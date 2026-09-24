@@ -1,0 +1,98 @@
+﻿[2026-09-23 13:15:10] [INFO] ============================================================
+[2026-09-23 13:15:10] [INFO] SQL SERVER STRUCTURE EXPORT
+[2026-09-23 13:15:10] [INFO] Server: splmcd03
+[2026-09-23 13:15:11] [INFO] Output: C:\Users\e334541\Desktop\SQL_EXPORT
+[2026-09-23 13:15:11] [INFO] ============================================================
+[2026-09-23 13:15:11] [INFO] Processing PZLPROD.LOG.uspUpdateAHDD
+[2026-09-23 13:15:11] [INFO] Processing PZLPROD.LOG.uspUpdateAHDD_VORNR
+[2026-09-23 13:15:11] [INFO] Processing PZLPROD.LOG.uspUpdateZMTO
+[2026-09-23 13:15:11] [INFO] Processing PZLPROD.LOG.vCzasyMTO
+[2026-09-23 13:15:12] [INFO] Processing PZLPROD.LOG.Z_SOL_SACC_ARCRFT_PSTN_FLW_TABLE_SF
+[2026-09-23 13:15:13] [INFO] Processing PZLPROD.LOG.ReportErrorInfo
+[2026-09-23 13:15:13] [INFO] Processing PZLPROD.LOG.WBS
+[2026-09-23 13:15:13] [INFO] Processing PZLPROD.LOG._Parameters
+[2026-09-23 13:15:13] [INFO] Processing PZLPROD.LOG.AHDD_VORNR
+[2026-09-23 13:15:14] [INFO] Processing PZLPROD.LOG.uspUpdateReportErrorInfo
+[2026-09-23 13:15:14] [INFO] Processing PZLPROD.LOG.StatusAktualizacjiRaportow
+[2026-09-23 13:15:14] [INFO] Processing PZLPROD.LOG.uspGetSQLdependencies
+[2026-09-23 13:15:14] [INFO] Processing PZLPROD.LOG.TableList
+[2026-09-23 13:15:14] [INFO] Processing PZLPROD.LOG.uspGetErrorInfo
+[2026-09-23 13:15:14] [INFO] Processing PZLPROD.LOG.LearningCurve
+[2026-09-23 13:15:15] [INFO] Processing PZLPROD.LOG.AHDD_ORDER
+[2026-09-23 13:15:15] [INFO] Processing PZLPROD.LOG.AHDD_PSPNR
+[2026-09-23 13:15:15] [INFO] Processing PZLPROD.LOG.ZMTO_ORDER
+[2026-09-23 13:15:15] [INFO] Processing PZLPROD.LOG.ZMTO_VORNR
+[2026-09-23 13:15:15] [INFO] Processing PZLPROD.LOG.uspGetZMTO_HIST
+[2026-09-23 13:15:15] [INFO] Processing master.XXX.spt_values
+[2026-09-23 13:15:15] [WARN] Object not found: master.XXX.spt_values
+[2026-09-23 13:15:15] [INFO] Processing PZLPROD.LOG.ZMTO_VORNR_HIST
+[2026-09-23 13:15:16] [INFO] Processing PZLPROD.LOG.AHDD_ARBID
+[2026-09-23 13:15:16] [INFO] Processing PZLPROD.LOG.PeriodDates
+[2026-09-23 13:15:16] [INFO] Processing PZLPROD.LOG.StanowiskaIPT
+[2026-09-23 13:15:16] [INFO] Processing PZLPROD.LOG.vAHDD
+[2026-09-23 13:15:16] [INFO] Processing PZLPROD.dbo.Z_R3_ZPPE0073_06_TBL
+[2026-09-23 13:15:16] [INFO] Synonym PZLPROD.dbo.Z_R3_ZPPE0073_06_TBL -> PZL_SAP.dbo.Z_R3_ZPPE0073_06_TBL
+[2026-09-23 13:15:19] [INFO] Exported synonym target table: PZL_SAP.dbo.Z_R3_ZPPE0073_06_TBL
+[2026-09-23 13:15:19] [INFO] Processing PZLPROD.LOG.Stanowiska
+[2026-09-23 13:15:19] [INFO] Processing PZLPROD.LOG.EmployeesHist
+[2026-09-23 13:15:19] [INFO] Processing PZLPROD.dbo.Z_R3_AFVC_TBL
+[2026-09-23 13:15:20] [INFO] Synonym PZLPROD.dbo.Z_R3_AFVC_TBL -> PZL_SAP.dbo.Z_R3_AFVC_TBL
+[2026-09-23 13:15:21] [INFO] Exported synonym target table: PZL_SAP.dbo.Z_R3_AFVC_TBL
+[2026-09-23 13:15:21] [INFO] Processing PZLPROD.dbo.Z_R3_AFVV_TBL
+[2026-09-23 13:15:21] [INFO] Synonym PZLPROD.dbo.Z_R3_AFVV_TBL -> PZL_SAP.dbo.Z_R3_AFVV_TBL
+[2026-09-23 13:15:21] [INFO] Exported synonym target table: PZL_SAP.dbo.Z_R3_AFVV_TBL
+[2026-09-23 13:15:21] [INFO] Processing PZLPROD.LOG.MaxCEWB
+[2026-09-23 13:15:21] [INFO] Processing PZLPROD.LOG.PLANOWANE
+[2026-09-23 13:15:22] [INFO] Processing PZLPROD.LOG.LaborHours
+[2026-09-23 13:15:23] [INFO] Processing PZLPROD.LOG.uspUpdateAHDD_ORDER
+[2026-09-23 13:15:23] [INFO] Processing PZLPROD.dbo.Z_R3_PLAF_TBL
+[2026-09-23 13:15:23] [INFO] Synonym PZLPROD.dbo.Z_R3_PLAF_TBL -> PZL_SAP.dbo.Z_R3_PLAF_TBL
+[2026-09-23 13:15:24] [INFO] Exported synonym target table: PZL_SAP.dbo.Z_R3_PLAF_TBL
+[2026-09-23 13:15:24] [INFO] Processing PZLPROD.dbo.Z_R3_AFIH_TBL
+[2026-09-23 13:15:24] [INFO] Synonym PZLPROD.dbo.Z_R3_AFIH_TBL -> PZL_SAP.dbo.Z_R3_AFIH_TBL
+[2026-09-23 13:15:24] [INFO] Exported synonym target table: PZL_SAP.dbo.Z_R3_AFIH_TBL
+[2026-09-23 13:15:24] [INFO] Processing PZLPROD.dbo.Z_R3_AFKO_TBL
+[2026-09-23 13:15:24] [INFO] Synonym PZLPROD.dbo.Z_R3_AFKO_TBL -> PZL_SAP.dbo.Z_R3_AFKO_TBL
+[2026-09-23 13:15:24] [INFO] Exported synonym target table: PZL_SAP.dbo.Z_R3_AFKO_TBL
+[2026-09-23 13:15:24] [INFO] Processing PZLPROD.dbo.Z_R3_AFPO_TBL
+[2026-09-23 13:15:24] [INFO] Synonym PZLPROD.dbo.Z_R3_AFPO_TBL -> PZL_SAP.dbo.Z_R3_AFPO_TBL
+[2026-09-23 13:15:25] [INFO] Exported synonym target table: PZL_SAP.dbo.Z_R3_AFPO_TBL
+[2026-09-23 13:15:25] [INFO] Processing PZLPROD.dbo.Z_R3_ZTL_DATA_TBL
+[2026-09-23 13:15:25] [INFO] Synonym PZLPROD.dbo.Z_R3_ZTL_DATA_TBL -> PZL_SAP.dbo.Z_R3_ZTL_DATA_TBL
+[2026-09-23 13:15:25] [INFO] Exported synonym target table: PZL_SAP.dbo.Z_R3_ZTL_DATA_TBL
+[2026-09-23 13:15:25] [INFO] Processing PZLPROD.dbo.Z_R3_AUFK_TBL
+[2026-09-23 13:15:25] [INFO] Synonym PZLPROD.dbo.Z_R3_AUFK_TBL -> PZL_SAP.dbo.Z_R3_AUFK_TBL
+[2026-09-23 13:15:25] [INFO] Exported synonym target table: PZL_SAP.dbo.Z_R3_AUFK_TBL
+[2026-09-23 13:15:26] [INFO] Processing PZLPROD.LOG.ToolOrdersStatus
+[2026-09-23 13:15:26] [INFO] Processing PZLPROD.dbo.Z_R3_ILOA_TBL
+[2026-09-23 13:15:26] [INFO] Synonym PZLPROD.dbo.Z_R3_ILOA_TBL -> PZL_SAP.dbo.Z_R3_ILOA_TBL
+[2026-09-23 13:15:26] [INFO] Exported synonym target table: PZL_SAP.dbo.Z_R3_ILOA_TBL
+[2026-09-23 13:15:26] [INFO] Processing PZLPROD.dbo.Z_R3_JEST_TBL
+[2026-09-23 13:15:26] [INFO] Synonym PZLPROD.dbo.Z_R3_JEST_TBL -> PZL_SAP.dbo.Z_R3_JEST_TBL
+[2026-09-23 13:15:26] [INFO] Exported synonym target table: PZL_SAP.dbo.Z_R3_JEST_TBL
+[2026-09-23 13:15:26] [INFO] Processing PZLPROD.dbo.Z_R3_MAKT_TBL
+[2026-09-23 13:15:26] [INFO] Synonym PZLPROD.dbo.Z_R3_MAKT_TBL -> PZL_SAP.dbo.Z_R3_MAKT_TBL
+[2026-09-23 13:15:27] [INFO] Exported synonym target table: PZL_SAP.dbo.Z_R3_MAKT_TBL
+[2026-09-23 13:15:27] [INFO] Processing PZLPROD.dbo.Z_R3_MARC_TBL
+[2026-09-23 13:15:27] [INFO] Synonym PZLPROD.dbo.Z_R3_MARC_TBL -> PZL_SAP.dbo.Z_R3_MARC_TBL
+[2026-09-23 13:15:27] [INFO] Exported synonym target table: PZL_SAP.dbo.Z_R3_MARC_TBL
+[2026-09-23 13:15:28] [INFO] Processing PZLPROD.dbo.Z_R3_MATERIALID_TBL
+[2026-09-23 13:15:28] [INFO] Synonym PZLPROD.dbo.Z_R3_MATERIALID_TBL -> PZL_SAP.dbo.Z_R3_MATERIALID_TBL
+[2026-09-23 13:15:28] [INFO] Exported synonym target table: PZL_SAP.dbo.Z_R3_MATERIALID_TBL
+[2026-09-23 13:15:28] [INFO] Processing PZLPROD.LOG.uspUpdateAHDD_PSPNR
+[2026-09-23 13:15:29] [INFO] Processing PZLPROD.dbo.Z_R3_PRPS_TBL
+[2026-09-23 13:15:30] [INFO] Synonym PZLPROD.dbo.Z_R3_PRPS_TBL -> PZL_SAP.dbo.Z_R3_PRPS_TBL
+[2026-09-23 13:15:30] [INFO] Exported synonym target table: PZL_SAP.dbo.Z_R3_PRPS_TBL
+[2026-09-23 13:15:30] [INFO] Processing PZLPROD.LOG.ZPPE0073
+[2026-09-23 13:15:31] [INFO] Processing PZLPROD.LOG.AHDD_PEGGING
+[2026-09-23 13:15:32] [INFO] Processing PZLPROD.LOG.vPEGTASS
+[2026-09-23 13:15:32] [INFO] Processing PZLPROD.dbo.Z_R3_PEG_TASS_TBL
+[2026-09-23 13:15:32] [INFO] Synonym PZLPROD.dbo.Z_R3_PEG_TASS_TBL -> PZL_SAP.dbo.Z_R3_PEG_TASS_TBL
+[2026-09-23 13:15:32] [INFO] Exported synonym target table: PZL_SAP.dbo.Z_R3_PEG_TASS_TBL
+[2026-09-23 13:15:32] [INFO] Collecting SQL module dependencies...
+[2026-09-23 13:15:34] [INFO] ============================================================
+[2026-09-23 13:15:34] [INFO] EXPORT FINISHED
+[2026-09-23 13:15:34] [INFO] Resolved records: 53
+[2026-09-23 13:15:34] [INFO] Dependency records: 104
+[2026-09-23 13:15:34] [INFO] Output directory: C:\Users\e334541\Desktop\SQL_EXPORT
+[2026-09-23 13:15:34] [INFO] ============================================================
