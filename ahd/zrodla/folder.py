@@ -1,21 +1,24 @@
-"""Źródło plików w folderze lokalnym lub sieciowym – także pliki ręcznie pobrane z przeglądarki.
+"""Źródło plików w folderze: lokalnym, sieciowym (UNC) albo WebDAV (ścieżka UNC do SharePoint).
 
-Archiwa ZIP (SharePoint pakuje do ZIP pobranie kilku plików naraz) są czytane bez rozpakowywania:
-każdy plik w archiwum jest traktowany jak osobny plik źródłowy. Wskazać można folder
-(np. „Do_importu”), pojedynczy plik albo plik .zip.
+Wskazać można folder (np. `00_Global\\RABIT\\Do_importu`) albo pojedynczy plik
+(np. ręcznie pobrany z przeglądarki).
 """
 
 from __future__ import annotations
 
 import datetime as dt
 import shutil
-import zipfile
-from pathlib import Path, PurePosixPath
+from dataclasses import dataclass
+from pathlib import Path
 from typing import Iterator
 
-from .sharepoint import RemoteFile
 
-ZIP_SEP = "!"  # ścieżka pliku w archiwum: C:\...\paczka.zip!folder/plik.csv
+@dataclass(frozen=True)
+class RemoteFile:
+    name: str
+    path: str
+    size: int
+    modified: str  # ISO 8601, UTC
 
 
 def _skip(name: str) -> bool:
@@ -31,53 +34,27 @@ class FolderSource:
 
     def walk(self, recursive: bool = False) -> Iterator[RemoteFile]:
         if self.root.is_file():
-            # Wskazany pojedynczy plik (np. ręcznie pobrany z przeglądarki) albo archiwum ZIP.
-            if zipfile.is_zipfile(self.root) and self.root.suffix.lower() == ".zip":
-                yield from self._zip_entries(self.root)
-            else:
-                yield self._file(self.root)
+            yield self._file(self.root)
             return
         pattern = "**/*" if recursive else "*"
         for path in sorted(self.root.glob(pattern), key=lambda p: str(p).lower()):
-            if not path.is_file() or _skip(path.name):
-                continue
-            if path.suffix.lower() == ".zip" and zipfile.is_zipfile(path):
-                yield from self._zip_entries(path)
-                continue
-            yield self._file(path)
+            if path.is_file() and not _skip(path.name):
+                yield self._file(path)
 
     @staticmethod
     def _file(path: Path) -> RemoteFile:
         stat = path.stat()
         return RemoteFile(
             name=path.name,
-            server_relative_url=str(path),
+            path=str(path),
             size=stat.st_size,
             modified=dt.datetime.fromtimestamp(stat.st_mtime, dt.timezone.utc).isoformat(timespec="seconds"),
         )
 
-    @staticmethod
-    def _zip_entries(archive: Path) -> Iterator[RemoteFile]:
-        with zipfile.ZipFile(archive) as zf:
-            for info in sorted(zf.infolist(), key=lambda i: i.filename.lower()):
-                name = PurePosixPath(info.filename).name
-                if info.is_dir() or not name or _skip(name):
-                    continue
-                yield RemoteFile(
-                    name=name,
-                    server_relative_url=f"{archive}{ZIP_SEP}{info.filename}",
-                    size=info.file_size,
-                    modified=dt.datetime(*info.date_time).isoformat(timespec="seconds"),
-                )
-
     def download(self, remote: RemoteFile, dest: Path) -> Path:
+        """Kopiuje plik (z zachowaniem daty modyfikacji); do końca kopiowania pod nazwą .part."""
         dest.parent.mkdir(parents=True, exist_ok=True)
         tmp = dest.with_name(dest.name + ".part")
-        archive, sep, member = remote.server_relative_url.partition(ZIP_SEP)
-        if sep and zipfile.is_zipfile(archive):
-            with zipfile.ZipFile(archive) as zf, zf.open(member) as src, tmp.open("wb") as out:
-                shutil.copyfileobj(src, out, length=1 << 20)
-        else:
-            shutil.copy2(remote.server_relative_url, tmp)
+        shutil.copy2(remote.path, tmp)
         tmp.replace(dest)
         return dest

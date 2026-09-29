@@ -1,9 +1,6 @@
-# AHD – MVP etapu 1
-requests>=2.31
+# AHD – etap 1 (pobranie RABIT przez WebDAV i import do bazy)
 openpyxl>=3.1
-truststore>=0.9 ; python_version >= "3.10"
-requests-negotiate-sspi>=0.5 ; sys_platform == "win32"
-pywin32>=306 ; sys_platform == "win32"
-requests-ntlm>=1.2
+# baza MS SQL (opcjonalnie; MVP domyślnie używa SQLite)
+# pyodbc>=5
 # testy
 pytest>=8

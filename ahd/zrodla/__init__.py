@@ -1,1 +1,1 @@
-"""Źródła plików: SharePoint (REST) i folder lokalny / sieciowy."""
+"""Źródła plików: RABIT przez WebDAV oraz folder na dysku (lokalny / sieciowy)."""
