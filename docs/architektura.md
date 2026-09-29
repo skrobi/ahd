@@ -45,6 +45,7 @@ Architektura ma zapewnić:
 | D18 | **Lista CAM z kolumny CAM słownika struktury** – bez osobnego słownika CAM | jedno miejsce zarządzania projektem |
 | D19 | Relacja **P1S ↔ CES definiowana w słowniku** (wiersz = para, dowolna krotność) | brak stałej relacji między systemami |
 | D20 | Zamknięcie miesiąca wymaga przypisania elementów z kosztem | kompletność EV formalnego |
+| D22 | **Pliki RABIT pobierane ręcznie z przeglądarki** (zaznacz wszystko → Pobierz → ZIP) do wspólnego folderu `00_Global\RABIT\Do_importu`; synchronizacja i dostęp API do SharePoint RABIT niedostępne (logowanie w przeglądarce, brak uprawnień do synchronizacji) | jedyna dostępna droga; import rozpoznaje duplikaty, więc można pobierać zawsze wszystko |
 | D21 | **Import plików SAP (RABIT) jest globalny, bez zakresu**: wszystkie pliki z folderu, import tylko nowych (SHA-256), wiersze w postaci surowej; przebieg zakresu wybiera swoje dane po elementach WBS ze słownika struktury | przy pobieraniu nie wiadomo, do którego zakresu należy plik |
 
 ---
@@ -229,6 +230,7 @@ wersję słownika; obowiązuje ostatnia poprawna.
 ```
 \\serwer\udział\AHD\                 korzeń środowiska (osobny dla TEST i PROD)
 ├── 00_Global\Slowniki\              słowniki globalne
+├── 00_Global\RABIT\Do_importu\     ręcznie pobrane pliki / ZIP-y z RABIT (D22)
 ├── 01_LandingZone\<RRRR-MM-DD>\<IdImportu>\   archiwum oryginałów (bez podziału na zakresy)
 └── Zakresy\<Zakres>\
     ├── Slowniki\                    słowniki zakresu
@@ -253,7 +255,9 @@ wersję słownika; obowiązuje ostatnia poprawna.
 
 ### 7.3 Pliki SAP (D21)
 
-- Źródło: folder RABIT na SharePoint (logowanie SSO) albo folder lokalny / sieciowy.
+- Źródło (D22): pliki pobrane ręcznie z SharePoint RABIT w przeglądarce do `00_Global\RABIT\Do_importu`
+  (pojedyncze pliki lub ZIP – czytany bez rozpakowywania). Dostęp bezpośredni do SharePoint (API, SSO)
+  zostaje w module jako opcja, ale w PZL wymaga logowania w przeglądarce.
 - Import obejmuje **wszystkie** pliki; zakres nie jest znany. Tożsamość pliku = SHA-256 treści:
   nowy hash → import; znany hash → duplikat; te same metadane (ścieżka, rozmiar, data) co wcześniej →
   pominięcie bez pobierania.

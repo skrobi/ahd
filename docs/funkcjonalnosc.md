@@ -105,7 +105,8 @@ Lista kontrolna na ekranie zakresu:
 ### F05a. Import plików SAP (globalny, poza przebiegiem)
 
 - Przy pobieraniu z RABIT **nie wiadomo, do którego zakresu należy plik** – import obejmuje
-  wszystkie pliki z folderu RABIT (SharePoint, logowanie SSO) lub z folderu lokalnego / sieciowego.
+  wszystkie pliki z folderu `00_Global\RABIT\Do_importu`, do którego osoba z finansów pobiera ręcznie
+  pliki z SharePoint RABIT (zaznacz wszystko → Pobierz; ZIP czytany bez rozpakowywania).
 - Dla każdego pliku decyzja: **zaimportowany** (nowy hash), **duplikat** (treść już w bazie),
   **pominięty** (te same metadane co przy poprzednim imporcie – bez pobierania), **błąd**.
 - Nowe pliki: kopia do Landing Zone, rejestracja (kto, kiedy, kolumny, sygnatura kolumn, typ raportu,
