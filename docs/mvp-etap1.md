@@ -1,19 +1,27 @@
-# MVP – Etap 1: pobranie plików SAP
+# MVP – Etap 1: import plików SAP (RABIT)
 
-Wersja: 0.1 (test działania, nie gotowe rozwiązanie)
+Wersja: 0.2 (test działania, nie gotowe rozwiązanie)
 
-Moduł pobiera pliki z folderu SharePoint (np. raporty RABIT) albo z folderu lokalnego / sieciowego
-do Landing Zone, liczy hash SHA-256, sprawdza pliki i zapisuje `manifest.json`.
-Działa **lokalnie na komputerze użytkownika** – logowanie do SharePoint odbywa się kontem
-zalogowanego użytkownika Windows (SSO), bez podawania hasła.
+## Zasada
 
-Nie ma jeszcze bazy danych ani interfejsu w przeglądarce – wynik jest w manifeście.
+Na etapie pobierania z RABIT **nie wiadomo, do którego zakresu należą pliki**. Dlatego import:
+
+1. bierze **wszystkie pliki** z folderu (SharePoint albo folder lokalny / sieciowy),
+2. importuje do bazy **tylko pliki, których jeszcze nie było** – decyduje odcisk treści (SHA-256),
+   nie nazwa pliku,
+3. pliku o tych samych metadanych co przy poprzednim imporcie (ścieżka, rozmiar, data modyfikacji)
+   **nie pobiera ponownie** – to oszczędza czas przy dużych plikach,
+4. ładuje wiersze do bazy w **postaci surowej** (wartości w kolejności kolumn + zapisane nagłówki),
+5. zapisuje w bazie, kto, kiedy i co zaimportował – każdy widzi, co już zostało przetworzone.
+
+Przypisanie wierszy do zakresów (F16, S70i…) odbywa się później, w przebiegu zakresu, na podstawie
+słownika „Struktura projektowa” (element WBS → zakres).
+
+Logowanie do SharePoint – kontem zalogowanego użytkownika Windows (SSO), bez podawania hasła.
 
 ---
 
 ## 1. Instalacja (Windows, jednorazowo)
-
-W katalogu repozytorium:
 
 ```bat
 py -m venv .venv
@@ -21,16 +29,15 @@ py -m venv .venv
 pip install -r requirements.txt
 ```
 
-Wymagany Python 3.10+.
+Wymagany Python 3.10+. Dla bazy MS SQL dodatkowo `pip install pyodbc` i sterownik
+„ODBC Driver 18 for SQL Server”.
 
 ---
 
-## 2. Test połączenia
-
-Link skopiowany z przeglądarki (widok folderu w bibliotece dokumentów):
+## 2. Test połączenia z SharePoint
 
 ```bat
-python -m ahd.etap1 sprawdz --url "https://lmsp4-intl.external.lmco.com/sites/RabbitReporting/Shared%20Documents/Forms/AllItems.aspx?...&RootFolder=%2fsites%2fRabbitReporting%2fShared%20Documents%2fE456659&..."
+python -m ahd.etap1 sprawdz --url "<link do folderu skopiowany z przeglądarki>"
 ```
 
 Oczekiwany wynik:
@@ -42,13 +49,11 @@ Zalogowano jako: i:0#.w|DOMENA\uzytkownik
 W folderze: 12 plików, 0 podfolderów
 ```
 
-Jeżeli się nie uda, komunikat mówi, co jest nie tak:
-
 | Komunikat | Co zrobić |
 |---|---|
-| `Odmowa dostępu (HTTP 401) … metody logowania: Negotiate, NTLM` | SSO nie przeszło – spróbuj `--auth ntlm` (login i hasło wpisywane w konsoli, nie są zapisywane) |
-| `Odmowa dostępu (HTTP 401) … metody logowania: brak` lub przekierowanie na stronę logowania | serwis wymaga logowania przez przeglądarkę (ADFS / karta) – wtedy użyj wariantu z folderem (pkt 5) |
-| `Błąd certyfikatu TLS` | sprawdź, czy zainstalował się pakiet `truststore`; ewentualnie `--ca-bundle` |
+| `Odmowa dostępu (HTTP 401) … metody logowania: Negotiate, NTLM` | SSO nie przeszło – spróbuj `--auth ntlm` (login i hasło w konsoli, nie są zapisywane) |
+| `Odmowa dostępu … metody logowania: brak` / przekierowanie na stronę logowania | serwis wymaga logowania w przeglądarce (ADFS / karta) – użyj wariantu z folderem (pkt 5) |
+| `Błąd certyfikatu TLS` | sprawdź instalację pakietu `truststore`; ewentualnie `--ca-bundle` |
 | `Brak połączenia` | sieć / VPN / proxy |
 
 ---
@@ -57,68 +62,97 @@ Jeżeli się nie uda, komunikat mówi, co jest nie tak:
 
 ```bat
 python -m ahd.etap1 lista --url "<link>"
-python -m ahd.etap1 lista --url "<link>" --filtr "*.xlsx" --filtr "*.csv"
 ```
 
 ---
 
-## 4. Pobranie do Landing Zone
+## 4. Import
 
 ```bat
-python -m ahd.etap1 pobierz --url "<link>" --cel C:\AHD_TEST\LandingZone --zakres F16 --filtr "*.xlsx"
+python -m ahd.etap1 import --url "<link>" --landing C:\AHD_TEST\LandingZone --dry-run
+python -m ahd.etap1 import --url "<link>" --landing C:\AHD_TEST\LandingZone
 ```
 
-- przebieg tygodniowy: domyślnie bieżący miesiąc i tydzień ISO (`--okres 2026-09 --tydzien 40`),
-- zamknięcie miesiąca: `--zamkniecie --okres 2026-09`,
-- `--dry-run` – tylko pokazuje, co zostałoby pobrane,
+Przykładowy wynik:
+
+```
+[1/4] CJI3_F16_cz1.csv: zaimportowany – 498 212 wierszy, typ CJI3
+[2/4] CJI3_F16_cz2.csv: zaimportowany – 214 218 wierszy, typ CJI3
+[3/4] ZRD_KKAJ_F16.xlsx: pominiety (metadane) – bez zmian od poprzedniego importu
+[4/4] Kopia ZRD.xlsx: duplikat – treść już zaimportowana jako ZRD_KKAJ_F16.xlsx (jkowalski, 2026-09-28T08:31:02)
+Zestaw CJI3_F16: 2 części, identyczny układ 34 kolumn (712 430 wierszy)
+Import IMP-20260929-083104-a1f3: zaimportowane 2, bez zmian 1, duplikaty 1, błędy 0
+```
+
+Opcje:
+- `--baza` – adres bazy; domyślnie plik SQLite `ahd_mvp.sqlite` w katalogu Landing Zone
+  (MVP, do czasu ustalenia bazy docelowej). MS SQL: `--baza mssql://SERWER/AHD_TEST`
+  (logowanie kontem Windows; tabele tworzy administrator skryptem `sql/mssql/001_etap1_import.sql`),
+- `--filtr "*.csv"` – tylko wybrane pliki (można powtórzyć),
 - `--rekurencyjnie` – także podfoldery,
-- ponowne pobranie tego samego przebiegu wymaga `--nadpisz`.
+- `--pelne-sprawdzenie` – pobiera i liczy hash także plików bez zmian w metadanych.
 
-Wynik:
-
-```
-C:\AHD_TEST\LandingZone\F16\2026-09\R-F16-2026-09-T40\
-    CJI3_F16_cz1.csv
-    CJI3_F16_cz2.csv
-    ZRD_KKAJ_F16.xlsx
-    manifest.json
-```
-
-`manifest.json` zawiera dla każdego pliku: źródło, rozmiar, datę modyfikacji, SHA-256,
-status (`nowy`, `bez zmian`, `zmieniony` – względem wcześniejszych przebiegów zakresu),
-oraz inspekcję (kolumny, liczba wierszy, kodowanie i separator CSV, arkusz Excela).
-Pliki wieloczęściowe (`_cz1`, `_cz2`, `part 3`, `(2)`) są sprawdzane jako zestaw:
-identyczne kolumny i łączna liczba wierszy. Niespójny zestaw kończy się kodem błędu.
+Pliki nowe trafiają do `LandingZone\<RRRR-MM-DD>\<IdImportu>\`. Duplikaty nie są przechowywane.
+Uszkodzony plik jest oznaczany jako błąd i nie przerywa importu pozostałych.
 
 ---
 
 ## 5. Wariant: folder zamiast SharePoint
 
-Jeśli bibliotekę da się zsynchronizować przez OneDrive albo pliki leżą na dysku sieciowym:
+Biblioteka zsynchronizowana przez OneDrive albo dysk sieciowy:
 
 ```bat
-python -m ahd.etap1 pobierz --folder "C:\Users\<ja>\Lockheed Martin\RabbitReporting - E456659" --cel C:\AHD_TEST\LandingZone --zakres F16
-python -m ahd.etap1 pobierz --folder "\\serwer\udzial\AHD\Zakresy\F16\SAP\2026-09\Tydz40" --cel ... --zakres F16
+python -m ahd.etap1 import --folder "C:\Users\<ja>\...\RabbitReporting - E456659" --landing C:\AHD_TEST\LandingZone
 ```
 
 Pliki blokady Excela (`~$…`) są pomijane.
 
 ---
 
-## 6. Co zgłosić po teście
+## 6. Historia importów
+
+```bat
+python -m ahd.etap1 historia --landing C:\AHD_TEST\LandingZone
+```
+
+Pokazuje ostatnie importy (kto, ile nowych / pominiętych / błędów) i ostatnio zaimportowane pliki
+(kto, typ raportu, liczba wierszy, hash).
+
+---
+
+## 7. Co jest w bazie
+
+| Tabela | Zawartość |
+|---|---|
+| `meta.ImportBatch` | każde uruchomienie importu: kto, komputer, wersja aplikacji, liczniki, status |
+| `meta.SourceFile` | każdy unikalny plik (klucz: SHA-256): nazwa, źródło, ścieżka w Landing Zone, kolumny, sygnatura kolumn, typ raportu, liczba wierszy |
+| `meta.SourceFileSeen` | każdy plik widziany w każdym imporcie i decyzja: zaimportowany / duplikat / pominięty / błąd |
+| `stg.RawRow` | surowe wiersze: hash pliku, numer wiersza, wartości (JSON) |
+
+**Typ raportu** jest na razie rozpoznawany po nazwie pliku (CJI3, ZRD_KKAJ, NET_INV, inaczej „nieznany”).
+**Sygnatura kolumn** (odcisk układu nagłówków) pozwoli rozpoznawać typ niezależnie od nazwy –
+po teście na prawdziwych plikach zrobimy słownik sygnatur.
+
+Wydajność (test): plik CSV 700 000 wierszy / 85 MB – import do SQLite ok. 13 s.
+
+---
+
+## 8. Co zgłosić po teście
 
 - wynik `sprawdz` (bez danych z plików),
-- lista nazw plików z `lista` – żeby ustalić nazewnictwo i zestawy wieloczęściowe,
-- z `manifest.json` tylko sekcja `inspekcja` (kolumny, liczba wierszy) – bez zawartości plików.
+- listę nazw plików z `lista`,
+- wynik `historia` (nazwy, typ raportu, liczba wierszy),
+- nagłówki kolumn plików (np. z `meta.SourceFile.Kolumny`) – bez zawartości.
 
 Dane z plików nie powinny trafiać poza sieć firmową.
 
 ---
 
-## 7. Testy (developer)
+## 9. Testy (developer)
 
 ```bat
 python -m pytest -q tests
 ```
 
-Testy działają na symulowanym serwerze SharePoint (REST API), bez dostępu do sieci firmowej.
+Testy działają na symulowanym serwerze SharePoint (REST API) i bazie SQLite.
+Wariant MS SQL (`mssql://`) nie był testowany automatycznie – wymaga serwera w sieci PZL.

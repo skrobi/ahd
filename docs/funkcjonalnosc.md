@@ -102,14 +102,26 @@ Lista kontrolna na ekranie zakresu:
 - Podgląd wersji słowników, które zostaną przypięte.
 - Start zapisuje przebieg, przypięcia i pierwsze zdarzenie w dzienniku.
 
-### F05. Etap 1 – Pliki SAP
+### F05a. Import plików SAP (globalny, poza przebiegiem)
 
-- Aplikacja wyszukuje pliki w `Zakresy\<Zakres>\SAP\<RRRR-MM>\Tydz<NN>\` (lub folderze zamknięcia).
-- Pokazuje listę: plik, źródło (CJI3, ZRD_KKAJ, Net Inv), liczba wierszy.
-- Kontrole: pliki wieloczęściowe tworzą zestaw (ten sam układ kolumn, brak duplikatów między
-  częściami, suma wierszy), daty w okresie, plik nie jest zablokowany (odczyt z kopii).
-- Akcja **Skopiuj do Landing Zone i zarejestruj** – kopia, hash SHA-256, rejestracja w bazie,
-  załadowanie do `stg`.
+- Przy pobieraniu z RABIT **nie wiadomo, do którego zakresu należy plik** – import obejmuje
+  wszystkie pliki z folderu RABIT (SharePoint, logowanie SSO) lub z folderu lokalnego / sieciowego.
+- Dla każdego pliku decyzja: **zaimportowany** (nowy hash), **duplikat** (treść już w bazie),
+  **pominięty** (te same metadane co przy poprzednim imporcie – bez pobierania), **błąd**.
+- Nowe pliki: kopia do Landing Zone, rejestracja (kto, kiedy, kolumny, sygnatura kolumn, typ raportu,
+  liczba wierszy), wiersze w postaci surowej w bazie.
+- Pliki wieloczęściowe sprawdzane jako zestaw (te same kolumny, łączna liczba wierszy).
+- Import może uruchomić każda osoba z finansów w dowolnym momencie; historia importów jest widoczna
+  dla wszystkich.
+- MVP: `python -m ahd.etap1 import` (instrukcja `docs/mvp-etap1.md`).
+
+### F05. Etap 1 przebiegu – Dane SAP zakresu
+
+- Warunek: import plików SAP (F05a) wykonany; aplikacja pokazuje datę ostatniego importu i pliki,
+  które pojawiły się od poprzedniego przebiegu.
+- Wybór wierszy zakresu na podstawie elementów WBS ze słownika „Struktura projektowa” oraz okresu.
+- Kontrole: daty w okresie przebiegu, plik nie zmienił się od importu (hash).
+- Wiersze bez przypisania do żadnego zakresu są widoczne w etapie 4 (F08) jako nowe elementy.
 
 ### F06. Etap 2 – Słowniki
 

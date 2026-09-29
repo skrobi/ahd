@@ -45,6 +45,7 @@ Architektura ma zapewnić:
 | D18 | **Lista CAM z kolumny CAM słownika struktury** – bez osobnego słownika CAM | jedno miejsce zarządzania projektem |
 | D19 | Relacja **P1S ↔ CES definiowana w słowniku** (wiersz = para, dowolna krotność) | brak stałej relacji między systemami |
 | D20 | Zamknięcie miesiąca wymaga przypisania elementów z kosztem | kompletność EV formalnego |
+| D21 | **Import plików SAP (RABIT) jest globalny, bez zakresu**: wszystkie pliki z folderu, import tylko nowych (SHA-256), wiersze w postaci surowej; przebieg zakresu wybiera swoje dane po elementach WBS ze słownika struktury | przy pobieraniu nie wiadomo, do którego zakresu należy plik |
 
 ---
 
@@ -128,7 +129,7 @@ Architektura ma zapewnić:
 
 | # | Etap (tydzień) | Etap (zamknięcie) | Bramka wyjścia |
 |---|---|---|---|
-| 1 | Pliki SAP | Pliki SAP | komplet plików, hash, zgodny okres, zgodny układ części |
+| 1 | Dane SAP | Dane SAP | import nowych plików RABIT (globalny, D21) zakończony; wybór danych zakresu po WBS; zgodny okres |
 | 2 | Słowniki | Słowniki | import słowników zakresu, przypięcie wersji globalnych |
 | 3 | Walidacja | Walidacja | brak błędów blokujących |
 | 4 | Łączenie źródeł | Łączenie źródeł | kontrole pokrycia; nowe elementy przypisane lub (tydzień) świadomie pominięte |
@@ -228,11 +229,10 @@ wersję słownika; obowiązuje ostatnia poprawna.
 ```
 \\serwer\udział\AHD\                 korzeń środowiska (osobny dla TEST i PROD)
 ├── 00_Global\Slowniki\              słowniki globalne
-├── 01_LandingZone\<Zakres>\<RRRR-MM>\<RunId>\   archiwum oryginałów
+├── 01_LandingZone\<RRRR-MM-DD>\<IdImportu>\   archiwum oryginałów (bez podziału na zakresy)
 └── Zakresy\<Zakres>\
     ├── Slowniki\                    słowniki zakresu
     │   └── Propozycje\              elementy do dopisania, raporty walidacji
-    ├── SAP\<RRRR-MM>\Tydz<NN>\      eksporty SAP (także wieloczęściowe)
     ├── Finanse\<RRRR-MM>\           pliki pośrednie dla finansów
     ├── CAM\<RRRR-MM>\Wyslane\       pliki do uzupełnienia przez CAM
     ├── CAM\<RRRR-MM>\Zwrocone\      pliki zwrócone przez CAM
@@ -251,10 +251,19 @@ wersję słownika; obowiązuje ostatnia poprawna.
 - Hash SHA-256 zapisany w bazie. Aplikacja działa na uprawnieniach użytkownika, więc Landing Zone
   nie jest chroniona uprawnieniami – zmianę pliku po imporcie wykrywa hash.
 
-### 7.3 Pliki SAP
+### 7.3 Pliki SAP (D21)
 
-- Jeden lub kilka plików na projekt (limit wierszy Excela) – traktowane jako zestaw jednego źródła:
-  identyczny układ kolumn, brak duplikatów między częściami, zgodny okres, sumy kontrolne.
+- Źródło: folder RABIT na SharePoint (logowanie SSO) albo folder lokalny / sieciowy.
+- Import obejmuje **wszystkie** pliki; zakres nie jest znany. Tożsamość pliku = SHA-256 treści:
+  nowy hash → import; znany hash → duplikat; te same metadane (ścieżka, rozmiar, data) co wcześniej →
+  pominięcie bez pobierania.
+- Wiersze ładowane w postaci surowej (`stg.RawRow`: hash pliku, nr wiersza, wartości JSON) oraz
+  nagłówki i **sygnatura kolumn** (rozpoznawanie typu raportu niezależnie od nazwy pliku).
+- Jeden lub kilka plików na projekt (limit wierszy Excela) – części sprawdzane jako zestaw:
+  identyczny układ kolumn i łączna liczba wierszy.
+- Każde uruchomienie importu i decyzja dla każdego pliku są zapisane w bazie (`meta.ImportBatch`,
+  `meta.SourceFile`, `meta.SourceFileSeen`) – widać, kto i kiedy zaimportował dane.
+- MVP: `ahd/etap1`, instrukcja `docs/mvp-etap1.md`, DDL `sql/mssql/001_etap1_import.sql`.
 - Jeśli RABIT pozwala – eksport do CSV/TXT (brak limitu wierszy, brak konwersji typów przez Excel).
 
 ### 7.4 Pliki CAM
