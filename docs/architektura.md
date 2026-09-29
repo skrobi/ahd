@@ -24,10 +24,11 @@ oraz wskazuje punkty newralgiczne i otwarte decyzje.
 | D10 | Pliki pośrednie dla finansów **wymagają potwierdzenia** przed generowaniem plików CAM | kontrola jakości przed wysłaniem do CAM |
 | D11 | Dopuszczalne ponowne przeliczenie EV | z zachowaniem poprzednich rewizji |
 | D12 | Pliki oryginalne przechowywane w centralnym folderze (Landing Zone), w bazie ścieżka + hash | odtwarzalność bez przyrostu bazy |
+| D13 | **Wszystko per zakres** (program / pula projektów); słowniki globalne publikowane osobno, przebieg przypina ich wersje | brak pipeline globalnego i przekazywania pracy, prosta współbieżność |
 
 ---
 
-## 2. Model pipeline – rekomendacja: wszystko per program, słowniki globalne jako osobny proces
+## 2. Model pipeline – przyjęto (D13): wszystko per zakres, słowniki globalne jako osobny proces
 
 ### 2.1 Problem
 
@@ -241,7 +242,6 @@ Schematy (propozycja):
 
 | # | Pytanie | Rekomendacja |
 |---|---|---|
-| O1 | Model: wszystko per zakres + słowniki globalne jako osobny proces z przypinaniem wersji? | tak |
 | O2 | Korzeń folderów: SharePoint (sync OneDrive) czy dysk sieciowy? | jeden korzeń, ścieżki względne |
 | O3 | Plik CAM: na CAM czy na program? | na CAM |
 | O4 | Czy tygodniowe przebiegi obejmują etapy CAM, czy CAM tylko raz w miesiącu? | do ustalenia |
