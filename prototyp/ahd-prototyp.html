@@ -210,14 +210,14 @@ textarea{min-height:70px;resize:vertical}
 const ROOT = '\\\\pzlfs01\\AHD';
 const ME = 'Anna Wiśniewska';
 const APP_VER = '0.3.0', SCHEMA_VER = 12;
-const KEY = 'ahd-prototyp-v2';
+const KEY = 'ahd-prototyp-v3';
 
 const TYPES = {
   SAC:{label:'Sikorsky (SAC)', desc:'EV prowadzi Sikorsky. Dodatkowy etap: plik dla Cobra, koszt pracy w USD.'},
   CAS:{label:'CAS Compliance', desc:'Koszty przeliczane stawkami CAS. Wymagany słownik stawek CAS.'},
   WEW:{label:'Wewnętrzny', desc:'Pełna odpowiedzialność PZL: budżet, harmonogram, ETC i EV.'}
 };
-const GLOBALS = ['stawki','kalendarz','cam','przypisania','projekty','kursy'];
+const GLOBALS = ['stawki','kalendarz','cam','przypisania','kursy'];
 const ST = {todo:'Oczekuje', ready:'Do wykonania', running:'W toku', action:'Wymaga akcji', done:'Zakończony', error:'Błąd', stale:'Nieaktualny'};
 
 function stageDefs(type, kind){
@@ -268,16 +268,14 @@ function seed(){
       [v(12,'15.09.2026','K. Rogalska',64,'+2 / ~1 / zamk. 1','R-F16-2026-09-T38'),v(11,'18.08.2026','K. Rogalska',63,'+1 / ~0 / zamk. 0','')]),
     przypisania:D('przypisania','Przypisania użytkowników','global','Finanse – T. Mazur','00_Global\\Slowniki\\Przypisania_uzytkownikow.xlsx',
       [v(5,'01.08.2026','T. Mazur',41,'+6 / ~0 / zamk. 0','')],{financeOnly:true}),
-    projekty:D('projekty','Przypisanie projektów do zakresów','global','Finanse – T. Mazur','00_Global\\Slowniki\\Przypisanie_projektow.xlsx',
-      [v(4,'14.09.2026','T. Mazur',17,'+2 / ~0 / zamk. 0',''),v(3,'03.08.2026','T. Mazur',15,'+4 / ~0 / zamk. 1','')]),
     kursy:D('kursy','Kursy USD/PLN','global','Finanse – T. Mazur','00_Global\\Slowniki\\Kursy_USD.xlsx',
       [v(9,'01.09.2026','T. Mazur',9,'+1 / ~0 / zamk. 0','')]),
   };
-  const zd = {struktura:'Struktura projektowa', harmonogram:'Harmonogram i budżet', stawkicas:'Stawki CAS', etc:'ETC lokalne'};
+  const zd = {struktura:'Struktura projektowa (P1S ↔ CES)', harmonogram:'Harmonogram i budżet', stawkicas:'Stawki CAS', etc:'ETC lokalne'};
   const zfile = {struktura:'Struktura_projektowa.xlsx', harmonogram:'Harmonogram_budzet.xlsx', stawkicas:'Stawki_CAS.xlsx', etc:'ETC_lokalne.xlsx'};
   for(const z of Object.values(zakresy)) for(const d of z.dicts){
     const id = z.id+':'+d, base = d==='struktura'?4:d==='harmonogram'?6:2;
-    dicts[id] = D(id, zd[d], z.id, 'Analityk zakresu', 'Zakresy\\'+z.code+'\\Slowniki\\'+z.code+'_'+zfile[d],
+    dicts[id] = D(id, zd[d], z.id, 'Finanse – '+z.analysts[0], 'Zakresy\\'+z.code+'\\Slowniki\\'+z.code+'_'+zfile[d],
       [v(base,'08.09.2026',z.analysts[0].split(' ').map((p,i)=>i?p:p[0]+'.').join(' '), d==='struktura'?412:d==='harmonogram'?156:38,'+3 / ~5 / zamk. 1',''), v(base-1,'04.08.2026','—',400,'+10 / ~2 / zamk. 0','')]);
   }
   const s = {zakresy, dicts, zd, zfile, runs:{}, events:[], clock:9*60+5, role:'analityk',
@@ -406,7 +404,6 @@ function vPulpit(){
     }
     if(z.dicts.some(d=>!S.dicts[z.id+':'+d]?.versions.length)) attention.push({lvl:'warn', z, txt:'Słowniki zakresu niekompletne – przebieg zablokowany', a:'zakres', x:z.id});
   }
-  if(S.newProj?.length) attention.unshift({lvl:'warn', z:{code:'GLOBAL'}, txt:'Nowe definicje projektów w SAP bez przypisania do zakresu: '+S.newProj.join(', '), a:'nav', x:'slowniki'});
   return `
   <div class="head"><div><div class="eyebrow">Tydzień 40 · poniedziałek 28.09.2026 · okres 2026-09</div><h1>Pulpit</h1>
     <p class="sub">Stan wszystkich zakresów. Każdy przebieg dotyczy jednego zakresu i przypina wersje słowników.</p></div>
@@ -450,7 +447,7 @@ function readiness(z){
   const items=[];
   const missing = z.dicts.filter(d=>!S.dicts[z.id+':'+d]?.versions.length);
   items.push({ok:true, txt:'Zakres zarejestrowany w bazie (meta.Zakres)'});
-  items.push(z.projects.length? {ok:true, txt:'Projekty przypisane w słowniku „Przypisanie projektów do zakresów”: '+z.projects.length} : {ok:false, lvl:'crit', txt:'Słownik „Przypisanie projektów do zakresów” nie ma projektów dla tego zakresu'+(z.proposal?.length?' (propozycja: '+z.proposal.join(', ')+' czeka na właściciela)':'')});
+  items.push(z.projects.length? {ok:true, txt:'Słownik „Struktura projektowa” obejmuje projekty: '+z.projects.map(p=>p[0]).join(', ')} : {ok:false, lvl:'crit', txt:'Słownik „Struktura projektowa” nie ma jeszcze żadnych elementów – zakres nie ma projektów'});
   items.push({ok:true, txt:'Struktura folderów zgodna z konfiguracją'});
   items.push(missing.length? {ok:false, lvl:'crit', txt:'Słowniki zakresu bez zatwierdzonej wersji: '+missing.map(d=>S.zd[d]).join(', ')} : {ok:true, txt:'Słowniki zakresu mają zatwierdzone wersje'});
   const hasAssign = z.id!=='NEW' && !z.isNew;
@@ -475,7 +472,7 @@ function vZakres(id){
     </section>
     <section class="panel"><h2>Konfiguracja</h2>
       <dl class="kv"><dt>Szablon etapów</dt><dd>${stageDefs(z.type,'weekly').length} etapów (tydzień) · ${stageDefs(z.type,'close').length} (zamknięcie)</dd>
-      <dt>Projekty</dt><dd>${z.projects.length? z.projects.map(p=>`<span class="tag">${esc(p[0])}</span>`).join(' ') : '<span class="muted">brak w słowniku przypisań</span>'} <span class="muted" style="font-size:.8rem">(ze słownika „Przypisanie projektów do zakresów”)</span></dd>
+      <dt>Projekty</dt><dd>${z.projects.length? z.projects.map(p=>`<span class="tag">${esc(p[0])}</span>`).join(' ') : '<span class="muted">brak – słownik struktury pusty</span>'} <span class="muted" style="font-size:.8rem">(ze słownika „Struktura projektowa”)</span></dd>
       <dt>Słowniki zakresu</dt><dd>${z.dicts.map(d=>esc(S.zd[d])).join(', ')}</dd>
       <dt>Słowniki globalne</dt><dd>Stawki, kalendarz, CAM, przypisania, kursy</dd>
       <dt>Analitycy</dt><dd>${esc(z.analysts.join(', '))}</dd>
@@ -520,11 +517,12 @@ function vWizard(){
     <div class="note info">Typ wyznacza szablon etapów: przebieg tygodniowy ma ${stageDefs(w.type,'weekly').length} etapów, zamknięcie miesiąca ${stageDefs(w.type,'close').length}.</div>`;
   if(w.step===1) body=`
     <label class="chk"><input type="checkbox" id="w-pool" data-wc="pool" ${w.pool?'checked':''}><span><b>Pula małych projektów</b><br><span class="muted">Kilka małych projektów raportowanych razem jako jeden zakres.</span></span></label>
-    <div class="note info">Źródłem przypisań jest słownik <b>„Przypisanie projektów do zakresów”</b> (v${curVer(S,'projekty')}, właściciel: finanse). Kreator nie przypisuje projektów sam, tylko przygotowuje propozycję wierszy do tego słownika. Nowe definicje projektów, które pojawią się w SAP między przebiegami, są wykrywane w każdym przebiegu.</div>
-    <div class="field"><label>Definicje projektów w SAP bez przypisania</label><span class="hint">Lista z danych SAP (PRPS). Zaznaczone trafią do propozycji dla właściciela słownika.</span>
-    <div class="stack">${AVAIL_PROJ.filter(a=>!a[2]).map(([c,n])=>`<label class="chk"><input type="checkbox" data-wp="${c}" ${w.projects.includes(c)?'checked':''}><span><span class="mono">${c}</span> · ${esc(n)}</span></label>`).join('')}</div></div>
-    <details><summary class="muted" style="cursor:pointer">Przypisane już do innych zakresów (${AVAIL_PROJ.filter(a=>a[2]).length})</summary>
-    <div class="stack" style="margin-top:8px">${AVAIL_PROJ.filter(a=>a[2]).map(([c,n,own])=>`<div class="chk dis"><span><span class="mono">${c}</span> · ${esc(n)} <span class="muted">– zakres ${own}</span></span></div>`).join('')}</div></details>`;
+    <div class="note info">Zakres wyznacza jego słownik <b>„Struktura projektowa”</b>, prowadzony przez osobę z finansów, która uruchamia przebiegi. Jeden wiersz łączy element WBS z P1S (produkcja) z elementem WBS z CES (koszty) i przypisuje go do programu, projektu, CAM i WP. Elementy pojawiają się w danych dopiero po pobraniu plików, więc przypisuje się je na bieżąco w przebiegach.</div>
+    <div class="field"><label>Kolumny słownika (wzorzec)</label>
+    <div class="tbl-wrap"><table><thead><tr><th>P1S WBS</th><th>CAS WBS</th><th>Project Definition</th><th>Business Area</th><th>Program</th><th>Project</th><th>Customer</th><th>Cost Category</th><th>CAM</th><th>WP</th><th>ValidFrom</th><th>ValidTo</th></tr></thead><tbody><tr><td class="mono">P-M28-0101-01</td><td class="mono">M28-MOD-01.1.01</td><td class="mono">M28-MOD-01</td><td>1200</td><td>M28</td><td>Modernizacja</td><td>—</td><td>Labor</td><td>T. Sikora</td><td>yes</td><td>2026-10-01</td><td></td></tr></tbody></table></div>
+    <span class="hint">Wiersz przykładowy. Nagłówki zgodne z readme; ostateczną listę kolumn zatwierdzimy przy projekcie słowników.</span></div>
+    <div class="field"><label>Elementy z dotychczasowych pobrań bez zakresu</label><span class="hint">Pojawiły się w plikach innych przebiegów, ale żaden słownik ich nie obejmuje. Zaznaczone trafią do wzorca z wypełnionymi kluczami.</span>
+    <div class="stack">${AVAIL_PROJ.filter(a=>!a[2]).map(([c,n])=>`<label class="chk"><input type="checkbox" data-wp="${c}" ${w.projects.includes(c)?'checked':''}><span><span class="mono">${c}</span> · ${esc(n)}</span></label>`).join('')}</div></div>`;
   if(w.step===2){
     const zd=['struktura','harmonogram'].concat(w.type==='CAS'?['stawkicas']:[]);
     body=`<div class="grid g2"><div class="stack"><h3>Słowniki zakresu</h3>
@@ -553,11 +551,11 @@ function vWizard(){
     const dup=Object.values(S.zakresy).some(z=>z.code.toUpperCase()===w.code.toUpperCase());
     body = w.busy||w.progress.length ? `<ul class="checks">${w.progress.map(p=>`<li><span class="ic ${p.done?'ok':'todo'}">${p.done?'✓':'…'}</span><span>${esc(p.t)}</span></li>`).join('')}</ul>${w.busy?'<div class="progress"><i></i></div>':''}` :
     `<dl class="kv"><dt>Kod</dt><dd><b>${esc(w.code)}</b></dd><dt>Nazwa</dt><dd>${esc(w.name)}</dd><dt>Typ</dt><dd>${TYPES[w.type].label}</dd>
-     <dt>Propozycja przypisań</dt><dd>${w.projects.map(p=>`<span class="tag">${p}</span>`).join(' ')||'<span class="muted">brak – projekty dopisze właściciel słownika</span>'}</dd>
+     <dt>Wstępne elementy wzorca</dt><dd>${w.projects.map(p=>`<span class="tag">${p}</span>`).join(' ')||'<span class="muted">brak – elementy dopiszesz po pierwszym pobraniu</span>'}</dd>
      <dt>Słowniki zakresu</dt><dd>${['struktura','harmonogram'].concat(w.type==='CAS'?['stawkicas']:[]).concat(w.etc?['etc']:[]).map(d=>S.zd[d]).join(', ')}</dd>
      <dt>Folder</dt><dd class="mono">${esc(ROOT)}\\Zakresy\\${esc(w.code)}</dd></dl>
      ${dup?'<div class="note crit">Zakres o tym kodzie już istnieje. Zmień kod w kroku 1.</div>':''}
-     <div class="note">Przebieg będzie możliwy dopiero, gdy słownik przypisań będzie miał projekty dla tego zakresu.</div>`;
+     <div class="note">Przebieg będzie możliwy, gdy słownik „Struktura projektowa” będzie miał zatwierdzoną wersję z co najmniej jednym projektem.</div>`;
   }
   const dup=Object.values(S.zakresy).some(z=>z.code.toUpperCase()===w.code.toUpperCase());
   const canCreate = !dup && w.code.trim();
@@ -692,7 +690,7 @@ const STAGE = {
       <div class="stack"><span class="eyebrow">Koszt rzeczywisty okresu</span><b class="num" style="font-size:1.3rem">${nf(ac)} PLN</b></div>
       <div class="stack"><span class="eyebrow">WBS zmapowane</span><b class="num" style="font-size:1.3rem">${nf(seedN(r,'w',380,410))} / ${nf(seedN(r,'w',380,410)+3)}</b></div>
       <div class="stack"><span class="eyebrow">Work Packages</span><b class="num" style="font-size:1.3rem">${z.cams.reduce((a,c)=>a+c[1],0)}</b></div></div>
-      <ul class="checks">${r.newEl?.state==='accepted'? `<li><span class="ic warn">!</span><span>Pominięto nowe elementy bez przypisania: ${nf(r.newEl.cost)} PLN poza EV tego przebiegu (decyzja: ${esc(r.newEl.by)})</span></li>` : r.newEl?.state==='resolved'? `<li><span class="ic ok">✓</span><span>Nowe elementy z SAP przypisane w słownikach i uwzględnione</span></li>` : `<li><span class="ic ok">✓</span><span>Brak nowych elementów SAP bez przypisania</span></li>`}
+      <ul class="checks">${r.newEl?.state==='accepted'? `<li><span class="ic warn">!</span><span>Pominięto elementy bez przypisania: ${nf(r.newEl.cost)} PLN poza EV tego przebiegu (decyzja: ${esc(r.newEl.by)})</span></li>` : r.newEl?.state==='resolved'? `<li><span class="ic ok">✓</span><span>Nowe elementy z CES i P1S przypisane w słowniku struktury i uwzględnione</span></li>` : `<li><span class="ic ok">✓</span><span>Wszystkie elementy z CES i P1S mają przypisanie w słowniku struktury</span></li>`}
       <li><span class="ic ok">✓</span><span>Każdy WP ma budżet i harmonogram</span></li><li><span class="ic ok">✓</span><span>Suma kontrolna: koszt po połączeniu = koszt z plików SAP</span></li></ul>`;
   },
   fin(r,st,z){
@@ -766,15 +764,14 @@ const STAGE = {
 
 function newElPanel(r,z){
   const e=r.newEl, close=r.kind==='close';
-  const t1=`<div class="tbl-wrap"><table><thead><tr><th>Definicja projektu</th><th>Opis (SAP)</th><th class="r">Koszt okresu</th><th>Sugestia</th></tr></thead><tbody>${e.proj.map(x=>`<tr><td class="mono">${x[0]}</td><td>${esc(x[1])}</td><td class="r">${nf(x[2])}</td><td>zakres ${esc(z.code)} <span class="muted">(ten sam prefiks)</span></td></tr>`).join('')}</tbody></table></div>`;
-  const t2=`<div class="tbl-wrap"><table><thead><tr><th>Element WBS</th><th>Projekt</th><th class="r">Koszt okresu</th><th>Brakuje</th></tr></thead><tbody>${e.wbs.map(x=>`<tr><td class="mono">${x[0]}</td><td class="mono">${x[1]}</td><td class="r">${nf(x[2])}</td><td>WP, CAM, Cost Category</td></tr>`).join('')}</tbody></table></div>`;
-  return `<div class="note warn">Od ostatniego przebiegu w SAP pojawiły się nowe elementy. Ich koszt (<b>${nf(e.cost)} PLN</b>) nie trafi do EV, dopóki nie zostaną przypisane w słownikach.</div>
-    <div class="stack"><h3>Nowe definicje projektów bez przypisania do zakresu</h3><p class="muted" style="font-size:.85rem">Uzupełnia właściciel słownika globalnego „Przypisanie projektów do zakresów” (finanse).</p>${t1}</div>
-    <div class="stack"><h3>Nowe elementy WBS w projektach zakresu bez mapowania</h3><p class="muted" style="font-size:.85rem">Uzupełnia analityk w słowniku „Struktura projektowa ${esc(z.code)}”.</p>${t2}</div>
-    ${e.exported?`<div class="note ok">Zapisano listy do uzupełnienia:<br><span class="mono">00_Global\\Slowniki\\Propozycje\\Nowe_projekty_${esc(r.id)}.xlsx</span><br><span class="mono">Zakresy\\${esc(z.code)}\\Slowniki\\Propozycje\\${esc(z.code)}_nowe_WBS_${esc(r.id)}.xlsx</span><br>Wiersze mają już wypełnione klucze. Wystarczy uzupełnić brakujące kolumny i wkleić je do słowników.</div>`:''}
-    <div class="row">${actBtn(r,'neExport','Eksportuj listy do uzupełnienia', !e.exported)}${e.exported?actBtn(r,'neResolve','Symuluj: słowniki uzupełnione – przelicz od walidacji'):''}
+  const t=`<div class="tbl-wrap"><table><thead><tr><th>Źródło</th><th>Element</th><th>Project Definition</th><th class="r">Wartość w okresie</th><th>Czego brakuje w słowniku</th></tr></thead><tbody>${e.rows.map(x=>`<tr><td>${pill(x.src==='CES'?'info':'stale',x.src)}</td><td class="mono">${x.key}</td><td class="mono">${x.pd}</td><td class="r">${x.val}</td><td>${esc(x.miss)}</td></tr>`).join('')}</tbody></table></div>`;
+  return `<div class="note warn">W pobranych danych są elementy, których nie obejmuje słownik „Struktura projektowa ${esc(z.code)}”. Koszt <b>${nf(e.cost)} PLN</b> i zaawansowanie tych elementów nie trafią do EV, dopóki nie zostaną przypisane.</div>
+    ${t}
+    <ul class="checks"><li><span class="ic ok">✓</span><span>Żaden z elementów nie należy do słownika innego zakresu (kontrola unikalności między zakresami)</span></li></ul>
+    ${e.exported?`<div class="note ok">Zapisano: <span class="mono">Zakresy\\${esc(z.code)}\\Slowniki\\Propozycje\\${esc(z.code)}_nowe_elementy_${esc(r.id)}.xlsx</span><br>Plik ma kolumny słownika. Klucze (CAS WBS, P1S WBS, Project Definition) są wypełnione danymi z SAP. Uzupełnij pozostałe kolumny i wklej wiersze do słownika.</div>`:''}
+    <div class="row">${actBtn(r,'neExport','Eksportuj elementy do uzupełnienia', !e.exported)}${e.exported?actBtn(r,'neResolve','Symuluj: słownik uzupełniony – przelicz od walidacji'):''}
     ${close? '' : actBtn(r,'neAccept','Kontynuuj bez tych elementów',false)}</div>
-    ${close? '<p class="muted" style="font-size:.85rem">Na zamknięcie miesiąca każdy element z kosztem musi być przypisany. Pominięcie jest możliwe tylko w przebiegu tygodniowym.</p>':''}`;
+    ${close? '<p class="muted" style="font-size:.85rem">Na zamknięcie miesiąca elementy z kosztem muszą być przypisane (reguła do potwierdzenia, O13). Pominięcie jest możliwe tylko w przebiegu tygodniowym.</p>':''}`;
 }
 
 /* ---------- PRZEBIEGI / SŁOWNIKI / INFO ---------- */
@@ -811,7 +808,7 @@ function vInfo(){
     <li>Zatwierdzić pliki dla finansów w przebiegu PULA-WEW po przełączeniu roli na „Finanse”.</li>
     <li>Opublikować nową wersję „Stawki wydziałów” i zobaczyć decyzję w aktywnych przebiegach.</li>
     <li>Przejąć przebieg S70i prowadzony przez inną osobę.</li>
-    <li>W przebiegu F16 zobaczyć wykrycie nowej definicji projektu i nowych WBS z SAP oraz ścieżkę ich przypisania w słownikach.</li>
+    <li>W przebiegu F16 zobaczyć wykrycie nowych elementów z CES i P1S po pobraniu danych oraz ich przypisanie w słowniku struktury.</li>
     <li>Uruchomić zamknięcie miesiąca z plikami CAM, odrzuceniem pliku i zamrożeniem okresu.</li></ol></section>
   <section class="panel"><h2>Założenia z architektury</h2><ul class="checks">
     <li><span class="ic ok">✓</span><span>Wszystko per zakres, słowniki globalne publikowane osobno, przebieg przypina wersje (D13)</span></li>
@@ -819,7 +816,7 @@ function vInfo(){
     <li><span class="ic ok">✓</span><span>Dysk sieciowy, ścieżki UNC względem korzenia (D15)</span></li>
     <li><span class="ic ok">✓</span><span>CAM pracują tylko na plikach (D16)</span></li>
     <li><span class="ic ok">✓</span><span>Stan w centralnej bazie, logowanie AD, logika w procedurach SQL</span></li>
-    <li><span class="ic ok">✓</span><span>Przypisanie projektów do zakresów wynika ze słownika; nowe elementy SAP wykrywane w każdym przebiegu</span></li>
+    <li><span class="ic ok">✓</span><span>Zakres = słownik struktury (P1S ↔ CES) prowadzony przez osobę z finansów; nowe elementy wykrywane po pobraniu danych</span></li>
     <li><span class="ic warn">!</span><span>Otwarte: źródło produkcji (O10), zasady uzupełnień (O11), plik CAM na CAM czy na program (O3)</span></li></ul></section>
   </div>
   <div class="note">Wszystkie nazwy, liczby, osoby i ścieżki są przykładowe. Stan demo zapisuje się w tej przeglądarce; „Resetuj dane demo” w menu przywraca stan początkowy.</div>`;
@@ -857,7 +854,7 @@ const A={
   wback:()=>{ S.wiz.step--; render(); },
   wcreate:()=>{
     const w=S.wiz; w.busy=true;
-    const steps=['Zarejestrowano zakres w bazie (meta.Zakres) i szablon etapów','Utworzono foldery w '+ROOT+'\\Zakresy\\'+w.code,'Skopiowano wzorce słowników z nagłówkami i instrukcją','Zapisano propozycję przypisań: 00_Global\\Slowniki\\Propozycje\\Przypisanie_projektow_'+w.code+'.xlsx','Przygotowano treść zgłoszenia do IT (uprawnienia grup AD)','Sprawdzono strukturę folderów'];
+    const steps=['Zarejestrowano zakres w bazie (meta.Zakres) i szablon etapów','Utworzono foldery w '+ROOT+'\\Zakresy\\'+w.code,'Skopiowano wzorce słowników z nagłówkami i instrukcją','Wypełniono wzorzec „Struktura projektowa” kluczami zaznaczonych elementów','Przygotowano treść zgłoszenia do IT (uprawnienia grup AD)','Sprawdzono strukturę folderów'];
     w.progress=[]; render();
     steps.forEach((t,i)=>setTimeout(()=>{ w.progress.push({t,done:true}); if(i===steps.length-1){ w.busy=false; finishCreate(); } render(); }, 450*(i+1)));
   },
@@ -866,9 +863,7 @@ const A={
     for(const d of z.dicts){ const dd=S.dicts[x+':'+d]; if(!dd.versions.length) dd.versions.unshift(v(1,'29.09.2026',ME.split(' ')[0][0]+'. '+ME.split(' ')[1], d==='struktura'?96:d==='harmonogram'?38:d==='etc'?38:12,'+'+(d==='struktura'?96:38)+' / ~0 / zamk. 0','publikacja')); }
     z.cams=[['T. Sikora',7],['W. Mróz',5]];
     if(!z.projects.length){ const pr=(z.proposal&&z.proposal.length? z.proposal : AVAIL_PROJ.filter(a=>!a[2]).slice(0,1).map(a=>a[0]));
-      z.projects=pr.map(p=>[p,(AVAIL_PROJ.find(a=>a[0]===p)||[])[1]||'']);
-      const nv=curVer(S,'projekty')+1; S.dicts.projekty.versions.unshift(v(nv,'29.09.2026','T. Mazur',17+pr.length,'+'+pr.length+' / ~0 / zamk. 0','publikacja'));
-      S.events.unshift({t:now(),who:'Tomasz Mazur',z:'GLOBAL',msg:'Opublikowano Przypisanie projektów do zakresów v'+nv+' (+'+pr.length+' dla '+z.code+')'}); }
+      z.projects=pr.map(p=>[p,(AVAIL_PROJ.find(a=>a[0]===p)||[])[1]||'']); }
     S.events.unshift({t:now(),who:ME,z:z.code,msg:'Opublikowano pierwsze wersje słowników zakresu (v1) – walidacja bez błędów'});
     save(); render(); toast('Słowniki zakresu mają wersję v1. Można uruchomić przebieg.');
   },
@@ -902,18 +897,21 @@ const A={
   valKeep:()=>{ const r=R(); r.flags.keepOld=true; complete(r,'val'); r.sel='val'; logRun(r,'Decyzja: kontynuacja na „Struktura projektowa” v'+r.pinned['F16:struktura']+'. Kandydat odrzucony.'); save(); render(); },
   doJoin:()=>{ const r=R(); work(r,'join','Łączenie źródeł w bazie (procedury)…',1400,()=>{
     if(r.zid==='F16' && !S.f16NewResolved && !r.newEl){
-      r.newEl={state:'open', proj:[['F16-CAS-04','F-16 Pakiet 4',182400]], wbs:[['F16-CAS-02.3.14','F16-CAS-02',46210],['F16-CAS-02.3.15','F16-CAS-02',12880]], cost:241490};
-      S.newProj=['F16-CAS-04']; setSt(r,'join','action'); logRun(r,'Wykryto nowe elementy SAP bez przypisania: 1 definicja projektu, 2 elementy WBS (241 490 PLN).');
+      r.newEl={state:'open', cost:241490, rows:[
+        {src:'CES', key:'F16-CAS-04.1.01', pd:'F16-CAS-04', val:'182 400 PLN', miss:'Cały wiersz – nowa definicja projektu w pliku CJI3'},
+        {src:'CES', key:'F16-CAS-02.3.14', pd:'F16-CAS-02', val:'46 210 PLN', miss:'Cały wiersz – nowy element WBS'},
+        {src:'CES', key:'F16-CAS-02.3.15', pd:'F16-CAS-02', val:'12 880 PLN', miss:'Cały wiersz – nowy element WBS'},
+        {src:'P1S', key:'P-F16-0231-07', pd:'—', val:'12 zleceń, 35%', miss:'Powiązanie z CAS WBS (brak pary P1S ↔ CES)'}]};
+      setSt(r,'join','action'); logRun(r,'Wykryto elementy bez przypisania w słowniku struktury: 3 z CES (241 490 PLN), 1 z P1S.');
     } else { complete(r,'join'); logRun(r,'Połączono źródła.'); } }); },
   neExport:()=>{ const r=R(); r.newEl.exported=true; logRun(r,'Wyeksportowano listy nowych elementów do uzupełnienia słowników.'); save(); render(); },
   neAccept:()=>{ const r=R(); r.newEl.state='accepted'; r.newEl.by=ME; complete(r,'join'); r.sel='join'; logRun(r,'Decyzja: kontynuacja bez nowych elementów (241 490 PLN poza EV wstępnym).'); save(); render(); },
   neResolve:()=>{ const r=R();
-    const np=curVer(S,'projekty')+1; S.dicts.projekty.versions.unshift(v(np,'29.09.2026','T. Mazur',18,'+1 / ~0 / zamk. 0',r.id));
-    const ns=curVer(S,'F16:struktura')+1; S.dicts['F16:struktura'].versions.unshift(v(ns,'29.09.2026','A. Wiśniewska',415,'+2 / ~0 / zamk. 0',r.id));
-    S.zakresy.F16.projects.push(['F16-CAS-04','Pakiet 4']); S.f16NewResolved=true; S.newProj=[];
-    r.pinned.projekty=np; r.pinned['F16:struktura']=ns; r.newEl.state='resolved';
-    logRun(r,'Opublikowano Przypisanie projektów v'+np+' i Struktura projektowa F16 v'+ns+'. Przypięto nowe wersje, etapy od walidacji unieważnione.');
-    invalidateFrom(r,'val'); save(); render(); toast('Słowniki uzupełnione. Wykonaj ponownie walidację i łączenie.'); },
+    const ns=curVer(S,'F16:struktura')+1; S.dicts['F16:struktura'].versions.unshift(v(ns,'29.09.2026','A. Wiśniewska',415,'+4 / ~0 / zamk. 0',r.id));
+    S.zakresy.F16.projects.push(['F16-CAS-04','Pakiet 4']); S.f16NewResolved=true;
+    r.pinned['F16:struktura']=ns; r.newEl.state='resolved';
+    logRun(r,'Opublikowano „Struktura projektowa” F16 v'+ns+' (+4 wiersze). Przypięto nową wersję, etapy od walidacji unieważnione.');
+    invalidateFrom(r,'val'); save(); render(); toast('Słownik uzupełniony. Wykonaj ponownie walidację i łączenie.'); },
   doFin:()=>{ const r=R(); work(r,'fin','Generowanie plików dla finansów…',1000,()=>{ setSt(r,'fin','action'); r.fin={state:'pending'}; logRun(r,'Wygenerowano pliki dla finansów – oczekują na zatwierdzenie.'); }); },
   finOk:()=>{ const r=R(); r.fin={state:'approved', by:'Tomasz Mazur (rola Finanse – demo)', at:now()}; complete(r,'fin'); logRun(r,'Finanse zatwierdziły pliki pośrednie.','Tomasz Mazur'); save(); render(); toast('Zatwierdzono. Kolejne etapy odblokowane.'); },
   finNo:()=>{ const r=R(), c=($('#fin-c')?.value||'').trim(); if(!c){ toast('Wpisz komentarz – bez niego analityk nie wie, co poprawić.'); $('#fin-c')?.focus(); return; }
@@ -934,7 +932,7 @@ function finishCreate(){
   const w=S.wiz, id=w.code.toUpperCase();
   const dl=['struktura','harmonogram'].concat(w.type==='CAS'?['stawkicas']:[]).concat(w.etc?['etc']:[]);
   S.zakresy[id]={id, code:w.code, name:w.name, type:w.type, pool:w.pool, projects:[], proposal:w.projects.slice(), cams:[], analysts:[ME], approver:'— (brak w słowniku przypisań)', dicts:dl, created:'29.09.2026 · A. Wiśniewska', isNew:true};
-  for(const d of dl) S.dicts[id+':'+d]={id:id+':'+d, name:S.zd[d], scope:id, owner:'Analityk zakresu', file:'Zakresy\\'+w.code+'\\Slowniki\\'+w.code+'_'+S.zfile[d], versions:[]};
+  for(const d of dl) S.dicts[id+':'+d]={id:id+':'+d, name:S.zd[d], scope:id, owner:'Finanse – '+ME, file:'Zakresy\\'+w.code+'\\Slowniki\\'+w.code+'_'+S.zfile[d], versions:[]};
   S.events.unshift({t:now(),who:ME,z:w.code,msg:'Utworzono zakres '+w.code+' ('+TYPES[w.type].label+')'});
   save();
 }
