@@ -102,7 +102,8 @@ Uszkodzony plik jest oznaczany jako błąd i nie przerywa importu pozostałych.
 
 Gdy `sprawdz` pokazuje przekierowanie na stronę logowania, a synchronizacja nie jest dostępna:
 
-1. Utwórz raz folder na pobrane pliki, np. `C:\AHD_TEST\Do_importu`.
+1. Folder na pobrane pliki – docelowo wspólny na dysku sieciowym: `\\serwer\udzial\AHD\00_Global\RABIT\Do_importu`
+   (do testu wystarczy lokalny, np. `C:\AHD_TEST\Do_importu`).
 2. Otwórz folder RABIT w przeglądarce, zaznacz wszystkie pliki (pole wyboru w nagłówku listy) i kliknij
    **Pobierz**. Przy kilku plikach SharePoint zapisze jeden plik ZIP (np. `OneDrive_1_29-09-2026.zip`).
 3. Przenieś ZIP (albo pojedyncze pliki) do `C:\AHD_TEST\Do_importu`. Rozpakowywać nie trzeba.
