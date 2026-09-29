@@ -21,6 +21,7 @@ Dokument jest rozwijany iteracyjnie na podstawie:
 |---|---|
 | `readme.md` | kontekst biznesowy, cele, problemy, słowniki, otwarte pytania (ten plik) |
 | `docs/architektura.md` | architektura rozwiązania: decyzje, komponenty, przepływ danych, baza, wdrożenia |
+| `docs/pipeline-fazy.md` | koncepcja wszystkich faz pipeline: cel, wejście, przetwarzanie, efekt, przekazanie do kolejnej fazy |
 | `docs/funkcjonalnosc.md` | specyfikacja funkcjonalna: ekrany, funkcje, etapy przebiegu, reguły |
 | `prototyp/ahd-prototyp.html` | klikalny prototyp aplikacji (dane przykładowe, otwierany w przeglądarce) |
 | `docs/mvp-etap1.md`, `ahd/` | etap 1: pobranie plików RABIT przez WebDAV i import do bazy |
