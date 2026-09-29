@@ -25,6 +25,9 @@ oraz wskazuje punkty newralgiczne i otwarte decyzje.
 | D11 | Dopuszczalne ponowne przeliczenie EV | z zachowaniem poprzednich rewizji |
 | D12 | Pliki oryginalne przechowywane w centralnym folderze (Landing Zone), w bazie ścieżka + hash | odtwarzalność bez przyrostu bazy |
 | D13 | **Wszystko per zakres** (program / pula projektów); słowniki globalne publikowane osobno, przebieg przypina ich wersje | brak pipeline globalnego i przekazywania pracy, prosta współbieżność |
+| D14 | Przebiegi **w trakcie miesiąca**: zaawansowanie z raportu produkcyjnego (źródło do ustalenia), braki od CAM uzupełniane przez analityka. **Zamknięcie miesiąca**: zaawansowanie **zawsze od CAM** | bieżąca informacja co tydzień, formalne dane na zamknięcie |
+| D15 | Korzeń folderów na **dysku sieciowym** | wspólna ścieżka UNC dla wszystkich użytkowników |
+| D16 | **CAM pracują wyłącznie na plikach** (bez dostępu do aplikacji) | brak konieczności wdrażania aplikacji u CAM |
 
 ---
 
@@ -69,7 +72,18 @@ Efekty:
 | 8 | Walidacja danych CAM | kompletność, zakresy, spójność z budżetem |
 | 9 | Generowanie EV | zapis użytych wersji słowników i danych (rewizja) |
 
-### 2.4 Przebieg jako trwały obiekt (maszyna stanów)
+### 2.4 Rodzaje przebiegów (D14)
+
+| Rodzaj | Kiedy | Źródło zaawansowania (etapy 6–8) | Bramka EV |
+|---|---|---|---|
+| **Tygodniowy** | poniedziałki w trakcie miesiąca | raport produkcyjny (źródło do ustalenia); brakujące wartości uzupełnia analityk; pliki CAM opcjonalne | EV wstępne, oznaczone jako „nieformalne” |
+| **Zamknięcie miesiąca** | po końcu okresu | **wyłącznie CAM** | EV nie powstanie, dopóki każdy WP nie ma wartości od CAM |
+
+**Pochodzenie każdej wartości zaawansowania** jest zapisywane w bazie: `CAM` / `PRODUKCJA` / `ANALITYK`
+(+ kto, kiedy, komentarz przy wpisie analityka). Raporty pokazują udział wartości
+nie pochodzących od CAM. Wpis analityka nigdy nie nadpisuje wartości od CAM bez śladu.
+
+### 2.5 Przebieg jako trwały obiekt (maszyna stanów)
 
 - Przebieg (`Run`) żyje w bazie tygodniami: ma status każdego etapu, historię zdarzeń,
   wersje danych wejściowych każdego etapu.
@@ -109,8 +123,15 @@ AHD/
 - **Konfiguracja zakresu jest w bazie**, folder jest tylko magazynem plików.
 - Aplikacja przy każdym uruchomieniu sprawdza zgodność folderów i słowników z konfiguracją
   (brakujące pliki, zmienione nazwy, niedozwolone formaty).
-- Ścieżki w bazie zapisywane są **względem korzenia** – lokalny korzeń (np. ścieżka OneDrive,
-  która jest różna u każdego użytkownika) ustawia się w lokalnej konfiguracji aplikacji.
+- Korzeń na **dysku sieciowym** (D15), zapisany jako ścieżka **UNC** (`\\serwer\udział\AHD`),
+  nie jako litera dysku – litery mapowania mogą się różnić między komputerami.
+- Ścieżki w bazie zapisywane są **względem korzenia**; korzeń jest parametrem środowiska
+  (TEST i PROD mają osobne korzenie).
+- Uprawnienia do folderów nadawane grupom AD per zakres (analitycy: zapis; CAM: zapis tylko
+  w `CAM/.../Zwrocone` swojego zakresu, odczyt w `Wyslane`). Nadawanie uprawnień – IT.
+- Aplikacja działa na uprawnieniach użytkownika, więc Landing Zone **nie może** być chroniona
+  wyłącznie uprawnieniami – integralność zapewnia hash zapisany w bazie (zmiana pliku po
+  imporcie jest wykrywana).
 
 ---
 
@@ -175,9 +196,13 @@ Reguły walidacji są opisane deklaratywnie (konfiguracja per słownik), nie „
 - Szablon zawiera ukryty arkusz z: ID przebiegu, zakres, okres, CAM, wersja szablonu.
 - Komórki poza polami do uzupełnienia są zablokowane.
 - Import odrzuca plik: bez identyfikatora, z innego przebiegu/okresu, zmodyfikowany poza polami.
+- CAM pracują wyłącznie na plikach (D16): analityk generuje pliki do `CAM/<RRRR-MM>/Wyslane`,
+  CAM zapisuje uzupełniony plik w `CAM/<RRRR-MM>/Zwrocone`, aplikacja pokazuje analitykowi
+  status per CAM (wysłany / zwrócony / zaimportowany / odrzucony + powód).
+- Informację o odrzuceniu pliku przekazuje CAM analityk (lub raport błędów zapisany obok pliku).
 - Rekomendacja: **jeden plik na CAM** (w ramach zakresu) – jednoznaczna odpowiedzialność,
-  równoległa praca bez konfliktów współedycji na SharePoint, możliwość częściowego importu;
-  dodatkowo zbiorczy plik programu tylko do odczytu. *(decyzja otwarta)*
+  równoległa praca, możliwość częściowego importu; dodatkowo zbiorczy plik programu tylko
+  do odczytu. *(decyzja otwarta)*
 
 ---
 
@@ -226,14 +251,16 @@ Schematy (propozycja):
 1. Rozbieżne wersje aplikacji u użytkowników → logika w bazie + kontrola wersji.
 2. Długo trwające przebiegi (dni) → trwały stan w bazie, przejmowanie przebiegu, unieważnianie etapów.
 3. Zmiana słownika w trakcie przebiegu → przypinanie wersji, świadoma decyzja o przeliczeniu.
-4. Ścieżki różne u różnych użytkowników (OneDrive) → ścieżki względne + lokalny korzeń.
-5. Pliki otwarte / w trakcie edycji / współedycja SharePoint → kopia do Landing Zone, hash, publikacja.
+4. Ścieżki: litery dysków różne u użytkowników → UNC + ścieżki względne od korzenia środowiska.
+5. Pliki otwarte / w trakcie edycji (blokada Excela na dysku sieciowym) → kopia do Landing Zone, hash, publikacja.
 6. Pliki CAM zmienione poza polami lub z innego przebiegu → identyfikator i blokady w szablonie.
 7. Excel zmieniający typy danych (WBS, daty, zera wiodące) → walidacja typów, preferencja CSV dla SAP.
 8. Etykiety poufności / szyfrowanie plików (Purview, IRM) → do weryfikacji z IT.
 9. Uprawnienia omijane przez bezpośrednie połączenie z bazą → kontrola w procedurach.
 10. Istniejące słowniki w `PZLPROD.LOG` (`WBS`, `Stanowiska`, `LearningCurve`, `PeriodDates`)
     → ryzyko dwóch źródeł prawdy; wymaga decyzji.
+12. Mieszanie źródeł zaawansowania (CAM / produkcja / analityk) → zapis pochodzenia każdej wartości,
+    twarda bramka „tylko CAM” na zamknięcie miesiąca.
 11. Świeżość `vAHDD` zależy od przebiegu `uspUpdateAHDD` → kontrola aktualności przed etapem 1/4.
 
 ---
@@ -242,11 +269,10 @@ Schematy (propozycja):
 
 | # | Pytanie | Rekomendacja |
 |---|---|---|
-| O2 | Korzeń folderów: SharePoint (sync OneDrive) czy dysk sieciowy? | jeden korzeń, ścieżki względne |
 | O3 | Plik CAM: na CAM czy na program? | na CAM |
-| O4 | Czy tygodniowe przebiegi obejmują etapy CAM, czy CAM tylko raz w miesiącu? | do ustalenia |
 | O5 | Serwer / baza dla AHD | osobna baza `AHD` |
 | O6 | Forma dystrybucji aplikacji (repozytorium + skrypt instalacyjny / paczka) | do ustalenia |
 | O7 | Czy RABIT może eksportować CSV/TXT? | CSV preferowany |
-| O8 | Czy CAM korzystają z aplikacji, czy tylko z plików? | tylko pliki (etap 1 wersji) |
+| O10 | Źródło zaawansowania z produkcji dla przebiegów tygodniowych (np. `vAHDD`?) | do ustalenia |
+| O11 | Zasady uzupełniania braków przez analityka (ostatnia znana wartość / plan / ręcznie) | do ustalenia |
 | O9 | Los słowników w `PZLPROD.LOG` | do ustalenia z właścicielami |
