@@ -21,7 +21,7 @@ oraz wskazuje punkty newralgiczne i otwarte decyzje.
 | D7 | Pipeline uruchamiany **co tydzień (poniedziałek)**, okres rozliczeniowy **miesięczny** | rytm pracy zespołu |
 | D8 | Wolumen danych przez sieć nie stanowi problemu | ładowanie z aplikacji lokalnej do bazy zdalnej |
 | D9 | **Brak podziału uprawnień** w finansach – każda osoba z finansów może prowadzić każdy zakres (zastępstwa); logowanie AD służy do audytu | prostota, ciągłość pracy |
-| D10 | Pliki pośrednie dla finansów **wymagają potwierdzenia** przed generowaniem plików CAM (może potwierdzić dowolna osoba z finansów, zapis kto/kiedy) | kontrola jakości przed wysłaniem do CAM |
+| D10 | Pliki pośrednie dla finansów **wymagają potwierdzenia** przed generowaniem plików CAM – formalne potwierdzenie **w aplikacji**, może je wykonać sama osoba prowadząca przebieg; zapis kto/kiedy | kontrola jakości przed wysłaniem do CAM |
 | D11 | Dopuszczalne ponowne przeliczenie EV | z zachowaniem poprzednich rewizji |
 | D12 | Pliki oryginalne przechowywane w centralnym folderze (Landing Zone), w bazie ścieżka + hash | odtwarzalność bez przyrostu bazy |
 | D13 | **Wszystko per zakres** (program / pula projektów); słowniki globalne publikowane osobno, przebieg przypina ich wersje | brak pipeline globalnego i przekazywania pracy, prosta współbieżność |
