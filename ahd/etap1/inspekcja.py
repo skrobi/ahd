@@ -6,7 +6,7 @@ import csv
 import re
 from collections import defaultdict
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
 
 EXCEL = {".xlsx", ".xlsm"}
 TEXT = {".csv", ".txt"}
@@ -118,3 +118,53 @@ def check_sets(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
             issue["opis"] = f"{len(recs)} części, identyczny układ {len(next(iter(cols)))} kolumn"
         issues.append(issue)
     return issues
+
+
+def header_signature(columns: list[str]) -> str:
+    """Krótki odcisk układu kolumn – pozwala rozpoznać ten sam typ raportu niezależnie od nazwy pliku."""
+    import hashlib
+
+    norm = "|".join(c.strip().lower() for c in columns)
+    return hashlib.sha1(norm.encode("utf-8")).hexdigest()[:16]
+
+
+REPORT_TYPES = [
+    (re.compile(r"cji3", re.IGNORECASE), "CJI3"),
+    (re.compile(r"zrd[_ -]?kkaj", re.IGNORECASE), "ZRD_KKAJ"),
+    (re.compile(r"net[_ -]?inv", re.IGNORECASE), "NET_INV"),
+]
+
+
+def guess_report_type(filename: str) -> str:
+    """Wstępne rozpoznanie typu raportu po nazwie pliku (do zastąpienia słownikiem sygnatur kolumn)."""
+    for pattern, name in REPORT_TYPES:
+        if pattern.search(filename):
+            return name
+    return "nieznany"
+
+
+def read_rows(path: str | Path, info: dict[str, Any]) -> Iterator[list[Any]]:
+    """Wiersze danych (bez nagłówka) jako listy wartości – do załadowania w postaci surowej."""
+    path = Path(path)
+    suffix = path.suffix.lower()
+    if suffix in TEXT:
+        sep = {"TAB": "\t"}.get(info.get("separator", ";"), info.get("separator", ";"))
+        with path.open("r", encoding=info.get("kodowanie", "utf-8-sig"), newline="") as fh:
+            reader = csv.reader(fh, delimiter=sep)
+            next(reader, None)
+            for row in reader:
+                if any(cell.strip() for cell in row):
+                    yield row
+    elif suffix in EXCEL:
+        import openpyxl
+
+        wb = openpyxl.load_workbook(path, read_only=True, data_only=True)
+        try:
+            rows = wb.worksheets[0].iter_rows(min_row=2, values_only=True)
+            for row in rows:
+                if any(v is not None and str(v).strip() != "" for v in row):
+                    yield list(row)
+        finally:
+            wb.close()
+    else:
+        raise ValueError(f"Nieobsługiwany format: {path.name}")

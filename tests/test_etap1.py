@@ -12,7 +12,8 @@ from urllib.parse import unquote
 import openpyxl
 import pytest
 
-from ahd.etap1 import cli, inspekcja, landing
+from ahd.baza import Database
+from ahd.etap1 import cli, inspekcja
 from ahd.zrodla.sharepoint import SharePointClient, SharePointError, parse_sharepoint_url
 
 SITE = "/sites/RabbitReporting"
@@ -143,60 +144,90 @@ def test_auth_error_is_readable(sharepoint):
         SharePointClient(loc.site_url).check()
 
 
-def test_pobierz_end_to_end(sharepoint, tmp_path, capsys):
-    cel = tmp_path / "LZ"
-    args = ["pobierz", "--url", sharepoint["url"], "--auth", "none", "--cel", str(cel), "--zakres", "F16",
-            "--okres", "2026-09", "--tydzien", "40", "--filtr", "*.csv", "--filtr", "*.xlsx"]
-    assert cli.main(args) == 0
-    run = cel / "F16" / "2026-09" / "R-F16-2026-09-T40"
-    manifest = json.loads((run / "manifest.json").read_text(encoding="utf-8"))
-    by_name = {r["plik"]: r for r in manifest["pliki"]}
-    assert set(by_name) == {"CJI3_F16_cz1.csv", "CJI3_F16_cz2.csv", "ZRD_KKAJ_F16.xlsx"}
-    assert all(r["status"] == "nowy" for r in by_name.values())
-    assert by_name["CJI3_F16_cz1.csv"]["sha256"] == landing.sha256_file(run / "CJI3_F16_cz1.csv")
-    assert by_name["CJI3_F16_cz1.csv"]["inspekcja"]["wiersze"] == 5
-    assert by_name["CJI3_F16_cz1.csv"]["inspekcja"]["kodowanie"] == "cp1250"
-    assert by_name["CJI3_F16_cz1.csv"]["inspekcja"]["kolumny"][2] == "Wartość/WK"
-    assert by_name["ZRD_KKAJ_F16.xlsx"]["inspekcja"]["wiersze"] == 4
-    (zestaw,) = manifest["zestawy"]
-    assert zestaw["zestaw"] == "CJI3_F16" and zestaw["waga"] == "OK" and zestaw["wiersze_razem"] == 8
-    assert not list(run.glob("*.part"))
+def _db(tmp_path):
+    return Database("sqlite:///" + (tmp_path / "LZ" / "ahd_mvp.sqlite").as_posix())
 
-    # Ten sam przebieg drugi raz – odmowa bez --nadpisz.
-    assert cli.main(args) == 2
 
-    # Kolejny tydzień: te same pliki są rozpoznane jako bez zmian, zmieniony plik jako zmieniony.
-    sharepoint["store"][FOLDER]["files"]["CJI3_F16_cz2.csv"] += "KO;F16-CAS-02.1.9;1,00;2026-09-20\n".encode("cp1250")
-    args2 = [a if a != "40" else "41" for a in args]
-    assert cli.main(args2) == 0
-    m2 = json.loads((cel / "F16" / "2026-09" / "R-F16-2026-09-T41" / "manifest.json").read_text(encoding="utf-8"))
-    statuses = {r["plik"]: r["status"] for r in m2["pliki"]}
-    assert statuses == {"CJI3_F16_cz1.csv": "bez zmian", "CJI3_F16_cz2.csv": "zmieniony", "ZRD_KKAJ_F16.xlsx": "bez zmian"}
+def _import(sharepoint, tmp_path, *extra):
+    return cli.main(["import", "--url", sharepoint["url"], "--auth", "none", "--landing", str(tmp_path / "LZ"), *extra])
+
+
+def test_import_all_files_without_scope(sharepoint, tmp_path):
+    assert _import(sharepoint, tmp_path) == 0
+    db = _db(tmp_path)
+    files = {row[2]: row for row in db.history(50)}
+    assert set(files) == {"CJI3_F16_cz1.csv", "CJI3_F16_cz2.csv", "ZRD_KKAJ_F16.xlsx", "Notatka's.txt"}
+    when, user, name, rtype, rows, sha = files["CJI3_F16_cz1.csv"]
+    assert (rtype, rows) == ("CJI3", 5) and db.count_rows(sha) == 5
+    assert files["ZRD_KKAJ_F16.xlsx"][3:5] == ("ZRD_KKAJ", 4)
+    cur = db.conn.execute("SELECT Dane FROM stg_RawRow WHERE Sha256=? AND NrWiersza=1", (sha,))
+    assert json.loads(cur.fetchone()[0]) == ["KO", "F16-CAS-01.1.0", "0,50", "2026-09-01"]
+    cols = db.conn.execute("SELECT Kolumny, Kodowanie FROM meta_SourceFile WHERE Sha256=?", (sha,)).fetchone()
+    assert json.loads(cols[0])[2] == "Wartość/WK" and cols[1] == "cp1250"
+    landing_files = [p for p in (tmp_path / "LZ").rglob("*") if p.is_file() and p.suffix != ".sqlite"]
+    assert len(landing_files) == 4 and not (tmp_path / "LZ" / "_tmp").exists() or not any((tmp_path / "LZ" / "_tmp").rglob("*.*"))
+    db.close()
+
+
+def test_second_import_skips_without_download(sharepoint, tmp_path, monkeypatch):
+    assert _import(sharepoint, tmp_path) == 0
+    downloads = []
+    original = SharePointClient.download
+    monkeypatch.setattr(SharePointClient, "download", lambda self, f, d: downloads.append(f.name) or original(self, f, d))
+    assert _import(sharepoint, tmp_path) == 0
+    assert downloads == []
+    (start, user, seen, imp, skip, err, status), *_ = list(_db(tmp_path).batches(1))
+    assert (seen, imp, skip, err, status) == (4, 0, 4, 0, "zakonczony")
+
+
+def test_changed_file_and_duplicate_under_new_name(sharepoint, tmp_path):
+    assert _import(sharepoint, tmp_path) == 0
+    files = sharepoint["store"][FOLDER]["files"]
+    files["CJI3_F16_cz2.csv"] += "KO;F16-CAS-02.1.9;1,00;2026-09-20\n".encode("cp1250")
+    files["Kopia ZRD.xlsx"] = files["ZRD_KKAJ_F16.xlsx"]
+    assert _import(sharepoint, tmp_path) == 0
+    db = _db(tmp_path)
+    decisions = dict(db.conn.execute(
+        "SELECT NazwaPliku, Decyzja FROM meta_SourceFileSeen WHERE BatchId=(SELECT BatchId FROM meta_ImportBatch ORDER BY Start DESC, rowid DESC LIMIT 1)"
+    ).fetchall())
+    assert decisions["CJI3_F16_cz2.csv"] == "zaimportowany"
+    assert decisions["Kopia ZRD.xlsx"] == "duplikat"
+    assert decisions["CJI3_F16_cz1.csv"] == "pominiety (metadane)"
+    assert db.conn.execute("SELECT COUNT(*) FROM meta_SourceFile").fetchone()[0] == 5
+
+
+def test_full_check_downloads_and_finds_duplicates(sharepoint, tmp_path):
+    assert _import(sharepoint, tmp_path) == 0
+    assert _import(sharepoint, tmp_path, "--pelne-sprawdzenie") == 0
+    (start, user, seen, imp, skip, err, status), *_ = list(_db(tmp_path).batches(1))
+    assert (imp, skip) == (0, 4)
+
+
+def test_broken_file_does_not_stop_import(sharepoint, tmp_path):
+    sharepoint["store"][FOLDER]["files"]["Uszkodzony.xlsx"] = b"to nie jest excel"
+    assert _import(sharepoint, tmp_path) == 1
+    db = _db(tmp_path)
+    assert db.conn.execute("SELECT COUNT(*) FROM meta_SourceFile").fetchone()[0] == 4
+    assert db.conn.execute("SELECT Decyzja FROM meta_SourceFileSeen WHERE NazwaPliku='Uszkodzony.xlsx'").fetchone()[0] == "blad"
 
 
 def test_inconsistent_parts_fail(sharepoint, tmp_path):
     sharepoint["store"][FOLDER]["files"]["CJI3_F16_cz2.csv"] = "Obiekt;Inna kolumna\nKO;1\n".encode("cp1250")
-    code = cli.main(["pobierz", "--url", sharepoint["url"], "--auth", "none", "--cel", str(tmp_path / "LZ"),
-                     "--zakres", "F16", "--okres", "2026-09", "--tydzien", "40", "--filtr", "CJI3*"])
-    assert code == 1
-    manifest = json.loads(next((tmp_path / "LZ").rglob("manifest.json")).read_text(encoding="utf-8"))
-    assert manifest["zestawy"][0]["waga"] == "BLAD"
+    assert _import(sharepoint, tmp_path, "--filtr", "CJI3*") == 1
 
 
-def test_folder_source_and_dry_run(tmp_path, capsys):
+def test_folder_source_dry_run_and_history(tmp_path, capsys):
     src = tmp_path / "zrodlo"
     src.mkdir()
     (src / "CJI3_S70i.csv").write_text("a;b\n1;2\n3;4\n", encoding="utf-8")
     (src / "~$CJI3_S70i.csv").write_text("blokada", encoding="utf-8")
-    assert cli.main(["pobierz", "--folder", str(src), "--cel", str(tmp_path / "LZ"), "--zakres", "S70i", "--zamkniecie",
-                     "--okres", "2026-08", "--dry-run"]) == 0
-    assert "Plików   : 1" in capsys.readouterr().out
-    assert not (tmp_path / "LZ").exists()
-    assert cli.main(["pobierz", "--folder", str(src), "--cel", str(tmp_path / "LZ"), "--zakres", "S70i", "--zamkniecie",
-                     "--okres", "2026-08"]) == 0
-    run = tmp_path / "LZ" / "S70i" / "2026-08" / "R-S70i-2026-08-Z"
-    rec = json.loads((run / "manifest.json").read_text(encoding="utf-8"))["pliki"][0]
-    assert rec["inspekcja"]["wiersze"] == 2 and rec["status"] == "nowy"
+    lz = str(tmp_path / "LZ")
+    assert cli.main(["import", "--folder", str(src), "--landing", lz, "--dry-run"]) == 0
+    assert "Plików      : 1" in capsys.readouterr().out
+    assert cli.main(["import", "--folder", str(src), "--landing", lz]) == 0
+    assert cli.main(["historia", "--landing", lz]) == 0
+    out = capsys.readouterr().out
+    assert "CJI3_S70i.csv" in out and "CJI3" in out
 
 
 @pytest.mark.parametrize(

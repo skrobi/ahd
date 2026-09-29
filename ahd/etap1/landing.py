@@ -1,13 +1,11 @@
-"""Landing Zone: kopia oryginałów, hash SHA-256, manifest przebiegu."""
+"""Landing Zone: archiwum oryginałów plików (bez podziału na zakresy)."""
 
 from __future__ import annotations
 
 import datetime as dt
-import getpass
 import hashlib
-import json
+import uuid
 from pathlib import Path
-from typing import Any
 
 
 def sha256_file(path: Path) -> str:
@@ -18,57 +16,27 @@ def sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
-def run_id(zakres: str, okres: str, tydzien: int | None) -> str:
-    """R-<Zakres>-<RRRR-MM>-T<NN> (tydzień) albo R-<Zakres>-<RRRR-MM>-Z (zamknięcie)."""
-    return f"R-{zakres}-{okres}-" + (f"T{tydzien:02d}" if tydzien is not None else "Z")
+def new_batch_id(now: dt.datetime | None = None) -> str:
+    """Identyfikator importu: IMP-RRRRMMDD-HHMMSS-xxxx (czytelny i unikalny)."""
+    now = now or dt.datetime.now()
+    return f"IMP-{now:%Y%m%d-%H%M%S}-{uuid.uuid4().hex[:4]}"
 
 
-def run_dir(root: Path, zakres: str, okres: str, rid: str) -> Path:
-    return Path(root) / zakres / okres / rid
+def batch_dir(root: Path, batch_id: str, now: dt.datetime | None = None) -> Path:
+    """<LandingZone>/<RRRR-MM-DD>/<BatchId>/ – pliki nowe (zaimportowane) w danym imporcie."""
+    now = now or dt.datetime.now()
+    return Path(root) / f"{now:%Y-%m-%d}" / batch_id
 
 
-def previous_hashes(root: Path, zakres: str, exclude: Path | None = None) -> dict[str, set[str]]:
-    """Hashe plików z wcześniejszych manifestów zakresu: nazwa pliku -> zbiór hashy."""
-    known: dict[str, set[str]] = {}
-    base = Path(root) / zakres
-    if not base.exists():
-        return known
-    for manifest in base.glob("*/*/manifest.json"):
-        if exclude and manifest.parent == exclude:
-            continue
-        try:
-            data = json.loads(manifest.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
-            continue
-        for rec in data.get("pliki", []):
-            known.setdefault(rec["plik"], set()).add(rec["sha256"])
-    return known
+def temp_dir(root: Path, batch_id: str) -> Path:
+    """Pliki pobrane do sprawdzenia hasha; duplikaty są stąd usuwane."""
+    return Path(root) / "_tmp" / batch_id
 
 
-def change_status(name: str, sha: str, known: dict[str, set[str]]) -> str:
-    if sha in known.get(name, set()):
-        return "bez zmian"
-    if any(sha in hashes for hashes in known.values()):
-        return "bez zmian (inna nazwa)"
-    return "zmieniony" if name in known else "nowy"
-
-
-def write_manifest(directory: Path, manifest: dict[str, Any]) -> Path:
-    path = directory / "manifest.json"
-    tmp = path.with_suffix(".json.part")
-    tmp.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
-    tmp.replace(path)
-    return path
-
-
-def new_manifest(rid: str, zakres: str, okres: str, zrodlo: str) -> dict[str, Any]:
-    return {
-        "przebieg": rid,
-        "zakres": zakres,
-        "okres": okres,
-        "zrodlo": zrodlo,
-        "uzytkownik": getpass.getuser(),
-        "start": dt.datetime.now().astimezone().isoformat(timespec="seconds"),
-        "pliki": [],
-        "zestawy": [],
-    }
+def unique_path(directory: Path, name: str) -> Path:
+    dest = directory / name
+    i = 2
+    while dest.exists():
+        dest = directory / f"{Path(name).stem} ({i}){Path(name).suffix}"
+        i += 1
+    return dest
