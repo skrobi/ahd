@@ -187,11 +187,6 @@ textarea{min-height:70px;resize:vertical}
   <span class="env" title="Profil konfiguracji aplikacji">TEST · AHD_TEST</span>
   <div class="who">
     <span class="muted">PZL\a.wisniewska</span>
-    <label class="muted" for="role">Rola</label>
-    <select id="role">
-      <option value="analityk">Analityk</option>
-      <option value="finanse">Finanse (zatwierdzanie)</option>
-    </select>
   </div>
 </div>
 <div class="shell">
@@ -210,14 +205,14 @@ textarea{min-height:70px;resize:vertical}
 const ROOT = '\\\\pzlfs01\\AHD';
 const ME = 'Anna Wiśniewska';
 const APP_VER = '0.3.0', SCHEMA_VER = 12;
-const KEY = 'ahd-prototyp-v3';
+const KEY = 'ahd-prototyp-v4';
 
 const TYPES = {
   SAC:{label:'Sikorsky (SAC)', desc:'EV prowadzi Sikorsky. Dodatkowy etap: plik dla Cobra, koszt pracy w USD.'},
   CAS:{label:'CAS Compliance', desc:'Koszty przeliczane stawkami CAS. Wymagany słownik stawek CAS.'},
   WEW:{label:'Wewnętrzny', desc:'Pełna odpowiedzialność PZL: budżet, harmonogram, ETC i EV.'}
 };
-const GLOBALS = ['stawki','kalendarz','cam','przypisania','kursy'];
+const GLOBALS = ['stawki','kalendarz','kursy'];
 const ST = {todo:'Oczekuje', ready:'Do wykonania', running:'W toku', action:'Wymaga akcji', done:'Zakończony', error:'Błąd', stale:'Nieaktualny'};
 
 function stageDefs(type, kind){
@@ -264,15 +259,11 @@ function seed(){
       [v(7,'01.09.2026','T. Mazur',184,'+6 / ~0 / zamk. 6','R-S70I-2026-09-T37'),v(6,'02.06.2026','T. Mazur',178,'+4 / ~2 / zamk. 0',''),v(5,'03.03.2026','T. Mazur',174,'+0 / ~3 / zamk. 0','')]),
     kalendarz:D('kalendarz','Kalendarz okresów','global','Finanse – T. Mazur','00_Global\\Slowniki\\Kalendarz_okresow.xlsx',
       [v(3,'05.01.2026','T. Mazur',24,'+12 / ~0 / zamk. 0','')]),
-    cam:D('cam','Słownik CAM','global','PMO – K. Rogalska','00_Global\\Slowniki\\CAM.xlsx',
-      [v(12,'15.09.2026','K. Rogalska',64,'+2 / ~1 / zamk. 1','R-F16-2026-09-T38'),v(11,'18.08.2026','K. Rogalska',63,'+1 / ~0 / zamk. 0','')]),
-    przypisania:D('przypisania','Przypisania użytkowników','global','Finanse – T. Mazur','00_Global\\Slowniki\\Przypisania_uzytkownikow.xlsx',
-      [v(5,'01.08.2026','T. Mazur',41,'+6 / ~0 / zamk. 0','')],{financeOnly:true}),
     kursy:D('kursy','Kursy USD/PLN','global','Finanse – T. Mazur','00_Global\\Slowniki\\Kursy_USD.xlsx',
       [v(9,'01.09.2026','T. Mazur',9,'+1 / ~0 / zamk. 0','')]),
   };
-  const zd = {struktura:'Struktura projektowa (P1S ↔ CES)', harmonogram:'Harmonogram i budżet', stawkicas:'Stawki CAS', etc:'ETC lokalne'};
-  const zfile = {struktura:'Struktura_projektowa.xlsx', harmonogram:'Harmonogram_budzet.xlsx', stawkicas:'Stawki_CAS.xlsx', etc:'ETC_lokalne.xlsx'};
+  const zd = {struktura:'Struktura projektowa (P1S ↔ CES)', harmonogram:'Harmonogram i budżet', stawkicas:'Stawki CAS'};
+  const zfile = {struktura:'Struktura_projektowa.xlsx', harmonogram:'Harmonogram_budzet.xlsx', stawkicas:'Stawki_CAS.xlsx'};
   for(const z of Object.values(zakresy)) for(const d of z.dicts){
     const id = z.id+':'+d, base = d==='struktura'?4:d==='harmonogram'?6:2;
     dicts[id] = D(id, zd[d], z.id, 'Finanse – '+z.analysts[0], 'Zakresy\\'+z.code+'\\Slowniki\\'+z.code+'_'+zfile[d],
@@ -341,7 +332,7 @@ function pill(st, txt){ return `<span class="pill s-${st}">${esc(txt ?? ST[st] ?
 function toast(msg){ const t=$('#toast'); t.textContent=msg; t.hidden=false; clearTimeout(toast.h); toast.h=setTimeout(()=>t.hidden=true,3200); }
 function logRun(r,msg,who=ME){ const t=now(); r.log.unshift({t,who,msg}); S.events.unshift({t,who,z:S.zakresy[r.zid].code,msg}); }
 function go(view){ S.view=view; S.modal=null; save(); render(); window.scrollTo({top:0}); }
-function isFin(){ return S.role==='finanse'; }
+function isFin(){ return true; }
 function defsOf(r){ return stageDefs(S.zakresy[r.zid].type, r.kind); }
 function runLabel(r){ return r.kind==='close' ? 'Zamknięcie '+r.period : 'Tydzień '+r.week+' · '+r.period; }
 function runState(r){
@@ -376,7 +367,7 @@ function work(r,k,label,ms,fn){
   setSt(r,k,'running',{label}); render();
   setTimeout(()=>{ fn(); save(); render(); }, ms);
 }
-function canAct(r){ return r.owner===ME && !r.frozen; }
+function canAct(r){ return !r.frozen; }
 
 /* ---------- nawigacja ---------- */
 function renderNav(){
@@ -399,7 +390,7 @@ function vPulpit(){
     for(const r of act){
       const rs=runState(r);
       if(r.st.fin && r.st.fin.s==='action' && r.fin?.state==='pending') attention.push({lvl:'info', z, txt:runLabel(r)+': pliki dla finansów czekają na zatwierdzenie', a:'run', x:r.id});
-      else if(['action','error','ready'].includes(rs.s)) attention.push({lvl:rs.s==='error'?'crit':'warn', z, txt:runLabel(r)+': '+rs.txt+(r.owner!==ME?' (prowadzi '+r.owner+')':''), a:'run', x:r.id});
+      else if(['action','error','ready'].includes(rs.s)) attention.push({lvl:rs.s==='error'?'crit':'warn', z, txt:runLabel(r)+': '+rs.txt, a:'run', x:r.id});
       if(newerFor(r).length) attention.push({lvl:'stale', z, txt:runLabel(r)+': dostępna nowsza wersja słownika', a:'run', x:r.id});
     }
     if(z.dicts.some(d=>!S.dicts[z.id+':'+d]?.versions.length)) attention.push({lvl:'warn', z, txt:'Słowniki zakresu niekompletne – przebieg zablokowany', a:'zakres', x:z.id});
@@ -427,7 +418,7 @@ function zCard(z){
     body = `<div class="stack"><div class="row between"><span class="mono">${esc(r.id)}</span>${pill(rs.s, rs.s==='done'?(r.frozen?'Zamrożony':'Zakończony'):ST[rs.s])}</div>
       <div class="dots" aria-hidden="true">${defs.map(d=>`<span class="dot ${r.st[d.k].s}"></span>`).join('')}</div>
       <p style="font-size:.88rem">${esc(runLabel(r))}: ${esc(rs.txt)}</p>
-      <p class="muted" style="font-size:.8rem">Prowadzi: ${esc(r.owner)}${r.owner===ME?' (Ty)':''}</p></div>`;
+      <p class="muted" style="font-size:.8rem">Ostatnio: ${esc(r.log[0]?.who||r.owner)}</p></div>`;
   }
   return `<button class="zcard" data-a="zakres" data-x="${z.id}"><div class="row between"><span class="code">${esc(z.code)}</span><span class="tag">${esc(TYPES[z.type].label)}</span></div>
     <span class="muted" style="font-size:.88rem">${esc(z.name)}${z.pool?' · pula':''}</span>${body}</button>`;
@@ -450,9 +441,8 @@ function readiness(z){
   items.push(z.projects.length? {ok:true, txt:'Słownik „Struktura projektowa” obejmuje projekty: '+z.projects.map(p=>p[0]).join(', ')} : {ok:false, lvl:'crit', txt:'Słownik „Struktura projektowa” nie ma jeszcze żadnych elementów – zakres nie ma projektów'});
   items.push({ok:true, txt:'Struktura folderów zgodna z konfiguracją'});
   items.push(missing.length? {ok:false, lvl:'crit', txt:'Słowniki zakresu bez zatwierdzonej wersji: '+missing.map(d=>S.zd[d]).join(', ')} : {ok:true, txt:'Słowniki zakresu mają zatwierdzone wersje'});
-  const hasAssign = z.id!=='NEW' && !z.isNew;
-  items.push(hasAssign? {ok:true, txt:'Użytkownicy przypisani w słowniku przypisań (finanse)'} : {ok:false, lvl:'warn', txt:'Brak wpisów w słowniku „Przypisania użytkowników” – do czasu uzupełnienia przez finanse dostęp ma tylko twórca zakresu'});
-  items.push(z.isNew? {ok:false, lvl:'warn', txt:'Uprawnienia grup AD do folderów – zgłoszenie do IT w toku'} : {ok:true, txt:'Uprawnienia grup AD do folderów nadane'});
+  items.push(z.cams.length? {ok:true, txt:'CAM w słowniku struktury: '+z.cams.length+' (pliki CAM powstaną dla każdego z nich)'} : {ok:false, lvl:'warn', txt:'Kolumna CAM w słowniku struktury jest pusta – pliki CAM nie powstaną'});
+  items.push(z.isNew? {ok:false, lvl:'warn', txt:'Dostęp CAM do folderu CAM\\…\\Zwrocone – zgłoszenie do IT w toku'} : {ok:true, txt:'CAM mają dostęp do folderu CAM\\…\\Zwrocone'});
   return {items, blocked: missing.length>0 || !z.projects.length};
 }
 
@@ -464,20 +454,19 @@ function vZakres(id){
   <div class="head"><div><div class="eyebrow"><a href="#" data-a="nav" data-x="zakresy">Zakresy</a> / ${esc(z.code)}</div><h1>${esc(z.code)} · ${esc(z.name)}</h1>
     <p class="sub">${esc(TYPES[z.type].label)} · ${z.pool?'pula projektów · ':''}utworzony ${esc(z.created)}</p></div>
     <button class="btn primary" data-a="newrun" data-x="${id}" ${rd.blocked?'disabled':''}>Nowy przebieg</button></div>
-  ${rd.blocked?`<div class="note crit">Przebiegu nie można uruchomić: brakuje przypisania projektów lub zatwierdzonych wersji słowników zakresu. Właściciele uzupełniają pliki Excel, a aplikacja je waliduje i publikuje.</div>`:''}
+  ${rd.blocked?`<div class="note crit">Przebiegu nie można uruchomić: słowniki zakresu nie mają zatwierdzonych wersji. Osoba prowadząca zakres uzupełnia pliki Excel, a aplikacja je waliduje i publikuje.</div>`:''}
   <div class="grid g2">
     <section class="panel"><h2>Gotowość zakresu</h2>
       <ul class="checks">${rd.items.map(i=>`<li><span class="ic ${i.ok?'ok':i.lvl}">${i.ok?'✓':'!'}</span><span>${esc(i.txt)}</span></li>`).join('')}</ul>
-      ${rd.blocked?`<div class="row"><button class="btn" data-a="fillDicts" data-x="${id}">Symuluj: właściciele uzupełnili słowniki i przypisania</button></div>`:''}
+      ${rd.blocked?`<div class="row"><button class="btn" data-a="fillDicts" data-x="${id}">Symuluj: słowniki uzupełnione</button></div>`:''}
     </section>
     <section class="panel"><h2>Konfiguracja</h2>
       <dl class="kv"><dt>Szablon etapów</dt><dd>${stageDefs(z.type,'weekly').length} etapów (tydzień) · ${stageDefs(z.type,'close').length} (zamknięcie)</dd>
       <dt>Projekty</dt><dd>${z.projects.length? z.projects.map(p=>`<span class="tag">${esc(p[0])}</span>`).join(' ') : '<span class="muted">brak – słownik struktury pusty</span>'} <span class="muted" style="font-size:.8rem">(ze słownika „Struktura projektowa”)</span></dd>
       <dt>Słowniki zakresu</dt><dd>${z.dicts.map(d=>esc(S.zd[d])).join(', ')}</dd>
-      <dt>Słowniki globalne</dt><dd>Stawki, kalendarz, CAM, przypisania, kursy</dd>
-      <dt>Analitycy</dt><dd>${esc(z.analysts.join(', '))}</dd>
-      <dt>Zatwierdza (finanse)</dt><dd>${esc(z.approver)}</dd>
-      <dt>CAM</dt><dd>${z.cams.length? z.cams.map(c=>esc(c[0])).join(', ') : '<span class="muted">brak – uzupełnij słownik struktury</span>'}</dd></dl>
+      <dt>Słowniki globalne</dt><dd>Stawki wydziałów, kalendarz okresów, kursy USD/PLN</dd>
+      <dt>Kto prowadzi</dt><dd>Dowolna osoba z finansów (bez podziału uprawnień)</dd>
+      <dt>CAM</dt><dd>${z.cams.length? z.cams.map(c=>esc(c[0])+' <span class="muted">('+c[1]+' WP)</span>').join(', ') : '<span class="muted">brak – uzupełnij kolumnę CAM w słowniku struktury</span>'}<br><span class="muted" style="font-size:.8rem">z kolumny CAM słownika „Struktura projektowa”</span></dd></dl>
     </section>
   </div>
   <section class="panel"><div class="row between"><h2>Przebiegi</h2><span class="muted">${runs.length} w historii</span></div>
@@ -503,9 +492,9 @@ ${d.join('\n')}
 }
 
 /* ---------- KREATOR ZAKRESU ---------- */
-const WSTEPS=['Podstawowe','Projekty','Słowniki','Uprawnienia','Foldery','Podsumowanie'];
+const WSTEPS=['Podstawowe','Struktura projektowa','Słowniki','CAM','Foldery','Podsumowanie'];
 const AVAIL_PROJ=[['M28-MOD-01','M28 – modernizacja awioniki',null],['M28-MOD-02','M28 – pakiet szkoleniowy',null],['M28-SRV-01','M28 – wsparcie eksploatacji',null],['WEW-2026-03','Stanowisko prób','PULA-WEW'],['F16-CAS-03','F-16 Pakiet 3','F16']];
-function newWiz(){ return {step:0, code:'M28', name:'M28 – modernizacja', type:'WEW', pool:false, projects:['M28-MOD-01','M28-MOD-02'], etc:true, busy:false, progress:[]}; }
+function newWiz(){ return {step:0, code:'M28', name:'M28 – modernizacja', type:'WEW', pool:false, projects:['M28-MOD-01','M28-MOD-02'], busy:false, progress:[]}; }
 function vWizard(){
   const w=S.wiz || (S.wiz=newWiz());
   const steps=`<ol class="wsteps">${WSTEPS.map((s,i)=>`<li class="${i===w.step?'on':i<w.step?'past':''}">${i+1}. ${s}</li>`).join('')}</ol>`;
@@ -520,39 +509,39 @@ function vWizard(){
     <div class="note info">Zakres wyznacza jego słownik <b>„Struktura projektowa”</b>, prowadzony przez osobę z finansów, która uruchamia przebiegi. Jeden wiersz łączy element WBS z P1S (produkcja) z elementem WBS z CES (koszty) i przypisuje go do programu, projektu, CAM i WP. Elementy pojawiają się w danych dopiero po pobraniu plików, więc przypisuje się je na bieżąco w przebiegach.</div>
     <div class="field"><label>Kolumny słownika (wzorzec)</label>
     <div class="tbl-wrap"><table><thead><tr><th>P1S WBS</th><th>CAS WBS</th><th>Project Definition</th><th>Business Area</th><th>Program</th><th>Project</th><th>Customer</th><th>Cost Category</th><th>CAM</th><th>WP</th><th>ValidFrom</th><th>ValidTo</th></tr></thead><tbody><tr><td class="mono">P-M28-0101-01</td><td class="mono">M28-MOD-01.1.01</td><td class="mono">M28-MOD-01</td><td>1200</td><td>M28</td><td>Modernizacja</td><td>—</td><td>Labor</td><td>T. Sikora</td><td>yes</td><td>2026-10-01</td><td></td></tr></tbody></table></div>
-    <span class="hint">Wiersz przykładowy. Nagłówki zgodne z readme; ostateczną listę kolumn zatwierdzimy przy projekcie słowników.</span></div>
+    <span class="hint">Wiersz przykładowy. Relacja P1S ↔ CES nie jest stała: każdy wiersz to jedna para, a ten sam element może wystąpić w kilku wierszach. Walidacja pilnuje, żeby para się nie powtarzała. Jedna strona pary może być pusta (np. element tylko w CES).</span></div>
     <div class="field"><label>Elementy z dotychczasowych pobrań bez zakresu</label><span class="hint">Pojawiły się w plikach innych przebiegów, ale żaden słownik ich nie obejmuje. Zaznaczone trafią do wzorca z wypełnionymi kluczami.</span>
     <div class="stack">${AVAIL_PROJ.filter(a=>!a[2]).map(([c,n])=>`<label class="chk"><input type="checkbox" data-wp="${c}" ${w.projects.includes(c)?'checked':''}><span><span class="mono">${c}</span> · ${esc(n)}</span></label>`).join('')}</div></div>`;
   if(w.step===2){
     const zd=['struktura','harmonogram'].concat(w.type==='CAS'?['stawkicas']:[]);
     body=`<div class="grid g2"><div class="stack"><h3>Słowniki zakresu</h3>
       ${zd.map(d=>`<label class="chk"><input type="checkbox" checked disabled><span><b>${S.zd[d]}</b> <span class="muted">– wymagany</span><br><span class="mono muted">${esc(w.code)}_${S.zfile[d]}</span></span></label>`).join('')}
-      <label class="chk"><input type="checkbox" data-wc="etc" ${w.etc?'checked':''}><span><b>ETC lokalne</b> <span class="muted">– opcjonalny</span><br><span class="mono muted">${esc(w.code)}_ETC_lokalne.xlsx</span></span></label>
       </div><div class="stack"><h3>Słowniki globalne</h3><p class="muted">Przypinane automatycznie przy starcie każdego przebiegu.</p>
       <ul class="checks">${GLOBALS.map(d=>`<li><span class="ic ok">✓</span><span>${S.dicts[d].name} <span class="tag">v${curVer(S,d)}</span></span></li>`).join('')}</ul></div></div>
       <div class="note">Aplikacja utworzy wzorce słowników z nagłówkami, typami kolumn i arkuszem instrukcji. Wzorzec bez danych blokuje pierwszy przebieg.</div>`;
   }
   if(w.step===3) body=`
-    <div class="note warn">Słownik „Przypisania użytkowników” (v${curVer(S,'przypisania')}, właściciel: finanse) nie ma wpisów dla zakresu <b>${esc(w.code)}</b>. Do czasu uzupełnienia dostęp ma tylko twórca zakresu. Uprawnień nie nadaje się w aplikacji, tylko w słowniku.</div>
-    <div class="tbl-wrap"><table><thead><tr><th>Rola</th><th>Kto</th><th>Źródło</th></tr></thead><tbody>
-      <tr><td>Analityk (prowadzi przebiegi)</td><td>${ME} (twórca)</td><td>tymczasowo – twórca zakresu</td></tr>
-      <tr><td>Zatwierdza pliki dla finansów</td><td class="muted">brak</td><td>słownik przypisań</td></tr>
-      <tr><td>CAM</td><td class="muted">z kolumny CAM w strukturze projektowej</td><td>słownik struktury</td></tr></tbody></table></div>
+    <div class="note info">Nie ma osobnych uprawnień: każda osoba z finansów może prowadzić każdy zakres, np. pod nieobecność innej osoby. Wszystkie akcje trafiają do dziennika z nazwą użytkownika AD.</div>
+    <p>CAM pochodzą z kolumny <b>CAM</b> słownika „Struktura projektowa”. Na tej podstawie aplikacja:</p>
+    <ul class="checks"><li><span class="ic ok">✓</span><span>generuje jeden plik na CAM z jego WP,</span></li>
+    <li><span class="ic ok">✓</span><span>pokazuje status zwrotu plików per CAM,</span></li>
+    <li><span class="ic ok">✓</span><span>wymaga CAM dla każdego wiersza z WP = yes,</span></li>
+    <li><span class="ic warn">!</span><span>ostrzega o podobnych zapisach tej samej osoby (np. „J. Kowalski” i „J.Kowalski”).</span></li></ul>
     <p class="muted" style="font-size:.85rem">W bazie użytkownicy nie mają praw do tabel. Procedury sprawdzają przypisanie do zakresu przy każdej akcji, także przy połączeniu z pominięciem aplikacji.</p>`;
   if(w.step===4) body=`
-    <pre class="tree">${esc(folderTree({code:w.code||'KOD', dicts:['struktura','harmonogram'].concat(w.type==='CAS'?['stawkicas']:[]).concat(w.etc?['etc']:[])}))}</pre>
+    <pre class="tree">${esc(folderTree({code:w.code||'KOD', dicts:['struktura','harmonogram'].concat(w.type==='CAS'?['stawkicas']:[])}))}</pre>
     <ul class="checks">
       <li><span class="ic ok">✓</span><span>Korzeń <span class="mono">${esc(ROOT)}</span> dostępny (ścieżka UNC, nie litera dysku)</span></li>
       <li><span class="ic ok">✓</span><span>Masz prawo zapisu w <span class="mono">Zakresy\\</span></span></li>
       <li><span class="ic ${S.zakresy[w.code.toUpperCase()]||Object.values(S.zakresy).some(z=>z.code.toUpperCase()===w.code.toUpperCase())?'crit':'ok'}">${Object.values(S.zakresy).some(z=>z.code.toUpperCase()===w.code.toUpperCase())?'!':'✓'}</span><span>Folder <span class="mono">${esc(w.code)}</span> jeszcze nie istnieje</span></li>
-      <li><span class="ic warn">!</span><span>Uprawnienia grup AD do folderu (CAM: zapis tylko w <span class="mono">CAM\\…\\Zwrocone</span>) nadaje IT. Aplikacja przygotuje treść zgłoszenia.</span></li>
+      <li><span class="ic warn">!</span><span>Dostęp CAM do folderu <span class="mono">CAM\\…\\Zwrocone</span> nadaje IT. Aplikacja przygotuje treść zgłoszenia.</span></li>
     </ul>`;
   if(w.step===5){
     const dup=Object.values(S.zakresy).some(z=>z.code.toUpperCase()===w.code.toUpperCase());
     body = w.busy||w.progress.length ? `<ul class="checks">${w.progress.map(p=>`<li><span class="ic ${p.done?'ok':'todo'}">${p.done?'✓':'…'}</span><span>${esc(p.t)}</span></li>`).join('')}</ul>${w.busy?'<div class="progress"><i></i></div>':''}` :
     `<dl class="kv"><dt>Kod</dt><dd><b>${esc(w.code)}</b></dd><dt>Nazwa</dt><dd>${esc(w.name)}</dd><dt>Typ</dt><dd>${TYPES[w.type].label}</dd>
      <dt>Wstępne elementy wzorca</dt><dd>${w.projects.map(p=>`<span class="tag">${p}</span>`).join(' ')||'<span class="muted">brak – elementy dopiszesz po pierwszym pobraniu</span>'}</dd>
-     <dt>Słowniki zakresu</dt><dd>${['struktura','harmonogram'].concat(w.type==='CAS'?['stawkicas']:[]).concat(w.etc?['etc']:[]).map(d=>S.zd[d]).join(', ')}</dd>
+     <dt>Słowniki zakresu</dt><dd>${['struktura','harmonogram'].concat(w.type==='CAS'?['stawkicas']:[]).map(d=>S.zd[d]).join(', ')}</dd>
      <dt>Folder</dt><dd class="mono">${esc(ROOT)}\\Zakresy\\${esc(w.code)}</dd></dl>
      ${dup?'<div class="note crit">Zakres o tym kodzie już istnieje. Zmień kod w kroku 1.</div>':''}
      <div class="note">Przebieg będzie możliwy, gdy słownik „Struktura projektowa” będzie miał zatwierdzoną wersję z co najmniej jednym projektem.</div>`;
@@ -601,13 +590,12 @@ function vRun(id){
   if(!r.sel || !r.st[r.sel]) r.sel = (defs.find(d=>r.st[d.k].s!=='done')||defs[defs.length-1]).k;
   const def=defs.find(d=>d.k===r.sel), i=defs.indexOf(def), rs=runState(r);
   const newer=newerFor(r);
-  const lock = r.owner!==ME && rs.s!=='done' ? `<div class="banner lock"><span>Przebieg prowadzi <b>${esc(r.owner)}</b> (ostatnia akcja: ${esc(r.log[0]?.t||'')}). Możesz podglądać, ale akcje są zablokowane.</span>
-      ${S.takeover? `<span class="row"><span>Przejąć przebieg? ${esc(r.owner)} zobaczy to w dzienniku.</span><button class="btn small" data-a="takeoverNo">Nie</button><button class="btn small primary" data-a="takeoverYes">Przejmij</button></span>` : `<button class="btn small" data-a="takeover">Przejmij przebieg</button>`}</div>` : '';
-  const nb = newer.length && r.owner===ME ? `<div class="banner"><span>${newer.map(n=>`Dostępna nowsza wersja: <b>${esc(S.dicts[n.id].name)}</b> v${n.cv} (przebieg używa v${n.pv}).`).join(' ')} Zmiana wersji unieważnia etapy od walidacji.</span>
+  const lock = r.owner!==ME && rs.s!=='done' ? `<div class="note info">Ostatnio pracował(a): <b>${esc(r.log[0]?.who||r.owner)}</b> (${esc(r.log[0]?.t||'')}). Każda osoba z finansów może kontynuować przebieg. Każda akcja trafia do dziennika.</div>` : '';
+  const nb = newer.length ? `<div class="banner"><span>${newer.map(n=>`Dostępna nowsza wersja: <b>${esc(S.dicts[n.id].name)}</b> v${n.cv} (przebieg używa v${n.pv}).`).join(' ')} Zmiana wersji unieważnia etapy od walidacji.</span>
       <span class="row"><button class="btn small" data-a="ackNewer">Kontynuuj na obecnej</button><button class="btn small primary" data-a="rebase">Przelicz od etapu 3</button></span></div>` : (newer.length? `<div class="note stale">Dostępna nowsza wersja słownika ${esc(newer.map(n=>S.dicts[n.id].name+' v'+n.cv).join(', '))}. Decyzję podejmuje prowadzący przebieg.</div>`:'');
   return `
   <div class="head"><div><div class="eyebrow"><a href="#" data-a="zakres" data-x="${z.id}">${esc(z.code)}</a> / przebieg</div>
-    <h1>${esc(runLabel(r))}</h1><p class="sub"><span class="mono">${esc(r.id)}</span> · prowadzi ${esc(r.owner)}${r.owner===ME?' (Ty)':''} · start ${esc(r.started)}${r.rev?` · rewizja EV R${r.rev}`:''}</p></div>
+    <h1>${esc(runLabel(r))}</h1><p class="sub"><span class="mono">${esc(r.id)}</span> · rozpoczął(a) ${esc(r.owner)}${r.owner===ME?' (Ty)':''} · start ${esc(r.started)}${r.rev?` · rewizja EV R${r.rev}`:''}</p></div>
     <div class="row">${r.kind==='weekly'?pill('info','EV wstępne'):pill('stale','Zamknięcie okresu')}${pill(rs.s, rs.s==='done'?(r.frozen?'Zamrożony':'Zakończony'):'W trakcie')}</div></div>
   ${lock}${nb}
   <nav class="stepper" aria-label="Etapy przebiegu">${defs.map((d,j)=>`<button class="step ${r.st[d.k].s}" data-a="sel" data-x="${d.k}" aria-current="${d.k===r.sel}"><span class="n">${String(j+1).padStart(2,'0')} · ${ST[r.st[d.k].s]}</span><span class="t">${d.n}</span><span class="bar"></span></button>`).join('')}</nav>
@@ -672,7 +660,7 @@ const STAGE = {
     if(st==='ready') return `<p>Walidacja obejmuje pliki SAP i słowniki: strukturę, typy, klucze i okresy ważności, reguły biznesowe, odwołania między słownikami, wersjonowanie.</p><div class="row">${actBtn(r,'doVal','Uruchom walidację')}</div>`;
     const issues=[];
     if(f16 && !r.flags.valFixed && !r.flags.keepOld) issues.push(['crit','Struktura projektowa','214','ValidFrom','Nakładające się okresy dla WBS P1S-F16-0412: 01.01.2026–31.12.2026 i 01.09.2026–(otwarty). Zamknij poprzedni okres (ValidTo) zamiast dodawać drugi wiersz.']);
-    if(f16) issues.push(['warn','Struktura projektowa','88','CAM','Spacja na końcu wartości „J.KOWALSKI ”. Po oczyszczeniu dopasowano do słownika CAM.']);
+    if(f16) issues.push(['warn','Struktura projektowa','88','CAM','Podobne zapisy CAM: „J. Kowalski” (11 wierszy) i „J.Kowalski ” (1 wiersz). Powstałyby dwa pliki CAM – ujednolić zapis?']);
     issues.push(['warn','Harmonogram i budżet','51','WP','Element z WP = no ma budżet godzinowy 120 h.']);
     issues.push(['warn','CJI3 cz. 2','—','Wydział',`2 wiersze z wydziałem W-417 bez stawki na rok 2026 (koszt 3 412,00 PLN).`]);
     const errs=issues.filter(i=>i[0]==='crit').length;
@@ -683,7 +671,7 @@ const STAGE = {
   },
   join(r,st,z){
     if(r.newEl && r.newEl.state==='open') return newElPanel(r,z);
-    const rej = r.fin?.state==='rejected' ? `<div class="note crit">Finanse odrzuciły pliki (${esc(r.fin.by)}, ${esc(r.fin.at)}): „${esc(r.fin.comment)}”. Popraw dane i połącz ponownie.</div>` : '';
+    const rej = r.fin?.state==='rejected' ? `<div class="note crit">Pliki odrzucone (${esc(r.fin.by)}, ${esc(r.fin.at)}): „${esc(r.fin.comment)}”. Popraw dane i połącz ponownie.</div>` : '';
     if(st==='ready') return rej+`<p>Logika łączenia działa w bazie (procedury), więc wynik nie zależy od wersji aplikacji na komputerze.</p><div class="row">${actBtn(r,'doJoin','Połącz źródła')}</div>`;
     const ac=seedN(r,'ac',8200,14600)*1000;
     return rej+`<div class="grid g3">
@@ -695,14 +683,14 @@ const STAGE = {
   },
   fin(r,st,z){
     const files=[z.code+'_AC_przeglad_'+(r.week?'T'+r.week:r.period)+'.xlsx', z.code+'_ETC_wstepne_'+(r.week?'T'+r.week:r.period)+'.xlsx', z.code+'_WBS_bez_mapowania.xlsx'];
-    if(st==='ready') return `<p>Pliki trafią do <span class="mono">Zakresy\\${esc(z.code)}\\Finanse\\${r.period}\\</span>. Kolejne etapy są zablokowane do czasu zatwierdzenia przez finanse.</p><div class="row">${actBtn(r,'doFin','Generuj pliki dla finansów')}</div>`;
+    if(st==='ready') return `<p>Pliki trafią do <span class="mono">Zakresy\\${esc(z.code)}\\Finanse\\${r.period}\\</span>. Kolejne etapy są zablokowane do czasu potwierdzenia, że pliki są poprawne.</p><div class="row">${actBtn(r,'doFin','Generuj pliki dla finansów')}</div>`;
     const list=`<ul class="checks">${files.map(f=>`<li><span class="ic ok">✓</span><span class="mono">${esc(f)}</span></li>`).join('')}</ul>`;
-    if(st==='done') return list+`<div class="note ok">Zatwierdził: ${esc(r.fin?.by||z.approver)} · ${esc(r.fin?.at||'')}</div>`;
-    const canApprove = isFin();
-    return list+`<div class="note info">Oczekuje na zatwierdzenie przez finanse (${esc(z.approver)}). Zatwierdzający otwiera ten przebieg w swojej aplikacji.</div>
+    if(st==='done') return list+`<div class="note ok">Potwierdził(a): ${esc(r.fin?.by||'—')} · ${esc(r.fin?.at||'')}</div>`;
+    const canApprove = true;
+    return list+`<div class="note info">Oczekuje na potwierdzenie. Może potwierdzić dowolna osoba z finansów, także prowadząca przebieg. Zapisujemy kto i kiedy.</div>
       ${canApprove? `<div class="field"><label for="fin-c">Komentarz (wymagany przy odrzuceniu)</label><textarea id="fin-c" placeholder="np. Koszt W-417 do wyjaśnienia"></textarea></div>
       <div class="row"><button class="btn primary" data-a="finOk">Zatwierdź</button><button class="btn danger" data-a="finNo">Odrzuć – wróć do łączenia</button></div>`
-      : `<p class="muted">Zatwierdzić może tylko rola Finanse. W demo przełącz rolę w nagłówku.</p>`}`;
+      : ''}`;
   },
   prod(r,st,z){
     const tot=z.cams.reduce((a,c)=>a+c[1],0), miss=Math.min(6,Math.max(3,Math.round(tot*0.1)));
@@ -754,7 +742,7 @@ const STAGE = {
       ${rows.map(x=>{const cpi=x.bcwp/x.acwp, spi=x.bcwp/x.bcws;return `<tr><td class="mono">${x.p}</td><td class="r">${f(x.bac)}</td><td class="r">${f(x.bcws)}</td><td class="r">${f(x.bcwp)}</td><td class="r">${f(x.acwp)}</td><td class="r" style="color:var(${cpi<0.95?'--crit':cpi<1?'--warn':'--ok'})">${cpi.toFixed(2)}</td><td class="r" style="color:var(${spi<0.95?'--crit':spi<1?'--warn':'--ok'})">${spi.toFixed(2)}</td></tr>`}).join('')}
       </tbody></table></div><p class="muted" style="font-size:.82rem">Wartości w tys. ${z.type==='SAC'?'USD':'PLN'}. Dane przykładowe.</p>
       ${r.frozen?'<div class="note ok">Okres zamknięty i zamrożony. Ponowne przeliczenie utworzy nową rewizję, poprzednia zostaje w historii.</div>':
-       `<div class="row">${actBtn(r,'doEvAgain','Przelicz ponownie (nowa rewizja)',false)}${r.kind==='close' && runState(r).s==='done'? `<button class="btn primary" data-a="freeze" ${isFin()?'':'disabled'}>Zatwierdź zamknięcie okresu</button>${isFin()?'':'<span class="muted" style="font-size:.85rem">Zamknięcie zatwierdza rola Finanse.</span>'}`:''}</div>`}`;
+       `<div class="row">${actBtn(r,'doEvAgain','Przelicz ponownie (nowa rewizja)',false)}${r.kind==='close' && runState(r).s==='done'? `<button class="btn primary" data-a="freeze">Zatwierdź zamknięcie okresu</button>`:''}</div>`}`;
   },
   cobra(r,st,z){
     if(st==='ready') return `<p>Plik dla Cobra: koszt pracy przeliczony po bieżących stawkach na USD, zaawansowanie wg WP.</p><div class="row">${actBtn(r,'doCobra','Generuj plik dla Cobra')}</div>`;
@@ -789,8 +777,8 @@ function vSlowniki(){
   const row=d=>{
     const cv=d.versions[0];
     const hist = open===d.id ? `<tr><td colspan="6" style="background:var(--surface-2)"><div class="tbl-wrap"><table><thead><tr><th>Wersja</th><th>Data</th><th>Kto</th><th class="r">Wiersze</th><th>Zmiany (dodane / zmienione / zamknięte)</th><th>Przebieg</th></tr></thead><tbody>${d.versions.map(x=>`<tr><td class="mono">v${x.v}</td><td>${x.at}</td><td>${esc(x.by)}</td><td class="r">${nf(x.rows)}</td><td class="mono">${x.ch}</td><td class="mono">${esc(x.run||'publikacja')}</td></tr>`).join('')}</tbody></table></div></td></tr>` : '';
-    return `<tr class="click" data-a="dopen" data-x="${d.id}"><td><b>${esc(d.name)}</b>${d.financeOnly?' <span class="tag">tylko finanse</span>':''}</td><td>${esc(d.owner)}</td><td class="mono" style="font-size:.78rem">${esc(d.file)}</td><td class="r mono">${cv?'v'+cv.v:'—'}</td><td>${cv?esc(cv.at+' · '+cv.by):'<span class="muted">brak wersji</span>'}</td>
-      <td>${d.scope==='global'?`<button class="btn small" data-a="publish" data-x="${d.id}" ${d.financeOnly&&!isFin()?'disabled title="Tylko rola Finanse"':''}>Publikuj</button>`:(cv?pill('ok','aktualny'):pill('crit','pusty wzorzec'))}</td></tr>${hist}`;
+    return `<tr class="click" data-a="dopen" data-x="${d.id}"><td><b>${esc(d.name)}</b></td><td>${esc(d.owner)}</td><td class="mono" style="font-size:.78rem">${esc(d.file)}</td><td class="r mono">${cv?'v'+cv.v:'—'}</td><td>${cv?esc(cv.at+' · '+cv.by):'<span class="muted">brak wersji</span>'}</td>
+      <td>${d.scope==='global'?`<button class="btn small" data-a="publish" data-x="${d.id}" >Publikuj</button>`:(cv?pill('ok','aktualny'):pill('crit','pusty wzorzec'))}</td></tr>${hist}`;
   };
   const head=`<thead><tr><th>Słownik</th><th>Właściciel</th><th>Plik</th><th class="r">Wersja</th><th>Ostatni import</th><th></th></tr></thead>`;
   return `<div class="head"><div><h1>Słowniki</h1><p class="sub">Excel jest źródłem prawdy. Publikacja = kopia do Landing Zone, walidacja, nowa wersja tylko przy zmianie treści. Kliknij wiersz, aby zobaczyć historię wersji.</p></div></div>
@@ -805,17 +793,17 @@ function vInfo(){
   <section class="panel"><h2>Co można przejść</h2><ol style="margin:0;padding-left:20px;display:grid;gap:6px">
     <li>Utworzyć zakres w kreatorze (Zakresy → Nowy zakres) i zobaczyć blokadę przebiegu przy pustych słownikach.</li>
     <li>Uruchomić przebieg tygodniowy T40 dla F16 i przejść wszystkie etapy. Walidacja zgłosi błąd w słowniku struktury.</li>
-    <li>Zatwierdzić pliki dla finansów w przebiegu PULA-WEW po przełączeniu roli na „Finanse”.</li>
+    <li>Potwierdzić pliki dla finansów w przebiegu PULA-WEW albo odrzucić je z komentarzem.</li>
     <li>Opublikować nową wersję „Stawki wydziałów” i zobaczyć decyzję w aktywnych przebiegach.</li>
-    <li>Przejąć przebieg S70i prowadzony przez inną osobę.</li>
+    <li>Kontynuować przebieg S70i rozpoczęty przez inną osobę z finansów.</li>
     <li>W przebiegu F16 zobaczyć wykrycie nowych elementów z CES i P1S po pobraniu danych oraz ich przypisanie w słowniku struktury.</li>
     <li>Uruchomić zamknięcie miesiąca z plikami CAM, odrzuceniem pliku i zamrożeniem okresu.</li></ol></section>
   <section class="panel"><h2>Założenia z architektury</h2><ul class="checks">
     <li><span class="ic ok">✓</span><span>Wszystko per zakres, słowniki globalne publikowane osobno, przebieg przypina wersje (D13)</span></li>
     <li><span class="ic ok">✓</span><span>Tydzień: produkcja + analityk; zamknięcie: tylko CAM (D14)</span></li>
     <li><span class="ic ok">✓</span><span>Dysk sieciowy, ścieżki UNC względem korzenia (D15)</span></li>
-    <li><span class="ic ok">✓</span><span>CAM pracują tylko na plikach (D16)</span></li>
-    <li><span class="ic ok">✓</span><span>Stan w centralnej bazie, logowanie AD, logika w procedurach SQL</span></li>
+    <li><span class="ic ok">✓</span><span>CAM pracują tylko na plikach; lista CAM z kolumny CAM słownika struktury (D16)</span></li>
+    <li><span class="ic ok">✓</span><span>Stan w centralnej bazie, logowanie AD (audyt), bez podziału uprawnień w finansach, logika w procedurach SQL</span></li>
     <li><span class="ic ok">✓</span><span>Zakres = słownik struktury (P1S ↔ CES) prowadzony przez osobę z finansów; nowe elementy wykrywane po pobraniu danych</span></li>
     <li><span class="ic warn">!</span><span>Otwarte: źródło produkcji (O10), zasady uzupełnień (O11), plik CAM na CAM czy na program (O3)</span></li></ul></section>
   </div>
@@ -836,25 +824,24 @@ function render(){
   else html=vInfo();
   $('#main').innerHTML=html;
   $('#overlay').innerHTML = S.modal? vNewRun() : '';
-  $('#role').value=S.role;
-}
+  }
 
 /* ---------- akcje ---------- */
 const R=()=>S.runs[S.view.id];
 const A={
   nav:x=>go({name:x}),
   zakres:x=>{ S.wiz=null; go({name:'zakres', id:x}); },
-  run:x=>{ S.takeover=false; go({name:'run', id:x}); },
+  run:x=>{ go({name:'run', id:x}); },
   wizard:()=>{ S.wiz=newWiz(); go({name:'wizard'}); },
   reset:()=>{ try{localStorage.removeItem(KEY);}catch(e){} S=seed(); render(); toast('Przywrócono dane początkowe demo.'); },
   dopen:x=>{ S.view={...S.view, open:S.view.open===x?null:x}; render(); },
-  sel:x=>{ R().sel=x; S.takeover=false; save(); render(); },
+  sel:x=>{ R().sel=x; save(); render(); },
   wset:(x,el)=>{ S.wiz[el.dataset.f]=x; render(); },
   wnext:()=>{ S.wiz.step++; render(); },
   wback:()=>{ S.wiz.step--; render(); },
   wcreate:()=>{
     const w=S.wiz; w.busy=true;
-    const steps=['Zarejestrowano zakres w bazie (meta.Zakres) i szablon etapów','Utworzono foldery w '+ROOT+'\\Zakresy\\'+w.code,'Skopiowano wzorce słowników z nagłówkami i instrukcją','Wypełniono wzorzec „Struktura projektowa” kluczami zaznaczonych elementów','Przygotowano treść zgłoszenia do IT (uprawnienia grup AD)','Sprawdzono strukturę folderów'];
+    const steps=['Zarejestrowano zakres w bazie (meta.Zakres) i szablon etapów','Utworzono foldery w '+ROOT+'\\Zakresy\\'+w.code,'Skopiowano wzorce słowników z nagłówkami i instrukcją','Wypełniono wzorzec „Struktura projektowa” kluczami zaznaczonych elementów','Przygotowano treść zgłoszenia do IT (dostęp CAM do folderu Zwrocone)','Sprawdzono strukturę folderów'];
     w.progress=[]; render();
     steps.forEach((t,i)=>setTimeout(()=>{ w.progress.push({t,done:true}); if(i===steps.length-1){ w.busy=false; finishCreate(); } render(); }, 450*(i+1)));
   },
@@ -875,9 +862,6 @@ const A={
     r.log=[]; logRun(r,'Rozpoczęto przebieg. Przypięto wersje słowników: '+Object.entries(r.pinned).map(([d,pv])=>S.dicts[d].name+' v'+pv).join(', ')+'.');
     S.modal=null; go({name:'run', id:r.id}); toast('Przebieg '+r.id+' uruchomiony.');
   },
-  takeover:()=>{ S.takeover=true; render(); },
-  takeoverNo:()=>{ S.takeover=false; render(); },
-  takeoverYes:()=>{ const r=R(), prev=r.owner; r.owner=ME; S.takeover=false; logRun(r,'Przejęto przebieg od: '+prev+'.'); save(); render(); toast('Prowadzisz teraz ten przebieg.'); },
   ackNewer:()=>{ const r=R(); for(const n of newerFor(r)){ r.ack[n.id+':'+n.cv]=true; logRun(r,'Decyzja: kontynuacja na '+S.dicts[n.id].name+' v'+n.pv+' mimo dostępnej v'+n.cv+'.'); } save(); render(); },
   rebase:()=>{ const r=R(); for(const n of newerFor(r)){ r.pinned[n.id]=n.cv; logRun(r,'Przypięto '+S.dicts[n.id].name+' v'+n.cv+'. Etapy od walidacji unieważnione.'); } invalidateFrom(r,'val'); save(); render(); },
   publish:x=>{
@@ -913,9 +897,9 @@ const A={
     logRun(r,'Opublikowano „Struktura projektowa” F16 v'+ns+' (+4 wiersze). Przypięto nową wersję, etapy od walidacji unieważnione.');
     invalidateFrom(r,'val'); save(); render(); toast('Słownik uzupełniony. Wykonaj ponownie walidację i łączenie.'); },
   doFin:()=>{ const r=R(); work(r,'fin','Generowanie plików dla finansów…',1000,()=>{ setSt(r,'fin','action'); r.fin={state:'pending'}; logRun(r,'Wygenerowano pliki dla finansów – oczekują na zatwierdzenie.'); }); },
-  finOk:()=>{ const r=R(); r.fin={state:'approved', by:'Tomasz Mazur (rola Finanse – demo)', at:now()}; complete(r,'fin'); logRun(r,'Finanse zatwierdziły pliki pośrednie.','Tomasz Mazur'); save(); render(); toast('Zatwierdzono. Kolejne etapy odblokowane.'); },
-  finNo:()=>{ const r=R(), c=($('#fin-c')?.value||'').trim(); if(!c){ toast('Wpisz komentarz – bez niego analityk nie wie, co poprawić.'); $('#fin-c')?.focus(); return; }
-    r.fin={state:'rejected', by:'Tomasz Mazur', at:now(), comment:c}; invalidateFrom(r,'join'); logRun(r,'Finanse odrzuciły pliki: „'+c+'”. Powrót do łączenia źródeł.','Tomasz Mazur'); save(); render(); },
+  finOk:()=>{ const r=R(); r.fin={state:'approved', by:ME, at:now()}; complete(r,'fin'); logRun(r,'Potwierdzono poprawność plików dla finansów.'); save(); render(); toast('Zatwierdzono. Kolejne etapy odblokowane.'); },
+  finNo:()=>{ const r=R(), c=($('#fin-c')?.value||'').trim(); if(!c){ toast('Wpisz komentarz – bez niego nie wiadomo, co poprawić.'); $('#fin-c')?.focus(); return; }
+    r.fin={state:'rejected', by:ME, at:now(), comment:c}; invalidateFrom(r,'join'); logRun(r,'Odrzucono pliki dla finansów: „'+c+'”. Powrót do łączenia źródeł.'); save(); render(); },
   doProd:()=>{ const r=R(); work(r,'prod','Pobieranie zaawansowania z raportu produkcyjnego…',1100,()=>{ complete(r,'prod'); logRun(r,'Pobrano zaawansowanie z produkcji. Braki do uzupełnienia.'); }); },
   doFill:()=>{ const r=R(); complete(r,'fill'); logRun(r,'Uzupełniono brakujące WP (pochodzenie: ANALITYK).'); save(); render(); },
   doCamOut:()=>{ const r=R(); work(r,'camout','Generowanie plików dla CAM…',1100,()=>{ complete(r,'camout'); setSt(r,'camin','action'); logRun(r,'Wygenerowano '+S.zakresy[r.zid].cams.length+' plików dla CAM.'); }); },
@@ -926,12 +910,12 @@ const A={
   doEv:()=>{ const r=R(); work(r,'ev','Kalkulacja EV w bazie…',1400,()=>{ r.rev=(r.rev||0)+1; complete(r,'ev'); r.sel='ev'; logRun(r,'Wygenerowano EV, rewizja R'+r.rev+'.'); }); },
   doEvAgain:()=>{ const r=R(); invalidateFrom(r,'ev'); logRun(r,'Ponowne przeliczenie EV – powstanie nowa rewizja.'); save(); render(); },
   doCobra:()=>{ const r=R(); work(r,'cobra','Generowanie pliku dla Cobra…',900,()=>{ complete(r,'cobra'); r.sel='cobra'; logRun(r,'Wygenerowano plik dla Cobra.'); }); },
-  freeze:()=>{ const r=R(); r.frozen=true; r.sel='ev'; logRun(r,'Zatwierdzono zamknięcie okresu '+r.period+'. Przebieg zamrożony.','Tomasz Mazur'); save(); render(); },
+  freeze:()=>{ const r=R(); r.frozen=true; r.sel='ev'; logRun(r,'Zatwierdzono zamknięcie okresu '+r.period+'. Przebieg zamrożony.'); save(); render(); },
 };
 function finishCreate(){
   const w=S.wiz, id=w.code.toUpperCase();
-  const dl=['struktura','harmonogram'].concat(w.type==='CAS'?['stawkicas']:[]).concat(w.etc?['etc']:[]);
-  S.zakresy[id]={id, code:w.code, name:w.name, type:w.type, pool:w.pool, projects:[], proposal:w.projects.slice(), cams:[], analysts:[ME], approver:'— (brak w słowniku przypisań)', dicts:dl, created:'29.09.2026 · A. Wiśniewska', isNew:true};
+  const dl=['struktura','harmonogram'].concat(w.type==='CAS'?['stawkicas']:[]);
+  S.zakresy[id]={id, code:w.code, name:w.name, type:w.type, pool:w.pool, projects:[], proposal:w.projects.slice(), cams:[], analysts:[ME], dicts:dl, created:'29.09.2026 · A. Wiśniewska', isNew:true};
   for(const d of dl) S.dicts[id+':'+d]={id:id+':'+d, name:S.zd[d], scope:id, owner:'Finanse – '+ME, file:'Zakresy\\'+w.code+'\\Slowniki\\'+w.code+'_'+S.zfile[d], versions:[]};
   S.events.unshift({t:now(),who:ME,z:w.code,msg:'Utworzono zakres '+w.code+' ('+TYPES[w.type].label+')'});
   save();
@@ -949,7 +933,6 @@ document.addEventListener('input',e=>{
 });
 document.addEventListener('change',e=>{
   const t=e.target;
-  if(t.id==='role'){ S.role=t.value; save(); render(); toast(t.value==='finanse'?'Rola: Finanse – możesz zatwierdzać pliki i zamknięcie okresu.':'Rola: Analityk.'); }
   if(t.dataset.wc){ S.wiz[t.dataset.wc]=t.checked; render(); }
   if(t.dataset.wp){ const p=t.dataset.wp, w=S.wiz; w.projects = t.checked? [...new Set([...w.projects,p])] : w.projects.filter(x=>x!==p); }
 });
