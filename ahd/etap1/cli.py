@@ -2,6 +2,8 @@
 
 Przykłady (Windows, w katalogu repozytorium):
 
+    python -m ahd.etap1 pobierz  --webdav "<link do folderu SharePoint>" --cel "\\\\serwer\\udzial\\AHD\\00_Global\\RABIT\\Do_importu"
+    python -m ahd.etap1 import   --webdav "<link>" --landing C:\\AHD_TEST\\LandingZone
     python -m ahd.etap1 sprawdz  --url "<link do folderu SharePoint>"
     python -m ahd.etap1 lista    --url "<link>"
     python -m ahd.etap1 import   --url "<link>" --landing C:\\AHD_TEST\\LandingZone
@@ -21,6 +23,7 @@ from typing import Callable, Iterable
 from ahd.baza import Database, DatabaseError
 from ahd.zrodla.folder import FolderSource
 from ahd.zrodla.sharepoint import RemoteFile, SharePointClient, SharePointError, build_auth, parse_sharepoint_url
+from ahd.zrodla.webdav import SIZE_LIMIT_HINT, unc_from_url
 
 from . import importer
 
@@ -50,9 +53,10 @@ def _matches(name: str, patterns: list[str] | None) -> bool:
 
 def _source(args: argparse.Namespace) -> tuple[Callable[[RemoteFile, Path], Path], str, Iterable[RemoteFile]]:
     """Zwraca (funkcja pobierająca plik, opis źródła, pliki)."""
-    if args.folder:
-        src = FolderSource(args.folder)
-        return src.download, str(Path(args.folder)), src.walk(recursive=args.rekurencyjnie)
+    folder = unc_from_url(args.webdav) if getattr(args, "webdav", None) else args.folder
+    if folder:
+        src = FolderSource(folder)
+        return src.download, str(folder), src.walk(recursive=args.rekurencyjnie)
     loc = parse_sharepoint_url(args.url)
     client = SharePointClient(loc.site_url, auth=build_auth(args.auth), verify=args.ca_bundle or True)
     host = loc.site_url.split("/", 3)
@@ -119,6 +123,50 @@ def cmd_import(args: argparse.Namespace) -> int:
     return 1 if result.errors or bad_sets else 0
 
 
+def _same_file(dest: Path, f: RemoteFile) -> bool:
+    """Plik w celu ma ten sam rozmiar i czas modyfikacji co w źródle (tolerancja 2 s – FAT/WebDAV)."""
+    import datetime as dt
+
+    if not dest.exists():
+        return False
+    st = dest.stat()
+    try:
+        src_ts = dt.datetime.fromisoformat(f.modified).timestamp()
+    except ValueError:
+        return False
+    return st.st_size == f.size and abs(st.st_mtime - src_ts) <= 2
+
+
+def cmd_pobierz(args: argparse.Namespace) -> int:
+    download, desc, files = _source(args)
+    target = Path(args.cel)
+    selected = [f for f in files if _matches(f.name, args.filtr)]
+    print(f"Źródło: {desc}")
+    print(f"Cel   : {target}")
+    counts = {"skopiowany": 0, "bez zmian": 0, "blad": 0}
+    for i, f in enumerate(selected, 1):
+        dest = target / f.name
+        if _same_file(dest, f):
+            decision = "bez zmian"
+        elif args.dry_run:
+            decision = "do skopiowania"
+        else:
+            try:
+                target.mkdir(parents=True, exist_ok=True)
+                download(f, dest)
+                decision = "skopiowany"
+            except OSError as exc:
+                decision = "blad"
+                too_big = getattr(exc, "winerror", None) == 223 or "0x800700DF" in str(exc) or f.size > 50_000_000
+                print(f"[{i}/{len(selected)}] {f.name} ({_human(f.size)}): BŁĄD {exc}" + (f"\n    {SIZE_LIMIT_HINT}" if too_big else ""))
+                counts["blad"] += 1
+                continue
+        counts[decision] = counts.get(decision, 0) + 1
+        print(f"[{i}/{len(selected)}] {f.name} ({_human(f.size)}): {decision}")
+    print("Wynik: " + ", ".join(f"{k} {v}" for k, v in counts.items() if v or k != "do skopiowania"))
+    return 1 if counts["blad"] else 0
+
+
 def cmd_historia(args: argparse.Namespace) -> int:
     db = Database(_db_url(args))
     try:
@@ -142,6 +190,7 @@ def build_parser() -> argparse.ArgumentParser:
         g.add_argument("--url", help="link do folderu SharePoint (skopiowany z przeglądarki)")
         if folder_allowed:
             g.add_argument("--folder", help="folder, pojedynczy plik lub .zip – pliki pobrane ręcznie z przeglądarki (także dysk sieciowy)")
+            g.add_argument("--webdav", help="link do folderu SharePoint – odczyt przez WebDAV (jak „Otwórz w Eksploratorze”)")
         sp.add_argument("--auth", choices=["sso", "ntlm", "none"], default="sso", help="logowanie (domyślnie SSO Windows)")
         sp.add_argument("--ca-bundle", help="plik z certyfikatami CA (gdy nie działa truststore)")
         sp.add_argument("--filtr", action="append", help="wzorzec nazwy, np. *.xlsx (można powtórzyć)")
@@ -168,6 +217,12 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--pelne-sprawdzenie", action="store_true", help="pobierz i policz hash także plików bez zmian w metadanych")
     s.add_argument("--dry-run", action="store_true", help="tylko pokaż pliki w źródle")
     s.set_defaults(func=cmd_import)
+
+    s = sub.add_parser("pobierz", help="skopiuj pliki ze źródła do folderu na dysku (tylko nowe i zmienione)")
+    conn(s)
+    s.add_argument("--cel", required=True, help="folder docelowy, np. \\\\serwer\\udzial\\AHD\\00_Global\\RABIT\\Do_importu")
+    s.add_argument("--dry-run", action="store_true", help="tylko pokaż, co zostałoby skopiowane")
+    s.set_defaults(func=cmd_pobierz)
 
     s = sub.add_parser("historia", help="pokaż ostatnie importy i pliki w bazie")
     dbopt(s)

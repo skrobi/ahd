@@ -98,6 +98,33 @@ Uszkodzony plik jest oznaczany jako błąd i nie przerywa importu pozostałych.
 
 ---
 
+## 3a. RABIT przez WebDAV – metoda podstawowa (sprawdzona 29.09.2026)
+
+Test dostępu wykazał, że działa **WebDAV** (jak „Otwórz w Eksploratorze”) – logowanie kontem Windows,
+bez synchronizacji i bez API. Moduł zamienia link do folderu na ścieżkę
+`\\lmsp4-intl.external.lmco.com@SSL\DavWWWRoot\sites\RabbitReporting\Shared Documents\E456659`.
+
+Skopiowanie wszystkich plików na dysk (kolejne uruchomienia kopiują tylko nowe i zmienione):
+
+```bat
+python -m ahd.etap1 pobierz --webdav "https://lmsp4-intl.external.lmco.com/sites/RabbitReporting/Shared%20Documents/E456659" --cel "\\serwer\udzial\AHD\00_Global\RABIT\Do_importu" --dry-run
+python -m ahd.etap1 pobierz --webdav "https://lmsp4-intl.external.lmco.com/sites/RabbitReporting/Shared%20Documents/E456659" --cel "\\serwer\udzial\AHD\00_Global\RABIT\Do_importu"
+```
+
+Import z folderu na dysku (albo bezpośrednio z WebDAV: `import --webdav "<link>" --landing …`):
+
+```bat
+python -m ahd.etap1 import --folder "\\serwer\udzial\AHD\00_Global\RABIT\Do_importu" --landing "\\serwer\udzial\AHD\01_LandingZone"
+```
+
+Do testu lokalnie wystarczy `--cel C:\AHD_TEST\Do_importu` i `--landing C:\AHD_TEST\LandingZone`.
+
+**Limit 50 MB:** usługa WebClient domyślnie nie pobiera plików większych niż ok. 50 MB. Taki plik
+zostanie oznaczony błędem z podpowiedzią – administrator może zwiększyć `FileSizeLimitInBytes`
+(`HKLM\SYSTEM\CurrentControlSet\Services\WebClient\Parameters`), a do tego czasu plik pobiera się ręcznie.
+
+---
+
 ## 4a. Test dostępu do RABIT (które drogi działają)
 
 Jednorazowy test – sprawdza cztery metody i zapisuje raport bez zawartości plików:

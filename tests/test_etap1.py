@@ -315,3 +315,38 @@ def test_single_downloaded_file(tmp_path, capsys):
     f.write_text("a;b\n1;2\n", encoding="utf-8")
     assert cli.main(["import", "--folder", str(f), "--landing", str(tmp_path / "LZ")]) == 0
     assert "zaimportowane 1" in capsys.readouterr().out
+
+
+def test_webdav_path_from_link():
+    from ahd.zrodla.webdav import unc_from_url
+
+    assert unc_from_url("https://lmsp4-intl.external.lmco.com/sites/RabbitReporting/Shared%20Documents/E456659") == (
+        "\\\\lmsp4-intl.external.lmco.com@SSL\\DavWWWRoot\\sites\\RabbitReporting\\Shared Documents\\E456659"
+    )
+    assert unc_from_url(LINK).endswith("\\Shared Documents\\E456659")
+    assert unc_from_url("\\\\host@SSL\\DavWWWRoot\\x") == "\\\\host@SSL\\DavWWWRoot\\x"
+
+
+def test_pobierz_copies_only_new_and_changed(tmp_path, capsys):
+    import os
+    import time
+
+    src, cel = tmp_path / "rabit", tmp_path / "Do_importu"
+    src.mkdir()
+    (src / "B6 AC1-2.xlsx").write_bytes(b"a" * 10)
+    (src / "PAF2 hedge Status.xlsx").write_bytes(b"b" * 20)
+    args = ["pobierz", "--folder", str(src), "--cel", str(cel)]
+
+    assert cli.main([*args, "--dry-run"]) == 0 and not cel.exists()
+    assert cli.main(args) == 0
+    assert sorted(p.name for p in cel.iterdir()) == ["B6 AC1-2.xlsx", "PAF2 hedge Status.xlsx"]
+    capsys.readouterr()
+
+    assert cli.main(args) == 0
+    assert "skopiowany 0, bez zmian 2" in capsys.readouterr().out
+
+    (src / "B6 AC1-2.xlsx").write_bytes(b"c" * 11)
+    os.utime(src / "B6 AC1-2.xlsx", (time.time() + 60, time.time() + 60))
+    assert cli.main(args) == 0
+    assert "skopiowany 1, bez zmian 1" in capsys.readouterr().out
+    assert (cel / "B6 AC1-2.xlsx").read_bytes() == b"c" * 11
