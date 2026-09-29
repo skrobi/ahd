@@ -3,6 +3,7 @@ requests>=2.31
 openpyxl>=3.1
 truststore>=0.9 ; python_version >= "3.10"
 requests-negotiate-sspi>=0.5 ; sys_platform == "win32"
+pywin32>=306 ; sys_platform == "win32"
 requests-ntlm>=1.2
 # testy
 pytest>=8
