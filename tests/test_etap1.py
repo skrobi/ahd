@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import re
 import threading
+import zipfile
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import unquote
@@ -273,3 +274,36 @@ def test_folder_source_dry_run_and_history(tmp_path, capsys):
 )
 def test_set_name(name, expected):
     assert inspekcja.set_name(name) == expected
+
+
+def test_manual_download_zip(tmp_path, capsys):
+    """Pobranie kilku plików z SharePoint w przeglądarce daje ZIP – import czyta go bez rozpakowywania."""
+    inbox = tmp_path / "Do_importu"
+    inbox.mkdir()
+    header = "Obiekt;Element PSP;Wartość/WK\n"
+    with zipfile.ZipFile(inbox / "OneDrive_1_29-09-2026.zip", "w") as zf:
+        zf.writestr("E456659/CJI3_F16_cz1.csv", (header + "KO;F16-CAS-01.1.1;1,00\n").encode("cp1250"))
+        zf.writestr("E456659/CJI3_F16_cz2.csv", (header + "KO;F16-CAS-02.1.1;2,00\nKO;x;3\n").encode("cp1250"))
+        zf.writestr("E456659/~$CJI3_F16_cz1.csv", b"blokada")
+    (inbox / "ZRD_KKAJ_F16.csv").write_text("a;b\n1;2\n", encoding="utf-8")
+    lz = str(tmp_path / "LZ")
+
+    assert cli.main(["import", "--folder", str(inbox), "--landing", lz]) == 0
+    db = Database("sqlite:///" + (tmp_path / "LZ" / "ahd_mvp.sqlite").as_posix())
+    names = {r[2]: r[4] for r in db.history(10)}
+    assert names == {"CJI3_F16_cz1.csv": 1, "CJI3_F16_cz2.csv": 2, "ZRD_KKAJ_F16.csv": 1}
+
+    # Tydzień później: nowy ZIP z tymi samymi plikami i jednym zmienionym.
+    with zipfile.ZipFile(inbox / "OneDrive_2_06-10-2026.zip", "w") as zf:
+        zf.writestr("E456659/CJI3_F16_cz1.csv", (header + "KO;F16-CAS-01.1.1;1,00\n").encode("cp1250"))
+        zf.writestr("E456659/CJI3_F16_cz2.csv", (header + "KO;F16-CAS-02.1.1;2,00\nKO;x;3\nKO;y;4\n").encode("cp1250"))
+    capsys.readouterr()
+    assert cli.main(["import", "--folder", str(inbox), "--landing", lz]) == 0
+    out = capsys.readouterr().out
+    assert "zaimportowane 1, bez zmian 3, duplikaty 1" in out
+    assert db.conn.execute("SELECT COUNT(*) FROM meta_SourceFile").fetchone()[0] == 4
+    db.close()
+
+    # Wskazanie bezpośrednio pliku ZIP.
+    assert cli.main(["lista", "--folder", str(inbox / "OneDrive_1_29-09-2026.zip")]) == 0
+    assert "Razem: 2 plików" in capsys.readouterr().out

@@ -1,6 +1,6 @@
 # MVP – Etap 1: import plików SAP (RABIT)
 
-Wersja: 0.2 (test działania, nie gotowe rozwiązanie)
+Wersja: 0.3 (test działania, nie gotowe rozwiązanie)
 
 ## Zasada
 
@@ -98,14 +98,26 @@ Uszkodzony plik jest oznaczany jako błąd i nie przerywa importu pozostałych.
 
 ---
 
-## 5. Wariant: folder zamiast SharePoint
+## 5. Wariant: ręczne pobranie z przeglądarki (gdy SharePoint wymaga logowania w przeglądarce)
 
-Biblioteka zsynchronizowana przez OneDrive albo dysk sieciowy:
+Gdy `sprawdz` pokazuje przekierowanie na stronę logowania, a synchronizacja nie jest dostępna:
+
+1. Utwórz raz folder na pobrane pliki, np. `C:\AHD_TEST\Do_importu`.
+2. Otwórz folder RABIT w przeglądarce, zaznacz wszystkie pliki (pole wyboru w nagłówku listy) i kliknij
+   **Pobierz**. Przy kilku plikach SharePoint zapisze jeden plik ZIP (np. `OneDrive_1_29-09-2026.zip`).
+3. Przenieś ZIP (albo pojedyncze pliki) do `C:\AHD_TEST\Do_importu`. Rozpakowywać nie trzeba.
+4. Uruchom import:
 
 ```bat
-python -m ahd.etap1 import --folder "C:\Users\<ja>\...\RabbitReporting - E456659" --landing C:\AHD_TEST\LandingZone
+python -m ahd.etap1 import --folder C:\AHD_TEST\Do_importu --landing C:\AHD_TEST\LandingZone --dry-run
+python -m ahd.etap1 import --folder C:\AHD_TEST\Do_importu --landing C:\AHD_TEST\LandingZone
 ```
 
+Co tydzień można pobrać **wszystkie** pliki ponownie – zaimportowane zostaną tylko pliki o nowej treści,
+reszta będzie oznaczona jako duplikat lub „bez zmian”. Stare ZIP-y można zostawić w folderze albo usunąć.
+Można też wskazać bezpośrednio plik ZIP: `--folder C:\Users\<ja>\Downloads\OneDrive_1_29-09-2026.zip`.
+
+Ten sam wariant działa dla dysku sieciowego (`--folder "\\serwer\udzial\RABIT"`).
 Pliki blokady Excela (`~$…`) są pomijane.
 
 ---

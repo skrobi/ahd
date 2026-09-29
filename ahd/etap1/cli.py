@@ -141,7 +141,7 @@ def build_parser() -> argparse.ArgumentParser:
         g = sp.add_mutually_exclusive_group(required=True)
         g.add_argument("--url", help="link do folderu SharePoint (skopiowany z przeglądarki)")
         if folder_allowed:
-            g.add_argument("--folder", help="folder lokalny / sieciowy / synchronizowany OneDrive")
+            g.add_argument("--folder", help="folder lub plik .zip z plikami pobranymi ręcznie z przeglądarki (także dysk sieciowy)")
         sp.add_argument("--auth", choices=["sso", "ntlm", "none"], default="sso", help="logowanie (domyślnie SSO Windows)")
         sp.add_argument("--ca-bundle", help="plik z certyfikatami CA (gdy nie działa truststore)")
         sp.add_argument("--filtr", action="append", help="wzorzec nazwy, np. *.xlsx (można powtórzyć)")
