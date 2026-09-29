@@ -20,8 +20,8 @@ oraz wskazuje punkty newralgiczne i otwarte decyzje.
 | D6 | Developer pracuje na **TEST**, wdrożenia na **PROD** wykonuje admin | wymóg organizacyjny PZL |
 | D7 | Pipeline uruchamiany **co tydzień (poniedziałek)**, okres rozliczeniowy **miesięczny** | rytm pracy zespołu |
 | D8 | Wolumen danych przez sieć nie stanowi problemu | ładowanie z aplikacji lokalnej do bazy zdalnej |
-| D9 | Przypisanie użytkowników do zakresów utrzymywane w **słowniku**, zarządzanym przez finanse | jedno miejsce konfiguracji |
-| D10 | Pliki pośrednie dla finansów **wymagają potwierdzenia** przed generowaniem plików CAM | kontrola jakości przed wysłaniem do CAM |
+| D9 | **Brak podziału uprawnień** w finansach – każda osoba z finansów może prowadzić każdy zakres (zastępstwa); logowanie AD służy do audytu | prostota, ciągłość pracy |
+| D10 | Pliki pośrednie dla finansów **wymagają potwierdzenia** przed generowaniem plików CAM (może potwierdzić dowolna osoba z finansów, zapis kto/kiedy) | kontrola jakości przed wysłaniem do CAM |
 | D11 | Dopuszczalne ponowne przeliczenie EV | z zachowaniem poprzednich rewizji |
 | D12 | Pliki oryginalne przechowywane w centralnym folderze (Landing Zone), w bazie ścieżka + hash | odtwarzalność bez przyrostu bazy |
 | D13 | **Wszystko per zakres** (program / pula projektów); słowniki globalne publikowane osobno, przebieg przypina ich wersje | brak pipeline globalnego i przekazywania pracy, prosta współbieżność |
@@ -29,6 +29,9 @@ oraz wskazuje punkty newralgiczne i otwarte decyzje.
 | D15 | Korzeń folderów na **dysku sieciowym** | wspólna ścieżka UNC dla wszystkich użytkowników |
 | D16 | **CAM pracują wyłącznie na plikach** (bez dostępu do aplikacji) | brak konieczności wdrażania aplikacji u CAM |
 | D17 | **Zakres wyznacza jego słownik „Struktura projektowa”** (P1S WBS ↔ CAS WBS → Project Definition, Program, Project, CAM, WP), prowadzony przez osobę z finansów uruchamiającą przebiegi; nowe elementy wykrywane po pobraniu danych | elementy pojawiają się między przebiegami, a słownik z readme już łączy P1S i CES |
+| D18 | **CAM pochodzą z kolumny CAM słownika „Struktura projektowa”** – brak osobnego słownika CAM | jedno miejsce zarządzania projektem |
+| D19 | Relacja P1S ↔ CES **definiowana w słowniku** (każdy wiersz = para, dowolna krotność) | brak stałej relacji między systemami |
+| D20 | Zamknięcie miesiąca: elementy z kosztem muszą być przypisane | potwierdzone |
 
 ---
 
@@ -198,10 +201,14 @@ Reguły walidacji są opisane deklaratywnie (konfiguracja per słownik), nie „
   kolumn słownika, z wypełnionymi kluczami; właściciel uzupełnia resztę i wkleja do słownika.
 - Po publikacji słownika przebieg przypina nową wersję i przelicza od walidacji.
 - Przebieg tygodniowy może pominąć nieprzypisane elementy (decyzja w dzienniku, wartość poza EV
-  w raporcie). Zasada na zamknięcie miesiąca – O13.
+  w raporcie). Na zamknięciu miesiąca elementy z kosztem muszą być przypisane (D20).
 - Zmiana przypisania = zamknięcie wiersza (ValidTo) i nowy wiersz, bez usuwania.
-- Do weryfikacji: czy istniejąca tabela `PZLPROD.LOG.WBS` (używana przez `vAHDD`) zawiera już
-  część mapowania P1S ↔ CES.
+- `PZLPROD.LOG.WBS` zawiera wyłącznie P1S – nie konkuruje ze słownikiem struktury (może służyć
+  do sprawdzenia, czy P1S WBS istnieje).
+- Relacja P1S ↔ CES (D19): każdy wiersz to para, ten sam element może wystąpić w kilku wierszach,
+  jedna strona pary może być pusta; duplikat pary = błąd.
+- CAM (D18): kolumna CAM słownika struktury wyznacza listę CAM i podział plików CAM; walidacja
+  wymaga CAM dla WP = yes i ostrzega o podobnych zapisach tej samej osoby.
 
 ---
 
@@ -223,7 +230,7 @@ Reguły walidacji są opisane deklaratywnie (konfiguracja per słownik), nie „
 - CAM pracują wyłącznie na plikach (D16): analityk generuje pliki do `CAM/<RRRR-MM>/Wyslane`,
   CAM zapisuje uzupełniony plik w `CAM/<RRRR-MM>/Zwrocone`, aplikacja pokazuje analitykowi
   status per CAM (wysłany / zwrócony / zaimportowany / odrzucony + powód).
-- Informację o odrzuceniu pliku przekazuje CAM analityk (lub raport błędów zapisany obok pliku).
+- Informację o odrzuceniu pliku przekazuje CAM osoba prowadząca przebieg (lub raport błędów zapisany obok pliku).
 - Rekomendacja: **jeden plik na CAM** (w ramach zakresu) – jednoznaczna odpowiedzialność,
   równoległa praca, możliwość częściowego importu; dodatkowo zbiorczy plik programu tylko
   do odczytu. *(decyzja otwarta)*
@@ -261,12 +268,10 @@ Schematy (propozycja):
 
 ### 8.1 Bezpieczeństwo
 
-- Grupy AD → role bazodanowe: `ahd_analyst`, `ahd_finance_approver`, `ahd_dict_owner`, `ahd_admin`.
+- Grupa AD finansów → jedna rola bazodanowa `ahd_user`; osobno `ahd_admin` (wdrożenia).
 - Użytkownicy **nie mają praw do tabel** – wyłącznie EXECUTE na procedurach i SELECT na widokach.
-- **Uprawnienia do zakresu sprawdzane w bazie** (procedury), nie tylko w aplikacji – aplikacja
-  działa lokalnie, więc użytkownik mógłby połączyć się z bazą z pominięciem aplikacji.
-- Słownik przypisań użytkowników jest krytyczny dla bezpieczeństwa – importować go może
-  tylko rola finansów.
+- Brak uprawnień per zakres (D9). Baza nadal wymusza reguły procesu (bramki etapów, zamrożenie
+  okresu) w procedurach, bo aplikacja działa lokalnie.
 
 ---
 
@@ -280,7 +285,7 @@ Schematy (propozycja):
 6. Pliki CAM zmienione poza polami lub z innego przebiegu → identyfikator i blokady w szablonie.
 7. Excel zmieniający typy danych (WBS, daty, zera wiodące) → walidacja typów, preferencja CSV dla SAP.
 8. Etykiety poufności / szyfrowanie plików (Purview, IRM) → do weryfikacji z IT.
-9. Uprawnienia omijane przez bezpośrednie połączenie z bazą → kontrola w procedurach.
+9. Reguły procesu omijane przez bezpośrednie połączenie z bazą → kontrola w procedurach.
 10. Istniejące słowniki w `PZLPROD.LOG` (`WBS`, `Stanowiska`, `LearningCurve`, `PeriodDates`)
     → ryzyko dwóch źródeł prawdy; wymaga decyzji.
 11. Świeżość `vAHDD` zależy od przebiegu `uspUpdateAHDD` → kontrola aktualności przed etapem 1/4.
@@ -299,8 +304,6 @@ Schematy (propozycja):
 | O7 | Czy RABIT może eksportować CSV/TXT? | CSV preferowany |
 | O9 | Los słowników w `PZLPROD.LOG` | do ustalenia z właścicielami |
 | O10 | Źródło zaawansowania z produkcji dla przebiegów tygodniowych (np. `vAHDD`?) | do ustalenia |
-| O12 | Relacja P1S WBS ↔ CAS WBS: 1:1, wiele P1S do jednego CAS, czy wiele do wielu? | do ustalenia |
-| O13 | Zamknięcie miesiąca: które elementy blokują (odpowiedź: „niezrealizowany a nie nieprzypisany” – do doprecyzowania) | do ustalenia |
 | O11 | Zasady uzupełniania braków przez analityka (ostatnia znana wartość / plan / ręcznie) | do ustalenia |
 
 ---
