@@ -45,6 +45,7 @@ Architektura ma zapewnić:
 | D18 | **Lista CAM z kolumny CAM słownika struktury** – bez osobnego słownika CAM | jedno miejsce zarządzania projektem |
 | D19 | Relacja **P1S ↔ CES definiowana w słowniku** (wiersz = para, dowolna krotność) | brak stałej relacji między systemami |
 | D20 | Zamknięcie miesiąca wymaga przypisania elementów z kosztem | kompletność EV formalnego |
+| D23 | **Pliki RABIT kopiowane przez WebDAV** (`\\host@SSL\DavWWWRoot\…`, konto Windows) do `00_Global\RABIT\Do_importu` komendą `pobierz` – tylko nowe i zmienione; ręczne pobieranie (D22) zostaje awaryjnie (np. pliki > 50 MB – limit WebClient) | test dostępu 29.09.2026: WebDAV działa, API/sync/eksport do Excela nie |
 | D22 | **Pliki RABIT pobierane ręcznie z przeglądarki** (zaznacz wszystko → Pobierz → ZIP) do wspólnego folderu `00_Global\RABIT\Do_importu`; synchronizacja i dostęp API do SharePoint RABIT niedostępne (logowanie w przeglądarce, brak uprawnień do synchronizacji) | jedyna dostępna droga; import rozpoznaje duplikaty, więc można pobierać zawsze wszystko |
 | D21 | **Import plików SAP (RABIT) jest globalny, bez zakresu**: wszystkie pliki z folderu, import tylko nowych (SHA-256), wiersze w postaci surowej; przebieg zakresu wybiera swoje dane po elementach WBS ze słownika struktury | przy pobieraniu nie wiadomo, do którego zakresu należy plik |
 
