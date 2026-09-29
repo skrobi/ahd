@@ -23,6 +23,7 @@ Dokument jest rozwijany iteracyjnie na podstawie:
 | `docs/architektura.md` | architektura rozwiązania: decyzje, komponenty, przepływ danych, baza, wdrożenia |
 | `docs/funkcjonalnosc.md` | specyfikacja funkcjonalna: ekrany, funkcje, etapy przebiegu, reguły |
 | `prototyp/ahd-prototyp.html` | klikalny prototyp aplikacji (dane przykładowe, otwierany w przeglądarce) |
+| `docs/mvp-etap1.md`, `ahd/` | MVP etapu 1: pobieranie plików SAP z SharePoint / folderu do Landing Zone |
 | `dependencies.csv`, `resolved_objects.csv`, `export_log.txt` | eksport metadanych obiektów SQL z `splmcd03` (`PZLPROD.LOG`, `PZL_SAP`) |
 
 ---
