@@ -2,7 +2,7 @@
 
 Archiwa ZIP (SharePoint pakuje do ZIP pobranie kilku plików naraz) są czytane bez rozpakowywania:
 każdy plik w archiwum jest traktowany jak osobny plik źródłowy. Wskazać można folder
-(np. „Do_importu”) albo bezpośrednio plik .zip.
+(np. „Do_importu”), pojedynczy plik albo plik .zip.
 """
 
 from __future__ import annotations
@@ -26,12 +26,16 @@ def _skip(name: str) -> bool:
 class FolderSource:
     def __init__(self, root: str | Path) -> None:
         self.root = Path(root)
-        if not (self.root.is_dir() or (self.root.is_file() and zipfile.is_zipfile(self.root))):
-            raise FileNotFoundError(f"Folder lub plik ZIP nie istnieje: {self.root}")
+        if not self.root.exists():
+            raise FileNotFoundError(f"Folder lub plik nie istnieje: {self.root}")
 
     def walk(self, recursive: bool = False) -> Iterator[RemoteFile]:
         if self.root.is_file():
-            yield from self._zip_entries(self.root)
+            # Wskazany pojedynczy plik (np. ręcznie pobrany z przeglądarki) albo archiwum ZIP.
+            if zipfile.is_zipfile(self.root) and self.root.suffix.lower() == ".zip":
+                yield from self._zip_entries(self.root)
+            else:
+                yield self._file(self.root)
             return
         pattern = "**/*" if recursive else "*"
         for path in sorted(self.root.glob(pattern), key=lambda p: str(p).lower()):
@@ -40,13 +44,17 @@ class FolderSource:
             if path.suffix.lower() == ".zip" and zipfile.is_zipfile(path):
                 yield from self._zip_entries(path)
                 continue
-            stat = path.stat()
-            yield RemoteFile(
-                name=path.name,
-                server_relative_url=str(path),
-                size=stat.st_size,
-                modified=dt.datetime.fromtimestamp(stat.st_mtime, dt.timezone.utc).isoformat(timespec="seconds"),
-            )
+            yield self._file(path)
+
+    @staticmethod
+    def _file(path: Path) -> RemoteFile:
+        stat = path.stat()
+        return RemoteFile(
+            name=path.name,
+            server_relative_url=str(path),
+            size=stat.st_size,
+            modified=dt.datetime.fromtimestamp(stat.st_mtime, dt.timezone.utc).isoformat(timespec="seconds"),
+        )
 
     @staticmethod
     def _zip_entries(archive: Path) -> Iterator[RemoteFile]:

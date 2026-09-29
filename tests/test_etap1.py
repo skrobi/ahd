@@ -307,3 +307,11 @@ def test_manual_download_zip(tmp_path, capsys):
     # Wskazanie bezpośrednio pliku ZIP.
     assert cli.main(["lista", "--folder", str(inbox / "OneDrive_1_29-09-2026.zip")]) == 0
     assert "Razem: 2 plików" in capsys.readouterr().out
+
+
+def test_single_downloaded_file(tmp_path, capsys):
+    """Ręcznie pobrany pojedynczy plik można wskazać bezpośrednio."""
+    f = tmp_path / "CJI3_F16.csv"
+    f.write_text("a;b\n1;2\n", encoding="utf-8")
+    assert cli.main(["import", "--folder", str(f), "--landing", str(tmp_path / "LZ")]) == 0
+    assert "zaimportowane 1" in capsys.readouterr().out

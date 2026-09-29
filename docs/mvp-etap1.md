@@ -98,6 +98,31 @@ Uszkodzony plik jest oznaczany jako błąd i nie przerywa importu pozostałych.
 
 ---
 
+## 4a. Test dostępu do RABIT (które drogi działają)
+
+Jednorazowy test – sprawdza cztery metody i zapisuje raport bez zawartości plików:
+
+```bat
+python narzedzia\test_dostepu_rabit.py --plik-url "<link do JEDNEGO pliku z folderu E456659>"
+```
+
+| Metoda | Co sprawdza |
+|---|---|
+| A | `owssvr.dll?XMLDATA=1` – to samo co „Eksport do Excela”, lista plików przez HTTP (SSO) |
+| B | provider `Microsoft.Office.List.OLEDB.2.0` przez ADODB – jak połączenie w Excelu (definicja `<LIST>`) |
+| C | WebDAV `\\host@SSL\DavWWWRoot\…` – jak „Otwórz w Eksploratorze” |
+| D | bezpośrednie pobranie jednego pliku przez HTTP (SSO) |
+
+Link do pliku: w bibliotece przy pliku „…” → „Kopiuj link” (albo prawy przycisk na nazwie → „Kopiuj adres linku”).
+Definicję listy można podać z połączenia Excela (`--lista-xml plik.xml`) albo z pliku `.iqy` (`--iqy`);
+domyślnie używana jest definicja folderu E456659.
+
+Provider OLEDB (B) wymaga Pythona o tej samej bitowości co Office (np. Office 32-bit → Python 32-bit);
+skrypt wypisuje bitowość. Na końcu skrypt podaje wniosek, a raport zapisuje w `raport_dostepu_rabit.json`
+(nazwy plików – przejrzyj przed wysłaniem).
+
+---
+
 ## 5. Wariant: ręczne pobranie z przeglądarki (gdy SharePoint wymaga logowania w przeglądarce)
 
 Gdy `sprawdz` pokazuje przekierowanie na stronę logowania, a synchronizacja nie jest dostępna:
@@ -107,6 +132,8 @@ Gdy `sprawdz` pokazuje przekierowanie na stronę logowania, a synchronizacja nie
 2. Otwórz folder RABIT w przeglądarce, zaznacz wszystkie pliki (pole wyboru w nagłówku listy) i kliknij
    **Pobierz**. Przy kilku plikach SharePoint zapisze jeden plik ZIP (np. `OneDrive_1_29-09-2026.zip`).
 3. Przenieś ZIP (albo pojedyncze pliki) do `C:\AHD_TEST\Do_importu`. Rozpakowywać nie trzeba.
+   Jeśli pobranie kilku plików naraz (ZIP) jest zablokowane – pobieraj pliki pojedynczo; import można
+   też wskazać na jeden plik: `--folder C:\AHD_TEST\Do_importu\CJI3_F16.xlsx`.
 4. Uruchom import:
 
 ```bat
