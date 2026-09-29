@@ -259,9 +259,9 @@ Schematy (propozycja):
 9. Uprawnienia omijane przez bezpośrednie połączenie z bazą → kontrola w procedurach.
 10. Istniejące słowniki w `PZLPROD.LOG` (`WBS`, `Stanowiska`, `LearningCurve`, `PeriodDates`)
     → ryzyko dwóch źródeł prawdy; wymaga decyzji.
+11. Świeżość `vAHDD` zależy od przebiegu `uspUpdateAHDD` → kontrola aktualności przed etapem 1/4.
 12. Mieszanie źródeł zaawansowania (CAM / produkcja / analityk) → zapis pochodzenia każdej wartości,
     twarda bramka „tylko CAM” na zamknięcie miesiąca.
-11. Świeżość `vAHDD` zależy od przebiegu `uspUpdateAHDD` → kontrola aktualności przed etapem 1/4.
 
 ---
 
@@ -273,6 +273,6 @@ Schematy (propozycja):
 | O5 | Serwer / baza dla AHD | osobna baza `AHD` |
 | O6 | Forma dystrybucji aplikacji (repozytorium + skrypt instalacyjny / paczka) | do ustalenia |
 | O7 | Czy RABIT może eksportować CSV/TXT? | CSV preferowany |
+| O9 | Los słowników w `PZLPROD.LOG` | do ustalenia z właścicielami |
 | O10 | Źródło zaawansowania z produkcji dla przebiegów tygodniowych (np. `vAHDD`?) | do ustalenia |
 | O11 | Zasady uzupełniania braków przez analityka (ostatnia znana wartość / plan / ręcznie) | do ustalenia |
-| O9 | Los słowników w `PZLPROD.LOG` | do ustalenia z właścicielami |
