@@ -276,3 +276,11 @@ Schematy (propozycja):
 | O9 | Los słowników w `PZLPROD.LOG` | do ustalenia z właścicielami |
 | O10 | Źródło zaawansowania z produkcji dla przebiegów tygodniowych (np. `vAHDD`?) | do ustalenia |
 | O11 | Zasady uzupełniania braków przez analityka (ostatnia znana wartość / plan / ręcznie) | do ustalenia |
+
+---
+
+## 11. Prototyp funkcjonalny
+
+Klikalny prototyp przebiegu pracy (od utworzenia zakresu do zamknięcia okresu):
+`prototyp/ahd-prototyp.html` – otwierany bezpośrednio w przeglądarce, bez instalacji.
+Dane są przykładowe; prototyp nie łączy się z bazą ani plikami.
