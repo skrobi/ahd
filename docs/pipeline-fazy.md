@@ -31,7 +31,8 @@ z różnych komputerów.
 ```mermaid
 flowchart TD
   subgraph G["Fazy globalne – bez zakresu, w dowolnym momencie"]
-    G1["G1 Pobranie RABIT<br/>(WebDAV → Do_importu, każda wersja)"] --> G2["G2 Import i rozładowanie<br/>(definicje plików → tabele z markerem)"]
+    G1["G1 Pobranie RABIT<br/>(WebDAV → Do_importu)"] --> G2["G2 Import<br/>(prefiks → źródło, hash, historia)"]
+    G2 --> G2b["G2b Kompletność źródeł projektów"]
     G2 --> G3["G3 Klasyfikacja elementów WBS<br/>(nowe elementy, klucze → propozycje)"]
     G4["G4 Publikacja słowników globalnych"]
   end
@@ -55,7 +56,8 @@ flowchart TD
 | Faza | Zakres | Kto | Kiedy | Stan |
 |---|---|---|---|---|
 | G1 Pobranie RABIT | globalna | dowolna osoba z finansów / harmonogram | co najmniej tak często jak RABIT | **działa** |
-| G2 Import i rozładowanie | globalna | j.w. | po G1 | rejestr plików działa; rozładowanie po zdefiniowaniu plików |
+| G2 Import | globalna | j.w. | po G1 (razem) | **działa** |
+| G2b Kompletność źródeł projektów | globalna | dowolna osoba z finansów | po G2 | **działa** (podstawowo) |
 | G3 Klasyfikacja elementów WBS | globalna | automatycznie po G2, decyzje – finanse | po G2 | koncepcja |
 | G4 Słowniki globalne | globalna | właściciel słownika | przy zmianie | koncepcja |
 | P1–P10 | zakres | osoba prowadząca zakres | tydzień / zamknięcie | prototyp |
@@ -75,24 +77,37 @@ czego dotyczy plik – o tym decyduje dopiero G2 na podstawie definicji plików 
 | **Cel** | Nie zgubić żadnej wersji raportu zrzuconej przez RABIT i mieć ją na dysku firmy. |
 | **Wejście** | Folder RABIT na SharePoint (WebDAV, konto Windows). |
 | **Jak pracuje** | Porównuje pliki źródłowe z ostatnio pobranymi (rozmiar, data modyfikacji); kopiuje tylko nowe i zmienione. Nie interpretuje treści. |
-| **Ryzyko** | RABIT nadpisuje plik – jeśli między dwoma uruchomieniami RABIT nie było pobrania, poprzednia wersja przepada. Dlatego G1 powinien **zachowywać każdą pobraną wersję** (np. `Do_importu\<nazwa>__<data modyfikacji>.xlsx` albo archiwum dzienne) i być uruchamiany co najmniej tak często jak RABIT (np. harmonogram zadań Windows). |
+| **Nazwy plików** | Proste, bez projektu, dat i wersji (np. `ACTUALS_PAF_01.xlsx`); o źródle decyduje prefiks. G1 zachowuje nazwę z RABIT. |
+| **Ryzyko** | RABIT nadpisuje plik – jeśli między dwoma uruchomieniami RABIT nie było pobrania i importu, poprzednia wersja przepada. Dlatego G1 i G2 uruchamia się razem i co najmniej tak często jak RABIT (np. harmonogram zadań Windows); historia wersji jest w bazie (hash), nie w nazwach plików. |
 | **Kontrole** | Dostępność WebDAV; limit 50 MB (większy plik – ręcznie). |
-| **Efekt** | Każda wersja każdego pliku RABIT w `00_Global\RABIT\Do_importu`. |
+| **Efekt** | Aktualna kopia plików RABIT w `00_Global\RABIT\Do_importu`. |
 | **Przekazanie** | Folder `Do_importu` jest wejściem G2. |
 
-### G2. Import i rozładowanie do tabel *(działa częściowo: rejestr plików; rozładowanie – po zdefiniowaniu plików)*
+### G2. Import *(działa: rozpoznanie po prefiksie, hash, historia; tabele typowane – po zdefiniowaniu raportów)*
 
 | | |
 |---|---|
-| **Cel** | Każdą nową wersję pliku **rozpoznać** i załadować jej dane do **właściwej tabeli** z markerem pochodzenia – tak, żeby dało się odtworzyć dowolny wcześniejszy stan i porównać dwa stany. |
-| **Wejście** | Pliki w `Do_importu`; słownik **Definicje plików RABIT** (do zdefiniowania później). |
-| **Słownik definicji plików** | wzorzec nazwy pliku (RABIT nadpisuje ten sam plik, więc nazwa jest stała) → typ raportu → tabela docelowa → mapowanie kolumn na pola tabeli → **oczekiwana sygnatura kolumn** (kontrola, czy układ raportu się nie zmienił) → klucz wiersza. |
-| **Jak pracuje** | 1) Rejestr pliku: hash SHA-256, duplikat = pomijany (działa). 2) Dopasowanie do definicji po nazwie + sprawdzenie sygnatury kolumn. 3) Załadowanie wierszy do tabeli typu raportu (konwersja typów, daty, liczby, WBS jako tekst). |
-| **Marker pochodzenia** | Każdy wiersz ma: `IdImportu` (kto, kiedy), `Sha256` pliku, **datę raportu** (data modyfikacji pliku w RABIT = kiedy SAP wygenerował dane), typ raportu. Jedna wersja pliku = jeden **snapshot** raportu. |
-| **Archiwalność** | Tabele tylko dopisywane (bez nadpisywania). Widok „najnowszy stan” wybiera ostatni snapshot każdego raportu; porównanie dwóch snapshotów pokazuje różnice (nowe / zmienione / usunięte wiersze). Oryginał pliku zostaje w Landing Zone. |
-| **Kontrole** | Plik bez definicji → status „niezdefiniowany” (zarejestrowany i zarchiwizowany, **nie ładowany**; alert). Zmieniona sygnatura kolumn → „układ zmieniony” (nie ładowany, alert). Suma kontrolna: liczba wierszy i sumy kwot przed/po. |
-| **Efekt** | Tabele raportów z markerami + rejestr plików ze statusem: załadowany / duplikat / niezdefiniowany / układ zmieniony / błąd. |
-| **Przekazanie** | Nowe snapshoty są wejściem G3 (elementy WBS) i P1 (dane zakresu). Po dopisaniu definicji plik „niezdefiniowany” można załadować ponownie z Landing Zone – bez ponownego pobierania. |
+| **Cel** | Każdy **rozpoznany** plik załadować do bazy jako źródło z markerem pochodzenia – tak, żeby dało się odtworzyć dowolny wcześniejszy stan i porównać dwa stany. |
+| **Zasada** | **Plik mówi, czym jest** (prefiks nazwy → źródło), **projekt mówi, czego potrzebuje** (projekt → wymagane źródła). |
+| **Wejście** | Pliki w `Do_importu`; `konfiguracja/zrodla_rabit.csv` (Prefiks → KodZrodla). |
+| **Jak pracuje** | 1) Prefiks nazwy → źródło (najdłuższy pasujący prefiks, bez rozróżniania wielkości liter). 2) Hash SHA-256: ten sam fizyczny plik = duplikat. 3) Nowa treść → Landing Zone + wiersze w bazie. Każdy rozpoznany plik osobno – także `ACTUALS_PAF_01/_02/_03` o różnych kolumnach. |
+| **Marker pochodzenia** | Każdy plik (i przez niego każdy wiersz): `IdImportu` (kto, kiedy), `Sha256`, **kod źródła**, **data raportu** (data modyfikacji w RABIT). Jedna wersja pliku = jeden snapshot. |
+| **Archiwalność** | Tylko dopisywanie. Każda nowa treść nadpisanego przez RABIT pliku to nowa wersja w historii; oryginał w Landing Zone. Widok „najnowszy stan” i porównanie wersji – na tej historii. |
+| **Kontrole** | Brak prefiksu → „nierozpoznany” (nie importowany; po dopisaniu prefiksu zaimportuje się przy kolejnym uruchomieniu). Uszkodzony plik → „błąd” (reszta importuje się dalej). |
+| **Efekt** | `meta.SourceFile` (hash, kod źródła, kolumny, liczba wierszy), `meta.SourceFileSeen` (decyzja dla każdego pliku w każdym imporcie), `stg.RawRow` / `stg.vRawRowZrodlo`. |
+| **Później** | Tabele typowane per źródło (mapowanie kolumn), gdy będzie wiadomo, co zawierają raporty. |
+| **Przekazanie** | Historia importów źródeł jest wejściem **G2b** (kompletność projektów), G3 (elementy WBS) i P1 (dane zakresu). |
+
+### G2b. Kompletność źródeł projektów *(działa w podstawowej wersji)*
+
+| | |
+|---|---|
+| **Cel** | Zamiast ręcznie sprawdzać kilkadziesiąt projektów – automatycznie wiedzieć, któremu projektowi brakuje danych. |
+| **Wejście** | `konfiguracja/projekty_zrodla.csv` (Projekt → wymagane źródła) + historia importów z G2. |
+| **Jak pracuje** | Dla każdego wymaganego źródła projektu: ostatni import, data raportu, liczba plików. |
+| **Efekt** | Projekt „komplet” / „niekompletny”: ✓ źródło zaimportowane, ✗ brak importu, ⚠ import starszy niż próg. |
+| **Później** | Kontrola, czy ostatni import obejmuje bieżący okres; zmiany między importami. |
+| **Przekazanie** | P1 nie rusza (albo ostrzega) dla projektu niekompletnego. |
 
 ### G3. Klasyfikacja elementów WBS *(koncepcja)*
 
@@ -130,7 +145,7 @@ fazy mogą być wykonywane w różne dni i przez różne osoby z finansów.
 | **Cel** | Wybrać z danych globalnych **tylko to, co należy do zakresu i okresu**, i zamrozić ten wybór na czas przebiegu. |
 | **Wejście** | Tabele raportów z G2 (najnowsze snapshoty); rejestr elementów z G3; słownik „Struktura projektowa” zakresu (CAS WBS / P1S WBS); kalendarz okresów. |
 | **Jak pracuje** | Filtruje wiersze po elementach WBS zakresu i datach okresu (koszt okresu i narastająco). **Przypina zestaw plików** (lista hashy) – analogicznie do przypinania wersji słowników. |
-| **Kontrole** | Ostatni import G2 nie starszy niż X dni; brak plików „niezdefiniowanych” / „układ zmieniony” (ostrzeżenie); elementy zakresu nieprzypisane w G3 (ostrzeżenie; zamknięcie – blokada); daty w okresie. |
+| **Kontrole** | Kompletność źródeł projektów zakresu (G2b); plików „nierozpoznanych” (ostrzeżenie); elementy zakresu nieprzypisane w G3 (ostrzeżenie; zamknięcie – blokada); daty w okresie. |
 | **Efekt** | Snapshot danych zakresu `hist.DaneZakresu` (RunId, Sha256) + lista przypiętych plików. |
 | **Przekazanie** | P2–P4 pracują wyłącznie na tym snapshocie. Nowy import w trakcie przebiegu → informacja „dostępne nowsze dane” i decyzja: kontynuuj / przelicz od P1. |
 
@@ -240,8 +255,8 @@ Dwa warianty, ten sam cel: **dla każdego WP wartość zaawansowania z zapisanym
 
 | # | Kwestia |
 |---|---|
-| K1 | Słownik **Definicje plików RABIT** (nazwa → typ → tabela → mapowanie kolumn → sygnatura) – gdy będzie wiadomo, które raporty są potrzebne |
-| K5 | Wersjonowanie w G1 (RABIT nadpisuje plik) i harmonogram pobierania |
+| K1 | Rzeczywiste prefiksy plików RABIT (`zrodla_rabit.csv`) i wymagane źródła projektów (`projekty_zrodla.csv`); później mapowanie kolumn źródeł na tabele typowane |
+| K5 | Harmonogram G1+G2 względem harmonogramu RABIT (nadpisywanie plików) |
 | K6 | Reguły kluczy w G3: po czym rozpoznać projekt (segment WBS, Project Definition, Business Area…) i czy reguła tylko proponuje, czy przypisuje |
 | K7 | Retencja snapshotów (wolumen: setki tysięcy wierszy × raporty × tygodnie) |
 | K2 | Co zawierają poszczególne pliki RABIT (koszty, zobowiązania, „PZL roll”, „hedge”, „workaround”) i które fazy ich używają |

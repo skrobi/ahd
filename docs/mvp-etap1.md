@@ -1,17 +1,23 @@
 # Etap 1: pobranie plików RABIT i import do bazy
 
-Wersja: 1.0 (rozwiązanie docelowe, MVP)
+Wersja: 1.1 (rozwiązanie docelowe, MVP)
 
 ## Zasada
+
+**Plik mówi, czym jest – projekt mówi, czego potrzebuje.**
+
+```
+RABIT → plik XLSX → PREFIKS → źródło → import do bazy → historia + hash → PROJEKT → wymagane źródła
+```
 
 1. **Pobierz** – pliki z folderu RABIT na SharePoint są kopiowane przez **WebDAV** (jak „Otwórz
    w Eksploratorze”, konto Windows użytkownika) do wspólnego folderu `00_Global\RABIT\Do_importu`.
    Kopiowane są tylko pliki nowe i zmienione (rozmiar, data modyfikacji).
-2. **Importuj** – wszystkie pliki z `Do_importu` trafiają do bazy, ale **tylko te o nowej treści**
-   (odcisk SHA-256). Na etapie importu **nie wiadomo, do którego zakresu** należy plik – wiersze są
-   zapisywane w postaci surowej, a przypisanie do zakresów odbywa się w przebiegu zakresu (słownik
-   „Struktura projektowa”).
-3. **Historia** – każdy widzi, kto, kiedy i co zaimportował.
+2. **Importuj** – źródło pliku rozpoznawane jest po **prefiksie nazwy** (np. `ACTUALS_PAF_01.xlsx` →
+   `ACTUALS_PAF`). Importowany jest **każdy rozpoznany plik** samodzielnie, ale **tylko o nowej treści**
+   (hash SHA-256 = tożsamość fizycznego pliku). Plik bez pasującego prefiksu nie jest importowany.
+3. **Kompletność** – każdy projekt ma listę wymaganych źródeł; AHD pokazuje, czego brakuje.
+4. **Historia** – każdy widzi, kto, kiedy i co zaimportował.
 
 ---
 
@@ -50,7 +56,34 @@ w przeglądarce i zapisuje w `Do_importu` – import potraktuje go tak samo.
 
 ---
 
-## 3. Import do bazy
+## 3. Konfiguracja źródeł i projektów
+
+Katalog `konfiguracja` (w repozytorium; inną lokalizację wskazuje `--konfiguracja` albo zmienna
+`AHD_KONFIGURACJA`, np. `\\serwer\udzial\AHD\00_Global\Konfiguracja`). Pliki CSV, separator `;`,
+edycja w Excelu, wiersze z `#` pomijane. W repozytorium są **przykłady** do zastąpienia.
+
+`zrodla_rabit.csv` – prefiks nazwy pliku → źródło (wygrywa najdłuższy pasujący prefiks, wielkość liter bez znaczenia):
+
+```
+Prefiks;KodZrodla;Opis
+ACTUALS_PAF;ACTUALS_PAF;Koszty rzeczywiste PAF
+FORECAST_PAF;FORECAST_PAF;Prognoza PAF
+```
+
+`projekty_zrodla.csv` – projekt → wymagane źródła (jeden wiersz = jedno źródło):
+
+```
+Projekt;KodZrodla
+PAF-001;ACTUALS_PAF
+PAF-001;FORECAST_PAF
+ABC-002;ACTUALS_PAF
+```
+
+`lista --webdav "<link>"` albo `lista --folder …` pokazuje, jakie źródło zostanie rozpoznane dla każdego pliku.
+
+---
+
+## 4. Import do bazy
 
 ```bat
 python -m ahd.etap1 import --folder "\\serwer\udzial\AHD\00_Global\RABIT\Do_importu" --landing "\\serwer\udzial\AHD\01_LandingZone"
@@ -60,10 +93,15 @@ Decyzja dla każdego pliku:
 
 | Decyzja | Znaczenie |
 |---|---|
-| zaimportowany | nowa treść – kopia w Landing Zone (`<RRRR-MM-DD>\<IdImportu>\`), wiersze w bazie |
+| zaimportowany | rozpoznany plik o nowej treści – kopia w Landing Zone (`<RRRR-MM-DD>\<IdImportu>\`), wiersze w bazie z kodem źródła |
 | pominiety (metadane) | ten sam plik (ścieżka, rozmiar, data) co przy poprzednim imporcie – nie jest nawet czytany |
-| duplikat | treść już jest w bazie (także pod inną nazwą) – komunikat mówi, kto i kiedy ją zaimportował |
+| duplikat | ten fizyczny plik (hash) już jest w bazie, także pod inną nazwą – komunikat mówi, kto i kiedy go zaimportował |
+| nierozpoznany | brak pasującego prefiksu w `zrodla_rabit.csv` – plik nie jest importowany; po dopisaniu prefiksu zaimportuje się przy kolejnym uruchomieniu |
 | blad | np. uszkodzony plik – pozostałe pliki importują się dalej |
+
+RABIT nadpisuje plik tą samą nazwą: każda nowa treść to nowa wersja w historii (poprzednie zostają).
+Kilka plików jednego źródła (`ACTUALS_PAF_01`, `_02`, `_03`) importuje się niezależnie, nawet jeśli
+mają różne kolumny.
 
 Opcje:
 - `--baza` – adres bazy; domyślnie plik SQLite `ahd_mvp.sqlite` w katalogu Landing Zone (do czasu
@@ -73,12 +111,30 @@ Opcje:
 - `--pelne-sprawdzenie` – liczy hash także plików bez zmian w metadanych,
 - `--webdav "<link>"` zamiast `--folder` – import bezpośrednio z SharePoint, bez kopii w `Do_importu`.
 
-Pliki wieloczęściowe (`_cz1`, `_cz2`, `part 3`, `(2)`) są sprawdzane jako zestaw: te same kolumny,
-łączna liczba wierszy.
+---
+
+## 5. Kompletność źródeł projektów
+
+```bat
+python -m ahd.etap1 kompletnosc --landing "\\serwer\udzial\AHD\01_LandingZone" --maks-wiek-dni 7
+```
+
+```
+PAF-001: NIEKOMPLETNY
+  ✓ ACTUALS_PAF            ostatni import 2026-09-29T08:10 (0 dni), raport z 2026-09-29T05:12, plików 3, ostatni: ACTUALS_PAF_03.xlsx
+  ✓ FORECAST_PAF           ostatni import 2026-09-29T08:10 (0 dni), raport z 2026-09-28T22:00, plików 1, ostatni: FORECAST_PAF.xlsx
+  ✗ ETC_PAF                brak importu
+ABC-002: komplet
+  …
+Projektów: 2, niekompletnych: 1
+```
+
+✗ – brak importu, ⚠ – ostatni import starszy niż `--maks-wiek-dni`. Kod wyjścia 1, gdy którykolwiek
+projekt jest niekompletny. Sprawdzenie, czy import obejmuje bieżący okres – w kolejnym kroku.
 
 ---
 
-## 4. Historia importów
+## 6. Historia importów
 
 ```bat
 python -m ahd.etap1 historia --landing "\\serwer\udzial\AHD\01_LandingZone"
@@ -86,24 +142,25 @@ python -m ahd.etap1 historia --landing "\\serwer\udzial\AHD\01_LandingZone"
 
 ---
 
-## 5. Co jest w bazie
+## 7. Co jest w bazie
 
 | Tabela | Zawartość |
 |---|---|
 | `meta.ImportBatch` | każde uruchomienie importu: kto, komputer, wersja aplikacji, liczniki, status |
-| `meta.SourceFile` | każdy unikalny plik (klucz: SHA-256): nazwa, źródło, ścieżka w Landing Zone, kolumny, sygnatura kolumn, typ raportu, liczba wierszy |
+| `meta.SourceFile` | każdy unikalny plik (klucz: SHA-256): nazwa, **kod źródła**, ścieżka w Landing Zone, data raportu, kolumny, sygnatura kolumn, liczba wierszy |
 | `meta.SourceFileSeen` | każdy plik widziany w każdym imporcie i decyzja |
-| `stg.RawRow` | surowe wiersze: hash pliku, numer wiersza, wartości (JSON) |
+| `stg.RawRow` | surowe wiersze: hash pliku, numer wiersza, wartości (JSON); widok `stg.vRawRowZrodlo` (MS SQL) dokłada kod źródła i import |
 
-**Typ raportu** jest wstępnie rozpoznawany po nazwie (CJI3, ZRD_KKAJ, NET_INV, inaczej „nieznany”).
-Pliki RABIT mają nazwy robocze (np. „B6 AC1-2”, „PAF2 hedge Status”), dlatego typ będzie rozpoznawany
-po **sygnaturze kolumn** – słownik sygnatur powstanie na podstawie pierwszych importów.
+**Sygnatura kolumn** (odcisk układu nagłówków) pozwala zauważyć, że RABIT/SAP zmienił układ raportu.
+Tabele typowane per źródło (mapowanie kolumn) powstaną, gdy będzie wiadomo, co zawierają raporty.
+
+Baza SQLite z wcześniejszej wersji MVP jest aktualizowana automatycznie (kolumna `TypRaportu` → `KodZrodla`).
 
 Wydajność (test): plik CSV 700 000 wierszy / 85 MB – import do SQLite ok. 13 s.
 
 ---
 
-## 6. Testy (developer)
+## 8. Testy (developer)
 
 ```bat
 python -m pytest -q tests

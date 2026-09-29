@@ -50,7 +50,7 @@ CREATE TABLE IF NOT EXISTS meta_SourceFile (
     Separator      TEXT,
     Kolumny        TEXT,
     SygnaturaKolumn TEXT,
-    TypRaportu     TEXT,
+    KodZrodla      TEXT,
     LiczbaWierszy  INTEGER
 );
 CREATE TABLE IF NOT EXISTS meta_SourceFileSeen (
@@ -63,6 +63,7 @@ CREATE TABLE IF NOT EXISTS meta_SourceFileSeen (
     Decyzja        TEXT NOT NULL,
     Opis           TEXT
 );
+CREATE INDEX IF NOT EXISTS IX_SourceFile_KodZrodla ON meta_SourceFile(KodZrodla, Zaimportowano);
 CREATE INDEX IF NOT EXISTS IX_Seen_Zrodlo ON meta_SourceFileSeen(Zrodlo, Rozmiar, ZmodyfikowanyWZrodle);
 CREATE TABLE IF NOT EXISTS stg_RawRow (
     Sha256         TEXT NOT NULL REFERENCES meta_SourceFile(Sha256),
@@ -107,6 +108,7 @@ class Database:
             Path(path).parent.mkdir(parents=True, exist_ok=True)
             self.dialect = "sqlite"
             self.conn = sqlite3.connect(path)
+            self._migrate_sqlite()
             self.conn.executescript(SQLITE_DDL)
             self.conn.commit()
         elif parts.scheme == "mssql":
@@ -134,6 +136,13 @@ class Database:
         else:
             raise DatabaseError(f"Nieobsługiwany adres bazy: {url} (sqlite:///… albo mssql://…)")
         self.t = TABLES[self.dialect]
+
+    def _migrate_sqlite(self) -> None:
+        # Bazy z wcześniejszej wersji MVP: kolumna TypRaportu → KodZrodla (źródło rozpoznane po prefiksie).
+        cols = {r[1] for r in self.conn.execute("PRAGMA table_info(meta_SourceFile)")}
+        if "TypRaportu" in cols and "KodZrodla" not in cols:
+            self.conn.execute("ALTER TABLE meta_SourceFile RENAME COLUMN TypRaportu TO KodZrodla")
+            self.conn.commit()
 
     # -- pomocnicze -------------------------------------------------------
     def _ts(self, value: dt.datetime | None = None) -> Any:
@@ -207,11 +216,11 @@ class Database:
             cur.execute(
                 f"INSERT INTO {self.t['file']} (Sha256, NazwaPliku, Zrodlo, Rozmiar, ZmodyfikowanyWZrodle, "
                 "SciezkaLandingZone, BatchId, Zaimportowano, Uzytkownik, TypPliku, Arkusz, Kodowanie, Separator, "
-                "Kolumny, SygnaturaKolumn, TypRaportu, LiczbaWierszy) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                "Kolumny, SygnaturaKolumn, KodZrodla, LiczbaWierszy) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (meta["sha256"], meta["plik"], meta["zrodlo"], meta["rozmiar"], meta["zmodyfikowany"],
                  meta["landing"], meta["batch"], self._ts(), meta["uzytkownik"], meta.get("typ"), meta.get("arkusz"),
                  meta.get("kodowanie"), meta.get("separator"), json.dumps(meta.get("kolumny", []), ensure_ascii=False),
-                 meta.get("sygnatura"), meta.get("typ_raportu"), None),
+                 meta.get("sygnatura"), meta["kod_zrodla"], None),
             )
         except Exception as exc:
             self.rollback()
@@ -241,7 +250,7 @@ class Database:
         top = f"TOP {int(limit)} " if self.dialect == "mssql" else ""
         tail = "" if self.dialect == "mssql" else f" LIMIT {int(limit)}"
         cur.execute(
-            f"SELECT {top}Zaimportowano, Uzytkownik, NazwaPliku, TypRaportu, LiczbaWierszy, Sha256 "
+            f"SELECT {top}Zaimportowano, Uzytkownik, NazwaPliku, KodZrodla, LiczbaWierszy, Sha256 "
             f"FROM {self.t['file']} ORDER BY Zaimportowano DESC{tail}"
         )
         yield from cur.fetchall()
@@ -255,6 +264,22 @@ class Database:
             f"FROM {self.t['batch']} ORDER BY Start DESC{tail}"
         )
         yield from cur.fetchall()
+
+    def source_status(self) -> dict[str, dict[str, Any]]:
+        """Stan każdego źródła: ostatni import, liczba plików, ostatni plik, najnowsza data raportu w RABIT."""
+        cur = self._cursor()
+        cur.execute(
+            f"SELECT KodZrodla, Zaimportowano, NazwaPliku, ZmodyfikowanyWZrodle FROM {self.t['file']} "
+            "WHERE KodZrodla IS NOT NULL ORDER BY Zaimportowano"
+        )
+        status: dict[str, dict[str, Any]] = {}
+        for code, when, name, modified in cur.fetchall():
+            st = status.setdefault(code, {"plikow": 0, "data_raportu": ""})
+            st["plikow"] += 1
+            st["ostatni_import"] = when
+            st["ostatni_plik"] = name
+            st["data_raportu"] = max(st["data_raportu"], str(modified or ""))
+        return status
 
     def count_rows(self, sha: str) -> int:
         cur = self._cursor()

@@ -47,6 +47,7 @@ Architektura ma zapewnić:
 | D20 | Zamknięcie miesiąca wymaga przypisania elementów z kosztem | kompletność EV formalnego |
 | D23 | **Rozwiązanie docelowe: pliki RABIT kopiowane przez WebDAV** (`\\host@SSL\DavWWWRoot\…`, konto Windows użytkownika) do `00_Global\RABIT\Do_importu` komendą `pobierz` – tylko nowe i zmienione; następnie `import` do bazy | test 29.09.2026: WebDAV działa; API REST, synchronizacja i eksport do Excela nie są dostępne |
 | D22 | Awaryjnie (np. plik > 50 MB – limit usługi WebClient): pojedynczy plik pobrany ręcznie w przeglądarce do `00_Global\RABIT\Do_importu` | import traktuje go tak samo |
+| D24 | **Plik mówi, czym jest – projekt mówi, czego potrzebuje.** Źródło pliku RABIT rozpoznawane po **prefiksie nazwy** (`konfiguracja/zrodla_rabit.csv`, wygrywa najdłuższy prefiks); importowany jest **każdy rozpoznany plik** samodzielnie (np. `ACTUALS_PAF_01/_02/_03`), bez kontroli „zestawów”; plik nierozpoznany nie jest importowany. Projekt ma listę **wymaganych źródeł** (`konfiguracja/projekty_zrodla.csv`), a AHD sprawdza ich kompletność i aktualność | proste nazwy plików RABIT, różne potrzeby projektów, automatyczna kontrola zamiast ręcznej |
 | D21 | **Import plików SAP (RABIT) jest globalny, bez zakresu**: wszystkie pliki z folderu, import tylko nowych (SHA-256), wiersze w postaci surowej; przebieg zakresu wybiera swoje dane po elementach WBS ze słownika struktury | przy pobieraniu nie wiadomo, do którego zakresu należy plik |
 
 ---
@@ -266,13 +267,23 @@ wersję słownika; obowiązuje ostatnia poprawna.
 - Import obejmuje **wszystkie** pliki; zakres nie jest znany. Tożsamość pliku = SHA-256 treści:
   nowy hash → import; znany hash → duplikat; te same metadane (ścieżka, rozmiar, data) co wcześniej →
   pominięcie bez pobierania.
-- Wiersze ładowane w postaci surowej (`stg.RawRow`: hash pliku, nr wiersza, wartości JSON) oraz
-  nagłówki i **sygnatura kolumn** (rozpoznawanie typu raportu niezależnie od nazwy pliku).
-- Jeden lub kilka plików na projekt (limit wierszy Excela) – części sprawdzane jako zestaw:
-  identyczny układ kolumn i łączna liczba wierszy.
+- **Rozpoznanie źródła (D24):** prefiks nazwy pliku → kod źródła wg `konfiguracja/zrodla_rabit.csv`
+  (np. `ACTUALS_PAF_01.xlsx` → `ACTUALS_PAF`). Nazwy plików pozostają proste – bez projektu, dat, wersji.
+  Plik bez pasującego prefiksu → decyzja „nierozpoznany”, nie jest importowany (po dopisaniu prefiksu
+  zostanie zaimportowany przy kolejnym uruchomieniu).
+- **Każdy rozpoznany plik importowany samodzielnie** – także kilka plików jednego źródła
+  (`_01`, `_02`, `_03`) o różnych układach kolumn; brak kontroli „zestawów”.
+- **Hash = tożsamość fizycznego pliku:** ponowne pobranie tego samego pliku nie jest traktowane jako nowe.
+  RABIT nadpisuje plik tą samą nazwą – każda nowa treść to nowa wersja w historii (`meta.SourceFile`).
+- Wiersze ładowane w postaci surowej (`stg.RawRow`, widok `stg.vRawRowZrodlo` z kodem źródła i importem);
+  zapisywana jest też sygnatura kolumn (zmiana układu raportu). Tabele typowane per źródło – gdy
+  zostanie zdefiniowana zawartość raportów.
+- **Kompletność projektu (D24):** `konfiguracja/projekty_zrodla.csv` (Projekt → wymagane źródła);
+  `kompletnosc` pokazuje dla projektu: ✓ źródło zaimportowane (ostatni import, data raportu, plik),
+  ✗ brak importu, ⚠ import starszy niż zadany próg. Sprawdzenie pokrycia okresu – później.
 - Każde uruchomienie importu i decyzja dla każdego pliku są zapisane w bazie (`meta.ImportBatch`,
   `meta.SourceFile`, `meta.SourceFileSeen`) – widać, kto i kiedy zaimportował dane.
-- Kod: `ahd/etap1` (`pobierz`, `import`, `historia`), instrukcja `docs/mvp-etap1.md`, DDL `sql/mssql/001_etap1_import.sql`.
+- Kod: `ahd/etap1` (`pobierz`, `import`, `kompletnosc`, `historia`), konfiguracja `konfiguracja/`, instrukcja `docs/mvp-etap1.md`, DDL `sql/mssql/001_etap1_import.sql`.
 - Jeśli RABIT pozwala – eksport do CSV/TXT (brak limitu wierszy, brak konwersji typów przez Excel).
 
 ### 7.4 Pliki CAM
