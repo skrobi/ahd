@@ -53,6 +53,7 @@ W folderze: 12 plików, 0 podfolderów
 |---|---|
 | `Odmowa dostępu (HTTP 401) … metody logowania: Negotiate, NTLM` | SSO nie przeszło – spróbuj `--auth ntlm` (login i hasło w konsoli, nie są zapisywane) |
 | `Odmowa dostępu … metody logowania: brak` / przekierowanie na stronę logowania | serwis wymaga logowania w przeglądarce (ADFS / karta) – użyj wariantu z folderem (pkt 5) |
+| `SharePoint nie zwrócił danych w formacie JSON` + lista przekierowań | komunikat pokazuje, dokąd serwer przekierował (np. strona logowania ADFS) i co zrobić; przekaż ten wynik – nie zawiera danych z plików |
 | `Błąd certyfikatu TLS` | sprawdź instalację pakietu `truststore`; ewentualnie `--ca-bundle` |
 | `Brak połączenia` | sieć / VPN / proxy |
 

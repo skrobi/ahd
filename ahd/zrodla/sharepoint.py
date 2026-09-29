@@ -100,6 +100,50 @@ def build_auth(kind: str) -> Any:
     raise ValueError(f"Nieznany sposób logowania: {kind}")
 
 
+def _safe_url(url: str) -> str:
+    """Adres bez parametrów zapytania (mogą zawierać tokeny logowania)."""
+    parts = urlsplit(url)
+    return f"{parts.scheme}://{parts.netloc}{parts.path}"
+
+
+def describe_response(resp: requests.Response) -> str:
+    """Opis odpowiedzi do diagnostyki – bez treści danych, tylko metadane i tytuł strony."""
+    lines = []
+    for r in [*resp.history, resp]:
+        lines.append(f"  HTTP {r.status_code}  {_safe_url(r.url)}")
+    ctype = resp.headers.get("Content-Type", "brak")
+    lines.append(f"  Typ odpowiedzi: {ctype}")
+    for header in ("MicrosoftSharePointTeamServices", "Server", "WWW-Authenticate"):
+        if header in resp.headers:
+            lines.append(f"  {header}: {resp.headers[header]}")
+    if "html" in ctype.lower():
+        import re
+
+        m = re.search(r"<title[^>]*>(.*?)</title>", resp.text[:20000], re.IGNORECASE | re.DOTALL)
+        if m:
+            lines.append(f"  Tytuł strony: {' '.join(m.group(1).split())[:120]}")
+    return "\n".join(lines)
+
+
+def _hint(resp: requests.Response, site_url: str) -> str:
+    site_host = urlsplit(site_url).netloc.lower()
+    hosts = {urlsplit(r.url).netloc.lower() for r in [*resp.history, resp]}
+    text = " ".join(_safe_url(r.url).lower() for r in [*resp.history, resp])
+    ctype = resp.headers.get("Content-Type", "").lower()
+    version = resp.headers.get("MicrosoftSharePointTeamServices", "")
+    if hosts - {site_host} or any(k in text for k in ("adfs", "login", "signin", "saml", "wsfed", "sso", "auth")):
+        return ("Serwer przekierowuje na stronę logowania w przeglądarce (np. ADFS / logowanie korporacyjne). "
+                "Logowanie kontem Windows (SSO) nie wystarcza dla tego adresu. Obejście na teraz: "
+                "zsynchronizuj bibliotekę przez OneDrive albo otwórz ją w Eksploratorze i użyj --folder.")
+    if version.startswith("14."):
+        return "SharePoint 2010 – brak API REST /_api. Użyj --folder (synchronizacja / Eksplorator)."
+    if "xml" in ctype or "atom" in ctype:
+        return "Serwer zwrócił XML zamiast JSON – przekaż ten wynik, dostosuję moduł."
+    if "html" in ctype:
+        return "Serwer zwrócił stronę HTML zamiast danych – przekaż ten wynik (bez treści plików), dostosuję moduł."
+    return "Nieoczekiwana odpowiedź serwera – przekaż ten wynik, dostosuję moduł."
+
+
 def _quote_path(path: str) -> str:
     # Apostrof w literale OData zapisuje się podwójnie; reszta jak w URL.
     return quote(path.replace("'", "''"), safe="/")
@@ -135,16 +179,28 @@ class SharePointClient:
         if resp.status_code in (401, 403):
             methods = resp.headers.get("WWW-Authenticate", "brak")
             raise SharePointError(
-                f"Odmowa dostępu (HTTP {resp.status_code}) do {url}. "
+                f"Odmowa dostępu (HTTP {resp.status_code}) do {_safe_url(url)}. "
                 f"Serwer oferuje metody logowania: {methods}. "
                 "Sprawdź, czy masz dostęp do folderu w przeglądarce; jeśli tak, a SSO nie działa, "
-                "spróbuj --auth ntlm."
+                "spróbuj --auth ntlm.\n" + describe_response(resp)
             )
         if resp.status_code == 404:
-            raise SharePointError(f"Nie znaleziono zasobu (HTTP 404): {url}")
+            raise SharePointError(f"Nie znaleziono zasobu (HTTP 404): {_safe_url(url)}\n" + describe_response(resp))
         if resp.status_code >= 400:
-            raise SharePointError(f"Błąd SharePoint HTTP {resp.status_code}: {resp.text[:300]}")
+            raise SharePointError(f"Błąd SharePoint HTTP {resp.status_code}\n" + describe_response(resp))
         return resp
+
+    def _json(self, api_path: str) -> dict[str, Any]:
+        resp = self._get(api_path)
+        ctype = resp.headers.get("Content-Type", "").lower()
+        try:
+            if "json" not in ctype:
+                raise ValueError(ctype)
+            return resp.json()
+        except ValueError:
+            raise SharePointError(
+                "SharePoint nie zwrócił danych w formacie JSON.\n" + describe_response(resp) + "\n" + _hint(resp, self.site_url)
+            ) from None
 
     @staticmethod
     def _results(data: dict[str, Any], key: str) -> list[dict[str, Any]]:
@@ -157,13 +213,13 @@ class SharePointClient:
 
     def check(self) -> str:
         """Sprawdza połączenie i logowanie; zwraca nazwę zalogowanego użytkownika."""
-        data = self._get("/_api/web/currentuser").json()
+        data = self._json("/_api/web/currentuser")
         body = data.get("d", data)
         return body.get("LoginName") or body.get("Title") or "?"
 
     def list_folder(self, folder: str) -> tuple[list[RemoteFile], list[str]]:
         api = f"/_api/web/GetFolderByServerRelativeUrl('{_quote_path(folder)}')?$expand=Files,Folders"
-        data = self._get(api).json()
+        data = self._json(api)
         files = [
             RemoteFile(
                 name=f["Name"],

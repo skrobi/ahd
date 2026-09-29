@@ -54,7 +54,7 @@ def sharepoint(tmp_path):
         },
         FOLDER + "/Archiwum": {"files": {"stary.csv": b"a;b\n1;2\n"}, "folders": []},
     }
-    state = {"require_auth": False}
+    state = {"require_auth": False, "mode": None}
 
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, *a):  # cisza w testach
@@ -68,7 +68,25 @@ def sharepoint(tmp_path):
             self.end_headers()
             self.wfile.write(body)
 
+        def _html(self, title, code=200):
+            body = f"<html><head><title>{title}</title></head><body>form</body></html>".encode()
+            self.send_response(code)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
         def do_GET(self):
+            if self.path.startswith("/adfs/ls/"):
+                return self._html("Sign In")
+            if state["mode"] == "login_redirect":
+                self.send_response(302)
+                self.send_header("Location", "/adfs/ls/?wa=wsignin1.0&wctx=SEKRETNY_TOKEN")
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+                return
+            if state["mode"] == "html":
+                return self._html("Strona informacyjna")
             if state["require_auth"]:
                 self.send_response(401)
                 self.send_header("WWW-Authenticate", "Negotiate")
@@ -126,6 +144,24 @@ def test_parse_other_link_forms():
     assert loc.folder == "/sites/X/Shared Documents"
     with pytest.raises(ValueError):
         parse_sharepoint_url("C:\\dane")
+
+
+def test_login_redirect_is_diagnosed(sharepoint):
+    sharepoint["state"]["mode"] = "login_redirect"
+    loc = parse_sharepoint_url(sharepoint["url"])
+    with pytest.raises(SharePointError) as err:
+        SharePointClient(loc.site_url).check()
+    msg = str(err.value)
+    assert "HTTP 302" in msg and "/adfs/ls/" in msg and "Tytuł strony: Sign In" in msg
+    assert "ADFS" in msg and "--folder" in msg
+    assert "SEKRETNY_TOKEN" not in msg  # parametry zapytania nie trafiają do komunikatu
+
+
+def test_html_instead_of_json_is_diagnosed(sharepoint, capsys):
+    sharepoint["state"]["mode"] = "html"
+    assert cli.main(["sprawdz", "--url", sharepoint["url"], "--auth", "none"]) == 1
+    err = capsys.readouterr().err
+    assert "nie zwrócił danych w formacie JSON" in err and "Strona informacyjna" in err
 
 
 def test_list_and_walk(sharepoint):
