@@ -105,8 +105,9 @@ Lista kontrolna na ekranie zakresu:
 ### F05a. Import plików SAP (globalny, poza przebiegiem)
 
 - Przy pobieraniu z RABIT **nie wiadomo, do którego zakresu należy plik** – import obejmuje
-  wszystkie pliki z folderu `00_Global\RABIT\Do_importu`, do którego osoba z finansów pobiera ręcznie
-  pliki z SharePoint RABIT (zaznacz wszystko → Pobierz; ZIP czytany bez rozpakowywania).
+  wszystkie pliki RABIT. **Pobierz** kopiuje przez WebDAV nowe i zmienione pliki z folderu RABIT na
+  SharePoint do `00_Global\RABIT\Do_importu`; **Importuj** ładuje je do bazy. Plik, którego WebDAV nie
+  pobierze (> 50 MB), zapisuje się tam ręcznie z przeglądarki.
 - Dla każdego pliku decyzja: **zaimportowany** (nowy hash), **duplikat** (treść już w bazie),
   **pominięty** (te same metadane co przy poprzednim imporcie – bez pobierania), **błąd**.
 - Nowe pliki: kopia do Landing Zone, rejestracja (kto, kiedy, kolumny, sygnatura kolumn, typ raportu,
@@ -114,7 +115,7 @@ Lista kontrolna na ekranie zakresu:
 - Pliki wieloczęściowe sprawdzane jako zestaw (te same kolumny, łączna liczba wierszy).
 - Import może uruchomić każda osoba z finansów w dowolnym momencie; historia importów jest widoczna
   dla wszystkich.
-- MVP: `python -m ahd.etap1 import` (instrukcja `docs/mvp-etap1.md`).
+- MVP: `python -m ahd.etap1 pobierz` + `import` (instrukcja `docs/mvp-etap1.md`).
 
 ### F05. Etap 1 przebiegu – Dane SAP zakresu
 

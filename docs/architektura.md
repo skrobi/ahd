@@ -45,8 +45,8 @@ Architektura ma zapewnić:
 | D18 | **Lista CAM z kolumny CAM słownika struktury** – bez osobnego słownika CAM | jedno miejsce zarządzania projektem |
 | D19 | Relacja **P1S ↔ CES definiowana w słowniku** (wiersz = para, dowolna krotność) | brak stałej relacji między systemami |
 | D20 | Zamknięcie miesiąca wymaga przypisania elementów z kosztem | kompletność EV formalnego |
-| D23 | **Pliki RABIT kopiowane przez WebDAV** (`\\host@SSL\DavWWWRoot\…`, konto Windows) do `00_Global\RABIT\Do_importu` komendą `pobierz` – tylko nowe i zmienione; ręczne pobieranie (D22) zostaje awaryjnie (np. pliki > 50 MB – limit WebClient) | test dostępu 29.09.2026: WebDAV działa, API/sync/eksport do Excela nie |
-| D22 | **Pliki RABIT pobierane ręcznie z przeglądarki** (zaznacz wszystko → Pobierz → ZIP) do wspólnego folderu `00_Global\RABIT\Do_importu`; synchronizacja i dostęp API do SharePoint RABIT niedostępne (logowanie w przeglądarce, brak uprawnień do synchronizacji) | jedyna dostępna droga; import rozpoznaje duplikaty, więc można pobierać zawsze wszystko |
+| D23 | **Rozwiązanie docelowe: pliki RABIT kopiowane przez WebDAV** (`\\host@SSL\DavWWWRoot\…`, konto Windows użytkownika) do `00_Global\RABIT\Do_importu` komendą `pobierz` – tylko nowe i zmienione; następnie `import` do bazy | test 29.09.2026: WebDAV działa; API REST, synchronizacja i eksport do Excela nie są dostępne |
+| D22 | Awaryjnie (np. plik > 50 MB – limit usługi WebClient): pojedynczy plik pobrany ręcznie w przeglądarce do `00_Global\RABIT\Do_importu` | import traktuje go tak samo |
 | D21 | **Import plików SAP (RABIT) jest globalny, bez zakresu**: wszystkie pliki z folderu, import tylko nowych (SHA-256), wiersze w postaci surowej; przebieg zakresu wybiera swoje dane po elementach WBS ze słownika struktury | przy pobieraniu nie wiadomo, do którego zakresu należy plik |
 
 ---
@@ -100,7 +100,7 @@ Architektura ma zapewnić:
 
 | Źródło | System | Dane | Sposób pozyskania |
 |---|---|---|---|
-| CJI3, ZRD_KKAJ, Net Inv | SAP **CES** (finansowy) | koszty rzeczywiste, zobowiązania | eksport RABIT / ręcznie z SharePoint, pliki na projekt (także wieloczęściowe) |
+| CJI3, ZRD_KKAJ, Net Inv | SAP **CES** (finansowy) | koszty rzeczywiste, zobowiązania | eksport RABIT na SharePoint, kopiowany przez WebDAV (D23), pliki na projekt (także wieloczęściowe) |
 | Dane produkcyjne | SAP **P1S** (produkcyjny) | zaawansowanie godzin i materiałów | np. `PZLPROD.LOG.vAHDD` na `splmcd03` (do potwierdzenia, O10) |
 | Słowniki | Excel | struktura, budżet, harmonogram, stawki | pliki na dysku sieciowym |
 | Pliki CAM | Excel | zaawansowanie od CAM | pliki zwrócone przez CAM |
@@ -231,7 +231,7 @@ wersję słownika; obowiązuje ostatnia poprawna.
 ```
 \\serwer\udział\AHD\                 korzeń środowiska (osobny dla TEST i PROD)
 ├── 00_Global\Slowniki\              słowniki globalne
-├── 00_Global\RABIT\Do_importu\     ręcznie pobrane pliki / ZIP-y z RABIT (D22)
+├── 00_Global\RABIT\Do_importu\     kopie plików RABIT (WebDAV, D23)
 ├── 01_LandingZone\<RRRR-MM-DD>\<IdImportu>\   archiwum oryginałów (bez podziału na zakresy)
 └── Zakresy\<Zakres>\
     ├── Slowniki\                    słowniki zakresu
@@ -256,14 +256,13 @@ wersję słownika; obowiązuje ostatnia poprawna.
 
 ### 7.3 Pliki SAP (D21)
 
-- Źródło (D22): pliki pobrane ręcznie z SharePoint RABIT w przeglądarce do `00_Global\RABIT\Do_importu`
-  (pojedyncze pliki lub ZIP – czytany bez rozpakowywania). Dostęp bezpośredni do SharePoint (API, SSO)
-  zostaje w module jako opcja, ale w PZL wymaga logowania w przeglądarce.
-- Sprawdzone i niedostępne dla użytkownika (stan 29.09.2026): synchronizacja OneDrive, eksport listy do
-  Excela (Office List OLEDB / `_vti_bin`), API REST (`_api`). Wszystkie wymagają uprawnienia witryny
-  „Use Remote Interfaces” / „Use Client Integration Features”, którego poziom dostępu użytkownika nie ma.
-  Automatyzacja wymagałaby zgody właściciela witryny RABIT (uprawnienie lub konto techniczne) albo
-  dostarczania raportów RABIT na dysk sieciowy (O19).
+- Źródło (D23): folder RABIT na SharePoint czytany przez **WebDAV** (usługa WebClient Windows, konto
+  użytkownika), np. `\\lmsp4-intl.external.lmco.com@SSL\DavWWWRoot\sites\RabbitReporting\Shared Documents\E456659`.
+  `pobierz` kopiuje nowe i zmienione pliki do `00_Global\RABIT\Do_importu`, `import` ładuje je do bazy.
+- Limit usługi WebClient: domyślnie ok. 50 MB na plik (`FileSizeLimitInBytes`, zmienia administrator);
+  większy plik pobiera się ręcznie w przeglądarce do `Do_importu` (D22).
+- Niedostępne dla użytkownika (sprawdzone 29.09.2026) i usunięte z kodu: API REST SharePoint, synchronizacja
+  OneDrive, eksport listy do Excela (Office List OLEDB / owssvr), pobieranie ZIP.
 - Import obejmuje **wszystkie** pliki; zakres nie jest znany. Tożsamość pliku = SHA-256 treści:
   nowy hash → import; znany hash → duplikat; te same metadane (ścieżka, rozmiar, data) co wcześniej →
   pominięcie bez pobierania.
@@ -273,7 +272,7 @@ wersję słownika; obowiązuje ostatnia poprawna.
   identyczny układ kolumn i łączna liczba wierszy.
 - Każde uruchomienie importu i decyzja dla każdego pliku są zapisane w bazie (`meta.ImportBatch`,
   `meta.SourceFile`, `meta.SourceFileSeen`) – widać, kto i kiedy zaimportował dane.
-- MVP: `ahd/etap1`, instrukcja `docs/mvp-etap1.md`, DDL `sql/mssql/001_etap1_import.sql`.
+- Kod: `ahd/etap1` (`pobierz`, `import`, `historia`), instrukcja `docs/mvp-etap1.md`, DDL `sql/mssql/001_etap1_import.sql`.
 - Jeśli RABIT pozwala – eksport do CSV/TXT (brak limitu wierszy, brak konwersji typów przez Excel).
 
 ### 7.4 Pliki CAM
@@ -399,4 +398,3 @@ Na podstawie eksportu metadanych (`dependencies.csv`, `resolved_objects.csv`):
 | O11 | Zasady uzupełniania braków (ostatnia znana wartość / plan / ręcznie) | do ustalenia |
 | O14 | Logika łączenia źródeł (etap 4) | do przedstawienia przez zespół |
 | O15 | Źródło ETC | otwarte pytanie z readme |
-| O19 | Automatyczne pobieranie z RABIT: uprawnienie „Use Remote Interfaces” / konto techniczne od właściciela witryny albo zapis raportów RABIT na dysk sieciowy | do zapytania właściciela RABIT; do tego czasu ręczne pobieranie (D22) |

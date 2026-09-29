@@ -22,7 +22,7 @@ from typing import Any, Callable, Iterable
 
 from ahd import __version__
 from ahd.baza import Database, DuplicateFile
-from ahd.zrodla.sharepoint import RemoteFile
+from ahd.zrodla.folder import RemoteFile
 
 from . import inspekcja, landing
 
@@ -66,17 +66,17 @@ def run_import(
     files = list(files)
 
     for i, f in enumerate(files, 1):
-        rec: dict[str, Any] = {"plik": f.name, "zrodlo": f.server_relative_url, "rozmiar": f.size, "zmodyfikowany": f.modified}
+        rec: dict[str, Any] = {"plik": f.name, "zrodlo": f.path, "rozmiar": f.size, "zmodyfikowany": f.modified}
         prefix = f"[{i}/{len(files)}] {f.name}"
         try:
-            known = None if full_check else db.unchanged_by_metadata(f.server_relative_url, f.size, f.modified)
+            known = None if full_check else db.unchanged_by_metadata(f.path, f.size, f.modified)
             if known:
                 rec.update(decyzja="pominiety (metadane)", sha256=known, opis="bez zmian od poprzedniego importu")
             else:
                 rec.update(_download_and_import(f, download, db, tmp, target, batch_id, user))
         except Exception as exc:  # pojedynczy plik nie przerywa importu
             rec.update(decyzja="blad", opis=f"{type(exc).__name__}: {exc}")
-        db.record_seen(batch_id, f.name, f.server_relative_url, f.size, f.modified, rec.get("sha256"), rec["decyzja"], rec.get("opis", ""))
+        db.record_seen(batch_id, f.name, f.path, f.size, f.modified, rec.get("sha256"), rec["decyzja"], rec.get("opis", ""))
         progress(f"{prefix}: {rec['decyzja']}" + (f" – {rec['opis']}" if rec.get("opis") else ""))
         result.records.append(rec)
 
@@ -109,7 +109,7 @@ def _download_and_import(f: RemoteFile, download: Downloader, db: Database, tmp:
     final = landing.unique_path(target, f.name)
     shutil.move(str(local), final)
     meta = {
-        "sha256": sha, "plik": f.name, "zrodlo": f.server_relative_url, "rozmiar": f.size, "zmodyfikowany": f.modified,
+        "sha256": sha, "plik": f.name, "zrodlo": f.path, "rozmiar": f.size, "zmodyfikowany": f.modified,
         "landing": str(final), "batch": batch_id, "uzytkownik": user, "typ": info.get("typ"), "arkusz": info.get("arkusz"),
         "kodowanie": info.get("kodowanie"), "separator": info.get("separator"), "kolumny": info.get("kolumny", []),
         "sygnatura": inspekcja.header_signature(info.get("kolumny", [])), "typ_raportu": inspekcja.guess_report_type(f.name),
