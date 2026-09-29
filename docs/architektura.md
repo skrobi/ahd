@@ -258,6 +258,11 @@ wersję słownika; obowiązuje ostatnia poprawna.
 - Źródło (D22): pliki pobrane ręcznie z SharePoint RABIT w przeglądarce do `00_Global\RABIT\Do_importu`
   (pojedyncze pliki lub ZIP – czytany bez rozpakowywania). Dostęp bezpośredni do SharePoint (API, SSO)
   zostaje w module jako opcja, ale w PZL wymaga logowania w przeglądarce.
+- Sprawdzone i niedostępne dla użytkownika (stan 29.09.2026): synchronizacja OneDrive, eksport listy do
+  Excela (Office List OLEDB / `_vti_bin`), API REST (`_api`). Wszystkie wymagają uprawnienia witryny
+  „Use Remote Interfaces” / „Use Client Integration Features”, którego poziom dostępu użytkownika nie ma.
+  Automatyzacja wymagałaby zgody właściciela witryny RABIT (uprawnienie lub konto techniczne) albo
+  dostarczania raportów RABIT na dysk sieciowy (O19).
 - Import obejmuje **wszystkie** pliki; zakres nie jest znany. Tożsamość pliku = SHA-256 treści:
   nowy hash → import; znany hash → duplikat; te same metadane (ścieżka, rozmiar, data) co wcześniej →
   pominięcie bez pobierania.
@@ -393,3 +398,4 @@ Na podstawie eksportu metadanych (`dependencies.csv`, `resolved_objects.csv`):
 | O11 | Zasady uzupełniania braków (ostatnia znana wartość / plan / ręcznie) | do ustalenia |
 | O14 | Logika łączenia źródeł (etap 4) | do przedstawienia przez zespół |
 | O15 | Źródło ETC | otwarte pytanie z readme |
+| O19 | Automatyczne pobieranie z RABIT: uprawnienie „Use Remote Interfaces” / konto techniczne od właściciela witryny albo zapis raportów RABIT na dysk sieciowy | do zapytania właściciela RABIT; do tego czasu ręczne pobieranie (D22) |
