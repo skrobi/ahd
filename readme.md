@@ -24,7 +24,7 @@ Dokument jest rozwijany iteracyjnie na podstawie:
 | `docs/pipeline-fazy.md` | koncepcja wszystkich faz pipeline: cel, wejście, przetwarzanie, efekt, przekazanie do kolejnej fazy |
 | `docs/funkcjonalnosc.md` | specyfikacja funkcjonalna: ekrany, funkcje, etapy przebiegu, reguły |
 | `prototyp/ahd-prototyp.html` | klikalny prototyp aplikacji (dane przykładowe, otwierany w przeglądarce) |
-| `docs/mvp-etap1.md`, `ahd/` | etap 1: pobranie plików RABIT przez WebDAV i import do bazy |
+| `docs/mvp-etap1.md`, `ahd/`, `konfiguracja/` | etap 1: pobranie plików RABIT przez WebDAV, rozpoznanie źródła po prefiksie, import do bazy, kompletność źródeł projektów |
 | `dependencies.csv`, `resolved_objects.csv`, `export_log.txt` | eksport metadanych obiektów SQL z `splmcd03` (`PZLPROD.LOG`, `PZL_SAP`) |
 
 ---

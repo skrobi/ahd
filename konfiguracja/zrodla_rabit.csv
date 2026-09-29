@@ -1,0 +1,7 @@
+﻿# Źródła RABIT rozpoznawane po prefiksie nazwy pliku (wygrywa najdłuższy pasujący prefiks).
+# PRZYKŁADY – do zastąpienia rzeczywistymi prefiksami plików RABIT.
+Prefiks;KodZrodla;Opis
+ACTUALS_PAF;ACTUALS_PAF;Koszty rzeczywiste PAF
+FORECAST_PAF;FORECAST_PAF;Prognoza PAF
+ETC_PAF;ETC_PAF;ETC PAF
+ACTUALS_CES;ACTUALS_CES;Koszty rzeczywiste CES

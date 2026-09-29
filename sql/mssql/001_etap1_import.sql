@@ -39,10 +39,20 @@ CREATE TABLE meta.SourceFile (
     Kodowanie             VARCHAR(20)    NULL,
     Separator             VARCHAR(5)     NULL,
     Kolumny               NVARCHAR(MAX)  NULL,   -- JSON: lista nagłówków
-    SygnaturaKolumn       CHAR(16)       NULL,   -- odcisk układu kolumn (rozpoznawanie typu raportu)
-    TypRaportu            VARCHAR(30)    NULL,
+    SygnaturaKolumn       CHAR(16)       NULL,   -- odcisk układu kolumn (zmiana układu raportu)
+    KodZrodla             VARCHAR(60)    NULL,   -- źródło RABIT rozpoznane po prefiksie nazwy pliku
     LiczbaWierszy         INT            NULL
 );
+
+GO
+
+-- Wcześniejsza wersja skryptu: kolumna TypRaportu → KodZrodla.
+IF COL_LENGTH('meta.SourceFile', 'TypRaportu') IS NOT NULL AND COL_LENGTH('meta.SourceFile', 'KodZrodla') IS NULL
+    EXEC sp_rename 'meta.SourceFile.TypRaportu', 'KodZrodla', 'COLUMN';
+GO
+
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_SourceFile_KodZrodla')
+CREATE INDEX IX_SourceFile_KodZrodla ON meta.SourceFile (KodZrodla, Zaimportowano);
 
 IF OBJECT_ID('meta.SourceFileSeen') IS NULL
 CREATE TABLE meta.SourceFileSeen (
@@ -53,7 +63,7 @@ CREATE TABLE meta.SourceFileSeen (
     Rozmiar               BIGINT         NOT NULL,
     ZmodyfikowanyWZrodle  VARCHAR(40)    NULL,
     Sha256                CHAR(64)       NULL,
-    Decyzja               VARCHAR(30)    NOT NULL,  -- zaimportowany / duplikat / pominiety (metadane) / blad
+    Decyzja               VARCHAR(30)    NOT NULL,  -- zaimportowany / duplikat / pominiety (metadane) / nierozpoznany / blad
     Opis                  NVARCHAR(1000) NULL
 );
 
@@ -67,6 +77,13 @@ CREATE TABLE stg.RawRow (
     Dane                  NVARCHAR(MAX)  NOT NULL,  -- JSON: wartości wiersza w kolejności kolumn
     CONSTRAINT PK_RawRow PRIMARY KEY (Sha256, NrWiersza) WITH (DATA_COMPRESSION = PAGE)
 );
+GO
+
+/* Wiersze ze wskazaniem źródła i importu – do odtwarzania stanu i porównań. */
+CREATE OR ALTER VIEW stg.vRawRowZrodlo AS
+SELECT f.KodZrodla, f.NazwaPliku, f.ZmodyfikowanyWZrodle, f.BatchId, f.Zaimportowano, r.Sha256, r.NrWiersza, r.Dane
+FROM stg.RawRow r
+JOIN meta.SourceFile f ON f.Sha256 = r.Sha256;
 GO
 
 /* Rola aplikacji: MVP zapisuje bezpośrednio do tabel (docelowo przez procedury). */

@@ -108,11 +108,21 @@ Lista kontrolna na ekranie zakresu:
   wszystkie pliki RABIT. **Pobierz** kopiuje przez WebDAV nowe i zmienione pliki z folderu RABIT na
   SharePoint do `00_Global\RABIT\Do_importu`; **Importuj** ładuje je do bazy. Plik, którego WebDAV nie
   pobierze (> 50 MB), zapisuje się tam ręcznie z przeglądarki.
-- Dla każdego pliku decyzja: **zaimportowany** (nowy hash), **duplikat** (treść już w bazie),
-  **pominięty** (te same metadane co przy poprzednim imporcie – bez pobierania), **błąd**.
-- Nowe pliki: kopia do Landing Zone, rejestracja (kto, kiedy, kolumny, sygnatura kolumn, typ raportu,
-  liczba wierszy), wiersze w postaci surowej w bazie.
-- Pliki wieloczęściowe sprawdzane jako zestaw (te same kolumny, łączna liczba wierszy).
+- Źródło pliku rozpoznawane po **prefiksie nazwy** (`konfiguracja/zrodla_rabit.csv`), np.
+  `ACTUALS_PAF_01.xlsx` → `ACTUALS_PAF`. Importowany jest każdy rozpoznany plik samodzielnie.
+- Dla każdego pliku decyzja: **zaimportowany** (nowy hash), **duplikat** (ten fizyczny plik był już
+  zaimportowany), **pominięty** (te same metadane co przy poprzednim imporcie – bez kopiowania),
+  **nierozpoznany** (brak prefiksu – nie importowany), **błąd**.
+- Nowe pliki: kopia do Landing Zone, rejestracja (kto, kiedy, kod źródła, kolumny, liczba wierszy),
+  wiersze w postaci surowej w bazie.
+
+### F05b. Kompletność źródeł projektu
+
+- Każdy projekt ma listę wymaganych źródeł RABIT (`konfiguracja/projekty_zrodla.csv`).
+- AHD pokazuje dla każdego projektu: ✓ źródło zaimportowane (ostatni import, data raportu, plik),
+  ✗ brak importu, ⚠ ostatni import starszy niż próg; projekt „komplet” / „niekompletny”.
+- Później: sprawdzenie, czy import obejmuje bieżący okres; blokada przebiegu dla niekompletnego projektu.
+- MVP: `python -m ahd.etap1 kompletnosc`.
 - Import może uruchomić każda osoba z finansów w dowolnym momencie; historia importów jest widoczna
   dla wszystkich.
 - MVP: `python -m ahd.etap1 pobierz` + `import` (instrukcja `docs/mvp-etap1.md`).
