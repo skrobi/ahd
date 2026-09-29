@@ -28,6 +28,7 @@ oraz wskazuje punkty newralgiczne i otwarte decyzje.
 | D14 | Przebiegi **w trakcie miesiąca**: zaawansowanie z raportu produkcyjnego (źródło do ustalenia), braki od CAM uzupełniane przez analityka. **Zamknięcie miesiąca**: zaawansowanie **zawsze od CAM** | bieżąca informacja co tydzień, formalne dane na zamknięcie |
 | D15 | Korzeń folderów na **dysku sieciowym** | wspólna ścieżka UNC dla wszystkich użytkowników |
 | D16 | **CAM pracują wyłącznie na plikach** (bez dostępu do aplikacji) | brak konieczności wdrażania aplikacji u CAM |
+| D17 | **Przypisanie projektów do zakresów wynika ze słownika** globalnego „Przypisanie projektów do zakresów”; nowe elementy SAP wykrywane w każdym przebiegu | projekty i WBS pojawiają się między przebiegami |
 
 ---
 
@@ -179,6 +180,28 @@ Dzięki przypinaniu wersji do przebiegu każdy raport EV można odtworzyć 1:1.
 Zasada: błąd blokujący odrzuca **całą** nową wersję słownika; obowiązuje ostatnia poprawna.
 Reguły walidacji są opisane deklaratywnie (konfiguracja per słownik), nie „zaszyte” w kodzie.
 
+### 4.5 Przypisanie projektów i nowe elementy SAP (D17)
+
+Dwa poziomy przypisania, oba w słownikach (Excel → walidacja → wersja):
+
+| Poziom | Słownik | Zasięg | Właściciel |
+|---|---|---|---|
+| Definicja projektu → zakres | Przypisanie projektów do zakresów (ValidFrom/ValidTo) | globalny | finanse *(do potwierdzenia)* |
+| Element WBS → WP / CAM / Cost Category | Struktura projektowa | zakres | analityk zakresu |
+
+- Kreator zakresu **nie przypisuje projektów** – przygotowuje propozycję wierszy do słownika.
+  Zakres bez projektów w słowniku nie może uruchomić przebiegu.
+- Każdy przebieg porównuje dane SAP z przypiętymi wersjami słowników i wykrywa:
+  nowe definicje projektów bez zakresu oraz nowe WBS w projektach zakresu bez mapowania.
+- Aplikacja eksportuje listy nowych elementów (z wypełnionymi kluczami i kosztem) do
+  folderów `Propozycje`; właściciel uzupełnia brakujące kolumny i wkleja do słownika.
+- Po publikacji słowników przebieg przypina nowe wersje i przelicza od walidacji.
+- Przebieg tygodniowy może pominąć nieprzypisane elementy (decyzja zapisana, koszt poza EV
+  pokazany w raporcie); **zamknięcie miesiąca wymaga przypisania wszystkich elementów z kosztem**.
+- Zmiana zakresu projektu = zamknięcie wiersza (ValidTo) i nowy wiersz, bez usuwania.
+- Źródło listy elementów: pliki SAP przebiegu (elementy z kosztem) oraz replikowana tabela
+  `PZL_SAP.dbo.Z_R3_PRPS_TBL` (także elementy jeszcze bez kosztu).
+
 ---
 
 ## 5. Pliki SAP
@@ -275,6 +298,8 @@ Schematy (propozycja):
 | O7 | Czy RABIT może eksportować CSV/TXT? | CSV preferowany |
 | O9 | Los słowników w `PZLPROD.LOG` | do ustalenia z właścicielami |
 | O10 | Źródło zaawansowania z produkcji dla przebiegów tygodniowych (np. `vAHDD`?) | do ustalenia |
+| O12 | Właściciel słownika „Przypisanie projektów do zakresów”; czy dopuszczamy reguły po prefiksie | wpisy jawne, prefiks tylko jako sugestia |
+| O13 | Próg dla nieprzypisanych elementów na zamknięciu (każdy koszt czy powyżej kwoty) | każdy koszt |
 | O11 | Zasady uzupełniania braków przez analityka (ostatnia znana wartość / plan / ręcznie) | do ustalenia |
 
 ---
