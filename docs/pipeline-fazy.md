@@ -1,4 +1,4 @@
-# AHD – Fazy pipeline (koncepcja)
+# PZL-EV – Fazy pipeline (koncepcja)
 
 Wersja: 0.2 (koncepcja do dyskusji)
 Powiązane: `docs/architektura.md`, `docs/funkcjonalnosc.md`, `docs/mvp-etap1.md` (faza G1–G2 – działa).

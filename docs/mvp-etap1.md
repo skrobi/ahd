@@ -16,7 +16,7 @@ RABIT → plik XLSX → PREFIKS → źródło → import do bazy → historia + 
 2. **Importuj** – źródło pliku rozpoznawane jest po **prefiksie nazwy** (np. `ACTUALS_PAF_01.xlsx` →
    `ACTUALS_PAF`). Importowany jest **każdy rozpoznany plik** samodzielnie, ale **tylko o nowej treści**
    (hash SHA-256 = tożsamość fizycznego pliku). Plik bez pasującego prefiksu nie jest importowany.
-3. **Kompletność** – każdy projekt ma listę wymaganych źródeł; AHD pokazuje, czego brakuje.
+3. **Kompletność** – każdy projekt ma listę wymaganych źródeł; PZL-EV pokazuje, czego brakuje.
 4. **Historia** – każdy widzi, kto, kiedy i co zaimportował.
 
 ---
@@ -39,8 +39,8 @@ Usługa Windows **WebClient** musi działać (standardowo uruchamia się przy pi
 ## 2. Pobranie plików RABIT
 
 ```bat
-python -m ahd.etap1 pobierz --webdav "https://lmsp4-intl.external.lmco.com/sites/RabbitReporting/Shared%20Documents/E456659" --cel "\\serwer\udzial\AHD\00_Global\RABIT\Do_importu" --dry-run
-python -m ahd.etap1 pobierz --webdav "https://lmsp4-intl.external.lmco.com/sites/RabbitReporting/Shared%20Documents/E456659" --cel "\\serwer\udzial\AHD\00_Global\RABIT\Do_importu"
+python -m pzl_ev.etap1 pobierz --webdav "https://lmsp4-intl.external.lmco.com/sites/RabbitReporting/Shared%20Documents/E456659" --cel "\\serwer\udzial\PZL-EV\00_Global\RABIT\Do_importu" --dry-run
+python -m pzl_ev.etap1 pobierz --webdav "https://lmsp4-intl.external.lmco.com/sites/RabbitReporting/Shared%20Documents/E456659" --cel "\\serwer\udzial\PZL-EV\00_Global\RABIT\Do_importu"
 ```
 
 - `--webdav` przyjmuje link do folderu skopiowany z przeglądarki (także widok `AllItems.aspx?RootFolder=…`)
@@ -59,7 +59,7 @@ w przeglądarce i zapisuje w `Do_importu` – import potraktuje go tak samo.
 ## 3. Konfiguracja źródeł i projektów
 
 Katalog `konfiguracja` (w repozytorium; inną lokalizację wskazuje `--konfiguracja` albo zmienna
-`AHD_KONFIGURACJA`, np. `\\serwer\udzial\AHD\00_Global\Konfiguracja`). Pliki CSV, separator `;`,
+`PZL_EV_KONFIGURACJA`, np. `\\serwer\udzial\PZL-EV\00_Global\Konfiguracja`). Pliki CSV, separator `;`,
 edycja w Excelu, wiersze z `#` pomijane. W repozytorium są **przykłady** do zastąpienia.
 
 `zrodla_rabit.csv` – prefiks nazwy pliku → źródło (wygrywa najdłuższy pasujący prefiks, wielkość liter bez znaczenia):
@@ -86,7 +86,7 @@ ABC-002;ACTUALS_PAF
 ## 4. Import do bazy
 
 ```bat
-python -m ahd.etap1 import --folder "\\serwer\udzial\AHD\00_Global\RABIT\Do_importu" --landing "\\serwer\udzial\AHD\01_LandingZone"
+python -m pzl_ev.etap1 import --folder "\\serwer\udzial\PZL-EV\00_Global\RABIT\Do_importu" --landing "\\serwer\udzial\PZL-EV\01_LandingZone"
 ```
 
 Decyzja dla każdego pliku:
@@ -104,8 +104,8 @@ Kilka plików jednego źródła (`ACTUALS_PAF_01`, `_02`, `_03`) importuje się 
 mają różne kolumny.
 
 Opcje:
-- `--baza` – adres bazy; domyślnie plik SQLite `ahd_mvp.sqlite` w katalogu Landing Zone (do czasu
-  ustalenia bazy docelowej). MS SQL: `--baza mssql://SERWER/AHD_TEST` (konto Windows; tabele tworzy
+- `--baza` – adres bazy; domyślnie plik SQLite `pzl_ev_mvp.sqlite` w katalogu Landing Zone (do czasu
+  ustalenia bazy docelowej). MS SQL: `--baza mssql://SERWER/PZL_EV_TEST` (konto Windows; tabele tworzy
   administrator skryptem `sql/mssql/001_etap1_import.sql`),
 - `--folder` może wskazywać także pojedynczy plik,
 - `--pelne-sprawdzenie` – liczy hash także plików bez zmian w metadanych,
@@ -116,7 +116,7 @@ Opcje:
 ## 5. Kompletność źródeł projektów
 
 ```bat
-python -m ahd.etap1 kompletnosc --landing "\\serwer\udzial\AHD\01_LandingZone" --maks-wiek-dni 7
+python -m pzl_ev.etap1 kompletnosc --landing "\\serwer\udzial\PZL-EV\01_LandingZone" --maks-wiek-dni 7
 ```
 
 ```
@@ -137,7 +137,7 @@ projekt jest niekompletny. Sprawdzenie, czy import obejmuje bieżący okres – 
 ## 6. Historia importów
 
 ```bat
-python -m ahd.etap1 historia --landing "\\serwer\udzial\AHD\01_LandingZone"
+python -m pzl_ev.etap1 historia --landing "\\serwer\udzial\PZL-EV\01_LandingZone"
 ```
 
 ---

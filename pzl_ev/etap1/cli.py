@@ -2,10 +2,10 @@
 
 Przepływ docelowy (Windows, w katalogu repozytorium):
 
-    1. python -m ahd.etap1 pobierz     --webdav "<link do folderu RABIT>" --cel "<AHD>\\00_Global\\RABIT\\Do_importu"
-    2. python -m ahd.etap1 import      --folder "<AHD>\\00_Global\\RABIT\\Do_importu" --landing "<AHD>\\01_LandingZone"
-    3. python -m ahd.etap1 kompletnosc --landing "<AHD>\\01_LandingZone"
-    4. python -m ahd.etap1 historia    --landing "<AHD>\\01_LandingZone"
+    1. python -m pzl_ev.etap1 pobierz     --webdav "<link do folderu RABIT>" --cel "<PZL-EV>\\00_Global\\RABIT\\Do_importu"
+    2. python -m pzl_ev.etap1 import      --folder "<PZL-EV>\\00_Global\\RABIT\\Do_importu" --landing "<PZL-EV>\\01_LandingZone"
+    3. python -m pzl_ev.etap1 kompletnosc --landing "<PZL-EV>\\01_LandingZone"
+    4. python -m pzl_ev.etap1 historia    --landing "<PZL-EV>\\01_LandingZone"
 
 `pobierz` kopiuje tylko pliki nowe i zmienione. `import` rozpoznaje źródło po prefiksie nazwy pliku
 (`zrodla_rabit.csv`) i ładuje do bazy tylko pliki o nowej treści (SHA-256). `kompletnosc` sprawdza,
@@ -23,10 +23,10 @@ import sys
 from pathlib import Path
 from typing import Callable, Iterable
 
-from ahd.baza import Database, DatabaseError
-from ahd.konfiguracja import ConfigError, default_dir, load_project_requirements, load_sources, match_source
-from ahd.zrodla.folder import FolderSource, RemoteFile
-from ahd.zrodla.webdav import SIZE_LIMIT_HINT, unc_from_url
+from pzl_ev.baza import Database, DatabaseError
+from pzl_ev.konfiguracja import ConfigError, default_dir, load_project_requirements, load_sources, match_source
+from pzl_ev.zrodla.folder import FolderSource, RemoteFile
+from pzl_ev.zrodla.webdav import SIZE_LIMIT_HINT, unc_from_url
 
 from . import importer
 
@@ -56,9 +56,9 @@ def _source(args: argparse.Namespace) -> tuple[Callable[[RemoteFile, Path], Path
 def _db_url(args: argparse.Namespace) -> str:
     if args.baza:
         return args.baza
-    if os.environ.get("AHD_BAZA"):
-        return os.environ["AHD_BAZA"]
-    return "sqlite:///" + (Path(args.landing).resolve() / "ahd_mvp.sqlite").as_posix()
+    if os.environ.get("PZL_EV_BAZA"):
+        return os.environ["PZL_EV_BAZA"]
+    return "sqlite:///" + (Path(args.landing).resolve() / "pzl_ev_mvp.sqlite").as_posix()
 
 
 def _same_file(dest: Path, f: RemoteFile) -> bool:
@@ -194,7 +194,7 @@ def cmd_historia(args: argparse.Namespace) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(prog="python -m ahd.etap1", description="AHD – etap 1: pobranie i import plików RABIT")
+    p = argparse.ArgumentParser(prog="python -m pzl_ev.etap1", description="PZL-EV – etap 1: pobranie i import plików RABIT")
     sub = p.add_subparsers(dest="cmd", required=True)
 
     def source(sp: argparse.ArgumentParser) -> None:
@@ -206,15 +206,15 @@ def build_parser() -> argparse.ArgumentParser:
 
     def config(sp: argparse.ArgumentParser) -> None:
         sp.add_argument("--konfiguracja", type=Path, default=default_dir(),
-                        help="katalog z zrodla_rabit.csv i projekty_zrodla.csv (domyślnie ./konfiguracja lub AHD_KONFIGURACJA)")
+                        help="katalog z zrodla_rabit.csv i projekty_zrodla.csv (domyślnie ./konfiguracja lub PZL_EV_KONFIGURACJA)")
 
     def database(sp: argparse.ArgumentParser) -> None:
-        sp.add_argument("--landing", required=True, help="korzeń Landing Zone, np. \\\\serwer\\udzial\\AHD\\01_LandingZone")
+        sp.add_argument("--landing", required=True, help="korzeń Landing Zone, np. \\\\serwer\\udzial\\PZL-EV\\01_LandingZone")
         sp.add_argument("--baza", help="adres bazy: sqlite:///… lub mssql://SERWER/BAZA (domyślnie plik SQLite w Landing Zone)")
 
     s = sub.add_parser("pobierz", help="skopiuj pliki RABIT na dysk (tylko nowe i zmienione)")
     source(s)
-    s.add_argument("--cel", required=True, help="folder docelowy, np. \\\\serwer\\udzial\\AHD\\00_Global\\RABIT\\Do_importu")
+    s.add_argument("--cel", required=True, help="folder docelowy, np. \\\\serwer\\udzial\\PZL-EV\\00_Global\\RABIT\\Do_importu")
     s.add_argument("--dry-run", action="store_true", help="tylko pokaż, co zostałoby skopiowane")
     s.set_defaults(func=cmd_pobierz)
 

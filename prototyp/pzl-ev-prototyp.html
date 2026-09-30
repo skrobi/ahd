@@ -1,4 +1,4 @@
-<!doctype html><html lang="pl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"></head><body><title>AHD Pipeline EV</title>
+<!doctype html><html lang="pl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"></head><body><title>PZL-EV Pipeline</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
 <style>
@@ -183,8 +183,8 @@ textarea{min-height:70px;resize:vertical}
 </style>
 
 <div class="top">
-  <div class="brand"><b>AHD</b><span>Pipeline EV · PZL Mielec · prototyp funkcjonalny</span></div>
-  <span class="env" title="Profil konfiguracji aplikacji">TEST · AHD_TEST</span>
+  <div class="brand"><b>PZL-EV</b><span>Pipeline EV · PZL Mielec · prototyp funkcjonalny</span></div>
+  <span class="env" title="Profil konfiguracji aplikacji">TEST · PZL_EV_TEST</span>
   <div class="who">
     <span class="muted">PZL\a.wisniewska</span>
   </div>
@@ -198,14 +198,14 @@ textarea{min-height:70px;resize:vertical}
 
 <script>
 /* ============================================================
-   AHD – prototyp funkcjonalny. Wszystkie dane są PRZYKŁADOWE.
+   PZL-EV – prototyp funkcjonalny. Wszystkie dane są PRZYKŁADOWE.
    Stan trzymany w pamięci przeglądarki (localStorage) tylko dla wygody demo;
    w docelowym rozwiązaniu cały stan jest w centralnej bazie MS SQL.
    ============================================================ */
-const ROOT = '\\\\pzlfs01\\AHD';
+const ROOT = '\\\\pzlfs01\\PZL-EV';
 const ME = 'Anna Wiśniewska';
 const APP_VER = '0.3.0', SCHEMA_VER = 12;
-const KEY = 'ahd-prototyp-v4';
+const KEY = 'pzl-ev-prototyp-v1';
 
 const TYPES = {
   SAC:{label:'Sikorsky (SAC)', desc:'EV prowadzi Sikorsky. Dodatkowy etap: plik dla Cobra, koszt pracy w USD.'},
@@ -788,7 +788,7 @@ function vSlowniki(){
   ${byZ.map(({z,ds})=>`<section class="panel"><div class="row between"><h2>${esc(z.code)}</h2><span class="muted">importowane w etapie 2 przebiegu</span></div><div class="tbl-wrap"><table>${head}<tbody>${ds.map(row).join('')}</tbody></table></div></section>`).join('')}`;
 }
 function vInfo(){
-  return `<div class="head"><div><h1>O prototypie</h1><p class="sub">Klikalny model działania aplikacji AHD. Nie łączy się z bazą ani plikami.</p></div></div>
+  return `<div class="head"><div><h1>O prototypie</h1><p class="sub">Klikalny model działania aplikacji PZL-EV. Nie łączy się z bazą ani plikami.</p></div></div>
   <div class="grid g2">
   <section class="panel"><h2>Co można przejść</h2><ol style="margin:0;padding-left:20px;display:grid;gap:6px">
     <li>Utworzyć zakres w kreatorze (Zakresy → Nowy zakres) i zobaczyć blokadę przebiegu przy pustych słownikach.</li>

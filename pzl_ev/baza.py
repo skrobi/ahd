@@ -1,7 +1,7 @@
 """Warstwa bazy danych MVP: rejestr importów, plików i surowych wierszy.
 
 Obsługiwane adresy bazy:
-    sqlite:///C:/AHD_TEST/ahd_mvp.sqlite          – plik lokalny (domyślnie w MVP)
+    sqlite:///C:/PZL_EV_TEST/pzl_ev_mvp.sqlite          – plik lokalny (domyślnie w MVP)
     mssql://SERWER/BAZA                            – MS SQL, logowanie kontem Windows (AD)
     mssql://SERWER/BAZA?driver=ODBC+Driver+18+for+SQL+Server&encrypt=no
 
@@ -132,7 +132,7 @@ class Database:
             cur.execute("SELECT COUNT(*) FROM sys.tables t JOIN sys.schemas s ON s.schema_id=t.schema_id "
                         "WHERE s.name+'.'+t.name IN ('meta.ImportBatch','meta.SourceFile','meta.SourceFileSeen','stg.RawRow')")
             if cur.fetchone()[0] != 4:
-                raise DatabaseError("Brak tabel AHD w bazie – administrator uruchamia sql/mssql/001_etap1_import.sql.")
+                raise DatabaseError("Brak tabel PZL-EV w bazie – administrator uruchamia sql/mssql/001_etap1_import.sql.")
         else:
             raise DatabaseError(f"Nieobsługiwany adres bazy: {url} (sqlite:///… albo mssql://…)")
         self.t = TABLES[self.dialect]
