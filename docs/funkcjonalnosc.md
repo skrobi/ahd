@@ -1,9 +1,9 @@
-# AHD – Specyfikacja funkcjonalna
+# PZL-EV – Specyfikacja funkcjonalna
 
 Wersja: 1.0 (wstępny projekt)
 Status: **do akceptacji** – opis zachowania aplikacji, bez implementacji.
 
-Powiązane dokumenty: `readme.md`, `docs/architektura.md`, `prototyp/ahd-prototyp.html`
+Powiązane dokumenty: `readme.md`, `docs/architektura.md`, `prototyp/pzl-ev-prototyp.html`
 (klikalny prototyp pokazujący opisane funkcje na danych przykładowych).
 
 ---
@@ -119,13 +119,13 @@ Lista kontrolna na ekranie zakresu:
 ### F05b. Kompletność źródeł projektu
 
 - Każdy projekt ma listę wymaganych źródeł RABIT (`konfiguracja/projekty_zrodla.csv`).
-- AHD pokazuje dla każdego projektu: ✓ źródło zaimportowane (ostatni import, data raportu, plik),
+- PZL-EV pokazuje dla każdego projektu: ✓ źródło zaimportowane (ostatni import, data raportu, plik),
   ✗ brak importu, ⚠ ostatni import starszy niż próg; projekt „komplet” / „niekompletny”.
 - Później: sprawdzenie, czy import obejmuje bieżący okres; blokada przebiegu dla niekompletnego projektu.
-- MVP: `python -m ahd.etap1 kompletnosc`.
+- MVP: `python -m pzl_ev.etap1 kompletnosc`.
 - Import może uruchomić każda osoba z finansów w dowolnym momencie; historia importów jest widoczna
   dla wszystkich.
-- MVP: `python -m ahd.etap1 pobierz` + `import` (instrukcja `docs/mvp-etap1.md`).
+- MVP: `python -m pzl_ev.etap1 pobierz` + `import` (instrukcja `docs/mvp-etap1.md`).
 
 ### F05. Etap 1 przebiegu – Dane SAP zakresu
 

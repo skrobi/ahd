@@ -1,4 +1,10 @@
-# AHD – Earned Value Reporting Platform
+# PZL-EV – Earned Value Reporting Platform
+
+**PZL-EV** to oprogramowanie do raportowania Earned Value w PZL Mielec, rozwijane w ramach zespołu /
+programu **Unicorn-EV** (obejmującego także inne elementy poza tym oprogramowaniem).
+Nazwa „AHD” jest zarezerwowana dla raportu w operacjach i nie jest używana w tym projekcie –
+wyjątkiem są istniejące obiekty SQL w `PZLPROD.LOG` (`vAHDD`, `uspUpdateAHDD`, `AHDD_*`),
+których nazwy pochodzą z systemu produkcyjnego.
 
 ## Status dokumentu
 
@@ -23,8 +29,8 @@ Dokument jest rozwijany iteracyjnie na podstawie:
 | `docs/architektura.md` | architektura rozwiązania: decyzje, komponenty, przepływ danych, baza, wdrożenia |
 | `docs/pipeline-fazy.md` | koncepcja wszystkich faz pipeline: cel, wejście, przetwarzanie, efekt, przekazanie do kolejnej fazy |
 | `docs/funkcjonalnosc.md` | specyfikacja funkcjonalna: ekrany, funkcje, etapy przebiegu, reguły |
-| `prototyp/ahd-prototyp.html` | klikalny prototyp aplikacji (dane przykładowe, otwierany w przeglądarce) |
-| `docs/mvp-etap1.md`, `ahd/`, `konfiguracja/` | etap 1: pobranie plików RABIT przez WebDAV, rozpoznanie źródła po prefiksie, import do bazy, kompletność źródeł projektów |
+| `prototyp/pzl-ev-prototyp.html` | klikalny prototyp aplikacji (dane przykładowe, otwierany w przeglądarce) |
+| `docs/mvp-etap1.md`, `pzl_ev/`, `konfiguracja/` | etap 1: pobranie plików RABIT przez WebDAV, rozpoznanie źródła po prefiksie, import do bazy, kompletność źródeł projektów |
 | `dependencies.csv`, `resolved_objects.csv`, `export_log.txt` | eksport metadanych obiektów SQL z `splmcd03` (`PZLPROD.LOG`, `PZL_SAP`) |
 
 ---

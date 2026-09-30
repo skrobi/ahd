@@ -11,10 +11,10 @@ from pathlib import Path
 import openpyxl
 import pytest
 
-from ahd.baza import Database
-from ahd.etap1 import cli
-from ahd.konfiguracja import ConfigError, SourceDef, load_project_requirements, load_sources, match_source
-from ahd.zrodla.webdav import unc_from_url
+from pzl_ev.baza import Database
+from pzl_ev.etap1 import cli
+from pzl_ev.konfiguracja import ConfigError, SourceDef, load_project_requirements, load_sources, match_source
+from pzl_ev.zrodla.webdav import unc_from_url
 
 HEADER = "Obiekt;Element PSP;Wartość/WK;Data księgowania\n"
 
@@ -66,7 +66,7 @@ def rabit(tmp_path):
 
 
 def _db(tmp_path):
-    return Database("sqlite:///" + (tmp_path / "LZ" / "ahd_mvp.sqlite").as_posix())
+    return Database("sqlite:///" + (tmp_path / "LZ" / "pzl_ev_mvp.sqlite").as_posix())
 
 
 def _import(src, tmp_path, konf, *extra):
@@ -182,7 +182,7 @@ def test_unrecognized_file_is_imported_after_prefix_is_added(rabit, tmp_path, ko
 
 def test_second_import_skips_without_copying(rabit, tmp_path, konf, monkeypatch):
     assert _import(rabit, tmp_path, konf) == 0
-    from ahd.zrodla.folder import FolderSource
+    from pzl_ev.zrodla.folder import FolderSource
 
     copies = []
     original = FolderSource.download
@@ -261,7 +261,7 @@ def test_kompletnosc_per_project(rabit, tmp_path, konf, capsys):
 # --- baza ----------------------------------------------------------------------
 
 def test_old_sqlite_database_is_migrated(tmp_path):
-    path = tmp_path / "LZ" / "ahd_mvp.sqlite"
+    path = tmp_path / "LZ" / "pzl_ev_mvp.sqlite"
     path.parent.mkdir()
     conn = sqlite3.connect(path)
     conn.execute("CREATE TABLE meta_SourceFile (Sha256 TEXT PRIMARY KEY, TypRaportu TEXT, Zaimportowano TEXT)")

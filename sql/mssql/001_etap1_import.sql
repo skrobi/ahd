@@ -1,6 +1,6 @@
-/* AHD – MVP etapu 1: rejestr importów plików SAP i surowe wiersze.
-   Uruchamia administrator na bazie AHD (TEST / PROD). Skrypt jest idempotentny.
-   Aplikacja łączy się kontem Windows (AD) użytkownika z roli ahd_user. */
+/* PZL-EV – MVP etapu 1: rejestr importów plików SAP i surowe wiersze.
+   Uruchamia administrator na bazie PZL-EV (TEST / PROD). Skrypt jest idempotentny.
+   Aplikacja łączy się kontem Windows (AD) użytkownika z roli pzl_ev_user. */
 
 IF SCHEMA_ID('meta') IS NULL EXEC('CREATE SCHEMA meta');
 IF SCHEMA_ID('stg')  IS NULL EXEC('CREATE SCHEMA stg');
@@ -87,8 +87,8 @@ JOIN meta.SourceFile f ON f.Sha256 = r.Sha256;
 GO
 
 /* Rola aplikacji: MVP zapisuje bezpośrednio do tabel (docelowo przez procedury). */
-IF DATABASE_PRINCIPAL_ID('ahd_user') IS NULL CREATE ROLE ahd_user;
-GRANT SELECT, INSERT, UPDATE ON SCHEMA::meta TO ahd_user;
-GRANT SELECT, INSERT ON SCHEMA::stg TO ahd_user;
--- ALTER ROLE ahd_user ADD MEMBER [DOMENA\Grupa_Finanse_AHD];
+IF DATABASE_PRINCIPAL_ID('pzl_ev_user') IS NULL CREATE ROLE pzl_ev_user;
+GRANT SELECT, INSERT, UPDATE ON SCHEMA::meta TO pzl_ev_user;
+GRANT SELECT, INSERT ON SCHEMA::stg TO pzl_ev_user;
+-- ALTER ROLE pzl_ev_user ADD MEMBER [DOMENA\Grupa_Finanse_PZL_EV];
 GO

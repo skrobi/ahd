@@ -23,10 +23,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Iterable
 
-from ahd import __version__
-from ahd.baza import Database, DuplicateFile
-from ahd.konfiguracja import SourceDef, match_source
-from ahd.zrodla.folder import RemoteFile
+from pzl_ev import __version__
+from pzl_ev.baza import Database, DuplicateFile
+from pzl_ev.konfiguracja import SourceDef, match_source
+from pzl_ev.zrodla.folder import RemoteFile
 
 from . import inspekcja, landing
 

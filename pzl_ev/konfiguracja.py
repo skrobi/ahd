@@ -36,7 +36,7 @@ class SourceDef:
 
 
 def default_dir() -> Path:
-    return Path(os.environ.get("AHD_KONFIGURACJA", "konfiguracja"))
+    return Path(os.environ.get("PZL_EV_KONFIGURACJA", "konfiguracja"))
 
 
 def _rows(path: Path, columns: list[str]) -> list[tuple[int, dict[str, str]]]:
