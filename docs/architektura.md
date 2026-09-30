@@ -140,30 +140,12 @@ Architektura ma zapewnić:
 
 ### 5.3 Etapy
 
-| # | Etap (tydzień) | Etap (zamknięcie) | Bramka wyjścia |
-|---|---|---|---|
-| 1 | Dane SAP | Dane SAP | import nowych plików RABIT (globalny, D21) zakończony; wybór danych projektu po WBS; zgodny okres |
-| 2 | Słowniki | Słowniki | przypięcie stanu bazy słowników i przypisań, snapshot w MS SQL (D27) |
-| 3 | Walidacja | Walidacja | brak błędów blokujących |
-| 4 | Łączenie źródeł | Łączenie źródeł | kontrole pokrycia; nowe elementy przypisane lub (tydzień) świadomie pominięte |
-| 5 | Pliki dla finansów | Pliki dla finansów | potwierdzenie w aplikacji (D10) |
-| 6 | Zaawansowanie z produkcji | Pliki dla CAM | pobrane / wygenerowane |
-| 7 | Uzupełnienie braków | Import plików CAM | braki uzupełnione / pliki wszystkich CAM zaimportowane |
-| 8 | Walidacja zaawansowania | Walidacja zaawansowania | zamknięcie: 100% wartości od CAM |
-| 9 | Generowanie EV | Generowanie EV | rewizja zapisana z wersjami wejść |
-| 10 | Plik dla Cobra (SAC) | Plik dla Cobra (SAC) | – |
-
-Zamknięcie okresu zatwierdza się po etapie EV; przebieg jest wtedy zamrażany.
+Etapy przebiegu (P0–P10, zamknięcie okresu), ich bramki i działanie w aplikacji: `docs/pipeline-fazy.md`
+(rozdz. 2 i 4) – jedyne miejsce opisu etapów.
 
 ### 5.4 Maszyna stanów etapu
 
-Statusy: `Oczekuje` → `Do wykonania` → `W toku` → `Zakończony`, oraz `Wymaga akcji`, `Błąd`,
-`Nieaktualny`.
-
-- Zakończenie etapu udostępnia następny.
-- Ponowne wykonanie etapu (albo zmiana jego danych wejściowych) oznacza etapy późniejsze jako
-  **Nieaktualne** – trzeba je wykonać ponownie.
-- Każda zmiana statusu trafia do dziennika (kto, kiedy, co).
+Statusy i przejścia etapu: `docs/pipeline-fazy.md`, rozdz. 1.1.
 
 ### 5.5 Przypinanie stanu słowników
 

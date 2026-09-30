@@ -27,7 +27,7 @@ Dokument jest rozwijany iteracyjnie na podstawie:
 |---|---|
 | `readme.md` | kontekst biznesowy, cele, problemy, słowniki, otwarte pytania (ten plik) |
 | `docs/architektura.md` | architektura rozwiązania: decyzje, komponenty, przepływ danych, baza, wdrożenia |
-| `docs/pipeline-fazy.md` | koncepcja wszystkich faz pipeline: cel, wejście, przetwarzanie, efekt, przekazanie do kolejnej fazy |
+| `docs/pipeline-fazy.md` | **jedyny opis etapów**: fazy globalne i etapy przebiegu – cel, wejście, bramki, działanie w aplikacji, kontrole, efekt, statusy |
 | `docs/mapowanie-ces-p1s.md` | założenia mapowania struktur WBS CES ↔ P1S i analiza spójności z dokumentacją |
 | `docs/funkcjonalnosc.md` | specyfikacja funkcjonalna: ekrany, funkcje, etapy przebiegu, reguły |
 | `prototyp/pzl-ev-prototyp.html` | klikalny prototyp aplikacji (dane przykładowe, otwierany w przeglądarce) |
@@ -246,25 +246,9 @@ Szczegóły: `docs/architektura.md` i `docs/funkcjonalnosc.md`.
 
 ## Przebieg (pipeline) projektu
 
-```
-Pobranie plików SAP (ręcznie z SharePoint lub automatycznie)
-↓
-Przypięcie wersji słowników i przypisań (z bazy słowników)
-↓
-Walidacja wszystkich importów
-↓
-Łączenie ze źródłami (logika do przedstawienia)
-↓
-Pliki pośrednie dla finansów → potwierdzenie w aplikacji
-↓
-Pliki do uzupełnienia przez CAM   (tydzień: zaawansowanie z produkcji + uzupełnienia)
-↓
-Import plików CAM
-↓
-Walidacja zaawansowania
-↓
-Generowanie EV (+ plik dla Cobra w projektach SAC)
-```
+Fazy globalne (pobranie i import RABIT, mapowanie CES↔P1S, edycja słowników) i etapy przebiegu projektu
+(uruchomienie, dane projektu, przypięcie słowników, walidacja, łączenie źródeł, pliki dla finansów,
+zaawansowanie, EV, plik Cobra, zamknięcie okresu) są opisane w jednym miejscu: `docs/pipeline-fazy.md`.
 
 ## Warstwy danych
 
