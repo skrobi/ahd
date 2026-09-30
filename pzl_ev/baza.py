@@ -265,22 +265,6 @@ class Database:
         )
         yield from cur.fetchall()
 
-    def source_status(self) -> dict[str, dict[str, Any]]:
-        """Stan każdego źródła: ostatni import, liczba plików, ostatni plik, najnowsza data raportu w RABIT."""
-        cur = self._cursor()
-        cur.execute(
-            f"SELECT KodZrodla, Zaimportowano, NazwaPliku, ZmodyfikowanyWZrodle FROM {self.t['file']} "
-            "WHERE KodZrodla IS NOT NULL ORDER BY Zaimportowano"
-        )
-        status: dict[str, dict[str, Any]] = {}
-        for code, when, name, modified in cur.fetchall():
-            st = status.setdefault(code, {"plikow": 0, "data_raportu": ""})
-            st["plikow"] += 1
-            st["ostatni_import"] = when
-            st["ostatni_plik"] = name
-            st["data_raportu"] = max(st["data_raportu"], str(modified or ""))
-        return status
-
     def count_rows(self, sha: str) -> int:
         cur = self._cursor()
         cur.execute(f"SELECT COUNT(*) FROM {self.t['row']} WHERE Sha256=?", (sha,))
