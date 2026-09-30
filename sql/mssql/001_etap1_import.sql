@@ -1,6 +1,6 @@
-/* AHD – MVP etapu 1: rejestr importów plików SAP i surowe wiersze.
-   Uruchamia administrator na bazie AHD (TEST / PROD). Skrypt jest idempotentny.
-   Aplikacja łączy się kontem Windows (AD) użytkownika z roli ahd_user. */
+/* PZL-EV – MVP etapu 1: rejestr importów plików SAP i surowe wiersze.
+   Uruchamia administrator na bazie PZL-EV (TEST / PROD). Skrypt jest idempotentny.
+   Aplikacja łączy się kontem Windows (AD) użytkownika z roli pzl_ev_user. */
 
 IF SCHEMA_ID('meta') IS NULL EXEC('CREATE SCHEMA meta');
 IF SCHEMA_ID('stg')  IS NULL EXEC('CREATE SCHEMA stg');
@@ -39,10 +39,20 @@ CREATE TABLE meta.SourceFile (
     Kodowanie             VARCHAR(20)    NULL,
     Separator             VARCHAR(5)     NULL,
     Kolumny               NVARCHAR(MAX)  NULL,   -- JSON: lista nagłówków
-    SygnaturaKolumn       CHAR(16)       NULL,   -- odcisk układu kolumn (rozpoznawanie typu raportu)
-    TypRaportu            VARCHAR(30)    NULL,
+    SygnaturaKolumn       CHAR(16)       NULL,   -- odcisk układu kolumn (zmiana układu raportu)
+    KodZrodla             VARCHAR(60)    NULL,   -- źródło RABIT rozpoznane po prefiksie nazwy pliku
     LiczbaWierszy         INT            NULL
 );
+
+GO
+
+-- Wcześniejsza wersja skryptu: kolumna TypRaportu → KodZrodla.
+IF COL_LENGTH('meta.SourceFile', 'TypRaportu') IS NOT NULL AND COL_LENGTH('meta.SourceFile', 'KodZrodla') IS NULL
+    EXEC sp_rename 'meta.SourceFile.TypRaportu', 'KodZrodla', 'COLUMN';
+GO
+
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_SourceFile_KodZrodla')
+CREATE INDEX IX_SourceFile_KodZrodla ON meta.SourceFile (KodZrodla, Zaimportowano);
 
 IF OBJECT_ID('meta.SourceFileSeen') IS NULL
 CREATE TABLE meta.SourceFileSeen (
@@ -53,7 +63,7 @@ CREATE TABLE meta.SourceFileSeen (
     Rozmiar               BIGINT         NOT NULL,
     ZmodyfikowanyWZrodle  VARCHAR(40)    NULL,
     Sha256                CHAR(64)       NULL,
-    Decyzja               VARCHAR(30)    NOT NULL,  -- zaimportowany / duplikat / pominiety (metadane) / blad
+    Decyzja               VARCHAR(30)    NOT NULL,  -- zaimportowany / duplikat / pominiety (metadane) / nierozpoznany / blad
     Opis                  NVARCHAR(1000) NULL
 );
 
@@ -69,9 +79,16 @@ CREATE TABLE stg.RawRow (
 );
 GO
 
+/* Wiersze ze wskazaniem źródła i importu – do odtwarzania stanu i porównań. */
+CREATE OR ALTER VIEW stg.vRawRowZrodlo AS
+SELECT f.KodZrodla, f.NazwaPliku, f.ZmodyfikowanyWZrodle, f.BatchId, f.Zaimportowano, r.Sha256, r.NrWiersza, r.Dane
+FROM stg.RawRow r
+JOIN meta.SourceFile f ON f.Sha256 = r.Sha256;
+GO
+
 /* Rola aplikacji: MVP zapisuje bezpośrednio do tabel (docelowo przez procedury). */
-IF DATABASE_PRINCIPAL_ID('ahd_user') IS NULL CREATE ROLE ahd_user;
-GRANT SELECT, INSERT, UPDATE ON SCHEMA::meta TO ahd_user;
-GRANT SELECT, INSERT ON SCHEMA::stg TO ahd_user;
--- ALTER ROLE ahd_user ADD MEMBER [DOMENA\Grupa_Finanse_AHD];
+IF DATABASE_PRINCIPAL_ID('pzl_ev_user') IS NULL CREATE ROLE pzl_ev_user;
+GRANT SELECT, INSERT, UPDATE ON SCHEMA::meta TO pzl_ev_user;
+GRANT SELECT, INSERT ON SCHEMA::stg TO pzl_ev_user;
+-- ALTER ROLE pzl_ev_user ADD MEMBER [DOMENA\Grupa_Finanse_PZL_EV];
 GO

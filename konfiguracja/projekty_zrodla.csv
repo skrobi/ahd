@@ -1,0 +1,8 @@
+﻿# Źródła RABIT wymagane przez projekt. Jeden wiersz = jedno wymagane źródło.
+# PRZYKŁADY – do zastąpienia rzeczywistymi projektami.
+Projekt;KodZrodla
+PAF-001;ACTUALS_PAF
+PAF-001;FORECAST_PAF
+PAF-001;ETC_PAF
+ABC-002;ACTUALS_PAF
+ABC-002;ACTUALS_CES
