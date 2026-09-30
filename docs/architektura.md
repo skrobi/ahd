@@ -31,7 +31,7 @@ Architektura ma zapewnić:
 | D4 | **Logika biznesowa w bazie** (procedury, widoki); Python = orkiestracja, pliki, walidacja struktury, generowanie Excel | wynik nie zależy od wersji aplikacji na danym komputerze |
 | D5 | Logowanie do bazy **po AD** (Windows Authentication) | brak haseł na stanowiskach, audyt „kto co zrobił” |
 | D6 | Developer pracuje na **TEST**, wdrożenia na **PROD** wykonuje admin | wymóg organizacyjny PZL |
-| D7 | Przebiegi **co tydzień (poniedziałek)**, okres rozliczeniowy **miesięczny** | rytm pracy zespołu |
+| D7 | *(zmienione 30.09.2026: dowolny dzień tygodnia zamiast poniedziałku)* Przebiegi **co tydzień** ~~(poniedziałek)~~ – **w dowolny dzień tygodnia**, okres rozliczeniowy **miesięczny** | rytm pracy zespołu |
 | D8 | Wolumen danych przez sieć nie stanowi problemu | ładowanie z aplikacji lokalnej do bazy zdalnej |
 | D9 | **Brak podziału uprawnień** w finansach – każda osoba z finansów może prowadzić każdy projekt | zastępstwa, ciągłość pracy; AD służy do audytu |
 | D10 | Pliki dla finansów wymagają **formalnego potwierdzenia w aplikacji** (może je wykonać osoba prowadząca przebieg) | kontrola przed wysłaniem plików do CAM; zapis kto/kiedy |
@@ -132,7 +132,7 @@ Architektura ma zapewnić:
 ### 5.2 Przebieg
 
 - **Przebieg** (`Run`) dotyczy jednego projektu i jednego okresu:
-  - **tygodniowy** – poniedziałek w trakcie miesiąca, EV wstępne (nieformalne),
+  - **tygodniowy** – w dowolny dzień tygodnia w trakcie miesiąca (D7), EV wstępne (nieformalne),
   - **zamknięcie miesiąca** – EV formalne, po zatwierdzeniu zamrażane.
 - Identyfikator: `R-<Projekt>-<RRRR-MM>-T<tydzień>` lub `R-<Projekt>-<RRRR-MM>-Z`.
 - Przebieg jest trwałym obiektem w bazie – może trwać dni (oczekiwanie na CAM); aplikację można
