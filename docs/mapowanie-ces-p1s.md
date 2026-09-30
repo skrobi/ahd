@@ -38,7 +38,7 @@ P1S. Nie pokazuje kosztów – kwoty i drzewo kosztów to inny etap.
 
 ### 2a.1 Źródło prawdy – raport mapowań (M16)
 
-Powiązanie CES ↔ P1S pochodzi z **raportu mapowań SAP↔CES**, czytanego zapytaniem do bazy `PZLPROD`
+Powiązanie CES ↔ P1S pochodzi z **raportu mapowań SAP↔CES** (obecnie nie ma na produkcji gotowego raportu jest jeszcze w fazie produkcji, mamy jednak extrakt w formacie cvs - będzie można użyć przy pierwszym uzupełnieniu danymi), czytanego zapytaniem do bazy `PZLPROD`
 (tylko odczyt). Kolumny:
 
 `src, pspnr, pspnr_sap, pspnr_ces, pspnr_parent, project, project_sap, project_sap_org, project_ces, wbs,
@@ -255,7 +255,7 @@ Ryzyka SQLite na udziale sieciowym i sposób ich ograniczenia:
 ### Raport mapowań SAP↔CES (M16)
 
 Zapytanie do `PZLPROD`, tylko odczyt – kolumny i znaczenie wierszy w rozdz. 2a.1. Łączenie z kategoryzacją:
-`LOG.WBS.PSPNR` = `pspnr_sap`.
+`LOG.WBS` = `pspnr_sap`.
 
 ### CES – z importów RABIT (G2)
 
@@ -266,7 +266,7 @@ Raporty CES zawierają kolumny:
 | `Project Definition` | **CES Project** (np. `4D03GZ`) – bez wyliczania z prefiksu (M5) |
 | `WBS Element` | **CES WBS** (np. `4D03GZ000001`) |
 
-Pełny układ raportu kosztów CES (zrzut RABIT):
+Pełny układ raportu kosztów CES (zrzut RABIT - ACTUALS):
 
 `Project Definition | WBS Element | Cost Element | Cost element descr. | Cost element name | CO object name |
 Transaction Currency | Value TranCurr | Object Currency | Value in Obj. Crcy | Report currency | Val.in rep.cur. |
@@ -338,8 +338,7 @@ Kolumny istotne dla modelu: `PSPNR`, `PROJECT`, `PROJORG`, `WBS_ELEMENT`, `PRCTR
 Z_KAT_ZBIORCZA
 └─ Z_KATEGORIA
    └─ Z_OPIS
-      └─ PROJORG
-         └─ elementy WBS/PSP (wg PARENT)
+      └─ WBS_ELEMENT (elementy WBS/PSP (wg PARENT)
 ```
 
 - Kategoria **nie jest przypisywana w mapowaniu** – element CES dostaje ją przez przypisanie do elementu P1S.
@@ -466,30 +465,14 @@ danych CES; elementy bez odpowiednika P1S wykazywalne; źródłem prawdy jest re
 | M21 | **Import RABIT bez słownika „Wymagane źródła projektów”** – usunięty wraz z kontrolą kompletności źródeł (Import, Pulpit, gotowość projektu, nowy przebieg). Zakres danych projektu wynika z jego węzłów w drzewie P1S, a jedna paczka RABIT może obejmować wiele projektów (np. całe PWC). Przebieg przypina **wszystkie zaimportowane pliki** i wybiera z nich wiersze elementów projektu. Konfiguracja importu = tylko „Prefiksy plików RABIT” (M15) | zastępuje M10 i część D24 (wymagane źródła); faza G2b i F05b usunięte |
 | M22 | **„Zakres” zastąpiony pojęciem „projekt”** (projekt PZL-EV – budowany do przeliczania wskaźników). Projekt ≠ projekt CES ≠ `PROJORG` (projekt P1S) | nazewnictwo w dokumentacji, ekranach i folderach (`Projekty\<Projekt>\`); zastępuje definicję z M8 |
 | M23 | **Kreator projektu:** Podstawowe → Projekty P1S → Słowniki projektu → Foldery → Podsumowanie (krok „CAM” usunięty – CAM w słowniku „WP i CAM”). **Zakres projektu z drzewa P1S** (rozwijanego w dół, checkbox na każdym poziomie): kilka grup z różnych poziomów i pojedyncze `PROJORG`; grupa obejmuje wszystkie swoje `PROJORG` i ich elementy WBS/PSP. Zapis: `sel` (ścieżki grup) + `p1s` (pojedyncze `PROJORG`). `PROJORG` należący do innego projektu jest pomijany; pojedynczo wskazany `PROJORG` ma pierwszeństwo przed grupą; wśród grup wygrywa projekt utworzony wcześniej | zastępuje M8 („program indywidualny / pula”); `docs/funkcjonalnosc.md` F01 |
-| M24 | **Słowniki projektu z Excela**: WP i CAM, Harmonogram i budżet, w CAS także Stawki CAS, opcjonalnie „Cost Category – zmiany w projekcie”. Jeden plik z arkuszami (szablon do pobrania z elementami P1S z zakresu) albo osobne pliki / CSV; kolumny rozpoznawane po nagłówkach. Walidacja jak przy zapisie w aplikacji; słownik z błędami nie zostaje zapisany. Po utworzeniu projektu – pobranie do Excela i ponowne wczytanie z podglądem różnic (+nowe / ~zmienione / −usunięte), zapis z historią | zmienia w części M13 (Excel jako format wymiany słowników; źródłem prawdy pozostaje baza); `docs/funkcjonalnosc.md` F01, F03, 6.3 |
+| M24 | **Słowniki projektu z Excela**: WP i CAM, Harmonogram i budżet, w CAS także Stawki CAS, „Cost Category”. Jeden plik z arkuszami (szablon do pobrania z elementami P1S z zakresu) albo osobne pliki / CSV; kolumny rozpoznawane po nagłówkach. Walidacja jak przy zapisie w aplikacji; słownik z błędami nie zostaje zapisany. Po utworzeniu projektu – pobranie do Excela i ponowne wczytanie z podglądem różnic (+nowe / ~zmienione / −usunięte), zapis z historią | zmienia w części M13 (Excel jako format wymiany słowników; źródłem prawdy pozostaje baza); `docs/funkcjonalnosc.md` F01, F03, 6.3 |
 | M25 | **Podsumowanie kreatora = baza analityczna**: drzewo (kategoria → `PROJORG` → element P1S) połączone z WP, CAM, BAC, datami i liczbą elementów CES z mapowania; braki (element z kosztami CES albo zaawansowaniem bez WP, WP bez budżetu); zestawienie według CAM; eksport do xlsx | `docs/funkcjonalnosc.md` F01 krok 5; na stronie projektu – O23 |
-| M26 | **Słownik Cost Category:** globalny (numer elementu kosztowego z `ACTUALS_CES` → Opis, Obszar, Cost Category) + w każdym projekcie opcjonalny „Cost Category – zmiany w projekcie” (zmienia i dodaje pozycje, pierwszeństwo przed globalnym); słownik efektywny = globalny + zmiany projektu. Edycja w aplikacji z historią i Excel (pobierz / wczytaj z podglądem różnic); numer zapisany w Excelu jako liczba uzupełniany zerami do 10 znaków. Przebieg przypina oba. Numer z kosztów projektu bez wpisu w żadnym słowniku – błąd blokujący (naprawa: dodanie w słowniku projektu); numer bez kategorii – ostrzeżenie | `docs/funkcjonalnosc.md` rozdz. 6.6 i załącznik A |
+
 
 **Potwierdzone bez zmian (30.09.2026, prototyp v3):** M3 (WBS ma jeden cel, koszt liczony raz), M9 (koszt bez
 przypisania jest liczony, ale nie trafia do EV), M14 (`NO_P1S` odłożone), D27 (migawka słowników kopiowana
 do MS SQL).
 
-## 10. Pytania otwarte
-
-| # | Pytanie |
-|---|---|
-| ~~P1~~ | ✅ M4 – w SQLite tylko słowniki i przypisania, dane importów w MS SQL |
-| ~~P2~~ | ✅ M6 – kolumny opisane w rozdz. 4a |
-| ~~P3~~ | ✅ M8 – zakres = program; WP, harmonogram, budżet, CAM w mapie przypisań *(M8 zastąpione: M22, M23)* |
-| ~~P4~~ | ✅ M9 – wszystkie koszty CES liczone, `NO_P1S` nie blokuje |
-| ~~P5~~ | ✅ M5 – kolumna `Project Definition` |
-| ~~P6~~ | ✅ M10 – lista raportów projektu jako konfiguracja w SQLite *(M10 zastąpione: M21 – bez wymaganych źródeł)* |
-| ~~P7~~ | ✅ M7 – reguła projektu wskazuje `PROJORG` (nadrzędny trzon); `PROJECT` = grupowanie *(M7 zastąpione: M16, M18)* |
-| ~~P8~~ | ✅ M11 – elementy nieaktywne/usunięte zostają |
-| ~~P9~~ | ✅ M12 – propozycje tylko z kodów i opisów *(M12 zastąpione: M16)* |
-| ~~P11~~ | ⏸ M14 – odłożone razem z `NO_P1S` |
-| ~~P12~~ | ✅ M13 – nic nie zostaje w Excelu; wszystkie słowniki w SQLite z interfejsem *(zmienione w części: M24, M26 – Excel jako format wymiany)* |
-| ~~P13~~ | ✅ M15 – prefiksy RABIT w SQLite, jak M10 |
 
 ### Otwarte
 
