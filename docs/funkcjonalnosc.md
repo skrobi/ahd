@@ -250,6 +250,15 @@ Lista kontrolna na ekranie zakresu:
 
 ---
 
+### F21–F24. Mapowanie CES ↔ P1S *(założenia – `docs/mapowanie-ces-p1s.md`)*
+
+- **F21 Drzewa CES i P1S** – dwa drzewa obok siebie, rozwijanie, wyszukiwanie, statusy mapowania.
+- **F22 Reguła projektu** – CES Project → P1S Project; obejmuje obecne i przyszłe WBS (dziedziczenie).
+- **F23 Wyjątek / `NO_P1S` / gałąź** – WBS CES → WBS P1S (pierwszeństwo), `include_children`, potwierdzony brak
+  odpowiednika; dezaktywacja z historią.
+- **F24 Po imporcie** – lista nowych elementów z wynikiem rozstrzygania (`odziedziczono`, `UNMAPPED`, `NO_P1S`)
+  i kontrola kompletności projektu CES.
+
 ## 5. Statusy etapu
 
 | Status | Znaczenie | Przejścia |
@@ -281,6 +290,8 @@ Stan przebiegu wynika ze stanów etapów: pierwszy niezakończony etap wyznacza 
 | Wersjonowanie | zmieniony wiersz ma podbitą Version; usunięty wiersz zamiast zamknięcia ValidTo | blokujący / ostrzeżenie |
 
 ### 6.2 Struktura projektowa
+
+> ⚠ Reguły dotyczące pary P1S/CES do przeglądu po decyzji o D25 (`docs/mapowanie-ces-p1s.md`, S1, S6).
 
 | Reguła | Waga |
 |---|---|

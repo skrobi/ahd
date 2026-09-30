@@ -28,6 +28,7 @@ Dokument jest rozwijany iteracyjnie na podstawie:
 | `readme.md` | kontekst biznesowy, cele, problemy, słowniki, otwarte pytania (ten plik) |
 | `docs/architektura.md` | architektura rozwiązania: decyzje, komponenty, przepływ danych, baza, wdrożenia |
 | `docs/pipeline-fazy.md` | koncepcja wszystkich faz pipeline: cel, wejście, przetwarzanie, efekt, przekazanie do kolejnej fazy |
+| `docs/mapowanie-ces-p1s.md` | założenia mapowania struktur WBS CES ↔ P1S i analiza spójności z dokumentacją |
 | `docs/funkcjonalnosc.md` | specyfikacja funkcjonalna: ekrany, funkcje, etapy przebiegu, reguły |
 | `prototyp/pzl-ev-prototyp.html` | klikalny prototyp aplikacji (dane przykładowe, otwierany w przeglądarce) |
 | `docs/mvp-etap1.md`, `pzl_ev/`, `konfiguracja/` | etap 1: pobranie plików RABIT przez WebDAV, rozpoznanie źródła po prefiksie, import do bazy, kompletność źródeł projektów |
@@ -355,6 +356,9 @@ każdy raport EV można odtworzyć.
 ## Przykładowe słowniki
 
 ### Struktura projektowa (zakresowy)
+
+> ⚠ Do uzgodnienia: powiązanie CES ↔ P1S może zostać przeniesione do warstwy mapowania w bazie
+> (`docs/mapowanie-ces-p1s.md`); kolumna „CAS WBS” oznacza WBS z systemu CES.
 
 `P1S WBS | CAS WBS | Project Definition | Business Area | Program | Project | Customer | Cost Category | CAM | WP (yes/no)`
 
