@@ -122,8 +122,6 @@ Lista kontrolna na ekranie projektu:
 - WP mają przypisanego CAM (ostrzeżenie – bez tego nie powstaną pliki CAM),
 - dostęp CAM do folderu `Zwrocone` (ostrzeżenie).
 
-Kompletność źródeł RABIT **nie jest** warunkiem gotowości (usunięta – M21).
-
 ### F03. Edycja słowników i przypisań
 
 - Ekran Słowniki (i Mapowanie CES ↔ P1S) w dowolnym momencie; dotyczy słowników globalnych i słowników projektu.
@@ -160,26 +158,14 @@ Kompletność źródeł RABIT **nie jest** warunkiem gotowości (usunięta – M
 - Źródło pliku rozpoznawane po **prefiksie nazwy** (konfiguracja w bazie słowników – M15;
   w MVP przejściowo `konfiguracja/zrodla_rabit.csv`), np.
   `ACTUALS_PAF_01.xlsx` → `ACTUALS_PAF`. Importowany jest każdy rozpoznany plik samodzielnie.
-  Konfiguracja importu = **tylko „Prefiksy plików RABIT”** (M21).
+  Konfiguracja importu = **tylko „Prefiksy plików RABIT”** (M21) – bez listy źródeł wymaganych przez projekt:
+  zakres danych projektu wynika z jego elementów w drzewie P1S, a jedna paczka RABIT może obejmować wiele
+  projektów (np. całe PWC).
 - Dla każdego pliku decyzja: **zaimportowany** (nowy hash), **duplikat** (ten fizyczny plik był już
   zaimportowany), **pominięty** (te same metadane co przy poprzednim imporcie – bez kopiowania),
   **nierozpoznany** (brak prefiksu – nie importowany), **błąd**.
 - Nowe pliki: kopia do Landing Zone, rejestracja (kto, kiedy, kod źródła, kolumny, liczba wierszy),
   wiersze w postaci surowej w bazie.
-
-### F05b. Kompletność źródeł projektu *(usunięte: M21)*
-
-> Słownik „Wymagane źródła projektów” i kontrola kompletności źródeł usunięte (Import, Pulpit, gotowość
-> projektu, nowy przebieg): zakres danych projektu wynika z jego węzłów w drzewie P1S, a jedna paczka RABIT
-> może obejmować wiele projektów (np. całe PWC). Opis poniżej – historia ustaleń; w MVP etapu 1 komenda
-> `kompletnosc` nadal istnieje w kodzie (`docs/mvp-etap1.md`).
-
-- Każdy projekt ma listę wymaganych źródeł RABIT (konfiguracja w bazie słowników – M10;
-  w MVP przejściowo `konfiguracja/projekty_zrodla.csv`).
-- PZL-EV pokazuje dla każdego projektu: ✓ źródło zaimportowane (ostatni import, data raportu, plik),
-  ✗ brak importu, ⚠ ostatni import starszy niż próg; projekt „komplet” / „niekompletny”.
-- Później: sprawdzenie, czy import obejmuje bieżący okres; blokada przebiegu dla niekompletnego projektu.
-- MVP: `python -m pzl_ev.etap1 kompletnosc`.
 - Import może uruchomić każda osoba z finansów w dowolnym momencie; historia importów jest widoczna
   dla wszystkich.
 - MVP: `python -m pzl_ev.etap1 pobierz` + `import` (instrukcja `docs/mvp-etap1.md`).

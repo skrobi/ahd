@@ -4,12 +4,10 @@ Przepływ docelowy (Windows, w katalogu repozytorium):
 
     1. python -m pzl_ev.etap1 pobierz     --webdav "<link do folderu RABIT>" --cel "<PZL-EV>\\00_Global\\RABIT\\Do_importu"
     2. python -m pzl_ev.etap1 import      --folder "<PZL-EV>\\00_Global\\RABIT\\Do_importu" --landing "<PZL-EV>\\01_LandingZone"
-    3. python -m pzl_ev.etap1 kompletnosc --landing "<PZL-EV>\\01_LandingZone"
-    4. python -m pzl_ev.etap1 historia    --landing "<PZL-EV>\\01_LandingZone"
+    3. python -m pzl_ev.etap1 historia    --landing "<PZL-EV>\\01_LandingZone"
 
 `pobierz` kopiuje tylko pliki nowe i zmienione. `import` rozpoznaje źródło po prefiksie nazwy pliku
-(`zrodla_rabit.csv`) i ładuje do bazy tylko pliki o nowej treści (SHA-256). `kompletnosc` sprawdza,
-czy każdy projekt ma zaimportowane wymagane źródła (`projekty_zrodla.csv`).
+(`zrodla_rabit.csv`) i ładuje do bazy tylko pliki o nowej treści (SHA-256).
 Plik pobrany ręcznie w przeglądarce (awaryjnie, np. > 50 MB) wystarczy zapisać w `Do_importu`.
 """
 
@@ -24,7 +22,7 @@ from pathlib import Path
 from typing import Callable, Iterable
 
 from pzl_ev.baza import Database, DatabaseError
-from pzl_ev.konfiguracja import ConfigError, default_dir, load_project_requirements, load_sources, match_source
+from pzl_ev.konfiguracja import ConfigError, default_dir, load_sources, match_source
 from pzl_ev.zrodla.folder import FolderSource, RemoteFile
 from pzl_ev.zrodla.webdav import SIZE_LIMIT_HINT, unc_from_url
 
@@ -147,38 +145,6 @@ def cmd_import(args: argparse.Namespace) -> int:
     return 1 if result.errors else 0
 
 
-def cmd_kompletnosc(args: argparse.Namespace) -> int:
-    sources = load_sources(args.konfiguracja)
-    required = load_project_requirements(args.konfiguracja, sources)
-    db = Database(_db_url(args))
-    try:
-        status = db.source_status()
-    finally:
-        db.close()
-    now = dt.datetime.now()
-    incomplete = 0
-    for project, codes in required.items():
-        lines, ok = [], True
-        for code in codes:
-            st = status.get(code)
-            if not st:
-                ok = False
-                lines.append(f"  ✗ {code:22} brak importu")
-                continue
-            last = dt.datetime.fromisoformat(str(st["ostatni_import"])[:19])
-            age = (now - last).days
-            stale = args.maks_wiek_dni is not None and age > args.maks_wiek_dni
-            ok = ok and not stale
-            mark = "⚠" if stale else "✓"
-            lines.append(f"  {mark} {code:22} ostatni import {str(st['ostatni_import'])[:16]} ({age} dni), "
-                         f"raport z {st['data_raportu'][:16]}, plików {st['plikow']}, ostatni: {st['ostatni_plik']}")
-        incomplete += not ok
-        print(f"{project}: {'komplet' if ok else 'NIEKOMPLETNY'}")
-        print("\n".join(lines))
-    print(f"Projektów: {len(required)}, niekompletnych: {incomplete}")
-    return 1 if incomplete else 0
-
-
 def cmd_historia(args: argparse.Namespace) -> int:
     db = Database(_db_url(args))
     try:
@@ -206,7 +172,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     def config(sp: argparse.ArgumentParser) -> None:
         sp.add_argument("--konfiguracja", type=Path, default=default_dir(),
-                        help="katalog z zrodla_rabit.csv i projekty_zrodla.csv (domyślnie ./konfiguracja lub PZL_EV_KONFIGURACJA)")
+                        help="katalog z zrodla_rabit.csv (domyślnie ./konfiguracja lub PZL_EV_KONFIGURACJA)")
 
     def database(sp: argparse.ArgumentParser) -> None:
         sp.add_argument("--landing", required=True, help="korzeń Landing Zone, np. \\\\serwer\\udzial\\PZL-EV\\01_LandingZone")
@@ -225,12 +191,6 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--pelne-sprawdzenie", action="store_true", help="policz hash także plików bez zmian w metadanych")
     s.add_argument("--dry-run", action="store_true", help="tylko pokaż pliki w źródle")
     s.set_defaults(func=cmd_import)
-
-    s = sub.add_parser("kompletnosc", help="sprawdź, czy projekty mają zaimportowane wymagane źródła")
-    config(s)
-    database(s)
-    s.add_argument("--maks-wiek-dni", type=int, help="oznacz źródło jako nieaktualne, jeśli ostatni import jest starszy")
-    s.set_defaults(func=cmd_kompletnosc)
 
     s = sub.add_parser("historia", help="pokaż ostatnie importy i pliki w bazie")
     database(s)

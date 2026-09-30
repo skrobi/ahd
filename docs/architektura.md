@@ -50,7 +50,7 @@ Architektura ma zapewnić:
 | D27 | **Snapshot słowników w MS SQL:** przy przypięciu (start przebiegu / przeliczenie) aplikacja kopiuje stan bazy słowników do schematu `dict` w MS SQL z identyfikatorem wersji – procedury EV (D4) czytają słowniki z MS SQL, a przebieg pozostaje odtwarzalny | logika EV w MS SQL nie może czytać pliku SQLite |
 | D26 | **Lekka baza plikowa (SQLite) w repozytorium PZL-EV na dysku sieciowym** dla **wszystkich słowników, przypisań i konfiguracji** (mapowanie CES ↔ P1S, mapa przypisań WP/CAM, harmonogramy, budżety, stawki, kalendarz, kursy, źródła RABIT), edytowanych w interfejsie aplikacji (CRUD + drzewo); **Excel nie jest źródłem słowników** (M13, M15); dane importów (miliony wierszy) pozostają w MS SQL (M4). Przebieg kopiuje przypięty stan słowników do MS SQL (D27). Ryzyka SMB (blokady, brak WAL) ograniczane: krótkie transakcje, jeden zapis naraz, kopie pliku | brak konieczności serwera bazy; proste wdrożenie |
 | D25 | *(zastąpione w części: M16–M19 – źródłem prawdy jest raport mapowań SAP↔CES z `PZLPROD`, w bazie PZL-EV tylko korekty elementu / projektu CES; bez reguły projektu → `PROJORG`, wyjątków i `include_children`)* **Mapowanie CES ↔ P1S jako warstwa w bazie PZL-EV** *(przyjęte: M1–M3 – SQLite na dysku sieciowym, P1S z `PZLPROD.LOG.WBS`, bez 1:wiele)*: reguła projektu CES → projekt P1S (dziedziczona logicznie przez wszystkie obecne i przyszłe WBS), wyjątki WBS → WBS (pierwszeństwo), `include_children`, `NO_P1S`, relacje wiele:1 (**1:wiele niedozwolone** – koszt CES pokazywany raz), historia i `valid_from/valid_to`; zarządzanie w UI (dwa drzewa). Szczegóły i analiza spójności: `docs/mapowanie-ces-p1s.md` | struktury CES i P1S są niezależne; jedno zatwierdzenie projektu zamiast mapowania każdego WBS |
-| D24 | *(M10, M15: prefiksy i źródła projektów jako konfiguracja w bazie słowników; CSV tylko w MVP)* *(zastąpione w części: M21 – wymagane źródła projektów i kontrola kompletności usunięte; zostaje rozpoznanie po prefiksie)* **Plik mówi, czym jest – projekt mówi, czego potrzebuje.** Źródło pliku RABIT rozpoznawane po **prefiksie nazwy** (`konfiguracja/zrodla_rabit.csv`, wygrywa najdłuższy prefiks); importowany jest **każdy rozpoznany plik** samodzielnie (np. `ACTUALS_PAF_01/_02/_03`), bez kontroli „zestawów”; plik nierozpoznany nie jest importowany. Projekt ma listę **wymaganych źródeł** (`konfiguracja/projekty_zrodla.csv`), a PZL-EV sprawdza ich kompletność i aktualność | proste nazwy plików RABIT, różne potrzeby projektów, automatyczna kontrola zamiast ręcznej |
+| D24 | *(M15: prefiksy jako konfiguracja w bazie słowników; CSV tylko w MVP. M21: bez listy źródeł wymaganych przez projekt)* **Plik mówi, czym jest.** Źródło pliku RABIT rozpoznawane po **prefiksie nazwy** (`konfiguracja/zrodla_rabit.csv`, wygrywa najdłuższy prefiks); importowany jest **każdy rozpoznany plik** samodzielnie (np. `ACTUALS_PAF_01/_02/_03`), bez kontroli „zestawów”; plik nierozpoznany nie jest importowany. Zakres danych projektu wynika z jego elementów w drzewie P1S, a jedna paczka RABIT może obejmować wiele projektów | proste nazwy plików RABIT |
 | D21 | *(M21: przebieg przypina wszystkie zaimportowane pliki i wybiera wiersze elementów projektu z drzewa P1S – bez słownika struktury)* **Import plików SAP (RABIT) jest globalny, bez projektu**: wszystkie pliki z folderu, import tylko nowych (SHA-256), wiersze w postaci surowej; przebieg projektu wybiera swoje dane po elementach WBS ze słownika struktury | przy pobieraniu nie wiadomo, do którego projektu należy plik |
 
 ---
@@ -204,7 +204,7 @@ Raporty pokazują udział wartości spoza CAM. Na zamknięciu dozwolone jest wy�
 | Cost Category | numer elementu kosztowego → Opis, Obszar, Cost Category (M26) | globalny + zmiany w projekcie |
 | Finansowe | stawki wydziałów, stawki CAS, kursy walut | globalny / projekt |
 | Kalendarz | okresy rozliczeniowe | globalny |
-| Konfiguracja importu | prefiksy plików RABIT → źródło; ~~źródła wymagane przez projekt~~ (usunięte: M21) | globalny |
+| Konfiguracja importu | prefiksy plików RABIT → źródło (M21) | globalny |
 
 Wszystko w bazie słowników (SQLite na dysku sieciowym), edycja w interfejsie aplikacji. Excel nie jest
 źródłem słowników (M13) – słowniki projektu i Cost Category można pobrać do Excela i wczytać z tą samą
@@ -294,12 +294,9 @@ odrzucany z komunikatem – nie powstaje błędna wersja. Szczegóły: `docs/fun
 - Wiersze ładowane w postaci surowej (`stg.RawRow`, widok `stg.vRawRowZrodlo` z kodem źródła i importem);
   zapisywana jest też sygnatura kolumn (zmiana układu raportu). Tabele typowane per źródło – gdy
   zostanie zdefiniowana zawartość raportów.
-- **Kompletność projektu (D24)** *(usunięte docelowo: M21 – zakres danych projektu wynika z drzewa P1S, przebieg przypina wszystkie zaimportowane pliki; w MVP komenda `kompletnosc` zostaje w kodzie)*: źródła wymagane przez projekt (docelowo w bazie słowników, M10; w MVP `konfiguracja/projekty_zrodla.csv`);
-  `kompletnosc` pokazuje dla projektu: ✓ źródło zaimportowane (ostatni import, data raportu, plik),
-  ✗ brak importu, ⚠ import starszy niż zadany próg. Sprawdzenie pokrycia okresu – później.
 - Każde uruchomienie importu i decyzja dla każdego pliku są zapisane w bazie (`meta.ImportBatch`,
   `meta.SourceFile`, `meta.SourceFileSeen`) – widać, kto i kiedy zaimportował dane.
-- Kod: `pzl_ev/etap1` (`pobierz`, `import`, `kompletnosc`, `historia`), konfiguracja `konfiguracja/`, instrukcja `docs/mvp-etap1.md`, DDL `sql/mssql/001_etap1_import.sql`.
+- Kod: `pzl_ev/etap1` (`pobierz`, `import`, `historia`), konfiguracja `konfiguracja/`, instrukcja `docs/mvp-etap1.md`, DDL `sql/mssql/001_etap1_import.sql`.
 - Jeśli RABIT pozwala – eksport do CSV/TXT (brak limitu wierszy, brak konwersji typów przez Excel).
 
 ### 7.4 Pliki CAM
