@@ -1,10 +1,11 @@
 # PZL-EV – Specyfikacja funkcjonalna
 
-Wersja: 1.0 (wstępny projekt)
+Wersja: 1.1 (wstępny projekt; 1.1: słowniki w bazie z interfejsem – M13, `NO_P1S` odłożony – M14)
 Status: **do akceptacji** – opis zachowania aplikacji, bez implementacji.
 
 Powiązane dokumenty: `readme.md`, `docs/architektura.md`, `prototyp/pzl-ev-prototyp.html`
-(klikalny prototyp pokazujący opisane funkcje na danych przykładowych).
+(klikalny prototyp pokazujący opisane funkcje na danych przykładowych; ekran słowników w prototypie
+pokazuje jeszcze pliki Excel – do aktualizacji po M13), `docs/mapowanie-ces-p1s.md`.
 
 ---
 
@@ -27,9 +28,10 @@ Powiązane dokumenty: `readme.md`, `docs/architektura.md`, `prototyp/pzl-ev-prot
 | Przebieg | jedno przetworzenie zakresu za okres: tygodniowy albo zamknięcie miesiąca |
 | Etap | krok przebiegu z własnym statusem i bramką wyjścia |
 | Słownik globalny | wspólny dla wszystkich zakresów (stawki wydziałów, kalendarz okresów, kursy USD/PLN) |
-| Słownik zakresowy | należy do jednego zakresu (struktura projektowa, harmonogram i budżet, stawki CAS) |
-| Wersja słownika | zatwierdzony stan słownika; powstaje tylko przy zmianie treści i poprawnej walidacji |
-| Przypięcie | zapamiętanie w przebiegu, na których wersjach słowników liczył |
+| Słownik zakresowy | należy do jednego zakresu (projekty i WP, CAM, harmonogram i budżet, stawki CAS) |
+| Baza słowników | SQLite na dysku sieciowym (`00_Global\Baza\`): wszystkie słowniki, przypisania i konfiguracja, edytowane w aplikacji (M13); **Excel nie jest źródłem słowników** |
+| Stan słownika | zawartość słownika na dany moment; każda zmiana zapisana w aplikacji przechodzi walidację przy zapisie i zostaje w historii (`ValidFrom`/`ValidTo`, kto, kiedy) |
+| Przypięcie | zapamiętanie w przebiegu stanu słowników, na którym liczył, i kopia tego stanu (migawka) do MS SQL (D27) |
 | Landing Zone | archiwum kopii oryginalnych plików (z hashem w bazie) |
 | Rewizja EV | kolejny wynik EV tego samego przebiegu; poprzednie zostają w historii |
 | Pochodzenie wartości | źródło zaawansowania: CAM, PRODUKCJA lub ANALITYK (wpis osoby z finansów) |
@@ -44,10 +46,11 @@ Powiązane dokumenty: `readme.md`, `docs/architektura.md`, `prototyp/pzl-ev-prot
 | **Pulpit** | karty zakresów ze stanem bieżącego przebiegu, lista „Wymaga uwagi”, ostatnie zdarzenia | przejście do zakresu / przebiegu, nowy zakres |
 | **Zakresy** | lista zakresów: typ, liczba projektów i CAM, aktywny przebieg, folder | nowy zakres |
 | **Zakres** | gotowość zakresu, konfiguracja, historia przebiegów, struktura folderów | nowy przebieg |
-| **Kreator zakresu** | 6 kroków: podstawowe, struktura projektowa, słowniki, CAM, foldery, podsumowanie | utwórz zakres |
+| **Kreator zakresu** | 6 kroków: podstawowe, projekty i WP, słowniki, CAM, foldery, podsumowanie | utwórz zakres |
 | **Przebiegi** | wszystkie przebiegi wszystkich zakresów ze stanem i osobą | przejście do przebiegu |
 | **Przebieg** | oś etapów, panel wybranego etapu, przypięte słowniki, dziennik przebiegu | akcje etapów |
-| **Słowniki** | słowniki globalne i zakresowe: plik, wersja, ostatni import, historia wersji | publikacja słownika globalnego |
+| **Słowniki** | słowniki globalne i zakresowe w bazie: tabela z filtrowaniem, stan walidacji, historia zmian | dodaj / edytuj / zamknij ważność wiersza |
+| **Przypisania** | dwa drzewa CES \| P1S, reguły projektu, wyjątki, WP i CAM zakresu, lista elementów `UNMAPPED` (F21–F24) | reguła projektu, wyjątek, przypisanie WP/CAM |
 
 Nagłówek aplikacji zawsze pokazuje środowisko (TEST / PROD), zalogowanego użytkownika AD
 oraz wersję aplikacji i schematu.
@@ -60,35 +63,41 @@ oraz wersję aplikacji i schematu.
 
 1. **Podstawowe** – kod (unikalny, używany w nazwach folderów, plików i przebiegów), nazwa, typ
    SAC / CAS / Wewnętrzny. Aplikacja pokazuje liczbę etapów wynikającą z typu.
-2. **Struktura projektowa** – informacja, że zakres wyznacza słownik struktury; podgląd kolumn
-   wzorca; opcjonalnie wybór elementów, które pojawiły się w dotychczasowych pobraniach i nie należą
-   do żadnego zakresu (trafią do wzorca z wypełnionymi kluczami). Opcja „pula małych projektów”.
-3. **Słowniki** – słowniki zakresu wymagane dla typu (struktura, harmonogram i budżet; w CAS także
-   stawki CAS); lista słowników globalnych z bieżącymi wersjami.
-4. **CAM** – informacja, że lista CAM pochodzi z kolumny CAM słownika struktury.
+2. **Projekty i WP** – wybór projektów P1S (`PROJORG`) z drzewa `LOG.WBS`; opcjonalnie projekty CES,
+   które pojawiły się w importach i nie mają reguły projektu (od razu z formularzem reguły CES → P1S).
+   Opcja „pula małych projektów”.
+3. **Słowniki** – słowniki zakresu wymagane dla typu (WP, CAM, harmonogram i budżet; w CAS także
+   stawki CAS) – uzupełniane w aplikacji; lista słowników globalnych z bieżącym stanem.
+4. **CAM** – przypisanie CAM do WP w narzędziu przypisań (M8); CAM wybierany z listy.
 5. **Foldery** – podgląd struktury; kontrole: dostępność korzenia (UNC), prawo zapisu, brak folderu
    o tym kodzie; informacja o zgłoszeniu do IT (dostęp CAM do `Zwrocone`).
-6. **Podsumowanie** → **Utwórz zakres**: rejestracja w bazie, utworzenie folderów, wzorce słowników
-   (nagłówki, typy kolumn, arkusz instrukcji), treść zgłoszenia do IT, kontrola struktury.
+6. **Podsumowanie** → **Utwórz zakres**: rejestracja w bazie słowników i w MS SQL, utworzenie
+   folderów, treść zgłoszenia do IT, kontrola struktury. Nie powstają żadne pliki słowników.
 
-Reguły: kod musi być unikalny; zakres bez zatwierdzonej wersji słowników nie może uruchomić przebiegu.
+Reguły: kod musi być unikalny; zakres z niekompletnymi słownikami (brak WP, CAM lub budżetu) nie może
+uruchomić przebiegu.
 
 ### F02. Gotowość zakresu
 
 Lista kontrolna na ekranie zakresu:
 - zakres zarejestrowany w bazie,
 - struktura folderów zgodna z konfiguracją,
-- słownik struktury obejmuje co najmniej jeden projekt,
-- słowniki zakresu mają zatwierdzone wersje (**blokuje** przebieg),
-- kolumna CAM wypełniona (ostrzeżenie – bez niej nie powstaną pliki CAM),
+- zakres obejmuje co najmniej jeden projekt P1S,
+- słowniki zakresu wypełnione (WP, harmonogram i budżet; w CAS stawki CAS) (**blokuje** przebieg),
+- WP mają przypisanego CAM (ostrzeżenie – bez tego nie powstaną pliki CAM),
 - dostęp CAM do folderu `Zwrocone` (ostrzeżenie).
 
-### F03. Publikacja słownika globalnego
+### F03. Edycja słowników i przypisań
 
-- Dostępna z ekranu Słowniki w dowolnym momencie.
-- Kopia do Landing Zone → walidacja → nowa wersja tylko przy zmianie treści.
-- Ten sam hash: komunikat „plik bez zmian – nowa wersja nie powstała”.
-- Aktywne przebiegi z przypiętą starszą wersją dostają informację (F16).
+- Ekran Słowniki (i Przypisania) w dowolnym momencie; dotyczy słowników globalnych i zakresowych.
+- Edycja w tabeli / formularzu; pola typowane (data, liczba, wybór z listy), klucze WBS zawsze jako tekst.
+- **Walidacja przy zapisie** wg rozdz. 6: błąd blokujący nie pozwala zapisać (komunikat przy polu),
+  ostrzeżenie wymaga potwierdzenia.
+- Zmiana wiersza = zamknięcie `ValidTo` starego i nowy wiersz (historia, kto, kiedy); „usunięcie” =
+  zamknięcie ważności. Brak zmian → nic się nie zapisuje.
+- Zapis to krótka transakcja; jednocześnie zapisuje jedna osoba (SQLite na dysku sieciowym) – druga
+  widzi komunikat i ponawia.
+- Aktywne przebiegi z przypiętym wcześniejszym stanem dostają informację (F16).
 
 ### F04. Uruchomienie przebiegu
 
@@ -96,10 +105,10 @@ Lista kontrolna na ekranie zakresu:
 - Kontrole przed startem:
   - brak innego przebiegu tego zakresu dla tego tygodnia / zamknięcia (**blokuje**),
   - zgodna wersja aplikacji i schematu bazy (**blokuje**),
-  - słowniki zakresu mają zatwierdzone wersje (**blokuje**),
+  - słowniki zakresu kompletne (**blokuje**),
   - tydzień: świeżość danych produkcyjnych (data odświeżenia `vAHDD`),
   - zamknięcie: informacja, jeśli okres jeszcze trwa.
-- Podgląd wersji słowników, które zostaną przypięte.
+- Podgląd stanu słowników, który zostanie przypięty (ostatnie zmiany: kto, kiedy).
 - Start zapisuje przebieg, przypięcia i pierwsze zdarzenie w dzienniku.
 
 ### F05a. Import plików SAP (globalny, poza przebiegiem)
@@ -108,7 +117,8 @@ Lista kontrolna na ekranie zakresu:
   wszystkie pliki RABIT. **Pobierz** kopiuje przez WebDAV nowe i zmienione pliki z folderu RABIT na
   SharePoint do `00_Global\RABIT\Do_importu`; **Importuj** ładuje je do bazy. Plik, którego WebDAV nie
   pobierze (> 50 MB), zapisuje się tam ręcznie z przeglądarki.
-- Źródło pliku rozpoznawane po **prefiksie nazwy** (`konfiguracja/zrodla_rabit.csv`), np.
+- Źródło pliku rozpoznawane po **prefiksie nazwy** (konfiguracja w bazie słowników – M15;
+  w MVP przejściowo `konfiguracja/zrodla_rabit.csv`), np.
   `ACTUALS_PAF_01.xlsx` → `ACTUALS_PAF`. Importowany jest każdy rozpoznany plik samodzielnie.
 - Dla każdego pliku decyzja: **zaimportowany** (nowy hash), **duplikat** (ten fizyczny plik był już
   zaimportowany), **pominięty** (te same metadane co przy poprzednim imporcie – bez kopiowania),
@@ -118,7 +128,8 @@ Lista kontrolna na ekranie zakresu:
 
 ### F05b. Kompletność źródeł projektu
 
-- Każdy projekt ma listę wymaganych źródeł RABIT (`konfiguracja/projekty_zrodla.csv`).
+- Każdy projekt ma listę wymaganych źródeł RABIT (konfiguracja w bazie słowników – M10;
+  w MVP przejściowo `konfiguracja/projekty_zrodla.csv`).
 - PZL-EV pokazuje dla każdego projektu: ✓ źródło zaimportowane (ostatni import, data raportu, plik),
   ✗ brak importu, ⚠ ostatni import starszy niż próg; projekt „komplet” / „niekompletny”.
 - Później: sprawdzenie, czy import obejmuje bieżący okres; blokada przebiegu dla niekompletnego projektu.
@@ -131,41 +142,45 @@ Lista kontrolna na ekranie zakresu:
 
 - Warunek: import plików SAP (F05a) wykonany; aplikacja pokazuje datę ostatniego importu i pliki,
   które pojawiły się od poprzedniego przebiegu.
-- Wybór wierszy zakresu na podstawie elementów WBS ze słownika „Struktura projektowa” oraz okresu.
+- Wybór wierszy zakresu na podstawie projektów P1S zakresu, mapowania CES↔P1S (F21–F24) oraz okresu.
 - Kontrole: daty w okresie przebiegu, plik nie zmienił się od importu (hash).
 - Wiersze bez przypisania do żadnego zakresu są widoczne w etapie 4 (F08) jako nowe elementy.
 
-### F06. Etap 2 – Słowniki
+### F06. Etap 2 – Przypięcie słowników
 
-- Tabela słowników przebiegu: nazwa, zasięg (globalny / zakres), plik, przypięta wersja, wynik.
-- Globalne są tylko przypinane. Zakresowe są importowane: ten sam hash = „bez zmian”,
-  zmiana = „kandydat nowej wersji” (wersja powstanie po walidacji w etapie 3).
+- Tabela słowników przebiegu: nazwa, zasięg (globalny / zakres), liczba wierszy, ostatnia zmiana
+  (kto, kiedy).
+- **Przypnij** zapisuje w przebiegu znacznik stanu słowników i kopiuje ten stan (migawkę) do MS SQL,
+  schemat `dict` (D27) – procedury EV czytają wyłącznie migawkę.
+- Słowniki nie są importowane z plików.
 
 ### F07. Etap 3 – Walidacja
 
-- Walidacja plików SAP i kandydatów nowych wersji słowników wg reguł z rozdz. 6.
-- Wynik: tabela problemów – waga (blokujący / ostrzeżenie), źródło, wiersz, kolumna, opis.
-- **Błąd blokujący**: kandydat odrzucony, obowiązuje poprzednia wersja; raport błędów zapisany
-  obok pliku (`<plik>.walidacja.xlsx`). Akcje: **Plik poprawiony – waliduj ponownie** albo
-  **Kontynuuj na obowiązującej wersji**.
-- Brak błędów blokujących: nowa wersja słownika utworzona i przypięta; ostrzeżenia trafiają do raportu.
+- Walidacja plików SAP (rozdz. 6.5) i **spójności przypiętych słowników z danymi przebiegu**
+  (np. wydział z kosztów CES bez stawki, element z kosztem `UNMAPPED`, WP bez budżetu). Poprawność
+  samych słowników zapewnia walidacja przy zapisie (F03).
+- Wynik: tabela problemów – waga (blokujący / ostrzeżenie), źródło, element, opis.
+- **Błąd blokujący**: akcja **Popraw w aplikacji** (przejście do ekranu Słowniki / Przypisania z
+  filtrem na problem) → **Przypnij ponownie i waliduj**.
+- Brak błędów blokujących: ostrzeżenia trafiają do raportu przebiegu.
 
 ### F08. Etap 4 – Łączenie źródeł
 
 - Wywołanie logiki łączenia w bazie (logika do przedstawienia przez zespół, O14).
 - Podsumowanie: koszt rzeczywisty okresu, liczba zmapowanych WBS, liczba WP, suma kontrolna
   (koszt po połączeniu = koszt z plików).
-- **Wykrywanie elementów bez przypisania** w słowniku struktury:
-  - element CES bez wiersza (w tym nowa definicja projektu) – z kosztem okresu,
-  - element P1S bez wiersza lub bez pary w CES – z zaawansowaniem,
-  - kontrola, że żaden element nie należy do słownika innego zakresu.
+- **Wykrywanie elementów bez przypisania**:
+  - element CES ze statusem `UNMAPPED` (brak reguły projektu i wyjątku, w tym nowa definicja
+    projektu) – z kosztem okresu,
+  - element P1S z zaawansowaniem bez WP w zakresie,
+  - kontrola, że projekt P1S nie należy do innego zakresu.
 - Akcje:
-  - **Eksportuj elementy do uzupełnienia** – plik `Slowniki\Propozycje\<Zakres>_nowe_elementy_<RunId>.xlsx`
-    w układzie kolumn słownika, z wypełnionymi kluczami,
-  - po uzupełnieniu słownika: nowa wersja, przypięcie, **przeliczenie od etapu 3**,
+  - **Przypisz w aplikacji** – ekran Przypisania z listą elementów (klucze wypełnione),
+  - po zapisaniu przypisań: ponowne przypięcie stanu, **przeliczenie od etapu 3**,
   - **Kontynuuj bez tych elementów** – tylko w przebiegu tygodniowym; decyzja w dzienniku,
     wartość poza EV pokazana w raporcie.
-- Zamknięcie miesiąca: elementy z kosztem muszą być przypisane (D20).
+- Zamknięcie miesiąca: elementy z kosztem muszą być przypisane (D20; szczegóły – pytanie P10 w
+  `docs/mapowanie-ces-p1s.md`).
 
 ### F09. Etap 5 – Pliki dla finansów
 
@@ -206,7 +221,7 @@ Lista kontrolna na ekranie zakresu:
 
 ### F14. Etap 9 – Generowanie EV
 
-- Kalkulacja w bazie; wynik jako **rewizja** (R1, R2…) z zapisem przypiętych wersji i plików.
+- Kalkulacja w bazie; wynik jako **rewizja** (R1, R2…) z zapisem przypiętego stanu słowników i plików.
 - Tabela: projekt, BAC, BCWS, BCWP, ACWP, CPI, SPI (w tys. PLN, w SAC w tys. USD).
 - Tydzień: oznaczenie „EV wstępne (nieformalne)”.
 - Plik wynikowy `EV\<RRRR-MM>\<Zakres>_EV_<T<NN>|RRRR-MM>_R<n>.xlsx`.
@@ -217,11 +232,11 @@ Lista kontrolna na ekranie zakresu:
 - Koszt pracy przeliczony po bieżących stawkach na USD, zaawansowanie wg WP.
 - Plik `EV\<RRRR-MM>\<Zakres>_<RRRR-MM>_Cobra_import.csv`.
 
-### F16. Nowa wersja słownika w trakcie przebiegu
+### F16. Zmiana słowników w trakcie przebiegu
 
-- Baner w przebiegu: „Dostępna nowsza wersja <słownik> vN (przebieg używa vM)”.
-- **Kontynuuj na obecnej** – decyzja w dzienniku, baner znika dla tej wersji.
-- **Przelicz od etapu 3** – przypięcie nowej wersji; etapy od walidacji do wykonania ponownie.
+- Baner w przebiegu: „Słownik <nazwa> zmieniony po przypięciu (kto, kiedy, liczba zmian)”.
+- **Kontynuuj na przypiętym stanie** – decyzja w dzienniku, baner znika dla tych zmian.
+- **Przelicz od etapu 3** – przypięcie nowego stanu i nowa migawka; etapy od walidacji wykonywane ponownie.
 
 ### F17. Kontynuacja przebiegu przez inną osobę
 
@@ -238,7 +253,7 @@ Lista kontrolna na ekranie zakresu:
 ### F19. Pulpit i dziennik
 
 - „Wymaga uwagi”: brak przebiegu w bieżącym tygodniu, etapy wymagające akcji lub z błędem,
-  pliki czekające na potwierdzenie, dostępne nowsze wersje słowników, zakresy z niekompletnymi słownikami.
+  pliki czekające na potwierdzenie, zmiany słowników po przypięciu, zakresy z niekompletnymi słownikami, elementy `UNMAPPED` z kosztem.
 - „Ostatnie zdarzenia”: przekrój dzienników wszystkich przebiegów.
 - Dziennik przebiegu: czas, użytkownik, opis – od najnowszego.
 
@@ -254,9 +269,9 @@ Lista kontrolna na ekranie zakresu:
 
 - **F21 Drzewa CES i P1S** – dwa drzewa obok siebie, rozwijanie, wyszukiwanie, statusy mapowania.
 - **F22 Reguła projektu** – CES Project → P1S Project; obejmuje obecne i przyszłe WBS (dziedziczenie).
-- **F23 Wyjątek / `NO_P1S` / gałąź** – WBS CES → WBS P1S (pierwszeństwo), `include_children`, potwierdzony brak
-  odpowiednika; dezaktywacja z historią.
-- **F24 Po imporcie** – lista nowych elementów z wynikiem rozstrzygania (`odziedziczono`, `UNMAPPED`, `NO_P1S`)
+- **F23 Wyjątek / gałąź** – WBS CES → WBS P1S (pierwszeństwo), `include_children`; dezaktywacja z
+  historią. (`NO_P1S` – potwierdzony brak odpowiednika – odłożony, M14.)
+- **F24 Po imporcie** – lista nowych elementów z wynikiem rozstrzygania (`odziedziczono`, `UNMAPPED`)
   i kontrola kompletności projektu CES.
 
 ## 5. Statusy etapu
@@ -277,36 +292,34 @@ Stan przebiegu wynika ze stanów etapów: pierwszy niezakończony etap wyznacza 
 
 ## 6. Reguły walidacji
 
-### 6.1 Wszystkie słowniki
+### 6.1 Wszystkie słowniki (walidacja przy zapisie w aplikacji)
+
+Słowniki są edytowane w aplikacji, więc problemy typowe dla Excela (nieczytelny plik, brak arkusza,
+`#N/A`, „1.10” zamienione na 1.1) nie występują – pola są typowane w formularzu.
 
 | Poziom | Reguła | Waga |
 |---|---|---|
-| Plik | plik i arkusz istnieją, plik da się odczytać (nie zaszyfrowany) | blokujący |
-| Struktura | wymagane kolumny obecne; brak zduplikowanych nagłówków; nieznane kolumny | blokujący / ostrzeżenie |
-| Typy | daty, liczby, wartości yes/no; klucze WBS jako tekst (np. „1.10” nie może stać się 1.1); brak `#N/A` i błędów formuł | blokujący |
-| Czystość | spacje na początku/końcu, spacje niełamliwe, różna wielkość liter | ostrzeżenie |
-| Klucz | brak duplikatów klucza; brak nakładających się okresów ValidFrom–ValidTo; ValidFrom ≤ ValidTo | blokujący |
-| Metadane | Owner, Version, LastUpdate wypełnione | blokujący |
-| Wersjonowanie | zmieniony wiersz ma podbitą Version; usunięty wiersz zamiast zamknięcia ValidTo | blokujący / ostrzeżenie |
+| Typy | daty, liczby, wartości z listy; klucze WBS jako tekst | blokujący (pole nie przyjmie wartości) |
+| Czystość | spacje na początku/końcu i niełamliwe usuwane automatycznie; podobny zapis istniejącej wartości | ostrzeżenie |
+| Klucz | brak duplikatów klucza; brak nakładających się okresów `ValidFrom`–`ValidTo`; `ValidFrom` ≤ `ValidTo` | blokujący |
+| Referencje | wskazany element (projekt, WP, CAM, wydział) istnieje | blokujący |
+| Historia | kto / kiedy uzupełnia aplikacja; zmiana i usunięcie tylko przez zamknięcie `ValidTo` | automatycznie |
 
-### 6.2 Struktura projektowa
-
-> ⚠ Reguły dotyczące pary P1S/CES do przeglądu po decyzji o D25 (`docs/mapowanie-ces-p1s.md`, S1, S6).
+### 6.2 Przypisania zakresu (projekty, WP, CAM, mapowanie CES↔P1S)
 
 | Reguła | Waga |
 |---|---|
-| wiersz ma co najmniej jeden z kluczy: P1S WBS lub CAS WBS | blokujący |
-| para P1S WBS + CAS WBS nie powtarza się w nakładających się okresach | blokujący |
-| element nie występuje w słowniku innego zakresu w nakładającym się okresie | blokujący |
-| WP = yes wymaga CAM | blokujący |
-| podobne zapisy tego samego CAM (np. „J. Kowalski” / „J.Kowalski”) | ostrzeżenie |
-| Program / Project / Project Definition wypełnione | blokujący |
+| projekt P1S należy do co najwyżej jednego zakresu w nakładającym się okresie | blokujący |
+| element CES ma co najwyżej jeden aktywny cel P1S (M3 – bez 1:wiele) | blokujący |
+| reguła projektu CES wskazuje `PROJORG` (M7) | blokujący |
+| WP wymaga CAM | blokujący |
+| CAM wybierany z listy osób (brak wariantów zapisu) | – |
 
 ### 6.3 Harmonogram i budżet
 
 | Reguła | Waga |
 |---|---|
-| element istnieje w słowniku struktury zakresu | blokujący |
+| element (WP) należy do zakresu | blokujący |
 | daty rozpoczęcia ≤ daty zakończenia (bazowe, planowane, rzeczywiste) | blokujący |
 | budżet ≥ 0 | blokujący |
 | budżet na elemencie z WP = no | ostrzeżenie |
@@ -335,26 +348,25 @@ Stan przebiegu wynika ze stanów etapów: pierwszy niezakończony etap wyznacza 
 
 | Plik | Folder | Etap |
 |---|---|---|
-| `<plik>.walidacja.xlsx` | obok pliku słownika | 3 |
-| `<Zakres>_nowe_elementy_<RunId>.xlsx` | `Slowniki\Propozycje\` | 4 |
 | `<Zakres>_AC_przeglad_<T<NN>>.xlsx`, `<Zakres>_ETC_wstepne_<T<NN>>.xlsx`, `<Zakres>_WBS_bez_mapowania.xlsx` | `Finanse\<RRRR-MM>\` | 5 |
 | `<Zakres>_<RRRR-MM>_CAM_<CAM>.xlsx` | `CAM\<RRRR-MM>\Wyslane\` | 6 (zamknięcie) |
 | `<Zakres>_EV_<T<NN>|RRRR-MM>_R<n>.xlsx` | `EV\<RRRR-MM>\` | 9 |
 | `<Zakres>_<RRRR-MM>_Cobra_import.csv` | `EV\<RRRR-MM>\` | 10 (SAC) |
 
-Nazwy plików są propozycją do potwierdzenia.
+Nazwy plików są propozycją do potwierdzenia. Słowniki nie są plikami – nie powstają pliki walidacji
+ani propozycji słowników.
 
 ---
 
 ## 8. Scenariusze (przejście przez prototyp)
 
-1. **Nowy zakres M28** – kreator → zakres zablokowany (puste słowniki) → uzupełnienie słowników →
-   zakres gotowy.
-2. **Tydzień F16** – błąd blokujący w słowniku struktury (nakładające się okresy) → poprawa →
-   nowa wersja; w łączeniu wykryte nowe elementy z CES i P1S → eksport → uzupełnienie → przeliczenie;
+1. **Nowy zakres M28** – kreator → zakres zablokowany (brak WP, CAM, budżetu) → uzupełnienie w
+   aplikacji → zakres gotowy.
+2. **Tydzień F16** – zapis nakładających się okresów odrzucony przy zapisie → poprawa; w łączeniu
+   wykryte elementy CES `UNMAPPED` i P1S bez WP → przypisanie w aplikacji → przeliczenie;
    potwierdzenie plików; produkcja, uzupełnienia, EV wstępne.
 3. **Odrzucenie plików dla finansów** – komentarz → powrót do łączenia.
-4. **Nowa wersja stawek** – publikacja → baner w przebiegach → przeliczenie od etapu 3.
+4. **Zmiana stawek** – edycja w aplikacji → baner w przebiegach → przeliczenie od etapu 3.
 5. **Kontynuacja przebiegu S70i** rozpoczętego przez inną osobę.
 6. **Zamknięcie miesiąca S70i (SAC)** – pliki CAM, odrzucenie pliku (zmiana poza polami), ponowny
    import, 100% CAM, EV, plik Cobra, zamrożenie okresu.
@@ -363,7 +375,8 @@ Nazwy plików są propozycją do potwierdzenia.
 
 ## 9. Poza zakresem wersji 1
 
-- Formularz edycji słowników w aplikacji (słowniki pozostają w Excelu).
+- Import / eksport słowników z i do Excela (ewentualnie później jako wygoda – nie źródło prawdy, M13).
+- Status `NO_P1S` (odłożony do pierwszego rzeczywistego przypadku, M14).
 - Dostęp CAM do aplikacji.
 - Podział uprawnień w finansach.
 - Automatyczne pobieranie z RABIT (jeśli nie będzie gotowe – pliki umieszczane ręcznie).

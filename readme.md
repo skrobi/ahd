@@ -15,7 +15,7 @@ Earned Value Management (EVM) w PZL Mielec.
 
 Dokument jest rozwijany iteracyjnie na podstawie:
 - warsztatów z użytkownikami,
-- istniejących plików Excel,
+- istniejących plików Excel (stan obecny),
 - szablonów raportowych,
 - logiki biznesowej,
 - procedur finansowych,
@@ -227,12 +227,15 @@ Szczegóły: `docs/architektura.md` i `docs/funkcjonalnosc.md`.
 
 - **Aplikacja w Pythonie uruchamiana lokalnie**, obsługiwana w przeglądarce. Każda osoba
   z finansów uruchamia ją u siebie; nie jest potrzebny serwer aplikacyjny.
-- **Centralna baza MS SQL** przechowuje cały stan: zakresy, przebiegi, wersje słowników,
-  dane, wyniki EV i dziennik zdarzeń. Każdy widzi, co już przetworzono i przez kogo.
+- **Centralna baza MS SQL** przechowuje dane: importy, przebiegi, wyniki EV i dziennik zdarzeń.
+  Każdy widzi, co już przetworzono i przez kogo.
+- **Słowniki, przypisania i konfiguracja** (mapowanie CES↔P1S, WP, CAM, harmonogramy, budżety, stawki,
+  kalendarz, kursy, źródła RABIT) – w **lekkiej bazie SQLite na dysku sieciowym**, edytowane w interfejsie
+  aplikacji (CRUD + drzewo). **Excel nie jest źródłem słowników.**
 - **Logika biznesowa w bazie** (procedury i widoki SQL) – wynik nie zależy od wersji
   aplikacji na danym komputerze.
-- **Pliki na dysku sieciowym** (ścieżki UNC): słowniki Excel, eksporty SAP, pliki dla finansów,
-  pliki dla CAM, wyniki EV.
+- **Pliki na dysku sieciowym** (ścieżki UNC): baza słowników (SQLite), eksporty SAP (RABIT), pliki dla
+  finansów, pliki dla CAM, wyniki EV.
 - **Praca w zakresach** – zakres to program lub pula małych projektów. Każdy przebieg
   dotyczy jednego zakresu, dzięki czemu np. F-16 nie czeka na pliki Cobra dla projektów SAC.
 - **Przebieg tygodniowy** (poniedziałek) daje wstępne EV; **zamknięcie miesiąca** daje EV formalne,
@@ -243,7 +246,7 @@ Szczegóły: `docs/architektura.md` i `docs/funkcjonalnosc.md`.
 ```
 Pobranie plików SAP (ręcznie z SharePoint lub automatycznie)
 ↓
-Import słowników (nowa wersja tylko przy zmianie treści)
+Przypięcie wersji słowników i przypisań (z bazy słowników)
 ↓
 Walidacja wszystkich importów
 ↓
@@ -264,7 +267,7 @@ Generowanie EV (+ plik dla Cobra w projektach SAC)
 
 | Warstwa | Zawartość |
 |---|---|
-| Data Collection | SAP CES (CJI3, ZRD_KKAJ, Net Inv), dane produkcyjne P1S (np. `PZLPROD.LOG.vAHDD`), eksporty Cobra, słowniki Excel, pliki CAM, stawki wydziałów |
+| Data Collection | SAP CES (CJI3, ZRD_KKAJ, Net Inv), dane produkcyjne P1S (np. `PZLPROD.LOG.vAHDD`), eksporty Cobra, pliki CAM; słowniki i przypisania – baza słowników (SQLite) |
 | Landing Zone | kopie oryginalnych plików (Excel, CSV, TXT) na dysku sieciowym, bez zmian; w bazie ścieżka i hash SHA-256 |
 | Historical Repository | wszystkie importy, wersje słowników i snapshoty w bazie MS SQL (m.in. ImportBatch, SourceFile, SourceSystem) |
 | Business Layer | widoki SQL, np. `vw_actual_cost`, `vw_budget`, `vw_etc`, `vw_ev`, `vw_cpi`, `vw_spi`, `vw_eac`, `vw_tcpi` |
@@ -278,7 +281,7 @@ Generowanie EV (+ plik dla Cobra w projektach SAC)
 
 - orkiestrację przebiegów,
 - odczyt i kopiowanie plików (Excel, CSV, TXT),
-- walidację struktury plików i słowników,
+- walidację plików i danych wprowadzanych w interfejsie,
 - ładowanie danych do bazy,
 - generowanie plików Excel (dla finansów, dla CAM, raporty).
 
@@ -290,10 +293,14 @@ Generowanie EV (+ plik dla Cobra w projektach SAC)
 - wersjonowanie słowników i historię zmian,
 - stan przebiegów i dziennik zdarzeń.
 
-**Excel** odpowiada za:
+**SQLite (dysk sieciowy)** odpowiada za:
 
-- utrzymanie słowników (źródło prawdy),
-- prezentację wyników i raport końcowy,
+- słowniki, przypisania i konfigurację (edycja w interfejsie aplikacji, historia zmian).
+
+**Excel** odpowiada wyłącznie za **wymianę plików** z ludźmi i systemami:
+
+- raporty RABIT (wejście),
+- pliki dla finansów, pliki dla CAM i raport końcowy (wyjście),
 - pracę CAM (uzupełnianie zaawansowania w plikach).
 
 Środowiska: developer pracuje na **TEST**; wdrożenia na **PROD** wykonuje administrator.
@@ -301,148 +308,43 @@ Logowanie do bazy przez konto AD (Windows Authentication).
 
 ---
 
-# Słowniki biznesowe
+# Słowniki i przypisania
 
 ## Cel
 
-Słowniki biznesowe są kluczowym elementem procesu EV i zawierają wiedzę biznesową niezbędną
-do przekształcania danych źródłowych w dane raportowe. Słowniki są utrzymywane w plikach Excel
-i importowane do bazy danych przy każdym przebiegu (nowa wersja powstaje tylko przy zmianie treści).
-
-Model:
-
-```
-Excel (Master)
-↓
-Import w przebiegu (kopia pliku + hash)
-↓
-Walidacja
-↓
-SQL Dictionary Tables (wersje + historia)
-↓
-Business Views
-↓
-EV Reports
-```
-
----
+Słowniki i przypisania zawierają wiedzę biznesową potrzebną do przekształcenia danych źródłowych
+w dane raportowe: powiązanie CES↔P1S, przypisanie do WP i CAM, harmonogramy, budżety, stawki.
 
 ## Zasada przechowywania
 
-Excel jest źródłem prawdy (Source of Truth).
+- **Źródłem prawdy jest baza słowników PZL-EV** – lekka baza SQLite w repozytorium PZL-EV na dysku
+  sieciowym (`docs/mapowanie-ces-p1s.md`, M1, M13).
+- Edycja wyłącznie w **interfejsie aplikacji** (dodawanie, zmiana, dezaktywacja, drzewo, wyszukiwanie).
+  Excel nie jest źródłem słowników; eksport do Excela – tylko do podglądu.
+- Każda zmiana zapisuje: kto, kiedy, poprzednią i nową wartość, okres obowiązywania
+  (`ValidFrom` / `ValidTo`). Zmiana obowiązującej wartości = zamknięcie okresu starej i nowy wpis.
+- Przebieg przypina stan słowników i przypisań, na którym liczył – każdy raport EV można odtworzyć.
+- Dane importów (miliony wierszy) są w MS SQL, nie w bazie słowników.
 
-> ⚠ Zmienione dla przypisań: mapowanie CES↔P1S, WP, CAM, harmonogram, budżet i konfiguracja źródeł
-> projektów są w narzędziu CRUD + drzewo (SQLite na dysku sieciowym) – `docs/mapowanie-ces-p1s.md`, M1, M8, M10.
-> Które słowniki zostają w Excelu – pytanie P12.
+## Zawartość bazy słowników
 
-SQL przechowuje:
+| Obszar | Zawartość |
+|---|---|
+| Mapowanie CES ↔ P1S | reguły projektu CES → `PROJORG` P1S, wyjątki WBS, historia (`docs/mapowanie-ces-p1s.md`) |
+| Mapa przypisań zakresu | zakres = program; przypisanie elementów P1S do WP, CAM, Cost Category; harmonogram i budżet |
+| Finansowe | stawki wydziałów (`Department | Year | Labor Rate | Overhead`), stawki CAS, kursy walut |
+| Kalendarz | okresy rozliczeniowe |
+| Konfiguracja importu | prefiksy plików RABIT → źródło; źródła wymagane przez projekt |
 
-- aktualną wersję słownika,
-- historię zmian (wszystkie wersje),
-- datę importu,
-- wersję słownika,
-- numer przebiegu, w którym wersja powstała,
-- użytkownika, który ją zaimportował.
+Struktury źródłowe (tylko odczyt): WBS CES z importów RABIT (`Project Definition`, `WBS Element`),
+WBS P1S z `PZLPROD.LOG.WBS` i `LOG.WBS_DIC`.
 
-Aktualizacja słownika odbywa się wyłącznie poprzez modyfikację pliku Excel.
-Każdy przebieg zapamiętuje („przypina”) wersje słowników, na których liczył – dzięki temu
-każdy raport EV można odtworzyć.
+## Walidacja
 
----
-
-## Rodzaje słowników
-
-- **globalne** – wspólne dla wszystkich zakresów (np. stawki wydziałów, kalendarz okresów, kursy USD/PLN),
-- **zakresowe** – należą do jednego zakresu (np. struktura projektowa, harmonogram i budżet, stawki CAS).
-
----
-
-## Przykładowe słowniki
-
-### Struktura projektowa (zakresowy)
-
-> ⚠ Do uzgodnienia: powiązanie CES ↔ P1S może zostać przeniesione do warstwy mapowania w bazie
-> (`docs/mapowanie-ces-p1s.md`); kolumna „CAS WBS” oznacza WBS z systemu CES.
-
-`P1S WBS | CAS WBS | Project Definition | Business Area | Program | Project | Customer | Cost Category | CAM | WP (yes/no)`
-
-- łączy element WBS z **P1S** (system produkcyjny – zaawansowanie) z elementem WBS z **CES**
-  (system finansowy – koszty); relacja nie jest stała: każdy wiersz to jedna para,
-  ten sam element może wystąpić w kilku wierszach, jedna strona pary może być pusta,
-- **wyznacza zakres** – projekty i elementy zakresu to wiersze tego słownika,
-- kolumna **CAM** wyznacza listę CAM i podział plików do uzupełnienia,
-- nowe elementy, które pojawią się w danych SAP po pobraniu, aplikacja wskazuje do dopisania.
-
-### Finansowe (globalny)
-
-`Department | Year | Labor Rate | Overhead`
-
-### Harmonogramy i budżet (zakresowy)
-
-`P1S WBS | CAS WBS | Project Definition | Budżet godzinowy | Budżet materiałowy | Bazowa planowana data rozpoczęcia | Bazowa planowana data zakończenia | Planowana data rozpoczęcia | Planowana data zakończenia | Rzeczywista data rozpoczęcia | Rzeczywista data zakończenia`
-
----
-
-## Minimalna struktura słownika
-
-Każdy słownik oprócz kolumn biznesowych zawiera:
-
-- ValidFrom,
-- ValidTo,
-- Owner,
-- Version,
-- LastUpdate,
-- Comments.
-
-Zmiana obowiązującej wartości odbywa się przez zamknięcie wiersza (ValidTo) i dodanie nowego,
-bez usuwania historii.
-
----
-
-## Właściciel słownika
-
-- słowniki zakresowe – osoba z finansów prowadząca zakres,
-- słowniki globalne – wskazana osoba z finansów.
-
-Dla każdego słownika określa się także lokalizację pliku i częstotliwość aktualizacji.
-Nie ma podziału uprawnień: każda osoba z finansów może wykonać import pod nieobecność innej;
-każda operacja jest zapisywana z nazwą użytkownika.
-
----
-
-## Walidacja słowników
-
-Każdy import słownika jest walidowany przed utworzeniem nowej wersji:
-
-- plik i arkusz (istnieje, da się odczytać),
-- struktura (wymagane kolumny, nagłówki),
-- typy danych (daty, liczby, klucze WBS zapisane jako tekst),
-- czystość danych (spacje, różne zapisy tej samej wartości),
-- klucze i okresy ważności (duplikaty, nakładające się okresy),
-- reguły biznesowe (np. WP = yes wymaga CAM),
-- spójność między słownikami,
-- wersjonowanie (zmiana treści wymaga podbicia wersji, wiersze się zamyka, a nie usuwa).
-
-Błąd blokujący odrzuca nową wersję słownika – obowiązuje ostatnia poprawna.
-Szczegóły: `docs/funkcjonalnosc.md`.
-
----
-
-## Historia zmian
-
-Każdy import słownika umożliwia:
-
-- odtworzenie wcześniejszej wersji,
-- porównanie zmian między wersjami,
-- identyfikację osoby wprowadzającej zmianę.
-
----
-
-## Założenie projektowe
-
-Nie planuje się budowy dedykowanego formularza do utrzymania słowników. Pliki Excel pozostają
-podstawowym narzędziem zarządzania słownikami, natomiast baza danych pełni rolę centralnego
-repozytorium przetwarzania oraz historii zmian.
+Walidacja odbywa się **przy zapisie w interfejsie** (a nie przy imporcie pliku): wymagane pola, typy,
+unikalność, nakładające się okresy ważności, odwołania (np. CAM, WP, element P1S istnieje), reguły biznesowe
+(np. WP = yes wymaga CAM, data startu ≤ data końca), blokada relacji CES → wiele P1S. Szczegóły:
+`docs/funkcjonalnosc.md`, rozdz. 6.
 
 ---
 
@@ -454,7 +356,7 @@ repozytorium przetwarzania oraz historii zmian.
 | 2 | Które dane pochodzą z Cobra? | otwarte |
 | 3 | Skąd pochodzi ETC? | otwarte |
 | 4 | Jak liczony jest progress w poszczególnych programach? | częściowo: tydzień – produkcja + uzupełnienia; zamknięcie – CAM |
-| 5 | Jakie słowniki istnieją obecnie? | otwarte (w tym `PZLPROD.LOG`: `Stanowiska`, `LearningCurve`, `PeriodDates`) |
+| 5 | Jakie słowniki istnieją obecnie? | częściowo: przenoszone do bazy słowników; w `PZLPROD.LOG`: `WBS`, `WBS_DIC` (źródło P1S), `Stanowiska`, `LearningCurve`, `PeriodDates` |
 | 6 | Jakie stawki CAS są wykorzystywane? | otwarte |
 | 7 | Które pliki są krytyczne dla procesu? | otwarte |
 | 8 | Jakie raporty są generowane dla kierownictwa? | otwarte |
