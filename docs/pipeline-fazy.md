@@ -89,7 +89,7 @@ flowchart TD
 |---|---|---|---|---|
 | G1 Pobranie RABIT (F05a) | globalna | dowolna osoba z finansów / harmonogram | co najmniej tak często jak RABIT | **działa** |
 | G2 Import (F05a) | globalna | j.w. | po G1 (razem) | **działa** |
-| G3 Mapowanie CES↔P1S (F21–F24) | globalna | automatycznie po G2, decyzje – finanse (UI) | po G2 | koncepcja |
+| G3 Mapowanie CES↔P1S (F21–F24) | globalna | automatycznie po G2, mapowanie jest globalne więc automat podbiera ustawienia, decyzje zmiany mapowania na poziomie projektu – finanse (UI) | po G2 | koncepcja |
 | G4 Edycja słowników i przypisań (F03, F25) | globalna | dowolna osoba z finansów (UI) | w dowolnym momencie | koncepcja |
 | P0–P10 | projekt | osoba prowadząca projekt | tydzień / zamknięcie | prototyp |
 
@@ -124,10 +124,10 @@ czego dotyczy plik – o tym decyduje dopiero G2 na podstawie definicji plików 
 |---|---|
 | **Cel** | Nie zgubić żadnej wersji raportu zrzuconej przez RABIT i mieć ją na dysku firmy. |
 | **Wejście** | Folder RABIT na SharePoint czytany przez **WebDAV** (usługa WebClient Windows, konto użytkownika; D23; lokalizacja – `docs/architektura.md`, rozdz. 7.3). |
-| **Jak pracuje** | Porównuje pliki źródłowe z ostatnio pobranymi (rozmiar, data modyfikacji); kopiuje tylko nowe i zmienione. Nie interpretuje treści. |
+| **Jak pracuje** | Porównuje pliki źródłowe z ostatnio pobranymi (rozmiar, data modyfikacji) - generowanie hash; kopiuje tylko nowe i zmienione. Raporty z Rabit powinny być z jednego okresu. Nie interpretuje treści. |
 | **Nazwy plików** | Proste, bez projektu, dat i wersji (np. `ACTUALS_PAF_01.xlsx`); o źródle decyduje prefiks. G1 zachowuje nazwę z RABIT. |
 | **Ryzyko** | RABIT nadpisuje plik – jeśli między dwoma uruchomieniami RABIT nie było pobrania i importu, poprzednia wersja przepada. Dlatego G1 i G2 uruchamia się razem i co najmniej tak często jak RABIT (np. harmonogram zadań Windows); historia wersji jest w bazie (hash), nie w nazwach plików. |
-| **Kontrole** | Dostępność WebDAV; limit usługi WebClient – domyślnie ok. 50 MB na plik (`FileSizeLimitInBytes`, zmienia administrator); większy plik pobiera się ręcznie w przeglądarce do `Do_importu` i import traktuje go tak samo (D22). |
+| **Kontrole** | Dostępność WebDAV; limit usługi WebClient – domyślnie ok. 90 MB na plik (`FileSizeLimitInBytes`, zmienia administrator); większy plik pobiera się ręcznie w przeglądarce do `Do_importu` i import traktuje go tak samo (D22). |
 | **Efekt** | Aktualna kopia plików RABIT w `00_Global\RABIT\Do_importu`. |
 | **Przekazanie** | Folder `Do_importu` jest wejściem G2. |
 
@@ -166,7 +166,7 @@ czego dotyczy plik – o tym decyduje dopiero G2 na podstawie definicji plików 
 
 | | |
 |---|---|
-| **Cel** | Utrzymywać słowniki globalne i słowniki projektów (stawki wydziałów, kalendarz okresów, kursy USD/PLN, stawki CAS, WP i CAM, harmonogram i budżet, Cost Category globalny i zmiany w projekcie (M26), korekty mapowania CES↔P1S (M18), **konfiguracja prefiksów RABIT** (~~i źródeł projektów~~ – usunięte, M21)). |
+| **Cel** | Utrzymywać słowniki globalne i słowniki projektów (stawki wydziałów, kalendarz okresów, kursy USD/PLN, stawki CAS, WP i CAM, harmonogram i budżet, Cost Category, korekty mapowania CES↔P1S (M18), **konfiguracja prefiksów RABIT** . |
 | **Wejście** | Zmiany wprowadzane w aplikacji (CRUD + drzewo) albo wczytane z Excela z tą samą walidacją i podglądem różnic (słowniki projektu, Cost Category – M24, M26). Źródłem prawdy jest baza (M13). |
 | **Jak pracuje** | Interfejs (CRUD + drzewo) → walidacja przy zapisie (rozdz. 5 specyfikacji) → nowy wpis z historią SCD2 (`ValidFrom`/`ValidTo`, kto, kiedy, poprzednia i nowa wartość) → baza słowników SQLite (`00_Global\Baza\`), krótka transakcja. |
 | **Kontrole** | Błąd blokujący nie pozwala zapisać; jednocześnie zapisuje jedna osoba (SQLite na dysku sieciowym). |
