@@ -241,7 +241,7 @@ Szczegóły: `docs/architektura.md` i `docs/funkcjonalnosc.md`.
 - **Praca w projektach** – projekt (dawniej „zakres”, M22) obejmuje węzły drzewa P1S wybrane w kreatorze
   (grupy kategorii i pojedyncze `PROJORG`, M23). Każdy przebieg
   dotyczy jednego projektu, dzięki czemu np. F-16 nie czeka na pliki Cobra dla projektów SAC.
-- **Przebieg tygodniowy** (poniedziałek) daje wstępne EV; **zamknięcie miesiąca** daje EV formalne,
+- **Przebieg tygodniowy** (w dowolny dzień tygodnia) daje wstępne EV; **zamknięcie miesiąca** daje EV formalne,
   oparte wyłącznie na zaawansowaniu od CAM.
 
 ## Przebieg (pipeline) projektu

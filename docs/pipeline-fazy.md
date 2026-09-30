@@ -177,7 +177,7 @@ na ekranie Przebieg (oś etapów, panel wybranego etapu, przypięte słowniki, d
 | | |
 |---|---|
 | **Cel** | Założyć przebieg projektu za okres i zapisać, na czym startuje. |
-| **Jak pracuje** | Wybór rodzaju: **tygodniowy** (bieżący tydzień – poniedziałek lub każdy inny dzień w tygodniu) albo **zamknięcie miesiąca**. Podgląd stanu słowników, który zostanie przypięty (ostatnie zmiany: kto, kiedy). |
+| **Jak pracuje** | Wybór rodzaju: **tygodniowy** (bieżący tydzień – w dowolny dzień tygodnia, D7) albo **zamknięcie miesiąca**. Podgląd stanu słowników, który zostanie przypięty (ostatnie zmiany: kto, kiedy). |
 | **Bramka wejścia** | brak innego przebiegu tego projektu dla tego tygodnia / zamknięcia (**blokuje**); zgodna wersja aplikacji i schematu bazy (**blokuje**); słowniki projektu kompletne – WP, CAM, harmonogram i budżet, w CAS stawki CAS (**blokuje**); tydzień: świeżość danych produkcyjnych (data odświeżenia `vAHDD`); zamknięcie: informacja, jeśli okres jeszcze trwa. |
 | **Efekt** | Przebieg `R-<Projekt>-<RRRR-MM>-T<tydzień>` / `R-<Projekt>-<RRRR-MM>-Z`, przypięcia i pierwsze zdarzenie w dzienniku. |
 | **Przekazanie** | P1. |
