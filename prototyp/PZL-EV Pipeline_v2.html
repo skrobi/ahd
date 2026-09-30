@@ -1,0 +1,1698 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>PZL-EV Pipeline</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Układ: narzędzie operacyjne – pasek środowiska u góry, nawigacja po lewej, obszar roboczy; przebieg = oś etapów + panel etapu + dziennik */
+:root{
+  --bg:#eef2f3; --surface:#ffffff; --surface-2:#e4eaec; --ink:#13212a; --muted:#566974; --line:#cfd9dd;
+  --accent:#0a6a76; --accent-ink:#ffffff; --accent-soft:#d5ecee;
+  --ok:#1d7648; --ok-soft:#dcefe4; --warn:#9a5c05; --warn-soft:#f6e8cf; --crit:#b0271f; --crit-soft:#f7dcd9;
+  --info:#2c5a98; --info-soft:#dde7f5; --stale:#6c618f; --stale-soft:#e7e3f2;
+  --shadow:0 1px 2px rgba(19,33,42,.06),0 4px 16px rgba(19,33,42,.06);
+  --f-body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-head:"IBM Plex Sans Condensed","IBM Plex Sans",system-ui,sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0d1418; --surface:#141e24; --surface-2:#1b272e; --ink:#e1e9ec; --muted:#8fa2ab; --line:#29373f;
+  --accent:#43b2bf; --accent-ink:#06181b; --accent-soft:#16333a;
+  --ok:#55c08a; --ok-soft:#15301f; --warn:#e2a54a; --warn-soft:#352711; --crit:#f07a70; --crit-soft:#3a1a18;
+  --info:#86aee8; --info-soft:#18263a; --stale:#aea3d6; --stale-soft:#262238;
+  --shadow:0 1px 2px rgba(0,0,0,.3),0 4px 16px rgba(0,0,0,.25); color-scheme:dark;}}
+:root[data-theme="dark"]{
+  --bg:#0d1418; --surface:#141e24; --surface-2:#1b272e; --ink:#e1e9ec; --muted:#8fa2ab; --line:#29373f;
+  --accent:#43b2bf; --accent-ink:#06181b; --accent-soft:#16333a;
+  --ok:#55c08a; --ok-soft:#15301f; --warn:#e2a54a; --warn-soft:#352711; --crit:#f07a70; --crit-soft:#3a1a18;
+  --info:#86aee8; --info-soft:#18263a; --stale:#aea3d6; --stale-soft:#262238;
+  --shadow:0 1px 2px rgba(0,0,0,.3),0 4px 16px rgba(0,0,0,.25); color-scheme:dark;}
+
+*{box-sizing:border-box}
+html,body{height:100%}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:14px;line-height:1.5}
+h1,h2,h3{font-family:var(--f-head);font-weight:600;margin:0;text-wrap:balance;letter-spacing:.005em}
+h1{font-size:1.6rem;line-height:1.2} h2{font-size:1.2rem} h3{font-size:1rem}
+p{margin:0}
+.mono{font-family:var(--f-mono);font-size:.86em}
+.muted{color:var(--muted)}
+.num{font-variant-numeric:tabular-nums}
+button{font:inherit;color:inherit}
+a{color:var(--accent)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* Shell */
+.top{display:flex;flex-wrap:wrap;align-items:center;gap:8px 16px;padding:10px 16px;background:var(--surface);border-bottom:1px solid var(--line);position:sticky;top:env(safe-area-inset-top,0px);z-index:20}
+.brand{display:flex;align-items:baseline;gap:10px}
+.brand b{font-family:var(--f-head);font-size:1.25rem;letter-spacing:.06em}
+.brand span{color:var(--muted);font-size:.85rem}
+.env{font-family:var(--f-mono);font-size:.75rem;padding:2px 8px;border-radius:4px;background:var(--warn-soft);color:var(--warn);font-weight:500;letter-spacing:.04em}
+.who{display:flex;align-items:center;gap:8px;font-size:.85rem}
+.who select{font:inherit;background:var(--surface-2);border:1px solid var(--line);border-radius:6px;padding:3px 6px;color:var(--ink)}
+.shell{display:grid;grid-template-columns:210px minmax(0,1fr);min-height:calc(100% - 52px)}
+.nav{border-right:1px solid var(--line);padding:16px 10px;display:flex;flex-direction:column;gap:2px;background:var(--surface)}
+.nav button{all:unset;cursor:pointer;padding:8px 12px;border-radius:6px;display:flex;justify-content:space-between;align-items:center;gap:8px;color:var(--muted);font-weight:500}
+.nav button:hover{background:var(--surface-2);color:var(--ink)}
+.nav button[aria-current="true"]{background:var(--accent-soft);color:var(--ink)}
+.nav button:focus-visible{outline:2px solid var(--accent)}
+.nav .sep{height:1px;background:var(--line);margin:10px 4px}
+.nav .foot{margin-top:auto;font-size:.75rem;color:var(--muted);padding:8px 12px;display:grid;gap:4px}
+.count{font-family:var(--f-mono);font-size:.72rem;background:var(--surface-2);border-radius:10px;padding:0 7px;color:var(--muted)}
+main{padding-block:24px 48px;padding-inline:clamp(16px,3vw,32px);min-width:0;display:flex;flex-direction:column;gap:20px}
+
+/* Blocks */
+.head{display:flex;flex-wrap:wrap;align-items:flex-end;gap:12px 20px;justify-content:space-between}
+.head .sub{color:var(--muted);margin-top:4px}
+.eyebrow{font-size:.72rem;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);font-weight:600}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:18px;display:flex;flex-direction:column;gap:14px;min-width:0}
+.panel.flat{background:transparent;border-style:dashed}
+.grid{display:grid;gap:16px}
+.g2{grid-template-columns:repeat(auto-fit,minmax(min(100%,340px),1fr))}
+.g3{grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr))}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.row.between{justify-content:space-between}
+.stack{display:flex;flex-direction:column;gap:8px}
+.kv{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:4px 14px;font-size:.9rem}
+.kv dt{color:var(--muted)} .kv dd{margin:0;min-width:0;overflow-wrap:anywhere}
+
+.btn{cursor:pointer;border:1px solid var(--line);background:var(--surface);border-radius:6px;padding:7px 14px;font-weight:500;display:inline-flex;align-items:center;gap:6px;min-height:36px}
+.btn:hover{background:var(--surface-2)}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.btn.primary:hover{filter:brightness(1.08)}
+.btn.danger{color:var(--crit);border-color:var(--crit)}
+.btn.small{padding:3px 10px;min-height:28px;font-size:.85rem}
+.btn:disabled{opacity:.45;cursor:not-allowed;filter:none}
+
+.pill{display:inline-flex;align-items:center;gap:5px;font-size:.75rem;font-weight:600;padding:2px 9px;border-radius:999px;white-space:nowrap;background:var(--surface-2);color:var(--muted)}
+.pill::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
+.pill.nodot::before{display:none}
+.s-ok{background:var(--ok-soft);color:var(--ok)} .s-warn,.s-action{background:var(--warn-soft);color:var(--warn)}
+.s-crit,.s-error{background:var(--crit-soft);color:var(--crit)} .s-info,.s-running{background:var(--info-soft);color:var(--info)}
+.s-stale{background:var(--stale-soft);color:var(--stale)} .s-ready{background:var(--accent-soft);color:var(--accent)}
+.s-done{background:var(--ok-soft);color:var(--ok)} .s-todo{background:var(--surface-2);color:var(--muted)}
+.tag{font-family:var(--f-mono);font-size:.72rem;padding:1px 6px;border-radius:4px;border:1px solid var(--line);color:var(--muted);white-space:nowrap}
+
+.tbl-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:6px}
+table{border-collapse:collapse;width:100%;font-size:.88rem}
+th{font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600;text-align:left;background:var(--surface-2)}
+th,td{padding:7px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+tr:last-child td{border-bottom:0}
+td.r,th.r{text-align:right;font-variant-numeric:tabular-nums}
+tr.click{cursor:pointer} tr.click:hover td{background:var(--surface-2)}
+
+.note{border-left:3px solid var(--line);padding:8px 12px;background:var(--surface-2);border-radius:0 6px 6px 0;font-size:.9rem}
+.note.warn{border-color:var(--warn);background:var(--warn-soft)}
+.note.crit{border-color:var(--crit);background:var(--crit-soft)}
+.note.ok{border-color:var(--ok);background:var(--ok-soft)}
+.note.info{border-color:var(--info);background:var(--info-soft)}
+.note.stale{border-color:var(--stale);background:var(--stale-soft)}
+
+.checks{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.checks li{display:grid;grid-template-columns:20px minmax(0,1fr);gap:8px;align-items:start}
+.ic{width:18px;height:18px;border-radius:50%;display:grid;place-items:center;font-size:.7rem;font-weight:700;margin-top:2px}
+.ic.ok{background:var(--ok-soft);color:var(--ok)} .ic.warn{background:var(--warn-soft);color:var(--warn)} .ic.crit{background:var(--crit-soft);color:var(--crit)} .ic.todo{background:var(--surface-2);color:var(--muted)}
+
+.tree{font-family:var(--f-mono);font-size:.8rem;line-height:1.7;white-space:pre;overflow-x:auto;background:var(--surface-2);border-radius:6px;padding:12px 14px;margin:0}
+
+/* karty (przebieg) */
+.zcard{cursor:pointer;text-align:left;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:16px;display:flex;flex-direction:column;gap:12px;min-width:0}
+.zcard:hover{border-color:var(--accent)}
+.zcard .code{font-family:var(--f-head);font-size:1.35rem;font-weight:600}
+.dots{display:flex;gap:4px;flex-wrap:wrap}
+.dot{width:18px;height:6px;border-radius:3px;background:var(--surface-2)}
+.dot.done{background:var(--ok)} .dot.action,.dot.ready{background:var(--warn)} .dot.error{background:var(--crit)} .dot.running{background:var(--info)} .dot.stale{background:var(--stale)}
+
+/* Run view */
+.run-layout{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:20px;align-items:start}
+.stepper{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px}
+.step{all:unset;cursor:pointer;flex:1 0 118px;border:1px solid var(--line);border-radius:6px;padding:8px 10px;display:flex;flex-direction:column;gap:6px;background:var(--surface);min-width:118px}
+.step:focus-visible{outline:2px solid var(--accent)}
+.step .n{font-family:var(--f-mono);font-size:.72rem;color:var(--muted)}
+.step .t{font-weight:600;font-size:.84rem;line-height:1.25}
+.step .bar{height:4px;border-radius:2px;background:var(--surface-2)}
+.step[aria-current="true"]{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+.step.done .bar{background:var(--ok)} .step.action .bar,.step.ready .bar{background:var(--warn)} .step.error .bar{background:var(--crit)}
+.step.running .bar{background:var(--info)} .step.stale .bar{background:var(--stale)}
+.log{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px;font-size:.84rem;max-height:560px;overflow:auto}
+.log li{display:grid;gap:2px;border-left:2px solid var(--line);padding-left:10px}
+.log .t{font-family:var(--f-mono);font-size:.72rem;color:var(--muted)}
+.progress{height:6px;border-radius:3px;background:var(--surface-2);overflow:hidden}
+.progress i{display:block;height:100%;width:40%;background:var(--info);border-radius:3px;animation:slide 1.1s ease-in-out infinite}
+@keyframes slide{0%{transform:translateX(-100%)}100%{transform:translateX(260%)}}
+@media (prefers-reduced-motion: reduce){.progress i{animation:none;width:100%;opacity:.6}}
+.prov{display:flex;height:12px;border-radius:6px;overflow:hidden;background:var(--surface-2)}
+.prov span{display:block;height:100%}
+.legend{display:flex;flex-wrap:wrap;gap:14px;font-size:.82rem}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+
+/* Forms / wizard */
+.field{display:flex;flex-direction:column;gap:5px;min-width:0}
+.field label{font-weight:600;font-size:.85rem}
+.field .hint{font-size:.8rem;color:var(--muted)}
+input[type=text],textarea,select{font:inherit;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:7px 10px;width:100%}
+textarea{min-height:70px;resize:vertical}
+.choice{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(min(100%,210px),1fr))}
+.opt{all:unset;cursor:pointer;border:1px solid var(--line);border-radius:8px;padding:12px 14px;display:flex;flex-direction:column;gap:4px;background:var(--surface)}
+.opt:focus-visible{outline:2px solid var(--accent)}
+.opt[aria-pressed="true"]{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent);background:var(--accent-soft)}
+.opt b{font-family:var(--f-head);font-size:1rem}
+.opt span{font-size:.82rem;color:var(--muted)}
+.wsteps{display:flex;gap:4px;flex-wrap:wrap;list-style:none;padding:0;margin:0}
+.wsteps li{font-size:.8rem;padding:4px 10px;border-radius:999px;background:var(--surface-2);color:var(--muted)}
+.wsteps li.on{background:var(--accent);color:var(--accent-ink)}
+.wsteps li.past{background:var(--accent-soft);color:var(--ink)}
+.chk{display:flex;gap:10px;align-items:flex-start;padding:8px 10px;border:1px solid var(--line);border-radius:6px}
+.chk input{margin-top:4px}
+.chk.dis{opacity:.55}
+
+/* Overlay */
+.overlay{position:fixed;inset:0;background:rgba(10,20,25,.45);display:grid;place-items:center;padding:16px;z-index:50}
+.modal{background:var(--surface);border-radius:10px;border:1px solid var(--line);box-shadow:var(--shadow);width:min(640px,100%);max-height:90vh;overflow:auto;padding:22px;display:flex;flex-direction:column;gap:16px}
+.toast{position:fixed;right:16px;bottom:calc(16px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:6px;box-shadow:var(--shadow);z-index:60;max-width:min(420px,calc(100% - 32px))}
+.banner{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;justify-content:space-between;padding:12px 14px;border-radius:8px;border:1px solid var(--stale);background:var(--stale-soft)}
+.banner.lock{border-color:var(--info);background:var(--info-soft)}
+
+@media (max-width:900px){
+  .run-layout{grid-template-columns:minmax(0,1fr)}
+}
+@media (max-width:760px){
+  .shell{grid-template-columns:minmax(0,1fr)}
+  .nav{flex-direction:row;overflow-x:auto;border-right:0;border-bottom:1px solid var(--line);padding:8px 16px}
+  .nav .sep,.nav .foot{display:none}
+  .nav button{white-space:nowrap}
+  .nav .grp,.nav .sub{display:none}
+  .tabs{order:3;flex-basis:100%}
+  .brand span{display:none}
+}
+/* Drzewa CES | P1S, edytor słowników */
+.trees{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,400px),1fr));gap:16px}
+.mt{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:1px;font-size:.86rem}
+.mt.scroll{max-height:520px;overflow:auto}
+.trow{display:flex;align-items:flex-start;gap:2px;min-width:0}
+.nd{all:unset;box-sizing:border-box;cursor:pointer;display:flex;gap:4px 8px;align-items:center;flex-wrap:wrap;flex:1;min-width:0;padding:5px 8px;border-radius:5px}
+.nd:hover{background:var(--surface-2)}
+.nd[aria-pressed="true"]{background:var(--accent-soft);box-shadow:inset 0 0 0 1px var(--accent)}
+.nd:focus-visible,.tg:focus-visible{outline:2px solid var(--accent)}
+.nd .c{font-family:var(--f-mono);font-size:.8rem}
+.nd .x{color:var(--muted);font-size:.78rem}
+.nd .amt{margin-left:auto;font-variant-numeric:tabular-nums;color:var(--muted);font-size:.8rem}
+.tg{all:unset;cursor:pointer;width:22px;min-height:28px;display:grid;place-items:center;color:var(--muted);font-family:var(--f-mono);flex:none}
+.tg.blank{cursor:default}
+.selbar{position:sticky;top:calc(env(safe-area-inset-top,0px) + 58px);z-index:5;box-shadow:var(--shadow)}
+.selbar .slot{display:inline-flex;gap:6px;align-items:center;padding:3px 10px;border:1px dashed var(--line);border-radius:6px;font-family:var(--f-mono);font-size:.82rem;min-height:30px}
+.selbar .slot.on{border-style:solid;border-color:var(--accent);background:var(--accent-soft)}
+tr.closed td{color:var(--muted)}
+tr.closed td.k{text-decoration:line-through}
+.form-grid{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(min(100%,170px),1fr))}
+.form-grid input,.form-grid select{min-height:36px}
+.inline{display:inline-flex;gap:6px;align-items:center;font-size:.88rem}
+.nav .grp{font-size:.7rem;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);font-weight:600;padding:2px 12px 4px}
+.run-layout.full{grid-template-columns:minmax(0,1fr)}
+.dnd{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,380px),1fr));gap:16px;align-items:start}
+.dnd .panel{padding:14px;gap:10px}
+.grip{color:var(--muted);font-size:.7rem;letter-spacing:-2px;cursor:grab}
+.nd[draggable="true"]{cursor:grab;-webkit-user-drag:element;user-select:none}
+.lk{font-family:var(--f-mono);font-size:.74rem;padding:1px 6px;border-radius:4px;background:var(--accent-soft);color:var(--accent);white-space:nowrap}
+.nd.linked{box-shadow:inset 3px 0 0 var(--accent)}
+.nd.hl{background:var(--warn-soft);box-shadow:inset 0 0 0 2px var(--warn)}
+body.dragging [data-drop]{outline:1px dashed var(--line)}
+[data-drop].over{background:var(--ok-soft);outline:2px solid var(--ok)}
+[data-drop].over.bad{background:var(--crit-soft);outline:2px solid var(--crit)}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.seg button{all:unset;cursor:pointer;padding:4px 10px;font-size:.8rem;color:var(--muted)}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}
+.seg button:focus-visible{outline:2px solid var(--accent)}
+details.cat{border-top:1px solid var(--line);padding-top:10px}
+details.cat>summary{cursor:pointer;font-weight:600;margin-bottom:10px}
+details.cat .mt{max-height:420px;overflow:auto}
+.x-btn{all:unset;cursor:pointer;margin-left:4px;color:var(--crit);font-weight:700}
+/* sekcje główne */
+.tabs{display:flex;gap:4px;margin-right:auto}
+.tabs button{all:unset;cursor:pointer;padding:6px 14px;border-radius:6px;font-weight:600;color:var(--muted)}
+.tabs button:hover{background:var(--surface-2);color:var(--ink)}
+.tabs button[aria-current="true"]{background:var(--accent);color:var(--accent-ink)}
+.tabs button:focus-visible{outline:2px solid var(--accent)}
+.shell.noside{grid-template-columns:minmax(0,1fr)} .shell.noside .nav{display:none}
+.nav .sub{padding:5px 12px 5px 24px;font-size:.88rem}
+.nav .add{color:var(--accent)}
+.nav .pill{font-size:.68rem;padding:1px 7px}
+.nav .grp.row{padding-right:6px}
+.mini{all:unset;cursor:pointer;width:22px;height:22px;border-radius:4px;display:grid;place-items:center;background:var(--accent);color:var(--accent-ink);font-weight:700}
+.count.crit{background:var(--crit-soft);color:var(--crit)}
+th .sort{all:unset;cursor:pointer;font:inherit;letter-spacing:inherit;text-transform:inherit}
+th .sort:focus-visible{outline:2px solid var(--accent)}
+.facts{display:flex;flex-wrap:wrap;gap:6px 20px;font-size:.9rem;padding:10px 14px;background:var(--surface);border:1px solid var(--line);border-radius:8px}
+.rcard{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:14px 16px;display:flex;flex-direction:column;gap:10px}
+.chips{display:flex;flex-wrap:wrap;gap:4px}
+.chip{font-size:.74rem;padding:2px 8px;border-radius:4px;background:var(--surface-2);color:var(--muted);white-space:nowrap}
+details.ready summary,details.panel>summary{cursor:pointer}
+details.ready .checks{margin-top:8px}
+/* mapowanie */
+.filters{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center}
+.filters select{width:auto}
+.map3{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,.85fr) minmax(0,1.15fr);gap:14px;align-items:start}
+.map3 .panel{padding:12px;gap:8px}
+@media (max-width:1100px){.map3{grid-template-columns:minmax(0,1fr)}}
+.dropzone{border:2px dashed var(--line);border-radius:8px;padding:12px;text-align:center;color:var(--muted);font-size:.85rem}
+body.dragging .dropzone{border-color:var(--crit);color:var(--crit)}
+.dropzone.over{background:var(--crit-soft)!important;outline:none!important;border-color:var(--crit)}
+.work{border-color:var(--accent);box-shadow:var(--shadow)}
+.work.pend{border-width:2px}
+.flow{display:flex;flex-wrap:wrap;align-items:stretch;gap:10px}
+.flow .box{flex:1 1 200px;display:flex;flex-direction:column;gap:2px;padding:10px 12px;border:1px solid var(--line);border-radius:6px;background:var(--surface-2)}
+.flow .arr{align-self:center;font-size:1.4rem;color:var(--accent)}
+.steps{margin:0;padding-left:20px;display:grid;gap:4px}
+.prop{display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px;padding:8px 10px;border:1px solid var(--line);border-radius:6px;font-size:.86rem}
+.zl{padding:5px 4px;font-size:.88rem}
+.seg button{display:inline-flex;gap:4px;align-items:center}
+.seg button .pill{font-size:.68rem;padding:0 6px}
+.kt{font-size:.72rem;padding:1px 7px;border-radius:4px;background:var(--stale-soft);color:var(--stale);white-space:nowrap}
+.kpath{font-size:.88rem}
+.grpbox{display:flex;flex-direction:column;gap:6px;padding:10px 12px;border:1px dashed var(--stale);border-radius:6px;background:var(--stale-soft)}
+.ktree tr.l1 td{background:var(--surface-2)} .ktree tr.l2 td:first-child{padding-left:24px} .ktree tr.l3 td:first-child{padding-left:44px}
+.ktree tr.un td{color:var(--crit)}
+.bar{display:block;height:8px;border-radius:4px;background:var(--surface-2);overflow:hidden} .bar i{display:block;height:100%;background:var(--stale);border-radius:4px}
+.small{font-size:.85rem}
+</style>
+
+<div class="top">
+  <div class="brand"><b>PZL-EV</b><span>Pipeline</span></div>
+  <nav class="tabs" id="tabs" aria-label="Sekcje"></nav>
+  <span class="env" title="Profil konfiguracji aplikacji">TEST · PZL_EV_TEST</span>
+  <div class="who"><span class="muted">PZL\a.wisniewska</span></div>
+</div>
+<div class="shell">
+  <nav class="nav" id="nav" aria-label="Nawigacja"></nav>
+  <main id="main"></main>
+</div>
+<div id="overlay"></div>
+<div id="toast" class="toast" hidden></div>
+
+<script>
+/* ============================================================
+   PZL-EV – prototyp funkcjonalny (wersja zgodna z dokumentacją: D25–D27, M1–M15).
+   Wszystkie dane są PRZYKŁADOWE. Stan demo w localStorage tylko dla wygody;
+   docelowo: dane i przebiegi w MS SQL, słowniki / przypisania / konfiguracja w SQLite.
+   ============================================================ */
+const ROOT = '\\\\pzlfs01\\PZL-EV';
+const RABIT_UNC = '\\\\lmsp4-intl.external.lmco.com@SSL\\DavWWWRoot\\sites\\RabbitReporting\\Shared Documents\\E456659';
+const DB_PATH = '00_Global\\Baza\\pzl_ev_slowniki.sqlite';
+const ME = 'Anna Wiśniewska', ME_S = 'A. Wiśniewska';
+const APP_VER = '0.4.0', SCHEMA_VER = 13;
+const KEY = 'pzl-ev-prototyp-v5';
+const TODAY = '2026-09-29', YESTERDAY = '2026-09-28';
+
+const TYPES = {
+  SAC:{label:'Sikorsky (SAC)', desc:'EV prowadzi Sikorsky. Dodatkowy etap: plik dla Cobra, koszt pracy w USD.'},
+  CAS:{label:'CAS Compliance', desc:'Koszty przeliczane stawkami CAS. Wymagany słownik stawek CAS.'},
+  WEW:{label:'Wewnętrzny', desc:'Pełna odpowiedzialność PZL: budżet, harmonogram, ETC i EV.'}
+};
+const ST = {todo:'Oczekuje', ready:'Do wykonania', running:'W toku', action:'Wymaga akcji', done:'Zakończony', error:'Błąd', stale:'Nieaktualny'};
+const MST = {UNMAPPED:'crit', INHERITED:'ok', OVERRIDE:'info', MAPPED:'ready'};
+const PEOPLE = ['A. Bąk','B. Nowicka','D. Wójcik','E. Sowa','H. Maj','J. Kowalski','K. Duda','L. Czarnecki','M. Kruk','P. Lis','R. Wróbel','S. Pawlak','T. Sikora','W. Mróz'];
+const DEPTS = {S70I:['W-101','W-205','W-310'], F16:['W-205','W-402','W-417'], PULA:['W-101','W-520']};
+
+/* Struktura P1S – tylko do odczytu, z PZLPROD.LOG.WBS (PROJORG = nadrzędny trzon, PROJECT = grupowanie).
+   [WBS_ELEMENT, opis, STUFE, zaawansowanie % (jeśli jest w danych produkcyjnych)] */
+/* P1S (PZLPROD.LOG.WBS) – tylko odczyt. px = liść kategoryzacji (Z_KAT_ZBIORCZA → Z_KATEGORIA → Z_OPIS).
+   Węzeł: [WBS_ELEMENT, opis (MAKTX / LTXA1), STUFE, zaawansowanie %] */
+const PWC_Q = Array.from({length:16},(_,i)=>['SP-CRDDQ.00001.'+String(i+1).padStart(5,'0'),'30B7849 · op. '+(9521+i)+' · zlec. '+String(34303038+i),3]);
+const P1S_ORG = {
+  'AC-I39':{name:'S-70i – kabina', project:'S70I', px:'AC', nodes:[['AC-I39','S-70i – kabina',1],['AC-I39.01','Konstrukcja kabiny',2],['AC-I39.01.01','Kadłub przedni',3],['AC-I39.01.02','Podłoga kabiny',3],['AC-I39.02','Instalacje',2],['AC-I39.02.01','Wiązki elektryczne',3],['AC-I39.03','Montaż końcowy',2]]},
+  'AC-I40':{name:'S-70i – belka ogonowa', project:'S70I', px:'AB', nodes:[['AC-I40','S-70i – belka ogonowa',1],['AC-I40.01','Belka',2],['AC-I40.02','Statecznik',2],['AC-I40.02.01','Okucia statecznika',3]]},
+  'AC-I41':{name:'S-70i – drzwi (serwis)', project:'S70I-SRV', px:'AS', nodes:[['AC-I41','S-70i – drzwi (serwis)',1],['AC-I41.01','Drzwi boczne',2]]},
+  'AF-F16A':{name:'F-16 – pakiet A', project:'F16-CAS', px:'AF', nodes:[['AF-F16A','F-16 – pakiet A',1],['AF-F16A.01','Panele',2],['AF-F16A.02','Wręgi',2],['AF-F16A.03','Kontrola jakości',2]]},
+  'AF-F16B':{name:'F-16 – pakiet B', project:'F16-CAS', px:'AF', nodes:[['AF-F16B','F-16 – pakiet B',1],['AF-F16B.01','Pokrycia',2],['AF-F16B.02','Montaż',2]]},
+  'AF-F16C':{name:'F-16 – pakiet C', project:'F16-CAS', px:'AF', nodes:[['AF-F16C','F-16 – pakiet C',1],['AF-F16C.01','Przygotowanie produkcji',2,20],['AF-F16C.02','Panele pakietu C',2,35]]},
+  'WW-2601':{name:'Oprzyrządowanie linii B', project:'WEW', px:'WW', nodes:[['WW-2601','Oprzyrządowanie linii B',1],['WW-2601.01','Projekt oprzyrządowania',2],['WW-2601.02','Wykonanie',2]]},
+  'WW-2602':{name:'Digitalizacja kart pracy', project:'WEW', px:'WW', nodes:[['WW-2602','Digitalizacja kart pracy',1],['WW-2602.01','Wdrożenie',2]]},
+  'WW-2603':{name:'Stanowisko prób', project:'WEW', px:'WW', nodes:[['WW-2603','Stanowisko prób',1],['WW-2603.01','Konstrukcja stanowiska',2],['WW-2603.02','Automatyka',2]]},
+  'M28-01':{name:'M28 – modernizacja awioniki', project:'M28', px:'MS', nodes:[['M28-01','M28 – modernizacja awioniki',1],['M28-01.01','Integracja awioniki',2],['M28-01.02','Próby naziemne',2]]},
+  'M28-02':{name:'M28 – pakiet szkoleniowy', project:'M28', px:'MS', nodes:[['M28-02','M28 – pakiet szkoleniowy',1],['M28-02.01','Materiały szkoleniowe',2]]},
+  // PWC – z wyciągu PZLPROD.LOG.WBS (PRCTR PIDPRATT, Z_KAT_ZBIORCZA = Z_KATEGORIA = Z_OPIS = PWC)
+  'SP-CRDDN':{name:'DUCT SEG-BYP,UPR, R, ASSY OF', project:'SP-CRDDN', px:'SP', nodes:[['SP-CRDDN','DUCT SEG-BYP,UPR, R, ASSY OF',1],['SP-CRDDN.00001','KDAUF 0022718812',2],['SP-CRDDN.00001.00001','30B6991-01 · op. 9950',3]]},
+  'SP-CRDDP':{name:'DUCT HALF-BYPASS,REAR,LWR, ASSY OF', project:'SP-CRDDP', px:'SP', nodes:[['SP-CRDDP','DUCT HALF-BYPASS,REAR,LWR, ASSY OF',1],['SP-CRDDP.00001','KDAUF 0022718814',2],['SP-CRDDP.00001.00001','30B7330-01 · op. 9950',3]]},
+  'SP-CRDDQ':{name:'DUCT HALF-BYP, LOWER, ASSY OF', project:'SP-CRDDQ', px:'SP', nodes:[['SP-CRDDQ','DUCT HALF-BYP, LOWER, ASSY OF',1],['SP-CRDDQ.00001','KDAUF 0022718823 · 16 operacji',2],...PWC_Q]},
+  'SP-CRDDR':{name:'FAIRING-BYP DUCT,LWR,R,ASYO', project:'SP-CRDDR', px:'SP', nodes:[['SP-CRDDR','FAIRING-BYP DUCT,LWR,R,ASYO',1],['SP-CRDDR.00001','KDAUF 0022718871',2],['SP-CRDDR.00001.00001','30B7190-01 · op. 9950',3]]}
+};
+const P1S_NODE = {};
+for(const [org,o] of Object.entries(P1S_ORG)) for(const [c,n,l,p] of o.nodes) P1S_NODE[c]={c,n,l,prog:p||null,org};
+
+/* Katalog P1S: ~205 000 PROJORG wg kategoryzacji P1S. Nigdy nie listujemy całości:
+   Z_KAT_ZBIORCZA → Z_KATEGORIA → Z_OPIS → strona 25 PROJORG → elementy (STUFE) po rozwinięciu. Wyszukiwanie od 3 znaków, max 50.
+   [Z_KAT_ZBIORCZA, Z_KATEGORIA, Z_OPIS, prefiks syntetycznych kodów, liczba PROJORG] */
+const CATS = [
+  ['PWC','PWC','PWC','SP',2140],['PWC','PW100','Części silnika PW100','PW',9800],
+  ['SIKORSKY','S70I','Kabina','AC',640],['SIKORSKY','S70I','Belka ogonowa','AB',600],['SIKORSKY','S70I-SRV','Serwis i części','AS',3180],['SIKORSKY','UH60-KIT','Zestawy montażowe','UK',14800],
+  ['LOCKHEED','F16','Struktury CAS','AF',860],
+  ['PZL','M28','Skytruck','MS',2410],['PZL','WEW','Projekty wewnętrzne','WW',6420],
+  ['ZLECENIA','ZL-ENG','Inżynieria zleceniowa','ZE',9650],['ZLECENIA','ZL-PROD','Produkcja zleceniowa','ZP',41200],
+  ['WSPARCIE','NARZ','Oprzyrządowanie','NR',22300],['WSPARCIE','MRO','Obsługa i naprawy','MR',18900],['WSPARCIE','JAK','Jakość i certyfikacja','JK',5120],['WSPARCIE','LOG','Logistyka i magazyn','LG',11600],
+  ['INWESTYCJE','INW','Infrastruktura','IN',7340],['INWESTYCJE','BR','Badania i rozwój','BR',4280],['ADM','ADM','Koszty administracyjne','AD',43760]
+];
+const CAT = Object.fromEntries(CATS.map(([kz,kat,opis,px,cnt])=>[px,{kz,kat,opis,px,cnt}]));
+const P1S_TOTAL = CATS.reduce((a,c)=>a+c[4],0);
+const realOrgs = px => Object.keys(P1S_ORG).filter(o=>P1S_ORG[o].px===px);
+function synthOrg(px,i){ return px+'-'+String(i).padStart(5,'0'); }
+function orgsPage(px,page,size=25){ // realne PROJORG liścia najpierw, potem syntetyczne
+  const real=realOrgs(px), out=[], from=page*size;
+  for(let i=from;i<Math.min(from+size,CAT[px].cnt);i++) out.push(i<real.length? real[i] : synthOrg(px,i-real.length+1));
+  return out;
+}
+function nodeOf(code){
+  if(P1S_NODE[code]) return P1S_NODE[code];
+  const m=/^([A-Z]{2})-(\d{5})(?:\.(\d{2}))?$/.exec(code||''); if(!m || !CAT[m[1]]) return null;
+  const c=CAT[m[1]], org=m[1]+'-'+m[2];
+  return m[3]? {c:code, n:['Konstrukcja','Montaż','Próby'][Number(m[3])-1]||'Element', l:2, prog:null, org, px:m[1]} : {c:code, n:c.opis+' – pozycja '+Number(m[2]), l:1, prog:null, org, px:m[1]};
+}
+function orgInfo(org){
+  if(P1S_ORG[org]) return {name:P1S_ORG[org].name, project:P1S_ORG[org].project, px:P1S_ORG[org].px, nodes:P1S_ORG[org].nodes};
+  const n=nodeOf(org); return n? {name:n.n, project:CAT[n.px].kat, px:n.px, nodes:[[org,n.n,1],[org+'.01','Konstrukcja',2],[org+'.02','Montaż',2],[org+'.03','Próby',2]]} : null;
+}
+/* Kategoria elementu P1S; nazwa grupy ze słownika „Grupy kategorii” nadpisuje Z_OPIS dla elementu i jego podelementów. */
+function grpOverride(code){ const rows=active(S.dicts.katgr); let c=code; while(c){ const r=rows.find(r=>r.v.p1s===c); if(r) return r; const i=c.lastIndexOf('.'); c = i>0 ? c.slice(0,i) : ''; } return null; }
+function catOf(code){
+  const n=nodeOf(code); if(!n) return null;
+  const c=CAT[orgInfo(n.org).px], ov=grpOverride(code);
+  return {kz:c.kz, kat:c.kat, opis:c.opis, grp: ov? ov.v.name : c.opis, ov};
+}
+const catLabel = k => k ? `${k.kz} › ${k.kat} › ${k.grp}` : '';
+function p1sSearch(q,limit=50){ // symulacja zapytania do PZLPROD.LOG.WBS (TOP 50)
+  q=q.trim().toUpperCase(); if(q.length<3) return {rows:[], more:false};
+  const rows=[];
+  for(const n of Object.values(P1S_NODE)) if((n.c+' '+n.n).toUpperCase().includes(q)) rows.push(n.c);
+  const m=/^([A-Z]{2})-?(\d{1,5})?$/.exec(q), c=m&&CAT[m[1]];
+  if(c) for(let i=1;i<=c.cnt && rows.length<=limit;i++){ const code=synthOrg(c.px,i); if(!m[2] || code.includes(m[2])) rows.push(code); }
+  return {rows:rows.slice(0,limit), more:rows.length>limit};
+}
+
+/* Definicje słowników (bazy SQLite). Kolumny typowane – walidacja przy zapisie. */
+const DEFS = {
+  stawki:{name:'Stawki wydziałów', cols:[{k:'dept',l:'Wydział',t:'text'},{k:'year',l:'Rok',t:'int'},{k:'rate',l:'Labor Rate [PLN/h]',t:'num',min:0.01,d:2},{k:'oh',l:'Overhead [%]',t:'num',min:0}], key:['dept','year']},
+  kalendarz:{name:'Kalendarz okresów', cols:[{k:'okres',l:'Okres',t:'text'},{k:'od',l:'Od',t:'date'},{k:'do',l:'Do',t:'date'},{k:'zam',l:'Termin zamknięcia',t:'date'}], key:['okres'], rules:[['od','do']]},
+  kursy:{name:'Kursy USD/PLN', cols:[{k:'okres',l:'Okres',t:'text'},{k:'kurs',l:'USD/PLN',t:'num',min:0.01,d:4}], key:['okres']},
+  prefiksy:{name:'Prefiksy plików RABIT', cols:[{k:'prefix',l:'Prefiks nazwy pliku',t:'text'},{k:'src',l:'Kod źródła',t:'text'},{k:'opis',l:'Opis',t:'text',opt:true}], key:['prefix']},
+  zrodla:{name:'Wymagane źródła projektów', cols:[{k:'proj',l:'Projekt P1S (PROJORG)',t:'list',src:'p1sorg'},{k:'src',l:'Kod źródła',t:'list',src:'srccodes'}], key:['proj','src']},
+  wp:{name:'WP i CAM', cols:[{k:'wp',l:'WP',t:'text'},{k:'p1s',l:'Element P1S',t:'list',src:'scopeNodes'},{k:'cam',l:'CAM',t:'list',src:'people'},{k:'cat',l:'Cost Category',t:'list',src:'cats'}], key:['wp'], uniq:['p1s']},
+  harm:{name:'Harmonogram i budżet', cols:[{k:'wp',l:'WP',t:'list',src:'scopeWp'},{k:'bac',l:'BAC [h]',t:'num',min:0},{k:'start',l:'Start',t:'date'},{k:'finish',l:'Koniec',t:'date'}], key:['wp'], rules:[['start','finish']]},
+  katgr:{name:'Grupy kategorii', cols:[{k:'p1s',l:'Element P1S',t:'p1s'},{k:'name',l:'Nazwa grupy (zastępuje Z_OPIS)',t:'text'}], key:['p1s']},
+  cas:{name:'Stawki CAS', cols:[{k:'dept',l:'Wydział',t:'text'},{k:'year',l:'Rok',t:'int'},{k:'rate',l:'Stawka CAS [USD/h]',t:'num',min:0.01,d:2}], key:['dept','year']}
+};
+
+function stageDefs(type, kind){
+  const s = [
+    {k:'data', n:'Dane projektu', sh:'Dane', d:'Wybór danych z importów RABIT (ADMIN → Import RABIT) dla projektów P1S i okresu. Przypięcie plików (hash).'},
+    {k:'dict', n:'Przypięcie słowników', sh:'Słowniki', d:'Stan bazy słowników przypięty do przebiegu i skopiowany do MS SQL (schemat dict).'},
+    {k:'val', n:'Walidacja', sh:'Walidacja', d:'Spójność przypiętych słowników z danymi przebiegu. Same słowniki są walidowane przy zapisie.'},
+    {k:'join', n:'Łączenie źródeł', sh:'Łączenie', d:'Koszt CES → element P1S (mapowanie) → WP. Wykrywanie UNMAPPED i elementów P1S bez WP.'},
+    {k:'fin', n:'Pliki dla finansów', sh:'Finanse', d:'Pliki pośrednie. Wymagają zatwierdzenia przez finanse.'}
+  ];
+  if(kind==='close') s.push(
+    {k:'camout', n:'Pliki dla CAM', sh:'CAM wysł.', d:'Plik na CAM z WP przypisanymi w słowniku „WP i CAM”; ukryty identyfikator przebiegu.'},
+    {k:'camin', n:'Import plików CAM', sh:'CAM zwrot', d:'Pliki zwrócone przez CAM. Trwa zwykle kilka dni.'},
+    {k:'camval', n:'Walidacja zaawansowania', sh:'Zaaw.', d:'Na zamknięcie wymagane 100% wartości od CAM.'});
+  else s.push(
+    {k:'prod', n:'Zaawansowanie z produkcji', sh:'Produkcja', d:'Raport produkcyjny (źródło do ustalenia, O10).'},
+    {k:'fill', n:'Uzupełnienie braków', sh:'Braki', d:'Braki uzupełnia analityk lub opcjonalnie plik CAM.'},
+    {k:'camval', n:'Walidacja zaawansowania', sh:'Zaaw.', d:'Kontrola wartości i ich pochodzenia.'});
+  s.push({k:'ev', n:'Generowanie EV', sh:'EV', d:'Kalkulacja EV w bazie na migawce słowników, nowa rewizja wyników.'});
+  if(type==='SAC') s.push({k:'cobra', n:'Plik dla Cobra', sh:'Cobra', d:'Eksport danych do Cobra dla Sikorsky.'});
+  return s;
+}
+
+/* ---------- dane przykładowe ---------- */
+const rid = ()=>'r'+Math.random().toString(36).slice(2,9);
+const Row = (v, vf='2026-01-01', by='T. Mazur', at='05.01.2026', vt=null)=>({id:rid(), v, vf, vt, by, at});
+function mkDict(kind, scope, rows, rev, by, at, txt){
+  const id = (scope==='global'||scope==='config') ? kind : scope+':'+kind;
+  return {id, kind, scope, rows, hist: rev? [{rev, at, by, txt}] : [], lastRev:rev||0, lastBy:by||'—', lastAt:at||'—'};
+}
+const WPS = {
+  S70I:[['S70-WP-101','AC-I39.01.01','P. Lis','Labor',4200],['S70-WP-102','AC-I39.01.02','P. Lis','Labor',2600],['S70-WP-103','AC-I39.02.01','K. Duda','Labor',3100],['S70-WP-104','AC-I39.03','R. Wróbel','Labor',5400],['S70-WP-201','AC-I40.01','E. Sowa','Labor',3800],['S70-WP-202','AC-I40.02.01','E. Sowa','Material',1200]],
+  F16:[['F16-WP-101','AF-F16A.01','J. Kowalski','Labor',2900],['F16-WP-102','AF-F16A.02','B. Nowicka','Labor',3300],['F16-WP-103','AF-F16A.03','S. Pawlak','Labor',900],['F16-WP-201','AF-F16B.01','M. Kruk','Labor',2400],['F16-WP-202','AF-F16B.02','A. Bąk','Labor',null]],
+  PULA:[['WW-WP-11','WW-2601.01','D. Wójcik','Labor',800],['WW-WP-12','WW-2601.02','D. Wójcik','Material',1500],['WW-WP-21','WW-2602.01','H. Maj','Labor',1100],['WW-WP-31','WW-2603.01','L. Czarnecki','Labor',700],['WW-WP-32','WW-2603.02','L. Czarnecki','Subcontract',650]]
+};
+const W = (c,n,cost,isNew)=>({c,n,cost,isNew:!!isNew});
+function seed(){
+  const s = {dbRev:1432, clock:9*60+5, view:{name:'pulpit'}, wiz:null, modal:null, events:[], runs:{},
+    mp:{selCes:null, selP1s:null, open:{}, q:'', f:'all', z:'all', msg:null, cp:[], page:{}, pq:'', cpage:0, pend:null, props:false, manual:false, mc:'', mpc:''}, adm:{q:''}, pul:{q:'',sort:'code',dir:1,all:false}};
+  s.zakresy = {
+    S70I:{id:'S70I', code:'S70i', name:'S-70i – kontrakt SAC', type:'SAC', pool:false, p1s:['AC-I39','AC-I40'], created:'02.06.2026 · M. Zielińska'},
+    F16:{id:'F16', code:'F16', name:'F-16 – pakiety strukturalne', type:'CAS', pool:false, p1s:['AF-F16A','AF-F16B','AF-F16C'], created:'14.07.2026 · A. Wiśniewska'},
+    PULA:{id:'PULA', code:'PULA-WEW', name:'Pula projektów wewnętrznych', type:'WEW', pool:true, p1s:['WW-2601','WW-2602','WW-2603'], created:'01.08.2026 · P. Górski'}
+  };
+  const d = {};
+  const st26 = [['W-101',142.5,38],['W-205',156,41],['W-310',149.8,40],['W-402',171.2,44],['W-415',138.9,36],['W-520',128.4,33]];
+  d.stawki = mkDict('stawki','global',
+    st26.map(([k,r,o])=>Row({dept:k,year:'2025',rate:(r*0.95).toFixed(2),oh:String(o)},'2025-01-01','T. Mazur','03.01.2025'))
+    .concat([Row({dept:'W-417',year:'2025',rate:'151.30',oh:'39'},'2025-01-01','T. Mazur','03.01.2025')])
+    .concat(st26.map(([k,r,o])=>Row({dept:k,year:'2026',rate:r.toFixed(2),oh:String(o)},'2026-01-01','T. Mazur','01.09.2026'))),
+    1398,'T. Mazur','01.09.2026 10:14','Stawki 2026 dla 6 wydziałów');
+  d.kalendarz = mkDict('kalendarz','global', Array.from({length:12},(_,i)=>{const m=String(i+1).padStart(2,'0'), last=new Date(2026,i+1,0).getDate(); return Row({okres:'2026-'+m, od:'2026-'+m+'-01', do:'2026-'+m+'-'+last, zam: i<11? '2026-'+String(i+2).padStart(2,'0')+'-06':'2027-01-06'});}),
+    1102,'T. Mazur','05.01.2026 09:20','Kalendarz okresów 2026');
+  d.kursy = mkDict('kursy','global',[3.98,3.95,3.91,3.89,3.94,3.87,3.84,3.86,3.82].map((k,i)=>Row({okres:'2026-'+String(i+1).padStart(2,'0'), kurs:k.toFixed(4)},'2026-'+String(i+1).padStart(2,'0')+'-01')),
+    1401,'T. Mazur','01.09.2026 11:02','Kurs 2026-09');
+  d.prefiksy = mkDict('prefiksy','config',[['ACTUALS_CES_','ACTUALS_CES','Koszty rzeczywiste CES'],['COMMIT_CES_','COMMIT_CES','Zobowiązania CES'],['HOURS_CES_','HOURS_CES','Godziny CES'],['ETC_CES_','ETC_CES','ETC z CES'],['ETC_PAF_','ETC_PAF','ETC PAF'],['FORECAST_PAF_','FORECAST_PAF','Prognoza PAF']].map(([p,c,o])=>Row({prefix:p,src:c,opis:o},'2026-06-01','M. Zielińska','01.06.2026')),
+    1410,'M. Zielińska','08.09.2026 13:40','Dodano prefiks ETC_CES_');
+  const req = {S70I:['ACTUALS_CES','HOURS_CES','FORECAST_PAF'], F16:['ACTUALS_CES','HOURS_CES'], PULA:['ACTUALS_CES']};
+  const zr = [];
+  for(const z of Object.values(s.zakresy)) for(const o of z.p1s) for(const c of req[z.id]) zr.push(Row({proj:o, src:c},'2026-06-01','M. Zielińska','01.06.2026'));
+  zr.push(Row({proj:'WW-2603', src:'ETC_CES'},'2026-09-08','P. Górski','08.09.2026'));
+  d.zrodla = mkDict('zrodla','config', zr, 1415,'P. Górski','08.09.2026 14:02','WW-2603 wymaga ETC_CES');
+  const revs = {S70I:[1420,'M. Zielińska','02.09.2026 10:31'], F16:[1405,ME_S,'28.08.2026 15:12'], PULA:[1411,'P. Górski','08.09.2026 09:50']};
+  for(const [zid,list] of Object.entries(WPS)){
+    const [rv,by,at]=revs[zid], vf = zid==='F16'?'2026-07-14':'2026-06-02';
+    d[zid+':wp'] = mkDict('wp',zid, list.map(([wp,p,cam,cat])=>Row({wp,p1s:p,cam,cat},vf,by,at.slice(0,10))), rv,by,at,'WP i CAM projektu');
+    d[zid+':harm'] = mkDict('harm',zid, list.filter(x=>x[4]!=null).map(([wp,,,,bac])=>Row({wp,bac:String(bac),start:'2026-01-05',finish:'2026-12-18'},vf,by,at.slice(0,10))), rv+1,by,at,'Budżet i harmonogram');
+  }
+  d['F16:cas'] = mkDict('cas','F16',[['W-205','58.40'],['W-402','61.10'],['W-417','57.90']].map(([k,r])=>Row({dept:k,year:'2026',rate:r},'2026-07-14',ME_S,'14.07.2026')),1407,ME_S,'14.07.2026 12:00','Stawki CAS 2026');
+  d.katgr = mkDict('katgr','global',[Row({p1s:'SP-CRDDN',name:'PW127 – kanały obejścia'},'2026-09-10','M. Zielińska','10.09.2026'),Row({p1s:'SP-CRDDP',name:'PW127 – kanały obejścia'},'2026-09-10','M. Zielińska','10.09.2026')],
+    1416,'M. Zielińska','10.09.2026 09:12','SP-CRDDN, SP-CRDDP → PW127 – kanały obejścia');
+  s.dicts = d;
+
+  s.ces = [
+    {pd:'4D03GZ', name:'S70i cabin structure', wbs:[W('4D03GZ000038','Cabin frame',412300),W('4D03GZ000039','Tail fairing parts',38200),W('4D03GZ000040','Floor panels',221900),W('4D03GZ000041','Harness install',96400,1)]},
+    {pd:'4D03H1', name:'S70i tail boom', wbs:[W('4D03H1000010','Boom assembly',305100),W('4D03H1000011','Stabilizer fittings',87600),W('4D03H1000012','Boom QA',21400)]},
+    {pd:'4F16A0', name:'F16 package A', wbs:[W('4F16A0000001','Panels',188000),W('4F16A0000002','Frames',264500),W('4F16A0000003','QA',31200)]},
+    {pd:'4F16B0', name:'F16 package B', wbs:[W('4F16B0000001','Skins',173400),W('4F16B0000002','Assembly',142800),W('4F16B0000015','Assembly rework',22600,1)]},
+    {pd:'4F16C0', name:'F16 package C', prop:'AF-F16C', wbs:[W('4F16C0000001','Package C tooling',182400,1),W('4F16C0000002','Package C panels',46210,1),W('4F16C0000003','Package C engineering',12880,1)]},
+    {pd:'4W2601', name:'Tooling line B', wbs:[W('4W2601000001','Design',64300),W('4W2601000002','Build',118900)]},
+    {pd:'4W2602', name:'Shop floor digital', wbs:[W('4W2602000001','Rollout',52700)]},
+    {pd:'4W2603', name:'Test rig', wbs:[W('4W2603000001','Rig structure',41800),W('4W2603000002','Automation',36100)]},
+    {pd:'4M2800', name:'M28 avionics upgrade', prop:'M28-01', wbs:[W('4M2800000001','Avionics integration',96500),W('4M2800000002','Ground tests',18300)]},
+    {pd:'4X9900', name:'Misc allocations', wbs:[W('4X9900000001','Allocation adjustment',8200,1)]},
+    {pd:'4PW1N0', name:'PWC bypass duct upper R', wbs:[W('4PW1N0000001','Duct seg-byp upper R',58400)]},
+    {pd:'4PW1P0', name:'PWC half-bypass rear lower', wbs:[W('4PW1P0000001','Duct half-bypass rear lower',61200)]},
+    {pd:'4PW1Q0', name:'PWC half-byp lower', prop:'SP-CRDDQ', wbs:[W('4PW1Q0000001','Half-byp lower – op. 10–50',84300,1),W('4PW1Q0000002','Half-byp lower – op. 60–110',77900,1),W('4PW1Q0000003','Half-byp lower – op. 120–160',69800,1)]},
+    {pd:'4PW1R0', name:'PWC fairing byp duct', wbs:[W('4PW1R0000001','Fairing byp duct lower R',23600)]}
+  ];
+  const MR = (kind,ces,p1s,vf,by,inc=false)=>({id:rid(), kind, ces, p1s, inc, vf, vt:null, by, at:vf.split('-').reverse().join('.')});
+  s.map = {rules:[
+    MR('proj','4D03GZ','AC-I39','2026-06-02','M. Zielińska'), MR('proj','4D03H1','AC-I40','2026-06-02','M. Zielińska'),
+    MR('proj','4F16A0','AF-F16A','2026-07-14',ME_S), MR('proj','4F16B0','AF-F16B','2026-07-14',ME_S),
+    MR('proj','4W2601','WW-2601','2026-08-01','P. Górski'), MR('proj','4W2602','WW-2602','2026-08-01','P. Górski'),
+    MR('wbs','4D03GZ000039','AC-I40.02','2026-06-10','M. Zielińska',true),
+    MR('proj','4PW1N0','SP-CRDDN','2026-08-12','M. Zielińska'), MR('proj','4PW1P0','SP-CRDDP','2026-08-12','M. Zielińska'), MR('proj','4PW1R0','SP-CRDDR','2026-08-12','M. Zielińska'),
+    MR('wbs','4W2603000001','WW-2603.01','2026-08-01','P. Górski'), MR('wbs','4W2603000002','WW-2603.02','2026-08-01','P. Górski')],
+    hist:[{rev:1432, at:'28.09.2026 08:12', by:'Magdalena Zielińska', txt:'Import IMP-0187: 7 nowych WBS CES – 2 odziedziczone, 5 UNMAPPED'},
+          {rev:1418, at:'08.09.2026 10:05', by:'P. Górski', txt:'Wyjątki 4W2603000001 → WW-2603.01, 4W2603000002 → WW-2603.02'}],
+    lastRev:1432, lastBy:'Magdalena Zielińska', lastAt:'28.09.2026 08:12'};
+
+  const F = (name,mb,mod)=>({name,mb,mod});
+  s.imp = {round:0, lastId:187,
+    remote:[F('ACTUALS_CES_01.xlsx',38.2,'28.09 05:48'),F('ACTUALS_CES_02.xlsx',21.4,'28.09 05:49'),F('COMMIT_CES_01.xlsx',6.1,'28.09 05:50'),F('HOURS_CES_01.xlsx',12.0,'28.09 05:51'),F('ETC_PAF_01.xlsx',2.3,'28.09 05:53'),F('FORECAST_PAF_01.xlsx',1.2,'28.09 05:53'),F('Instrukcja_RABIT.pdf',0.4,'12.05 10:00')],
+    seen:{}, imported:{}, dl:null, res:null,
+    history:[{id:'IMP-0187', who:'Magdalena Zielińska', at:'28.09 08:10', imp:6, dup:0, skip:0, unrec:1, err:0},{id:'IMP-0186', who:ME, at:'21.09 08:02', imp:4, dup:1, skip:1, unrec:1, err:0},{id:'IMP-0185', who:'Piotr Górski', at:'14.09 07:55', imp:6, dup:0, skip:0, unrec:1, err:0}],
+    lastNew:{id:'IMP-0187', rows:['4D03GZ000041','4F16B0000015','4F16C0000001','4F16C0000002','4F16C0000003','4X9900000001']}};
+  for(const f of s.imp.remote) if(!/\.pdf$/.test(f.name)){ s.imp.seen[f.name]={mod:f.mod, mb:f.mb}; s.imp.imported[f.name]={mod:f.mod, mb:f.mb, sha:sha(f.name+f.mod), at:'28.09 08:10', id:'IMP-0187', rows:Math.round(f.mb*18300)}; }
+
+  S = s;
+  mkRun('S70I','close','2026-08',null,'Magdalena Zielińska',{allDone:true, at:'07.09.2026'});
+  mkRun('F16','close','2026-08',null,ME,{allDone:true, at:'08.09.2026'});
+  mkRun('F16','weekly','2026-09',39,ME,{allDone:true, at:'21.09.2026'});
+  mkRun('PULA','close','2026-08',null,'Piotr Górski',{allDone:true, at:'08.09.2026'});
+  mkRun('S70I','weekly','2026-09',40,'Magdalena Zielińska',{upTo:'fill', at:'28.09.2026'});
+  mkRun('PULA','weekly','2026-09',40,ME,{upTo:'fin', at:'28.09.2026'});
+  s.events = [
+    {t:'28.09 15:40', who:'Magdalena Zielińska', z:'S70i', msg:'Pobrano zaawansowanie z produkcji: 2 WP bez wartości do uzupełnienia'},
+    {t:'28.09 11:02', who:ME, z:'PULA-WEW', msg:'Wygenerowano pliki dla finansów – oczekują na zatwierdzenie'},
+    {t:'28.09 08:31', who:'Magdalena Zielińska', z:'S70i', msg:'Rozpoczęto przebieg tygodniowy T40'},
+    {t:'28.09 08:12', who:'Magdalena Zielińska', z:'GLOBAL', msg:'Mapowanie po imporcie IMP-0187: 2 WBS odziedziczone, 5 UNMAPPED'},
+    {t:'28.09 08:10', who:'Magdalena Zielińska', z:'GLOBAL', msg:'Import IMP-0187: 6 plików zaimportowanych, 1 nierozpoznany'},
+    {t:'21.09 14:10', who:ME, z:'F16', msg:'Zakończono przebieg T39 – EV wstępne R1'}
+  ];
+  return s;
+}
+
+/* ---------- stan ---------- */
+let S;
+function load(){ try{ const raw = localStorage.getItem(KEY); return raw ? JSON.parse(raw) : null; }catch(e){ return null; } }
+function save(){ try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(e){} }
+
+/* ---------- pomocnicze ---------- */
+const $ = sel => document.querySelector(sel);
+const esc = x => String(x ?? '').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const nf = (n,d=0) => Number(n).toLocaleString('pl-PL',{minimumFractionDigits:d, maximumFractionDigits:d});
+const sum = a => a.reduce((x,y)=>x+y,0);
+function now(){ S.clock += 3; const h=Math.floor(S.clock/60)%24, m=S.clock%60; return '29.09 '+String(h).padStart(2,'0')+':'+String(m).padStart(2,'0'); }
+function hash(str){ let h=2166136261; for(const c of str){ h^=c.charCodeAt(0); h=Math.imul(h,16777619);} return (h>>>0); }
+function sha(str){ let a=hash(str), out=''; for(let i=0;i<8;i++){ a=Math.imul(a^(a>>>13),1274126177)>>>0; out+=a.toString(16).padStart(8,'0').slice(0,8);} return out; }
+function prevDay(d){ const x=new Date(d+'T12:00:00'); x.setDate(x.getDate()-1); return x.toISOString().slice(0,10); }
+function pill(st, txt){ return `<span class="pill s-${st}">${esc(txt ?? ST[st] ?? st)}</span>`; }
+function mpill(s){ return `<span class="pill s-${MST[s]}">${s}</span>`; }
+function toast(msg){ const t=$('#toast'); t.textContent=msg; t.hidden=false; clearTimeout(toast.h); toast.h=setTimeout(()=>t.hidden=true,3600); }
+function ev(z,msg){ S.events.unshift({t:now(), who:ME, z, msg}); }
+function logRun(r,msg,who=ME){ const t=now(); r.log.unshift({t,who,msg}); S.events.unshift({t,who,z:S.zakresy[r.zid].code,msg}); }
+function go(view){ S.view=view; S.modal=null; save(); render(); window.scrollTo({top:0}); }
+const isActive = r => r.vf<=TODAY && (!r.vt || r.vt>=TODAY);
+const active = d => d ? d.rows.filter(isActive) : [];
+
+/* ---------- słowniki ---------- */
+function dictIdsOf(z){ return ['wp','harm'].concat(z.type==='CAS'?['cas']:[]).map(k=>z.id+':'+k); }
+function relevant(z){ return ['stawki','kalendarz','kursy'].concat(dictIdsOf(z),['map']); }
+function meta(id){ return id==='map' ? S.map : S.dicts[id]; }
+function dname(id){ return id==='map' ? 'Mapowanie CES↔P1S' : DEFS[S.dicts[id].kind].name; }
+function rowsOf(id){ return id==='map' ? activeRules().length : active(S.dicts[id]).length; }
+function bump(id, txt){
+  const m=meta(id); S.dbRev++; m.lastRev=S.dbRev; m.lastBy=ME; m.lastAt='29.09.2026 '+now().slice(6);
+  m.hist.unshift({rev:S.dbRev, at:m.lastAt, by:ME, txt});
+  S.events.unshift({t:now(), who:ME, z: id==='map'||!S.dicts[id]||['global','config'].includes(S.dicts[id].scope)?'GLOBAL':S.zakresy[S.dicts[id].scope].code, msg:dname(id)+': '+txt+' (stan #'+S.dbRev+')'});
+}
+function opts(src, d){
+  if(src==='people') return PEOPLE;
+  if(src==='cats') return ['Labor','Material','Subcontract'];
+  if(src==='p1sorg') return Object.keys(P1S_ORG);
+  if(src==='srccodes') return [...new Set(active(S.dicts.prefiksy).map(r=>r.v.src))];
+  if(src==='scopeNodes') return S.zakresy[d.scope].p1s.flatMap(o=>P1S_ORG[o].nodes.map(n=>n[0]));
+  if(src==='scopeWp') return active(S.dicts[d.scope+':wp']).map(r=>r.v.wp);
+  return [];
+}
+function dictComplete(z){ return dictIdsOf(z).every(id=>active(S.dicts[id]).length>0); }
+function camsOf(zid){ const m={}; for(const r of active(S.dicts[zid+':wp'])) m[r.v.cam]=(m[r.v.cam]||0)+1; return Object.entries(m); }
+function wpsOf(zid){ return active(S.dicts[zid+':wp']).map(r=>r.v); }
+function hasRate(dept,year){ return active(S.dicts.stawki).some(r=>r.v.dept===dept && Number(r.v.year)===year); }
+
+/* ---------- mapowanie CES ↔ P1S ---------- */
+function activeRules(){ return S.map.rules.filter(isActive); }
+function projRule(pd){ return activeRules().find(r=>r.kind==='proj'&&r.ces===pd); }
+function wbsRule(w){ return activeRules().find(r=>r.kind==='wbs'&&r.ces===w); }
+function isProj(x){ return S.ces.some(p=>p.pd===x); }
+function resolve(pd, w){ const e=wbsRule(w), p=projRule(pd); if(e) return {s:p?'OVERRIDE':'MAPPED', t:e.p1s}; if(p) return {s:'INHERITED', t:p.p1s}; return {s:'UNMAPPED', t:null}; }
+function allCes(){ return S.ces.flatMap(p=>p.wbs.map(w=>({...w, pd:p.pd, pname:p.name, prop:p.prop, r:resolve(p.pd,w.c)}))); }
+function unmapped(){ return allCes().filter(x=>x.r.s==='UNMAPPED'); }
+function scopeOfOrg(org){ return Object.values(S.zakresy).find(z=>z.p1s.includes(org)); }
+function scopeCes(zid){ const z=S.zakresy[zid]; return allCes().filter(x=>x.r.t && z.p1s.includes(nodeOf(x.r.t)?.org)); }
+function scopeUnm(zid){ const z=S.zakresy[zid]; return unmapped().filter(x=>x.prop && z.p1s.includes(x.prop)); }
+function noWp(zid){ const z=S.zakresy[zid], has=new Set(wpsOf(zid).map(v=>v.p1s)); return z.p1s.flatMap(o=>P1S_ORG[o].nodes).filter(n=>n[3] && !has.has(n[0])).map(n=>({c:n[0], n:n[1], prog:n[3]})); }
+function wpOfNode(){ const m={}; for(const z of Object.values(S.zakresy)) for(const v of wpsOf(z.id)) m[v.p1s]=v.wp; return m; }
+function addRule(kind, ces, p1s, inc=false){ const r={id:rid(), kind, ces, p1s, inc, vf:TODAY, vt:null, by:ME_S, at:'29.09.2026'}; S.map.rules.push(r); return r; }
+
+/* ---------- import RABIT ---------- */
+function srcOf(name){ let best=null; for(const r of active(S.dicts.prefiksy)){ if(name.toUpperCase().startsWith(r.v.prefix.toUpperCase()) && (!best || r.v.prefix.length>best.v.prefix.length)) best=r; } return best? best.v.src : null; }
+function importedSrc(){ const m={}; for(const [n,f] of Object.entries(S.imp.imported)){ const s=srcOf(n); if(s && (!m[s] || f.at>m[s].at)) m[s]={at:f.at, name:n}; } return m; }
+function completeness(){
+  const imp=importedSrc(), by={};
+  for(const r of active(S.dicts.zrodla)) (by[r.v.proj] ||= []).push(r.v.src);
+  return Object.entries(by).map(([proj,srcs])=>({proj, z:scopeOfOrg(proj), srcs:srcs.map(s=>({s, ok:!!imp[s], at:imp[s]?.at})), ok:srcs.every(s=>imp[s])}));
+}
+function pinFiles(zid){
+  const z=S.zakresy[zid], need=new Set(active(S.dicts.zrodla).filter(r=>z.p1s.includes(r.v.proj)).map(r=>r.v.src));
+  return Object.entries(S.imp.imported).filter(([n])=>need.has(srcOf(n))).map(([n,f])=>({name:n, src:srcOf(n), sha:f.sha, at:f.at, rows:f.rows}));
+}
+function newerData(r){ return (r.files||[]).filter(f=>S.imp.imported[f.name] && S.imp.imported[f.name].sha!==f.sha); }
+
+/* ---------- przebiegi ---------- */
+function runId(z,kind,period,week){ return 'R-'+z+'-'+period+'-'+(kind==='close'?'Z':'T'+week); }
+function computeSnap(zid){
+  const z=S.zakresy[zid], sc=scopeCes(zid), un=scopeUnm(zid);
+  const wps=wpsOf(zid), hasB=new Set(active(S.dicts[zid+':harm']).map(r=>r.v.wp));
+  const rows={}; for(const id of relevant(z)) rows[id]=rowsOf(id);
+  return {rev:S.dbRev, unm:un.map(x=>({c:x.c, pd:x.pd, n:x.n, cost:x.cost, prop:x.prop})), noWp:noWp(zid),
+    missRate:(DEPTS[zid]||['W-101']).filter(d=>!hasRate(d,2026)), noBudget:wps.filter(v=>!hasB.has(v.wp)).map(v=>v.wp),
+    ces:sc.length, cost:sum(sc.map(x=>x.cost)), rows};
+}
+function pinSnap(r){ r.pinRev=S.dbRev; r.snap=computeSnap(r.zid); r.ack={}; }
+function mkRun(zid,kind,period,week,owner,opt={}){
+  const z=S.zakresy[zid], defs=stageDefs(z.type,kind), id=runId(zid,kind,period,week);
+  const st={}; let reached=!opt.upTo && !opt.allDone;
+  defs.forEach((d,i)=>{
+    if(opt.allDone) st[d.k]={s:'done'};
+    else if(opt.upTo){ if(reached) st[d.k]={s:'todo'}; else if(d.k===opt.upTo){ st[d.k]={s:'action'}; reached=true; } else st[d.k]={s:'done'}; }
+    else st[d.k]={s:i===0?'ready':'todo'};
+  });
+  const r={id, zid, kind, period, week, owner, started:opt.at||'29.09.2026', st, sel:null, log:[], ack:{}, flags:{}, fin:null, cams:null, newEl:null,
+    rev:opt.allDone?1:0, frozen:!!(opt.allDone && kind==='close'), pinRev:null, snap:null, files:null};
+  if(opt.allDone || opt.upTo){ pinSnap(r); r.files=pinFiles(zid); }
+  if(opt.upTo==='fin') r.fin={state:'pending'};
+  r.log.push({t:(opt.at||'29.09.2026').slice(0,5)+' 08:31', who:owner, msg:'Rozpoczęto przebieg.'});
+  if(r.pinRev) r.log.unshift({t:(opt.at||'').slice(0,5)+' 08:40', who:owner, msg:'Przypięto stan słowników #'+r.pinRev+' i skopiowano migawkę do MS SQL.'});
+  if(opt.allDone) r.log.unshift({t:(opt.at||'').slice(0,5)+' 16:05', who:owner, msg: kind==='close'?'Zatwierdzono zamknięcie okresu. Przebieg zamrożony.':'Wygenerowano EV wstępne (R1).'});
+  S.runs[id]=r; return r;
+}
+function defsOf(r){ return stageDefs(S.zakresy[r.zid].type, r.kind); }
+function runLabel(r){ return r.kind==='close' ? 'Zamknięcie '+r.period : 'Tydzień '+r.week+' · '+r.period; }
+function runState(r){
+  const defs=defsOf(r);
+  if(defs.every(d=>r.st[d.k].s==='done')) return {s:'done', txt:r.frozen?'Zamknięty i zamrożony':'Zakończony'};
+  const d=defs.find(d=>r.st[d.k].s!=='done');
+  return {s:r.st[d.k].s, txt:d.n+' – '+ST[r.st[d.k].s].toLowerCase(), k:d.k};
+}
+function activeRuns(zid){ return Object.values(S.runs).filter(r=>r.zid===zid && runState(r).s!=='done'); }
+function runsOf(zid){ return Object.values(S.runs).filter(r=>r.zid===zid).sort((a,b)=>(b.period+(b.week||99)).localeCompare(a.period+(a.week||99))); }
+function newerFor(r){
+  if(!r.pinRev || runState(r).s==='done') return [];
+  return relevant(S.zakresy[r.zid]).map(id=>({id, m:meta(id)})).filter(x=>x.m.lastRev>r.pinRev && !r.ack[x.id+':'+x.m.lastRev]);
+}
+function setSt(r,k,s,extra={}){ r.st[k]={...r.st[k],s,...extra}; }
+function complete(r,k){ const defs=defsOf(r), i=defs.findIndex(d=>d.k===k); setSt(r,k,'done'); const nx=defs[i+1]; if(nx && ['todo','stale'].includes(r.st[nx.k].s)) setSt(r,nx.k,'ready'); if(nx) r.sel=nx.k; }
+function invalidateFrom(r,k){ const defs=defsOf(r), i=defs.findIndex(d=>d.k===k); defs.forEach((d,j)=>{ if(j===i) setSt(r,d.k,'ready'); else if(j>i) setSt(r,d.k,['done','action','error','running'].includes(r.st[d.k].s)?'stale':'todo'); }); r.sel=k; }
+function work(r,k,label,ms,fn){ setSt(r,k,'running',{label}); render(); setTimeout(()=>{ fn(); save(); render(); }, ms); }
+const canAct = r => !r.frozen;
+
+/* ---------- nawigacja: sekcje główne u góry (Pulpit | ADMIN | Projekty), menu kontekstowe z boku ---------- */
+function sectionOf(v){
+  if(v.name==='pulpit') return 'pulpit';
+  if(['slowniki','import','mapa','info'].includes(v.name)) return 'admin';
+  if(v.name==='dict'){ const d=S.dicts[v.id]; return d && !['global','config'].includes(d.scope) ? 'projekty' : 'admin'; }
+  return 'projekty';
+}
+function curRun(zid){ const act=activeRuns(zid); return act.find(r=>r.week===40) || act[0] || runsOf(zid)[0] || null; }
+function projState(z){
+  if(!dictComplete(z)) return ['crit','słowniki'];
+  const a=activeRuns(z.id)[0];
+  if(a) return ['action','error'].includes(runState(a).s) ? ['warn','czeka'] : ['info','aktywny'];
+  return runsOf(z.id).some(r=>r.week===40) ? ['ok','gotowy'] : ['todo','brak T40'];
+}
+const CUR_PERIOD='weekly:2026-09:40';
+function periods(){
+  const m={}, add=(kind,period,week)=>{ const key=kind+':'+period+':'+(week||''); return m[key] ||= {key,kind,period,week,label: kind==='close'?'Zamknięcie '+period:'T'+week+' '+period}; };
+  add('weekly','2026-09',40);
+  for(const r of Object.values(S.runs)) add(r.kind,r.period,r.week);
+  return Object.values(m).sort((a,b)=>(b.period+(b.week||99)).localeCompare(a.period+(a.week||99)));
+}
+function renderNav(){
+  const v=S.view, sec=sectionOf(v);
+  $('#tabs').innerHTML=[['pulpit','Pulpit'],['admin','ADMIN'],['projekty','Projekty']].map(([k,l])=>`<button data-a="tab" data-x="${k}" aria-current="${sec===k}">${l}</button>`).join('');
+  $('.shell').classList.toggle('noside', sec==='pulpit');
+  const cur=(name,id)=> v.name===name && (id===undefined || v.id===id);
+  const it=(a,x,label,on,extra='',cls='')=>`<button class="${cls}" data-a="${a}" data-x="${esc(x)}" aria-current="${on}"><span>${label}</span>${extra}</button>`;
+  let h='';
+  if(sec==='admin'){
+    const un=unmapped().length;
+    h = `<div class="grp">Słowniki</div>` + it('nav','slowniki','Przegląd słowników',cur('slowniki'))
+      + ['stawki','kursy','kalendarz','katgr','prefiksy','zrodla'].map(d=>it('dict',d,esc(dname(d)),cur('dict',d),'','sub')).join('')
+      + `<div class="sep"></div>` + it('nav','import','Import RABIT',cur('import'),`<span class="count">${esc(S.imp.history[0].id)}</span>`)
+      + it('nav','mapa','Mapowanie CES↔P1S',cur('mapa'), un?`<span class="count crit" title="${un} WBS CES bez mapowania">${un}</span>`:'')
+      + `<div class="sep"></div>` + it('nav','info','O aplikacji',cur('info'));
+  } else if(sec==='projekty'){
+    const rz = v.name==='run'? S.runs[v.id]?.zid : v.name==='dict'? S.dicts[v.id]?.scope : v.name==='zakres'? v.id : null;
+    h = `<div class="grp row between"><span>Projekty</span><button class="mini" data-a="wizard" aria-label="Nowy projekt" title="Nowy projekt">+</button></div>`
+      + Object.values(S.zakresy).map(z=>{ const [c,l]=projState(z); return it('zakres',z.id,esc(z.code),rz===z.id,`<span class="pill s-${c}">${l}</span>`); }).join('')
+      + `<div class="sep"></div><div class="grp">Przebiegi (wspólne)</div>`
+      + periods().map(p=>it('okres',p.key,esc(p.label)+(p.key===CUR_PERIOD?' <span class="muted">(bieżący)</span>':''),cur('okres',p.key))).join('')
+      + it('okres',CUR_PERIOD,'+ Nowy przebieg',false,'','add');
+  }
+  h += `<div class="foot"><span>Aplikacja ${APP_VER} · schemat ${SCHEMA_VER}</span><span>Baza słowników: stan #${S.dbRev}</span><button data-a="reset" style="padding:4px 0;color:var(--accent)">Resetuj dane demo</button></div>`;
+  $('#nav').innerHTML=h;
+}
+
+/* ---------- PULPIT: tabela projektów + krótka lista „Wymaga uwagi” ---------- */
+function attention(){
+  const att=[];
+  const inc=completeness().filter(c=>!c.ok);
+  if(inc.length) att.push({lvl:'warn', tag:'RABIT', txt:'Niekompletne źródła: '+inc.map(c=>c.proj+' (brak '+c.srcs.filter(s=>!s.ok).map(s=>s.s).join(', ')+')').join('; '), a:'nav', x:'import'});
+  const orphan=unmapped().filter(x=>!x.prop || !scopeOfOrg(x.prop));
+  if(orphan.length) att.push({lvl:'crit', tag:'MAPOWANIE', txt:`${orphan.length} WBS CES bez mapowania i bez projektu, koszt ${nf(sum(orphan.map(x=>x.cost)))} PLN`, a:'goMapZ', x:'none'});
+  for(const z of Object.values(S.zakresy)){
+    const su=scopeUnm(z.id);
+    if(su.length) att.push({lvl:'crit', tag:z.code, txt:`${su.length} WBS UNMAPPED, koszt ${nf(sum(su.map(x=>x.cost)))} PLN`, a:'goMapZ', x:z.id});
+    const miss=(DEPTS[z.id]||[]).filter(d=>!hasRate(d,2026));
+    if(miss.length) att.push({lvl:'crit', tag:z.code, txt:'Brak stawki '+miss.join(', ')+' na 2026', a:'dict', x:'stawki'});
+    if(!dictComplete(z)) att.push({lvl:'crit', tag:z.code, txt:'Słowniki projektu niekompletne – przebieg zablokowany', a:'zakres', x:z.id});
+    for(const r of activeRuns(z.id)){ const rs=runState(r);
+      if(r.fin?.state==='pending' && r.st.fin?.s==='action') att.push({lvl:'info', tag:z.code, txt:runLabel(r)+': pliki dla finansów czekają na zatwierdzenie', a:'run', x:r.id});
+      else if(['action','error'].includes(rs.s)) att.push({lvl:rs.s==='error'?'crit':'warn', tag:z.code, txt:runLabel(r)+': '+rs.txt, a:'run', x:r.id});
+      if(newerFor(r).length) att.push({lvl:'stale', tag:z.code, txt:runLabel(r)+': słowniki zmienione po przypięciu', a:'run', x:r.id});
+    }
+  }
+  const ord={crit:0,warn:1,stale:2,info:3}; return att.sort((a,b)=>ord[a.lvl]-ord[b.lvl]);
+}
+function vPulpit(){
+  const P=S.pul, q=P.q.trim().toLowerCase();
+  const rows=Object.values(S.zakresy).map(z=>{ const r=curRun(z.id), act=r&&runState(r).s!=='done'?r:null, rs=act&&runState(act), defs=act&&defsOf(act);
+      return {z, r:act, rs, defs, idx: act? (rs.k? defs.findIndex(d=>d.k===rs.k)+1 : defs.length) : 0}; })
+    .filter(o=>!q || (o.z.code+' '+o.z.name+' '+TYPES[o.z.type].label).toLowerCase().includes(q));
+  const key={code:o=>o.z.code, name:o=>o.z.name, type:o=>o.z.type, run:o=>o.r?o.r.id:'~', state:o=>o.r?o.rs.s:'~'}[P.sort];
+  rows.sort((a,b)=>P.dir*String(key(a)).localeCompare(String(key(b))));
+  const th=(k,l)=>`<th aria-sort="${P.sort===k?(P.dir>0?'ascending':'descending'):'none'}"><button class="sort" data-a="psort" data-x="${k}">${l}${P.sort===k?(P.dir>0?' ▲':' ▼'):''}</button></th>`;
+  const att=attention(), shown=P.all?att:att.slice(0,5);
+  return `
+  <div class="head"><div><div class="eyebrow">Tydzień 40 · wtorek 29.09.2026 · okres 2026-09</div><h1>Pulpit</h1>
+    <p class="sub">Projekty (zakresy) w przeglądzie operacyjnym.</p></div>
+    <div class="row"><input type="text" id="pf" data-pf value="${esc(P.q)}" placeholder="Filtruj: kod, nazwa, typ" aria-label="Filtruj projekty" style="width:220px"><button class="btn primary" data-a="wizard">+ Nowy projekt</button></div></div>
+  <div class="tbl-wrap"><table><thead><tr>${th('code','Kod')}${th('name','Nazwa')}${th('type','Typ')}${th('run','Aktywny przebieg')}<th>Etap</th>${th('state','Stan')}<th></th></tr></thead><tbody>
+  ${rows.map(o=>{ const z=o.z, r=o.r, t40=!!S.runs[runId(z.id,'weekly','2026-09',40)], blocked=!dictComplete(z);
+    return `<tr class="click" data-a="zakres" data-x="${z.id}"><td><b>${esc(z.code)}</b></td><td>${esc(z.name)}</td><td><span class="tag">${z.type}</span></td>
+      <td>${r?`${esc(runLabel(r))}<br><span class="mono muted small">${esc(r.id)}</span>`:'<span class="muted">Brak</span>'}</td>
+      <td>${r?`<span class="num">${o.idx}/${o.defs.length}</span> · ${esc(o.defs[o.idx-1]?.n||'')}<div class="dots" aria-hidden="true" style="margin-top:4px">${o.defs.map(d=>`<span class="dot ${r.st[d.k].s}"></span>`).join('')}</div>`:'—'}</td>
+      <td>${r? pill(o.rs.s, ST[o.rs.s]) : blocked? pill('crit','Słowniki niekompletne') : pill('ok','Brak aktywnego')}</td>
+      <td><div class="row" style="flex-wrap:nowrap"><button class="btn small" data-a="${r?'run':'zakres'}" data-x="${r?r.id:z.id}">Przejdź</button><button class="btn small" data-a="newrun" data-x="${z.id}" ${t40||blocked?'disabled':''} title="${t40?'Przebieg T40 już istnieje':blocked?'Słowniki niekompletne':'Nowy przebieg T40'}">Nowy przebieg</button></div></td></tr>`; }).join('')
+    || '<tr><td colspan="7" class="muted">Brak projektów dla filtra.</td></tr>'}
+  </tbody></table></div>
+  <section class="panel"><div class="row between"><h2>Wymaga uwagi</h2><span class="count">${att.length}</span></div>
+    ${att.length?`<div class="tbl-wrap"><table><tbody>${shown.map(a=>`<tr class="click" data-a="${a.a}" data-x="${esc(a.x)}"><td style="width:1%">${pill(a.lvl, a.tag)}</td><td>${esc(a.txt)}</td><td class="r muted small">szczegóły →</td></tr>`).join('')}</tbody></table></div>
+      ${att.length>5?`<button class="btn small" data-a="pall">${P.all?'Pokaż 5 najważniejszych':'Pokaż wszystkie ('+att.length+')'}</button>`:''}` : '<p class="muted">Wszystko na bieżąco.</p>'}
+  </section>`;
+}
+
+/* ---------- PROJEKTY ---------- */
+function vZakresy(){
+  return `<div class="head"><div><h1>Projekty</h1><p class="sub">Projekt (zakres) = program albo pula projektów liczona razem (M8). Obejmuje projekty P1S; koszty CES trafiają do niego przez mapowanie.</p></div>
+    <button class="btn primary" data-a="wizard">+ Nowy projekt</button></div>
+  <div class="tbl-wrap"><table><thead><tr><th>Kod</th><th>Nazwa</th><th>Typ</th><th>Projekty P1S</th><th class="r">WP</th><th class="r">CAM</th><th>Aktywny przebieg</th></tr></thead><tbody>
+  ${Object.values(S.zakresy).map(z=>{const a=activeRuns(z.id)[0];return `<tr class="click" data-a="zakres" data-x="${z.id}"><td><b>${esc(z.code)}</b></td><td>${esc(z.name)}</td><td>${esc(TYPES[z.type].label)}</td><td class="mono small">${z.p1s.join(', ')||'—'}</td><td class="r">${wpsOf(z.id).length}</td><td class="r">${camsOf(z.id).length}</td><td>${a?pill(runState(a).s, runLabel(a)):'<span class="muted">—</span>'}</td></tr>`}).join('')}
+  </tbody></table></div>
+  <section class="panel"><h2>Przebiegi (wspólne)</h2><p class="muted small">Okres jest wspólny dla wszystkich projektów; każdy projekt ma w nim własny przebieg.</p>
+    <div class="tbl-wrap"><table><thead><tr><th>Przebieg</th><th class="r">Projekty z przebiegiem</th><th>Stan</th></tr></thead><tbody>
+    ${periods().map(p=>{ const rs=Object.values(S.runs).filter(r=>r.kind===p.kind&&r.period===p.period&&(r.week||null)===(p.week||null)), done=rs.filter(r=>runState(r).s==='done').length;
+      return `<tr class="click" data-a="okres" data-x="${p.key}"><td>${esc(p.label)}${p.key===CUR_PERIOD?' <span class="muted small">(bieżący)</span>':''}</td><td class="r">${rs.length} / ${Object.keys(S.zakresy).length}</td><td>${done?pill('ok',done+' zakończone'):''} ${rs.length-done?pill('info',(rs.length-done)+' w toku'):''}</td></tr>`; }).join('')}
+    </tbody></table></div></section>`;
+}
+function vOkres(key){
+  const p=periods().find(x=>x.key===key)||periods()[0], cur=p.key===CUR_PERIOD;
+  return `<div class="head"><div><div class="eyebrow"><a href="#" data-a="nav" data-x="zakresy">Projekty</a> / przebiegi wspólne</div><h1>${esc(p.label)}</h1>
+    <p class="sub">${p.kind==='close'?'Zamknięcie okresu':'Przebieg tygodniowy'} – stan we wszystkich projektach.${cur?' Brakujący przebieg uruchomisz przyciskiem w wierszu.':''}</p></div></div>
+  <div class="tbl-wrap"><table><thead><tr><th>Projekt</th><th>Przebieg</th><th>Etap</th><th>Stan</th><th>Prowadzi</th><th></th></tr></thead><tbody>
+  ${Object.values(S.zakresy).map(z=>{ const r=S.runs[runId(z.id,p.kind,p.period,p.week)];
+    if(!r) return `<tr><td><b>${esc(z.code)}</b></td><td class="muted">nie uruchomiono</td><td>—</td><td>${dictComplete(z)?pill('todo','Brak'):pill('crit','Słowniki niekompletne')}</td><td>—</td><td>${cur?`<button class="btn small primary" data-a="newrun" data-x="${z.id}" ${dictComplete(z)?'':'disabled'}>Uruchom</button>`:''}</td></tr>`;
+    const rs=runState(r), defs=defsOf(r), idx=rs.k? defs.findIndex(d=>d.k===rs.k)+1 : defs.length;
+    return `<tr class="click" data-a="run" data-x="${r.id}"><td><b>${esc(z.code)}</b></td><td class="mono small">${esc(r.id)}</td><td><span class="num">${idx}/${defs.length}</span> · ${esc(rs.k?defs[idx-1].n:'wszystkie etapy')}</td><td>${pill(rs.s, rs.s==='done'?(r.frozen?'Zamrożony':'Zakończony'):ST[rs.s])}</td><td>${esc(r.owner)}</td><td><button class="btn small" data-a="run" data-x="${r.id}">Przejdź</button></td></tr>`; }).join('')}
+  </tbody></table></div>`;
+}
+function readiness(z){
+  const items=[], missing=dictIdsOf(z).filter(id=>!active(S.dicts[id]).length);
+  items.push(z.p1s.length? {ok:true, txt:'Projekty P1S: '+z.p1s.join(', ')} : {ok:false, lvl:'crit', txt:'Projekt nie ma projektów P1S'});
+  for(const id of dictIdsOf(z)) items.push(active(S.dicts[id]).length? {ok:true, txt:dname(id)+': wypełniony'} : {ok:false, lvl:'crit', txt:dname(id)+': pusty'});
+  const cams=camsOf(z.id);
+  items.push(cams.length? {ok:true, txt:'WP mają CAM: '+cams.length+' osób'} : {ok:false, lvl:'warn', txt:'Brak WP z CAM – pliki CAM nie powstaną'});
+  const inc=completeness().filter(c=>z.p1s.includes(c.proj) && !c.ok);
+  items.push(inc.length? {ok:false, lvl:'warn', txt:'Niekompletne źródła RABIT: '+inc.map(c=>c.proj).join(', ')} : {ok:true, txt:'Źródła RABIT kompletne'});
+  items.push(z.isNew? {ok:false, lvl:'warn', txt:'Dostęp CAM do folderu CAM\\…\\Zwrocone – zgłoszenie do IT w toku'} : {ok:true, txt:'CAM mają dostęp do folderu CAM\\…\\Zwrocone'});
+  return {items, blocked: missing.length>0 || !z.p1s.length};
+}
+function stIcon(s){ return s==='done'?'✓':s==='error'?'✗':s==='stale'?'↺':['action','ready','running'].includes(s)?'⏳':'·'; }
+function runCard(r){
+  const defs=defsOf(r), rs=runState(r);
+  return `<article class="rcard"><div class="row between"><div><b>${esc(runLabel(r))}</b> <span class="muted small">(${r.kind==='close'?'zamknięcie':'tygodniowy'})</span><br><span class="mono muted small">${esc(r.id)}</span></div><span class="small">Prowadzi: <b>${esc(r.owner)}</b></span></div>
+    <div class="chips" aria-label="Etapy">${defs.map(d=>{ const s=r.st[d.k].s; return `<span class="chip s-${s}" title="${esc(d.n)}: ${ST[s]}">${esc(d.sh)} ${stIcon(s)}</span>`; }).join('')}</div>
+    <div class="row between">${pill(rs.s, rs.txt)}<button class="btn small ${rs.s==='done'?'':'primary'}" data-a="run" data-x="${r.id}">Przejdź do przebiegu →</button></div></article>`;
+}
+function vZakres(id){
+  const z=S.zakresy[id]; if(!z) return vZakresy();
+  const rd=readiness(z), runs=runsOf(id), okN=rd.items.filter(i=>i.ok).length;
+  const srcs=[...new Set(active(S.dicts.zrodla).filter(r=>z.p1s.includes(r.v.proj)).map(r=>r.v.src))];
+  const act=runs.filter(r=>runState(r).s!=='done'), old=runs.filter(r=>runState(r).s==='done');
+  const list = S.view.all ? runs : act.concat(old.slice(0,2)), t40=!!S.runs[runId(id,'weekly','2026-09',40)];
+  const mapped=scopeCes(id), su=scopeUnm(id);
+  return `
+  <div class="head"><div><div class="eyebrow"><a href="#" data-a="nav" data-x="zakresy">Projekty</a> / ${esc(z.code)}</div><h1>${esc(z.code)} · ${esc(z.name)}</h1>
+    <p class="sub">${esc(TYPES[z.type].label)} · ${z.pool?'pula projektów · ':''}utworzony ${esc(z.created)}</p></div></div>
+  <div class="facts"><span>Projekty P1S: ${z.p1s.map(p=>`<span class="tag">${p}</span>`).join(' ')||'—'}</span><span>WP: <b>${wpsOf(id).length}</b></span><span>CAM: <b>${camsOf(id).length}</b></span><span>Źródła RABIT: <b>${srcs.length}</b> <span class="muted small">(${srcs.join(', ')})</span></span></div>
+  ${rd.blocked?`<div class="note crit">Przebiegu nie można uruchomić: słowniki projektu są puste. Uzupełnij je w Konfiguracji poniżej.</div>`:''}
+  <section class="stack"><h2>Przebiegi tego projektu</h2>
+    ${list.map(runCard).join('')||'<p class="muted">Jeszcze nie uruchomiono żadnego przebiegu.</p>'}
+    <div class="row">${old.length>2?`<button class="btn small" data-a="zall">${S.view.all?'Pokaż tylko bieżące':'Pokaż całą historię ('+runs.length+')'}</button>`:''}
+      <button class="btn primary" data-a="newrun" data-x="${id}" ${rd.blocked||t40?'disabled':''} title="${t40?'Przebieg T40 już istnieje':''}">+ Nowy przebieg w tym projekcie</button></div>
+  </section>
+  <section class="panel"><div class="row between"><h2>Koszty wg kategorii P1S</h2><a href="#" data-a="goMapZ" data-x="${id}" class="small">ADMIN → Mapowanie</a></div>${catTable(allCes().filter(x=>zOfCes(x)===id),false)}</section>
+  <section class="panel"><h2>Konfiguracja</h2>
+    <div class="tbl-wrap"><table><thead><tr><th>Słownik projektu</th><th class="r">Aktywne wiersze</th><th>Ostatnia zmiana</th><th>Stan</th></tr></thead><tbody>${dictIdsOf(z).map(dictRow).join('')}</tbody></table></div>
+    ${rd.blocked?`<div class="row"><button class="btn" data-a="fillDicts" data-x="${id}">Symuluj: słowniki uzupełnione</button></div>`:''}
+    <details class="ready"><summary>Gotowość: <b>${okN}/${rd.items.length}</b> ${okN===rd.items.length?pill('ok','gotowy'):pill('warn','braki')} <span class="muted small">pokaż szczegóły</span></summary>
+      <ul class="checks">${rd.items.map(i=>`<li><span class="ic ${i.ok?'ok':i.lvl}">${i.ok?'✓':'!'}</span><span>${esc(i.txt)}</span></li>`).join('')}</ul></details>
+    <dl class="kv"><dt>Mapowanie CES</dt><dd>${mapped.length} WBS CES trafia do projektu${su.length?` · <b style="color:var(--crit)">${su.length} UNMAPPED</b> z propozycją w tym projekcie`:''} · <a href="#" data-a="goMapZ" data-x="${id}">ADMIN → Mapowanie</a></dd>
+      <dt>Słowniki globalne</dt><dd><a href="#" data-a="nav" data-x="slowniki">ADMIN → Słowniki</a> (stawki, kursy, kalendarz)</dd>
+      <dt>Folder</dt><dd class="mono small">${esc(ROOT)}\\Projekty\\${esc(z.code)}</dd></dl>
+  </section>`;
+}
+function folderTree(code){ return `${ROOT}\\Projekty\\${code}\\
+├── Finanse\\2026-09\\
+├── CAM\\2026-09\\Wyslane\\
+├── CAM\\2026-09\\Zwrocone\\
+└── EV\\2026-09\\`; }
+
+/* ---------- ADMIN → Słowniki ---------- */
+function dictRow(id){ const m=meta(id), n=rowsOf(id); return `<tr class="click" data-a="dict" data-x="${id}"><td><b>${esc(dname(id))}</b></td><td class="r num">${n}</td><td class="small">${esc(m.lastAt)} · ${esc(m.lastBy)} <span class="mono muted">${m.lastRev?'#'+m.lastRev:''}</span></td><td>${n?pill('ok','wypełniony'):pill('crit','pusty')}</td></tr>`; }
+function vSlowniki(){
+  const row=id=>{ const m=meta(id); return `<tr><td><b>${esc(dname(id))}</b> <span class="muted small">· ${rowsOf(id)} aktywnych wierszy</span></td><td class="mono">#${m.lastRev}</td><td class="small">${esc(m.lastAt)} · ${esc(m.lastBy)}</td>
+    <td><div class="row" style="flex-wrap:nowrap"><button class="btn small" data-a="dict" data-x="${id}">Edytuj</button><button class="btn small" data-a="dicth" data-x="${id}">Historia</button></div></td></tr>`; };
+  const head='<thead><tr><th>Słownik</th><th>Stan</th><th>Ostatnia zmiana</th><th></th></tr></thead>';
+  const cnt=(id)=> S.dicts[id]? `<a href="#" data-a="dict" data-x="${id}">${rowsOf(id)}</a>` : '<span class="muted">—</span>';
+  return `<div class="head"><div><div class="eyebrow">ADMIN</div><h1>Słowniki</h1><p class="sub">Wszystkie słowniki są w bazie i edytuje się je tutaj. Każdy zapis jest walidowany i zostaje w historii (ważny od / do, kto, kiedy).</p></div></div>
+  <div class="note info">Baza <span class="mono">${esc(DB_PATH)}</span> · aktualny stan <b class="mono">#${S.dbRev}</b>. Przebieg przypina stan i kopiuje go do MS SQL.</div>
+  <section class="panel"><h2>Globalne</h2><div class="tbl-wrap"><table>${head}<tbody>${['stawki','kalendarz','kursy','katgr'].map(row).join('')}</tbody></table></div></section>
+  <section class="panel"><h2>Konfiguracja importu RABIT</h2><div class="tbl-wrap"><table>${head}<tbody>${['prefiksy','zrodla'].map(row).join('')}</tbody></table></div></section>
+  <section class="panel"><h2>Słowniki projektów</h2><p class="muted small">Każdy projekt ma własne słowniki. Liczby to aktywne wiersze – kliknij, aby edytować.</p>
+    <div class="tbl-wrap"><table><thead><tr><th>Projekt</th><th class="r">WP i CAM</th><th class="r">Harmonogram</th><th class="r">Stawki CAS</th><th>Gotowość</th></tr></thead><tbody>
+    ${Object.values(S.zakresy).map(z=>{ const miss=dictIdsOf(z).filter(id=>!rowsOf(id)).length; return `<tr><td><a href="#" data-a="zakres" data-x="${z.id}"><b>${esc(z.code)}</b></a></td><td class="r">${cnt(z.id+':wp')}</td><td class="r">${cnt(z.id+':harm')}</td><td class="r">${cnt(z.id+':cas')}</td><td>${miss?pill('crit',miss+' puste'):pill('ok','✓')}</td></tr>`; }).join('')}
+    </tbody></table></div></section>`;
+}
+
+/* ---------- ADMIN → Import RABIT (wspólny dla wszystkich projektów) ---------- */
+function impFolderTable(){
+  const im=S.imp, dl=im.dl||{}, res=im.res||{};
+  const dlL={got:['ok','pobrany'], same:['todo','bez zmian – pominięty'], too:['crit','> 50 MB – zapisz ręcznie'], manual:['info','zapisany ręcznie']};
+  const resL={imported:['ok','zaimportowany'], skip:['todo','pominięty (te same metadane)'], dup:['todo','duplikat (ten sam hash)'], unrec:['warn','nierozpoznany – nie importowany'], err:['crit','błąd – brak pliku']};
+  return `<div class="tbl-wrap"><table><thead><tr><th>Plik</th><th>Źródło (prefiks)</th><th class="r">Rozmiar</th><th>Zmieniony w RABIT</th><th>Pobranie</th><th>Import</th></tr></thead><tbody>
+    ${im.remote.map(f=>{ const s=srcOf(f.name), d=dl[f.name], x=res[f.name];
+      return `<tr><td class="mono">${esc(f.name)}</td><td>${s?`<span class="tag">${s}</span>`:'<span class="muted">brak prefiksu</span>'}</td><td class="r">${nf(f.mb,1)} MB</td><td class="num">${esc(f.mod)}</td>
+      <td>${d?pill(...dlL[d]):'<span class="muted">—</span>'}${d==='too'?` <button class="btn small" data-a="impManual" data-x="${esc(f.name)}">Symuluj: zapisano ręcznie</button>`:''}</td>
+      <td>${x?pill(...resL[x]):im.imported[f.name]?`${pill('ok','✓')} <span class="muted small">${esc(im.imported[f.name].id)} · ${esc(im.imported[f.name].at)}</span>`:'<span class="muted">—</span>'}</td></tr>`}).join('')}
+    </tbody></table></div>
+    ${Object.values(res).includes('unrec')?`<div class="note warn">Plik nierozpoznany nie jest importowany. Jeśli to nowy raport, dopisz prefiks w <a href="#" data-a="dict" data-x="prefiksy">Słowniki → Prefiksy plików RABIT</a>; zaimportuje się przy kolejnym uruchomieniu.</div>`:''}`;
+}
+function vImport(){
+  const im=S.imp, last=im.history[0], canImport=im.dl && !im.res, comp=completeness();
+  const lastNew=im.lastNew.rows.map(c=>allCes().find(x=>x.c===c)).filter(Boolean), newUn=lastNew.filter(x=>x.r.s==='UNMAPPED').length;
+  return `
+  <div class="head"><div><div class="eyebrow">ADMIN</div><h1>Import RABIT</h1>
+    <p class="sub">Wspólny dla wszystkich projektów – wykonywany raz, nie w każdym projekcie. Przebiegi biorą z niego dane w etapie „Dane projektu”.</p></div></div>
+  <section class="panel"><div class="row between"><div><span class="eyebrow">Ostatni import</span><p><b class="mono">${esc(last.id)}</b> · ${esc(last.at)} · ${esc(last.who)} · ${last.imp} zaimportowane${last.unrec?', '+last.unrec+' nierozpoznany':''}</p></div>
+      <div class="row"><button class="btn" data-a="impDl">Pobierz nowe i zmienione</button><button class="btn primary" data-a="impRun" ${canImport?'':'disabled'}>Importuj</button></div></div>
+    <p class="mono small muted" style="overflow-wrap:anywhere">Folder: ${esc(RABIT_UNC)}</p>
+    ${impFolderTable()}
+    <p class="muted small">Plik bez zmian (nazwa, rozmiar, data) jest pomijany. WebDAV nie pobierze pliku &gt; 50 MB – taki plik zapisuje się ręcznie. Tożsamość pliku to hash SHA-256.</p></section>
+  <div class="grid g2">
+    <section class="panel"><h2>Kompletność źródeł</h2>
+      <div class="tbl-wrap"><table><thead><tr><th>Projekt P1S</th><th>Projekt</th><th>Źródła</th><th>Stan</th></tr></thead><tbody>
+      ${comp.map(c=>`<tr><td class="mono">${c.proj}</td><td>${c.z?esc(c.z.code):'<span class="muted">—</span>'}</td><td>${c.srcs.map(s=>`<span class="tag" style="${s.ok?'':'color:var(--crit);border-color:var(--crit)'}">${s.ok?'✓':'✗'} ${s.s}</span>`).join(' ')}</td><td>${c.ok?pill('ok','komplet'):pill('warn','niekompletny')}</td></tr>`).join('')}
+      </tbody></table></div></section>
+    <section class="panel"><h2>Nowe WBS CES z importu ${esc(im.lastNew.id)}</h2>
+      ${lastNew.length?`<div class="tbl-wrap"><table><thead><tr><th>WBS CES</th><th>Wynik mapowania</th><th>Cel</th></tr></thead><tbody>
+      ${lastNew.map(x=>`<tr><td class="mono">${x.c}</td><td>${mpill(x.r.s)}</td><td class="mono">${x.r.t||'—'}</td></tr>`).join('')}</tbody></table></div>
+      ${newUn?`<div class="row"><button class="btn primary" data-a="goMapZ" data-x="all">Przypisz ${newUn} UNMAPPED → Mapowanie</button></div>`:''}`:'<p class="muted">Import nie przyniósł nowych elementów WBS.</p>'}</section>
+  </div>
+  <section class="panel"><h2>Historia importów</h2>
+    <div class="tbl-wrap"><table><thead><tr><th>Import</th><th>Kiedy</th><th>Kto</th><th class="r">Zaimportowane</th><th class="r">Duplikaty</th><th class="r">Pominięte</th><th class="r">Nierozpoznane</th><th class="r">Błędy</th></tr></thead><tbody>
+    ${im.history.map(h=>`<tr><td class="mono">${h.id}</td><td class="num">${h.at}</td><td>${esc(h.who)}</td><td class="r">${h.imp}</td><td class="r">${h.dup}</td><td class="r">${h.skip}</td><td class="r">${h.unrec}</td><td class="r">${h.err}</td></tr>`).join('')}
+    </tbody></table></div></section>`;
+}
+
+/* ---------- ADMIN → Mapowanie CES ↔ P1S ----------
+   Zasada: każda zmiana przechodzi przez PODGLĄD (rodzaj reguły + skutek dla każdego WBS) i dopiero „Zapisz” ją utrwala.
+   Źródła zmiany: przeciągnięcie CES → P1S, klik CES potem klik P1S, przeciągnięcie na „Bez mapowania” (usunięcie),
+   przyjęcie propozycji, formularz ręczny. */
+function zOfCes(x){ const org = x.r.t ? nodeOf(x.r.t)?.org : x.prop; return (org && scopeOfOrg(org)?.id) || 'none'; }
+function cesName(code){ const p=S.ces.find(p=>p.pd===code); if(p) return p.name; for(const p of S.ces){ const w=p.wbs.find(w=>w.c===code); if(w) return w.n+' · '+p.pd; } return ''; }
+function cesView(){
+  const mp=S.mp, q=mp.q.trim().toLowerCase();
+  const items=allCes().filter(x=>(mp.z==='all'||zOfCes(x)===mp.z) && (!q || (x.c+' '+x.n+' '+x.pd+' '+x.pname).toLowerCase().includes(q)));
+  const counts={}; for(const x of items) counts[x.r.s]=(counts[x.r.s]||0)+1;
+  const groups=[], gi={};
+  for(const x of items.filter(x=>mp.f==='all'||x.r.s===mp.f)){ if(!gi[x.pd]){ gi[x.pd]={p:S.ces.find(c=>c.pd===x.pd), items:[]}; groups.push(gi[x.pd]); } gi[x.pd].items.push(x); }
+  return {items, counts, groups};
+}
+function linksTo(code){
+  return activeRules().filter(r=>r.p1s===code).map(r=> r.kind==='proj'
+    ? {r, txt:`${r.ces} · reguła · ${S.ces.find(p=>p.pd===r.ces)?.wbs.filter(w=>resolve(r.ces,w.c).s==='INHERITED').length||0} WBS`}
+    : {r, txt:`${r.ces} · wyjątek`});
+}
+function orgCost(org){ const xs=allCes().filter(x=>x.r.t && nodeOf(x.r.t)?.org===org); return {n:xs.length, cost:sum(xs.map(x=>x.cost))}; }
+function selTarget(){ const sc=S.mp.selCes; if(!sc) return null; if(isProj(sc)) return projRule(sc)?.p1s||null; const p=S.ces.find(p=>p.wbs.some(w=>w.c===sc)); return p? resolve(p.pd,sc).t : null; }
+function p1sRow(n,org,pad){
+  const code=n[0], lv=n[2], mp=S.mp, links=linksTo(code), tgt=selTarget(), hl = tgt===code || mp.pend?.target===code;
+  const zz=lv===1? scopeOfOrg(org) : null, oc=lv===1? orgCost(org) : null;
+  return `<button class="nd ${hl?'hl':''} ${links.length?'linked':''}" data-drop="${code}" data-a="mp1s" data-x="${code}" aria-pressed="${mp.selP1s===code}" style="padding-left:${pad}px">
+    <span class="c">${lv===1?'<b>'+code+'</b>':code}</span><span>${esc(n[1])}</span>
+    ${lv===1?(zz?`<span class="tag">${esc(zz.code)}</span>`:'<span class="x">bez projektu</span>'):''}${n[3]?`<span class="x">zaawans. ${n[3]}%</span>`:''}
+    ${links.map(l=>`<span class="lk">← ${esc(l.txt)}</span>`).join('')}${oc&&oc.n?`<span class="amt">${oc.n} WBS · ${nf(oc.cost)} PLN</span>`:''}</button>`;
+}
+function p1sOrg(org,forceOpen){
+  const o=orgInfo(org); if(!o) return '';
+  const mp=S.mp, tOrg=nodeOf(selTarget()||'')?.org, pOrg=nodeOf(mp.pend?.target||'')?.org;
+  const open=forceOpen || mp.open['p:'+org] || tOrg===org || pOrg===org;
+  return `<li><div class="trow"><button class="tg" data-a="mtog" data-x="p:${org}" aria-label="${open?'Zwiń':'Rozwiń'} ${org}">${open?'▾':'▸'}</button>${p1sRow(o.nodes[0],org,8)}</div>
+    ${open?`<ul class="mt">${o.nodes.slice(1).map(n=>`<li><div class="trow"><span class="tg blank"></span>${p1sRow(n,org,8+(n[2]-1)*18)}</div></li>`).join('')}</ul>`:''}</li>`;
+}
+function p1sCatalog(pick,noInput){ // pick: wybór PROJORG w kreatorze (checkboxy) zamiast celów mapowania
+  const mp=S.mp, q=mp.pq.trim(), orgLine = org => pick ? pickRow(org) : p1sOrg(org,false);
+  let body;
+  if(q.length>=3){
+    const {rows,more}=p1sSearch(q), orgs=[...new Set(rows.map(c=>nodeOf(c).org))];
+    body = orgs.length? `<p class="muted small">Wyniki dla „${esc(q)}”: ${rows.length}${more?'+ – pokazano pierwsze 50, zawęź wyszukiwanie':''}</p><ul class="mt">${orgs.map(orgLine).join('')}</ul>` : `<p class="muted">Brak wyników dla „${esc(q)}”.</p>`;
+  } else {
+    const [kz,kat,px]=mp.cp||[], crumb=[`<a href="#" data-a="pcat" data-x="">Z_KAT_ZBIORCZA</a>`];
+    if(kz) crumb.push(kat||px?`<a href="#" data-a="pcat" data-x="${esc(kz)}">${esc(kz)}</a>`:`<b>${esc(kz)}</b>`);
+    if(kat) crumb.push(px?`<a href="#" data-a="pcat" data-x="${esc(kz+'|'+kat)}">${esc(kat)}</a>`:`<b>${esc(kat)}</b>`);
+    const agg=(rows,key)=>{ const m=new Map(); for(const r of rows){ const k=key(r); m.set(k,(m.get(k)||0)+r[4]); } return [...m]; };
+    const tbl=(head,rows)=>`<div class="tbl-wrap"><table><thead><tr><th>${head}</th><th class="r">PROJORG</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+    if(px){ const c=CAT[px], pg=mp.page[px]||0, pages=Math.ceil(c.cnt/25);
+      crumb.push(`<b>${esc(c.opis)}</b>`);
+      body = `<div class="row between"><span class="small">${crumb.join(' › ')}</span>
+        <span class="row"><button class="btn small" data-a="ppage" data-x="-1" ${pg?'':'disabled'} aria-label="Poprzednia strona">‹</button><span class="small num">${nf(pg*25+1)}–${nf(Math.min((pg+1)*25,c.cnt))} z ${nf(c.cnt)}</span><button class="btn small" data-a="ppage" data-x="1" ${pg<pages-1?'':'disabled'} aria-label="Następna strona">›</button></span></div>
+        <ul class="mt">${orgsPage(px,pg).map(orgLine).join('')}</ul>`;
+    } else if(kat){
+      body = `<p class="small">${crumb.join(' › ')}</p>`+tbl('Z_OPIS', CATS.filter(c=>c[0]===kz&&c[1]===kat).map(c=>`<tr class="click" data-a="pcat" data-x="${esc(kz+'|'+kat+'|'+c[3])}"><td>${esc(c[2])}</td><td class="r">${nf(c[4])}</td></tr>`).join(''));
+    } else if(kz){
+      body = `<p class="small">${crumb.join(' › ')}</p>`+tbl('Z_KATEGORIA', agg(CATS.filter(c=>c[0]===kz),c=>c[1]).map(([k,n])=>`<tr class="click" data-a="pcat" data-x="${esc(kz+'|'+k)}"><td>${esc(k)}</td><td class="r">${nf(n)}</td></tr>`).join(''));
+    } else {
+      body = tbl('Z_KAT_ZBIORCZA', agg(CATS,c=>c[0]).map(([k,n])=>`<tr class="click" data-a="pcat" data-x="${esc(k)}"><td>${esc(k)}</td><td class="r">${nf(n)}</td></tr>`).join(''));
+    }
+  }
+  return (noInput?'':p1sInput())+body;
+}
+
+function p1sInput(){ return `<input type="text" id="pq" data-pq value="${esc(S.mp.pq)}" placeholder="Szukaj w P1S: kod lub opis (min. 3 znaki)" aria-label="Szukaj w P1S">`; }
+function pendInfo(p){
+  const isPd=p.src.startsWith('pd:'), code=p.src.slice(p.src.indexOf(':')+1);
+  const pdObj = isPd ? S.ces.find(x=>x.pd===code) : S.ces.find(x=>x.wbs.some(w=>w.c===code));
+  const wl = isPd ? pdObj.wbs : pdObj.wbs.filter(w=>w.c===code), pr=projRule(pdObj.pd);
+  const I={code, isPd, kind:'', save:'Zapisz', errs:[], warns:[], info:[], eff:[], fix:null};
+  const E=(w,a)=>({c:w.c, n:w.n, cost:w.cost, b:resolve(pdObj.pd,w.c), a});
+  if(p.op==='assign'){
+    const n=nodeOf(p.target);
+    if(isPd){
+      I.kind='Reguła projektu'; I.save='Zapisz regułę';
+      if(n.l!==1){ I.errs.push(`Reguła projektu wskazuje zawsze PROJORG – najwyższy poziom P1S (M7). ${n.c} jest elementem poziomu ${n.l}. Użyj ${n.org} albo przeciągnij pojedynczy WBS (wyjątek).`); I.fix=n.org; }
+      else if(pr && pr.p1s===n.c) I.errs.push(`Reguła ${code} → ${n.c} już obowiązuje.`);
+      if(pr && pr.p1s!==n.c && n.l===1) I.warns.push(`Zastąpi obecną regułę ${code} → ${pr.p1s}. Stara reguła zostanie zamknięta i zostaje w historii.`);
+      I.eff=wl.map(w=>{ const e=wbsRule(w.c); return E(w, e? {s:'OVERRIDE', t:e.p1s} : {s:'INHERITED', t:n.l===1?n.c:n.org}); });
+      I.info.push(`Obejmie obecne WBS projektu ${code} i wszystkie przyszłe – nowe WBS z importu odziedziczą regułę same.`);
+    } else {
+      const e=wbsRule(code);
+      I.kind='Wyjątek WBS'; I.save='Zapisz wyjątek';
+      if(e && e.p1s===n.c) I.errs.push(`${code} jest już przypisany do ${n.c}.`);
+      else if(!e && pr && pr.p1s===n.c) I.errs.push(`${code} już dziedziczy ${n.c} z reguły projektu ${pdObj.pd} – wyjątek nie jest potrzebny.`);
+      if(e && e.p1s!==n.c) I.warns.push(`Zastąpi obecny wyjątek ${code} → ${e.p1s}. WBS ma zawsze jeden cel – koszt liczony raz (M3).`);
+      if(pr) I.info.push(`Wyjątek ma pierwszeństwo przed regułą projektu ${pdObj.pd} → ${pr.p1s}.`);
+      I.eff=[E(wl[0], {s:pr?'OVERRIDE':'MAPPED', t:n.c})];
+    }
+    const zz=scopeOfOrg(n.org);
+    if(zz) I.info.push(`Koszt trafi do projektu ${zz.code} (${zz.name}).`);
+    else I.warns.push(`${n.org} nie należy do żadnego projektu – koszt nie trafi do żadnego przebiegu, dopóki PROJORG nie zostanie dodany do projektu.`);
+  } else if(isPd){
+    I.kind='Usunięcie reguły projektu'; I.save='Usuń regułę';
+    if(!pr) I.errs.push(`${code} nie ma reguły projektu – nie ma czego usuwać.`);
+    I.eff=wl.map(w=>{ const e=wbsRule(w.c); return E(w, e? {s:'MAPPED', t:e.p1s} : {s:'UNMAPPED', t:null}); });
+  } else {
+    const e=wbsRule(code);
+    I.kind= e? 'Usunięcie wyjątku' : 'Odpięcie WBS'; I.save= e? 'Usuń wyjątek' : 'Odepnij';
+    if(!e) I.errs.push(pr ? `${code} dziedziczy cel z reguły projektu ${pdObj.pd} → ${pr.p1s}. Pojedynczego WBS nie da się odpiąć (status NO_P1S odłożony – M14). Usuń regułę projektu ${pdObj.pd} albo przeciągnij WBS na inny cel (wyjątek).` : `${code} nie ma mapowania.`);
+    I.eff=[E(wl[0], pr? {s:'INHERITED', t:pr.p1s} : {s:'UNMAPPED', t:null})];
+  }
+  return I;
+}
+function commitPend(){
+  const p=S.mp.pend, I=pendInfo(p); if(I.errs.length) return;
+  const code=I.code;
+  if(p.op==='assign'){
+    const ex = I.isPd ? projRule(code) : wbsRule(code); if(ex) ex.vt=YESTERDAY;
+    addRule(I.isPd?'proj':'wbs', code, p.target);
+    bump('map', (I.isPd?'Reguła projektu ':'Wyjątek ')+code+' → '+p.target+(ex?' (poprzednio '+ex.p1s+')':''));
+  } else {
+    const r = I.isPd ? projRule(code) : wbsRule(code); r.vt=YESTERDAY;
+    bump('map', 'Usunięto '+(I.isPd?'regułę projektu ':'wyjątek ')+code+' → '+r.p1s);
+  }
+  const ch=I.eff.filter(e=>e.b.s!==e.a.s || e.b.t!==e.a.t).length;
+  mmsg('ok', `${I.kind}: zapisano (stan bazy #${S.dbRev}). Zmieniony status lub cel: ${ch} WBS.`);
+  // po przypisaniu od razu pokazujemy element P1S (kategoria + nazwa grupy); po usunięciu – element CES
+  S.mp.pend=null; if(p.op==='assign'){ S.mp.selCes=null; S.mp.selP1s=p.target; } else { S.mp.selCes=code; S.mp.selP1s=null; }
+}
+function catPathHtml(k){ if(!k) return '<span class="muted">—</span>'; return `<span class="kpath">${esc(k.kz)} › ${esc(k.kat)} › ${k.ov?`<b>${esc(k.grp)}</b> <span class="muted small">(✎ zamiast ${esc(k.opis)}${k.ov.v.p1s!==undefined?' · ustawione na '+esc(k.ov.v.p1s):''})</span>`:esc(k.grp)}</span>`; }
+function catChip(code){ const k=catOf(code); return k? `<span class="kt" title="${esc(k.kz+' › '+k.kat+' › '+k.grp)}">${k.ov?'✎ ':''}${esc(k.grp)}</span>` : ''; }
+function grpForm(n){
+  const own=active(S.dicts.katgr).find(r=>r.v.p1s===n.c), k=catOf(n.c), xs=allCes().filter(x=>x.r.t && (x.r.t===n.c || x.r.t.startsWith(n.c+'.')));
+  return `<div class="grpbox"><b>Nazwa grupy</b> <span class="muted small">– opcjonalna; zastępuje Z_OPIS „${esc(k.opis)}” dla ${esc(n.c)} i jego podelementów. Wszystko, co zmapujesz tutaj, pojawi się pod tą nazwą.</span>
+    <div class="row"><input type="text" id="kgn" value="${esc(own?own.v.name:'')}" placeholder="np. Silnik PW127 – kanał obejścia" aria-label="Nazwa grupy" style="flex:1 1 220px">
+      <button class="btn small primary" data-a="grpSave" data-x="${n.c}">Zapisz nazwę</button>${own?`<button class="btn small" data-a="grpDel" data-x="${n.c}">Usuń nazwę</button>`:''}</div>
+    <span class="muted small">Obejmie teraz: ${xs.length} WBS CES · ${nf(sum(xs.map(x=>x.cost)))} PLN. Zapis w słowniku „Grupy kategorii” z historią.</span></div>`;
+}
+function ruleOf(code){ return isProj(code) ? projRule(code) : wbsRule(code); }
+function workPanel(){
+  const mp=S.mp, st=x=> x.t? `${mpill(x.s)} <span class="mono">${x.t}</span>` : mpill(x.s);
+  if(mp.pend){
+    const p=mp.pend, I=pendInfo(p), n=p.target&&nodeOf(p.target);
+    return `<section class="panel work pend" id="work" aria-live="polite"><div class="row between"><h3>Podgląd zmiany: ${esc(I.kind)}</h3><span class="muted small">nic nie jest zapisane, dopóki nie klikniesz „${esc(I.save)}”</span></div>
+      <div class="flow"><div class="box"><span class="eyebrow">CES · ${I.isPd?'projekt':'WBS'}</span><b class="mono">${esc(I.code)}</b><span class="small muted">${esc(cesName(I.code))}</span></div><span class="arr" aria-hidden="true">${p.op==='assign'?'→':'✕'}</span>
+        <div class="box">${p.op==='assign'?`<span class="eyebrow">P1S · poziom ${n.l}</span><b class="mono">${n.c}</b><span class="small muted">${esc(n.n)}</span>`:'<span class="eyebrow">Wynik</span><b>bez mapowania</b>'}</div></div>
+      ${I.errs.map(e=>`<div class="note crit"><b>Nie można zapisać.</b> ${esc(e)}</div>`).join('')}${I.errs.length?'':I.warns.map(e=>`<div class="note warn">${esc(e)}</div>`).join('')+I.info.map(e=>`<div class="note info">${esc(e)}</div>`).join('')}
+      <div class="tbl-wrap" ${I.errs.length?'hidden':''}><table><thead><tr><th>WBS CES</th><th class="r">Koszt okresu</th><th>Teraz</th><th>Po zapisie</th><th>Kategoria P1S po zapisie</th></tr></thead><tbody>
+      ${I.eff.map(e=>`<tr><td class="mono">${e.c}</td><td class="r">${nf(e.cost)} PLN</td><td>${st(e.b)}</td><td>${e.b.s===e.a.s&&e.b.t===e.a.t?'<span class="muted">bez zmian</span>':st(e.a)}</td><td class="small">${e.a.t?catPathHtml(catOf(e.a.t)):'<span class="muted">bez kategorii</span>'}</td></tr>`).join('')}</tbody></table></div>
+      <div class="row">${I.fix?`<button class="btn primary" data-a="pfix" data-x="${I.fix}">Użyj ${I.fix} (PROJORG)</button>`:''}<button class="btn primary" data-a="pSave" ${I.errs.length?'disabled':''}>${esc(I.save)}</button><button class="btn" data-a="pCancel">Anuluj</button></div></section>`;
+  }
+  if(mp.manual) return `<section class="panel work" id="work"><div class="row between"><h3>Dodaj regułę ręcznie</h3><button class="btn small" data-a="mManual">Zamknij</button></div>
+    <p class="small muted">Wpisz kod CES – projekt (np. <span class="mono">4F16C0</span>) utworzy regułę projektu, WBS (np. <span class="mono">4F16C0000003</span>) utworzy wyjątek – oraz kod celu w P1S. Przed zapisem zobaczysz podgląd.</p>
+    <div class="form-grid"><div class="field"><label for="mfc">CES (projekt albo WBS)</label><input type="text" id="mfc" list="ces-codes" value="${esc(mp.mc)}"><datalist id="ces-codes">${S.ces.flatMap(p=>[p.pd,...p.wbs.map(w=>w.c)]).map(c=>`<option value="${c}">`).join('')}</datalist></div>
+      <div class="field"><label for="mfp">Cel P1S</label><input type="text" id="mfp" value="${esc(mp.mpc)}" placeholder="np. AF-F16C"></div></div>
+    <div class="row"><button class="btn primary" data-a="mManualGo">Pokaż podgląd</button></div></section>`;
+  if(mp.selCes){
+    const c=mp.selCes, pd=isProj(c), p=pd? S.ces.find(x=>x.pd===c) : S.ces.find(x=>x.wbs.some(w=>w.c===c)), pr=projRule(p.pd);
+    const rr = pd? null : resolve(p.pd,c), own=ruleOf(c), tgt=selTarget(), tn=tgt&&nodeOf(tgt), tz=tn&&scopeOfOrg(tn.org);
+    const cnt={}; if(pd) for(const w of p.wbs){ const s=resolve(p.pd,w.c).s; cnt[s]=(cnt[s]||0)+1; }
+    return `<section class="panel work" id="work"><div class="row between"><h3><span class="mono">${esc(c)}</span> · ${esc(pd?p.name:cesName(c))}</h3><button class="btn small" data-a="mClear">Odznacz</button></div>
+      <dl class="kv"><dt>Rodzaj</dt><dd>${pd?`projekt CES (${p.wbs.length} WBS)`:'WBS CES'}</dd>
+        <dt>Stan</dt><dd>${pd? Object.entries(cnt).map(([s,n])=>mpill(s)+' '+n).join(' ') : mpill(rr.s)}</dd>
+        <dt>Cel P1S</dt><dd>${tgt?`<span class="mono">${tgt}</span> · ${esc(tn.n)}${tz?' · projekt '+esc(tz.code):' · bez projektu'}`:'<span class="muted">brak</span>'}</dd>
+        <dt>Kategoria P1S</dt><dd>${tgt?catPathHtml(catOf(tgt)):'<span class="muted">pojawi się po zmapowaniu</span>'}</dd>
+        <dt>Skąd</dt><dd>${own? `${own.kind==='proj'?'reguła projektu':'wyjątek'} od ${own.vf} · ${esc(own.by)}` : (!pd && pr? `dziedziczy z reguły projektu ${p.pd} → ${pr.p1s}` : '<span class="muted">brak mapowania</span>')}</dd></dl>
+      <div class="note info"><b>Aby przypisać:</b> kliknij cel w kolumnie P1S albo przeciągnij tam ten element. ${pd?'Projekt CES wskazuje PROJORG (poziom 1).':'WBS może wskazać dowolny element P1S.'}</div>
+      <div class="row">${own?`<button class="btn" data-a="mUnmap" data-x="${c}">Usuń mapowanie</button>`:''}${tgt?`<button class="btn" data-a="preveal" data-x="${tn.org}">Pokaż cel w P1S</button>`:''}</div></section>`;
+  }
+  if(mp.selP1s){
+    const n=nodeOf(mp.selP1s), links=linksTo(n.c), zz=scopeOfOrg(n.org), oi=orgInfo(n.org);
+    return `<section class="panel work" id="work"><div class="row between"><h3><span class="mono">${n.c}</span> · ${esc(n.n)}</h3><button class="btn small" data-a="mClear">Odznacz</button></div>
+      <dl class="kv"><dt>Poziom</dt><dd>${n.l===1?'PROJORG (1) – cel reguły projektu lub wyjątku':n.l+' – cel wyjątku WBS'}</dd><dt>PROJECT</dt><dd>${esc(oi.project)}</dd>
+      <dt>Kategoria P1S</dt><dd>${catPathHtml(catOf(n.c))}</dd><dt>Projekt EV</dt><dd>${zz?esc(zz.code+' · '+zz.name):'<span class="muted">nie należy do żadnego projektu</span>'}</dd>
+      <dt>Powiązane CES</dt><dd>${links.length? links.map(l=>`<span class="lk">← ${esc(l.txt)}</span> <button class="btn small" data-a="mUnmap" data-x="${l.r.ces}">Usuń</button>`).join('<br>') : '<span class="muted">brak</span>'}</dd></dl>
+      ${grpForm(n)}
+      <div class="note info">Aby coś tu przypisać: wybierz element CES (lewa kolumna albo „Bez mapowania”), potem kliknij ten element – albo przeciągnij.</div></section>`;
+  }
+  return `<section class="panel work" id="work"><h3>Jak utworzyć regułę</h3>
+    <ol class="steps"><li><b>Wybierz element CES</b> – z kolejki „Bez mapowania” albo z listy CES: cały projekt (np. <span class="mono">4F16C0</span>) albo pojedynczy WBS.</li>
+      <li><b>Znajdź cel w P1S</b> – w projektach albo w katalogu (Z_KAT_ZBIORCZA → Z_KATEGORIA → Z_OPIS) lub wyszukiwarką.</li>
+      <li><b>Przeciągnij CES na P1S</b> albo kliknij cel. Pojawi się tu podgląd: rodzaj reguły i skutek dla każdego WBS. Zapis dopiero przyciskiem „Zapisz”.</li></ol>
+    <div class="tbl-wrap"><table><thead><tr><th>Co przeciągasz</th><th>Na co</th><th>Co powstaje</th></tr></thead><tbody>
+      <tr><td>Projekt CES</td><td>PROJORG (poziom 1)</td><td><b>Reguła projektu</b> – wszystkie obecne i przyszłe WBS projektu (status INHERITED)</td></tr>
+      <tr><td>WBS CES</td><td>dowolny element P1S</td><td><b>Wyjątek</b> – tylko ten WBS; ma pierwszeństwo przed regułą (OVERRIDE / MAPPED)</td></tr>
+      <tr><td>Zmapowany element</td><td>kolumnę „Bez mapowania”</td><td><b>Usunięcie</b> reguły lub wyjątku</td></tr></tbody></table></div>
+    <div class="row"><button class="btn" data-a="mManual">+ Dodaj regułę ręcznie</button><span class="muted small">albo przyjmij gotową propozycję: „Zaproponuj” w środkowej kolumnie.</span></div></section>`;
+}
+function proposals(items){
+  const pds=[...new Set(items.filter(x=>x.r.s==='UNMAPPED').map(x=>x.pd))];
+  return pds.map(pd=>{ const p=S.ces.find(c=>c.pd===pd); return {p, prop:p.prop && !projRule(pd) ? p.prop : null}; });
+}
+function vMapa(){
+  const mp=S.mp, V=cesView(), tot=V.items.length, unm=V.items.filter(x=>x.r.s==='UNMAPPED');
+  const back = S.view.back && S.runs[S.view.back] ? `<a href="#" data-a="run" data-x="${S.view.back}">← Wróć do przebiegu ${esc(S.view.back)}</a> · ` : '';
+  const pages=Math.max(1,Math.ceil(V.groups.length/20)), cp=Math.min(mp.cpage,pages-1), groups=V.groups.slice(cp*20,cp*20+20);
+  const cesRow=(x,pad)=>{ const sel=mp.selCes===x.c, hl=mp.selP1s && x.r.t && (x.r.t===mp.selP1s || (nodeOf(mp.selP1s)?.l===1 && nodeOf(x.r.t)?.org===mp.selP1s));
+    return `<div role="button" tabindex="0" class="nd ${hl?'hl':''}" draggable="true" data-drag="w:${x.c}" data-a="mces" data-x="${x.c}" aria-pressed="${sel}" style="padding-left:${pad}px"><span class="grip" aria-hidden="true">⋮⋮</span><span class="c">${x.c}</span><span>${esc(x.n)}</span>${mpill(x.r.s)}${x.r.t?`<span class="lk">→ ${x.r.t}</span>${catChip(x.r.t)}`:''}${x.isNew?'<span class="x">nowy</span>':''}<span class="amt">${nf(x.cost)} PLN</span></div>`; };
+  const cesTree = groups.map(({p,items})=>{
+    const pr=projRule(p.pd), open = mp.open['c:'+p.pd] || mp.q || mp.f!=='all' || (mp.selCes && (mp.selCes===p.pd || p.wbs.some(w=>w.c===mp.selCes)));
+    const hlP = mp.selP1s && pr && pr.p1s===mp.selP1s, cU=p.wbs.filter(w=>resolve(p.pd,w.c).s==='UNMAPPED').length;
+    return `<li><div class="trow"><button class="tg" data-a="mtog" data-x="c:${p.pd}" aria-label="${open?'Zwiń':'Rozwiń'} ${p.pd}">${open?'▾':'▸'}</button>
+      <div role="button" tabindex="0" class="nd ${hlP?'hl':''}" draggable="true" data-drag="pd:${p.pd}" data-a="mces" data-x="${p.pd}" aria-pressed="${mp.selCes===p.pd}"><span class="grip" aria-hidden="true">⋮⋮</span><span class="c"><b>${p.pd}</b></span><span>${esc(p.name)}</span>
+      ${pr?`<span class="lk">reguła → ${pr.p1s}</span>`:'<span class="x">bez reguły</span>'}<span class="amt">${p.wbs.length} WBS${cU?` · <b style="color:var(--crit)">${cU} UNMAPPED</b>`:''}</span></div></div>
+      ${open?`<ul class="mt">${items.map(x=>`<li><div class="trow"><span class="tg blank"></span>${cesRow(x,18)}</div></li>`).join('')}</ul>`:''}</li>`;
+  }).join('');
+  const qGroups={}; for(const x of unm) (qGroups[x.pd] ||= []).push(x);
+  const props=proposals(V.items);
+  const zOpen=z=>!mp.open['zc:'+z.id];
+  const chip=(k,l)=>`<button data-a="mfil" data-x="${k}" aria-pressed="${mp.f===k}">${k==='all'?l:mpill(k)} <b class="num">${k==='all'?tot:(V.counts[k]||0)}</b></button>`;
+  return `
+  <div class="head"><div><div class="eyebrow">${back}ADMIN</div><h1>Mapowanie CES ↔ P1S</h1>
+    <p class="sub">Globalny słownik powiązań: który koszt CES trafia do którego elementu P1S (a przez niego do projektu). Zapis z historią w bazie słowników.</p></div></div>
+  <div class="filters">
+    <input type="text" id="mq" data-mq value="${esc(mp.q)}" placeholder="Szukaj w CES: kod lub opis" aria-label="Szukaj w CES" style="flex:1 1 220px">
+    <div class="seg" role="group" aria-label="Stan">${chip('all','Wszystkie')}${chip('INHERITED')}${chip('OVERRIDE')}${chip('MAPPED')}${chip('UNMAPPED')}</div>
+    <label class="inline">Projekt <select data-mz aria-label="Projekt">${[['all','wszystkie'],...Object.values(S.zakresy).map(z=>[z.id,z.code]),['none','bez projektu']].map(([k,l])=>`<option value="${k}" ${mp.z===k?'selected':''}>${esc(l)}</option>`).join('')}</select></label>
+  </div>
+  ${mp.msg?`<div class="note ${mp.msg.lvl}">${esc(mp.msg.txt)}</div>`:''}
+  ${workPanel()}
+  <div class="map3">
+    <section class="panel"><div class="row between"><h3>CES · projekty</h3><span class="muted small">${V.groups.length} projektów CES</span></div>
+      <ul class="mt scroll">${cesTree||'<li class="muted">Brak elementów dla filtrów.</li>'}</ul>
+      ${pages>1?`<div class="row"><button class="btn small" data-a="cpage" data-x="-1" ${cp?'':'disabled'}>‹</button><span class="small">strona ${cp+1} z ${pages}</span><button class="btn small" data-a="cpage" data-x="1" ${cp<pages-1?'':'disabled'}>›</button></div>`:''}
+      <button class="btn small" data-a="mManual">+ Dodaj regułę ręcznie</button></section>
+    <section class="panel"><div class="row between"><h3>Bez mapowania</h3><span class="pill ${unm.length?'s-crit':'s-ok'}">${unm.length} WBS</span></div>
+      <div class="dropzone" data-drop="__unmap">Upuść tu zmapowany element, aby usunąć mapowanie</div>
+      ${unm.length?`<p class="small"><b>${nf(sum(unm.map(x=>x.cost)))} PLN</b> kosztu bez celu – liczony zawsze, ale nie trafi do EV (M9).</p>`:'<p class="muted small">Wszystko zmapowane.</p>'}
+      <ul class="mt scroll">${Object.entries(qGroups).map(([pd,xs])=>`<li><div class="eyebrow" style="padding:6px 8px 2px">${pd} · ${esc(S.ces.find(p=>p.pd===pd).name)}</div><ul class="mt">${xs.map(x=>`<li>${cesRow(x,8)}</li>`).join('')}</ul></li>`).join('')}</ul>
+      ${props.length?`<button class="btn small" data-a="mProps">${mp.props?'Ukryj propozycje':'Zaproponuj'}</button>`:''}
+      ${mp.props?`<div class="stack">${props.map(({p,prop})=>`<div class="prop">${prop?`<span><span class="mono"><b>${p.pd}</b></span> → <span class="mono"><b>${prop}</b></span> · ${esc(orgInfo(prop).name)}<br><span class="muted small">zgodność kodu i opisu: „${esc(p.name)}” ~ „${esc(orgInfo(prop).name)}”</span></span>
+          <span class="row"><button class="btn small primary" data-a="mPropGo" data-x="${p.pd}">Przyjmij</button><button class="btn small" data-a="mces" data-x="${p.pd}">Edytuj</button></span>`
+          : `<span><span class="mono"><b>${p.pd}</b></span> · ${esc(p.name)}<br><span class="muted small">brak propozycji – kod i opis nie pasują do żadnego PROJORG; przypisz ręcznie</span></span><span><button class="btn small" data-a="mces" data-x="${p.pd}">Wybierz</button></span>`}</div>`).join('')}</div>`:''}
+    </section>
+    <section class="panel"><h3>P1S</h3>${p1sInput()}
+      ${mp.pq.trim().length>=3 ? `${p1sCatalog(false,true)}<button class="btn small" data-a="pqClear">Wyczyść wyszukiwanie</button>` : `
+      <div class="eyebrow">Projekty i ich PROJORG</div>
+      <ul class="mt">${Object.values(S.zakresy).map(z=>`<li><div class="trow"><button class="tg" data-a="mtog" data-x="zc:${z.id}" aria-label="${zOpen(z)?'Zwiń':'Rozwiń'} ${esc(z.code)}">${zOpen(z)?'▾':'▸'}</button><span class="zl"><b>${esc(z.code)}</b> <span class="muted small">${z.p1s.length} PROJORG</span></span></div>
+        ${zOpen(z)?`<ul class="mt">${z.p1s.map(o=>p1sOrg(o,false)).join('')}</ul>`:''}</li>`).join('')}</ul>
+      <details class="cat" ${mp.cp?.length?'open':''}><summary>Katalog P1S · ${nf(P1S_TOTAL)} projektów · Z_KAT_ZBIORCZA → Z_KATEGORIA → Z_OPIS</summary>${p1sCatalog(false,true)}</details>`}
+    </section>
+  </div>
+  <section class="panel"><div class="row between"><h2>Koszty CES wg kategorii P1S</h2><span class="muted small">kategoria przechodzi z P1S na koszt CES w chwili zmapowania · ✎ = nazwa własna grupy</span></div>
+    ${catTable(V.items,true)}
+    <p class="muted small">Nazwę grupy zmienisz, klikając element P1S (np. <span class="mono">SP-CRDDQ</span>) – pole „Nazwa grupy” w panelu. Nie trzeba nazywać wszystkiego: bez nazwy własnej grupą jest Z_OPIS z P1S.</p></section>
+  <details class="panel"><summary><b>Rejestr reguł</b> <span class="muted small">(${activeRules().length} aktywnych)</span></summary>${rulesTable()}</details>
+  <section class="panel"><h2>Historia zmian mapowania</h2><ul class="log">${S.map.hist.slice(0,10).map(h=>`<li><span class="t">#${h.rev} · ${esc(h.at)} · ${esc(h.by)}</span><span>${esc(h.txt)}</span></li>`).join('')}</ul></section>`;
+}
+/* Koszty CES pogrupowane kategorią P1S, którą element dostał przy zmapowaniu: Z_KAT_ZBIORCZA → Z_KATEGORIA → grupa (Z_OPIS albo nazwa własna) */
+function catTable(items, clickable){
+  const T={}, un=items.filter(x=>!x.r.t);
+  for(const x of items.filter(x=>x.r.t)){ const k=catOf(x.r.t), org=nodeOf(x.r.t).org;
+    const a=(T[k.kz] ||= {cost:0,n:0,kat:{}}), b=(a.kat[k.kat] ||= {cost:0,n:0,grp:{}}), c=(b.grp[k.grp] ||= {cost:0,n:0,ov:false,orgs:new Set()});
+    for(const o of [a,b,c]){ o.cost+=x.cost; o.n++; } if(k.ov) c.ov=true; c.orgs.add(org); }
+  const tot=sum(items.map(x=>x.cost))||1, pct=v=>`<span class="bar"><i style="width:${Math.max(2,Math.round(v/tot*100))}%"></i></span>`;
+  const rows=[];
+  for(const [kz,a] of Object.entries(T).sort((x,y)=>y[1].cost-x[1].cost)){
+    rows.push(`<tr class="l1"><td><b>${esc(kz)}</b></td><td class="r">${a.n}</td><td class="r"><b>${nf(a.cost)}</b></td><td>${pct(a.cost)}</td><td></td></tr>`);
+    for(const [kat,b] of Object.entries(a.kat).sort((x,y)=>y[1].cost-x[1].cost)){
+      rows.push(`<tr class="l2"><td>${esc(kat)}</td><td class="r">${b.n}</td><td class="r">${nf(b.cost)}</td><td>${pct(b.cost)}</td><td></td></tr>`);
+      for(const [g,c] of Object.entries(b.grp).sort((x,y)=>y[1].cost-x[1].cost))
+        rows.push(`<tr class="l3"><td>${c.ov?'✎ <b>'+esc(g)+'</b>':esc(g)}</td><td class="r">${c.n}</td><td class="r">${nf(c.cost)}</td><td>${pct(c.cost)}</td><td class="small">${[...c.orgs].map(o=>clickable?`<a href="#" data-a="mp1sGo" data-x="${o}" class="mono">${o}</a>`:`<span class="mono">${o}</span>`).join(', ')}</td></tr>`);
+    }
+  }
+  if(un.length) rows.push(`<tr class="l1 un"><td><b>Bez kategorii</b> <span class="muted small">(UNMAPPED)</span></td><td class="r">${un.length}</td><td class="r"><b>${nf(sum(un.map(x=>x.cost)))}</b></td><td>${pct(sum(un.map(x=>x.cost)))}</td><td class="small muted">kategoria pojawi się po zmapowaniu</td></tr>`);
+  return `<div class="tbl-wrap"><table class="ktree"><thead><tr><th>Z_KAT_ZBIORCZA › Z_KATEGORIA › grupa</th><th class="r">WBS CES</th><th class="r">Koszt [PLN]</th><th style="width:18%">Udział</th><th>Elementy P1S</th></tr></thead><tbody>${rows.join('')||'<tr><td colspan="5" class="muted">Brak danych.</td></tr>'}</tbody></table></div>`;
+}
+function rulesTable(){
+  const a=S.adm, q=a.q.trim().toLowerCase(), pg=a.pg||0;
+  const all=S.map.rules.filter(r=>(a.old || isActive(r)) && (!q || (r.ces+' '+r.p1s).toLowerCase().includes(q))).sort((x,y)=>x.kind.localeCompare(y.kind)||x.ces.localeCompare(y.ces));
+  return `<div class="row" style="margin-top:10px"><input type="text" id="aq" data-aq value="${esc(a.q)}" placeholder="Szukaj: kod CES lub P1S" aria-label="Szukaj w rejestrze" style="flex:1 1 220px"><label class="inline"><input type="checkbox" data-aold ${a.old?'checked':''}> pokaż nieaktywne</label></div>
+  <div class="tbl-wrap"><table><thead><tr><th>Rodzaj</th><th>CES</th><th>P1S</th><th>Projekt</th><th>Ważna od</th><th>Ważna do</th><th>Kto</th><th></th></tr></thead><tbody>
+  ${all.slice(pg*25,pg*25+25).map(r=>`<tr class="${isActive(r)?'':'closed'}"><td>${r.kind==='proj'?'Reguła projektu':'Wyjątek WBS'}</td><td class="mono k">${r.ces}</td><td class="mono k">${r.p1s}</td><td>${esc(scopeOfOrg(nodeOf(r.p1s)?.org)?.code||'—')}</td><td class="num">${r.vf}</td><td class="num">${r.vt||'—'}</td><td>${esc(r.by)}</td><td>${isActive(r)?`<button class="btn small" data-a="mUnmap" data-x="${r.ces}">Usuń</button>`:''}</td></tr>`).join('')||'<tr><td colspan="8" class="muted">Brak reguł dla filtra.</td></tr>'}
+  </tbody></table></div>
+  <div class="row"><button class="btn small" data-a="apage" data-x="-1" ${pg?'':'disabled'}>‹</button><span class="small">${all.length?nf(pg*25+1)+'–'+nf(Math.min(pg*25+25,all.length))+' z '+nf(all.length):'0'}</span><button class="btn small" data-a="apage" data-x="1" ${(pg+1)*25<all.length?'':'disabled'}>›</button></div>`;
+}
+
+/* ---------- KREATOR PRZELICZENIA ---------- */
+const WSTEPS=['Podstawowe','Projekty i WP','Słowniki','CAM','Foldery','Podsumowanie'];
+function newWiz(){ return {step:0, code:'M28', name:'M28 – modernizacja', type:'WEW', pool:false, p1s:['M28-01','M28-02'], cesR:{}, busy:false, progress:[]}; }
+function pickRow(org){ const w=S.wiz, o=orgInfo(org), z=scopeOfOrg(org);
+  return `<li><label class="chk ${z?'dis':''}"><input type="checkbox" data-wp="${org}" ${w.p1s.includes(org)?'checked':''} ${z?'disabled':''}><span><span class="mono">${org}</span> · ${esc(o.name)} <span class="tag">${esc(catLabel(catOf(org)))}</span>${z?` <span class="muted small">należy do ${esc(z.code)}</span>`:''}</span></label></li>`; }
+function wDicts(w){ return ['wp','harm'].concat(w.type==='CAS'?['cas']:[]); }
+function vWizard(){
+  const w=S.wiz || (S.wiz=newWiz());
+  const steps=`<ol class="wsteps">${WSTEPS.map((s,i)=>`<li class="${i===w.step?'on':i<w.step?'past':''}">${i+1}. ${s}</li>`).join('')}</ol>`;
+  const dup=Object.values(S.zakresy).some(z=>z.code.toUpperCase()===w.code.toUpperCase());
+  let body='';
+  if(w.step===0) body=`
+    <div class="grid g2"><div class="field"><label for="w-code">Kod projektu</label><input type="text" id="w-code" data-w="code" value="${esc(w.code)}"><span class="hint">Używany w nazwach folderów, plików i przebiegów. Unikalny.</span></div>
+    <div class="field"><label for="w-name">Nazwa</label><input type="text" id="w-name" data-w="name" value="${esc(w.name)}"></div></div>
+    <div class="field"><label>Typ projektu EV</label><div class="choice">${Object.entries(TYPES).map(([k,t])=>`<button class="opt" data-a="wset" data-f="type" data-x="${k}" aria-pressed="${w.type===k}"><b>${t.label}</b><span>${t.desc}</span></button>`).join('')}</div></div>
+    <div class="note info">Typ wyznacza szablon etapów: przebieg tygodniowy ma ${stageDefs(w.type,'weekly').length} etapów, zamknięcie miesiąca ${stageDefs(w.type,'close').length}.</div>`;
+  if(w.step===1){
+    body=`
+    <label class="chk"><input type="checkbox" id="w-pool" data-wc="pool" ${w.pool?'checked':''}><span><b>Program indywidualny / pula</b><br><span class="muted">Kilka małych projektów liczonych razem jako jeden projekt.</span></span></label>
+    <div class="field"><label>Wybrane projekty P1S (PROJORG)</label>
+      <div class="row">${w.p1s.map(o=>`<span class="tag">${o} · ${esc(orgInfo(o)?.name||'')} <button class="x-btn" data-a="wunpick" data-x="${o}" aria-label="Usuń ${o}">×</button></span>`).join('')||'<span class="muted">brak – wybierz w katalogu poniżej</span>'}</div>
+      <span class="hint">Projekt P1S należy do co najwyżej jednego projektu. Koszty CES przypiszesz w ADMIN → Mapowanie CES↔P1S.</span></div>
+    <section class="panel flat"><h3>Katalog P1S · ${nf(P1S_TOTAL)} projektów · wg kategorii P1S</h3>${p1sCatalog(true)}</section>`;
+  }
+  if(w.step===2) body=`<div class="grid g2"><div class="stack"><h3>Słowniki projektu</h3>
+      ${wDicts(w).map(d=>`<label class="chk"><input type="checkbox" checked disabled><span><b>${DEFS[d].name}</b> <span class="muted">– wymagany, uzupełniany w aplikacji</span><br><span class="muted small">${DEFS[d].cols.map(c=>c.l).join(' · ')} · Ważny od / do</span></span></label>`).join('')}
+      </div><div class="stack"><h3>Słowniki globalne</h3><p class="muted">Przypinane razem ze słownikami projektu w każdym przebiegu.</p>
+      <ul class="checks">${['stawki','kalendarz','kursy'].map(d=>`<li><span class="ic ok">✓</span><span>${dname(d)} <span class="tag">${rowsOf(d)} wierszy · zmiana ${esc(S.dicts[d].lastAt)}</span></span></li>`).join('')}</ul></div></div>
+      <div class="note">Słowniki są w bazie (SQLite na dysku sieciowym), nie w plikach Excel. Nowy projekt ma puste słowniki – to blokuje pierwszy przebieg do czasu uzupełnienia.</div>`;
+  if(w.step===3) body=`
+    <div class="note info">Nie ma osobnych uprawnień: każda osoba z finansów może prowadzić każdy projekt. Wszystkie akcje trafiają do dziennika z nazwą użytkownika AD.</div>
+    <p>CAM przypisujesz do WP w słowniku <b>„WP i CAM”</b>, wybierając osobę z listy. Na tej podstawie aplikacja:</p>
+    <ul class="checks"><li><span class="ic ok">✓</span><span>generuje jeden plik na CAM z jego WP,</span></li>
+    <li><span class="ic ok">✓</span><span>pokazuje status zwrotu plików per CAM,</span></li>
+    <li><span class="ic ok">✓</span><span>nie pozwala zapisać WP bez CAM (walidacja przy zapisie),</span></li>
+    <li><span class="ic ok">✓</span><span>nie dopuszcza wariantów zapisu tej samej osoby – wybór z listy.</span></li></ul>`;
+  if(w.step===4) body=`<pre class="tree">${esc(folderTree(w.code||'KOD'))}</pre>
+    <ul class="checks"><li><span class="ic ok">✓</span><span>Korzeń <span class="mono">${esc(ROOT)}</span> dostępny (ścieżka UNC)</span></li>
+      <li><span class="ic ok">✓</span><span>Masz prawo zapisu w <span class="mono">Projekty\\</span></span></li>
+      <li><span class="ic ${dup?'crit':'ok'}">${dup?'!':'✓'}</span><span>Folder <span class="mono">${esc(w.code)}</span> jeszcze nie istnieje</span></li>
+      <li><span class="ic warn">!</span><span>Dostęp CAM do folderu <span class="mono">CAM\\…\\Zwrocone</span> nadaje IT. Aplikacja przygotuje treść zgłoszenia.</span></li></ul>`;
+  if(w.step===5){
+    const rules=Object.entries(w.cesR).filter(([,o])=>o && w.p1s.includes(o));
+    body = w.busy||w.progress.length ? `<ul class="checks">${w.progress.map(p=>`<li><span class="ic ok">✓</span><span>${esc(p)}</span></li>`).join('')}</ul>${w.busy?'<div class="progress"><i></i></div>':''}` :
+    `<dl class="kv"><dt>Kod</dt><dd><b>${esc(w.code)}</b></dd><dt>Nazwa</dt><dd>${esc(w.name)}</dd><dt>Typ</dt><dd>${TYPES[w.type].label}</dd>
+     <dt>Projekty P1S</dt><dd>${w.p1s.map(p=>`<span class="tag">${p}</span>`).join(' ')||'<span class="muted">brak</span>'}</dd>
+     <dt>Koszty CES</dt><dd class="muted">przypisanie w etapie „Mapowanie” pierwszego przebiegu</dd>
+     <dt>Słowniki projektu</dt><dd>${wDicts(w).map(d=>DEFS[d].name).join(', ')} <span class="muted">(puste)</span></dd>
+     <dt>Folder</dt><dd class="mono">${esc(ROOT)}\\Projekty\\${esc(w.code)}</dd></dl>
+     ${dup?'<div class="note crit">Projekt o tym kodzie już istnieje. Zmień kod w kroku 1.</div>':''}
+     ${!w.p1s.length?'<div class="note crit">Wybierz co najmniej jeden projekt P1S w kroku 2.</div>':''}
+     <div class="note">Przebieg będzie możliwy po uzupełnieniu słowników projektu (WP i CAM, harmonogram i budżet).</div>`;
+  }
+  const canCreate=!dup && w.code.trim() && w.p1s.length;
+  return `<div class="head"><div><div class="eyebrow"><a href="#" data-a="nav" data-x="zakresy">Projekty</a> / nowy</div><h1>Nowy projekt</h1><p class="sub">Kreator rejestruje projekt, przypisuje projekty P1S i tworzy foldery.</p></div></div>
+  ${steps}<section class="panel">${body}
+  <div class="row between"><button class="btn" data-a="wback" ${w.step===0||w.busy?'disabled':''}>Wstecz</button>
+  ${w.step<5?`<button class="btn primary" data-a="wnext">Dalej</button>`: w.progress.length&&!w.busy? `<button class="btn primary" data-a="zakres" data-x="${esc(w.code.toUpperCase())}">Przejdź do projektu</button>` : `<button class="btn primary" data-a="wcreate" ${canCreate&&!w.busy?'':'disabled'}>Utwórz projekt</button>`}</div></section>`;
+}
+
+/* ---------- NOWY PRZEBIEG (modal) ---------- */
+function vNewRun(){
+  const m=S.modal, z=S.zakresy[m.zid], weekly=m.kind==='weekly', id=runId(z.id,m.kind,'2026-09',40), exists=!!S.runs[id];
+  const inc=completeness().filter(c=>z.p1s.includes(c.proj) && !c.ok), su=scopeUnm(z.id), dc=dictComplete(z);
+  const checks=[
+    {ok:!exists, txt: exists? `Przebieg ${id} już istnieje – jeden przebieg na projekt i ${weekly?'tydzień':'okres'}` : `Brak przebiegu ${weekly?'T40':'zamknięcia 2026-09'} dla ${z.code}`},
+    {ok:true, txt:`Wersja aplikacji ${APP_VER}, schemat bazy ${SCHEMA_VER} zgodny`},
+    {ok:dc, txt: dc?'Słowniki projektu kompletne':'Słowniki projektu niekompletne'},
+    inc.length? {ok:true, warn:true, txt:'Niekompletne źródła RABIT: '+inc.map(c=>c.proj).join(', ')} : {ok:true, txt:'Źródła RABIT projektu kompletne'},
+    su.length? {ok:true, warn:true, txt:`${su.length} WBS CES UNMAPPED z propozycją w tym projekcie (${nf(sum(su.map(x=>x.cost)))} PLN) – do przypisania w ADMIN → Mapowanie CES↔P1S`} : {ok:true, txt:'Brak elementów UNMAPPED wskazujących to przeliczenie'},
+    weekly? {ok:true, txt:'Raport produkcyjny odświeżony 29.09.2026 05:12 (vAHDD)'} : {ok:true, warn:true, txt:'Okres 2026-09 trwa do 30.09. W demo można zacząć wcześniej.'}
+  ];
+  return `<div class="overlay" data-a="closeModal"><div class="modal" role="dialog" aria-modal="true" aria-labelledby="mt" data-stop>
+    <div><div class="eyebrow">${esc(z.code)} · ${esc(TYPES[z.type].label)}</div><h2 id="mt">Nowy przebieg</h2></div>
+    <div class="choice">
+      <button class="opt" data-a="mkind" data-x="weekly" aria-pressed="${weekly}"><b>Tygodniowy · T40</b><span>Zaawansowanie z produkcji, braki uzupełnia analityk. EV wstępne.</span></button>
+      <button class="opt" data-a="mkind" data-x="close" aria-pressed="${!weekly}"><b>Zamknięcie 2026-09</b><span>Zaawansowanie wyłącznie od CAM. EV formalne, po zatwierdzeniu zamrażane.</span></button>
+    </div>
+    <ul class="checks">${checks.map(c=>`<li><span class="ic ${!c.ok?'crit':c.warn?'warn':'ok'}">${!c.ok||c.warn?'!':'✓'}</span><span>${esc(c.txt)}</span></li>`).join('')}</ul>
+    <div class="stack"><h3>Stan słowników do przypięcia · #${S.dbRev}</h3>
+      <div class="tbl-wrap"><table><tbody>${relevant(z).map(d=>`<tr><td>${esc(dname(d))}</td><td class="r num">${rowsOf(d)}</td><td class="muted small">${esc(meta(d).lastAt)} · ${esc(meta(d).lastBy)}</td></tr>`).join('')}</tbody></table></div>
+      <p class="muted small">Stan przypina etap „Przypięcie słowników” i kopiuje go do MS SQL (dict). Zmiany po przypięciu nie wpływają na przebieg bez Twojej decyzji.</p></div>
+    <p class="mono muted">${esc(id)} · etapy: ${stageDefs(z.type,m.kind).length}</p>
+    <div class="row between"><button class="btn" data-a="closeModal">Anuluj</button><button class="btn primary" data-a="startRun" ${exists||!dc?'disabled':''}>Uruchom przebieg</button></div>
+  </div></div>`;
+}
+
+/* ---------- PRZEBIEG ---------- */
+function vRun(id){
+  const r=S.runs[id]; if(!r) return vPulpit();
+  const z=S.zakresy[r.zid], defs=defsOf(r);
+  if(!r.sel || !r.st[r.sel]) r.sel=(defs.find(d=>r.st[d.k].s!=='done')||defs[defs.length-1]).k;
+  const def=defs.find(d=>d.k===r.sel), i=defs.indexOf(def), rs=runState(r), newer=newerFor(r), nd=rs.s!=='done'?newerData(r):[];
+  const lock = r.owner!==ME && rs.s!=='done' ? `<div class="note info">Ostatnio pracował(a): <b>${esc(r.log[0]?.who||r.owner)}</b> (${esc(r.log[0]?.t||'')}). Każda osoba z finansów może kontynuować przebieg. Każda akcja trafia do dziennika.</div>` : '';
+  const nb = newer.length ? `<div class="banner"><span>Po przypięciu (stan #${r.pinRev}) zmieniono: ${newer.map(n=>`<b>${esc(dname(n.id))}</b> (${esc(n.m.lastBy)}, ${esc(n.m.lastAt)})`).join(', ')}. Przypięcie nowego stanu unieważnia etapy od walidacji.</span>
+      <span class="row">${actBtn(r,'ackNewer','Kontynuuj na przypiętym stanie',false,'small')}${actBtn(r,'rebase','Przypnij ponownie – przelicz od walidacji',true,'small')}</span></div>` : '';
+  const ndb = nd.length ? `<div class="banner"><span>Dostępne nowsze dane RABIT: ${nd.map(f=>`<span class="mono">${esc(f.name)}</span>`).join(', ')} (import ${esc(S.imp.imported[nd[0].name].id)}).</span><span class="row">${actBtn(r,'redata','Przelicz od etapu Dane projektu',true,'small')}</span></div>` : '';
+  return `
+  <div class="head"><div><div class="eyebrow"><a href="#" data-a="zakres" data-x="${z.id}">${esc(z.code)}</a> / przebieg</div>
+    <h1>${esc(runLabel(r))}</h1><p class="sub"><span class="mono">${esc(r.id)}</span> · rozpoczął(a) ${esc(r.owner)}${r.owner===ME?' (Ty)':''} · start ${esc(r.started)}${r.rev?` · rewizja EV R${r.rev}`:''}</p></div>
+    <div class="row">${r.kind==='weekly'?pill('info','EV wstępne'):pill('stale','Zamknięcie okresu')}${pill(rs.s, rs.s==='done'?(r.frozen?'Zamrożony':'Zakończony'):'W trakcie')}</div></div>
+  ${lock}${nb}${ndb}
+  <nav class="stepper" aria-label="Etapy przebiegu">${defs.map((d,j)=>`<button class="step ${r.st[d.k].s}" data-a="sel" data-x="${d.k}" aria-current="${d.k===r.sel}"><span class="n">${String(j+1).padStart(2,'0')} · ${ST[r.st[d.k].s]}${d.shared?' · wspólny':''}</span><span class="t">${d.n}</span><span class="bar"></span></button>`).join('')}</nav>
+  <div class="run-layout">
+    <section class="panel">
+      <div class="row between"><div><div class="eyebrow">Etap ${i+1} z ${defs.length}</div><h2>${def.n}</h2><p class="muted">${def.d}</p></div>${pill(r.st[def.k].s)}</div>
+      ${stagePanel(r,def)}
+    </section>
+    <aside class="stack">
+      <section class="panel"><h3>Przypięte słowniki</h3>${r.pinRev?`<p class="small">Stan <b class="mono">#${r.pinRev}</b> · migawka w MS SQL <span class="mono">dict.*</span></p><div class="tbl-wrap"><table><tbody>
+        ${relevant(z).map(d=>{const ch=meta(d).lastRev>r.pinRev;return `<tr><td>${esc(dname(d))}</td><td class="r num">${r.snap.rows[d]??'—'}${ch?' <span style="color:var(--stale)">zmieniony</span>':''}</td></tr>`}).join('')}</tbody></table></div>`:'<p class="muted small">Stan słowników zostanie przypięty w etapie „Przypięcie słowników”.</p>'}
+        ${r.files?`<p class="small muted">Dane: ${r.files.length} plików RABIT przypiętych (hash).</p>`:''}</section>
+      <section class="panel"><h3>Dziennik przebiegu</h3><ul class="log">${r.log.map(l=>`<li><span class="t">${esc(l.t)} · ${esc(l.who)}</span><span>${esc(l.msg)}</span></li>`).join('')}</ul></section>
+    </aside>
+  </div>`;
+}
+function actBtn(r,a,label,primary=true,cls='',x=''){ return `<button class="btn ${primary?'primary':''} ${cls}" data-a="${a}" ${x?`data-x="${esc(x)}"`:''} ${canAct(r)?'':'disabled'}>${esc(label)}</button>`; }
+function seedN(r,salt,min,max){ return min + hash(r.zid+salt)%(max-min+1); }
+function stagePanel(r,def){
+  const st=r.st[def.k].s, z=S.zakresy[r.zid];
+  if(st==='running') return `<p>${esc(r.st[def.k].label||'Przetwarzanie…')}</p><div class="progress"><i></i></div>`;
+  if(st==='todo') return `<div class="note">Etap czeka na zakończenie poprzednich etapów.</div>`;
+  const staleNote = st==='stale' ? `<div class="note stale">Wynik etapu jest nieaktualny, bo zmieniły się dane wejściowe wcześniejszego etapu. Wykonaj ponownie etapy od pierwszego oznaczonego „Do wykonania”.</div>` : '';
+  const defs=defsOf(r), nx=defs[defs.indexOf(def)+1];
+  const next = st==='done' && nx && r.st[nx.k].s!=='done' ? `<div class="row"><button class="btn" data-a="sel" data-x="${nx.k}">Dalej: ${esc(nx.n)} →</button></div>` : '';
+  return staleNote + STAGE[def.k](r,st,z) + next;
+}
+function issueList(r){
+  const s=r.snap, is=[];
+  for(const d of s.missRate) is.push(['crit','Stawki wydziałów',d,`Wydział ${d} występuje w kosztach CES projektu (2 wiersze, 3 412,00 PLN), a słownik nie ma dla niego stawki na 2026.`]);
+  if(s.unm.length) is.push(['warn','Mapowanie CES↔P1S',s.unm.length+' WBS',`Koszt ${nf(sum(s.unm.map(x=>x.cost)))} PLN bez mapowania (UNMAPPED, propozycja w tym projekcie). Przypisanie: ADMIN → Mapowanie CES↔P1S.`]);
+  if(s.noWp.length) is.push(['warn','WP i CAM',s.noWp.map(x=>x.c).join(', '),'Element P1S z zaawansowaniem bez WP. Rozstrzygnięcie w etapie Łączenie źródeł.']);
+  for(const w of s.noBudget) is.push(['warn','Harmonogram i budżet',w,'WP bez budżetu (BAC).']);
+  return is;
+}
+const STAGE = {
+  data(r,st,z){
+    const files = st==='done' && r.files ? r.files : pinFiles(z.id);
+    const comp = completeness().filter(c=>z.p1s.includes(c.proj)), su=scopeUnm(z.id);
+    const li=S.imp.history[0];
+    return `<p class="muted">Dane pochodzą ze wspólnego importu (<a href="#" data-a="nav" data-x="import">ADMIN → Import RABIT</a>, ostatni <span class="mono">${esc(li.id)}</span> · ${esc(li.at)} · ${esc(li.who)}). Etap wybiera wiersze projektów P1S projektu i koszty CES zmapowane do tych projektów, a potem przypina pliki.</p>
+    <div class="tbl-wrap"><table><thead><tr><th>Plik</th><th>Źródło</th><th>Import</th><th class="r">Wiersze</th><th>SHA-256</th></tr></thead><tbody>
+    ${files.map(f=>`<tr><td class="mono">${esc(f.name)}</td><td><span class="tag">${f.src}</span></td><td class="num">${esc(f.at)}</td><td class="r">${nf(f.rows)}</td><td class="mono">${f.sha.slice(0,12)}…</td></tr>`).join('')}</tbody></table></div>
+    <ul class="checks">${comp.map(c=>c.ok?`<li><span class="ic ok">✓</span><span>${c.proj}: źródła kompletne (${c.srcs.map(s=>s.s).join(', ')})</span></li>`:`<li><span class="ic warn">!</span><span>${c.proj}: brak importu ${c.srcs.filter(s=>!s.ok).map(s=>s.s).join(', ')} (ostrzeżenie; docelowo blokada)</span></li>`).join('')}
+      ${su.length?`<li><span class="ic warn">!</span><span>${su.length} WBS CES UNMAPPED z propozycją w tym projekcie (${nf(sum(su.map(x=>x.cost)))} PLN) – <a href="#" data-a="goMapZ" data-x="${z.id}">przypisz w ADMIN → Mapowanie</a></span></li>`:''}
+      <li><span class="ic ok">✓</span><span>Daty księgowania w okresie ${r.period}</span></li></ul>
+    ${st==='done'?`<div class="note ok">Przypięto ${files.length} plików. Nowy import w trakcie przebiegu pokaże informację i decyzję: kontynuuj albo przelicz od etapu Dane projektu.</div>`:`<div class="row">${actBtn(r,'doData','Przypnij dane projektu')}</div>`}`;
+  },
+  dict(r,st,z){
+    const ids=relevant(z);
+    return `<p>Słowniki nie są importowane z plików. Przypięcie zapisuje znacznik stanu bazy słowników i kopiuje ten stan do MS SQL, bo procedury EV nie czytają SQLite (D27).</p>
+    <div class="tbl-wrap"><table><thead><tr><th>Słownik</th><th>Zasięg</th><th class="r">Wiersze</th><th>Ostatnia zmiana</th></tr></thead><tbody>
+    ${ids.map(d=>`<tr><td><a href="#" data-a="${d==='map'?'nav':'dict'}" data-x="${d==='map'?'mapa':d}">${esc(dname(d))}</a></td><td class="muted">${d==='map'?'globalny':['stawki','kalendarz','kursy'].includes(d)?'globalny':'projekt'}</td><td class="r num">${st==='done'?r.snap.rows[d]:rowsOf(d)}</td><td class="small">${esc(meta(d).lastAt)} · ${esc(meta(d).lastBy)}</td></tr>`).join('')}</tbody></table></div>
+    ${st==='done'?`<div class="note ok">Przypięto stan <b class="mono">#${r.pinRev}</b>. Migawka skopiowana do MS SQL (<span class="mono">dict.StanSlownikow</span>, <span class="mono">dict.*</span>): ${nf(sum(Object.values(r.snap.rows)))} wierszy. Kolejne etapy czytają tylko migawkę.</div>`:`<div class="row">${actBtn(r,'doDict','Przypnij stan i skopiuj migawkę')}</div>`}`;
+  },
+  val(r,st,z){
+    if(st==='ready') return `<p>Poprawność samych słowników zapewnia walidacja przy zapisie. Ten etap sprawdza, czy przypięte słowniki pasują do danych przebiegu: stawki dla wydziałów z kosztów, mapowanie kosztów CES, WP dla elementów z zaawansowaniem, budżety WP.</p><div class="row">${actBtn(r,'doVal','Uruchom walidację')}</div>`;
+    const is=issueList(r), errs=is.filter(x=>x[0]==='crit').length;
+    const tbl=`<div class="tbl-wrap"><table><thead><tr><th>Waga</th><th>Źródło</th><th>Element</th><th>Opis</th></tr></thead><tbody>${is.map(i=>`<tr><td>${pill(i[0], i[0]==='crit'?'Blokujący':'Ostrzeżenie')}</td><td>${i[1]}</td><td class="mono small">${esc(i[2])}</td><td>${esc(i[3])}</td></tr>`).join('')}</tbody></table></div>`;
+    if(st==='error') return `<div class="note crit">${errs} błąd blokujący. Popraw słownik w aplikacji – zapis przejdzie walidację i trafi do historii – a potem przypnij stan ponownie.</div>${tbl}
+      <div class="row">${actBtn(r,'valFix','Popraw w aplikacji: Stawki wydziałów',false)}${actBtn(r,'revalidate','Przypnij ponownie i waliduj')}</div>`;
+    return `<div class="note ok">Brak błędów blokujących. ${is.length} ostrzeżeń trafia do raportu przebiegu.</div>${is.length?tbl:''}`;
+  },
+  join(r,st,z){
+    if(r.newEl && r.newEl.state==='open' && st==='action') return newElPanel(r,z);
+    const rej = r.fin?.state==='rejected' ? `<div class="note crit">Pliki odrzucone (${esc(r.fin.by)}, ${esc(r.fin.at)}): „${esc(r.fin.comment)}”. Popraw dane i połącz ponownie.</div>` : '';
+    if(st==='ready') return rej+`<p>Koszt każdego WBS CES trafia do elementu P1S według przypiętego mapowania (wyjątek WBS → reguła projektu), a dalej do WP projektu. Logika w procedurach MS SQL (O14).</p><div class="row">${actBtn(r,'doJoin','Połącz źródła')}</div>`;
+    const s=r.snap, tot=s.ces+s.unm.length;
+    return rej+`<div class="grid g3">
+      <div class="stack"><span class="eyebrow">Koszt CES okresu w EV</span><b class="num" style="font-size:1.3rem">${nf(s.cost)} PLN</b></div>
+      <div class="stack"><span class="eyebrow">WBS CES zmapowane</span><b class="num" style="font-size:1.3rem">${s.ces} / ${tot}</b></div>
+      <div class="stack"><span class="eyebrow">Work Packages</span><b class="num" style="font-size:1.3rem">${wpsOf(z.id).length}</b></div></div>
+      <ul class="checks">${r.newEl?.state==='accepted'? `<li><span class="ic warn">!</span><span>Pominięto elementy bez przypisania: ${nf(r.newEl.cost)} PLN poza EV tego przebiegu (decyzja: ${esc(r.newEl.by)})</span></li>` : `<li><span class="ic ok">✓</span><span>Wszystkie koszty CES wskazujące ten projekt są zmapowane; elementy P1S z zaawansowaniem mają WP</span></li>`}
+      <li><span class="ic ok">✓</span><span>Każdy koszt CES pokazany raz – brak relacji 1:wiele (M3)</span></li>
+      <li><span class="ic ok">✓</span><span>Suma kontrolna: koszt po połączeniu = koszt z przypiętych plików</span></li></ul>`;
+  },
+  fin(r,st,z){
+    const t=r.week?'T'+r.week:r.period, files=[z.code+'_AC_przeglad_'+t+'.xlsx', z.code+'_ETC_wstepne_'+t+'.xlsx', z.code+'_WBS_bez_mapowania.xlsx'];
+    if(st==='ready') return `<p>Pliki trafią do <span class="mono">Projekty\\${esc(z.code)}\\Finanse\\${r.period}\\</span>. Kolejne etapy są zablokowane do czasu potwierdzenia, że pliki są poprawne.</p><div class="row">${actBtn(r,'doFin','Generuj pliki dla finansów')}</div>`;
+    const list=`<ul class="checks">${files.map(f=>`<li><span class="ic ok">✓</span><span class="mono">${esc(f)}</span></li>`).join('')}</ul><p class="muted small">„WBS_bez_mapowania” zawiera elementy UNMAPPED ze stanu mapowania przypiętego w przebiegu.</p>`;
+    if(st==='done') return list+`<div class="note ok">Potwierdził(a): ${esc(r.fin?.by||'—')} · ${esc(r.fin?.at||'')}</div>`;
+    return list+`<div class="note info">Oczekuje na potwierdzenie. Może potwierdzić dowolna osoba z finansów, także prowadząca przebieg. Zapisujemy kto i kiedy.</div>
+      <div class="field"><label for="fin-c">Komentarz (wymagany przy odrzuceniu)</label><textarea id="fin-c" placeholder="np. Koszt W-417 do wyjaśnienia"></textarea></div>
+      <div class="row"><button class="btn primary" data-a="finOk">Zatwierdź</button><button class="btn danger" data-a="finNo">Odrzuć – wróć do łączenia</button></div>`;
+  },
+  prod(r,st,z){
+    const tot=wpsOf(z.id).length, miss=Math.min(3,Math.max(2,Math.round(tot*0.3)));
+    if(st==='ready') return `<p>Zaawansowanie z raportu produkcyjnego po elementach P1S przypisanych do WP. Źródło do ustalenia (O10, np. <span class="mono">PZLPROD.LOG.vAHDD</span>).</p><div class="row">${actBtn(r,'doProd','Pobierz zaawansowanie z produkcji')}</div>`;
+    return `<div class="note ok">Pobrano zaawansowanie dla ${tot-miss} z ${tot} WP. Brak wartości dla ${miss} WP – uzupełnij w następnym etapie.</div>`;
+  },
+  fill(r,st,z){
+    const w=wpsOf(z.id), tot=w.length, miss=Math.min(3,Math.max(2,Math.round(tot*0.3)));
+    const rows=w.slice(0,miss).map((v,i)=>({wp:v.wp, cam:v.cam, last:seedN(r,'l'+i,20,85)}));
+    if(st==='done') return `<div class="note ok">Uzupełniono ${miss} WP. Każda wartość ma zapisane pochodzenie: ANALITYK (kto, kiedy, metoda).</div>`;
+    return `<p>Braki od CAM i produkcji uzupełnia analityk. Wartość analityka nigdy nie nadpisuje wartości od CAM bez śladu. Zasady uzupełniania – decyzja O11.</p>
+    <div class="tbl-wrap"><table><thead><tr><th>WP</th><th>CAM</th><th class="r">Ostatnio</th><th>Metoda</th><th class="r">Wartość %</th></tr></thead><tbody>
+    ${rows.map((x,i)=>`<tr><td class="mono">${x.wp}</td><td>${esc(x.cam)}</td><td class="r">${x.last}%</td><td><select id="fm-${i}" aria-label="Metoda dla ${x.wp}" ${canAct(r)?'':'disabled'}><option>Ostatnia znana wartość</option><option>Wartość ręczna</option><option>Plik CAM (opcjonalny)</option></select></td><td class="r"><input type="text" id="fv-${i}" value="${x.last}" style="width:70px;text-align:right" aria-label="Wartość ${x.wp}" ${canAct(r)?'':'disabled'}></td></tr>`).join('')}
+    </tbody></table></div><div class="row">${actBtn(r,'doFill','Zapisz uzupełnienia')}</div>`;
+  },
+  camout(r,st,z){
+    const cams=camsOf(z.id);
+    if(st==='ready') return `<p>Jeden plik na CAM z WP przypisanymi w słowniku „WP i CAM” (migawka przebiegu). Szablon ma ukryty arkusz z identyfikatorem przebiegu; komórki poza polami do uzupełnienia są zablokowane.</p>
+      <div class="tbl-wrap"><table><thead><tr><th>CAM</th><th class="r">WP</th><th>Plik</th></tr></thead><tbody>${cams.map(c=>`<tr><td>${esc(c[0])}</td><td class="r">${c[1]}</td><td class="mono">${esc(z.code)}_${r.period}_CAM_${esc(c[0].replace(/[ .]/g,''))}.xlsx</td></tr>`).join('')}</tbody></table></div>
+      <div class="row">${actBtn(r,'doCamOut','Generuj pliki dla CAM')}</div>`;
+    return `<div class="note ok">Wygenerowano ${cams.length} plików w <span class="mono">CAM\\${r.period}\\Wyslane\\</span>. Termin zwrotu: 06.10.2026. CAM pracują tylko na plikach.</div>`;
+  },
+  camin(r,st,z){
+    const c=r.cams || camsOf(z.id).map(x=>({n:x[0], wp:x[1], s:'sent'}));
+    const lab={sent:['todo','Wysłany'],back:['info','Zwrócony'],ok:['ok','Zaimportowany'],rej:['crit','Odrzucony']};
+    const tbl=`<div class="tbl-wrap"><table><thead><tr><th>CAM</th><th class="r">WP</th><th>Status</th><th>Uwagi</th></tr></thead><tbody>${c.map(x=>`<tr><td>${esc(x.n)}</td><td class="r">${x.wp}</td><td>${pill(lab[x.s][0],lab[x.s][1])}</td><td>${esc(x.msg||'')}</td></tr>`).join('')}</tbody></table></div>`;
+    if(st==='done') return tbl+`<div class="note ok">Zaimportowano pliki wszystkich CAM.</div>`;
+    const scanned=!!r.cams;
+    return `<p>Aplikacja sprawdza folder <span class="mono">CAM\\${r.period}\\Zwrocone\\</span>. Import odrzuca pliki z innego przebiegu lub zmienione poza polami do uzupełnienia.</p>${tbl}
+      <div class="row">${actBtn(r, scanned?'camRescan':'camScan', scanned?'Symuluj: CAM poprawili pliki – skanuj ponownie':'Skanuj folder Zwrócone')}</div>
+      ${scanned?'<p class="muted small">Przebieg może czekać kilka dni. Aplikację można zamknąć – stan jest w bazie.</p>':''}`;
+  },
+  camval(r,st,z){
+    const close=r.kind==='close', pr=close?[100,0,0]:[0,70,30];
+    const bar=`<div class="prov" role="img" aria-label="Pochodzenie zaawansowania"><span style="width:${pr[0]}%;background:var(--ok)"></span><span style="width:${pr[1]}%;background:var(--info)"></span><span style="width:${pr[2]}%;background:var(--warn)"></span></div>
+      <div class="legend"><span><i style="background:var(--ok)"></i>CAM ${pr[0]}%</span><span><i style="background:var(--info)"></i>Produkcja ${pr[1]}%</span><span><i style="background:var(--warn)"></i>Analityk ${pr[2]}%</span></div>`;
+    const checks=`<ul class="checks"><li><span class="ic ok">✓</span><span>Zaawansowanie w zakresie 0–100%</span></li>
+      <li><span class="ic warn">!</span><span>1 WP ze spadkiem zaawansowania względem poprzedniego okresu</span></li>
+      <li><span class="ic ${close?'ok':'warn'}">${close?'✓':'!'}</span><span>${close?'Bramka zamknięcia: 100% wartości od CAM':'Przebieg tygodniowy: wartości spoza CAM dozwolone, EV oznaczone jako wstępne'}</span></li></ul>`;
+    if(st==='ready') return bar+`<div class="row">${actBtn(r,'doCamVal','Waliduj zaawansowanie')}</div>`;
+    return bar+checks;
+  },
+  ev(r,st,z){
+    if(st==='ready') return `<p>Kalkulacja w bazie na migawce słowników <span class="mono">#${r.pinRev}</span> i przypiętych plikach, więc wynik można odtworzyć 1:1.</p><div class="row">${actBtn(r,'doEv', r.rev?'Przelicz – nowa rewizja':'Generuj EV')}</div>`;
+    const rows=z.p1s.map(p=>{ const bac=seedN(r,p+'b',40,160)*1e6, bcws=bac*seedN(r,p+'s',30,70)/100, bcwp=bcws*seedN(r,p+'p',88,106)/100, acwp=bcwp*seedN(r,p+'a',92,112)/100; return {p,bac,bcws,bcwp,acwp}; });
+    const f=x=>nf(Math.round(x/1000));
+    return `<div class="row between"><span>Rewizja <b>R${r.rev||1}</b> · ${r.kind==='weekly'?'EV wstępne (nieformalne)':'EV formalne'} · stan słowników #${r.pinRev}</span><span class="mono muted">${esc(z.code)}_EV_${r.week?'T'+r.week:r.period}_R${r.rev||1}.xlsx</span></div>
+      <div class="tbl-wrap"><table><thead><tr><th>Projekt P1S</th><th class="r">BAC</th><th class="r">BCWS</th><th class="r">BCWP</th><th class="r">ACWP</th><th class="r">CPI</th><th class="r">SPI</th></tr></thead><tbody>
+      ${rows.map(x=>{const cpi=x.bcwp/x.acwp, spi=x.bcwp/x.bcws;return `<tr><td class="mono">${x.p}</td><td class="r">${f(x.bac)}</td><td class="r">${f(x.bcws)}</td><td class="r">${f(x.bcwp)}</td><td class="r">${f(x.acwp)}</td><td class="r" style="color:var(${cpi<0.95?'--crit':cpi<1?'--warn':'--ok'})">${cpi.toFixed(2)}</td><td class="r" style="color:var(${spi<0.95?'--crit':spi<1?'--warn':'--ok'})">${spi.toFixed(2)}</td></tr>`}).join('')}
+      </tbody></table></div><p class="muted" style="font-size:.82rem">Wartości w tys. ${z.type==='SAC'?'USD':'PLN'}. Dane przykładowe.</p>
+      ${r.frozen?'<div class="note ok">Okres zamknięty i zamrożony. Ponowne przeliczenie utworzy nową rewizję, poprzednia zostaje w historii.</div>':
+       `<div class="row">${actBtn(r,'doEvAgain','Przelicz ponownie (nowa rewizja)',false)}${r.kind==='close' && runState(r).s==='done'? `<button class="btn primary" data-a="freeze">Zatwierdź zamknięcie okresu</button>`:''}</div>`}`;
+  },
+  cobra(r,st,z){
+    if(st==='ready') return `<p>Plik dla Cobra: koszt pracy przeliczony po bieżących stawkach na USD, zaawansowanie wg WP.</p><div class="row">${actBtn(r,'doCobra','Generuj plik dla Cobra')}</div>`;
+    return `<div class="note ok">Wygenerowano <span class="mono">${esc(z.code)}_${r.period}_Cobra_import.csv</span> w <span class="mono">EV\\${r.period}\\</span>.</div>`;
+  }
+};
+function newElPanel(r,z){
+  const s=r.snap, close=r.kind==='close', cost=sum(s.unm.map(x=>x.cost));
+  return `<div class="note warn">Przypięty stan mapowania nie obejmuje części danych projektu. Koszt <b>${nf(cost)} PLN</b> i zaawansowanie tych elementów nie trafią do EV, dopóki nie zostaną przypisane.</div>
+    ${s.unm.length?`<h3>Koszty CES bez mapowania (UNMAPPED)</h3><div class="tbl-wrap"><table><thead><tr><th>WBS CES</th><th>Project Definition</th><th class="r">Koszt okresu</th><th>Propozycja</th></tr></thead><tbody>${s.unm.map(x=>`<tr><td class="mono">${x.c}</td><td class="mono">${x.pd}</td><td class="r">${nf(x.cost)} PLN</td><td class="mono">${x.prop||'—'}</td></tr>`).join('')}</tbody></table></div>`:''}
+    ${s.noWp.length?`<h3>Elementy P1S z zaawansowaniem bez WP</h3><div class="tbl-wrap"><table><thead><tr><th>Element P1S</th><th>Opis</th><th class="r">Zaawansowanie</th></tr></thead><tbody>${s.noWp.map(x=>`<tr><td class="mono">${x.c}</td><td>${esc(x.n)}</td><td class="r">${x.prog}%</td></tr>`).join('')}</tbody></table></div>`:''}
+    <ul class="checks"><li><span class="ic ok">✓</span><span>Żaden projekt P1S tego projektu nie należy do innego projektu</span></li></ul>
+    <div class="row">${s.unm.length?actBtn(r,'goMap','Przypisz: ADMIN → Mapowanie CES↔P1S'):''}${s.noWp.length?actBtn(r,'goWp','Dodaj WP w słowniku projektu',false):''}${actBtn(r,'neSim','Symuluj: przypisania uzupełnione',false)}${close?'':actBtn(r,'neAccept','Kontynuuj bez tych elementów',false)}</div>
+    <p class="muted small">Po zapisaniu przypisań przebieg pokaże, że słowniki zmieniły się po przypięciu. „Przypnij ponownie” odświeży migawkę i przeliczy etapy od walidacji.${close?' Na zamknięcie miesiąca koszt UNMAPPED blokuje (reguła do potwierdzenia – P10).':''}</p>`;
+}
+
+/* ---------- SŁOWNIKI (edytor) / INFO ---------- */
+function cellFmt(c,x){ if(x==null||x==='') return '<span class="muted">—</span>'; if(c.t==='num') return nf(Number(x), c.d??0); return esc(x); }
+function vDict(id){
+  const d=S.dicts[id]; if(!d) return vSlowniki();
+  const def=DEFS[d.kind], v=S.view;
+  const crumb = d.scope==='global' ? `<a href="#" data-a="nav" data-x="slowniki">ADMIN · Słowniki</a>` : d.scope==='config' ? `<a href="#" data-a="nav" data-x="slowniki">ADMIN · Słowniki</a> / konfiguracja importu` : `<a href="#" data-a="zakres" data-x="${d.scope}">Projekty / ${esc(S.zakresy[d.scope].code)}</a>`;
+  const rows=d.rows.filter(r=>v.all || isActive(r)).sort((a,b)=>def.key.map(k=>String(a.v[k])).join('|').localeCompare(def.key.map(k=>String(b.v[k])).join('|')) || a.vf.localeCompare(b.vf));
+  const pf=v.prefill||{}, edit=v.edit && d.rows.find(r=>r.id===v.edit);
+  const back = v.back && S.runs[v.back] ? `<a href="#" data-a="run" data-x="${v.back}">← Wróć do przebiegu ${esc(v.back)}</a> · ` : '';
+  const field=c=>{ const val=pf[c.k]??''; const idx=`df-${c.k}`;
+    if(c.t==='list') return `<div class="field"><label for="${idx}">${esc(c.l)}</label><select id="${idx}"><option value="">— wybierz —</option>${opts(c.src,d).map(o=>`<option ${o===val?'selected':''}>${esc(o)}</option>`).join('')}</select></div>`;
+    return `<div class="field"><label for="${idx}">${esc(c.l)}${c.opt?' <span class="muted">(opcjonalnie)</span>':''}</label><input type="text" id="${idx}" value="${esc(val)}" ${c.t==='date'?'placeholder="RRRR-MM-DD"':''} ${['num','int'].includes(c.t)?'inputmode="decimal"':''}></div>`; };
+  return `
+  <div class="head"><div><div class="eyebrow">${back}${crumb}</div><h1>${esc(def.name)}</h1>
+    <p class="sub">Klucz: ${def.key.map(k=>def.cols.find(c=>c.k===k).l).join(' + ')}. Ostatnia zmiana ${esc(d.lastAt)} · ${esc(d.lastBy)} · stan #${d.lastRev||'—'}.</p></div>
+    <label class="inline"><input type="checkbox" id="d-all" data-dall ${v.all?'checked':''}> pokaż historię (wiersze zamknięte)</label></div>
+  <section class="panel"><div class="row between"><h2>${edit?'Zmiana wiersza':'Nowy wiersz'}</h2>${edit?`<span class="muted small">Poprzedni wiersz zostanie zamknięty z dniem poprzedzającym „Ważny od”.</span>`:''}</div>
+    <div class="form-grid">${def.cols.map(field).join('')}<div class="field"><label for="df-vf">Ważny od</label><input type="text" id="df-vf" value="${esc(pf.vf||TODAY)}" placeholder="RRRR-MM-DD"></div></div>
+    ${v.err?`<div class="note crit"><b>Nie zapisano.</b><ul style="margin:4px 0 0;padding-left:18px">${v.err.map(e=>`<li>${esc(e)}</li>`).join('')}</ul></div>`:''}
+    <div class="row"><button class="btn primary" data-a="dsave">${edit?'Zapisz zmianę':'Dodaj wiersz'}</button>${edit||v.prefill?'<button class="btn" data-a="dcancel">Anuluj</button>':''}<span class="muted small">Walidacja przy zapisie: wymagane pola, typy, nakładające się okresy ważności, odwołania.</span></div>
+  </section>
+  <div class="tbl-wrap"><table><thead><tr>${def.cols.map(c=>`<th class="${['num','int'].includes(c.t)?'r':''}">${esc(c.l)}</th>`).join('')}<th>Ważny od</th><th>Ważny do</th><th>Zmienił</th><th></th></tr></thead><tbody>
+  ${rows.map(r=>`<tr class="${isActive(r)?'':'closed'}">${def.cols.map(c=>`<td class="${['num','int'].includes(c.t)?'r':''} ${def.key.includes(c.k)?'k mono':''}">${cellFmt(c,r.v[c.k])}</td>`).join('')}<td class="num">${r.vf}</td><td class="num">${r.vt||'—'}</td><td class="small">${esc(r.by)} · ${esc(r.at)}</td>
+    <td>${isActive(r)?`<div class="row" style="flex-wrap:nowrap"><button class="btn small" data-a="dedit" data-x="${r.id}">Zmień</button><button class="btn small" data-a="dclose" data-x="${r.id}">Zamknij ważność</button></div>`:''}</td></tr>`).join('')||`<tr><td colspan="${def.cols.length+4}" class="muted">Słownik jest pusty. Dodaj pierwszy wiersz w formularzu powyżej.</td></tr>`}
+  </tbody></table></div>
+  <section class="panel" id="hist"><h2>Historia zmian</h2>${d.hist.length?`<ul class="log">${d.hist.slice(0,10).map(h=>`<li><span class="t">#${h.rev} · ${esc(h.at)} · ${esc(h.by)}</span><span>${esc(h.txt)}</span></li>`).join('')}</ul>`:'<p class="muted">Brak zmian.</p>'}</section>`;
+}
+function validateRow(d, vals, vf, editId){
+  const def=DEFS[d.kind], errs=[], lab=k=>def.cols.find(c=>c.k===k).l;
+  for(const c of def.cols){ const x=vals[c.k];
+    if(!x){ if(!c.opt) errs.push(`Pole „${c.l}” jest wymagane.`); continue; }
+    if(c.t==='num'||c.t==='int'){ const n=Number(x.replace(',','.').replace(/\s/g,''));
+      if(isNaN(n) || (c.t==='int' && !Number.isInteger(n))) errs.push(`„${c.l}”: „${x}” nie jest liczbą${c.t==='int'?' całkowitą':''}.`);
+      else if(c.min!=null && n<c.min) errs.push(`„${c.l}” musi być ${c.min>0?'większe od 0':'nieujemne'}.`);
+      else vals[c.k]=String(n); }
+    if(c.t==='p1s'){ vals[c.k]=x.toUpperCase(); if(!nodeOf(vals[c.k])) errs.push(`„${c.l}”: nie ma elementu ${x} w P1S.`); }
+    if(c.t==='date' && !/^\d{4}-\d{2}-\d{2}$/.test(x)) errs.push(`„${c.l}”: podaj datę w formacie RRRR-MM-DD.`);
+  }
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(vf)) errs.push('„Ważny od”: podaj datę w formacie RRRR-MM-DD.');
+  for(const [a,b] of def.rules||[]) if(vals[a] && vals[b] && vals[a]>vals[b]) errs.push(`„${lab(a)}” musi być wcześniej niż „${lab(b)}” albo tego samego dnia.`);
+  if(errs.length) return errs;
+  const others=d.rows.filter(r=>r.id!==editId && (!r.vt || r.vt>=vf));
+  const dupK=others.find(r=>def.key.every(k=>String(r.v[k]).toLowerCase()===String(vals[k]).toLowerCase()));
+  if(dupK) errs.push(`Nakładające się okresy ważności: ${def.key.map(k=>vals[k]).join(' / ')} ma już wiersz ważny od ${dupK.vf}${dupK.vt?' do '+dupK.vt:' (bez końca)'}. Użyj „Zmień” przy tym wierszu – poprzedni zostanie zamknięty.`);
+  for(const u of def.uniq||[]){ const o=others.find(r=>String(r.v[u])===vals[u]); if(o) errs.push(`${lab(u)} ${vals[u]} ma już WP ${o.v.wp}. Jeden element P1S może mieć tylko jeden WP.`); }
+  return errs;
+}
+function vInfo(){
+  return `<div class="head"><div><div class="eyebrow">ADMIN</div><h1>O aplikacji</h1><p class="sub">Klikalny prototyp PZL-EV. Nie łączy się z bazą ani plikami; wszystkie dane są przykładowe.</p></div></div>
+  <div class="grid g2">
+  <section class="panel"><h2>Układ</h2><ul class="checks">
+    <li><span class="ic ok">✓</span><span><b>Pulpit</b> – tabela projektów i stanu ich przebiegów (sortowanie, filtr) oraz max 5 pozycji „Wymaga uwagi”.</span></li>
+    <li><span class="ic ok">✓</span><span><b>ADMIN</b> – słowniki (globalne, konfiguracja importu, przegląd słowników projektów), Import RABIT (wspólny dla wszystkich projektów), Mapowanie CES↔P1S.</span></li>
+    <li><span class="ic ok">✓</span><span><b>Projekty</b> – strona projektu z kartami przebiegów i konfiguracją; przebiegi wspólne (okresy) we wszystkich projektach.</span></li>
+    <li><span class="ic ok">✓</span><span><b>Przebieg</b> – etapy bez zmian w logice; dane z importu, mapowanie z ADMIN.</span></li>
+    <li><span class="ic ok">✓</span><span><b>P1S (${nf(P1S_TOTAL)} projektów)</b> nigdy nie jest listowany w całości: Z_KAT_ZBIORCZA → Z_KATEGORIA → Z_OPIS → strona 25 PROJORG → elementy po rozwinięciu; wyszukiwanie od 3 znaków, max 50 wyników.</span></li></ul></section>
+  <section class="panel"><h2>Do przejścia</h2><ol style="margin:0;padding-left:20px;display:grid;gap:6px">
+    <li><b>Reguła projektu:</b> ADMIN → Mapowanie → „Zaproponuj” → „Przyjmij” przy <span class="mono">4F16C0</span>. Podgląd pokazuje, że 3 WBS przejdą z UNMAPPED na INHERITED → „Zapisz regułę”.</li>
+    <li><b>Wyjątek:</b> przeciągnij WBS <span class="mono">4D03GZ000040</span> na <span class="mono">AC-I39.01.02</span> – status OVERRIDE, pierwszeństwo przed regułą.</li>
+    <li><b>Błąd poziomu:</b> przeciągnij projekt <span class="mono">4X9900</span> na element poziomu 2 – podgląd blokuje zapis i proponuje PROJORG.</li>
+    <li><b>Usunięcie:</b> przeciągnij zmapowany element na „Bez mapowania”.</li>
+    <li><b>Kategoria P1S:</b> w katalogu wejdź PWC › PWC › PWC, przeciągnij <span class="mono">4PW1Q0</span> na <span class="mono">SP-CRDDQ</span> – podgląd pokazuje kategorię, którą dostaną koszty. Potem kliknij <span class="mono">SP-CRDDQ</span> i nadaj nazwę grupy – tabela „Koszty CES wg kategorii P1S” zbierze wszystko pod tą nazwą.</li>
+    <li><b>Import RABIT:</b> pobierz i zaimportuj – nowy WBS odziedziczy regułę sam.</li>
+    <li><b>F16 → Nowy przebieg T40:</b> walidacja zatrzyma brak stawki W-417 (ADMIN → Słowniki → Stawki).</li></ol></section>
+  </div>
+  <div class="note">Stan demo zapisuje się w tej przeglądarce; „Resetuj dane demo” w menu bocznym przywraca stan początkowy.</div>`;
+}
+
+/* ---------- render ---------- */
+function render(){
+  renderNav();
+  const v=S.view; let html='';
+  if(v.name==='pulpit') html=vPulpit();
+  else if(v.name==='import') html=vImport();
+  else if(v.name==='mapa') html=vMapa();
+  else if(v.name==='okres') html=vOkres(v.id);
+  else if(v.name==='zakresy') html=vZakresy();
+  else if(v.name==='zakres') html=vZakres(v.id);
+  else if(v.name==='wizard') html=vWizard();
+  else if(v.name==='run') html=vRun(v.id);
+  else if(v.name==='slowniki') html=vSlowniki();
+  else if(v.name==='dict') html=vDict(v.id);
+  else html=vInfo();
+  $('#main').innerHTML=html;
+  $('#overlay').innerHTML = S.modal? vNewRun() : '';
+}
+
+/* ---------- akcje ---------- */
+const R=()=>S.runs[S.view.id];
+function mmsg(lvl,txt){ S.mp.msg={lvl,txt}; }
+const A={
+  nav:x=>go({name:x}),
+  tab:x=>go({name:{pulpit:'pulpit',admin:'slowniki',projekty:'zakresy'}[x]}),
+  zakres:x=>{ S.wiz=null; go({name:'zakres', id:x}); },
+  okres:x=>go({name:'okres', id:x}),
+  zall:()=>{ S.view={...S.view, all:!S.view.all}; render(); },
+  run:x=>go({name:'run', id:x}),
+  dict:x=>go({name:'dict', id:x}),
+  dicth:x=>{ go({name:'dict', id:x}); document.getElementById('hist')?.scrollIntoView(); },
+  psort:x=>{ const P=S.pul; if(P.sort===x) P.dir=-P.dir; else { P.sort=x; P.dir=1; } save(); render(); },
+  pall:()=>{ S.pul.all=!S.pul.all; render(); },
+  wizard:()=>{ S.wiz=newWiz(); S.mp.pq=''; S.mp.cp=[]; go({name:'wizard'}); },
+  reset:()=>{ try{localStorage.removeItem(KEY);}catch(e){} S=seed(); render(); toast('Przywrócono dane początkowe demo.'); },
+  sel:x=>{ R().sel=x; save(); render(); },
+
+  /* import */
+  impDl:()=>{
+    const im=S.imp;
+    if(im.round===0){ const a=im.remote.find(f=>f.name==='ACTUALS_CES_02.xlsx'); a.mod='29.09 05:52'; a.mb=22.0;
+      im.remote.push({name:'HOURS_CES_02.xlsx', mb:61.4, mod:'29.09 05:55'},{name:'TEST_eksport.xlsx', mb:0.8, mod:'29.09 06:10'}); im.round=1; }
+    im.dl={}; for(const f of im.remote){ const s=im.seen[f.name]; im.dl[f.name]= f.mb>50?'too' : (s && s.mod===f.mod && s.mb===f.mb)?'same':'got'; }
+    im.res=null; const n=Object.values(im.dl).filter(x=>x==='got').length;
+    ev('GLOBAL','Pobrano z RABIT '+n+' plików (nowe i zmienione); 1 plik > 50 MB do zapisania ręcznie');
+    save(); render(); toast('Pobrano '+n+' plików do 00_Global\\RABIT\\Do_importu.');
+  },
+  impManual:x=>{ S.imp.dl[x]='manual'; save(); render(); },
+  impRun:()=>{
+    const im=S.imp, res={}, id='IMP-0'+(++im.lastId), c={imp:0,dup:0,skip:0,unrec:0,err:0}, newW=[];
+    for(const f of im.remote){ const d=im.dl[f.name];
+      if(d==='same'){ res[f.name]='skip'; c.skip++; continue; }
+      if(d==='too'){ res[f.name]='err'; c.err++; continue; }
+      if(!srcOf(f.name)){ res[f.name]='unrec'; c.unrec++; continue; }
+      const h=sha(f.name+f.mod), old=Object.values(im.imported).find(x=>x.sha===h);
+      if(old){ res[f.name]='dup'; c.dup++; continue; }
+      res[f.name]='imported'; c.imp++; im.seen[f.name]={mod:f.mod, mb:f.mb};
+      im.imported[f.name]={mod:f.mod, mb:f.mb, sha:h, at:'29.09 '+now().slice(6), id, rows:Math.round(f.mb*18300)};
+      if(f.name==='ACTUALS_CES_02.xlsx' && !S.ces.some(p=>p.wbs.some(w=>w.c==='4D03H1000013'))){ S.ces.find(p=>p.pd==='4D03H1').wbs.push(W('4D03H1000013','Boom fairing',14300,1)); newW.push('4D03H1000013'); }
+    }
+    im.res=res; im.history.unshift({id, who:ME, at:'29.09 '+now().slice(6), ...c}); im.lastNew={id, rows:newW};
+    for(const r of Object.values(S.runs)) if(runState(r).s!=='done' && r.files) r.log.unshift({t:now(), who:ME, msg:'Nowy wspólny import '+id+' – dostępne nowsze dane RABIT.'});
+    ev('GLOBAL',`Import ${id}: ${c.imp} zaimportowane, ${c.skip} pominięte, ${c.unrec} nierozpoznane, ${c.err} błędy`);
+    if(newW.length) ev('GLOBAL','Mapowanie po imporcie '+id+': 4D03H1000013 odziedziczył regułę 4D03H1 → AC-I40');
+    save(); render(); toast(`Import ${id}: ${c.imp} zaimportowane. Nowe WBS: ${newW.length}.`);
+  },
+
+  /* mapowanie: każda zmiana → podgląd (S.mp.pend) → „Zapisz” */
+  mces:x=>{ const mp=S.mp; mp.pend=null; mp.manual=false; mp.msg=null; mp.selCes=mp.selCes===x?null:x; mp.selP1s=null; render(); },
+  mp1s:x=>{ const mp=S.mp; mp.msg=null;
+    if(mp.selCes){ mp.pend={op:'assign', src:(isProj(mp.selCes)?'pd:':'w:')+mp.selCes, target:x}; render(); $('#work')?.scrollIntoView({block:'nearest'}); return; }
+    mp.pend=null; mp.selP1s=mp.selP1s===x?null:x; render(); },
+  mtog:x=>{ S.mp.open[x]=!S.mp.open[x]; render(); },
+  mfil:x=>{ S.mp.f=x; S.mp.cpage=0; render(); },
+  cpage:x=>{ S.mp.cpage=Math.max(0,S.mp.cpage+Number(x)); render(); },
+  mClear:()=>{ Object.assign(S.mp,{selCes:null, selP1s:null, pend:null, msg:null}); render(); },
+  mUnmap:x=>{ S.mp.pend={op:'remove', src:(isProj(x)?'pd:':'w:')+x}; S.mp.msg=null; render(); $('#work')?.scrollIntoView({block:'nearest'}); },
+  pfix:x=>{ S.mp.pend.target=x; render(); },
+  pSave:()=>{ commitPend(); save(); render(); },
+  pCancel:()=>{ S.mp.pend=null; render(); },
+  mProps:()=>{ S.mp.props=!S.mp.props; render(); },
+  mPropGo:x=>{ const p=S.ces.find(c=>c.pd===x); S.mp.selCes=x; S.mp.pend={op:'assign', src:'pd:'+x, target:p.prop}; render(); $('#work')?.scrollIntoView({block:'nearest'}); },
+  mManual:()=>{ const mp=S.mp; mp.manual=!mp.manual; mp.pend=null; mp.selCes=null; mp.selP1s=null; render(); },
+  mManualGo:()=>{ const mp=S.mp, c=($('#mfc')?.value||'').trim().toUpperCase(), t=($('#mfp')?.value||'').trim().toUpperCase(); mp.mc=c; mp.mpc=t;
+    const okC=isProj(c) || S.ces.some(p=>p.wbs.some(w=>w.c===c));
+    if(!okC) return mmsg('crit',`Nie ma elementu CES „${c}”. Wpisz kod projektu CES albo WBS z listy podpowiedzi.`), render();
+    if(!nodeOf(t)) return mmsg('crit',`Nie ma elementu P1S „${t}”. Sprawdź kod w katalogu P1S.`), render();
+    mp.manual=false; mp.msg=null; mp.selCes=c; mp.pend={op:'assign', src:(isProj(c)?'pd:':'w:')+c, target:t}; render(); },
+  pcat:x=>{ S.mp.cp=x?x.split('|'):[]; S.mp.pq=''; render(); },
+  pqClear:()=>{ S.mp.pq=''; render(); },
+  mp1sGo:x=>{ const mp=S.mp; Object.assign(mp,{selCes:null, pend:null, manual:false, msg:null, selP1s:x}); A.preveal(x); window.scrollTo({top:0}); },
+  grpSave:x=>{ const name=($('#kgn')?.value||'').trim(), d=S.dicts.katgr; if(!name) return toast('Wpisz nazwę grupy albo użyj „Usuń nazwę”.');
+    const old=active(d).find(r=>r.v.p1s===x); if(old && old.v.name===name) return;
+    if(old) old.vt=YESTERDAY; d.rows.push({id:rid(), v:{p1s:x, name}, vf:TODAY, vt:null, by:ME_S, at:'29.09.2026'});
+    bump('katgr', x+' → „'+name+'”'+(old?' (poprzednio „'+old.v.name+'”)':'')); mmsg('ok',`Grupa „${name}” zapisana dla ${x} (stan #${S.dbRev}). Elementy CES zmapowane do ${x} są teraz pod tą nazwą.`); save(); render(); },
+  grpDel:x=>{ const r=active(S.dicts.katgr).find(r=>r.v.p1s===x); if(!r) return; r.vt=YESTERDAY; bump('katgr','Usunięto nazwę grupy dla '+x); mmsg('ok',`Usunięto nazwę grupy dla ${x} – wraca Z_OPIS z P1S.`); save(); render(); },
+  ppage:x=>{ const c=S.mp.cp[2], pg=(S.mp.page[c]||0)+Number(x); S.mp.page[c]=Math.max(0,Math.min(pg,Math.ceil(CAT[c].cnt/25)-1)); render(); },
+  preveal:x=>{ const mp=S.mp; if(!scopeOfOrg(x)){ mp.pq=x; } mp.open['p:'+x]=true; const z=scopeOfOrg(x); if(z) mp.open['zc:'+z.id]=false; render(); document.querySelector(`[data-drop="${x}"]`)?.scrollIntoView({block:'center'}); },
+  goMapZ:x=>{ Object.assign(S.mp,{z:x||'all', f:'UNMAPPED', q:'', pend:null, selCes:null, selP1s:null, msg:null, cpage:0}); go({name:'mapa'}); },
+  apage:x=>{ S.adm.pg=Math.max(0,(S.adm.pg||0)+Number(x)); render(); },
+  wunpick:x=>{ S.wiz.p1s=S.wiz.p1s.filter(o=>o!==x); render(); },
+
+  /* słowniki */
+  dedit:x=>{ const d=S.dicts[S.view.id], r=d.rows.find(r=>r.id===x); S.view={...S.view, edit:x, prefill:{...r.v, vf:TODAY}, err:null}; render(); window.scrollTo({top:0}); },
+  dcancel:()=>{ S.view={...S.view, edit:null, prefill:null, err:null}; render(); },
+  dclose:x=>{ const d=S.dicts[S.view.id], r=d.rows.find(r=>r.id===x), def=DEFS[d.kind]; r.vt=YESTERDAY; bump(d.id,'Zamknięto ważność: '+def.key.map(k=>r.v[k]).join(' / ')); save(); render(); toast('Zamknięto ważność wiersza (stan #'+S.dbRev+').'); },
+  dsave:()=>{
+    const d=S.dicts[S.view.id], def=DEFS[d.kind], vals={};
+    for(const c of def.cols) vals[c.k]=($('#df-'+c.k)?.value||'').replace(/ /g,' ').trim();
+    const vf=($('#df-vf')?.value||'').trim(), editId=S.view.edit;
+    const errs=validateRow(d, vals, vf, editId);
+    if(errs.length){ S.view={...S.view, err:errs, prefill:{...vals, vf}}; render(); return; }
+    const old=editId && d.rows.find(r=>r.id===editId); if(old) old.vt=prevDay(vf);
+    d.rows.push({id:rid(), v:vals, vf, vt:null, by:ME_S, at:'29.09.2026'});
+    bump(d.id,(old?'Zmieniono: ':'Dodano: ')+def.key.map(k=>vals[k]).join(' / '));
+    S.view={...S.view, err:null, edit:null, prefill:null}; save(); render(); toast('Zapisano (stan #'+S.dbRev+'). Walidacja przy zapisie bez błędów.');
+  },
+  fillDicts:x=>{
+    const z=S.zakresy[x], nodes=z.p1s.flatMap(o=>P1S_ORG[o].nodes.filter(n=>n[2]===2)), ppl=['T. Sikora','W. Mróz'];
+    const wp=S.dicts[x+':wp'], hm=S.dicts[x+':harm'];
+    nodes.forEach((n,i)=>{ const code=z.code.toUpperCase()+'-WP-'+String(101+i); wp.rows.push({id:rid(), v:{wp:code,p1s:n[0],cam:ppl[i%2],cat:'Labor'}, vf:TODAY, vt:null, by:ME_S, at:'29.09.2026'}); hm.rows.push({id:rid(), v:{wp:code,bac:String(600+i*150),start:'2026-10-01',finish:'2027-06-30'}, vf:TODAY, vt:null, by:ME_S, at:'29.09.2026'}); });
+    bump(x+':wp','Dodano '+nodes.length+' WP z CAM'); bump(x+':harm','Dodano budżety '+nodes.length+' WP');
+    if(S.dicts[x+':cas']){ S.dicts[x+':cas'].rows.push({id:rid(), v:{dept:'W-101',year:'2026',rate:'55.20'}, vf:TODAY, vt:null, by:ME_S, at:'29.09.2026'}); bump(x+':cas','Dodano stawkę CAS W-101 / 2026'); }
+    save(); render(); toast('Słowniki projektu uzupełnione. Można uruchomić przebieg.');
+  },
+
+  /* kreator */
+  wset:(x,el)=>{ S.wiz[el.dataset.f]=x; render(); },
+  wnext:()=>{ S.wiz.step++; render(); },
+  wback:()=>{ S.wiz.step--; render(); },
+  wcreate:()=>{
+    const w=S.wiz; w.busy=true; w.progress=[];
+    const rules=Object.entries(w.cesR).filter(([,o])=>o && w.p1s.includes(o));
+    const steps=['Zarejestrowano projekt w bazie słowników i w MS SQL (meta.Zakres)','Przypisano projekty P1S: '+w.p1s.join(', ')].concat(rules.length?['Zapisano reguły projektu: '+rules.map(([c,o])=>c+' → '+o).join(', ')]:[],['Utworzono puste słowniki projektu: '+wDicts(w).map(d=>DEFS[d].name).join(', '),'Utworzono foldery w '+ROOT+'\\Przeliczenia\\'+w.code,'Przygotowano treść zgłoszenia do IT (dostęp CAM do folderu Zwrocone)']);
+    render();
+    steps.forEach((t,i)=>setTimeout(()=>{ w.progress.push(t); if(i===steps.length-1){ w.busy=false; finishCreate(rules); } render(); }, 400*(i+1)));
+  },
+
+  /* przebieg */
+  newrun:x=>{ S.modal={zid:x, kind:'weekly'}; render(); },
+  mkind:x=>{ S.modal.kind=x; render(); },
+  closeModal:()=>{ S.modal=null; render(); },
+  startRun:()=>{ const m=S.modal, r=mkRun(m.zid,m.kind,'2026-09',m.kind==='weekly'?40:null,ME,{at:'29.09.2026'}); r.log=[]; logRun(r,'Rozpoczęto przebieg.'); S.modal=null; go({name:'run', id:r.id}); toast('Przebieg '+r.id+' uruchomiony.'); },
+  ackNewer:()=>{ const r=R(); for(const n of newerFor(r)){ r.ack[n.id+':'+n.m.lastRev]=true; logRun(r,'Decyzja: kontynuacja na stanie #'+r.pinRev+' mimo zmiany „'+dname(n.id)+'”.'); } save(); render(); },
+  rebase:()=>{ const r=R(), old=r.pinRev; pinSnap(r); logRun(r,'Przypięto ponownie stan słowników #'+r.pinRev+' (poprzednio #'+old+'), nowa migawka w MS SQL. Etapy od walidacji unieważnione.'); if(r.st.val.s!=='todo') invalidateFrom(r,'val'); r.newEl=null; save(); render(); },
+  revalidate:()=>{ A.rebase(); A.doVal(); },
+  redata:()=>{ const r=R(); r.files=null; logRun(r,'Nowsze dane RABIT – przeliczenie od etapu Dane projektu.'); invalidateFrom(r,'data'); save(); render(); },
+  doData:()=>{ const r=R(); work(r,'data','Wybór danych projektu i przypinanie plików…',1100,()=>{ r.files=pinFiles(r.zid); complete(r,'data'); logRun(r,'Przypięto '+r.files.length+' plików RABIT (hash).'); }); },
+  doDict:()=>{ const r=R(); work(r,'dict','Przypinanie stanu i kopiowanie migawki do MS SQL…',1100,()=>{ pinSnap(r); complete(r,'dict'); logRun(r,'Przypięto stan słowników #'+r.pinRev+'. Migawka skopiowana do MS SQL (dict.*).'); }); },
+  doVal:()=>{ const r=R(); work(r,'val','Walidacja spójności słowników z danymi…',1100,()=>{
+    const e=r.snap.missRate.length; if(e){ setSt(r,'val','error'); r.sel='val'; logRun(r,'Walidacja: '+e+' błąd blokujący (brak stawki '+r.snap.missRate.join(', ')+' na 2026).'); }
+    else { complete(r,'val'); r.sel='val'; logRun(r,'Walidacja bez błędów blokujących ('+issueList(r).length+' ostrzeżeń).'); } }); },
+  valFix:()=>{ const r=R(); go({name:'dict', id:'stawki', back:r.id, prefill:{dept:r.snap.missRate[0], year:'2026', vf:TODAY}}); },
+  doJoin:()=>{ const r=R(); work(r,'join','Łączenie źródeł w bazie (procedury)…',1300,()=>{
+    const s=r.snap, cost=sum(s.unm.map(x=>x.cost));
+    if(s.unm.length || s.noWp.length){ r.newEl={state:'open', cost}; setSt(r,'join','action'); logRun(r,`Wykryto elementy bez przypisania: ${s.unm.length} WBS CES UNMAPPED (${nf(cost)} PLN), ${s.noWp.length} elementów P1S bez WP.`); }
+    else { r.newEl=null; complete(r,'join'); logRun(r,'Połączono źródła. Wszystkie koszty CES projektu zmapowane.'); } }); },
+  goMap:()=>{ const r=R(); Object.assign(S.mp,{z:r.zid, f:'UNMAPPED', q:'', pend:null, selCes:null, selP1s:null, msg:null, cpage:0}); go({name:'mapa', back:r.id}); },
+  goWp:()=>{ const r=R(); go({name:'dict', id:r.zid+':wp', back:r.id, prefill:{p1s:r.snap.noWp[0]?.c, vf:TODAY}}); },
+  neSim:()=>{ const r=R(), s=r.snap;
+    for(const pd of [...new Set(s.unm.map(x=>x.pd))]){ const p=S.ces.find(c=>c.pd===pd); if(p.prop && !projRule(pd)){ addRule('proj',pd,p.prop); bump('map','Reguła projektu '+pd+' → '+p.prop); } }
+    const wp=S.dicts[r.zid+':wp'], hm=S.dicts[r.zid+':harm'], ppl=['J. Kowalski','B. Nowicka'];
+    s.noWp.forEach((n,i)=>{ const code=S.zakresy[r.zid].code.toUpperCase()+'-WP-3'+String(i+1).padStart(2,'0'); wp.rows.push({id:rid(), v:{wp:code,p1s:n.c,cam:ppl[i%2],cat:'Labor'}, vf:TODAY, vt:null, by:ME_S, at:'29.09.2026'}); hm.rows.push({id:rid(), v:{wp:code,bac:String(900+i*300),start:'2026-10-01',finish:'2027-03-31'}, vf:TODAY, vt:null, by:ME_S, at:'29.09.2026'}); });
+    if(s.noWp.length){ bump(r.zid+':wp','Dodano '+s.noWp.length+' WP dla '+s.noWp.map(x=>x.c).join(', ')); bump(r.zid+':harm','Budżety nowych WP'); }
+    logRun(r,'Zapisano przypisania w aplikacji (reguła projektu, nowe WP).'); A.rebase(); toast('Przypisania zapisane i przypięte ponownie. Wykonaj walidację i łączenie.'); },
+  neAccept:()=>{ const r=R(); r.newEl.state='accepted'; r.newEl.by=ME; complete(r,'join'); r.sel='join'; logRun(r,'Decyzja: kontynuacja bez nieprzypisanych elementów ('+nf(r.newEl.cost)+' PLN poza EV wstępnym).'); save(); render(); },
+  doFin:()=>{ const r=R(); work(r,'fin','Generowanie plików dla finansów…',1000,()=>{ setSt(r,'fin','action'); r.fin={state:'pending'}; logRun(r,'Wygenerowano pliki dla finansów – oczekują na zatwierdzenie.'); }); },
+  finOk:()=>{ const r=R(); r.fin={state:'approved', by:ME, at:now()}; complete(r,'fin'); logRun(r,'Potwierdzono poprawność plików dla finansów.'); save(); render(); toast('Zatwierdzono. Kolejne etapy odblokowane.'); },
+  finNo:()=>{ const r=R(), c=($('#fin-c')?.value||'').trim(); if(!c){ toast('Wpisz komentarz – bez niego nie wiadomo, co poprawić.'); $('#fin-c')?.focus(); return; }
+    r.fin={state:'rejected', by:ME, at:now(), comment:c}; invalidateFrom(r,'join'); logRun(r,'Odrzucono pliki dla finansów: „'+c+'”. Powrót do łączenia źródeł.'); save(); render(); },
+  doProd:()=>{ const r=R(); work(r,'prod','Pobieranie zaawansowania z raportu produkcyjnego…',1100,()=>{ complete(r,'prod'); logRun(r,'Pobrano zaawansowanie z produkcji. Braki do uzupełnienia.'); }); },
+  doFill:()=>{ const r=R(); complete(r,'fill'); logRun(r,'Uzupełniono brakujące WP (pochodzenie: ANALITYK).'); save(); render(); },
+  doCamOut:()=>{ const r=R(); work(r,'camout','Generowanie plików dla CAM…',1100,()=>{ complete(r,'camout'); setSt(r,'camin','action'); logRun(r,'Wygenerowano '+camsOf(r.zid).length+' plików dla CAM.'); }); },
+  camScan:()=>{ const r=R(), cams=camsOf(r.zid); r.cams=cams.map((c,i)=>({n:c[0], wp:c[1], s: i===cams.length-1?'sent': i===1?'rej':'ok', msg: i===1?'Zmieniona komórka poza polami do uzupełnienia': i===cams.length-1?'Brak pliku w Zwrócone':''}));
+    setSt(r,'camin','action'); logRun(r,'Skan Zwrócone: zaimportowano '+r.cams.filter(c=>c.s==='ok').length+', odrzucono 1, brak 1.'); save(); render(); },
+  camRescan:()=>{ const r=R(); r.cams.forEach(c=>{c.s='ok'; c.msg=c.msg?'Poprawiony plik zaimportowany':'';}); complete(r,'camin'); logRun(r,'Zaimportowano pliki wszystkich CAM.'); save(); render(); },
+  doCamVal:()=>{ const r=R(); work(r,'camval','Walidacja zaawansowania i pochodzenia wartości…',1000,()=>{ complete(r,'camval'); logRun(r,'Walidacja zaawansowania zakończona (1 ostrzeżenie).'); }); },
+  doEv:()=>{ const r=R(); work(r,'ev','Kalkulacja EV w bazie…',1300,()=>{ r.rev=(r.rev||0)+1; complete(r,'ev'); r.sel='ev'; logRun(r,'Wygenerowano EV, rewizja R'+r.rev+' (stan słowników #'+r.pinRev+').'); }); },
+  doEvAgain:()=>{ const r=R(); invalidateFrom(r,'ev'); logRun(r,'Ponowne przeliczenie EV – powstanie nowa rewizja.'); save(); render(); },
+  doCobra:()=>{ const r=R(); work(r,'cobra','Generowanie pliku dla Cobra…',900,()=>{ complete(r,'cobra'); r.sel='cobra'; logRun(r,'Wygenerowano plik dla Cobra.'); }); },
+  freeze:()=>{ const r=R(); r.frozen=true; r.sel='ev'; logRun(r,'Zatwierdzono zamknięcie okresu '+r.period+'. Przebieg zamrożony.'); save(); render(); }
+};
+function finishCreate(rules){
+  const w=S.wiz, id=w.code.toUpperCase();
+  S.zakresy[id]={id, code:w.code, name:w.name, type:w.type, pool:w.pool, p1s:w.p1s.slice(), created:'29.09.2026 · '+ME_S, isNew:true};
+  for(const k of wDicts(w)) S.dicts[id+':'+k]=mkDict(k,id,[],0);
+  for(const [c,o] of rules) if(!projRule(c)){ addRule('proj',c,o); }
+  if(rules.length) bump('map','Reguły projektu z kreatora '+w.code+': '+rules.map(([c,o])=>c+' → '+o).join(', '));
+  ev(w.code,'Utworzono projekt '+w.code+' ('+TYPES[w.type].label+')');
+  save();
+}
+
+document.addEventListener('click',e=>{
+  const el=e.target.closest('[data-a]'); if(!el) return;
+  if(el.dataset.a==='closeModal' && e.target.closest('[data-stop]') && !e.target.closest('button[data-a="closeModal"]')) return;
+  if(el.tagName==='A') e.preventDefault();
+  const f=A[el.dataset.a]; if(f && !el.disabled) f(el.dataset.x, el);
+});
+document.addEventListener('input',e=>{
+  const t=e.target;
+  if(t.dataset.w!==undefined) S.wiz[t.dataset.w]=t.value;
+  for(const [k,set,id] of [['mq',v=>{S.mp.q=v; S.mp.cpage=0;},'#mq'],['pq',v=>{S.mp.pq=v;},'#pq'],['aq',v=>{S.adm.q=v; S.adm.pg=0;},'#aq'],['pf',v=>{S.pul.q=v;},'#pf']])
+    if(t.dataset[k]!==undefined){ set(t.value); const pos=t.selectionStart; render(); const n=$(id); if(n){ n.focus(); n.setSelectionRange(pos,pos); } }
+});
+document.addEventListener('change',e=>{
+  const t=e.target;
+  if(t.dataset.wc!==undefined){ S.wiz[t.dataset.wc]=t.checked; render(); }
+  if(t.dataset.wp!==undefined){ const p=t.dataset.wp, w=S.wiz; w.p1s = t.checked? [...new Set([...w.p1s,p])] : w.p1s.filter(x=>x!==p); render(); }
+  if(t.dataset.wr!==undefined){ S.wiz.cesR[t.dataset.wr]=t.value; }
+  if(t.dataset.aold!==undefined){ S.adm.old=t.checked; render(); }
+  if(t.dataset.mz!==undefined){ S.mp.z=t.value; S.mp.cpage=0; render(); }
+  if(t.dataset.dall!==undefined){ S.view={...S.view, all:t.checked}; render(); }
+});
+/* drag & drop: CES (data-drag) → P1S (data-drop) */
+let DRAG=null;
+function dropOk(t){ if(t.dataset.drop==='__unmap') return true; const n=nodeOf(t.dataset.drop); return !(DRAG.startsWith('pd:') && n && n.l!==1); }
+document.addEventListener('dragstart',e=>{ const el=e.target.closest?.('[data-drag]'); if(!el) return; DRAG=el.dataset.drag; e.dataTransfer.setData('text/plain',DRAG); e.dataTransfer.effectAllowed='link'; document.body.classList.add('dragging', DRAG.startsWith('pd:')?'drag-pd':'drag-w'); });
+document.addEventListener('dragend',()=>{ DRAG=null; document.body.classList.remove('dragging','drag-pd','drag-w'); document.querySelectorAll('.over').forEach(x=>x.classList.remove('over','bad')); });
+document.addEventListener('dragover',e=>{ const t=e.target.closest?.('[data-drop]'); if(!t||!DRAG) return; e.preventDefault(); const ok=dropOk(t); e.dataTransfer.dropEffect='link'; /* błędny cel też przyjmuje drop – komunikat wyjaśnia dlaczego */ t.classList.add('over'); t.classList.toggle('bad',!ok); });
+document.addEventListener('dragleave',e=>{ const t=e.target.closest?.('[data-drop]'); if(t && !t.contains(e.relatedTarget)) t.classList.remove('over','bad'); });
+document.addEventListener('drop',e=>{ const t=e.target.closest?.('[data-drop]'); if(!t||!DRAG) return; e.preventDefault(); const src=DRAG; DRAG=null; document.body.classList.remove('dragging','drag-pd','drag-w'); const tgt=t.dataset.drop, mp=S.mp; mp.msg=null; mp.manual=false; mp.selCes=src.slice(src.indexOf(':')+1); mp.selP1s=null;
+  mp.pend = tgt==='__unmap' ? {op:'remove', src} : {op:'assign', src, target:tgt}; render(); $('#work')?.scrollIntoView({block:'nearest'}); });
+document.addEventListener('keydown',e=>{ if(e.key==='Escape' && S.modal){ S.modal=null; render(); }
+  const t=e.target; if((e.key==='Enter'||e.key===' ') && t.matches?.('[role="button"][data-a]')){ e.preventDefault(); t.click(); } });
+S = load() || seed();
+S.mp={...{f:'all', z:'all', cp:[], page:{}, pq:'', open:{}, q:'', cpage:0, pend:null, props:false, manual:false, mc:'', mpc:''}, ...S.mp}; S.adm=S.adm||{q:''}; S.pul=S.pul||{q:'',sort:'code',dir:1,all:false};
+for(const r of Object.values(S.runs)) for(const k in r.st) if(r.st[k].s==='running') r.st[k].s='ready';
+render();
+</script>
+
+</body></html>
