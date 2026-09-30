@@ -1,6 +1,6 @@
 # PZL-EV – Architektura rozwiązania
 
-Wersja: 1.0 (wstępny projekt)
+Wersja: 1.1 (wstępny projekt; 1.1: ustalenia z prototypu v3 – M16–M26 w `docs/mapowanie-ces-p1s.md`)
 Status: **do akceptacji** – dokument nie zawiera implementacji.
 
 Powiązane dokumenty: `readme.md` (kontekst biznesowy), `docs/funkcjonalnosc.md` (specyfikacja
@@ -16,7 +16,7 @@ Architektura ma zapewnić:
 1. **Jedno źródło stanu** – każdy widzi, co zostało przetworzone, przez kogo i na jakich danych.
 2. **Odtwarzalność** – każdy wynik EV można odtworzyć (wersje słowników i danych są zapamiętane).
 3. **Kontrolę jakości danych** – walidacja słowników i plików przed użyciem.
-4. **Niezależność zakresów** – programy nie czekają na siebie.
+4. **Niezależność projektów** – programy nie czekają na siebie.
 5. **Wdrażalność w PZL** – bez serwera aplikacyjnego, z podziałem TEST (developer) / PROD (admin).
 
 ---
@@ -33,11 +33,11 @@ Architektura ma zapewnić:
 | D6 | Developer pracuje na **TEST**, wdrożenia na **PROD** wykonuje admin | wymóg organizacyjny PZL |
 | D7 | Przebiegi **co tydzień (poniedziałek)**, okres rozliczeniowy **miesięczny** | rytm pracy zespołu |
 | D8 | Wolumen danych przez sieć nie stanowi problemu | ładowanie z aplikacji lokalnej do bazy zdalnej |
-| D9 | **Brak podziału uprawnień** w finansach – każda osoba z finansów może prowadzić każdy zakres | zastępstwa, ciągłość pracy; AD służy do audytu |
+| D9 | **Brak podziału uprawnień** w finansach – każda osoba z finansów może prowadzić każdy projekt | zastępstwa, ciągłość pracy; AD służy do audytu |
 | D10 | Pliki dla finansów wymagają **formalnego potwierdzenia w aplikacji** (może je wykonać osoba prowadząca przebieg) | kontrola przed wysłaniem plików do CAM; zapis kto/kiedy |
 | D11 | Dopuszczalne ponowne przeliczenie EV | każde przeliczenie = nowa rewizja, poprzednie zostają |
 | D12 | Oryginały plików w centralnym folderze (Landing Zone), w bazie ścieżka + hash | odtwarzalność bez przyrostu bazy |
-| D13 | **Wszystko per zakres** (program / pula projektów); przebieg przypina stan słowników i przypisań (D27) | brak pipeline globalnego i przekazywania pracy, prosta współbieżność |
+| D13 | *(M22, M23: projekt = węzły drzewa P1S wybrane w kreatorze, zamiast programu / puli)* **Wszystko per projekt** (program / pula projektów); przebieg przypina stan słowników i przypisań (D27) | brak pipeline globalnego i przekazywania pracy, prosta współbieżność |
 | D14 | Tydzień: zaawansowanie z **produkcji** + uzupełnienia; **zamknięcie miesiąca: zaawansowanie wyłącznie od CAM** | bieżąca informacja co tydzień, formalne dane na zamknięcie |
 | D15 | Korzeń folderów na **dysku sieciowym** (UNC) | wspólna ścieżka dla wszystkich |
 | D16 | **CAM pracują wyłącznie na plikach** | bez wdrażania aplikacji u CAM |
@@ -49,9 +49,9 @@ Architektura ma zapewnić:
 | D22 | Awaryjnie (np. plik > 50 MB – limit usługi WebClient): pojedynczy plik pobrany ręcznie w przeglądarce do `00_Global\RABIT\Do_importu` | import traktuje go tak samo |
 | D27 | **Snapshot słowników w MS SQL:** przy przypięciu (start przebiegu / przeliczenie) aplikacja kopiuje stan bazy słowników do schematu `dict` w MS SQL z identyfikatorem wersji – procedury EV (D4) czytają słowniki z MS SQL, a przebieg pozostaje odtwarzalny | logika EV w MS SQL nie może czytać pliku SQLite |
 | D26 | **Lekka baza plikowa (SQLite) w repozytorium PZL-EV na dysku sieciowym** dla **wszystkich słowników, przypisań i konfiguracji** (mapowanie CES ↔ P1S, mapa przypisań WP/CAM, harmonogramy, budżety, stawki, kalendarz, kursy, źródła RABIT), edytowanych w interfejsie aplikacji (CRUD + drzewo); **Excel nie jest źródłem słowników** (M13, M15); dane importów (miliony wierszy) pozostają w MS SQL (M4). Przebieg kopiuje przypięty stan słowników do MS SQL (D27). Ryzyka SMB (blokady, brak WAL) ograniczane: krótkie transakcje, jeden zapis naraz, kopie pliku | brak konieczności serwera bazy; proste wdrożenie |
-| D25 | **Mapowanie CES ↔ P1S jako warstwa w bazie PZL-EV** *(przyjęte: M1–M3 – SQLite na dysku sieciowym, P1S z `PZLPROD.LOG.WBS`, bez 1:wiele)*: reguła projektu CES → projekt P1S (dziedziczona logicznie przez wszystkie obecne i przyszłe WBS), wyjątki WBS → WBS (pierwszeństwo), `include_children`, `NO_P1S`, relacje wiele:1 (**1:wiele niedozwolone** – koszt CES pokazywany raz), historia i `valid_from/valid_to`; zarządzanie w UI (dwa drzewa). Szczegóły i analiza spójności: `docs/mapowanie-ces-p1s.md` | struktury CES i P1S są niezależne; jedno zatwierdzenie projektu zamiast mapowania każdego WBS |
-| D24 | *(M10, M15: prefiksy i źródła projektów jako konfiguracja w bazie słowników; CSV tylko w MVP)* **Plik mówi, czym jest – projekt mówi, czego potrzebuje.** Źródło pliku RABIT rozpoznawane po **prefiksie nazwy** (`konfiguracja/zrodla_rabit.csv`, wygrywa najdłuższy prefiks); importowany jest **każdy rozpoznany plik** samodzielnie (np. `ACTUALS_PAF_01/_02/_03`), bez kontroli „zestawów”; plik nierozpoznany nie jest importowany. Projekt ma listę **wymaganych źródeł** (`konfiguracja/projekty_zrodla.csv`), a PZL-EV sprawdza ich kompletność i aktualność | proste nazwy plików RABIT, różne potrzeby projektów, automatyczna kontrola zamiast ręcznej |
-| D21 | **Import plików SAP (RABIT) jest globalny, bez zakresu**: wszystkie pliki z folderu, import tylko nowych (SHA-256), wiersze w postaci surowej; przebieg zakresu wybiera swoje dane po elementach WBS ze słownika struktury | przy pobieraniu nie wiadomo, do którego zakresu należy plik |
+| D25 | *(zastąpione w części: M16–M19 – źródłem prawdy jest raport mapowań SAP↔CES z `PZLPROD`, w bazie PZL-EV tylko korekty elementu / projektu CES; bez reguły projektu → `PROJORG`, wyjątków i `include_children`)* **Mapowanie CES ↔ P1S jako warstwa w bazie PZL-EV** *(przyjęte: M1–M3 – SQLite na dysku sieciowym, P1S z `PZLPROD.LOG.WBS`, bez 1:wiele)*: reguła projektu CES → projekt P1S (dziedziczona logicznie przez wszystkie obecne i przyszłe WBS), wyjątki WBS → WBS (pierwszeństwo), `include_children`, `NO_P1S`, relacje wiele:1 (**1:wiele niedozwolone** – koszt CES pokazywany raz), historia i `valid_from/valid_to`; zarządzanie w UI (dwa drzewa). Szczegóły i analiza spójności: `docs/mapowanie-ces-p1s.md` | struktury CES i P1S są niezależne; jedno zatwierdzenie projektu zamiast mapowania każdego WBS |
+| D24 | *(M10, M15: prefiksy i źródła projektów jako konfiguracja w bazie słowników; CSV tylko w MVP)* *(zastąpione w części: M21 – wymagane źródła projektów i kontrola kompletności usunięte; zostaje rozpoznanie po prefiksie)* **Plik mówi, czym jest – projekt mówi, czego potrzebuje.** Źródło pliku RABIT rozpoznawane po **prefiksie nazwy** (`konfiguracja/zrodla_rabit.csv`, wygrywa najdłuższy prefiks); importowany jest **każdy rozpoznany plik** samodzielnie (np. `ACTUALS_PAF_01/_02/_03`), bez kontroli „zestawów”; plik nierozpoznany nie jest importowany. Projekt ma listę **wymaganych źródeł** (`konfiguracja/projekty_zrodla.csv`), a PZL-EV sprawdza ich kompletność i aktualność | proste nazwy plików RABIT, różne potrzeby projektów, automatyczna kontrola zamiast ręcznej |
+| D21 | *(M21: przebieg przypina wszystkie zaimportowane pliki i wybiera wiersze elementów projektu z drzewa P1S – bez słownika struktury)* **Import plików SAP (RABIT) jest globalny, bez projektu**: wszystkie pliki z folderu, import tylko nowych (SHA-256), wiersze w postaci surowej; przebieg projektu wybiera swoje dane po elementach WBS ze słownika struktury | przy pobieraniu nie wiadomo, do którego projektu należy plik |
 
 ---
 
@@ -61,7 +61,7 @@ Architektura ma zapewnić:
  Stanowisko osoby z finansów                          Centralnie
  ┌─────────────────────────────────────┐     ┌──────────────────────────────────┐
  │ Przeglądarka  ⇄  PZL-EV (Python)    │     │ MS SQL – baza PZL_EV (TEST / PROD)│
- │                  - orkiestracja     │◄───►│  meta  – zakresy, przebiegi,     │
+ │                  - orkiestracja     │◄───►│  meta  – projekty, przebiegi,     │
  │                  - odczyt plików    │ AD  │          etapy, dziennik, blokady│
  │                  - walidacja        │     │  stg   – surowe dane z plików    │
  │                  - generowanie xlsx │     │  dict  – snapshot słowników (D27)│
@@ -106,8 +106,9 @@ Architektura ma zapewnić:
 |---|---|---|---|
 | CJI3, ZRD_KKAJ, Net Inv | SAP **CES** (finansowy) | koszty rzeczywiste, zobowiązania | eksport RABIT na SharePoint, kopiowany przez WebDAV (D23), pliki na projekt (także wieloczęściowe) |
 | Dane produkcyjne | SAP **P1S** (produkcyjny) | zaawansowanie godzin i materiałów | np. `PZLPROD.LOG.vAHDD` na `splmcd03` (do potwierdzenia, O10) |
-| Słowniki i przypisania | baza słowników PZL-EV (SQLite, dysk sieciowy) | mapowanie CES↔P1S, WP, CAM, harmonogram, budżet, stawki, kalendarz, kursy, konfiguracja | interfejs aplikacji (D26) |
-| Struktura P1S | MS SQL `splmcd03` | `PZLPROD.LOG.WBS`, `LOG.WBS_DIC` | odczyt (M6, M7) |
+| Słowniki i przypisania | baza słowników PZL-EV (SQLite, dysk sieciowy) | korekty mapowania CES↔P1S, WP i CAM, harmonogram i budżet, Cost Category, stawki, kalendarz, kursy, prefiksy RABIT | interfejs aplikacji (D26); słowniki projektu i Cost Category także pobranie / wczytanie Excela (M24, M26) |
+| Struktura P1S | MS SQL `splmcd03` | `PZLPROD.LOG.WBS`, `LOG.WBS_DIC`; kategoryzacja WBS (M20) | odczyt (M6, M20) |
+| Raport mapowań SAP↔CES | `PZLPROD` | przypisania elementów CES ↔ P1S (`pspnr_sap` / `pspnr_ces`, M16) | zapytanie, tylko odczyt |
 | Pliki CAM | Excel | zaawansowanie od CAM | pliki zwrócone przez CAM |
 | Cobra | Sikorsky | budżet i harmonogram (SAC) | do ustalenia |
 
@@ -115,20 +116,28 @@ Architektura ma zapewnić:
 
 ## 5. Model przetwarzania
 
-### 5.1 Zakres
+### 5.1 Projekt
 
-- **Zakres** = program albo pula małych projektów, raportowane razem.
-- Typ zakresu: **SAC**, **CAS**, **Wewnętrzny** – wyznacza szablon etapów (np. plik Cobra tylko w SAC)
+- **Projekt** (dawniej „zakres” – M22) = projekt PZL-EV budowany do przeliczania wskaźników EV.
+- **Zakres projektu** = węzły drzewa P1S zaznaczone w kreatorze (M23): grupy z różnych poziomów kategoryzacji
+  (`sel`) i pojedyncze `PROJORG` (`p1s`), z ich elementami WBS/PSP. `PROJORG` należy do co najwyżej
+  jednego projektu (pojedynczy `PROJORG` przed grupą, wśród grup – projekt utworzony wcześniej).
+- Typ projektu: **SAC**, **CAS**, **Wewnętrzny** – wyznacza szablon etapów (np. plik Cobra tylko w SAC)
   i wymagane słowniki (np. stawki CAS tylko w CAS).
-- Zawartość zakresu (elementy P1S, WP, CAM, harmonogram, budżet) wynika z mapy przypisań w bazie słowników (M8, rozdz. 6.4).
-- Zakres tworzy się w aplikacji (kreator): rejestracja w bazie, foldery, mapa przypisań.
+- Słowniki projektu (M24): WP i CAM, Harmonogram i budżet, w CAS Stawki CAS, opcjonalnie Cost Category –
+  zmiany w projekcie (M26).
+- Projekt tworzy się w aplikacji (kreator, `docs/funkcjonalnosc.md` F01): rejestracja w bazie, foldery,
+  słowniki projektu, baza analityczna (M25).
+
+> *Wcześniej (zastąpione: M22, M23):* zakres = program albo pula małych projektów raportowanych razem;
+> zawartość (elementy P1S, WP, CAM, harmonogram, budżet) z mapy przypisań (M8).
 
 ### 5.2 Przebieg
 
-- **Przebieg** (`Run`) dotyczy jednego zakresu i jednego okresu:
+- **Przebieg** (`Run`) dotyczy jednego projektu i jednego okresu:
   - **tygodniowy** – poniedziałek w trakcie miesiąca, EV wstępne (nieformalne),
   - **zamknięcie miesiąca** – EV formalne, po zatwierdzeniu zamrażane.
-- Identyfikator: `R-<Zakres>-<RRRR-MM>-T<tydzień>` lub `R-<Zakres>-<RRRR-MM>-Z`.
+- Identyfikator: `R-<Projekt>-<RRRR-MM>-T<tydzień>` lub `R-<Projekt>-<RRRR-MM>-Z`.
 - Przebieg jest trwałym obiektem w bazie – może trwać dni (oczekiwanie na CAM); aplikację można
   zamknąć, a przebieg może kontynuować dowolna osoba z finansów (D9).
 
@@ -136,7 +145,7 @@ Architektura ma zapewnić:
 
 | # | Etap (tydzień) | Etap (zamknięcie) | Bramka wyjścia |
 |---|---|---|---|
-| 1 | Dane SAP | Dane SAP | import nowych plików RABIT (globalny, D21) zakończony; wybór danych zakresu po WBS; zgodny okres |
+| 1 | Dane SAP | Dane SAP | import nowych plików RABIT (globalny, D21) zakończony; wybór danych projektu po WBS; zgodny okres |
 | 2 | Słowniki | Słowniki | przypięcie stanu bazy słowników i przypisań, snapshot w MS SQL (D27) |
 | 3 | Walidacja | Walidacja | brak błędów blokujących |
 | 4 | Łączenie źródeł | Łączenie źródeł | kontrole pokrycia; nowe elementy przypisane lub (tydzień) świadomie pominięte |
@@ -162,7 +171,9 @@ Statusy: `Oczekuje` → `Do wykonania` → `W toku` → `Zakończony`, oraz `Wym
 ### 5.5 Przypinanie stanu słowników
 
 - Przy starcie przebieg przypina **stan bazy słowników i przypisań** (wersja / znacznik czasu) i kopiuje go
-  do MS SQL (`dict`, D27) – procedury EV liczą na tej kopii.
+  do MS SQL (`dict`, D27) – procedury EV liczą na tej kopii. Przypinane są także oba słowniki Cost Category
+  (globalny i zmiany projektu – M26) oraz **wszystkie zaimportowane pliki RABIT** (M21). Przypinanie stanu
+  raportu mapowań SAP↔CES – O19.
 - Zmiana słownika lub przypisania w interfejsie w trakcie przebiegu: aplikacja pyta, czy kontynuować na
   przypiętym stanie, czy **przeliczyć od etapu 3**. Decyzja trafia do dziennika.
 
@@ -174,7 +185,7 @@ Raporty pokazują udział wartości spoza CAM. Na zamknięciu dozwolone jest wy�
 
 ### 5.7 Współbieżność
 
-- Jeden przebieg na zakres i tydzień (lub zamknięcie okresu) – wymuszane w bazie.
+- Jeden przebieg na projekt i tydzień (lub zamknięcie okresu) – wymuszane w bazie.
 - Operacja w toku (np. import) zakłada krótką blokadę przebiegu (`sp_getapplock`), żeby dwie osoby
   nie wykonały tej samej operacji jednocześnie.
 - Zapis w bazie słowników (SQLite na dysku sieciowym) – krótkie transakcje, jeden zapis naraz (D26).
@@ -188,14 +199,17 @@ Raporty pokazują udział wartości spoza CAM. Na zamknięciu dozwolone jest wy�
 
 | Obszar | Przykłady | Zasięg |
 |---|---|---|
-| Mapowanie CES ↔ P1S | reguła projektu CES → `PROJORG`, wyjątki WBS | globalny (`docs/mapowanie-ces-p1s.md`) |
-| Mapa przypisań zakresu | element P1S → WP, CAM, Cost Category; harmonogram, budżet | zakres (program) |
-| Finansowe | stawki wydziałów, stawki CAS, kursy walut | globalny / zakres |
+| Mapowanie CES ↔ P1S | korekty elementu CES i projektu CES względem raportu mapowań (M18); ~~reguła projektu CES → `PROJORG`, wyjątki WBS~~ (zastąpione: M16–M18) | globalny (`docs/mapowanie-ces-p1s.md`) |
+| Słowniki projektu | WP i CAM (element P1S → WP, CAM, Cost Category), Harmonogram i budżet, Stawki CAS (CAS), Cost Category – zmiany w projekcie (M24, M26) | projekt |
+| Cost Category | numer elementu kosztowego → Opis, Obszar, Cost Category (M26) | globalny + zmiany w projekcie |
+| Finansowe | stawki wydziałów, stawki CAS, kursy walut | globalny / projekt |
 | Kalendarz | okresy rozliczeniowe | globalny |
-| Konfiguracja importu | prefiksy plików RABIT → źródło; źródła wymagane przez projekt | globalny |
+| Konfiguracja importu | prefiksy plików RABIT → źródło; ~~źródła wymagane przez projekt~~ (usunięte: M21) | globalny |
 
 Wszystko w bazie słowników (SQLite na dysku sieciowym), edycja w interfejsie aplikacji. Excel nie jest
-źródłem słowników (M13).
+źródłem słowników (M13) – słowniki projektu i Cost Category można pobrać do Excela i wczytać z tą samą
+walidacją i podglądem różnic (M24, M26). Przypisania z raportu mapowań nie są kopiowane – czytane z
+`PZLPROD` (M16).
 
 ### 6.2 Przepływ
 
@@ -210,13 +224,13 @@ kto, kiedy, poprzednia i nowa wartość) → baza słowników (SQLite)
 - **biznesowa** – ValidFrom / ValidTo wpisane w interfejsie (od kiedy obowiązuje wartość),
 - **techniczna** – wersja stanu słowników i przebieg, który ją przypiął.
 
-### 6.4 Mapa przypisań zakresu (M8)
+### 6.4 Mapa przypisań projektu (M8) *(zastąpione: M22–M24 – rozdz. 5.1, `docs/funkcjonalnosc.md` F01)*
 
-- Zakres = konkretny program albo program indywidualny.
-- Elementy P1S zakresu (drzewo z `LOG.WBS`, korzeń `PROJORG`) przypisane do **WP**, **CAM**, kategorii;
+- Projekt = konkretny program albo program indywidualny.
+- Elementy P1S projektu (drzewo z `LOG.WBS`, korzeń `PROJORG`) przypisane do **WP**, **CAM**, kategorii;
   na tej samej mapie **harmonogram** i **budżet**.
-- Koszty CES trafiają do zakresu przez mapowanie CES ↔ P1S (`docs/mapowanie-ces-p1s.md`).
-- Ten sam element nie może należeć do dwóch zakresów w nakładających się okresach.
+- Koszty CES trafiają do projektu przez mapowanie CES ↔ P1S (`docs/mapowanie-ces-p1s.md`).
+- Ten sam element nie może należeć do dwóch projektów w nakładających się okresach.
 - CAM z mapy przypisań wyznacza listę CAM i podział plików CAM.
 - Nowe elementy (CES po imporcie, P1S z `LOG.WBS`) pojawiają się w interfejsie jako wymagające uwagi –
   bez eksportu do plików.
@@ -237,8 +251,8 @@ odrzucany z komunikatem – nie powstaje błędna wersja. Szczegóły: `docs/fun
 \\serwer\udział\PZL-EV\                 korzeń środowiska (osobny dla TEST i PROD)
 ├── 00_Global\Baza\                 baza słowników i przypisań (SQLite, D26) + kopie
 ├── 00_Global\RABIT\Do_importu\     kopie plików RABIT (WebDAV, D23)
-├── 01_LandingZone\<RRRR-MM-DD>\<IdImportu>\   archiwum oryginałów (bez podziału na zakresy)
-└── Zakresy\<Zakres>\
+├── 01_LandingZone\<RRRR-MM-DD>\<IdImportu>\   archiwum oryginałów (bez podziału na projekty)
+└── Projekty\<Projekt>\
     ├── Finanse\<RRRR-MM>\           pliki pośrednie dla finansów
     ├── CAM\<RRRR-MM>\Wyslane\       pliki do uzupełnienia przez CAM
     ├── CAM\<RRRR-MM>\Zwrocone\      pliki zwrócone przez CAM
@@ -246,9 +260,9 @@ odrzucany z komunikatem – nie powstaje błędna wersja. Szczegóły: `docs/fun
 ```
 
 - Ścieżki UNC (nie litery dysków); w bazie ścieżki **względne** od korzenia środowiska.
-- Aplikacja sprawdza strukturę folderów przy otwarciu zakresu.
+- Aplikacja sprawdza strukturę folderów przy otwarciu projektu.
 - Dostęp: finanse – zapis w całym `PZL-EV`; CAM – zapis w `CAM\…\Zwrocone`, odczyt w `Wyslane`
-  swojego zakresu (nadaje IT).
+  swojego projektu (nadaje IT).
 
 ### 7.2 Landing Zone i integralność
 
@@ -266,7 +280,7 @@ odrzucany z komunikatem – nie powstaje błędna wersja. Szczegóły: `docs/fun
   większy plik pobiera się ręcznie w przeglądarce do `Do_importu` (D22).
 - Niedostępne dla użytkownika (sprawdzone 29.09.2026) i usunięte z kodu: API REST SharePoint, synchronizacja
   OneDrive, eksport listy do Excela (Office List OLEDB / owssvr), pobieranie ZIP.
-- Import obejmuje **wszystkie** pliki; zakres nie jest znany. Tożsamość pliku = SHA-256 treści:
+- Import obejmuje **wszystkie** pliki; projekt nie jest znany. Tożsamość pliku = SHA-256 treści:
   nowy hash → import; znany hash → duplikat; te same metadane (ścieżka, rozmiar, data) co wcześniej →
   pominięcie bez pobierania.
 - **Rozpoznanie źródła (D24):** prefiks nazwy pliku → kod źródła wg konfiguracji źródeł (docelowo w bazie słowników, M15; w MVP `konfiguracja/zrodla_rabit.csv`)
@@ -280,7 +294,7 @@ odrzucany z komunikatem – nie powstaje błędna wersja. Szczegóły: `docs/fun
 - Wiersze ładowane w postaci surowej (`stg.RawRow`, widok `stg.vRawRowZrodlo` z kodem źródła i importem);
   zapisywana jest też sygnatura kolumn (zmiana układu raportu). Tabele typowane per źródło – gdy
   zostanie zdefiniowana zawartość raportów.
-- **Kompletność projektu (D24):** źródła wymagane przez projekt (docelowo w bazie słowników, M10; w MVP `konfiguracja/projekty_zrodla.csv`);
+- **Kompletność projektu (D24)** *(usunięte docelowo: M21 – zakres danych projektu wynika z drzewa P1S, przebieg przypina wszystkie zaimportowane pliki; w MVP komenda `kompletnosc` zostaje w kodzie)*: źródła wymagane przez projekt (docelowo w bazie słowników, M10; w MVP `konfiguracja/projekty_zrodla.csv`);
   `kompletnosc` pokazuje dla projektu: ✓ źródło zaimportowane (ostatni import, data raportu, plik),
   ✗ brak importu, ⚠ import starszy niż zadany próg. Sprawdzenie pokrycia okresu – później.
 - Każde uruchomienie importu i decyzja dla każdego pliku są zapisane w bazie (`meta.ImportBatch`,
@@ -290,8 +304,8 @@ odrzucany z komunikatem – nie powstaje błędna wersja. Szczegóły: `docs/fun
 
 ### 7.4 Pliki CAM
 
-- Jeden plik na CAM w ramach zakresu (rekomendacja, O3).
-- Ukryty arkusz: ID przebiegu, zakres, okres, CAM, wersja szablonu. Komórki poza polami do
+- Jeden plik na CAM w ramach projektu (rekomendacja, O3).
+- Ukryty arkusz: ID przebiegu, projekt, okres, CAM, wersja szablonu. Komórki poza polami do
   uzupełnienia zablokowane.
 - Import odrzuca plik: bez identyfikatora, z innego przebiegu lub okresu, zmieniony poza polami.
 
@@ -303,7 +317,7 @@ odrzucany z komunikatem – nie powstaje błędna wersja. Szczegóły: `docs/fun
 
 | Schemat | Zawartość |
 |---|---|
-| `meta` | zakresy, szablony etapów, przebiegi, etapy, zdarzenia (dziennik), blokady, pliki (ścieżka, hash), wersja aplikacji i schematu |
+| `meta` | projekty, szablony etapów, przebiegi, etapy, zdarzenia (dziennik), blokady, pliki (ścieżka, hash), wersja aplikacji i schematu |
 | `stg` | surowe dane z plików (per przebieg i plik) |
 | `dict` | **snapshoty** słowników i przypisań przypięte przez przebiegi (kopia z bazy słowników SQLite, D27) – źródłem prawdy jest baza słowników |
 | `hist` | snapshoty danych źródłowych (CES, P1S, CAM) |
@@ -313,8 +327,8 @@ odrzucany z komunikatem – nie powstaje błędna wersja. Szczegóły: `docs/fun
 
 | Encja | Opis |
 |---|---|
-| `meta.Zakres` | kod, nazwa, typ (SAC/CAS/WEW), pula, data utworzenia, twórca |
-| `meta.Przebieg` | zakres, rodzaj, okres, tydzień, status, rewizja EV, zamrożenie |
+| `meta.Zakres` | projekt (M22 – nazwa encji do ustalenia w projekcie bazy): kod, nazwa, typ (SAC/CAS/WEW), zakres P1S (`sel` + `p1s`, M23; wcześniej: pula), data utworzenia, twórca |
+| `meta.Przebieg` | projekt, rodzaj, okres, tydzień, status, rewizja EV, zamrożenie |
 | `meta.EtapPrzebiegu` | przebieg, etap, status, kto/kiedy, wersje wejść |
 | `meta.Zdarzenie` | dziennik: przebieg, kto (AD), kiedy, opis |
 | `meta.Plik` | ścieżka względna, hash, rozmiar, liczba wierszy, przebieg, źródło |
@@ -327,8 +341,8 @@ odrzucany z komunikatem – nie powstaje błędna wersja. Szczegóły: `docs/fun
 
 - Grupa AD finansów → rola `pzl_ev_user`; osobno `pzl_ev_admin` (wdrożenia).
 - Użytkownicy nie mają praw do tabel – wyłącznie EXECUTE na procedurach i SELECT na widokach.
-- Brak uprawnień per zakres (D9). Baza wymusza reguły procesu (bramki etapów, jeden przebieg na
-  zakres i tydzień, zamrożenie okresu), bo aplikacja działa lokalnie i nie może być jedyną kontrolą.
+- Brak uprawnień per projekt (D9). Baza wymusza reguły procesu (bramki etapów, jeden przebieg na
+  projekt i tydzień, zamrożenie okresu), bo aplikacja działa lokalnie i nie może być jedyną kontrolą.
 - Każda procedura zapisuje użytkownika AD (`ORIGINAL_LOGIN()`) w dzienniku.
 
 ---
@@ -412,3 +426,4 @@ Na podstawie eksportu metadanych (`dependencies.csv`, `resolved_objects.csv`):
 | O11 | Zasady uzupełniania braków (ostatnia znana wartość / plan / ręcznie) | do ustalenia |
 | O14 | Logika łączenia źródeł (etap 4) | do przedstawienia przez zespół |
 | O15 | Źródło ETC | otwarte pytanie z readme |
+| O19–O26 | Kwestie z prototypu v3 (przypinanie raportu mapowań, korekta projektu CES, kategorie, zakres z grupy, baza analityczna, Cost Category) | `docs/funkcjonalnosc.md`, rozdz. 10 |
