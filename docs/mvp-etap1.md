@@ -58,9 +58,13 @@ w przeglądarce i zapisuje w `Do_importu` – import potraktuje go tak samo.
 
 ## 3. Konfiguracja źródeł i projektów
 
+> **Rozwiązanie przejściowe.** Docelowo prefiksy RABIT (M15) i wymagane źródła projektów (M10) są
+> konfiguracją w bazie słowników SQLite, edytowaną w aplikacji (D26, `docs/mapowanie-ces-p1s.md`).
+> Pliki CSV poniżej obowiązują tylko w MVP etapu 1 – do czasu powstania bazy słowników z interfejsem.
+
 Katalog `konfiguracja` (w repozytorium; inną lokalizację wskazuje `--konfiguracja` albo zmienna
 `PZL_EV_KONFIGURACJA`, np. `\\serwer\udzial\PZL-EV\00_Global\Konfiguracja`). Pliki CSV, separator `;`,
-edycja w Excelu, wiersze z `#` pomijane. W repozytorium są **przykłady** do zastąpienia.
+edycja w edytorze tekstu lub Excelu, wiersze z `#` pomijane. W repozytorium są **przykłady** do zastąpienia.
 
 `zrodla_rabit.csv` – prefiks nazwy pliku → źródło (wygrywa najdłuższy pasujący prefiks, wielkość liter bez znaczenia):
 
