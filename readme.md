@@ -32,7 +32,7 @@ Dokument jest rozwijany iteracyjnie na podstawie:
 | `docs/funkcjonalnosc.md` | specyfikacja funkcjonalna: ekrany, funkcje, etapy przebiegu, reguły |
 | `prototyp/pzl-ev-prototyp.html` | klikalny prototyp aplikacji (dane przykładowe, otwierany w przeglądarce) |
 | `prototyp/PZL-EV Pipeline v3.html` | klikalny prototyp v3 – ilustracja ustaleń M16–M26 (mapowanie z raportu mapowań, kategoryzacja WBS, kreator projektu, Cost Category); źródłem prawdy jest dokumentacja |
-| `docs/mvp-etap1.md`, `pzl_ev/`, `konfiguracja/` | etap 1: pobranie plików RABIT przez WebDAV, rozpoznanie źródła po prefiksie, import do bazy, kompletność źródeł projektów (docelowo usunięta – M21) |
+| `docs/mvp-etap1.md`, `pzl_ev/`, `konfiguracja/` | etap 1: pobranie plików RABIT przez WebDAV, rozpoznanie źródła po prefiksie, import do bazy |
 | `dependencies.csv`, `resolved_objects.csv`, `export_log.txt` | eksport metadanych obiektów SQL z `splmcd03` (`PZLPROD.LOG`, `PZL_SAP`) |
 
 ---
@@ -339,7 +339,7 @@ w dane raportowe: powiązanie CES↔P1S, przypisanie do WP i CAM, harmonogramy, 
 | Cost Category | numer elementu kosztowego → Opis, Obszar, Cost Category (M26) |
 | Finansowe | stawki wydziałów (`Department | Year | Labor Rate | Overhead`), stawki CAS, kursy walut |
 | Kalendarz | okresy rozliczeniowe |
-| Konfiguracja importu | prefiksy plików RABIT → źródło; ~~źródła wymagane przez projekt~~ (usunięte – M21) |
+| Konfiguracja importu | prefiksy plików RABIT → źródło (M21) |
 
 Struktury źródłowe (tylko odczyt): WBS CES z importów RABIT (`Project Definition`, `WBS Element`),
 WBS P1S i kategoryzacja z `PZLPROD.LOG.WBS` i `LOG.WBS_DIC` (M20), raport mapowań SAP↔CES z `PZLPROD` (M16).

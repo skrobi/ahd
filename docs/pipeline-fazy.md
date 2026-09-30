@@ -1,7 +1,7 @@
 # PZL-EV – Fazy pipeline (koncepcja)
 
 Wersja: 0.4 (koncepcja do dyskusji; 0.3: słowniki w bazie z interfejsem – M13/M15, D26–D27;
-0.4: „projekt” zamiast „zakresu” – M22, mapowanie z raportu mapowań – M16–M18, G2b usunięta – M21, Cost Category – M26)
+0.4: „projekt” zamiast „zakresu” – M22, mapowanie z raportu mapowań – M16–M18, kompletność źródeł projektów usunięta – M21, Cost Category – M26)
 Powiązane: `docs/architektura.md`, `docs/funkcjonalnosc.md`, `docs/mvp-etap1.md` (faza G1–G2 – działa).
 
 ---
@@ -33,7 +33,6 @@ z różnych komputerów.
 flowchart TD
   subgraph G["Fazy globalne – bez projektu, w dowolnym momencie"]
     G1["G1 Pobranie RABIT<br/>(WebDAV → Do_importu)"] --> G2["G2 Import<br/>(prefiks → źródło, hash, historia)"]
-    G2 -.-> G2b["G2b Kompletność źródeł projektów<br/>(usunięta – M21)"]
     G2 --> G3["G3 Mapowanie CES↔P1S<br/>(raport mapowań, korekty, dziedziczenie, UNMAPPED)"]
     G4["G4 Edycja słowników i przypisań<br/>(UI → SQLite, walidacja przy zapisie)"]
   end
@@ -58,7 +57,6 @@ flowchart TD
 |---|---|---|---|---|
 | G1 Pobranie RABIT | globalna | dowolna osoba z finansów / harmonogram | co najmniej tak często jak RABIT | **działa** |
 | G2 Import | globalna | j.w. | po G1 (razem) | **działa** |
-| ~~G2b Kompletność źródeł projektów~~ | globalna | dowolna osoba z finansów | po G2 | **usunięta docelowo (M21)**; w MVP komenda działa |
 | G3 Mapowanie CES↔P1S | globalna | automatycznie po G2, decyzje – finanse (UI) | po G2 | koncepcja |
 | G4 Edycja słowników i przypisań | globalna | dowolna osoba z finansów (UI) | w dowolnym momencie | koncepcja |
 | P1–P10 | projekt | osoba prowadząca projekt | tydzień / zamknięcie | prototyp |
@@ -89,7 +87,7 @@ czego dotyczy plik – o tym decyduje dopiero G2 na podstawie definicji plików 
 | | |
 |---|---|
 | **Cel** | Każdy **rozpoznany** plik załadować do bazy jako źródło z markerem pochodzenia – tak, żeby dało się odtworzyć dowolny wcześniejszy stan i porównać dwa stany. |
-| **Zasada** | **Plik mówi, czym jest** (prefiks nazwy → źródło). ~~**Projekt mówi, czego potrzebuje** (projekt → wymagane źródła).~~ *(zastąpione: M21 – zakres danych projektu wynika z jego węzłów w drzewie P1S; jedna paczka RABIT może obejmować wiele projektów, np. całe PWC)* |
+| **Zasada** | **Plik mówi, czym jest** (prefiks nazwy → źródło). Zakres danych projektu wynika z jego węzłów w drzewie P1S; jedna paczka RABIT może obejmować wiele projektów, np. całe PWC (M21). |
 | **Wejście** | Pliki w `Do_importu`; konfiguracja prefiksów (Prefiks → KodZrodla) w bazie słowników – M15 (w MVP przejściowo `konfiguracja/zrodla_rabit.csv`). |
 | **Jak pracuje** | 1) Prefiks nazwy → źródło (najdłuższy pasujący prefiks, bez rozróżniania wielkości liter). 2) Hash SHA-256: ten sam fizyczny plik = duplikat. 3) Nowa treść → Landing Zone + wiersze w bazie. Każdy rozpoznany plik osobno – także `ACTUALS_PAF_01/_02/_03` o różnych kolumnach. |
 | **Marker pochodzenia** | Każdy plik (i przez niego każdy wiersz): `IdImportu` (kto, kiedy), `Sha256`, **kod źródła**, **data raportu** (data modyfikacji w RABIT). Jedna wersja pliku = jeden snapshot. |
@@ -97,21 +95,7 @@ czego dotyczy plik – o tym decyduje dopiero G2 na podstawie definicji plików 
 | **Kontrole** | Brak prefiksu → „nierozpoznany” (nie importowany; po dopisaniu prefiksu zaimportuje się przy kolejnym uruchomieniu). Uszkodzony plik → „błąd” (reszta importuje się dalej). |
 | **Efekt** | `meta.SourceFile` (hash, kod źródła, kolumny, liczba wierszy), `meta.SourceFileSeen` (decyzja dla każdego pliku w każdym imporcie), `stg.RawRow` / `stg.vRawRowZrodlo`. |
 | **Później** | Tabele typowane per źródło (mapowanie kolumn), gdy będzie wiadomo, co zawierają raporty. |
-| **Przekazanie** | Historia importów źródeł jest wejściem G3 (elementy WBS) i P1 (dane projektu – przebieg przypina wszystkie zaimportowane pliki, M21). ~~G2b (kompletność projektów)~~ – usunięta (M21). |
-
-### G2b. Kompletność źródeł projektów *(usunięta docelowo: M21; w MVP działa w podstawowej wersji)*
-
-> Słownik „Wymagane źródła projektów” i kontrola kompletności usunięte (Import, Pulpit, gotowość projektu,
-> nowy przebieg). Opis poniżej – historia ustaleń.
-
-| | |
-|---|---|
-| **Cel** | Zamiast ręcznie sprawdzać kilkadziesiąt projektów – automatycznie wiedzieć, któremu projektowi brakuje danych. |
-| **Wejście** | Konfiguracja Projekt → wymagane źródła w bazie słowników – M10 (w MVP przejściowo `konfiguracja/projekty_zrodla.csv`) + historia importów z G2. |
-| **Jak pracuje** | Dla każdego wymaganego źródła projektu: ostatni import, data raportu, liczba plików. |
-| **Efekt** | Projekt „komplet” / „niekompletny”: ✓ źródło zaimportowane, ✗ brak importu, ⚠ import starszy niż próg. |
-| **Później** | Kontrola, czy ostatni import obejmuje bieżący okres; zmiany między importami. |
-| **Przekazanie** | P1 nie rusza (albo ostrzega) dla projektu niekompletnego. |
+| **Przekazanie** | Historia importów źródeł jest wejściem G3 (elementy WBS) i P1 (dane projektu – przebieg przypina wszystkie zaimportowane pliki, M21). |
 
 ### G3. Mapowanie CES ↔ P1S *(koncepcja – `docs/mapowanie-ces-p1s.md`, D25)*
 
@@ -152,7 +136,7 @@ fazy mogą być wykonywane w różne dni i przez różne osoby z finansów.
 | **Cel** | Wybrać z danych globalnych **tylko to, co należy do projektu i okresu**, i zamrozić ten wybór na czas przebiegu. |
 | **Wejście** | Tabele raportów z G2 (najnowsze snapshoty); stan mapowania z G3; zakres P1S projektu (węzły drzewa – M23) i WP (baza słowników); kalendarz okresów. |
 | **Jak pracuje** | **Przypina wszystkie zaimportowane pliki** (lista hashy, M21) – analogicznie do przypinania stanu słowników – i wybiera z nich wiersze elementów projektu (zakres P1S z drzewa – M23, elementy CES przez mapowanie) oraz dat okresu (koszt okresu i narastająco). |
-| **Kontrole** | Pliki „nierozpoznane” (ostrzeżenie); ~~kompletność źródeł projektów (G2b)~~ – usunięta (M21); elementy `UNMAPPED` z G3 (ostrzeżenie; zamknięcie – blokada); daty w okresie. |
+| **Kontrole** | Pliki „nierozpoznane” (ostrzeżenie); elementy `UNMAPPED` z G3 (ostrzeżenie; zamknięcie – blokada); daty w okresie. |
 | **Efekt** | Snapshot danych projektu `hist.DaneZakresu` (RunId, Sha256) + lista przypiętych plików. |
 | **Przekazanie** | P2–P4 pracują wyłącznie na tym snapshocie. Nowy import w trakcie przebiegu → informacja „dostępne nowsze dane” i decyzja: kontynuuj / przelicz od P1. |
 
@@ -262,7 +246,7 @@ Dwa warianty, ten sam cel: **dla każdego WP wartość zaawansowania z zapisanym
 
 | # | Kwestia |
 |---|---|
-| K1 | Rzeczywiste prefiksy plików RABIT (docelowo w bazie słowników – M15; w MVP CSV; wymagane źródła projektów usunięte – M21); później mapowanie kolumn źródeł na tabele typowane |
+| K1 | Rzeczywiste prefiksy plików RABIT (docelowo w bazie słowników – M15; w MVP CSV); później mapowanie kolumn źródeł na tabele typowane |
 | K5 | Harmonogram G1+G2 względem harmonogramu RABIT (nadpisywanie plików) |
 | K6 | *(zob. `docs/mapowanie-ces-p1s.md` – propozycje poziomu 3)* Reguły kluczy w G3: po czym rozpoznać projekt (segment WBS, Project Definition, Business Area…) i czy reguła tylko proponuje, czy przypisuje |
 | K7 | Retencja snapshotów (wolumen: setki tysięcy wierszy × raporty × tygodnie) |
