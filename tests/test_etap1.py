@@ -1,4 +1,4 @@
-"""Testy etapu 1: pobranie plików RABIT (WebDAV = folder UNC), rozpoznanie po prefiksie, import, kompletność."""
+"""Testy etapu 1: pobranie plików RABIT (WebDAV = folder UNC), rozpoznanie po prefiksie, import."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ import pytest
 
 from pzl_ev.baza import Database
 from pzl_ev.etap1 import cli
-from pzl_ev.konfiguracja import ConfigError, SourceDef, load_project_requirements, load_sources, match_source
+from pzl_ev.konfiguracja import ConfigError, SourceDef, load_sources, match_source
 from pzl_ev.zrodla.webdav import unc_from_url
 
 HEADER = "Obiekt;Element PSP;Wartość/WK;Data księgowania\n"
@@ -26,12 +26,7 @@ ETC_PAF;ETC_PAF;ETC PAF
 ACTUALS_CES;ACTUALS_CES;Koszty CES
 """
 
-PROJECTS_CSV = """Projekt;KodZrodla
-PAF-001;ACTUALS_PAF
-PAF-001;FORECAST_PAF
-PAF-001;ETC_PAF
-ABC-002;ACTUALS_PAF
-"""
+
 
 
 def _xlsx(path: Path, rows: int, header=("Element PSP", "Kwota", "Data")) -> None:
@@ -48,7 +43,6 @@ def konf(tmp_path):
     d = tmp_path / "konfiguracja"
     d.mkdir()
     (d / "zrodla_rabit.csv").write_text("\ufeff" + SOURCES_CSV, encoding="utf-8")
-    (d / "projekty_zrodla.csv").write_text(PROJECTS_CSV, encoding="utf-8")
     return d
 
 
@@ -89,15 +83,10 @@ def test_prefix_match_longest_wins_and_case_insensitive():
 
 
 def test_config_validation(konf):
-    sources = load_sources(konf)
-    assert load_project_requirements(konf, sources)["PAF-001"] == ["ACTUALS_PAF", "FORECAST_PAF", "ETC_PAF"]
+    load_sources(konf)
     (konf / "zrodla_rabit.csv").write_text(SOURCES_CSV + "actuals_paf;INNE;dubel\n", encoding="utf-8")
     with pytest.raises(ConfigError, match="zdefiniowany już"):
         load_sources(konf)
-    (konf / "zrodla_rabit.csv").write_text(SOURCES_CSV, encoding="utf-8")
-    (konf / "projekty_zrodla.csv").write_text(PROJECTS_CSV + "XYZ;NIEZNANE\n", encoding="utf-8")
-    with pytest.raises(ConfigError, match="nie jest zdefiniowane"):
-        load_project_requirements(konf, load_sources(konf))
 
 
 def test_missing_config_is_reported(rabit, tmp_path, capsys):
@@ -239,23 +228,6 @@ def test_lista_shows_recognized_source(rabit, konf, capsys):
     assert cli.main(["lista", "--folder", str(rabit), "--konfiguracja", str(konf)]) == 0
     out = capsys.readouterr().out
     assert "ACTUALS_PAF" in out and "nierozpoznanych: 1" in out
-
-
-# --- kompletność ---------------------------------------------------------------
-
-def test_kompletnosc_per_project(rabit, tmp_path, konf, capsys):
-    lz = str(tmp_path / "LZ")
-    assert _import(rabit, tmp_path, konf) == 0
-    capsys.readouterr()
-    assert cli.main(["kompletnosc", "--landing", lz, "--konfiguracja", str(konf)]) == 1
-    out = capsys.readouterr().out
-    assert "PAF-001: NIEKOMPLETNY" in out and "✗ ETC_PAF" in out and "✓ ACTUALS_PAF" in out
-    assert "ABC-002: komplet" in out and "niekompletnych: 1" in out
-
-    _xlsx(rabit / "ETC_PAF.xlsx", 1)
-    assert _import(rabit, tmp_path, konf) == 0
-    assert cli.main(["kompletnosc", "--landing", lz, "--konfiguracja", str(konf)]) == 0
-    assert cli.main(["kompletnosc", "--landing", lz, "--konfiguracja", str(konf), "--maks-wiek-dni", "-1"]) == 1
 
 
 # --- baza ----------------------------------------------------------------------

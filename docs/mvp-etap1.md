@@ -1,13 +1,14 @@
 # Etap 1: pobranie plików RABIT i import do bazy
 
-Wersja: 1.1 (rozwiązanie docelowe, MVP)
+Wersja: 1.2 (rozwiązanie docelowe, MVP; 1.2: usunięta kompletność źródeł projektów – M21)
 
 ## Zasada
 
-**Plik mówi, czym jest – projekt mówi, czego potrzebuje.**
+**Plik mówi, czym jest.** Zakres danych projektu wynika z jego elementów w drzewie P1S (M21) – import
+nie zna projektów, a jedna paczka RABIT może obejmować wiele projektów.
 
 ```
-RABIT → plik XLSX → PREFIKS → źródło → import do bazy → historia + hash → PROJEKT → wymagane źródła
+RABIT → plik XLSX → PREFIKS → źródło → import do bazy → historia + hash
 ```
 
 1. **Pobierz** – pliki z folderu RABIT na SharePoint są kopiowane przez **WebDAV** (jak „Otwórz
@@ -16,8 +17,7 @@ RABIT → plik XLSX → PREFIKS → źródło → import do bazy → historia + 
 2. **Importuj** – źródło pliku rozpoznawane jest po **prefiksie nazwy** (np. `ACTUALS_PAF_01.xlsx` →
    `ACTUALS_PAF`). Importowany jest **każdy rozpoznany plik** samodzielnie, ale **tylko o nowej treści**
    (hash SHA-256 = tożsamość fizycznego pliku). Plik bez pasującego prefiksu nie jest importowany.
-3. **Kompletność** – każdy projekt ma listę wymaganych źródeł; PZL-EV pokazuje, czego brakuje.
-4. **Historia** – każdy widzi, kto, kiedy i co zaimportował.
+3. **Historia** – każdy widzi, kto, kiedy i co zaimportował.
 
 ---
 
@@ -56,15 +56,15 @@ w przeglądarce i zapisuje w `Do_importu` – import potraktuje go tak samo.
 
 ---
 
-## 3. Konfiguracja źródeł i projektów
+## 3. Konfiguracja źródeł
 
-> **Rozwiązanie przejściowe.** Docelowo prefiksy RABIT (M15) i wymagane źródła projektów (M10 – zastąpione przez M21: usunięte) są
+> **Rozwiązanie przejściowe.** Docelowo prefiksy RABIT (M15) są
 > konfiguracją w bazie słowników SQLite, edytowaną w aplikacji (D26, `docs/mapowanie-ces-p1s.md`).
-> Pliki CSV poniżej obowiązują tylko w MVP etapu 1 – do czasu powstania bazy słowników z interfejsem.
+> Plik CSV poniżej obowiązuje tylko w MVP etapu 1 – do czasu powstania bazy słowników z interfejsem.
 
 Katalog `konfiguracja` (w repozytorium; inną lokalizację wskazuje `--konfiguracja` albo zmienna
-`PZL_EV_KONFIGURACJA`, np. `\\serwer\udzial\PZL-EV\00_Global\Konfiguracja`). Pliki CSV, separator `;`,
-edycja w edytorze tekstu lub Excelu, wiersze z `#` pomijane. W repozytorium są **przykłady** do zastąpienia.
+`PZL_EV_KONFIGURACJA`, np. `\\serwer\udzial\PZL-EV\00_Global\Konfiguracja`). Plik CSV, separator `;`,
+edycja w edytorze tekstu lub Excelu, wiersze z `#` pomijane. W repozytorium jest **przykład** do zastąpienia.
 
 `zrodla_rabit.csv` – prefiks nazwy pliku → źródło (wygrywa najdłuższy pasujący prefiks, wielkość liter bez znaczenia):
 
@@ -72,15 +72,6 @@ edycja w edytorze tekstu lub Excelu, wiersze z `#` pomijane. W repozytorium są 
 Prefiks;KodZrodla;Opis
 ACTUALS_PAF;ACTUALS_PAF;Koszty rzeczywiste PAF
 FORECAST_PAF;FORECAST_PAF;Prognoza PAF
-```
-
-`projekty_zrodla.csv` – projekt → wymagane źródła (jeden wiersz = jedno źródło):
-
-```
-Projekt;KodZrodla
-PAF-001;ACTUALS_PAF
-PAF-001;FORECAST_PAF
-ABC-002;ACTUALS_PAF
 ```
 
 `lista --webdav "<link>"` albo `lista --folder …` pokazuje, jakie źródło zostanie rozpoznane dla każdego pliku.
@@ -117,33 +108,7 @@ Opcje:
 
 ---
 
-## 5. Kompletność źródeł projektów
-
-> **Docelowo usunięte (M21, `docs/mapowanie-ces-p1s.md`).** Słownik „Wymagane źródła projektów” i kontrola
-> kompletności nie wchodzą do aplikacji: zakres danych projektu wynika z jego węzłów w drzewie P1S, a przebieg
-> przypina wszystkie zaimportowane pliki. Komenda `kompletnosc` i `projekty_zrodla.csv` zostają w kodzie MVP
-> bez zmian.
-
-```bat
-python -m pzl_ev.etap1 kompletnosc --landing "\\serwer\udzial\PZL-EV\01_LandingZone" --maks-wiek-dni 7
-```
-
-```
-PAF-001: NIEKOMPLETNY
-  ✓ ACTUALS_PAF            ostatni import 2026-09-29T08:10 (0 dni), raport z 2026-09-29T05:12, plików 3, ostatni: ACTUALS_PAF_03.xlsx
-  ✓ FORECAST_PAF           ostatni import 2026-09-29T08:10 (0 dni), raport z 2026-09-28T22:00, plików 1, ostatni: FORECAST_PAF.xlsx
-  ✗ ETC_PAF                brak importu
-ABC-002: komplet
-  …
-Projektów: 2, niekompletnych: 1
-```
-
-✗ – brak importu, ⚠ – ostatni import starszy niż `--maks-wiek-dni`. Kod wyjścia 1, gdy którykolwiek
-projekt jest niekompletny. Sprawdzenie, czy import obejmuje bieżący okres – w kolejnym kroku.
-
----
-
-## 6. Historia importów
+## 5. Historia importów
 
 ```bat
 python -m pzl_ev.etap1 historia --landing "\\serwer\udzial\PZL-EV\01_LandingZone"
@@ -151,7 +116,7 @@ python -m pzl_ev.etap1 historia --landing "\\serwer\udzial\PZL-EV\01_LandingZone
 
 ---
 
-## 7. Co jest w bazie
+## 6. Co jest w bazie
 
 | Tabela | Zawartość |
 |---|---|
@@ -169,7 +134,7 @@ Wydajność (test): plik CSV 700 000 wierszy / 85 MB – import do SQLite ok. 13
 
 ---
 
-## 8. Testy (developer)
+## 7. Testy (developer)
 
 ```bat
 python -m pytest -q tests

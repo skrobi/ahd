@@ -1,14 +1,12 @@
-"""Konfiguracja importu RABIT: źródła rozpoznawane po prefiksie nazwy pliku i źródła wymagane przez projekty.
+"""Konfiguracja importu RABIT: źródła rozpoznawane po prefiksie nazwy pliku.
 
-Dwa pliki CSV (separator `;`, UTF-8, edytowalne w Excelu) w katalogu konfiguracji:
+Plik CSV (separator `;`, UTF-8, edytowalny w Excelu) w katalogu konfiguracji:
 
     zrodla_rabit.csv      Prefiks;KodZrodla;Opis
                           ACTUALS_PAF;ACTUALS_PAF;Koszty rzeczywiste PAF
 
-    projekty_zrodla.csv   Projekt;KodZrodla
-                          PAF-001;ACTUALS_PAF
-
-Plik mówi, czym jest (prefiks → źródło), projekt mówi, czego potrzebuje (projekt → źródła).
+Plik mówi, czym jest (prefiks → źródło). Zakres danych projektu wynika z jego elementów w drzewie P1S
+(M21 w docs/mapowanie-ces-p1s.md) – bez listy źródeł wymaganych przez projekt.
 Wiersze zaczynające się od `#` są pomijane.
 """
 
@@ -21,7 +19,6 @@ from dataclasses import dataclass
 from pathlib import Path
 
 SOURCES_FILE = "zrodla_rabit.csv"
-PROJECTS_FILE = "projekty_zrodla.csv"
 
 
 class ConfigError(Exception):
@@ -71,23 +68,6 @@ def load_sources(directory: str | Path) -> list[SourceDef]:
         seen[key] = n
         defs.append(SourceDef(prefix=prefix, code=code, description=row.get("Opis", "")))
     return defs
-
-
-def load_project_requirements(directory: str | Path, sources: list[SourceDef]) -> dict[str, list[str]]:
-    """Projekt → lista wymaganych kodów źródeł (w kolejności z pliku)."""
-    path = Path(directory) / PROJECTS_FILE
-    known = {s.code for s in sources}
-    required: dict[str, list[str]] = {}
-    for n, row in _rows(path, ["Projekt", "KodZrodla"]):
-        project, code = row["Projekt"], row["KodZrodla"]
-        if not project or not code:
-            raise ConfigError(f"{path.name}, wiersz {n}: Projekt i KodZrodla są wymagane")
-        if code not in known:
-            raise ConfigError(f"{path.name}, wiersz {n}: źródło '{code}' nie jest zdefiniowane w {SOURCES_FILE}")
-        codes = required.setdefault(project, [])
-        if code not in codes:
-            codes.append(code)
-    return required
 
 
 def match_source(filename: str, sources: list[SourceDef]) -> SourceDef | None:
