@@ -1,6 +1,6 @@
 # PZL-EV – Mapowanie CES ↔ P1S (założenia)
 
-Wersja: 0.2 (założenia + decyzje z 30.09.2026 – bez implementacji)
+Wersja: 0.3 (założenia + decyzje M1–M6 – bez implementacji)
 Powiązane: `docs/architektura.md` (D25), `docs/pipeline-fazy.md` (G3), `docs/funkcjonalnosc.md` (F21–F24).
 
 > W specyfikacji źródłowej występuje nazwa „AHD” – w projekcie oznacza ona **PZL-EV**.
@@ -120,7 +120,7 @@ wystąpienie) – na nim działa drzewo, wykrywanie nowych elementów i `include
 
 ### 4.1 Przechowywanie (decyzja M1)
 
-Reguły mapowania, rejestry elementów i historia zmian są w **lekkiej bazie plikowej (SQLite)**
+Reguły mapowania, słowniki, rejestry elementów i historia zmian są w **lekkiej bazie plikowej (SQLite)**
 w repozytorium PZL-EV na dysku sieciowym, np. `\\serwer\udzial\PZL-EV\00_Global\Baza\pzl_ev.sqlite`.
 Zarządzanie przez **narzędzie CRUD z drzewem** (dwa drzewa CES | P1S) – bez Excela jako źródła prawdy
 dla przypisań.
@@ -132,9 +132,54 @@ Ryzyka SQLite na udziale sieciowym i sposób ich ograniczenia:
 | blokady plików przez SMB bywają zawodne; tryb WAL nie działa na udziale sieciowym | tryb dziennika `DELETE`, krótkie transakcje, jeden zapis naraz (blokada aplikacyjna + `busy_timeout`) |
 | jednoczesny zapis kilku osób | zapis tylko w krótkich operacjach CRUD/importu; odczyt równoległy bez ograniczeń |
 | uszkodzenie pliku przy zerwaniu połączenia | automatyczna kopia pliku przed każdym importem / sesją edycji; kopie dzienne |
-| rozmiar (surowe wiersze importów to setki tysięcy rekordów tygodniowo) | do decyzji: mapowanie i rejestry w jednym małym pliku, dane importów w osobnym pliku/plikach (pytanie P1) |
+| rozmiar | nie dotyczy: w SQLite są **tylko słowniki i przypisania** (M4); dane importów (miliony wierszy) pozostają w MS SQL |
 
 ---
+
+## 4a. Źródła struktur (M5, M6)
+
+### CES – z importów RABIT (G2)
+
+Raporty CES zawierają kolumny:
+
+| Kolumna CES | Znaczenie w mapowaniu |
+|---|---|
+| `Project Definition` | **CES Project** (np. `4D03GZ`) – bez wyliczania z prefiksu (M5) |
+| `WBS Element` | **CES WBS** (np. `4D03GZ000001`) |
+
+Struktura CES jest **płaska**: projekt → lista WBS (numeracja ciągła z lukami, np. brak `…000028`,
+`…000031`). Drzewo CES w narzędziu ma więc dwa poziomy.
+
+### P1S – z `PZLPROD.LOG.WBS` i `PZLPROD.LOG.WBS_DIC` (MS SQL, `splmcd03`)
+
+`LOG.WBS` – wszystkie WBS P1S (nadrzędne i szczegółowe), z danymi do grupowania:
+
+| Kolumna | Użycie w mapowaniu |
+|---|---|
+| `PSPNR` | identyfikator techniczny elementu (klucz) |
+| `PARENT` | `PSPNR` elementu nadrzędnego – **budowa drzewa P1S** i `include_children` |
+| `STUFE` | poziom w hierarchii (1 = korzeń projektu) |
+| `WBS_ELEMENT` | kod WBS P1S (np. `MC-00.001.0001.001`) – **wartość `p1s_wbs` w regułach** |
+| `PROJORG` | projekt SAP P1S (np. `MC-00`) |
+| `PROJECT` | projekt / grupa raportowa (np. `MC-00.001`) – grupowanie wg `WBS_DIC` |
+| `PROJNAME`, `LTXA1`, `Z_OPIS` | opisy (wyszukiwanie, podpowiedzi) |
+| `PRCTR` | profit center (grupowanie wg `WBS_DIC`, gdy `Z_GRP = PRCTR`) |
+| `Z_KAT_ZBIORCZA`, `Z_KATEGORIA` | kategorie (filtry w drzewie) |
+| `Z_MODEL`, `MATNR_LO`, `SERNR_LO`, `KDAUF`/`KDPOS`, `KUNNR`, `BSTNK`, `MATNR`, `AUFNR` | model, materiał i nr seryjny, zlecenie sprzedaży, klient, zamówienie klienta, materiał, zlecenie – **kryteria propozycji (poziom 3)** |
+| `Z_ACTIVE`, `LOEKZ` | aktywność / znacznik usunięcia – elementy nieaktywne i usunięte wyszarzone; mapowanie na nie → ostrzeżenie |
+| `ERDAT`, `AEDAT` | daty utworzenia i zmiany – wykrywanie nowych elementów P1S |
+
+`LOG.WBS_DIC` – słownik grupujący projekty P1S:
+
+| Kolumna | Użycie |
+|---|---|
+| `Z_PROJECT` + `Z_GRP` | klucz grupy: `PROJECT` (grupa po projekcie/WBS) albo `PRCTR` (grupa po profit center) |
+| `Z_OPIS`, `Z_KATEGORIA`, `Z_KAT_ZBIORCZA`, `Z_INFO` | opis i kategorie grupy (np. „Internal Work”, „Spares & Services”) |
+| `ERDAT`, `Z_USER` | kto i kiedy dopisał grupę |
+
+Drzewo P1S w narzędziu: `PARENT → PSPNR` (poziomy wg `STUFE`), z możliwością filtrowania / grupowania
+po `PROJECT`, `PROJORG`, kategoriach i profit center. Dane P1S są **czytane** z MS SQL (bez zmian w SAP ani
+w `LOG.WBS`); do SQLite trafiają tylko reguły mapowania i ewentualny podręczny rejestr elementów.
 
 ## 5. Interfejs wizualny
 
@@ -211,7 +256,7 @@ danych CES; elementy bez odpowiednika P1S wykazywalne; źródłem prawdy jest re
 | S8 | **Koszty `NO_P1S` w EV** | D20: koszty muszą być przypisane na zamknięciu | `NO_P1S` = świadomy brak odpowiednika | do ustalenia: czy `NO_P1S` przechodzi bramkę zamknięcia i gdzie raportujemy ten koszt | otwarte |
 | S9 | **Odtwarzalność przebiegu** | przebieg przypina wersje słowników i dane (P1) | mapowanie ma `valid_from/valid_to` | przebieg przypina również **stan mapowania** (znacznik czasu); zmiana mapowania w trakcie przebiegu → decyzja „kontynuuj / przelicz” jak przy słownikach | otwarte |
 | S10 | **„Projekt” w `projekty_zrodla.csv`** (D24) | nieokreślone | rozróżnienie projekt CES / projekt P1S | doprecyzować, czy chodzi o projekt P1S (raportowy), czy CES | otwarte |
-| S11 | **Ustalenie Project Definition dla WBS CES** | brak | krok obowiązkowy rozstrzygania | z kolumny raportu CES (która?) czy z prefiksu kodu WBS (np. 6 znaków) | otwarte |
+| S11 | **Ustalenie Project Definition dla WBS CES** | brak | krok obowiązkowy rozstrzygania | z kolumny raportu CES (która?) czy z prefiksu kodu WBS (np. 6 znaków) | ✅ **M5:** kolumna `Project Definition` |
 
 ---
 
@@ -222,14 +267,20 @@ danych CES; elementy bez odpowiednika P1S wykazywalne; źródłem prawdy jest re
 | M1 | Przypisania (reguły mapowania, rejestry elementów, historia) w **lekkiej bazie SQLite na dysku sieciowym**, zarządzane **narzędziem CRUD z drzewem** | rozwiązuje S1, S2; mapowanie nie jest w Excelu |
 | M2 | Struktura P1S z **`PZLPROD.LOG.WBS`** (dane już przetworzone), bez `PZL_SAP.dbo.Z_R3_PRPS_TBL` | rozwiązuje S5; potrzebny opis kolumn `LOG.WBS` (pytanie P2) |
 | M3 | **Brak relacji 1:wiele** – koszt CES występujący raz jest raz pokazywany | rozwiązuje S7; walidacja blokuje drugi aktywny cel dla tego samego elementu CES |
+| M4 | W SQLite na dysku sieciowym są **tylko słowniki i przypisania**. Dane importów (miliony wierszy w kolejnych cyklach tygodniowych) pozostają w **MS SQL** | zamyka P1; D3 (MS SQL) obowiązuje dla danych |
+| M5 | CES Project = kolumna **`Project Definition`**, CES WBS = **`WBS Element`** z raportu CES; struktura CES płaska | zamyka P5 / S11 |
+| M6 | Drzewo P1S z **`LOG.WBS`** (`PSPNR`/`PARENT`/`STUFE`, kod `WBS_ELEMENT`), grupowanie z **`LOG.WBS_DIC`** | zamyka P2 |
 
 ## 10. Pytania otwarte
 
 | # | Pytanie |
 |---|---|
-| P1 | Czy „wszystko” w SQLite na dysku sieciowym obejmuje też dane importów (surowe wiersze), czy tylko przypisania / słowniki / konfigurację? Rekomendacja: przypisania w małym pliku, dane importów w osobnym pliku (lub w MS SQL, jeśli będzie dostępny). Dotyczy D3 w architekturze. |
-| P2 | Kolumny `PZLPROD.LOG.WBS`: kod WBS P1S, projekt, rodzic (lub poziom), opis – jak się nazywają? |
+| ~~P1~~ | ✅ M4 – w SQLite tylko słowniki i przypisania, dane importów w MS SQL |
+| ~~P2~~ | ✅ M6 – kolumny opisane w rozdz. 4a |
 | P3 | Czy dalej obowiązuje: zakres = zbiór projektów P1S, a słownik struktury opisuje tylko P1S (S3, S4)? W praktyce atrybuty P1S (CAM, WP, Cost Category) też mogą trafić do narzędzia CRUD zamiast Excela. |
 | P4 | Czy koszt `NO_P1S` przechodzi bramkę zamknięcia miesiąca i gdzie jest raportowany (S8)? |
-| P5 | Skąd Project Definition dla WBS CES – kolumna raportu czy prefiks kodu (S11)? |
+| ~~P5~~ | ✅ M5 – kolumna `Project Definition` |
 | P6 | „Projekt” w `projekty_zrodla.csv` – projekt P1S czy CES (S10)? Ujednolicenie „CAS WBS” → „CES WBS” (S6)? |
+| P7 | Reguła projektu wskazuje w P1S: **`PROJORG`** (projekt SAP, np. `MC-00`) czy **`PROJECT`** (grupa raportowa wg `WBS_DIC`, np. `MC-00.001`)? Rekomendacja: regułę zapisujemy jako węzeł P1S (`WBS_ELEMENT`) + `include_children` – działa dla obu przypadków. |
+| P8 | Czy elementy P1S z `LOEKZ` / `Z_ACTIVE = 0` pokazujemy w drzewie (wyszarzone), czy ukrywamy? Co z istniejącą regułą, której cel został usunięty w SAP? |
+| P9 | Raport CES ma tylko `Project Definition` i `WBS Element` – czy inne raporty CES dostarczają atrybutów (zlecenie, materiał, klient) do automatycznych propozycji? Bez nich propozycje ograniczą się do opisów i zgodności kodów. |
