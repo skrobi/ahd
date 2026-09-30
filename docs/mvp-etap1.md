@@ -58,7 +58,7 @@ w przeglądarce i zapisuje w `Do_importu` – import potraktuje go tak samo.
 
 ## 3. Konfiguracja źródeł i projektów
 
-> **Rozwiązanie przejściowe.** Docelowo prefiksy RABIT (M15) i wymagane źródła projektów (M10) są
+> **Rozwiązanie przejściowe.** Docelowo prefiksy RABIT (M15) i wymagane źródła projektów (M10 – zastąpione przez M21: usunięte) są
 > konfiguracją w bazie słowników SQLite, edytowaną w aplikacji (D26, `docs/mapowanie-ces-p1s.md`).
 > Pliki CSV poniżej obowiązują tylko w MVP etapu 1 – do czasu powstania bazy słowników z interfejsem.
 
@@ -118,6 +118,11 @@ Opcje:
 ---
 
 ## 5. Kompletność źródeł projektów
+
+> **Docelowo usunięte (M21, `docs/mapowanie-ces-p1s.md`).** Słownik „Wymagane źródła projektów” i kontrola
+> kompletności nie wchodzą do aplikacji: zakres danych projektu wynika z jego węzłów w drzewie P1S, a przebieg
+> przypina wszystkie zaimportowane pliki. Komenda `kompletnosc` i `projekty_zrodla.csv` zostają w kodzie MVP
+> bez zmian.
 
 ```bat
 python -m pzl_ev.etap1 kompletnosc --landing "\\serwer\udzial\PZL-EV\01_LandingZone" --maks-wiek-dni 7

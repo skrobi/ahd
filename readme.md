@@ -31,7 +31,8 @@ Dokument jest rozwijany iteracyjnie na podstawie:
 | `docs/mapowanie-ces-p1s.md` | założenia mapowania struktur WBS CES ↔ P1S i analiza spójności z dokumentacją |
 | `docs/funkcjonalnosc.md` | specyfikacja funkcjonalna: ekrany, funkcje, etapy przebiegu, reguły |
 | `prototyp/pzl-ev-prototyp.html` | klikalny prototyp aplikacji (dane przykładowe, otwierany w przeglądarce) |
-| `docs/mvp-etap1.md`, `pzl_ev/`, `konfiguracja/` | etap 1: pobranie plików RABIT przez WebDAV, rozpoznanie źródła po prefiksie, import do bazy, kompletność źródeł projektów |
+| `prototyp/PZL-EV Pipeline v3.html` | klikalny prototyp v3 – ilustracja ustaleń M16–M26 (mapowanie z raportu mapowań, kategoryzacja WBS, kreator projektu, Cost Category); źródłem prawdy jest dokumentacja |
+| `docs/mvp-etap1.md`, `pzl_ev/`, `konfiguracja/` | etap 1: pobranie plików RABIT przez WebDAV, rozpoznanie źródła po prefiksie, import do bazy, kompletność źródeł projektów (docelowo usunięta – M21) |
 | `dependencies.csv`, `resolved_objects.csv`, `export_log.txt` | eksport metadanych obiektów SQL z `splmcd03` (`PZLPROD.LOG`, `PZL_SAP`) |
 
 ---
@@ -229,19 +230,21 @@ Szczegóły: `docs/architektura.md` i `docs/funkcjonalnosc.md`.
   z finansów uruchamia ją u siebie; nie jest potrzebny serwer aplikacyjny.
 - **Centralna baza MS SQL** przechowuje dane: importy, przebiegi, wyniki EV i dziennik zdarzeń.
   Każdy widzi, co już przetworzono i przez kogo.
-- **Słowniki, przypisania i konfiguracja** (mapowanie CES↔P1S, WP, CAM, harmonogramy, budżety, stawki,
-  kalendarz, kursy, źródła RABIT) – w **lekkiej bazie SQLite na dysku sieciowym**, edytowane w interfejsie
-  aplikacji (CRUD + drzewo). **Excel nie jest źródłem słowników.**
+- **Słowniki, przypisania i konfiguracja** (korekty mapowania CES↔P1S, WP i CAM, harmonogramy, budżety, Cost Category,
+  stawki, kalendarz, kursy, prefiksy RABIT) – w **lekkiej bazie SQLite na dysku sieciowym**, edytowane w interfejsie
+  aplikacji (CRUD + drzewo). **Excel nie jest źródłem słowników** – słowniki projektu i Cost Category można
+  pobrać do Excela i wczytać z walidacją (M24, M26). Przypisania CES↔P1S – z raportu mapowań SAP↔CES (M16).
 - **Logika biznesowa w bazie** (procedury i widoki SQL) – wynik nie zależy od wersji
   aplikacji na danym komputerze.
 - **Pliki na dysku sieciowym** (ścieżki UNC): baza słowników (SQLite), eksporty SAP (RABIT), pliki dla
   finansów, pliki dla CAM, wyniki EV.
-- **Praca w zakresach** – zakres to program lub pula małych projektów. Każdy przebieg
-  dotyczy jednego zakresu, dzięki czemu np. F-16 nie czeka na pliki Cobra dla projektów SAC.
+- **Praca w projektach** – projekt (dawniej „zakres”, M22) obejmuje węzły drzewa P1S wybrane w kreatorze
+  (grupy kategorii i pojedyncze `PROJORG`, M23). Każdy przebieg
+  dotyczy jednego projektu, dzięki czemu np. F-16 nie czeka na pliki Cobra dla projektów SAC.
 - **Przebieg tygodniowy** (poniedziałek) daje wstępne EV; **zamknięcie miesiąca** daje EV formalne,
   oparte wyłącznie na zaawansowaniu od CAM.
 
-## Przebieg (pipeline) zakresu
+## Przebieg (pipeline) projektu
 
 ```
 Pobranie plików SAP (ręcznie z SharePoint lub automatycznie)
@@ -320,7 +323,8 @@ w dane raportowe: powiązanie CES↔P1S, przypisanie do WP i CAM, harmonogramy, 
 - **Źródłem prawdy jest baza słowników PZL-EV** – lekka baza SQLite w repozytorium PZL-EV na dysku
   sieciowym (`docs/mapowanie-ces-p1s.md`, M1, M13).
 - Edycja wyłącznie w **interfejsie aplikacji** (dodawanie, zmiana, dezaktywacja, drzewo, wyszukiwanie).
-  Excel nie jest źródłem słowników; eksport do Excela – tylko do podglądu.
+  Excel nie jest źródłem słowników; ~~eksport do Excela – tylko do podglądu~~ *(zmienione: M24, M26 – słowniki
+  projektu i Cost Category: pobranie do Excela i wczytanie z walidacją i podglądem różnic)*.
 - Każda zmiana zapisuje: kto, kiedy, poprzednią i nową wartość, okres obowiązywania
   (`ValidFrom` / `ValidTo`). Zmiana obowiązującej wartości = zamknięcie okresu starej i nowy wpis.
 - Przebieg przypina stan słowników i przypisań, na którym liczył – każdy raport EV można odtworzyć.
@@ -330,14 +334,15 @@ w dane raportowe: powiązanie CES↔P1S, przypisanie do WP i CAM, harmonogramy, 
 
 | Obszar | Zawartość |
 |---|---|
-| Mapowanie CES ↔ P1S | reguły projektu CES → `PROJORG` P1S, wyjątki WBS, historia (`docs/mapowanie-ces-p1s.md`) |
-| Mapa przypisań zakresu | zakres = program; przypisanie elementów P1S do WP, CAM, Cost Category; harmonogram i budżet |
+| Mapowanie CES ↔ P1S | korekty elementu / projektu CES względem raportu mapowań SAP↔CES, historia (M16–M18, `docs/mapowanie-ces-p1s.md`); ~~reguły projektu CES → `PROJORG` P1S, wyjątki WBS~~ |
+| Słowniki projektu | zakres P1S projektu (M23); WP i CAM (element P1S → WP, CAM, Cost Category), Harmonogram i budżet, Stawki CAS, Cost Category – zmiany w projekcie (M24, M26) |
+| Cost Category | numer elementu kosztowego → Opis, Obszar, Cost Category (M26) |
 | Finansowe | stawki wydziałów (`Department | Year | Labor Rate | Overhead`), stawki CAS, kursy walut |
 | Kalendarz | okresy rozliczeniowe |
-| Konfiguracja importu | prefiksy plików RABIT → źródło; źródła wymagane przez projekt |
+| Konfiguracja importu | prefiksy plików RABIT → źródło; ~~źródła wymagane przez projekt~~ (usunięte – M21) |
 
 Struktury źródłowe (tylko odczyt): WBS CES z importów RABIT (`Project Definition`, `WBS Element`),
-WBS P1S z `PZLPROD.LOG.WBS` i `LOG.WBS_DIC`.
+WBS P1S i kategoryzacja z `PZLPROD.LOG.WBS` i `LOG.WBS_DIC` (M20), raport mapowań SAP↔CES z `PZLPROD` (M16).
 
 ## Walidacja
 
