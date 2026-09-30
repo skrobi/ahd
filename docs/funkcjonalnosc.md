@@ -4,8 +4,8 @@ Wersja: 1.1 (wstępny projekt; 1.1: słowniki w bazie z interfejsem – M13, `NO
 Status: **do akceptacji** – opis zachowania aplikacji, bez implementacji.
 
 Powiązane dokumenty: `readme.md`, `docs/architektura.md`, `prototyp/pzl-ev-prototyp.html`
-(klikalny prototyp pokazujący opisane funkcje na danych przykładowych; ekran słowników w prototypie
-pokazuje jeszcze pliki Excel – do aktualizacji po M13), `docs/mapowanie-ces-p1s.md`.
+(klikalny prototyp pokazujący opisane funkcje na danych przykładowych: import RABIT, przypisania
+CES↔P1S, słowniki w bazie, przebiegi), `docs/mapowanie-ces-p1s.md`.
 
 ---
 
