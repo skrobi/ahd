@@ -27,7 +27,7 @@ Dokument jest rozwijany iteracyjnie na podstawie:
 |---|---|
 | `readme.md` | kontekst biznesowy, cele, problemy, słowniki, otwarte pytania (ten plik) |
 | `docs/architektura.md` | architektura rozwiązania: decyzje, komponenty, przepływ danych, baza, wdrożenia |
-| `docs/pipeline-fazy.md` | koncepcja wszystkich faz pipeline: cel, wejście, przetwarzanie, efekt, przekazanie do kolejnej fazy |
+| `docs/pipeline-fazy.md` | **jedyny opis etapów**: fazy globalne i etapy przebiegu – cel, wejście, bramki, działanie w aplikacji, kontrole, efekt, statusy |
 | `docs/mapowanie-ces-p1s.md` | założenia mapowania struktur WBS CES ↔ P1S i analiza spójności z dokumentacją |
 | `docs/funkcjonalnosc.md` | specyfikacja funkcjonalna: ekrany, funkcje, etapy przebiegu, reguły |
 | `prototyp/pzl-ev-prototyp.html` | klikalny prototyp aplikacji (dane przykładowe, otwierany w przeglądarce) |
@@ -241,30 +241,6 @@ Szczegóły: `docs/architektura.md` i `docs/funkcjonalnosc.md`.
 - **Praca w projektach** – projekt (dawniej „zakres”, M22) obejmuje węzły drzewa P1S wybrane w kreatorze
   (grupy kategorii i pojedyncze `PROJORG`, M23). Każdy przebieg
   dotyczy jednego projektu, dzięki czemu np. F-16 nie czeka na pliki Cobra dla projektów SAC.
-- **Przebieg tygodniowy** (poniedziałek) daje wstępne EV; **zamknięcie miesiąca** daje EV formalne,
-  oparte wyłącznie na zaawansowaniu od CAM.
-
-## Przebieg (pipeline) projektu
-
-```
-Pobranie plików SAP (ręcznie z SharePoint lub automatycznie)
-↓
-Przypięcie wersji słowników i przypisań (z bazy słowników)
-↓
-Walidacja wszystkich importów
-↓
-Łączenie ze źródłami (logika do przedstawienia)
-↓
-Pliki pośrednie dla finansów → potwierdzenie w aplikacji
-↓
-Pliki do uzupełnienia przez CAM   (tydzień: zaawansowanie z produkcji + uzupełnienia)
-↓
-Import plików CAM
-↓
-Walidacja zaawansowania
-↓
-Generowanie EV (+ plik dla Cobra w projektach SAC)
-```
 
 ## Warstwy danych
 
@@ -349,7 +325,7 @@ WBS P1S i kategoryzacja z `PZLPROD.LOG.WBS` i `LOG.WBS_DIC` (M20), raport mapowa
 Walidacja odbywa się **przy zapisie w interfejsie** (a nie przy imporcie pliku): wymagane pola, typy,
 unikalność, nakładające się okresy ważności, odwołania (np. CAM, WP, element P1S istnieje), reguły biznesowe
 (np. WP = yes wymaga CAM, data startu ≤ data końca), blokada relacji CES → wiele P1S. Szczegóły:
-`docs/funkcjonalnosc.md`, rozdz. 6.
+`docs/funkcjonalnosc.md`, rozdz. 5.
 
 ---
 
@@ -370,7 +346,7 @@ unikalność, nakładające się okresy ważności, odwołania (np. CAM, WP, ele
 | 11 | Logika łączenia źródeł (etap 4 przebiegu) | do przedstawienia |
 
 Otwarte decyzje architektoniczne i funkcjonalne: `docs/architektura.md` (rozdz. 13)
-i `docs/funkcjonalnosc.md` (rozdz. 10).
+i `docs/funkcjonalnosc.md` (rozdz. 9).
 
 ---
 
