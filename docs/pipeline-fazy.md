@@ -1,6 +1,6 @@
 # PZL-EV – Fazy pipeline (koncepcja)
 
-Wersja: 0.2 (koncepcja do dyskusji)
+Wersja: 0.3 (koncepcja do dyskusji; 0.3: słowniki w bazie z interfejsem – M13/M15, D26–D27)
 Powiązane: `docs/architektura.md`, `docs/funkcjonalnosc.md`, `docs/mvp-etap1.md` (faza G1–G2 – działa).
 
 ---
@@ -11,12 +11,12 @@ Każda faza jest osobnym klockiem o tym samym kształcie:
 
 | Element | Znaczenie |
 |---|---|
-| **Wejście** | czyta **wyłącznie** dane utrwalone przez wcześniejsze fazy (tabele w bazie, zarejestrowane pliki, przypięte wersje słowników) – nigdy „z pamięci” poprzedniego kroku |
-| **Bramka wejścia** | warunki, bez których faza nie ruszy (np. poprzednia faza zakończona, słownik ma zatwierdzoną wersję) |
+| **Wejście** | czyta **wyłącznie** dane utrwalone przez wcześniejsze fazy (tabele w bazie, zarejestrowane pliki, przypięty stan słowników – migawka w MS SQL, D27) – nigdy „z pamięci” poprzedniego kroku |
+| **Bramka wejścia** | warunki, bez których faza nie ruszy (np. poprzednia faza zakończona, słowniki zakresu kompletne) |
 | **Przetwarzanie** | logika biznesowa w bazie (procedury SQL); Python orkiestruje, czyta i zapisuje pliki |
-| **Wyjście** | tabele w bazie + ewentualne pliki; każdy rekord ma identyfikator pochodzenia (import, przebieg, wersja) |
+| **Wyjście** | tabele w bazie + ewentualne pliki; każdy rekord ma identyfikator pochodzenia (import, przebieg, stan słowników) |
 | **Bramka wyjścia** | kontrole, które muszą przejść, żeby następna faza mogła ruszyć |
-| **Zapis stanu** | status fazy, kto, kiedy, **identyfikatory wejść** (hashe plików, wersje słowników, rewizje) – w `meta.EtapPrzebiegu` i dzienniku |
+| **Zapis stanu** | status fazy, kto, kiedy, **identyfikatory wejść** (hashe plików, znacznik stanu słowników, rewizje) – w `meta.EtapPrzebiegu` i dzienniku |
 | **Idempotencja** | ponowne uruchomienie z tymi samymi wejściami daje ten sam wynik i nie dubluje danych |
 | **Unieważnienie** | zmiana wejść fazy oznacza ją i wszystkie późniejsze jako **nieaktualne** |
 
@@ -33,11 +33,11 @@ flowchart TD
   subgraph G["Fazy globalne – bez zakresu, w dowolnym momencie"]
     G1["G1 Pobranie RABIT<br/>(WebDAV → Do_importu)"] --> G2["G2 Import<br/>(prefiks → źródło, hash, historia)"]
     G2 --> G2b["G2b Kompletność źródeł projektów"]
-    G2 --> G3["G3 Klasyfikacja elementów WBS<br/>(nowe elementy, klucze → propozycje)"]
-    G4["G4 Publikacja słowników globalnych"]
+    G2 --> G3["G3 Mapowanie CES↔P1S<br/>(reguły, dziedziczenie, UNMAPPED)"]
+    G4["G4 Edycja słowników i przypisań<br/>(UI → SQLite, walidacja przy zapisie)"]
   end
   subgraph P["Przebieg zakresu – tygodniowy lub zamknięcie miesiąca"]
-    P1["P1 Dane zakresu<br/>(wybór i przypięcie danych)"] --> P2["P2 Słowniki zakresu"]
+    P1["P1 Dane zakresu<br/>(wybór i przypięcie danych)"] --> P2["P2 Przypięcie słowników<br/>(migawka do MS SQL)"]
     P2 --> P3["P3 Walidacja"]
     P3 --> P4["P4 Łączenie źródeł"]
     P4 --> P5["P5 Pliki dla finansów<br/>+ potwierdzenie"]
@@ -58,8 +58,8 @@ flowchart TD
 | G1 Pobranie RABIT | globalna | dowolna osoba z finansów / harmonogram | co najmniej tak często jak RABIT | **działa** |
 | G2 Import | globalna | j.w. | po G1 (razem) | **działa** |
 | G2b Kompletność źródeł projektów | globalna | dowolna osoba z finansów | po G2 | **działa** (podstawowo) |
-| G3 Klasyfikacja elementów WBS | globalna | automatycznie po G2, decyzje – finanse | po G2 | koncepcja |
-| G4 Słowniki globalne | globalna | właściciel słownika | przy zmianie | koncepcja |
+| G3 Mapowanie CES↔P1S | globalna | automatycznie po G2, decyzje – finanse (UI) | po G2 | koncepcja |
+| G4 Edycja słowników i przypisań | globalna | dowolna osoba z finansów (UI) | w dowolnym momencie | koncepcja |
 | P1–P10 | zakres | osoba prowadząca zakres | tydzień / zamknięcie | prototyp |
 
 ---
@@ -89,7 +89,7 @@ czego dotyczy plik – o tym decyduje dopiero G2 na podstawie definicji plików 
 |---|---|
 | **Cel** | Każdy **rozpoznany** plik załadować do bazy jako źródło z markerem pochodzenia – tak, żeby dało się odtworzyć dowolny wcześniejszy stan i porównać dwa stany. |
 | **Zasada** | **Plik mówi, czym jest** (prefiks nazwy → źródło), **projekt mówi, czego potrzebuje** (projekt → wymagane źródła). |
-| **Wejście** | Pliki w `Do_importu`; `konfiguracja/zrodla_rabit.csv` (Prefiks → KodZrodla). |
+| **Wejście** | Pliki w `Do_importu`; konfiguracja prefiksów (Prefiks → KodZrodla) w bazie słowników – M15 (w MVP przejściowo `konfiguracja/zrodla_rabit.csv`). |
 | **Jak pracuje** | 1) Prefiks nazwy → źródło (najdłuższy pasujący prefiks, bez rozróżniania wielkości liter). 2) Hash SHA-256: ten sam fizyczny plik = duplikat. 3) Nowa treść → Landing Zone + wiersze w bazie. Każdy rozpoznany plik osobno – także `ACTUALS_PAF_01/_02/_03` o różnych kolumnach. |
 | **Marker pochodzenia** | Każdy plik (i przez niego każdy wiersz): `IdImportu` (kto, kiedy), `Sha256`, **kod źródła**, **data raportu** (data modyfikacji w RABIT). Jedna wersja pliku = jeden snapshot. |
 | **Archiwalność** | Tylko dopisywanie. Każda nowa treść nadpisanego przez RABIT pliku to nowa wersja w historii; oryginał w Landing Zone. Widok „najnowszy stan” i porównanie wersji – na tej historii. |
@@ -103,33 +103,33 @@ czego dotyczy plik – o tym decyduje dopiero G2 na podstawie definicji plików 
 | | |
 |---|---|
 | **Cel** | Zamiast ręcznie sprawdzać kilkadziesiąt projektów – automatycznie wiedzieć, któremu projektowi brakuje danych. |
-| **Wejście** | `konfiguracja/projekty_zrodla.csv` (Projekt → wymagane źródła) + historia importów z G2. |
+| **Wejście** | Konfiguracja Projekt → wymagane źródła w bazie słowników – M10 (w MVP przejściowo `konfiguracja/projekty_zrodla.csv`) + historia importów z G2. |
 | **Jak pracuje** | Dla każdego wymaganego źródła projektu: ostatni import, data raportu, liczba plików. |
 | **Efekt** | Projekt „komplet” / „niekompletny”: ✓ źródło zaimportowane, ✗ brak importu, ⚠ import starszy niż próg. |
 | **Później** | Kontrola, czy ostatni import obejmuje bieżący okres; zmiany między importami. |
 | **Przekazanie** | P1 nie rusza (albo ostrzega) dla projektu niekompletnego. |
 
-### G3. Klasyfikacja elementów WBS *(koncepcja)*
+### G3. Mapowanie CES ↔ P1S *(koncepcja – `docs/mapowanie-ces-p1s.md`, D25)*
 
 | | |
 |---|---|
-| **Cel** | Wiedzieć o **każdym elemencie WBS** występującym w danych, do którego projektu / zakresu należy – i szybko wychwycić nowe. |
-| **Wejście** | Elementy WBS (CES i P1S) z nowych snapshotów G2; słowniki „Struktura projektowa” wszystkich zakresów; **reguły kluczy** (np. segment WBS / Project Definition / Business Area → projekt → zakres). |
-| **Jak pracuje** | 1) Zbiera unikalne elementy z nowych snapshotów i porównuje z rejestrem znanych elementów. 2) Dla nowych stosuje reguły kluczy i wyznacza **propozycję** projektu i zakresu. 3) Tworzy listę do decyzji i eksportuje propozycje wierszy do słowników struktury właściwych zakresów. |
-| **Kontrole** | Element pasujący do kilku zakresów → konflikt (do decyzji). Element bez dopasowania → „nieprzypisany” (alert na pulpicie, z kosztem). |
-| **Efekt** | Rejestr elementów WBS: przypisany / zaproponowany / nieprzypisany / konflikt, z datą pierwszego wystąpienia i snapshotem źródłowym. |
-| **Przekazanie** | P1 bierze do zakresu elementy przypisane w słowniku struktury; propozycje trafiają do właściciela zakresu (akceptacja = wpis w słowniku). P4 nie wykrywa już nowych elementów – korzysta z rejestru G3 i blokuje zamknięcie, jeśli element z kosztem jest nieprzypisany. |
+| **Cel** | Wiedzieć o **każdym elemencie WBS CES** z danych, do którego elementu P1S (i przez to zakresu) należy – i szybko wychwycić te bez decyzji. |
+| **Wejście** | Elementy CES (`Project Definition`, `WBS Element`) z nowych snapshotów G2; drzewo P1S z `PZLPROD.LOG.WBS`; reguły mapowania i przypisania zakresów z bazy słowników (SQLite). |
+| **Jak pracuje** | Rozstrzyganie: wyjątek WBS → reguła projektu (dziedziczenie – nowe WBS projektu obejmowane automatycznie) → automatyczna propozycja (kody / opisy, M12; nigdy nie zatwierdza się sama) → `UNMAPPED`. |
+| **Kontrole** | Co najwyżej jeden aktywny cel P1S na element CES (M3); element bez decyzji → `UNMAPPED` (alert na pulpicie, z kosztem). `NO_P1S` odłożony (M14). |
+| **Efekt** | Lista nowych elementów z wynikiem (`odziedziczono → XYZ`, `UNMAPPED`) i kontrola kompletności projektów CES. Źródłem prawdy są reguły, nie rekordy pochodne. |
+| **Przekazanie** | Decyzje zapisywane w UI (G4 / ekran Przypisania). P1 i P4 korzystają z przypiętego stanu mapowania; zamknięcie z kosztem `UNMAPPED` – pytanie P10. |
 
-### G4. Publikacja słowników globalnych *(koncepcja)*
+### G4. Edycja słowników i przypisań *(koncepcja)*
 
 | | |
 |---|---|
-| **Cel** | Udostępnić zatwierdzoną wersję słownika wspólnego (stawki wydziałów, kalendarz okresów, kursy USD/PLN, **definicje plików RABIT**, **reguły kluczy WBS**). |
-| **Wejście** | Plik Excel słownika w `00_Global\Slowniki`. |
-| **Jak pracuje** | Kopia do Landing Zone + hash → walidacja (rozdz. 6 specyfikacji) → nowa wersja tylko przy zmianie treści. |
-| **Kontrole** | Błąd blokujący odrzuca wersję; obowiązuje poprzednia. |
-| **Efekt** | `dict.WersjaSlownika` + dane słownika z historią (SCD2). |
-| **Przekazanie** | Przebieg przypina wersję w P1/P2; aktywne przebiegi ze starszą wersją dostają decyzję „kontynuuj / przelicz od P3”. |
+| **Cel** | Utrzymywać słowniki globalne i zakresowe (stawki wydziałów, kalendarz okresów, kursy USD/PLN, stawki CAS, projekty/WP/CAM zakresów, harmonogram i budżet, mapowanie CES↔P1S, **konfiguracja prefiksów RABIT i źródeł projektów**). |
+| **Wejście** | Zmiany wprowadzane w aplikacji (CRUD + drzewo). **Excel nie jest źródłem słowników** (M13). |
+| **Jak pracuje** | Zapis do bazy słowników SQLite (`00_Global\Baza\`) w krótkiej transakcji → walidacja przy zapisie (rozdz. 6 specyfikacji) → historia SCD2 (`ValidFrom`/`ValidTo`, kto, kiedy). |
+| **Kontrole** | Błąd blokujący nie pozwala zapisać; jednocześnie zapisuje jedna osoba (SQLite na dysku sieciowym). |
+| **Efekt** | Nowy stan słowników z historią. |
+| **Przekazanie** | Przebieg przypina stan w P2 i kopiuje migawkę do MS SQL (D27); aktywne przebiegi z wcześniejszym stanem dostają decyzję „kontynuuj / przelicz od P3”. |
 
 ---
 
@@ -143,32 +143,32 @@ fazy mogą być wykonywane w różne dni i przez różne osoby z finansów.
 | | |
 |---|---|
 | **Cel** | Wybrać z danych globalnych **tylko to, co należy do zakresu i okresu**, i zamrozić ten wybór na czas przebiegu. |
-| **Wejście** | Tabele raportów z G2 (najnowsze snapshoty); rejestr elementów z G3; słownik „Struktura projektowa” zakresu (CAS WBS / P1S WBS); kalendarz okresów. |
-| **Jak pracuje** | Filtruje wiersze po elementach WBS zakresu i datach okresu (koszt okresu i narastająco). **Przypina zestaw plików** (lista hashy) – analogicznie do przypinania wersji słowników. |
-| **Kontrole** | Kompletność źródeł projektów zakresu (G2b); plików „nierozpoznanych” (ostrzeżenie); elementy zakresu nieprzypisane w G3 (ostrzeżenie; zamknięcie – blokada); daty w okresie. |
+| **Wejście** | Tabele raportów z G2 (najnowsze snapshoty); stan mapowania z G3; projekty P1S i WP zakresu (baza słowników); kalendarz okresów. |
+| **Jak pracuje** | Filtruje wiersze po elementach WBS zakresu i datach okresu (koszt okresu i narastająco). **Przypina zestaw plików** (lista hashy) – analogicznie do przypinania stanu słowników. |
+| **Kontrole** | Kompletność źródeł projektów zakresu (G2b); plików „nierozpoznanych” (ostrzeżenie); elementy `UNMAPPED` z G3 (ostrzeżenie; zamknięcie – blokada); daty w okresie. |
 | **Efekt** | Snapshot danych zakresu `hist.DaneZakresu` (RunId, Sha256) + lista przypiętych plików. |
 | **Przekazanie** | P2–P4 pracują wyłącznie na tym snapshocie. Nowy import w trakcie przebiegu → informacja „dostępne nowsze dane” i decyzja: kontynuuj / przelicz od P1. |
 
-### P2. Słowniki zakresu
+### P2. Przypięcie słowników
 
 | | |
 |---|---|
-| **Cel** | Mieć aktualne, sprawdzone słowniki zakresu (struktura P1S↔CES, harmonogram i budżet, stawki CAS). |
-| **Wejście** | Pliki słowników w `Zakresy\<Zakres>\Slowniki`; wersje słowników globalnych z G4. |
-| **Jak pracuje** | Import słowników zakresu (hash bez zmian = brak nowej wersji; zmiana = kandydat); przypięcie wersji globalnych. |
-| **Efekt** | Kandydaci nowych wersji + lista przypiętych wersji w przebiegu. |
-| **Przekazanie** | Kandydaci trafiają do walidacji P3; nowa wersja powstaje dopiero po jej przejściu. |
+| **Cel** | Zamrozić stan słowników (globalnych i zakresu), na którym liczy przebieg. |
+| **Wejście** | Baza słowników (SQLite) – stan po edycjach z G4. |
+| **Jak pracuje** | Zapis znacznika stanu w przebiegu + **kopia migawki** słowników zakresu i globalnych do MS SQL, schemat `dict` (D27) – procedury w MS SQL nie czytają SQLite. |
+| **Efekt** | `dict.StanSlownikow` (RunId, znacznik) + tabele `dict.*` z migawką. |
+| **Przekazanie** | P3–P9 czytają wyłącznie migawkę. Zmiana słowników później → baner i decyzja „kontynuuj / przelicz od P3”. |
 
 ### P3. Walidacja
 
 | | |
 |---|---|
-| **Cel** | Nie dopuścić błędnych słowników i danych do obliczeń. |
-| **Wejście** | Kandydaci słowników z P2; snapshot danych z P1. |
-| **Jak pracuje** | Reguły deklaratywne per słownik (struktura, typy, klucze, okresy ważności, reguły biznesowe, odwołania między słownikami, wersjonowanie) + kontrole danych (np. wydział bez stawki). |
-| **Kontrole** | Błąd blokujący → kandydat odrzucony, raport błędów obok pliku, obowiązuje poprzednia wersja. |
-| **Efekt** | Zatwierdzone wersje słowników (przypięte) + lista ostrzeżeń. |
-| **Przekazanie** | P4 startuje tylko bez błędów blokujących (albo po świadomej decyzji „kontynuuj na poprzedniej wersji”). |
+| **Cel** | Nie dopuścić niespójnych danych i słowników do obliczeń. |
+| **Wejście** | Migawka słowników z P2; snapshot danych z P1. |
+| **Jak pracuje** | Poprawność samych słowników zapewnia walidacja przy zapisie (G4). Tu: kontrole **spójności słowników z danymi przebiegu** (np. wydział z kosztów bez stawki, element z kosztem `UNMAPPED`, WP bez budżetu) + kontrole danych. |
+| **Kontrole** | Błąd blokujący → poprawa w aplikacji (ekran Słowniki / Przypisania) → ponowne przypięcie (P2) i walidacja. |
+| **Efekt** | Lista problemów (blokujące / ostrzeżenia) zapisana w przebiegu. |
+| **Przekazanie** | P4 startuje tylko bez błędów blokujących. |
 
 ### P4. Łączenie źródeł
 
@@ -198,7 +198,7 @@ Dwa warianty, ten sam cel: **dla każdego WP wartość zaawansowania z zapisanym
 
 | | Tydzień | Zamknięcie miesiąca |
 |---|---|---|
-| **P6** | Pobranie zaawansowania z danych produkcyjnych P1S (np. `vAHDD`, źródło – O10) po P1S WBS ze słownika | Generowanie **pliku na CAM** (WP danego CAM z kolumny CAM słownika; ukryty identyfikator przebiegu; zablokowane komórki) do `CAM\…\Wyslane` |
+| **P6** | Pobranie zaawansowania z danych produkcyjnych P1S (np. `vAHDD`, źródło – O10) po P1S WBS zakresu | Generowanie **pliku na CAM** (WP danego CAM z przypisań WP → CAM; ukryty identyfikator przebiegu; zablokowane komórki) do `CAM\…\Wyslane` |
 | **P7** | Uzupełnienie braków przez analityka (metody – O11) | Import plików z `CAM\…\Zwrocone` (kontrola identyfikatora, okresu, zmian poza polami); status per CAM; może trwać dni |
 | **P8** | Walidacja: 0–100%, spadki vs poprzedni okres, EV ≤ BAC; wartości spoza CAM dozwolone | Te same kontrole + **100% wartości od CAM** |
 | **Efekt** | `ev.Zaawansowanie` (WP, okres, wartość, pochodzenie: PRODUKCJA / ANALITYK / CAM, kto, kiedy) | j.w., pochodzenie wyłącznie CAM |
@@ -209,10 +209,10 @@ Dwa warianty, ten sam cel: **dla każdego WP wartość zaawansowania z zapisanym
 | | |
 |---|---|
 | **Cel** | Policzyć wskaźniki EV zakresu w sposób odtwarzalny. |
-| **Wejście** | `ev.KosztWP` (ACWP), `ev.Zaawansowanie`, budżet i harmonogram (BAC, BCWS) z przypiętych słowników, ETC (źródło – O15). |
+| **Wejście** | `ev.KosztWP` (ACWP), `ev.Zaawansowanie`, budżet i harmonogram (BAC, BCWS) z migawki słowników, ETC (źródło – O15). |
 | **Jak pracuje** | Kalkulacja w bazie: BCWS, BCWP, ACWP, CPI, SPI, EAC, TCPI – na WP, CAM, projekt, zakres. |
 | **Kontrole** | Spójność sum na poziomach; EV ≤ BAC. |
-| **Efekt** | **Rewizja** wyników `ev.Wynik` (R1, R2…) z listą przypiętych wejść (hashe plików, wersje słowników, rewizja zaawansowania) + plik `EV\<RRRR-MM>\…`. |
+| **Efekt** | **Rewizja** wyników `ev.Wynik` (R1, R2…) z listą przypiętych wejść (hashe plików, stan słowników, rewizja zaawansowania) + plik `EV\<RRRR-MM>\…`. |
 | **Przekazanie** | Tydzień: EV wstępne (koniec przebiegu). Zamknięcie: P10 (SAC) i zatwierdzenie okresu. |
 
 ### P10. Plik dla Cobra (tylko SAC)
@@ -239,11 +239,11 @@ Dwa warianty, ten sam cel: **dla każdego WP wartość zaawansowania z zapisanym
 |---|---|---|
 | G1 → G2 | pliki w `Do_importu` | nazwa, rozmiar, data |
 | G2 → G3, P1 | tabele raportów (snapshoty) | IdImportu + Sha256 + data raportu |
-| G3 → P1, P4 | rejestr elementów WBS, propozycje do słowników | element WBS + snapshot pierwszego wystąpienia |
-| G4 → P1/P2 | `dict.WersjaSlownika` | numer wersji |
+| G3 → P1, P4 | stan mapowania CES↔P1S (reguły + wynik rozstrzygania) | element WBS + znacznik stanu |
+| G4 → P2 | baza słowników (SQLite) | znacznik stanu |
 | P1 → P2–P4 | `hist.DaneZakresu`, lista przypiętych plików | RunId + Sha256 |
-| P2 → P3 | kandydaci wersji | RunId + hash pliku słownika |
-| P3 → P4 | przypięte wersje słowników | RunId + wersje |
+| P2 → P3–P9 | migawka `dict.*` w MS SQL | RunId + znacznik stanu |
+| P3 → P4 | lista problemów, status walidacji | RunId |
 | P4 → P5, P9 | `ev.KosztWP` | RunId |
 | P5 → P6 | potwierdzenie | RunId + status |
 | P6/P7 → P8 → P9 | `ev.Zaawansowanie` | RunId + pochodzenie |
@@ -255,9 +255,9 @@ Dwa warianty, ten sam cel: **dla każdego WP wartość zaawansowania z zapisanym
 
 | # | Kwestia |
 |---|---|
-| K1 | Rzeczywiste prefiksy plików RABIT (`zrodla_rabit.csv`) i wymagane źródła projektów (`projekty_zrodla.csv`); później mapowanie kolumn źródeł na tabele typowane |
+| K1 | Rzeczywiste prefiksy plików RABIT i wymagane źródła projektów (docelowo w bazie słowników – M10, M15; w MVP CSV); później mapowanie kolumn źródeł na tabele typowane |
 | K5 | Harmonogram G1+G2 względem harmonogramu RABIT (nadpisywanie plików) |
-| K6 | Reguły kluczy w G3: po czym rozpoznać projekt (segment WBS, Project Definition, Business Area…) i czy reguła tylko proponuje, czy przypisuje |
+| K6 | *(zob. `docs/mapowanie-ces-p1s.md` – propozycje poziomu 3)* Reguły kluczy w G3: po czym rozpoznać projekt (segment WBS, Project Definition, Business Area…) i czy reguła tylko proponuje, czy przypisuje |
 | K7 | Retencja snapshotów (wolumen: setki tysięcy wierszy × raporty × tygodnie) |
 | K2 | Co zawierają poszczególne pliki RABIT (koszty, zobowiązania, „PZL roll”, „hedge”, „workaround”) i które fazy ich używają |
 | K3 | Próg „świeżości” danych przed P1 (ile dni od ostatniego importu) |
