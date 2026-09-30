@@ -43,10 +43,11 @@ Architektura ma zapewnić:
 | D16 | **CAM pracują wyłącznie na plikach** | bez wdrażania aplikacji u CAM |
 | D17 | **Zakres wyznacza jego słownik „Struktura projektowa”**; nowe elementy wykrywane po pobraniu danych | elementy pojawiają się między przebiegami |
 | D18 | **Lista CAM z kolumny CAM słownika struktury** – bez osobnego słownika CAM | jedno miejsce zarządzania projektem |
-| D19 | Relacja **P1S ↔ CES definiowana w słowniku** (wiersz = para, dowolna krotność) | brak stałej relacji między systemami |
+| D19 | Relacja **P1S ↔ CES definiowana w słowniku** (wiersz = para, dowolna krotność) ⚠ *do zastąpienia przez D25 – zob. `docs/mapowanie-ces-p1s.md` S1* | brak stałej relacji między systemami |
 | D20 | Zamknięcie miesiąca wymaga przypisania elementów z kosztem | kompletność EV formalnego |
 | D23 | **Rozwiązanie docelowe: pliki RABIT kopiowane przez WebDAV** (`\\host@SSL\DavWWWRoot\…`, konto Windows użytkownika) do `00_Global\RABIT\Do_importu` komendą `pobierz` – tylko nowe i zmienione; następnie `import` do bazy | test 29.09.2026: WebDAV działa; API REST, synchronizacja i eksport do Excela nie są dostępne |
 | D22 | Awaryjnie (np. plik > 50 MB – limit usługi WebClient): pojedynczy plik pobrany ręcznie w przeglądarce do `00_Global\RABIT\Do_importu` | import traktuje go tak samo |
+| D25 | *(propozycja)* **Mapowanie CES ↔ P1S jako warstwa w bazie PZL-EV**: reguła projektu CES → projekt P1S (dziedziczona logicznie przez wszystkie obecne i przyszłe WBS), wyjątki WBS → WBS (pierwszeństwo), `include_children`, `NO_P1S`, relacje wiele:1 i 1:wiele (bez automatycznego podziału wartości), historia i `valid_from/valid_to`; zarządzanie w UI (dwa drzewa). Szczegóły i analiza spójności: `docs/mapowanie-ces-p1s.md` | struktury CES i P1S są niezależne; jedno zatwierdzenie projektu zamiast mapowania każdego WBS |
 | D24 | **Plik mówi, czym jest – projekt mówi, czego potrzebuje.** Źródło pliku RABIT rozpoznawane po **prefiksie nazwy** (`konfiguracja/zrodla_rabit.csv`, wygrywa najdłuższy prefiks); importowany jest **każdy rozpoznany plik** samodzielnie (np. `ACTUALS_PAF_01/_02/_03`), bez kontroli „zestawów”; plik nierozpoznany nie jest importowany. Projekt ma listę **wymaganych źródeł** (`konfiguracja/projekty_zrodla.csv`), a PZL-EV sprawdza ich kompletność i aktualność | proste nazwy plików RABIT, różne potrzeby projektów, automatyczna kontrola zamiast ręcznej |
 | D21 | **Import plików SAP (RABIT) jest globalny, bez zakresu**: wszystkie pliki z folderu, import tylko nowych (SHA-256), wiersze w postaci surowej; przebieg zakresu wybiera swoje dane po elementach WBS ze słownika struktury | przy pobieraniu nie wiadomo, do którego zakresu należy plik |
 
@@ -205,6 +206,9 @@ Excel → kopia do Landing Zone (+SHA-256)
 - **techniczna** – wersja słownika i przebieg, w którym wartość była znana.
 
 ### 6.4 Struktura projektowa (D17–D19)
+
+> ⚠ **Do uzgodnienia:** proponowana D25 przenosi powiązanie CES ↔ P1S ze słownika do warstwy mapowania
+> w bazie; słownik opisywałby tylko elementy P1S. Zob. `docs/mapowanie-ces-p1s.md`, rozbieżności S1–S4, S6.
 
 - Kolumny: `P1S WBS | CAS WBS | Project Definition | Business Area | Program | Project | Customer | Cost Category | CAM | WP` + metadane.
 - Wiersz = para P1S ↔ CES; element może wystąpić w kilku wierszach; jedna strona może być pusta;

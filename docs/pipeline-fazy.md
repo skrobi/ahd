@@ -111,6 +111,11 @@ czego dotyczy plik – o tym decyduje dopiero G2 na podstawie definicji plików 
 
 ### G3. Klasyfikacja elementów WBS *(koncepcja)*
 
+> Doprecyzowane przez **mapowanie CES ↔ P1S** (`docs/mapowanie-ces-p1s.md`, D25): rozstrzyganie
+> wyjątek WBS → reguła projektu → propozycja → `UNMAPPED`; nowe WBS dziedziczą regułę projektu;
+> uwagi wymagają tylko `UNMAPPED` (oraz przegląd `NO_P1S`). „Reguły kluczy” (K6) = automatyczne propozycje
+> (poziom 3), zawsze do zatwierdzenia.
+
 | | |
 |---|---|
 | **Cel** | Wiedzieć o **każdym elemencie WBS** występującym w danych, do którego projektu / zakresu należy – i szybko wychwycić nowe. |
@@ -257,7 +262,7 @@ Dwa warianty, ten sam cel: **dla każdego WP wartość zaawansowania z zapisanym
 |---|---|
 | K1 | Rzeczywiste prefiksy plików RABIT (`zrodla_rabit.csv`) i wymagane źródła projektów (`projekty_zrodla.csv`); później mapowanie kolumn źródeł na tabele typowane |
 | K5 | Harmonogram G1+G2 względem harmonogramu RABIT (nadpisywanie plików) |
-| K6 | Reguły kluczy w G3: po czym rozpoznać projekt (segment WBS, Project Definition, Business Area…) i czy reguła tylko proponuje, czy przypisuje |
+| K6 | *(zob. `docs/mapowanie-ces-p1s.md` – propozycje poziomu 3)* Reguły kluczy w G3: po czym rozpoznać projekt (segment WBS, Project Definition, Business Area…) i czy reguła tylko proponuje, czy przypisuje |
 | K7 | Retencja snapshotów (wolumen: setki tysięcy wierszy × raporty × tygodnie) |
 | K2 | Co zawierają poszczególne pliki RABIT (koszty, zobowiązania, „PZL roll”, „hedge”, „workaround”) i które fazy ich używają |
 | K3 | Próg „świeżości” danych przed P1 (ile dni od ostatniego importu) |
