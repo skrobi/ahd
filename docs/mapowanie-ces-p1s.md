@@ -1,6 +1,6 @@
 # PZL-EV – Mapowanie CES ↔ P1S (założenia)
 
-Wersja: 0.3 (założenia + decyzje M1–M6 – bez implementacji)
+Wersja: 0.4 (założenia + decyzje M1–M7 – bez implementacji)
 Powiązane: `docs/architektura.md` (D25), `docs/pipeline-fazy.md` (G3), `docs/funkcjonalnosc.md` (F21–F24).
 
 > W specyfikacji źródłowej występuje nazwa „AHD” – w projekcie oznacza ona **PZL-EV**.
@@ -160,8 +160,8 @@ Struktura CES jest **płaska**: projekt → lista WBS (numeracja ciągła z luka
 | `PARENT` | `PSPNR` elementu nadrzędnego – **budowa drzewa P1S** i `include_children` |
 | `STUFE` | poziom w hierarchii (1 = korzeń projektu) |
 | `WBS_ELEMENT` | kod WBS P1S (np. `MC-00.001.0001.001`) – **wartość `p1s_wbs` w regułach** |
-| `PROJORG` | projekt SAP P1S (np. `MC-00`) |
-| `PROJECT` | projekt / grupa raportowa (np. `MC-00.001`) – grupowanie wg `WBS_DIC` |
+| `PROJORG` | projekt SAP P1S – **zawsze nadrzędny trzon** (korzeń drzewa P1S); **cel reguły projektu** (M7) |
+| `PROJECT` | grupa raportowa wg `WBS_DIC`; często = `PROJORG` (np. `AC-I39`), ale nie zawsze (np. `MC-00.001` pod `MC-00`) – filtr / grupowanie, nie cel reguły projektu |
 | `PROJNAME`, `LTXA1`, `Z_OPIS` | opisy (wyszukiwanie, podpowiedzi) |
 | `PRCTR` | profit center (grupowanie wg `WBS_DIC`, gdy `Z_GRP = PRCTR`) |
 | `Z_KAT_ZBIORCZA`, `Z_KATEGORIA` | kategorie (filtry w drzewie) |
@@ -177,8 +177,18 @@ Struktura CES jest **płaska**: projekt → lista WBS (numeracja ciągła z luka
 | `Z_OPIS`, `Z_KATEGORIA`, `Z_KAT_ZBIORCZA`, `Z_INFO` | opis i kategorie grupy (np. „Internal Work”, „Spares & Services”) |
 | `ERDAT`, `Z_USER` | kto i kiedy dopisał grupę |
 
-Drzewo P1S w narzędziu: `PARENT → PSPNR` (poziomy wg `STUFE`), z możliwością filtrowania / grupowania
-po `PROJECT`, `PROJORG`, kategoriach i profit center. Dane P1S są **czytane** z MS SQL (bez zmian w SAP ani
+Drzewo P1S w narzędziu: korzeń = `PROJORG`, dalej `PARENT → PSPNR` (poziomy wg `STUFE`), np.
+
+```text
+AC-I39                    (PROJORG = PROJECT = AC-I39, PRCTR PIDS70OM)
+└─ AC-I39.1
+   └─ AC-I39.1.01
+      ├─ AC-I39.1.01.01
+      ├─ AC-I39.1.01.02
+      └─ …
+```
+
+Filtrowanie / grupowanie po `PROJECT` (grupa raportowa), kategoriach i profit center. Dane P1S są **czytane** z MS SQL (bez zmian w SAP ani
 w `LOG.WBS`); do SQLite trafiają tylko reguły mapowania i ewentualny podręczny rejestr elementów.
 
 ## 5. Interfejs wizualny
@@ -269,6 +279,7 @@ danych CES; elementy bez odpowiednika P1S wykazywalne; źródłem prawdy jest re
 | M3 | **Brak relacji 1:wiele** – koszt CES występujący raz jest raz pokazywany | rozwiązuje S7; walidacja blokuje drugi aktywny cel dla tego samego elementu CES |
 | M4 | W SQLite na dysku sieciowym są **tylko słowniki i przypisania**. Dane importów (miliony wierszy w kolejnych cyklach tygodniowych) pozostają w **MS SQL** | zamyka P1; D3 (MS SQL) obowiązuje dla danych |
 | M5 | CES Project = kolumna **`Project Definition`**, CES WBS = **`WBS Element`** z raportu CES; struktura CES płaska | zamyka P5 / S11 |
+| M7 | **`PROJORG` = nadrzędny trzon P1S.** Reguła projektu CES → P1S wskazuje `PROJORG` (np. `4D03GZ → AC-I39`); wyjątki i węzły wskazują `WBS_ELEMENT`; `PROJECT` służy do grupowania (często równy `PROJORG`, nie zawsze) | zamyka P7 |
 | M6 | Drzewo P1S z **`LOG.WBS`** (`PSPNR`/`PARENT`/`STUFE`, kod `WBS_ELEMENT`), grupowanie z **`LOG.WBS_DIC`** | zamyka P2 |
 
 ## 10. Pytania otwarte
@@ -281,6 +292,6 @@ danych CES; elementy bez odpowiednika P1S wykazywalne; źródłem prawdy jest re
 | P4 | Czy koszt `NO_P1S` przechodzi bramkę zamknięcia miesiąca i gdzie jest raportowany (S8)? |
 | ~~P5~~ | ✅ M5 – kolumna `Project Definition` |
 | P6 | „Projekt” w `projekty_zrodla.csv` – projekt P1S czy CES (S10)? Ujednolicenie „CAS WBS” → „CES WBS” (S6)? |
-| P7 | Reguła projektu wskazuje w P1S: **`PROJORG`** (projekt SAP, np. `MC-00`) czy **`PROJECT`** (grupa raportowa wg `WBS_DIC`, np. `MC-00.001`)? Rekomendacja: regułę zapisujemy jako węzeł P1S (`WBS_ELEMENT`) + `include_children` – działa dla obu przypadków. |
+| ~~P7~~ | ✅ M7 – reguła projektu wskazuje `PROJORG` (nadrzędny trzon); `PROJECT` = grupowanie |
 | P8 | Czy elementy P1S z `LOEKZ` / `Z_ACTIVE = 0` pokazujemy w drzewie (wyszarzone), czy ukrywamy? Co z istniejącą regułą, której cel został usunięty w SAP? |
 | P9 | Raport CES ma tylko `Project Definition` i `WBS Element` – czy inne raporty CES dostarczają atrybutów (zlecenie, materiał, klient) do automatycznych propozycji? Bez nich propozycje ograniczą się do opisów i zgodności kodów. |
