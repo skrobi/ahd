@@ -241,14 +241,6 @@ Szczegóły: `docs/architektura.md` i `docs/funkcjonalnosc.md`.
 - **Praca w projektach** – projekt (dawniej „zakres”, M22) obejmuje węzły drzewa P1S wybrane w kreatorze
   (grupy kategorii i pojedyncze `PROJORG`, M23). Każdy przebieg
   dotyczy jednego projektu, dzięki czemu np. F-16 nie czeka na pliki Cobra dla projektów SAC.
-- **Przebieg tygodniowy** (w dowolny dzień tygodnia) daje wstępne EV; **zamknięcie miesiąca** daje EV formalne,
-  oparte wyłącznie na zaawansowaniu od CAM.
-
-## Przebieg (pipeline) projektu
-
-Fazy globalne (pobranie i import RABIT, mapowanie CES↔P1S, edycja słowników) i etapy przebiegu projektu
-(uruchomienie, dane projektu, przypięcie słowników, walidacja, łączenie źródeł, pliki dla finansów,
-zaawansowanie, EV, plik Cobra, zamknięcie okresu) są opisane w jednym miejscu: `docs/pipeline-fazy.md`.
 
 ## Warstwy danych
 
@@ -333,7 +325,7 @@ WBS P1S i kategoryzacja z `PZLPROD.LOG.WBS` i `LOG.WBS_DIC` (M20), raport mapowa
 Walidacja odbywa się **przy zapisie w interfejsie** (a nie przy imporcie pliku): wymagane pola, typy,
 unikalność, nakładające się okresy ważności, odwołania (np. CAM, WP, element P1S istnieje), reguły biznesowe
 (np. WP = yes wymaga CAM, data startu ≤ data końca), blokada relacji CES → wiele P1S. Szczegóły:
-`docs/funkcjonalnosc.md`, rozdz. 6.
+`docs/funkcjonalnosc.md`, rozdz. 5.
 
 ---
 
@@ -354,7 +346,7 @@ unikalność, nakładające się okresy ważności, odwołania (np. CAM, WP, ele
 | 11 | Logika łączenia źródeł (etap 4 przebiegu) | do przedstawienia |
 
 Otwarte decyzje architektoniczne i funkcjonalne: `docs/architektura.md` (rozdz. 13)
-i `docs/funkcjonalnosc.md` (rozdz. 10).
+i `docs/funkcjonalnosc.md` (rozdz. 9).
 
 ---
 

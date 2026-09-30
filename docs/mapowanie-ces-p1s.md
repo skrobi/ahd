@@ -412,7 +412,7 @@ danych CES; elementy bez odpowiednika P1S wykazywalne; źródłem prawdy jest re
 
 | Założenie mapowania | Dotychczasowa dokumentacja |
 |---|---|
-| Mapowanie w bazie, historia zmian, `valid_from/valid_to` | wersjonowanie i dwie osie czasu (arch. 6.3), audyt AD (arch. 8.3) |
+| Mapowanie w bazie, historia zmian, `valid_from/valid_to` | wersjonowanie i dwie osie czasu (arch. 6.2), audyt AD (arch. 8.3) |
 | Propozycja ≠ zatwierdzenie | wcześniejsza rekomendacja: prefiks/klucz tylko jako podpowiedź (K6) |
 | Wiele CES → jeden P1S; bez 1:wiele (M3) | D19 dopuszczała dowolną krotność – M3 ją zawęża (koszt pokazywany raz) |
 | Brak mapowania nie gubi danych CES | G2: surowe dane zawsze w bazie; D20: zamknięcie wymaga przypisania kosztów |
@@ -424,10 +424,10 @@ danych CES; elementy bez odpowiednika P1S wykazywalne; źródłem prawdy jest re
 
 | # | Rozbieżność | Dotychczas | Nowe założenie | Propozycja | Stan |
 |---|---|---|---|---|---|
-| S1 | **Gdzie żyje powiązanie CES↔P1S** | D19, arch. 6.4, spec. 6.2, readme: para `P1S WBS | CAS WBS` w wierszu słownika Excel „Struktura projektowa” | reguły w bazie PZL-EV, zarządzane w UI | powiązanie CES↔P1S **wyłącznie** w warstwie mapowania (D25); słownik „Struktura projektowa” opisuje już tylko **P1S WBS** (Program, Project, CAM, WP, Cost Category…) | ✅ **M1:** przypisania w lekkiej bazie (SQLite) na dysku sieciowym, zarządzane narzędziem CRUD + drzewo |
+| S1 | **Gdzie żyje powiązanie CES↔P1S** | D19, arch. 6.3, spec. 5.2, readme: para `P1S WBS | CAS WBS` w wierszu słownika Excel „Struktura projektowa” | reguły w bazie PZL-EV, zarządzane w UI | powiązanie CES↔P1S **wyłącznie** w warstwie mapowania (D25); słownik „Struktura projektowa” opisuje już tylko **P1S WBS** (Program, Project, CAM, WP, Cost Category…) | ✅ **M1:** przypisania w lekkiej bazie (SQLite) na dysku sieciowym, zarządzane narzędziem CRUD + drzewo |
 | S2 | **Zasada „Excel jest źródłem prawdy, bez formularza”** (readme – słowniki) | wszystkie słowniki w Excelu | mapowanie edytowane w aplikacji | mapowanie CES↔P1S to **wyjątek od zasady** – nie jest słownikiem Excel; ewentualnie eksport/import reguł do Excela jako wygoda | ✅ **M13:** zasada odwrócona – **żaden** słownik nie jest w Excelu; wszystkie słowniki, przypisania i konfiguracja w SQLite z interfejsem |
 | S3 | **Definicja zakresu** (D17) | zakres = wiersze słownika struktury (pary P1S/CES) | wspólny poziom raportowania = struktura P1S | zakres = zbiór **projektów P1S** (ze słownika struktury); dane CES trafiają do zakresu przez mapowanie | ✅ **M8** → zastąpione: **M22, M23** (projekt = węzły drzewa P1S) |
-| S4 | **Wykrywanie nowych elementów** (D17, arch. 6.4, spec. F08) | eksport brakujących elementów do `Slowniki\Propozycje` i dopisanie wiersza w Excelu | nowe WBS dziedziczą regułę projektu; uwagi wymagają tylko `UNMAPPED` | G3 = mapowanie; eksport „Propozycje” dotyczy już tylko nowych elementów **P1S** do słownika struktury | ✅ **M8** |
+| S4 | **Wykrywanie nowych elementów** (D17, arch. 6.3, spec. F08) | eksport brakujących elementów do `Slowniki\Propozycje` i dopisanie wiersza w Excelu | nowe WBS dziedziczą regułę projektu; uwagi wymagają tylko `UNMAPPED` | G3 = mapowanie; eksport „Propozycje” dotyczy już tylko nowych elementów **P1S** do słownika struktury | ✅ **M8** |
 | S5 | **Źródło struktury P1S** | „dopiero po ściągnięciu – nie wybiegamy przed szereg” (P1S tylko z danych z zaawansowaniem) | pełne drzewo P1S w UI, `include_children` obejmuje nowych potomków | potrzebne źródło hierarchii P1S (raport RABIT z P1S albo `PZL_SAP.Z_R3_PRPS_TBL`) – **do decyzji** | ✅ **M2:** hierarchia P1S z przetworzonej tabeli `PZLPROD.LOG.WBS` (bez `Z_R3_PRPS_TBL`) |
 | S6 | **Nazwa kolumny CES** | readme/słownik: „CAS WBS” | „CES WBS” | ujednolicić na **CES WBS** (CAS = typ projektu Compliance, CES = system) | otwarte |
 | S7 | **Wartości przy 1:wiele** | brak | nie dzielimy bez reguły podziału | do ustalenia, gdzie w EV trafia koszt CES z relacją 1:wiele bez reguły (blokada zamknięcia? poziom projektu?) | ✅ **M3:** 1:wiele niedozwolone – koszt CES pokazywany dokładnie raz |
@@ -479,4 +479,4 @@ do MS SQL).
 | # | Kwestia |
 |---|---|
 | P10 | **UNMAPPED a zamknięcie miesiąca.** Wg M9 każdy koszt CES jest liczony. Czy koszt `UNMAPPED` (brak decyzji) liczymy na poziomie projektu CES / projektu PZL-EV i dopuszczamy zamknięcie, czy – jak w D20 – wymagamy mapowania przed zamknięciem? Rekomendacja: liczony zawsze, ale zamknięcie wymaga zmapowania (przy odłożonym `NO_P1S` – M14 – jedyną decyzją jest mapowanie). |
-| O19–O22 | Kwestie z prototypu v3 dotyczące mapowania i kategoryzacji (przypinanie raportu mapowań, zasięg korekty projektu CES, kategorie w obrębie `PROJORG`, nowe `PROJORG` w zaznaczonej grupie) – `docs/funkcjonalnosc.md`, rozdz. 10 |
+| O19–O22 | Kwestie z prototypu v3 dotyczące mapowania i kategoryzacji (przypinanie raportu mapowań, zasięg korekty projektu CES, kategorie w obrębie `PROJORG`, nowe `PROJORG` w zaznaczonej grupie) – `docs/funkcjonalnosc.md`, rozdz. 9 |
