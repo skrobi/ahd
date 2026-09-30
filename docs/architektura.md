@@ -41,9 +41,6 @@ Architektura ma zapewnić:
 | D14 | Tydzień: zaawansowanie z **produkcji** + uzupełnienia; **zamknięcie miesiąca: zaawansowanie wyłącznie od CAM** | bieżąca informacja co tydzień, formalne dane na zamknięcie |
 | D15 | Korzeń folderów na **dysku sieciowym** (UNC) | wspólna ścieżka dla wszystkich |
 | D16 | **CAM pracują wyłącznie na plikach** | bez wdrażania aplikacji u CAM |
-| D17 | *(zastąpione: M8, M13)* ~~**Zakres wyznacza jego słownik „Struktura projektowa”**; nowe elementy wykrywane po pobraniu danych~~ | elementy pojawiają się między przebiegami |
-| D18 | *(zastąpione: M8)* ~~**Lista CAM z kolumny CAM słownika struktury** – bez osobnego słownika CAM~~ | jedno miejsce zarządzania projektem |
-| D19 | *(zastąpione: D25, M1–M3)* ~~Relacja **P1S ↔ CES definiowana w słowniku** (wiersz = para, dowolna krotność)~~ | brak stałej relacji między systemami |
 | D20 | ⚠ *(M9: wszystkie koszty CES liczone, `NO_P1S` odłożony – M14; UNMAPPED – P10)* Zamknięcie miesiąca wymaga przypisania elementów z kosztem | kompletność EV formalnego |
 | D23 | **Rozwiązanie docelowe: pliki RABIT kopiowane przez WebDAV** (`\\host@SSL\DavWWWRoot\…`, konto Windows użytkownika) do `00_Global\RABIT\Do_importu` komendą `pobierz` – tylko nowe i zmienione; następnie `import` do bazy | test 29.09.2026: WebDAV działa; API REST, synchronizacja i eksport do Excela nie są dostępne |
 | D22 | Awaryjnie (np. plik > 50 MB – limit usługi WebClient): pojedynczy plik pobrany ręcznie w przeglądarce do `00_Global\RABIT\Do_importu` | import traktuje go tak samo |
@@ -124,7 +121,7 @@ Architektura ma zapewnić:
   jednego projektu (pojedynczy `PROJORG` przed grupą, wśród grup – projekt utworzony wcześniej).
 - Typ projektu: **SAC**, **CAS**, **Wewnętrzny** – wyznacza szablon etapów (np. plik Cobra tylko w SAC)
   i wymagane słowniki (np. stawki CAS tylko w CAS).
-- Słowniki projektu (M24): WP i CAM, Harmonogram i budżet, w CAS Stawki CAS, opcjonalnie Cost Category –
+- Słowniki projektu (M24): WP i CAM, Harmonogram i budżet, w CAS Stawki CAS, Cost Category –
   zmiany w projekcie (M26).
 - Projekt tworzy się w aplikacji (kreator, `docs/funkcjonalnosc.md` F01): rejestracja w bazie, foldery,
   słowniki projektu, baza analityczna (M25).
