@@ -331,6 +331,10 @@ EV Reports
 
 Excel jest źródłem prawdy (Source of Truth).
 
+> ⚠ Zmienione dla przypisań: mapowanie CES↔P1S, WP, CAM, harmonogram, budżet i konfiguracja źródeł
+> projektów są w narzędziu CRUD + drzewo (SQLite na dysku sieciowym) – `docs/mapowanie-ces-p1s.md`, M1, M8, M10.
+> Które słowniki zostają w Excelu – pytanie P12.
+
 SQL przechowuje:
 
 - aktualną wersję słownika,

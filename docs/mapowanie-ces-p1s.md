@@ -1,6 +1,6 @@
 # PZL-EV – Mapowanie CES ↔ P1S (założenia)
 
-Wersja: 0.4 (założenia + decyzje M1–M7 – bez implementacji)
+Wersja: 0.5 (założenia + decyzje M1–M12 – bez implementacji)
 Powiązane: `docs/architektura.md` (D25), `docs/pipeline-fazy.md` (G3), `docs/funkcjonalnosc.md` (F21–F24).
 
 > W specyfikacji źródłowej występuje nazwa „AHD” – w projekcie oznacza ona **PZL-EV**.
@@ -147,6 +147,19 @@ Raporty CES zawierają kolumny:
 | `Project Definition` | **CES Project** (np. `4D03GZ`) – bez wyliczania z prefiksu (M5) |
 | `WBS Element` | **CES WBS** (np. `4D03GZ000001`) |
 
+Pełny układ raportu kosztów CES (zrzut RABIT):
+
+`Project Definition | WBS Element | Cost Element | Cost element descr. | Cost element name | CO object name |
+Transaction Currency | Value TranCurr | Object Currency | Value in Obj. Crcy | Report currency | Val.in rep.cur. |
+Total Quantity | Partner-CCtr | Source object name | Partner Object Class | Partner object | Original material |
+Original material description | Fiscal Year | Created on | Period`
+
+Przykład: `2DI473 | 2DI473001001 | 51105550 | PZL Material Consumption | … | PAF2 - materiały pod RTS batch 6 |
+USD | 261,54 | PLN | 1 254,51 | USD | 261,54 | 0,000 | … | 2026 | 2026-03-29 | 3`.
+Liczby w formacie polskim (spacja tysięcy, przecinek dziesiętny); trzy waluty: transakcji, obiektu (PLN),
+raportowa (USD). Dla mapowania znaczenie mają tylko `Project Definition`, `WBS Element` i opis obiektu
+`CO object name` (M12).
+
 Struktura CES jest **płaska**: projekt → lista WBS (numeracja ciągła z lukami, np. brak `…000028`,
 `…000031`). Drzewo CES w narzędziu ma więc dwa poziomy.
 
@@ -258,14 +271,14 @@ danych CES; elementy bez odpowiednika P1S wykazywalne; źródłem prawdy jest re
 |---|---|---|---|---|---|
 | S1 | **Gdzie żyje powiązanie CES↔P1S** | D19, arch. 6.4, spec. 6.2, readme: para `P1S WBS | CAS WBS` w wierszu słownika Excel „Struktura projektowa” | reguły w bazie PZL-EV, zarządzane w UI | powiązanie CES↔P1S **wyłącznie** w warstwie mapowania (D25); słownik „Struktura projektowa” opisuje już tylko **P1S WBS** (Program, Project, CAM, WP, Cost Category…) | ✅ **M1:** przypisania w lekkiej bazie (SQLite) na dysku sieciowym, zarządzane narzędziem CRUD + drzewo |
 | S2 | **Zasada „Excel jest źródłem prawdy, bez formularza”** (readme – słowniki) | wszystkie słowniki w Excelu | mapowanie edytowane w aplikacji | mapowanie CES↔P1S to **wyjątek od zasady** – nie jest słownikiem Excel; ewentualnie eksport/import reguł do Excela jako wygoda | ✅ **M1:** przypisania nie są słownikiem Excel – wyjątek od zasady „Excel jest źródłem prawdy” |
-| S3 | **Definicja zakresu** (D17) | zakres = wiersze słownika struktury (pary P1S/CES) | wspólny poziom raportowania = struktura P1S | zakres = zbiór **projektów P1S** (ze słownika struktury); dane CES trafiają do zakresu przez mapowanie | otwarte |
-| S4 | **Wykrywanie nowych elementów** (D17, arch. 6.4, spec. F08) | eksport brakujących elementów do `Slowniki\Propozycje` i dopisanie wiersza w Excelu | nowe WBS dziedziczą regułę projektu; uwagi wymagają tylko `UNMAPPED` | G3 = mapowanie; eksport „Propozycje” dotyczy już tylko nowych elementów **P1S** do słownika struktury | otwarte |
+| S3 | **Definicja zakresu** (D17) | zakres = wiersze słownika struktury (pary P1S/CES) | wspólny poziom raportowania = struktura P1S | zakres = zbiór **projektów P1S** (ze słownika struktury); dane CES trafiają do zakresu przez mapowanie | ✅ **M8** |
+| S4 | **Wykrywanie nowych elementów** (D17, arch. 6.4, spec. F08) | eksport brakujących elementów do `Slowniki\Propozycje` i dopisanie wiersza w Excelu | nowe WBS dziedziczą regułę projektu; uwagi wymagają tylko `UNMAPPED` | G3 = mapowanie; eksport „Propozycje” dotyczy już tylko nowych elementów **P1S** do słownika struktury | ✅ **M8** |
 | S5 | **Źródło struktury P1S** | „dopiero po ściągnięciu – nie wybiegamy przed szereg” (P1S tylko z danych z zaawansowaniem) | pełne drzewo P1S w UI, `include_children` obejmuje nowych potomków | potrzebne źródło hierarchii P1S (raport RABIT z P1S albo `PZL_SAP.Z_R3_PRPS_TBL`) – **do decyzji** | ✅ **M2:** hierarchia P1S z przetworzonej tabeli `PZLPROD.LOG.WBS` (bez `Z_R3_PRPS_TBL`) |
 | S6 | **Nazwa kolumny CES** | readme/słownik: „CAS WBS” | „CES WBS” | ujednolicić na **CES WBS** (CAS = typ projektu Compliance, CES = system) | otwarte |
 | S7 | **Wartości przy 1:wiele** | brak | nie dzielimy bez reguły podziału | do ustalenia, gdzie w EV trafia koszt CES z relacją 1:wiele bez reguły (blokada zamknięcia? poziom projektu?) | ✅ **M3:** 1:wiele niedozwolone – koszt CES pokazywany dokładnie raz |
-| S8 | **Koszty `NO_P1S` w EV** | D20: koszty muszą być przypisane na zamknięciu | `NO_P1S` = świadomy brak odpowiednika | do ustalenia: czy `NO_P1S` przechodzi bramkę zamknięcia i gdzie raportujemy ten koszt | otwarte |
+| S8 | **Koszty `NO_P1S` w EV** | D20: koszty muszą być przypisane na zamknięciu | `NO_P1S` = świadomy brak odpowiednika | do ustalenia: czy `NO_P1S` przechodzi bramkę zamknięcia i gdzie raportujemy ten koszt | ✅ **M9:** `NO_P1S` liczony, nie blokuje |
 | S9 | **Odtwarzalność przebiegu** | przebieg przypina wersje słowników i dane (P1) | mapowanie ma `valid_from/valid_to` | przebieg przypina również **stan mapowania** (znacznik czasu); zmiana mapowania w trakcie przebiegu → decyzja „kontynuuj / przelicz” jak przy słownikach | otwarte |
-| S10 | **„Projekt” w `projekty_zrodla.csv`** (D24) | nieokreślone | rozróżnienie projekt CES / projekt P1S | doprecyzować, czy chodzi o projekt P1S (raportowy), czy CES | otwarte |
+| S10 | **„Projekt” w `projekty_zrodla.csv`** (D24) | nieokreślone | rozróżnienie projekt CES / projekt P1S | doprecyzować, czy chodzi o projekt P1S (raportowy), czy CES | ✅ **M10** |
 | S11 | **Ustalenie Project Definition dla WBS CES** | brak | krok obowiązkowy rozstrzygania | z kolumny raportu CES (która?) czy z prefiksu kodu WBS (np. 6 znaków) | ✅ **M5:** kolumna `Project Definition` |
 
 ---
@@ -281,6 +294,11 @@ danych CES; elementy bez odpowiednika P1S wykazywalne; źródłem prawdy jest re
 | M5 | CES Project = kolumna **`Project Definition`**, CES WBS = **`WBS Element`** z raportu CES; struktura CES płaska | zamyka P5 / S11 |
 | M7 | **`PROJORG` = nadrzędny trzon P1S.** Reguła projektu CES → P1S wskazuje `PROJORG` (np. `4D03GZ → AC-I39`); wyjątki i węzły wskazują `WBS_ELEMENT`; `PROJECT` służy do grupowania (często równy `PROJORG`, nie zawsze) | zamyka P7 |
 | M6 | Drzewo P1S z **`LOG.WBS`** (`PSPNR`/`PARENT`/`STUFE`, kod `WBS_ELEMENT`), grupowanie z **`LOG.WBS_DIC`** | zamyka P2 |
+| M8 | **Zakres = konkretny program albo program indywidualny.** Na każdym zakresie są przypisania do **WP**; **harmonogramy, budżet i CAM** też trafiają do mapy przypisań (narzędzie CRUD + drzewo, SQLite) | zamyka P3 / S3, S4; słownik Excel „Struktura projektowa” oraz „Harmonogram i budżet” zastępuje narzędzie przypisań |
+| M9 | **Wszystko, co jest w zrzutach CES, wchodzi do przeliczenia kosztów i wskaźników** – także elementy `NO_P1S` | zamyka P4 / S8; `NO_P1S` nie blokuje zamknięcia; koszt nie jest pomijany |
+| M10 | Lista raportów (źródeł) importowanych dla projektu to **konfiguracja w lokalnej bazie** (SQLite), nie plik CSV | zamyka P6 / S10; dotyczy `projekty_zrodla.csv` (D24) |
+| M11 | Elementy P1S nieaktywne / usunięte (`Z_ACTIVE`, `LOEKZ`) **zostają** w drzewie i mogą być celem mapowania – mogą mieć koszty | zamyka P8 |
+| M12 | Raport CES ma tylko informacje o elemencie WBS (bez zlecenia, materiału końcowego, klienta) – **automatyczne propozycje** ograniczone do zgodności kodów i opisów (`CO object name` ↔ opisy P1S) | zamyka P9 |
 
 ## 10. Pytania otwarte
 
@@ -288,10 +306,19 @@ danych CES; elementy bez odpowiednika P1S wykazywalne; źródłem prawdy jest re
 |---|---|
 | ~~P1~~ | ✅ M4 – w SQLite tylko słowniki i przypisania, dane importów w MS SQL |
 | ~~P2~~ | ✅ M6 – kolumny opisane w rozdz. 4a |
-| P3 | Czy dalej obowiązuje: zakres = zbiór projektów P1S, a słownik struktury opisuje tylko P1S (S3, S4)? W praktyce atrybuty P1S (CAM, WP, Cost Category) też mogą trafić do narzędzia CRUD zamiast Excela. |
-| P4 | Czy koszt `NO_P1S` przechodzi bramkę zamknięcia miesiąca i gdzie jest raportowany (S8)? |
+| ~~P3~~ | ✅ M8 – zakres = program; WP, harmonogram, budżet, CAM w mapie przypisań |
+| ~~P4~~ | ✅ M9 – wszystkie koszty CES liczone, `NO_P1S` nie blokuje |
 | ~~P5~~ | ✅ M5 – kolumna `Project Definition` |
-| P6 | „Projekt” w `projekty_zrodla.csv` – projekt P1S czy CES (S10)? Ujednolicenie „CAS WBS” → „CES WBS” (S6)? |
+| ~~P6~~ | ✅ M10 – lista raportów projektu jako konfiguracja w SQLite |
 | ~~P7~~ | ✅ M7 – reguła projektu wskazuje `PROJORG` (nadrzędny trzon); `PROJECT` = grupowanie |
-| P8 | Czy elementy P1S z `LOEKZ` / `Z_ACTIVE = 0` pokazujemy w drzewie (wyszarzone), czy ukrywamy? Co z istniejącą regułą, której cel został usunięty w SAP? |
-| P9 | Raport CES ma tylko `Project Definition` i `WBS Element` – czy inne raporty CES dostarczają atrybutów (zlecenie, materiał, klient) do automatycznych propozycji? Bez nich propozycje ograniczą się do opisów i zgodności kodów. |
+| ~~P8~~ | ✅ M11 – elementy nieaktywne/usunięte zostają |
+| ~~P9~~ | ✅ M12 – propozycje tylko z kodów i opisów |
+
+### Nowe kwestie wynikające z M8–M10
+
+| # | Kwestia |
+|---|---|
+| P10 | **UNMAPPED a zamknięcie miesiąca.** Wg M9 każdy koszt CES jest liczony. Czy koszt `UNMAPPED` (brak decyzji) liczymy na poziomie projektu CES / zakresu i dopuszczamy zamknięcie, czy – jak w D20 – wymagamy decyzji (mapowanie albo `NO_P1S`) przed zamknięciem? Rekomendacja: liczony zawsze, ale zamknięcie wymaga decyzji. |
+| P11 | **Gdzie w wyniku EV ląduje koszt `NO_P1S`** – na poziomie projektu CES / programu (bez WP)? |
+| P12 | **Które słowniki zostają w Excelu?** Po M8 i M10 w narzędziu (SQLite) są: mapowanie CES↔P1S, WP, CAM, harmonogram, budżet, konfiguracja źródeł projektów. Czy stawki wydziałów, kalendarz okresów, kursy walut i stawki CAS też przechodzą do narzędzia, czy zostają w Excelu? |
+| P13 | Konfiguracja prefiksów plików RABIT (`zrodla_rabit.csv`) – czy również do SQLite (spójnie z M10)? |
