@@ -2,11 +2,14 @@
 
 Przepływ docelowy (Windows, w katalogu repozytorium):
 
-    1. python -m ahd.etap1 pobierz  --webdav "<link do folderu RABIT>" --cel "<AHD>\\00_Global\\RABIT\\Do_importu"
-    2. python -m ahd.etap1 import   --folder "<AHD>\\00_Global\\RABIT\\Do_importu" --landing "<AHD>\\01_LandingZone"
-    3. python -m ahd.etap1 historia --landing "<AHD>\\01_LandingZone"
+    1. python -m pzl_ev.etap1 pobierz     --webdav "<link do folderu RABIT>" --cel "<PZL-EV>\\00_Global\\RABIT\\Do_importu"
+    2. python -m pzl_ev.etap1 import      --folder "<PZL-EV>\\00_Global\\RABIT\\Do_importu" --landing "<PZL-EV>\\01_LandingZone"
+    3. python -m pzl_ev.etap1 kompletnosc --landing "<PZL-EV>\\01_LandingZone"
+    4. python -m pzl_ev.etap1 historia    --landing "<PZL-EV>\\01_LandingZone"
 
-`pobierz` kopiuje tylko pliki nowe i zmienione, `import` ładuje do bazy tylko pliki o nowej treści (SHA-256).
+`pobierz` kopiuje tylko pliki nowe i zmienione. `import` rozpoznaje źródło po prefiksie nazwy pliku
+(`zrodla_rabit.csv`) i ładuje do bazy tylko pliki o nowej treści (SHA-256). `kompletnosc` sprawdza,
+czy każdy projekt ma zaimportowane wymagane źródła (`projekty_zrodla.csv`).
 Plik pobrany ręcznie w przeglądarce (awaryjnie, np. > 50 MB) wystarczy zapisać w `Do_importu`.
 """
 
@@ -20,9 +23,10 @@ import sys
 from pathlib import Path
 from typing import Callable, Iterable
 
-from ahd.baza import Database, DatabaseError
-from ahd.zrodla.folder import FolderSource, RemoteFile
-from ahd.zrodla.webdav import SIZE_LIMIT_HINT, unc_from_url
+from pzl_ev.baza import Database, DatabaseError
+from pzl_ev.konfiguracja import ConfigError, default_dir, load_project_requirements, load_sources, match_source
+from pzl_ev.zrodla.folder import FolderSource, RemoteFile
+from pzl_ev.zrodla.webdav import SIZE_LIMIT_HINT, unc_from_url
 
 from . import importer
 
@@ -52,9 +56,9 @@ def _source(args: argparse.Namespace) -> tuple[Callable[[RemoteFile, Path], Path
 def _db_url(args: argparse.Namespace) -> str:
     if args.baza:
         return args.baza
-    if os.environ.get("AHD_BAZA"):
-        return os.environ["AHD_BAZA"]
-    return "sqlite:///" + (Path(args.landing).resolve() / "ahd_mvp.sqlite").as_posix()
+    if os.environ.get("PZL_EV_BAZA"):
+        return os.environ["PZL_EV_BAZA"]
+    return "sqlite:///" + (Path(args.landing).resolve() / "pzl_ev_mvp.sqlite").as_posix()
 
 
 def _same_file(dest: Path, f: RemoteFile) -> bool:
@@ -70,14 +74,17 @@ def _same_file(dest: Path, f: RemoteFile) -> bool:
 
 
 def cmd_lista(args: argparse.Namespace) -> int:
+    sources = load_sources(args.konfiguracja)
     _copy, desc, files = _source(args)
     print(f"Źródło: {desc}")
-    count = 0
+    count = unknown = 0
     for f in files:
         if _matches(f.name, args.filtr):
             count += 1
-            print(f"  {f.modified[:19]:19}  {_human(f.size):>10}  {f.name}")
-    print(f"Razem: {count} plików")
+            src = match_source(f.name, sources)
+            unknown += src is None
+            print(f"  {f.modified[:19]:19}  {_human(f.size):>10}  {(src.code if src else '— nierozpoznany'):22}  {f.name}")
+    print(f"Razem: {count} plików, nierozpoznanych: {unknown}")
     return 0
 
 
@@ -111,6 +118,7 @@ def cmd_pobierz(args: argparse.Namespace) -> int:
 
 
 def cmd_import(args: argparse.Namespace) -> int:
+    sources = load_sources(args.konfiguracja)
     copy, desc, files = _source(args)
     selected = [f for f in files if _matches(f.name, args.filtr)]
     db_url = _db_url(args)
@@ -120,23 +128,55 @@ def cmd_import(args: argparse.Namespace) -> int:
     print(f"Plików      : {len(selected)} ({_human(sum(f.size for f in selected))})")
     if args.dry_run:
         for f in selected:
-            print(f"  {_human(f.size):>10}  {f.name}")
+            src = match_source(f.name, sources)
+            print(f"  {_human(f.size):>10}  {(src.code if src else '— nierozpoznany'):22}  {f.name}")
         return 0
 
     db = Database(db_url)
     try:
-        result = importer.run_import(selected, copy, db, Path(args.landing), desc, full_check=args.pelne_sprawdzenie)
+        result = importer.run_import(selected, copy, sources, db, Path(args.landing), desc,
+                                     full_check=args.pelne_sprawdzenie)
     finally:
         db.close()
 
-    for s in result.sets:
-        print(f"Zestaw {s['zestaw']}: {s['opis']} ({importer.fmt_int(s['wiersze_razem'])} wierszy)")
     print(f"Import {result.batch_id}: zaimportowane {result.count('zaimportowany')}, "
-          f"bez zmian {result.count('pominiety (metadane)')}, duplikaty {result.count('duplikat')}, błędy {result.errors}")
-    bad_sets = [s for s in result.sets if s["waga"] == "BLAD"]
-    if bad_sets:
-        print("Uwaga: części zestawu mają różne kolumny – sprawdź eksport RABIT.", file=sys.stderr)
-    return 1 if result.errors or bad_sets else 0
+          f"bez zmian {result.count('pominiety (metadane)')}, duplikaty {result.count('duplikat')}, "
+          f"nierozpoznane {result.count('nierozpoznany')}, błędy {result.errors}")
+    if result.count("nierozpoznany"):
+        print("Pliki nierozpoznane nie zostały zaimportowane – dopisz ich prefiks do zrodla_rabit.csv.", file=sys.stderr)
+    return 1 if result.errors else 0
+
+
+def cmd_kompletnosc(args: argparse.Namespace) -> int:
+    sources = load_sources(args.konfiguracja)
+    required = load_project_requirements(args.konfiguracja, sources)
+    db = Database(_db_url(args))
+    try:
+        status = db.source_status()
+    finally:
+        db.close()
+    now = dt.datetime.now()
+    incomplete = 0
+    for project, codes in required.items():
+        lines, ok = [], True
+        for code in codes:
+            st = status.get(code)
+            if not st:
+                ok = False
+                lines.append(f"  ✗ {code:22} brak importu")
+                continue
+            last = dt.datetime.fromisoformat(str(st["ostatni_import"])[:19])
+            age = (now - last).days
+            stale = args.maks_wiek_dni is not None and age > args.maks_wiek_dni
+            ok = ok and not stale
+            mark = "⚠" if stale else "✓"
+            lines.append(f"  {mark} {code:22} ostatni import {str(st['ostatni_import'])[:16]} ({age} dni), "
+                         f"raport z {st['data_raportu'][:16]}, plików {st['plikow']}, ostatni: {st['ostatni_plik']}")
+        incomplete += not ok
+        print(f"{project}: {'komplet' if ok else 'NIEKOMPLETNY'}")
+        print("\n".join(lines))
+    print(f"Projektów: {len(required)}, niekompletnych: {incomplete}")
+    return 1 if incomplete else 0
 
 
 def cmd_historia(args: argparse.Namespace) -> int:
@@ -146,15 +186,15 @@ def cmd_historia(args: argparse.Namespace) -> int:
         for start, user, seen, imp, skip, err, status in db.batches(args.limit):
             print(f"  {str(start)[:19]:19}  {user:15}  widziane {seen or 0:>4}  nowe {imp or 0:>4}  pominięte {skip or 0:>4}  błędy {err or 0:>3}  {status}")
         print("Ostatnio zaimportowane pliki:")
-        for when, user, name, rtype, rows, sha in db.history(args.limit):
-            print(f"  {str(when)[:19]:19}  {user:15}  {rtype or '':9}  {rows or 0:>9}  {sha[:12]}  {name}")
+        for when, user, name, code, rows, sha in db.history(args.limit):
+            print(f"  {str(when)[:19]:19}  {user:15}  {code or '':22}  {rows or 0:>9}  {sha[:12]}  {name}")
     finally:
         db.close()
     return 0
 
 
 def build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(prog="python -m ahd.etap1", description="AHD – etap 1: pobranie i import plików RABIT")
+    p = argparse.ArgumentParser(prog="python -m pzl_ev.etap1", description="PZL-EV – etap 1: pobranie i import plików RABIT")
     sub = p.add_subparsers(dest="cmd", required=True)
 
     def source(sp: argparse.ArgumentParser) -> None:
@@ -164,30 +204,42 @@ def build_parser() -> argparse.ArgumentParser:
         sp.add_argument("--filtr", action="append", help="wzorzec nazwy, np. *.xlsx (można powtórzyć)")
         sp.add_argument("--rekurencyjnie", action="store_true", help="także podfoldery")
 
+    def config(sp: argparse.ArgumentParser) -> None:
+        sp.add_argument("--konfiguracja", type=Path, default=default_dir(),
+                        help="katalog z zrodla_rabit.csv i projekty_zrodla.csv (domyślnie ./konfiguracja lub PZL_EV_KONFIGURACJA)")
+
     def database(sp: argparse.ArgumentParser) -> None:
-        sp.add_argument("--landing", required=True, help="korzeń Landing Zone, np. \\\\serwer\\udzial\\AHD\\01_LandingZone")
+        sp.add_argument("--landing", required=True, help="korzeń Landing Zone, np. \\\\serwer\\udzial\\PZL-EV\\01_LandingZone")
         sp.add_argument("--baza", help="adres bazy: sqlite:///… lub mssql://SERWER/BAZA (domyślnie plik SQLite w Landing Zone)")
 
     s = sub.add_parser("pobierz", help="skopiuj pliki RABIT na dysk (tylko nowe i zmienione)")
     source(s)
-    s.add_argument("--cel", required=True, help="folder docelowy, np. \\\\serwer\\udzial\\AHD\\00_Global\\RABIT\\Do_importu")
+    s.add_argument("--cel", required=True, help="folder docelowy, np. \\\\serwer\\udzial\\PZL-EV\\00_Global\\RABIT\\Do_importu")
     s.add_argument("--dry-run", action="store_true", help="tylko pokaż, co zostałoby skopiowane")
     s.set_defaults(func=cmd_pobierz)
 
-    s = sub.add_parser("import", help="zaimportuj pliki o nowej treści do bazy (wszystkie, bez zakresu)")
+    s = sub.add_parser("import", help="zaimportuj rozpoznane pliki o nowej treści do bazy")
     source(s)
+    config(s)
     database(s)
     s.add_argument("--pelne-sprawdzenie", action="store_true", help="policz hash także plików bez zmian w metadanych")
     s.add_argument("--dry-run", action="store_true", help="tylko pokaż pliki w źródle")
     s.set_defaults(func=cmd_import)
+
+    s = sub.add_parser("kompletnosc", help="sprawdź, czy projekty mają zaimportowane wymagane źródła")
+    config(s)
+    database(s)
+    s.add_argument("--maks-wiek-dni", type=int, help="oznacz źródło jako nieaktualne, jeśli ostatni import jest starszy")
+    s.set_defaults(func=cmd_kompletnosc)
 
     s = sub.add_parser("historia", help="pokaż ostatnie importy i pliki w bazie")
     database(s)
     s.add_argument("--limit", type=int, default=20)
     s.set_defaults(func=cmd_historia)
 
-    s = sub.add_parser("lista", help="pokaż pliki w źródle")
+    s = sub.add_parser("lista", help="pokaż pliki w źródle i rozpoznane źródło")
     source(s)
+    config(s)
     s.set_defaults(func=cmd_lista)
     return p
 
@@ -196,6 +248,6 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
         return args.func(args)
-    except (DatabaseError, ValueError, FileNotFoundError) as exc:
+    except (ConfigError, DatabaseError, ValueError, FileNotFoundError) as exc:
         print(f"BŁĄD: {exc}", file=sys.stderr)
         return 1

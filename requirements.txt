@@ -1,4 +1,4 @@
-# AHD – etap 1 (pobranie RABIT przez WebDAV i import do bazy)
+# PZL-EV – etap 1 (pobranie RABIT przez WebDAV i import do bazy)
 openpyxl>=3.1
 # baza MS SQL (opcjonalnie; MVP domyślnie używa SQLite)
 # pyodbc>=5

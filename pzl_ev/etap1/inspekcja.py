@@ -1,20 +1,13 @@
-"""Szybka inspekcja pobranych plików: nagłówek, liczba wierszy, spójność plików wieloczęściowych."""
+"""Inspekcja pliku: nagłówek, liczba wierszy, kodowanie; odczyt wierszy do załadowania."""
 
 from __future__ import annotations
 
 import csv
-import re
-from collections import defaultdict
 from pathlib import Path
 from typing import Any, Iterator
 
 EXCEL = {".xlsx", ".xlsm"}
 TEXT = {".csv", ".txt"}
-
-# Sufiks części pliku wieloczęściowego: "_cz1", " cz.2", "-part3", "_p4", " (2)".
-PART_RE = re.compile(
-    r"(?:(?:[ _\-.]*(?:cz(?:esc|ęść)?|part)|[ _\-.]+p)[ _.\-]*\d+|\s*\(\d+\))$", re.IGNORECASE
-)
 
 
 def _decode(sample: bytes) -> tuple[str, str]:
@@ -86,61 +79,12 @@ def inspect_file(path: str | Path) -> dict[str, Any]:
         return {"typ": suffix.lstrip("."), "blad": f"{type(exc).__name__}: {exc}"}
 
 
-def set_name(filename: str) -> str:
-    """Nazwa zestawu, do którego należy plik (bez sufiksu części i rozszerzenia)."""
-    stem = Path(filename).stem
-    return PART_RE.sub("", stem) or stem
-
-
-def check_sets(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Kontrola plików wieloczęściowych: te same kolumny we wszystkich częściach."""
-    groups: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
-    for rec in records:
-        groups[(set_name(rec["plik"]), Path(rec["plik"]).suffix.lower())].append(rec)
-
-    issues = []
-    for (name, _suffix), recs in sorted(groups.items()):
-        if len(recs) < 2:
-            continue
-        cols = {tuple(r["inspekcja"].get("kolumny", [])) for r in recs}
-        total = sum(r["inspekcja"].get("wiersze", 0) for r in recs)
-        issue = {
-            "zestaw": name,
-            "czesci": [r["plik"] for r in recs],
-            "wiersze_razem": total,
-            "zgodne_kolumny": len(cols) == 1,
-        }
-        if len(cols) != 1:
-            issue["waga"] = "BLAD"
-            issue["opis"] = "Części zestawu mają różne kolumny"
-        else:
-            issue["waga"] = "OK"
-            issue["opis"] = f"{len(recs)} części, identyczny układ {len(next(iter(cols)))} kolumn"
-        issues.append(issue)
-    return issues
-
-
 def header_signature(columns: list[str]) -> str:
-    """Krótki odcisk układu kolumn – pozwala rozpoznać ten sam typ raportu niezależnie od nazwy pliku."""
+    """Krótki odcisk układu kolumn – pozwala zauważyć zmianę układu raportu w RABIT/SAP."""
     import hashlib
 
     norm = "|".join(c.strip().lower() for c in columns)
     return hashlib.sha1(norm.encode("utf-8")).hexdigest()[:16]
-
-
-REPORT_TYPES = [
-    (re.compile(r"cji3", re.IGNORECASE), "CJI3"),
-    (re.compile(r"zrd[_ -]?kkaj", re.IGNORECASE), "ZRD_KKAJ"),
-    (re.compile(r"net[_ -]?inv", re.IGNORECASE), "NET_INV"),
-]
-
-
-def guess_report_type(filename: str) -> str:
-    """Wstępne rozpoznanie typu raportu po nazwie pliku (do zastąpienia słownikiem sygnatur kolumn)."""
-    for pattern, name in REPORT_TYPES:
-        if pattern.search(filename):
-            return name
-    return "nieznany"
 
 
 def read_rows(path: str | Path, info: dict[str, Any]) -> Iterator[list[Any]]:

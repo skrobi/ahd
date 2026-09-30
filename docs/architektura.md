@@ -1,10 +1,10 @@
-# AHD – Architektura rozwiązania
+# PZL-EV – Architektura rozwiązania
 
 Wersja: 1.0 (wstępny projekt)
 Status: **do akceptacji** – dokument nie zawiera implementacji.
 
 Powiązane dokumenty: `readme.md` (kontekst biznesowy), `docs/funkcjonalnosc.md` (specyfikacja
-funkcjonalna), `prototyp/ahd-prototyp.html` (klikalny prototyp).
+funkcjonalna), `prototyp/pzl-ev-prototyp.html` (klikalny prototyp).
 
 ---
 
@@ -47,6 +47,7 @@ Architektura ma zapewnić:
 | D20 | Zamknięcie miesiąca wymaga przypisania elementów z kosztem | kompletność EV formalnego |
 | D23 | **Rozwiązanie docelowe: pliki RABIT kopiowane przez WebDAV** (`\\host@SSL\DavWWWRoot\…`, konto Windows użytkownika) do `00_Global\RABIT\Do_importu` komendą `pobierz` – tylko nowe i zmienione; następnie `import` do bazy | test 29.09.2026: WebDAV działa; API REST, synchronizacja i eksport do Excela nie są dostępne |
 | D22 | Awaryjnie (np. plik > 50 MB – limit usługi WebClient): pojedynczy plik pobrany ręcznie w przeglądarce do `00_Global\RABIT\Do_importu` | import traktuje go tak samo |
+| D24 | **Plik mówi, czym jest – projekt mówi, czego potrzebuje.** Źródło pliku RABIT rozpoznawane po **prefiksie nazwy** (`konfiguracja/zrodla_rabit.csv`, wygrywa najdłuższy prefiks); importowany jest **każdy rozpoznany plik** samodzielnie (np. `ACTUALS_PAF_01/_02/_03`), bez kontroli „zestawów”; plik nierozpoznany nie jest importowany. Projekt ma listę **wymaganych źródeł** (`konfiguracja/projekty_zrodla.csv`), a PZL-EV sprawdza ich kompletność i aktualność | proste nazwy plików RABIT, różne potrzeby projektów, automatyczna kontrola zamiast ręcznej |
 | D21 | **Import plików SAP (RABIT) jest globalny, bez zakresu**: wszystkie pliki z folderu, import tylko nowych (SHA-256), wiersze w postaci surowej; przebieg zakresu wybiera swoje dane po elementach WBS ze słownika struktury | przy pobieraniu nie wiadomo, do którego zakresu należy plik |
 
 ---
@@ -56,7 +57,7 @@ Architektura ma zapewnić:
 ```
  Stanowisko osoby z finansów                          Centralnie
  ┌─────────────────────────────────────┐     ┌──────────────────────────────────┐
- │ Przeglądarka  ⇄  AHD App (Python)   │     │ MS SQL – baza AHD (TEST / PROD)  │
+ │ Przeglądarka  ⇄  PZL-EV (Python)    │     │ MS SQL – baza PZL_EV (TEST / PROD)│
  │                  - orkiestracja     │◄───►│  meta  – zakresy, przebiegi,     │
  │                  - odczyt plików    │ AD  │          etapy, dziennik, blokady│
  │                  - walidacja        │     │  stg   – surowe dane z plików    │
@@ -64,7 +65,7 @@ Architektura ma zapewnić:
  └──────────────┬──────────────────────┘     │  hist  – snapshoty danych        │
                 │ uprawnienia użytkownika    │  ev    – wyniki i rewizje EV     │
  ┌──────────────▼──────────────────────┐     │  procedury = logika biznesowa    │
- │ Dysk sieciowy  \\serwer\udział\AHD  │     └──────────────┬───────────────────┘
+ │ Dysk sieciowy \\serwer\udział\PZL-EV│     └──────────────┬───────────────────┘
  │  słowniki, SAP, finanse, CAM, EV,   │                    │ odczyt
  │  Landing Zone                        │     ┌──────────────▼───────────────────┐
  └──────────────▲──────────────────────┘     │ splmcd03: PZLPROD.LOG, PZL_SAP   │
@@ -76,7 +77,7 @@ Architektura ma zapewnić:
 
 ## 4. Komponenty
 
-### 4.1 Aplikacja AHD (Python, lokalnie)
+### 4.1 Aplikacja PZL-EV (Python, lokalnie)
 
 - Lokalny serwer WWW + przeglądarka. Aplikacja jest **bezstanowa** – cały stan jest w bazie.
 - Odpowiada za: orkiestrację etapów, odczyt i kopiowanie plików, walidację struktury i typów,
@@ -86,7 +87,7 @@ Architektura ma zapewnić:
   zapisane w bazie; niezgodna aplikacja odmawia pracy.
 - Profile konfiguracji TEST / PROD (serwer bazy, korzeń folderów); brak haseł w konfiguracji.
 
-### 4.2 Baza AHD (MS SQL)
+### 4.2 Baza PZL-EV (MS SQL)
 
 - Jedyne źródło stanu i historii. Logika biznesowa w procedurach i widokach.
 - Szczegóły w rozdz. 8.
@@ -229,7 +230,7 @@ wersję słownika; obowiązuje ostatnia poprawna.
 ### 7.1 Struktura (D15)
 
 ```
-\\serwer\udział\AHD\                 korzeń środowiska (osobny dla TEST i PROD)
+\\serwer\udział\PZL-EV\                 korzeń środowiska (osobny dla TEST i PROD)
 ├── 00_Global\Slowniki\              słowniki globalne
 ├── 00_Global\RABIT\Do_importu\     kopie plików RABIT (WebDAV, D23)
 ├── 01_LandingZone\<RRRR-MM-DD>\<IdImportu>\   archiwum oryginałów (bez podziału na zakresy)
@@ -244,7 +245,7 @@ wersję słownika; obowiązuje ostatnia poprawna.
 
 - Ścieżki UNC (nie litery dysków); w bazie ścieżki **względne** od korzenia środowiska.
 - Aplikacja sprawdza strukturę folderów przy otwarciu zakresu.
-- Dostęp: finanse – zapis w całym `AHD`; CAM – zapis w `CAM\…\Zwrocone`, odczyt w `Wyslane`
+- Dostęp: finanse – zapis w całym `PZL-EV`; CAM – zapis w `CAM\…\Zwrocone`, odczyt w `Wyslane`
   swojego zakresu (nadaje IT).
 
 ### 7.2 Landing Zone i integralność
@@ -266,13 +267,23 @@ wersję słownika; obowiązuje ostatnia poprawna.
 - Import obejmuje **wszystkie** pliki; zakres nie jest znany. Tożsamość pliku = SHA-256 treści:
   nowy hash → import; znany hash → duplikat; te same metadane (ścieżka, rozmiar, data) co wcześniej →
   pominięcie bez pobierania.
-- Wiersze ładowane w postaci surowej (`stg.RawRow`: hash pliku, nr wiersza, wartości JSON) oraz
-  nagłówki i **sygnatura kolumn** (rozpoznawanie typu raportu niezależnie od nazwy pliku).
-- Jeden lub kilka plików na projekt (limit wierszy Excela) – części sprawdzane jako zestaw:
-  identyczny układ kolumn i łączna liczba wierszy.
+- **Rozpoznanie źródła (D24):** prefiks nazwy pliku → kod źródła wg `konfiguracja/zrodla_rabit.csv`
+  (np. `ACTUALS_PAF_01.xlsx` → `ACTUALS_PAF`). Nazwy plików pozostają proste – bez projektu, dat, wersji.
+  Plik bez pasującego prefiksu → decyzja „nierozpoznany”, nie jest importowany (po dopisaniu prefiksu
+  zostanie zaimportowany przy kolejnym uruchomieniu).
+- **Każdy rozpoznany plik importowany samodzielnie** – także kilka plików jednego źródła
+  (`_01`, `_02`, `_03`) o różnych układach kolumn; brak kontroli „zestawów”.
+- **Hash = tożsamość fizycznego pliku:** ponowne pobranie tego samego pliku nie jest traktowane jako nowe.
+  RABIT nadpisuje plik tą samą nazwą – każda nowa treść to nowa wersja w historii (`meta.SourceFile`).
+- Wiersze ładowane w postaci surowej (`stg.RawRow`, widok `stg.vRawRowZrodlo` z kodem źródła i importem);
+  zapisywana jest też sygnatura kolumn (zmiana układu raportu). Tabele typowane per źródło – gdy
+  zostanie zdefiniowana zawartość raportów.
+- **Kompletność projektu (D24):** `konfiguracja/projekty_zrodla.csv` (Projekt → wymagane źródła);
+  `kompletnosc` pokazuje dla projektu: ✓ źródło zaimportowane (ostatni import, data raportu, plik),
+  ✗ brak importu, ⚠ import starszy niż zadany próg. Sprawdzenie pokrycia okresu – później.
 - Każde uruchomienie importu i decyzja dla każdego pliku są zapisane w bazie (`meta.ImportBatch`,
   `meta.SourceFile`, `meta.SourceFileSeen`) – widać, kto i kiedy zaimportował dane.
-- Kod: `ahd/etap1` (`pobierz`, `import`, `historia`), instrukcja `docs/mvp-etap1.md`, DDL `sql/mssql/001_etap1_import.sql`.
+- Kod: `pzl_ev/etap1` (`pobierz`, `import`, `kompletnosc`, `historia`), konfiguracja `konfiguracja/`, instrukcja `docs/mvp-etap1.md`, DDL `sql/mssql/001_etap1_import.sql`.
 - Jeśli RABIT pozwala – eksport do CSV/TXT (brak limitu wierszy, brak konwersji typów przez Excel).
 
 ### 7.4 Pliki CAM
@@ -312,7 +323,7 @@ wersję słownika; obowiązuje ostatnia poprawna.
 
 ### 8.3 Bezpieczeństwo i audyt
 
-- Grupa AD finansów → rola `ahd_user`; osobno `ahd_admin` (wdrożenia).
+- Grupa AD finansów → rola `pzl_ev_user`; osobno `pzl_ev_admin` (wdrożenia).
 - Użytkownicy nie mają praw do tabel – wyłącznie EXECUTE na procedurach i SELECT na widokach.
 - Brak uprawnień per zakres (D9). Baza wymusza reguły procesu (bramki etapów, jeden przebieg na
   zakres i tydzień, zamrożenie okresu), bo aplikacja działa lokalnie i nie może być jedyną kontrolą.
@@ -390,7 +401,7 @@ Na podstawie eksportu metadanych (`dependencies.csv`, `resolved_objects.csv`):
 | # | Pytanie | Rekomendacja |
 |---|---|---|
 | O3 | Plik CAM: jeden na CAM czy jeden na program? | jeden na CAM |
-| O5 | Serwer / baza dla AHD | osobna baza `AHD`; część danych z `splmcd03` |
+| O5 | Serwer / baza dla PZL-EV | osobna baza `PZL_EV`; część danych z `splmcd03` |
 | O6 | Forma dystrybucji aplikacji | do ustalenia |
 | O7 | Czy RABIT może eksportować CSV/TXT? | CSV preferowany |
 | O9 | Los słowników w `PZLPROD.LOG` (`Stanowiska`, `LearningCurve`, `PeriodDates`) | do ustalenia z właścicielami |
