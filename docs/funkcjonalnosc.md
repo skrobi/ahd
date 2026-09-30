@@ -61,7 +61,6 @@ dokumentacja).
 | **Przebieg** | oś etapów, panel wybranego etapu, przypięte słowniki, dziennik przebiegu | akcje etapów |
 | **Słowniki** | słowniki globalne (w tym Cost Category – M26) i słowniki projektu w bazie: tabela z filtrowaniem, stan walidacji, historia zmian | dodaj / edytuj / zamknij ważność wiersza; pobierz / wczytaj Excel |
 | **Mapowanie CES ↔ P1S** (ADMIN) | dwa drzewa CES \| P1S w strukturze kategoryzacji, statusy `OVERRIDE/REPORT/INHERITED/UNMAPPED`, węzeł „Nieprzypisane”; bez kosztów (F21–F24, M16–M19) | korekta elementu CES, korekta projektu CES, usunięcie korekty, historia |
-| ~~**Przypisania**~~ *(zastąpione: M19, M24)* | ~~dwa drzewa CES \| P1S, reguły projektu, wyjątki, WP i CAM projektu, lista elementów `UNMAPPED`~~ | ~~reguła projektu, wyjątek, przypisanie WP/CAM~~ |
 
 Nagłówek aplikacji zawsze pokazuje środowisko (TEST / PROD), zalogowanego użytkownika AD
 oraz wersję aplikacji i schematu.
@@ -84,20 +83,20 @@ oraz wersję aplikacji i schematu.
    - wśród grup wygrywa projekt utworzony wcześniej,
    - `PROJORG`, które pojawią się później w zaznaczonej grupie – O22 (prototyp: wchodzą automatycznie).
 3. **Słowniki projektu** – z Excela (M24): **WP i CAM**, **Harmonogram i budżet**, w CAS także
-   **Stawki CAS**, opcjonalnie **Cost Category – zmiany w projekcie** (M26).
+   **Stawki CAS**, **Cost Category** (M26).
    - Format: jeden plik z arkuszami (szablon do pobrania, z elementami P1S z zakresu) albo osobne pliki / CSV;
      kolumny rozpoznawane po nagłówkach (w prototypie: WP i CAM – WP, Element P1S, CAM, Cost Category;
-     Harmonogram i budżet – WP, BAC, Start, Koniec).
+     Harmonogram i budżet – WP, BAC HOURS,BAC MATERIAL , Planowany Start, Planowany Koniec).
    - Walidacja jak przy zapisie w aplikacji (rozdz. 6.3); **słownik z błędami nie zostaje zapisany**.
    - Lista słowników globalnych z bieżącym stanem.
 4. **Foldery** – podgląd struktury `Projekty\<Projekt>\`; kontrole: dostępność korzenia (UNC), prawo zapisu,
    brak folderu o tym kodzie; informacja o zgłoszeniu do IT (dostęp CAM do `Zwrocone`).
 5. **Podsumowanie = baza analityczna** (M25) → **Utwórz projekt**:
-   - drzewo (kategoria → `PROJORG` → element P1S) połączone z WP, CAM, BAC, datami i liczbą elementów CES
+   - drzewo (Z_KATEGORIA → `Z_OPIS` → WBS_ELEMENT (CES pspnr_ces - z mapowania) połączone z WP, CAM, BAC_*, datami i liczbą elementów CES
      z mapowania (F21–F24),
    - braki: element z kosztami CES albo zaawansowaniem bez WP, WP bez budżetu,
-   - zestawienie według CAM, eksport do xlsx,
-   - utworzenie: rejestracja w bazie słowników i w MS SQL, utworzenie folderów, treść zgłoszenia do IT,
+   - sumaryczny budżet na końcu, ilość godzin sumaryczna, sumaryczna ilość kosztów materiałów jako końcowa weryfikacja projektu
+   - utworzenie: rejestracja w bazie słowników i w MS SQL, utworzenie folderów,
      kontrola struktury.
 
 Krok „CAM” usunięty – CAM jest kolumną słownika „WP i CAM” (M23). Po utworzeniu projektu każdy słownik
@@ -106,11 +105,6 @@ zapis z historią (M24). Baza analityczna także na stronie projektu – O23.
 
 Reguły: kod musi być unikalny; projekt z niekompletnymi słownikami (brak WP, CAM lub budżetu) nie może
 uruchomić przebiegu.
-
-> *Wcześniejsza wersja kreatora (zastąpiona: M22–M24):* 6 kroków – Podstawowe; Projekty i WP (wybór
-> `PROJORG` z drzewa `LOG.WBS`, projekty CES bez reguły projektu z formularzem reguły CES → P1S, opcja
-> „pula małych projektów”); Słowniki (uzupełniane w aplikacji); CAM (przypisanie CAM do WP w narzędziu
-> przypisań, M8); Foldery; Podsumowanie (bez plików słowników).
 
 ### F02. Gotowość projektu
 
@@ -139,7 +133,7 @@ Lista kontrolna na ekranie projektu:
 
 ### F04. Uruchomienie przebiegu
 
-- Wybór rodzaju: **tygodniowy** (bieżący tydzień, poniedziałek) albo **zamknięcie miesiąca**.
+- Wybór rodzaju: **tygodniowy** (bieżący tydzień, poniedziałek lub każdy inny dzień w tygodniu) albo **zamknięcie miesiąca**.
 - Kontrole przed startem:
   - brak innego przebiegu tego projektu dla tego tygodnia / zamknięcia (**blokuje**),
   - zgodna wersja aplikacji i schematu bazy (**blokuje**),
