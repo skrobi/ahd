@@ -1,13 +1,14 @@
 # PZL-EV – Fazy pipeline (koncepcja)
 
-Wersja: 0.5 (koncepcja do dyskusji; 0.5: **jedyne miejsce opisu etapów** – przeniesione z `docs/funkcjonalnosc.md`
-(F04–F18, statusy etapu) i `docs/architektura.md` (5.3–5.4); 0.3: słowniki w bazie z interfejsem – M13/M15, D26–D27;
+Wersja: 0.5 (koncepcja do dyskusji; 0.5: **jedyne miejsce opisu przepływu i etapów** – przeniesione z
+`docs/funkcjonalnosc.md` (F04–F18, statusy etapu), `docs/architektura.md` (5.2–5.7, 6.2, proces z 7.3–7.4)
+i `readme.md` (przebieg projektu); 0.3: słowniki w bazie z interfejsem – M13/M15, D26–D27;
 0.4: „projekt” zamiast „zakresu” – M22, mapowanie z raportu mapowań – M16–M18, kompletność źródeł projektów usunięta – M21, Cost Category – M26)
 Powiązane: `docs/architektura.md`, `docs/funkcjonalnosc.md`, `docs/mvp-etap1.md` (faza G1–G2 – działa).
 
-> **Ten dokument jest jedynym opisem etapów** (faz globalnych i etapów przebiegu): cel, wejście, bramki,
-> działanie w aplikacji, kontrole, efekt, statusy. Pozostałe dokumenty odsyłają tutaj (numery funkcji F04–F18
-> ze specyfikacji podane przy fazach).
+> **Ten dokument jest jedynym opisem przepływu** (faz globalnych i etapów przebiegu): cel, wejście, bramki,
+> działanie w aplikacji, kontrole, efekt, statusy, współbieżność. Inne dokumenty go nie powtarzają. Numery
+> funkcji F04–F18 ze specyfikacji są podane przy fazach.
 
 ---
 
@@ -46,6 +47,14 @@ z różnych komputerów.
   etap wyznacza „co dalej”.
 - Ponowne wykonanie etapu (albo zmiana jego wejść) oznacza etapy późniejsze jako **Nieaktualne**.
 - Każda zmiana statusu trafia do dziennika (kto, kiedy, co).
+
+### 1.2 Współbieżność
+
+- Jeden przebieg na projekt i tydzień (lub zamknięcie okresu) – wymuszane w bazie.
+- Operacja w toku (np. import) zakłada krótką blokadę przebiegu (`sp_getapplock`), żeby dwie osoby
+  nie wykonały tej samej operacji jednocześnie (druga osoba widzi komunikat).
+- Zapis w bazie słowników (SQLite na dysku sieciowym) – krótkie transakcje, jeden zapis naraz (D26).
+- Import pliku jest idempotentny: ten sam hash nie tworzy nowej wersji ani duplikatu danych.
 
 ---
 
@@ -114,11 +123,11 @@ czego dotyczy plik – o tym decyduje dopiero G2 na podstawie definicji plików 
 | | |
 |---|---|
 | **Cel** | Nie zgubić żadnej wersji raportu zrzuconej przez RABIT i mieć ją na dysku firmy. |
-| **Wejście** | Folder RABIT na SharePoint (WebDAV, konto Windows). |
+| **Wejście** | Folder RABIT na SharePoint czytany przez **WebDAV** (usługa WebClient Windows, konto użytkownika; D23; lokalizacja – `docs/architektura.md`, rozdz. 7.3). |
 | **Jak pracuje** | Porównuje pliki źródłowe z ostatnio pobranymi (rozmiar, data modyfikacji); kopiuje tylko nowe i zmienione. Nie interpretuje treści. |
 | **Nazwy plików** | Proste, bez projektu, dat i wersji (np. `ACTUALS_PAF_01.xlsx`); o źródle decyduje prefiks. G1 zachowuje nazwę z RABIT. |
 | **Ryzyko** | RABIT nadpisuje plik – jeśli między dwoma uruchomieniami RABIT nie było pobrania i importu, poprzednia wersja przepada. Dlatego G1 i G2 uruchamia się razem i co najmniej tak często jak RABIT (np. harmonogram zadań Windows); historia wersji jest w bazie (hash), nie w nazwach plików. |
-| **Kontrole** | Dostępność WebDAV; limit 50 MB (większy plik – ręcznie). |
+| **Kontrole** | Dostępność WebDAV; limit usługi WebClient – domyślnie ok. 50 MB na plik (`FileSizeLimitInBytes`, zmienia administrator); większy plik pobiera się ręcznie w przeglądarce do `Do_importu` i import traktuje go tak samo (D22). |
 | **Efekt** | Aktualna kopia plików RABIT w `00_Global\RABIT\Do_importu`. |
 | **Przekazanie** | Folder `Do_importu` jest wejściem G2. |
 
@@ -127,7 +136,7 @@ czego dotyczy plik – o tym decyduje dopiero G2 na podstawie definicji plików 
 | | |
 |---|---|
 | **Cel** | Każdy **rozpoznany** plik załadować do bazy jako źródło z markerem pochodzenia – tak, żeby dało się odtworzyć dowolny wcześniejszy stan i porównać dwa stany. |
-| **Zasada** | **Plik mówi, czym jest** (prefiks nazwy → źródło). Zakres danych projektu wynika z jego węzłów w drzewie P1S; jedna paczka RABIT może obejmować wiele projektów, np. całe PWC (M21). |
+| **Zasada** | Import jest **globalny** – obejmuje wszystkie pliki, projekt nie jest znany (D21). **Plik mówi, czym jest** (prefiks nazwy → źródło, D24). Zakres danych projektu wynika z jego węzłów w drzewie P1S; jedna paczka RABIT może obejmować wiele projektów, np. całe PWC (M21). |
 | **Wejście** | Pliki w `Do_importu`; konfiguracja prefiksów (Prefiks → KodZrodla) w bazie słowników – M15 (w MVP przejściowo `konfiguracja/zrodla_rabit.csv`). |
 | **Jak pracuje** | 1) Prefiks nazwy → źródło (najdłuższy pasujący prefiks, bez rozróżniania wielkości liter). 2) Hash SHA-256: ten sam fizyczny plik = duplikat. 3) Nowa treść → Landing Zone + wiersze w bazie. Każdy rozpoznany plik osobno – także `ACTUALS_PAF_01/_02/_03` o różnych kolumnach. |
 | **Marker pochodzenia** | Każdy plik (i przez niego każdy wiersz): `IdImportu` (kto, kiedy), `Sha256`, **kod źródła**, **data raportu** (data modyfikacji w RABIT). Jedna wersja pliku = jeden snapshot. |
@@ -135,7 +144,7 @@ czego dotyczy plik – o tym decyduje dopiero G2 na podstawie definicji plików 
 | **W aplikacji** | Ekran **Import**: **Pobierz** (G1) + **Importuj** (G2); import może uruchomić każda osoba z finansów w dowolnym momencie, historia importów widoczna dla wszystkich. MVP: `python -m pzl_ev.etap1 pobierz` + `import` (`docs/mvp-etap1.md`). |
 | **Decyzja dla pliku** | **zaimportowany** (nowy hash), **duplikat** (ten fizyczny plik był już zaimportowany), **pominięty** (te same metadane co przy poprzednim imporcie – bez kopiowania), **nierozpoznany** (brak prefiksu), **błąd**. |
 | **Kontrole** | Brak prefiksu → „nierozpoznany” (nie importowany; po dopisaniu prefiksu zaimportuje się przy kolejnym uruchomieniu). Uszkodzony plik → „błąd” (reszta importuje się dalej). |
-| **Efekt** | `meta.SourceFile` (hash, kod źródła, kolumny, liczba wierszy), `meta.SourceFileSeen` (decyzja dla każdego pliku w każdym imporcie), `stg.RawRow` / `stg.vRawRowZrodlo`. |
+| **Efekt** | `meta.ImportBatch` (każde uruchomienie: kto, kiedy, liczniki), `meta.SourceFile` (hash, kod źródła, kolumny, **sygnatura kolumn** – zmiana układu raportu, liczba wierszy), `meta.SourceFileSeen` (decyzja dla każdego pliku w każdym imporcie), `stg.RawRow` / `stg.vRawRowZrodlo` (wiersze surowe z kodem źródła i importem). |
 | **Później** | Tabele typowane per źródło (mapowanie kolumn), gdy będzie wiadomo, co zawierają raporty. |
 | **Przekazanie** | Historia importów źródeł jest wejściem G3 (elementy WBS) i P1 (dane projektu – przebieg przypina wszystkie zaimportowane pliki, M21). |
 
@@ -159,7 +168,7 @@ czego dotyczy plik – o tym decyduje dopiero G2 na podstawie definicji plików 
 |---|---|
 | **Cel** | Utrzymywać słowniki globalne i słowniki projektów (stawki wydziałów, kalendarz okresów, kursy USD/PLN, stawki CAS, WP i CAM, harmonogram i budżet, Cost Category globalny i zmiany w projekcie (M26), korekty mapowania CES↔P1S (M18), **konfiguracja prefiksów RABIT** (~~i źródeł projektów~~ – usunięte, M21)). |
 | **Wejście** | Zmiany wprowadzane w aplikacji (CRUD + drzewo) albo wczytane z Excela z tą samą walidacją i podglądem różnic (słowniki projektu, Cost Category – M24, M26). Źródłem prawdy jest baza (M13). |
-| **Jak pracuje** | Zapis do bazy słowników SQLite (`00_Global\Baza\`) w krótkiej transakcji → walidacja przy zapisie (rozdz. 6 specyfikacji) → historia SCD2 (`ValidFrom`/`ValidTo`, kto, kiedy). |
+| **Jak pracuje** | Interfejs (CRUD + drzewo) → walidacja przy zapisie (rozdz. 5 specyfikacji) → nowy wpis z historią SCD2 (`ValidFrom`/`ValidTo`, kto, kiedy, poprzednia i nowa wartość) → baza słowników SQLite (`00_Global\Baza\`), krótka transakcja. |
 | **Kontrole** | Błąd blokujący nie pozwala zapisać; jednocześnie zapisuje jedna osoba (SQLite na dysku sieciowym). |
 | **Efekt** | Nowy stan słowników z historią. |
 | **Przekazanie** | Przebieg przypina stan w P2 i kopiuje migawkę do MS SQL (D27); aktywne przebiegi z wcześniejszym stanem dostają decyzję „kontynuuj / przelicz od P3” (rozdz. 4a). |
@@ -168,8 +177,16 @@ czego dotyczy plik – o tym decyduje dopiero G2 na podstawie definicji plików 
 
 ## 4. Fazy przebiegu projektu
 
-Przebieg = jeden projekt × okres (tydzień albo zamknięcie miesiąca). Stan przebiegu jest w bazie,
-fazy mogą być wykonywane w różne dni i przez różne osoby z finansów. Faza P*n* = **etap *n*** przebiegu
+**Przebieg** (`Run`) dotyczy jednego projektu i jednego okresu:
+
+- **tygodniowy** – w dowolny dzień tygodnia w trakcie miesiąca (D7), EV wstępne (nieformalne),
+- **zamknięcie miesiąca** – EV formalne, oparte wyłącznie na zaawansowaniu od CAM (D14), po zatwierdzeniu
+  zamrażane.
+
+Identyfikator: `R-<Projekt>-<RRRR-MM>-T<tydzień>` lub `R-<Projekt>-<RRRR-MM>-Z`. Przebieg jest trwałym
+obiektem w bazie – może trwać dni (oczekiwanie na CAM); aplikację można zamknąć, a fazy mogą być wykonywane
+w różne dni i przez różne osoby z finansów (D9). Każdy przebieg dotyczy jednego projektu, więc projekty
+nie czekają na siebie (np. F-16 nie czeka na pliki Cobra projektów SAC). Faza P*n* = **etap *n*** przebiegu
 na ekranie Przebieg (oś etapów, panel wybranego etapu, przypięte słowniki, dziennik).
 
 ### P0. Uruchomienie przebiegu *(F04)*
@@ -210,7 +227,7 @@ na ekranie Przebieg (oś etapów, panel wybranego etapu, przypięte słowniki, d
 |---|---|
 | **Cel** | Nie dopuścić niespójnych danych i słowników do obliczeń. |
 | **Wejście** | Migawka słowników z P2; snapshot danych z P1. |
-| **Jak pracuje** | Poprawność samych słowników zapewnia walidacja przy zapisie (G4). Tu: walidacja plików SAP (`docs/funkcjonalnosc.md`, rozdz. 6.5) i kontrole **spójności słowników z danymi przebiegu**: wydział z kosztów CES bez stawki na dany rok (blokujący), element z kosztem `UNMAPPED`, WP bez budżetu, numer elementu kosztowego bez wpisu w Cost Category – globalnym ani w zmianach projektu (blokujący – naprawa: dodanie w słowniku projektu; waga – O25), numer bez kategorii (ostrzeżenie; M26, rozdz. 6.6 specyfikacji). |
+| **Jak pracuje** | Poprawność samych słowników zapewnia walidacja przy zapisie (G4). Tu: walidacja plików SAP (`docs/funkcjonalnosc.md`, rozdz. 5.5) i kontrole **spójności słowników z danymi przebiegu**: wydział z kosztów CES bez stawki na dany rok (blokujący), element z kosztem `UNMAPPED`, WP bez budżetu, numer elementu kosztowego bez wpisu w Cost Category – globalnym ani w zmianach projektu (blokujący – naprawa: dodanie w słowniku projektu; waga – O25), numer bez kategorii (ostrzeżenie; M26, rozdz. 5.6 specyfikacji). |
 | **Kontrole** | Błąd blokujący → **Popraw w aplikacji** (ekran Słowniki / Mapowanie CES ↔ P1S z filtrem na problem) → **Przypnij ponownie i waliduj** (P2 + P3). Brak błędów blokujących: ostrzeżenia trafiają do raportu przebiegu. |
 | **Efekt** | Tabela problemów zapisana w przebiegu: waga (blokujący / ostrzeżenie), źródło, element, opis. |
 | **Przekazanie** | P4 startuje tylko bez błędów blokujących. |
@@ -233,7 +250,7 @@ na ekranie Przebieg (oś etapów, panel wybranego etapu, przypięte słowniki, d
 |---|---|
 | **Cel** | Dać finansom do sprawdzenia wynik łączenia, zanim zostanie użyty dalej (i wysłany do CAM). |
 | **Wejście** | `ev.KosztWP`, raport pokrycia z P4. |
-| **Jak pracuje** | Generuje pliki do `Projekty\<Projekt>\Finanse\<RRRR-MM>\`, np. przegląd kosztu rzeczywistego, ETC wstępne, lista WBS bez mapowania (nazwy – `docs/funkcjonalnosc.md`, rozdz. 7; zawartość – O16); czeka na potwierdzenie w aplikacji (D10, formalność). |
+| **Jak pracuje** | Generuje pliki do `Projekty\<Projekt>\Finanse\<RRRR-MM>\`, np. przegląd kosztu rzeczywistego, ETC wstępne, lista WBS bez mapowania (nazwy – `docs/funkcjonalnosc.md`, rozdz. 6; zawartość – O16); czeka na potwierdzenie w aplikacji (D10, formalność). |
 | **Kontrole** | **Potwierdź** (może osoba prowadząca; zapis kto i kiedy) albo **Odrzuć** (wymagany komentarz). |
 | **Efekt** | Pliki + zapis potwierdzenia / odrzucenia. |
 | **Przekazanie** | Potwierdzenie odblokowuje P6; odrzucenie cofa do P4 (P5+ nieaktualne). |
@@ -241,11 +258,13 @@ na ekranie Przebieg (oś etapów, panel wybranego etapu, przypięte słowniki, d
 ### P6–P8. Zaawansowanie *(etapy 6–8, F10–F13)*
 
 Dwa warianty, ten sam cel: **dla każdego WP wartość zaawansowania z zapisanym pochodzeniem**
-(`PRODUKCJA`, `ANALITYK`, `CAM` – `docs/architektura.md`, rozdz. 5.6; D14).
+(`PRODUKCJA`, `ANALITYK` – wpis osoby z finansów: kto, kiedy, metoda – albo `CAM`). Wpis ręczny nie nadpisuje
+wartości od CAM bez śladu; raporty pokazują udział wartości spoza CAM; na zamknięciu dozwolone jest
+wyłącznie `CAM` (D14).
 
 | | Tydzień | Zamknięcie miesiąca |
 |---|---|---|
-| **P6** | **Zaawansowanie z produkcji (F10):** pobranie zaawansowania godzin i materiałów z danych produkcyjnych P1S (np. `vAHDD`, źródło – O10) po P1S WBS projektu; wynik: liczba WP z wartością i lista WP bez wartości; pochodzenie `PRODUKCJA` | **Pliki dla CAM (F12):** **Generuj pliki dla CAM** – jeden plik na CAM (O3) do `CAM\<RRRR-MM>\Wyslane\`, z WP danego CAM (z „WP i CAM”); ukryty arkusz z identyfikatorem przebiegu; zablokowane komórki poza polami do uzupełnienia |
+| **P6** | **Zaawansowanie z produkcji (F10):** pobranie zaawansowania godzin i materiałów z danych produkcyjnych P1S (np. `vAHDD`, źródło – O10) po P1S WBS projektu; wynik: liczba WP z wartością i lista WP bez wartości; pochodzenie `PRODUKCJA` | **Pliki dla CAM (F12):** **Generuj pliki dla CAM** – jeden plik na CAM (O3) do `CAM\<RRRR-MM>\Wyslane\`, z WP danego CAM (z „WP i CAM”); ukryty arkusz (ID przebiegu, projekt, okres, CAM, wersja szablonu); zablokowane komórki poza polami do uzupełnienia (format pliku – `docs/architektura.md`, rozdz. 7.4) |
 | **P7** | **Uzupełnienie braków (F11):** tabela WP bez wartości (WP, CAM, ostatnia znana wartość, metoda, wartość); metody: ostatnia znana wartość, wartość ręczna, plik CAM (opcjonalnie) – zasady O11; zapis: pochodzenie `ANALITYK`, kto, kiedy, metoda | **Import plików CAM (F12):** **Skanuj folder Zwrócone** – status per CAM: wysłany / zwrócony / zaimportowany / odrzucony (+ powód). Powody odrzucenia: brak identyfikatora, plik z innego przebiegu lub okresu, zmiana poza polami, wartości poza zakresem. Etap czeka (dni), aż pliki wszystkich CAM zostaną zaimportowane; pochodzenie `CAM` |
 | **P8** | **Walidacja zaawansowania (F13):** udział pochodzenia wartości na wykresie paskowym; 0–100%, spadek względem poprzedniego okresu (ostrzeżenie), EV ≤ BAC; wartości spoza CAM dozwolone | Te same kontrole + **100% wartości od CAM** (blokuje) |
 | **Efekt** | `ev.Zaawansowanie` (WP, okres, wartość, pochodzenie: PRODUKCJA / ANALITYK / CAM, kto, kiedy) | j.w., pochodzenie wyłącznie CAM |

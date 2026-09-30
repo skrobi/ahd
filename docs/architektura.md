@@ -1,10 +1,11 @@
 # PZL-EV – Architektura rozwiązania
 
-Wersja: 1.1 (wstępny projekt; 1.1: ustalenia z prototypu v3 – M16–M26 w `docs/mapowanie-ces-p1s.md`)
+Wersja: 1.2 (wstępny projekt; 1.1: ustalenia z prototypu v3 – M16–M26 w `docs/mapowanie-ces-p1s.md`;
+1.2: przepływ i etapy przeniesione do `docs/pipeline-fazy.md`)
 Status: **do akceptacji** – dokument nie zawiera implementacji.
 
 Powiązane dokumenty: `readme.md` (kontekst biznesowy), `docs/funkcjonalnosc.md` (specyfikacja
-funkcjonalna), `prototyp/pzl-ev-prototyp.html` (klikalny prototyp).
+funkcjonalna), `docs/pipeline-fazy.md` (przepływ i etapy), `prototyp/pzl-ev-prototyp.html` (klikalny prototyp).
 
 ---
 
@@ -111,9 +112,7 @@ Architektura ma zapewnić:
 
 ---
 
-## 5. Model przetwarzania
-
-### 5.1 Projekt
+## 5. Projekt
 
 - **Projekt** (dawniej „zakres” – M22) = projekt PZL-EV budowany do przeliczania wskaźników EV.
 - **Zakres projektu** = węzły drzewa P1S zaznaczone w kreatorze (M23): grupy z różnych poziomów kategoryzacji
@@ -128,47 +127,6 @@ Architektura ma zapewnić:
 
 > *Wcześniej (zastąpione: M22, M23):* zakres = program albo pula małych projektów raportowanych razem;
 > zawartość (elementy P1S, WP, CAM, harmonogram, budżet) z mapy przypisań (M8).
-
-### 5.2 Przebieg
-
-- **Przebieg** (`Run`) dotyczy jednego projektu i jednego okresu:
-  - **tygodniowy** – w dowolny dzień tygodnia w trakcie miesiąca (D7), EV wstępne (nieformalne),
-  - **zamknięcie miesiąca** – EV formalne, po zatwierdzeniu zamrażane.
-- Identyfikator: `R-<Projekt>-<RRRR-MM>-T<tydzień>` lub `R-<Projekt>-<RRRR-MM>-Z`.
-- Przebieg jest trwałym obiektem w bazie – może trwać dni (oczekiwanie na CAM); aplikację można
-  zamknąć, a przebieg może kontynuować dowolna osoba z finansów (D9).
-
-### 5.3 Etapy
-
-Etapy przebiegu (P0–P10, zamknięcie okresu), ich bramki i działanie w aplikacji: `docs/pipeline-fazy.md`
-(rozdz. 2 i 4) – jedyne miejsce opisu etapów.
-
-### 5.4 Maszyna stanów etapu
-
-Statusy i przejścia etapu: `docs/pipeline-fazy.md`, rozdz. 1.1.
-
-### 5.5 Przypinanie stanu słowników
-
-- Przy starcie przebieg przypina **stan bazy słowników i przypisań** (wersja / znacznik czasu) i kopiuje go
-  do MS SQL (`dict`, D27) – procedury EV liczą na tej kopii. Przypinane są także oba słowniki Cost Category
-  (globalny i zmiany projektu – M26) oraz **wszystkie zaimportowane pliki RABIT** (M21). Przypinanie stanu
-  raportu mapowań SAP↔CES – O19.
-- Zmiana słownika lub przypisania w interfejsie w trakcie przebiegu: aplikacja pyta, czy kontynuować na
-  przypiętym stanie, czy **przeliczyć od etapu 3**. Decyzja trafia do dziennika.
-
-### 5.6 Pochodzenie wartości zaawansowania
-
-Każda wartość zaawansowania ma zapisane pochodzenie: `CAM`, `PRODUKCJA` albo `ANALITYK`
-(wpis osoby z finansów: kto, kiedy, metoda). Wpis ręczny nie nadpisuje wartości od CAM bez śladu.
-Raporty pokazują udział wartości spoza CAM. Na zamknięciu dozwolone jest wyłącznie `CAM` (D14).
-
-### 5.7 Współbieżność
-
-- Jeden przebieg na projekt i tydzień (lub zamknięcie okresu) – wymuszane w bazie.
-- Operacja w toku (np. import) zakłada krótką blokadę przebiegu (`sp_getapplock`), żeby dwie osoby
-  nie wykonały tej samej operacji jednocześnie.
-- Zapis w bazie słowników (SQLite na dysku sieciowym) – krótkie transakcje, jeden zapis naraz (D26).
-- Import pliku jest idempotentny: ten sam hash nie tworzy nowej wersji ani duplikatu danych.
 
 ---
 
@@ -190,20 +148,12 @@ Wszystko w bazie słowników (SQLite na dysku sieciowym), edycja w interfejsie a
 walidacją i podglądem różnic (M24, M26). Przypisania z raportu mapowań nie są kopiowane – czytane z
 `PZLPROD` (M16).
 
-### 6.2 Przepływ
-
-```
-Interfejs (CRUD + drzewo) → walidacja przy zapisie → nowy wpis z historią (SCD2: ValidFrom / ValidTo,
-kto, kiedy, poprzednia i nowa wartość) → baza słowników (SQLite)
-   → przypięcie przez przebieg → snapshot w MS SQL `dict` (D27) → procedury EV
-```
-
-### 6.3 Dwie osie czasu
+### 6.2 Dwie osie czasu
 
 - **biznesowa** – ValidFrom / ValidTo wpisane w interfejsie (od kiedy obowiązuje wartość),
 - **techniczna** – wersja stanu słowników i przebieg, który ją przypiął.
 
-### 6.4 Mapa przypisań projektu (M8) *(zastąpione: M22–M24 – rozdz. 5.1, `docs/funkcjonalnosc.md` F01)*
+### 6.3 Mapa przypisań projektu (M8) *(zastąpione: M22–M24 – rozdz. 5, `docs/funkcjonalnosc.md` F01)*
 
 - Projekt = konkretny program albo program indywidualny.
 - Elementy P1S projektu (drzewo z `LOG.WBS`, korzeń `PROJORG`) przypisane do **WP**, **CAM**, kategorii;
@@ -214,11 +164,11 @@ kto, kiedy, poprzednia i nowa wartość) → baza słowników (SQLite)
 - Nowe elementy (CES po imporcie, P1S z `LOG.WBS`) pojawiają się w interfejsie jako wymagające uwagi –
   bez eksportu do plików.
 
-### 6.5 Walidacja
+### 6.4 Walidacja
 
 Walidacja **przy zapisie w interfejsie** (reguły deklaratywne per słownik): wymagane pola, typy,
 unikalność, nakładające się okresy, odwołania między słownikami, reguły biznesowe. Błędny zapis jest
-odrzucany z komunikatem – nie powstaje błędna wersja. Szczegóły: `docs/funkcjonalnosc.md`, rozdz. 6.
+odrzucany z komunikatem – nie powstaje błędna wersja. Szczegóły: `docs/funkcjonalnosc.md`, rozdz. 5.
 
 ---
 
@@ -253,28 +203,10 @@ odrzucany z komunikatem – nie powstaje błędna wersja. Szczegóły: `docs/fun
 ### 7.3 Pliki SAP (D21)
 
 - Źródło (D23): folder RABIT na SharePoint czytany przez **WebDAV** (usługa WebClient Windows, konto
-  użytkownika), np. `\\lmsp4-intl.external.lmco.com@SSL\DavWWWRoot\sites\RabbitReporting\Shared Documents\E456659`.
-  `pobierz` kopiuje nowe i zmienione pliki do `00_Global\RABIT\Do_importu`, `import` ładuje je do bazy.
-- Limit usługi WebClient: domyślnie ok. 50 MB na plik (`FileSizeLimitInBytes`, zmienia administrator);
-  większy plik pobiera się ręcznie w przeglądarce do `Do_importu` (D22).
+  użytkownika), np. `\\lmsp4-intl.external.lmco.com@SSL\DavWWWRoot\sites\RabbitReporting\Shared Documents\E456659`;
+  kopie w `00_Global\RABIT\Do_importu`.
 - Niedostępne dla użytkownika (sprawdzone 29.09.2026) i usunięte z kodu: API REST SharePoint, synchronizacja
   OneDrive, eksport listy do Excela (Office List OLEDB / owssvr), pobieranie ZIP.
-- Import obejmuje **wszystkie** pliki; projekt nie jest znany. Tożsamość pliku = SHA-256 treści:
-  nowy hash → import; znany hash → duplikat; te same metadane (ścieżka, rozmiar, data) co wcześniej →
-  pominięcie bez pobierania.
-- **Rozpoznanie źródła (D24):** prefiks nazwy pliku → kod źródła wg konfiguracji źródeł (docelowo w bazie słowników, M15; w MVP `konfiguracja/zrodla_rabit.csv`)
-  (np. `ACTUALS_PAF_01.xlsx` → `ACTUALS_PAF`). Nazwy plików pozostają proste – bez projektu, dat, wersji.
-  Plik bez pasującego prefiksu → decyzja „nierozpoznany”, nie jest importowany (po dopisaniu prefiksu
-  zostanie zaimportowany przy kolejnym uruchomieniu).
-- **Każdy rozpoznany plik importowany samodzielnie** – także kilka plików jednego źródła
-  (`_01`, `_02`, `_03`) o różnych układach kolumn; brak kontroli „zestawów”.
-- **Hash = tożsamość fizycznego pliku:** ponowne pobranie tego samego pliku nie jest traktowane jako nowe.
-  RABIT nadpisuje plik tą samą nazwą – każda nowa treść to nowa wersja w historii (`meta.SourceFile`).
-- Wiersze ładowane w postaci surowej (`stg.RawRow`, widok `stg.vRawRowZrodlo` z kodem źródła i importem);
-  zapisywana jest też sygnatura kolumn (zmiana układu raportu). Tabele typowane per źródło – gdy
-  zostanie zdefiniowana zawartość raportów.
-- Każde uruchomienie importu i decyzja dla każdego pliku są zapisane w bazie (`meta.ImportBatch`,
-  `meta.SourceFile`, `meta.SourceFileSeen`) – widać, kto i kiedy zaimportował dane.
 - Kod: `pzl_ev/etap1` (`pobierz`, `import`, `historia`), konfiguracja `konfiguracja/`, instrukcja `docs/mvp-etap1.md`, DDL `sql/mssql/001_etap1_import.sql`.
 - Jeśli RABIT pozwala – eksport do CSV/TXT (brak limitu wierszy, brak konwersji typów przez Excel).
 
@@ -283,7 +215,6 @@ odrzucany z komunikatem – nie powstaje błędna wersja. Szczegóły: `docs/fun
 - Jeden plik na CAM w ramach projektu (rekomendacja, O3).
 - Ukryty arkusz: ID przebiegu, projekt, okres, CAM, wersja szablonu. Komórki poza polami do
   uzupełnienia zablokowane.
-- Import odrzuca plik: bez identyfikatora, z innego przebiegu lub okresu, zmieniony poza polami.
 
 ---
 
@@ -402,4 +333,4 @@ Na podstawie eksportu metadanych (`dependencies.csv`, `resolved_objects.csv`):
 | O11 | Zasady uzupełniania braków (ostatnia znana wartość / plan / ręcznie) | do ustalenia |
 | O14 | Logika łączenia źródeł (etap 4) | do przedstawienia przez zespół |
 | O15 | Źródło ETC | otwarte pytanie z readme |
-| O19–O26 | Kwestie z prototypu v3 (przypinanie raportu mapowań, korekta projektu CES, kategorie, zakres z grupy, baza analityczna, Cost Category) | `docs/funkcjonalnosc.md`, rozdz. 10 |
+| O19–O26 | Kwestie z prototypu v3 (przypinanie raportu mapowań, korekta projektu CES, kategorie, zakres z grupy, baza analityczna, Cost Category) | `docs/funkcjonalnosc.md`, rozdz. 9 |
