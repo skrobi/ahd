@@ -1310,7 +1310,23 @@ const PO_SAMPLE=[
  {l:4,c:'4D06WP000003',n:'Cabin',legacy:'AC-CAB.6.38.03',po:''},
  {l:4,c:'4D06WP000004',n:'LWR AFT TRANSITION 0352',legacy:'AC-CAB.6.38.03.01',po:''},
 ];
-function poDemoTree(){ return `<ul class="mt">`+PO_SAMPLE.map(r=>`<li style="margin-left:${(r.l-1)*18}px"><span class="mono">${esc(r.c)}</span> ${esc(r.n)} ${r.po?`<span class="tag">PO ${esc(r.po)}</span>`:''}${r.legacy?` <span class="muted small">P1S: ${esc(r.legacy)}</span>`:''}</li>`).join('')+`<li style="margin-left:36px" class="muted"><span class="tag">wirtualny</span> własny węzeł raportowy (przykład grupowania PSP)</li></ul>`; }
+function parsePO(rows){ if(!rows||!rows.length) return null;
+  const hi=rows.findIndex(r=>r.map(nrm).includes('wbs element')); if(hi<0) return null;
+  const H=rows[hi].map(nrm), col=n=>H.indexOf(n);
+  const ic=col('wbs element'), il=col('level'), ipd=col('project definition'), inm=col('name'), ires=col('person responsible'), ipc=col('profit center'), ileg=col('legacy wbs'), ipo=col('performance obligation');
+  const g=(r,i)=>i>=0?String(r[i]??'').trim():'', out=[];
+  rows.slice(hi+1).forEach(r=>{ const c=g(r,ic); if(!c) return;
+    out.push({k:c, c, pd:g(r,ipd), l:Number(g(r,il))||1, name:g(r,inm), resp:g(r,ires), prctr:g(r,ipc), legacy:g(r,ileg), po:g(r,ipo), group:null}); });
+  return out.length? out : null; }
+function poTreeHtml(w){ const po=w.po;
+  if(!po||!po.rows.length) return '<p class="muted">Brak struktury. Wczytaj Excel/CSV albo użyj przykładowych danych – wtedy pojawi się drzewo kontraktu.</p>';
+  const sel=r=>`<select data-pogrp="${esc(r.k)}" title="Przypisz do węzła wirtualnego"><option value="">— grupa</option>${po.vnodes.map(v=>`<option value="${v.id}" ${r.group===v.id?'selected':''}>${esc(v.name)}</option>`).join('')}</select>`;
+  const line=r=>`<li style="margin-left:${(r.l-1)*18}px"><span class="mono">${esc(r.c)}</span> ${esc(r.name)}${r.po?` <span class="tag">PO ${esc(r.po)}</span>`:''}${r.legacy?` <span class="muted small">P1S: ${esc(r.legacy)}</span>`:''}${r.group?` <span class="tag">${esc((po.vnodes.find(v=>v.id===r.group)||{}).name||'')}</span>`:''} ${sel(r)}</li>`;
+  let h='';
+  if(po.vnodes.length){ h+='<div class="stack"><h4>Węzły wirtualne</h4><ul class="mt">'+po.vnodes.map(v=>{ const mem=po.rows.filter(r=>r.group===v.id);
+    return `<li><span class="tag">wirtualny</span> <input data-vn="${v.id}" value="${esc(v.name)}" style="width:200px"> <button class="btn small" data-a="poDelNode" data-x="${v.id}">Usuń</button>${mem.length?`<ul class="mt">${mem.map(r=>`<li style="margin-left:18px"><span class="mono">${esc(r.c)}</span> ${esc(r.name)}</li>`).join('')}</ul>`:' <span class="muted small">— przypisz elementy w drzewie poniżej (kolumna „grupa”)</span>'}</li>`; }).join('')+'</ul></div>'; }
+  h+='<h4>Struktura kontraktu (SAP) · WBS element</h4><ul class="mt">'+po.rows.map(line).join('')+'</ul>';
+  return h; }
 function newWiz(){ return {step:0, code:'M28', name:'M28 – modernizacja', type:'WEW', sel:[], p1s:['M28-01','M28-02'], open:{}, page:{}, imp:{}, busy:false, progress:[]}; }
 const eqP=(a,b)=>a.length===b.length && a.every((x,i)=>x===b[i]);
 const preP=(a,b)=>a.length<=b.length && a.every((x,i)=>x===b[i]); // a jest przodkiem (albo równe) b
@@ -1356,7 +1372,7 @@ const nrm=s=>String(s??'').toLowerCase().replace(/ł/g,'l').normalize('NFD').rep
 function parseCSV(txt){ const L=txt.replace(/\r/g,'').split('\n').filter(l=>l.trim()), f=L[0]||'', d=[';','\t',','].sort((a,b)=>f.split(b).length-f.split(a).length)[0];
   return L.map(l=>{ const out=[]; let cur='', q=false; for(const ch of l){ if(ch==='"') q=!q; else if(ch===d && !q){ out.push(cur); cur=''; } else cur+=ch; } out.push(cur); return out.map(x=>x.trim()); }); }
 async function readBook(file){
-  if(/\.csv$/i.test(file.name)) return [{name:file.name.replace(/\.csv$/i,''), rows:parseCSV(await file.text())}];
+  if(/\.(csv|txt|tsv)$/i.test(file.name)) return [{name:file.name.replace(/\.(csv|txt|tsv)$/i,''), rows:parseCSV(await file.text())}];
   const X=await loadXLSX(), wb=X.read(await file.arrayBuffer(), {type:'array'});
   return wb.SheetNames.map(n=>({name:n, rows:X.utils.sheet_to_json(wb.Sheets[n], {header:1, raw:true, defval:''})}));
 }
@@ -1477,10 +1493,10 @@ function vWizard(){
     const taken=Object.keys(P1S_ORG).filter(o=>selHas(w.sel,o) && scopeOfOrg(o));
     body=`
     <div class="note info"><b>Performance Objectives</b> – nadrzędna struktura kontraktu po stronie <b>CES</b>, po której raportuje się wykonanie (nie tylko po elemencie kosztowym). Kotwicą jest CES: element w kolumnie <span class="mono">WBS element</span> pociąga poddrzewo z globalnego mapowania, a strona P1S wchodzi jako dodatkowe zadania. Strukturę można zmieniać i grupować PSP we własnych, wirtualnych węzłach.</div>
-    <section class="panel flat"><div class="row between"><h3>Struktura kontraktu (CES)</h3><span class="muted small">eksport SAP / ręcznie</span></div>
-      <div class="row"><button class="btn primary" disabled>Wczytaj Excel (struktura kontraktu)</button><button class="btn" disabled>Zbuduj ręcznie</button><button class="btn" disabled>+ Węzeł wirtualny</button></div>
-      <span class="hint">Kolumny: <span class="mono">Project definition · Level · WBS element · Name · Person responsible · Profit center · … · Legacy WBS · Performance Obligation</span>. <span class="mono">Legacy WBS</span> to strona P1S (dodatkowe zadanie). Prototyp pokazuje model na przykładowych danych; wczytywanie Excela i edycja węzłów – w pełnej wersji.</span>
-      ${poDemoTree()}</section>
+    <section class="panel flat"><div class="row between"><h3>Struktura kontraktu (CES)</h3><span class="muted small">${w.po&&w.po.rows.length? w.po.rows.length+' elementów · '+w.po.vnodes.length+' węzłów wirtualnych' : 'eksport SAP / ręcznie'}</span></div>
+      <div class="row"><label class="btn primary">Wczytaj Excel / CSV<input type="file" accept=".xlsx,.xls,.csv,.txt,.tsv" data-xls="po" hidden></label><button class="btn" data-a="poDemo">Użyj przykładowych danych</button><button class="btn" data-a="poAddNode">+ Węzeł wirtualny</button>${w.po&&w.po.rows.length?`<button class="btn" data-a="poClear">Wyczyść</button>`:''}</div>
+      <span class="hint">Kolumny: <span class="mono">Project definition · Level · WBS element · Name · Person responsible · Profit center · … · Legacy WBS · Performance Obligation</span>. Plik <span class="mono">.xlsx</span> albo CSV/TXT (także wklejone z Excela – rozdzielane tabulatorem). <span class="mono">Legacy WBS</span> to strona P1S (dodatkowe zadanie); w kolumnie „grupa” przy elemencie przypiszesz go do węzła wirtualnego.</span>
+      ${poTreeHtml(w)}</section>
     <section class="panel flat"><div class="row between"><h3>Zakres pociągnięty z mapowania · drzewo P1S</h3><span class="muted small">${nf(total)} PROJORG</span></div>
       <div class="row">${selChips(w.sel,w.p1s,true)||'<span class="muted">nic nie zaznaczono – zaznacz w drzewie poniżej</span>'}</div>
       <span class="hint">Globalne mapowanie CES↔P1S (bez wpływu na projekt) rozwiązuje stronę P1S kontraktu; tu potwierdzasz węzły wchodzące do projektu jako dodatkowe zadania. PROJORG należący do innego projektu jest pomijany.</span>
@@ -1948,6 +1964,10 @@ const A={
   wunsel:x=>{ const w=S.wiz, p=x.split('|'); w.sel=w.sel.filter(q=>!eqP(q,p)); render(); },
   wpage:x=>{ const w=S.wiz, [px,d]=x.split('|'); w.page[px]=Math.max(0,Math.min((w.page[px]||0)+Number(d),Math.ceil(CAT[px].cnt/25)-1)); render(); },
   atog:x=>{ const w=S.wiz; (w.aopen ||= {})[x]=!w.aopen[x]; render(); },
+  poDemo:()=>{ const w=S.wiz; w.po={rows:PO_SAMPLE.map(r=>({k:r.c,c:r.c,pd:'4D06WP',l:r.l,name:r.n,resp:'Maciejak, Dawid PGGF03',prctr:'PIDCABIN',legacy:r.legacy,po:r.po,group:null})), vnodes:[], nextV:1}; render(); },
+  poClear:()=>{ S.wiz.po={rows:[],vnodes:[],nextV:1}; render(); },
+  poAddNode:()=>{ const w=S.wiz; w.po=w.po||{rows:[],vnodes:[],nextV:1}; const id='V'+(w.po.nextV++); w.po.vnodes.push({id,name:'Węzeł '+id}); render(); },
+  poDelNode:(x)=>{ const w=S.wiz; if(!w.po) return; w.po.vnodes=w.po.vnodes.filter(v=>v.id!==x); w.po.rows.forEach(r=>{ if(r.group===x) r.group=null; }); render(); },
   xlsTpl:()=>{ const w=S.wiz; saveBook(w.code.toUpperCase()+'_slowniki_projektu.xlsx', sampleDicts(w.code,wizOrgs(w),w.type,false)); },
   xlsDemo:()=>{ const w=S.wiz; for(const [n,aoa] of sampleDicts(w.code,wizOrgs(w),w.type,true)){ const k=n==='WP i CAM'?'wp':n==='Stawki CAS'?'cas':'harm'; w.imp[k]={file:'przykład (wygenerowany)', sheet:n, raw:aoa}; } render(); },
   ximpDel:x=>{ if(S.view.name==='dict') S.view={...S.view, ximp:null}; else delete S.wiz.imp[x]; render(); },
@@ -2025,6 +2045,7 @@ document.addEventListener('click',e=>{
 document.addEventListener('input',e=>{
   const t=e.target;
   if(t.dataset.w!==undefined) S.wiz[t.dataset.w]=t.value;
+  if(t.dataset.vn!==undefined){ const v=(S.wiz.po?.vnodes||[]).find(v=>v.id===t.dataset.vn); if(v) v.name=t.value; }
   for(const [k,set,id] of [['mq',v=>{S.mp.q=v; S.mp.cpage=0;},'#mq'],['pq',v=>{S.mp.pq=v;},'#pq'],['aq',v=>{S.adm.q=v; S.adm.pg=0;},'#aq'],['pf',v=>{S.pul.q=v;},'#pf']])
     if(t.dataset[k]!==undefined){ set(t.value); const pos=t.selectionStart; render(); const n=$(id); if(n){ n.focus(); n.setSelectionRange(pos,pos); } }
 });
@@ -2036,6 +2057,7 @@ document.addEventListener('change',e=>{
     if(t.checked){ w.sel=w.sel.filter(p=>!preP(path,p)); w.p1s=w.p1s.filter(o=>!pathHas(path,rawCat(o))); w.sel.push(path); } else w.sel=w.sel.filter(p=>!eqP(p,path));
     render(); }
   if(t.dataset.xls!==undefined){ const f=t.files?.[0], tg=t.dataset.xls; t.value=''; if(f) xlsLoad(tg,f); }
+  if(t.dataset.pogrp!==undefined){ const r=S.wiz.po?.rows.find(x=>x.k===t.dataset.pogrp); if(r){ r.group=t.value||null; } render(); }
   if(t.dataset.aold!==undefined){ S.adm.old=t.checked; render(); }
   if(t.dataset.mz!==undefined){ S.mp.z=t.value; S.mp.cpage=0; render(); }
   if(t.dataset.dall!==undefined){ S.view={...S.view, all:t.checked}; render(); }
@@ -2053,6 +2075,12 @@ document.addEventListener('keydown',e=>{ if(e.key==='Escape' && S.modal){ S.moda
   const t=e.target; if((e.key==='Enter'||e.key===' ') && t.matches?.('[role="button"][data-a]')){ e.preventDefault(); t.click(); } });
 async function xlsLoad(tg,file){
   let sheets; try{ sheets=await readBook(file); }catch(e){ return toast('Nie udało się odczytać pliku: '+(e.message||e)); }
+  if(tg==='po'){ const w=S.wiz; let rows=null;
+    for(const sh of sheets){ const pr=parsePO(sh.rows); if(pr){ rows=pr; break; } }
+    if(!rows){ toast('W pliku nie ma kolumny „WBS element” – sprawdź nagłówki (jak w eksporcie SAP).'); }
+    else { w.po=w.po||{vnodes:[],nextV:1}; w.po.rows=rows; w.po.vnodes=w.po.vnodes||[]; w.po.nextV=w.po.nextV||1; toast('Wczytano strukturę kontraktu: '+rows.length+' elementów.'); }
+    save(); render(); return;
+  }
   if(tg==='wiz'){ const w=S.wiz, hit=[];
     for(const k of wDicts(w)){ const sh=pickSheet(k,sheets); if(sh){ w.imp[k]={file:file.name, sheet:sh.name, raw:sh.rows}; hit.push(DEFS[k].name); } }
     toast(hit.length? 'Wczytano: '+hit.join(', ') : 'W pliku nie ma arkusza ani kolumn słowników projektu – sprawdź nagłówki (jak w szablonie).');
