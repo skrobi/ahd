@@ -1,11 +1,13 @@
-# Etap 1: pobranie plików RABIT i import do bazy
+# Narzędzie testowe: pobranie plików RABIT i import do bazy (Python)
 
-Wersja: 1.2 (rozwiązanie docelowe, MVP; 1.2: usunięta kompletność źródeł projektów – M21)
+Narzędzie w Pythonie (`pzl_ev/etap1`) zbudowane do sprawdzenia dostępu do RABIT przez WebDAV i importu plików
+do bazy. Nie jest aplikacją docelową – docelowy import opisują `docs/pipeline-fazy.md` (G1)
+i `docs/zrodla-danych.md`. Narzędzie różni się od rozwiązania docelowego: kopiuje oryginały plików do Landing
+Zone, czyta prefiksy z pliku CSV zamiast z definicji źródeł w bazie i domyślnie zapisuje do pliku SQLite.
 
 ## Zasada
 
-**Plik mówi, czym jest.** Zakres danych projektu wynika z jego elementów w drzewie P1S (M21) – import
-nie zna projektów, a jedna paczka RABIT może obejmować wiele projektów.
+**Plik mówi, czym jest.** Import nie zna projektów – jedna paczka RABIT może obejmować wiele projektów.
 
 ```
 RABIT → plik XLSX → PREFIKS → źródło → import do bazy → historia + hash
@@ -58,9 +60,8 @@ w przeglądarce i zapisuje w `Do_importu` – import potraktuje go tak samo.
 
 ## 3. Konfiguracja źródeł
 
-> **Rozwiązanie przejściowe.** Docelowo prefiksy RABIT (M15) są
-> konfiguracją w bazie słowników SQLite, edytowaną w aplikacji (D26, `docs/mapowanie-ces-p1s.md`).
-> Plik CSV poniżej obowiązuje tylko w MVP etapu 1 – do czasu powstania bazy słowników z interfejsem.
+> W rozwiązaniu docelowym prefiksy są częścią definicji źródła w bazie (`docs/zrodla-danych.md`, rozdz. 2).
+> Plik CSV poniżej dotyczy tylko narzędzia testowego.
 
 Katalog `konfiguracja` (w repozytorium; inną lokalizację wskazuje `--konfiguracja` albo zmienna
 `PZL_EV_KONFIGURACJA`, np. `\\serwer\udzial\PZL-EV\00_Global\Konfiguracja`). Plik CSV, separator `;`,
@@ -99,8 +100,7 @@ Kilka plików jednego źródła (`ACTUALS_PAF_01`, `_02`, `_03`) importuje się 
 mają różne kolumny.
 
 Opcje:
-- `--baza` – adres bazy; domyślnie plik SQLite `pzl_ev_mvp.sqlite` w katalogu Landing Zone (do czasu
-  ustalenia bazy docelowej). MS SQL: `--baza mssql://SERWER/PZL_EV_TEST` (konto Windows; tabele tworzy
+- `--baza` – adres bazy; domyślnie plik SQLite `pzl_ev_mvp.sqlite` w katalogu Landing Zone. MS SQL: `--baza mssql://SERWER/PZL_EV_TEST` (konto Windows; tabele tworzy
   administrator skryptem `sql/mssql/001_etap1_import.sql`),
 - `--folder` może wskazywać także pojedynczy plik,
 - `--pelne-sprawdzenie` – liczy hash także plików bez zmian w metadanych,
