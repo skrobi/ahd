@@ -44,6 +44,8 @@ i utrzymywaną na ekranie Administracja (`docs/funkcjonalnosc.md`, F08).
 | Wersja parsera | wersja przekształcenia wierszy surowych do postaci kanonicznej |
 
 - Prefiks służy wyłącznie do rozpoznania pliku. Znaczenie danych wynika z definicji, nie z nazwy pliku.
+- Każdy prefiks to **osobne źródło** z własnym kodem i definicją, nawet gdy kilka źródeł ma identyczny układ
+  kolumn (np. wszystkie `ACTUALS_*` – rozdz. 4). Układy nie są łączone w jedno źródło.
 - Plik bez pasującego prefiksu nie jest importowany; po dodaniu definicji zostanie zaimportowany przy kolejnym
   imporcie.
 - Wiersze surowe są zapisywane zawsze. Dane kanoniczne powstają tylko z pliku zgodnego ze schematem definicji.
@@ -59,8 +61,8 @@ i utrzymywaną na ekranie Administracja (`docs/funkcjonalnosc.md`, F08).
 - Raporty jednego zrzutu dotyczą jednego okresu.
 - Jeden plik może obejmować wiele projektów (np. całe PWC). Import nie zna projektów – dane projektu wybiera
   przebieg według zakresu projektu (`docs/pipeline-fazy.md`, P1).
-- Duże raporty są dzielone na części (`_01`, `_02`, `_03`) – każda część to osobny plik tego samego źródła,
-  o układzie zgodnym z definicją. Pliki o innym układzie to osobne źródła z własnymi definicjami.
+- Duże raporty jednego źródła są dzielone na części (`_01`, `_02`, `_03`) – każda część to osobny plik tego
+  samego źródła, o układzie zgodnym z definicją. Pliki o innym prefiksie to osobne źródła (rozdz. 2).
 - **Lokalizacje RABIT:** raporty mogą trafiać do wielu folderów na SharePoint. Lista lokalizacji jest
   konfiguracją importu w bazie (`meta.SourceLocation`, ekran Administracja – `docs/funkcjonalnosc.md`, F08):
   nazwa, ścieżka, aktywna. Przykład ścieżki:
@@ -81,7 +83,8 @@ i utrzymywaną na ekranie Administracja (`docs/funkcjonalnosc.md`, F08).
 ## 4. Raporty kosztów rzeczywistych CES (`ACTUALS_*`)
 
 Pliki z prefiksem `ACTUALS_` to zrzuty kosztów rzeczywistych pobierane z SAP CES przez RABIT, w formacie Excel
-(`.xlsx`). Wszystkie mają ten sam układ kolumn:
+(`.xlsx`). Każdy taki prefiks (np. `ACTUALS_PAF`, `ACTUALS_CES`) to **osobne źródło** (rozdz. 2); wszystkie mają
+wspólny układ kolumn:
 
 `Project Definition | WBS Element | Cost Element | Cost element descr. | Cost element name | CO object name |
 Transaction Currency | Value TranCurr | Object Currency | Value in Obj. Crcy | Report currency | Val.in rep.cur. |
