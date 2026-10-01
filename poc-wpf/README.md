@@ -41,8 +41,15 @@ W LM pakiety pobiera się z proxy **eFOSS (Nexus)**, nie z nuget.org:
   - budowa z wiersza poleceń (`build.cmd`, CI): zmienna środowiskowa sesji
     `NuGetPackageSourceCredentials_eFOSS=Username=<NTID>;Password=<token>`;
   - albo użytkownikowy `NuGet.config` (poza repo) z sekcją `<packageSourceCredentials>`.
-- **Proxy (jeśli wymagane w sieci):** `HTTP_PROXY=http://proxy-lmi.global.lmco.com:80` – ustaw w konfiguracji
-  użytkownika / zmiennej środowiskowej, nie w pliku w repo (zależne od stanowiska).
+- **Proxy:** `http://proxy-lmi.global.lmco.com:80` – `nexus.global.lmco.com` nie jest rozwiązywany
+  bezpośrednio przez DNS stanowiska, ruch idzie przez proxy; wymagana sieć LM (w biurze albo VPN).
+  NuGet czyta proxy **tylko** z konfiguracji użytkownika albo ze zmiennej `http_proxy` – nie z `NuGet.config`
+  w repo. `build.cmd` ustawia zmienną sam (jeśli nie jest ustawiona); dla Visual Studio i ręcznego `dotnet`
+  ustaw raz w konfiguracji użytkownika:
+
+  ```powershell
+  dotnet nuget config set http_proxy http://proxy-lmi.global.lmco.com:80 --configfile "$env:APPDATA\NuGet\NuGet.Config"
+  ```
 
 **Poświadczenia z wiersza poleceń (na maszynie developera, nie w repo).** Źródło `eFOSS` jest już w
 `poc-wpf/NuGet.config`, więc dodaj tylko poświadczenia do **konfiguracji użytkownika** (`%APPDATA%\NuGet\NuGet.Config`):
@@ -58,6 +65,30 @@ Bezpieczniej (token nie ląduje w żadnym pliku) – zmienna środowiskowa sesji
 set NuGetPackageSourceCredentials_eFOSS=Username=<NTID>;Password=<TOKEN>
 build.cmd
 ```
+
+To samo w PowerShell:
+
+```powershell
+$env:NuGetPackageSourceCredentials_eFOSS = "Username=<NTID>;Password=<TOKEN>"
+.\build.cmd
+```
+
+**Diagnostyka restore (PowerShell, w `poc-wpf/`):**
+
+```powershell
+dotnet nuget list source                  # oczekiwane: tylko eFOSS (włączone)
+curl.exe -s -o NUL -w "%{http_code}`n" -x http://proxy-lmi.global.lmco.com:80 https://nexus.global.lmco.com/repository/nuget-proxy-v3/index.json
+git diff -- NuGet.config                  # token nie może trafić do pliku w repo
+```
+
+| Wynik | Znaczenie |
+|---|---|
+| NU1301 „Żądana nazwa jest prawidłowa, ale dane żądanego typu nie zostały znalezione” (`nexus.global.lmco.com:443`) | NuGet łączył się bez proxy – uruchom `build.cmd` (ustawia proxy) albo ustaw proxy w konfiguracji użytkownika |
+| ten sam NU1301, ale z nazwą `proxy-lmi.global.lmco.com` | proxy nieosiągalne – stanowisko poza siecią LM / VPN |
+| `curl` → `200` albo `401` | sieć i proxy działają (`401` – feed wymaga logowania) |
+| `curl` → `000` / błąd połączenia | proxy nieosiągalne – sprawdź VPN |
+| NU1301 z `401 Unauthorized` | brak poświadczeń albo nieważny token – wygeneruj nowy token |
+| `407 Proxy Authentication Required` | proxy wymaga logowania – zgłoszenie do IT / konfiguracja `http_proxy.user` w konfiguracji użytkownika |
 
 Nie uruchamiaj `dotnet nuget add/update source` w katalogu `poc-wpf/` bez `--configfile` – dopisałoby token do
 wersjonowanego `NuGet.config`. Używaj konfiguracji użytkownika albo zmiennej środowiskowej.
@@ -88,7 +119,7 @@ Wynik: `publish\PZL-EV.exe` (ok. 70–100 MB – zawiera runtime .NET i WPF).
 | SmartScreen „Nieznany wydawca” | brak podpisu kodu | podpis certyfikatem firmowym |
 | długi pierwszy start | single-file rozpakowuje biblioteki natywne do `%TEMP%\.net` | normalne przy pierwszym uruchomieniu; kolejne szybsze |
 | brak pliku logu | brak prawa zapisu w folderze `.exe` | docelowo log w `%LOCALAPPDATA%` albo w osobnym folderze sieciowym |
-| błąd restore pakietu przy budowie | brak poświadczeń do eFOSS, zły/wygasły token, proxy albo pakiet niedostępny w feedzie | sprawdź token i proxy (sekcja „Pakiety NuGet… eFOSS”); jeśli pakietu nie ma w feedzie – lista do zatwierdzenia / lokalny cache |
+| błąd restore pakietu przy budowie | brak sieci LM / VPN, brak poświadczeń do eFOSS, zły/wygasły token albo pakiet niedostępny w feedzie | diagnostyka w sekcji „Pakiety NuGet… eFOSS”; jeśli pakietu nie ma w feedzie – lista do zatwierdzenia / lokalny cache |
 
 ## Struktura
 
