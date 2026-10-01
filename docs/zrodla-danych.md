@@ -142,7 +142,7 @@ Słownik grupujący projekty P1S.
 
 ### 5.3 Drzewo P1S
 
-Jedno drzewo P1S jest używane w kreatorze projektu (`docs/funkcjonalnosc.md`, F01) i w widoku mapowania
+Jedno drzewo P1S jest używane przy budowie nakładki Performance Objectives (`docs/performance-objectives.md`) i w widoku mapowania
 (`docs/mapowanie-ces-p1s.md`, rozdz. 11):
 
 ```text

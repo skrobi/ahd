@@ -133,7 +133,7 @@ Decyzja dla pliku:
 
 | | |
 |---|---|
-| **Cel** | Dla każdego elementu WBS CES z danych znać jego element P1S (a przez zakres – projekt) i wychwycić elementy bez przypisania. |
+| **Cel** | Dla każdego elementu WBS CES z danych znać jego element P1S (globalnie) i wychwycić elementy bez przypisania. |
 | **Wejście** | Elementy CES z nowych wersji plików (G1); raport mapowań; korekty; drzewo P1S. |
 | **Działanie** | Automatycznie po imporcie – kolejność rozstrzygania według `docs/mapowanie-ces-p1s.md`, rozdz. 5. Lista nowych elementów z wynikiem (`INHERITED`, `UNMAPPED`). |
 | **Kontrole** | Element `UNMAPPED` z kosztem → WARNING na pulpicie. |
@@ -194,7 +194,7 @@ Kalendarz okresów wyznacza wariant przebiegu:
 | | |
 |---|---|
 | **Cel** | Ustalić, na jakich danych liczy przebieg. |
-| **Działanie** | Aplikacja pokazuje, co zmieniło się od poprzedniego przebiegu projektu: nowe wersje plików i datę ostatniego importu, zmiany słowników i korekt mapowania (kto, kiedy). **Przypnij** zapisuje znacznik stanu (`docs/model-danych.md`, rozdz. 4.2). Procedury wybierają dane projektu: wiersze elementów P1S z zakresu projektu i elementów CES przypisanych do nich w mapowaniu, w okresie przebiegu (koszt okresu i narastająco – O30). |
+| **Działanie** | Aplikacja pokazuje, co zmieniło się od poprzedniego przebiegu projektu: nowe wersje plików i datę ostatniego importu, zmiany słowników i korekt mapowania (kto, kiedy). **Przypnij** zapisuje znacznik stanu (`docs/model-danych.md`, rozdz. 4.2). Procedury wybierają dane projektu: wiersze elementów z zakresu projektu (nakładka Performance Objectives – `docs/performance-objectives.md`) w okresie przebiegu (koszt okresu i narastająco – O30). Sposób przypisania kosztów i zaawansowania do węzłów nakładki – O45. |
 | **Kontrole** | pliki nierozpoznane od ostatniego importu (WARNING); ostatni import starszy niż próg świeżości (O29; WARNING); elementy `UNMAPPED` z kosztem (WARNING; rozstrzygane w P3). |
 | **Efekt** | Znacznik stanu w przebiegu; zestawienie danych projektu (liczba wierszy, koszt). |
 | **Przekazanie** | P2–P9 pracują wyłącznie na stanie ze znacznika. |
@@ -216,7 +216,7 @@ Kalendarz okresów wyznacza wariant przebiegu:
 |---|---|
 | **Cel** | Jeden spójny obraz kosztów projektu: koszt rzeczywisty (ACWP) przypisany do WP, CAM i kategorii kosztów, w walucie wyniku. |
 | **Działanie** | Procedury w bazie (logika – O14): element CES → element P1S (mapowanie) → WP (słownik „WP i CAM”); przeliczenie godzin na koszt według stawek wydziałów albo stawek CAS (typ projektu); przeliczenie waluty według kursów. Podsumowanie: koszt okresu, liczba zmapowanych elementów, liczba WP, suma kontrolna. |
-| **Kontrole** | suma kontrolna: koszt po połączeniu = koszt danych projektu (ERROR). **Elementy bez przypisania:** element CES `UNMAPPED` z kosztem, element P1S z zaawansowaniem bez WP, `PROJORG` należący do innego projektu – WARNING w środku okresu, ERROR w przebiegu zamykającym (O33). |
+| **Kontrole** | suma kontrolna: koszt po połączeniu = koszt danych projektu (ERROR). **Elementy bez przypisania:** element CES z kosztem spoza nakładki projektu, element z zaawansowaniem bez WP – WARNING w środku okresu, ERROR w przebiegu zamykającym (O33). |
 | **Akcje** | **Przypisz** – korekta mapowania (ekran Mapowanie) albo słownik „WP i CAM” → przypnij ponownie (P1). **Kontynuuj bez tych elementów** – tylko w środku okresu; decyzja w dzienniku, wartość poza EV pokazana w raporcie przebiegu. |
 | **Efekt** | `ev.KosztWP` (przebieg, WP, okres, kwoty, pochodzenie) i raport pokrycia. |
 | **Przekazanie** | P4; P8 (ACWP). |

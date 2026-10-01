@@ -22,7 +22,8 @@ Każda reguła jest opisana w jednym dokumencie; pozostałe dokumenty do niego o
 | `docs/model-danych.md` | warstwy danych, schematy i encje MS SQL, historia i wersjonowanie, przebieg, znacznik stanu i rewizja (kontrakt przebiegu) |
 | `docs/zrodla-danych.md` | źródła danych i definicja źródła (kontrakt danych): RABIT, raport kosztów CES, struktura P1S i drzewo, zaawansowanie z produkcji, pliki CAM |
 | `docs/slowniki.md` | słowniki globalne i projektu, typ projektu a słowniki, wymiana przez Excel, reguły walidacji, Cost Category |
-| `docs/mapowanie-ces-p1s.md` | przypisanie elementów CES do P1S: raport mapowań, dziedziczenie, korekty, statusy, widok |
+| `docs/performance-objectives.md` | nakładka kontraktu CES wyznaczająca zakres projektu i oś raportowania wykonania |
+| `docs/mapowanie-ces-p1s.md` | globalne przypisanie elementów CES do P1S: raport mapowań, dziedziczenie, korekty, statusy, widok |
 | `docs/pipeline-fazy.md` | przepływ: fazy globalne i etapy przebiegu tygodniowego; statusy, problemy (ERROR / WARNING), współbieżność |
 | `docs/ev-obliczenia.md` | silnik EVM (kontrakt EVM): dane wejściowe, wskaźniki, poziomy agregacji, kwestie do ustalenia z Finansami |
 | `docs/uprawnienia.md` | konto AD, role, zakres danych (kontrakt RBAC) |
@@ -39,7 +40,8 @@ Każda reguła jest opisana w jednym dokumencie; pozostałe dokumenty do niego o
 | Pojęcie | Znaczenie | Szczegóły |
 |---|---|---|
 | Projekt | projekt PZL-EV, dla którego liczone są wskaźniki EV; typ SAC, CAS albo wewnętrzny | `docs/funkcjonalnosc.md`, F01 |
-| Zakres projektu | węzły drzewa P1S (grupy kategorii, pojedyncze `PROJORG`) z elementami WBS/PSP | `docs/funkcjonalnosc.md`, F01 |
+| Zakres projektu | nakładka Performance Objectives – struktura kontraktu CES wyznaczająca elementy projektu | `docs/performance-objectives.md` |
+| Performance Objectives | nadrzędna struktura kontraktu CES, oś raportowania wykonania; wirtualne węzły | `docs/performance-objectives.md` |
 | CES / P1S | SAP finansowy (koszty) / SAP produkcyjny (struktura, zaawansowanie) | `docs/zrodla-danych.md` |
 | Projekt CES / `PROJORG` | projekt w SAP CES / projekt w SAP P1S (korzeń drzewa P1S) – nie mylić z projektem PZL-EV | `docs/mapowanie-ces-p1s.md` |
 | RABIT | narzędzie SAP zrzucające wyniki raportów na SharePoint | `docs/zrodla-danych.md`, rozdz. 3 |

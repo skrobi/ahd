@@ -73,7 +73,7 @@ w historii z informacją, kto i kiedy go zastąpił.
 |---|---|
 | Słowniki globalne i projektu, w tym harmonogram i budżet | historia na obu osiach (rozdz. 3.2) |
 | Korekty mapowania CES ↔ P1S | historia na obu osiach (`docs/mapowanie-ces-p1s.md`, rozdz. 8) |
-| Zakres projektu i definicje źródeł | historia na osi technicznej |
+| Nakładka Performance Objectives, zakres projektu i definicje źródeł | historia na osi technicznej |
 | Pliki źródłowe | każda nowa treść pliku (hash SHA-256) to nowa wersja z czasem importu; tylko dopisywanie |
 | Dane kanoniczne | oznaczone wersją parsera; ponowne przetworzenie nowym parserem tworzy nową wersję danych z czasem zapisu |
 | Zaawansowanie w przebiegu | każda zmiana wartości to nowy wpis z pochodzeniem (PRODUKCJA, ANALITYK, CAM), kto i kiedy |
@@ -106,7 +106,7 @@ Znacznik stanu to moment zapisany w przebiegu w etapie P1. Przebieg czyta wszyst
 - najnowszą wersję każdego pliku źródłowego (lokalizacja + nazwa) zaimportowaną do tego momentu, w wersji kanonicznej
   obowiązującej w tym momencie,
 - słowniki globalne i słowniki projektu (w tym harmonogram i budżet),
-- zakres projektu,
+- nakładkę Performance Objectives (zakres projektu),
 - korekty mapowania CES ↔ P1S.
 
 Ponowne przypięcie zapisuje nowy znacznik (`docs/pipeline-fazy.md`, rozdz. 5).
@@ -149,7 +149,8 @@ istniejących wierszy w tych źródłach nie jest wykrywana (`docs/architektura.
 | `stg.RawRow` | surowe wiersze: wersja pliku, numer wiersza, wartości |
 | `can.<Źródło>` | dane kanoniczne źródła: wersja pliku, wersja parsera, kolumny typowane |
 | `dict.*` | słowniki (`docs/slowniki.md`) i korekty mapowania (`docs/mapowanie-ces-p1s.md`, rozdz. 8) |
-| `meta.Projekt` | kod, nazwa, typ (SAC / CAS / wewnętrzny), zakres P1S (`docs/funkcjonalnosc.md`, F01) |
+| `meta.Projekt` | kod, nazwa, typ (SAC / CAS / wewnętrzny) |
+| `meta.PerformanceObjective` | węzły nakładki kontraktu projektu: element WBS CES, poziom, rodzic, wirtualny węzeł, atrybuty, historia (`docs/performance-objectives.md`) – wyznacza zakres projektu |
 | `meta.Przebieg` | projekt, tydzień, okres, czy zamykający, znacznik stanu, status, zamrożenie |
 | `meta.EtapPrzebiegu` | przebieg, etap, status, kto, kiedy |
 | `meta.Rewizja` | elementy z rozdz. 4.3 |
