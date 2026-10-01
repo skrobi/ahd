@@ -217,6 +217,11 @@ tr.closed td.k{text-decoration:line-through}
 body.dragging [data-drop]{outline:1px dashed var(--line)}
 [data-drop].over{background:var(--ok-soft);outline:2px solid var(--ok)}
 [data-drop].over.bad{background:var(--crit-soft);outline:2px solid var(--crit)}
+[data-podrop].over{background:var(--ok-soft);outline:2px solid var(--ok)}
+.po-node{border:1px solid var(--line);border-radius:8px;padding:6px 10px;margin:8px 0}
+.po-el{list-style:none;display:flex;align-items:center;gap:6px;padding:1px 0}
+.po-el .grip{cursor:grab;color:var(--muted)} .po-mem{margin:4px 0 0;padding:0}
+.lnk{all:unset;cursor:pointer;color:var(--accent);padding:0 3px} .po-hint{padding:5px 2px}
 .seg{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden}
 .seg button{all:unset;cursor:pointer;padding:4px 10px;font-size:.8rem;color:var(--muted)}
 .seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}
@@ -1319,14 +1324,18 @@ function parsePO(rows){ if(!rows||!rows.length) return null;
     out.push({k:c, c, pd:g(r,ipd), l:Number(g(r,il))||1, name:g(r,inm), resp:g(r,ires), prctr:g(r,ipc), legacy:g(r,ileg), po:g(r,ipo), group:null}); });
   return out.length? out : null; }
 function poTreeHtml(w){ const po=w.po;
-  if(!po||!po.rows.length) return '<p class="muted">Brak struktury. Wczytaj Excel/CSV albo użyj przykładowych danych – wtedy pojawi się drzewo kontraktu.</p>';
-  const sel=r=>`<select data-pogrp="${esc(r.k)}" title="Przypisz do węzła wirtualnego"><option value="">— grupa</option>${po.vnodes.map(v=>`<option value="${v.id}" ${r.group===v.id?'selected':''}>${esc(v.name)}</option>`).join('')}</select>`;
-  const line=r=>`<li style="margin-left:${(r.l-1)*18}px"><span class="mono">${esc(r.c)}</span> ${esc(r.name)}${r.po?` <span class="tag">PO ${esc(r.po)}</span>`:''}${r.legacy?` <span class="muted small">P1S: ${esc(r.legacy)}</span>`:''}${r.group?` <span class="tag">${esc((po.vnodes.find(v=>v.id===r.group)||{}).name||'')}</span>`:''} ${sel(r)}</li>`;
-  let h='';
-  if(po.vnodes.length){ h+='<div class="stack"><h4>Węzły wirtualne</h4><ul class="mt">'+po.vnodes.map(v=>{ const mem=po.rows.filter(r=>r.group===v.id);
-    return `<li><span class="tag">wirtualny</span> <input data-vn="${v.id}" value="${esc(v.name)}" style="width:200px"> <button class="btn small" data-a="poDelNode" data-x="${v.id}">Usuń</button>${mem.length?`<ul class="mt">${mem.map(r=>`<li style="margin-left:18px"><span class="mono">${esc(r.c)}</span> ${esc(r.name)}</li>`).join('')}</ul>`:' <span class="muted small">— przypisz elementy w drzewie poniżej (kolumna „grupa”)</span>'}</li>`; }).join('')+'</ul></div>'; }
-  h+='<h4>Struktura kontraktu (SAP) · WBS element</h4><ul class="mt">'+po.rows.map(line).join('')+'</ul>';
-  return h; }
+  if(!po||!po.rows.length) return '<p class="muted">Brak struktury. Wczytaj Excel/CSV albo użyj przykładowych danych – wtedy pojawi się drzewo kontraktu, które ułożysz w węzły.</p>';
+  const nameCell=r=> po.editing===r.k
+    ? `<input data-poname="${esc(r.k)}" value="${esc(r.name)}" style="width:220px"><button class="lnk" data-a="poEditDone" title="Gotowe">✓</button>`
+    : `<span>${esc(r.name)}</span><button class="lnk" data-a="poEdit" data-x="${esc(r.k)}" title="Zmień nazwę">✎</button>`;
+  const elRow=(r,ind)=>`<li class="po-el" draggable="true" data-podrag="${esc(r.k)}" style="margin-left:${ind}px"><span class="grip" aria-hidden="true">⋮⋮</span><span class="mono">${esc(r.c)}</span> ${nameCell(r)}${r.po?' <span class="tag">PO</span>':''}${r.legacy?` <span class="muted small">P1S: ${esc(r.legacy)}</span>`:''}</li>`;
+  let h='<div class="po-wrap">';
+  po.vnodes.forEach(v=>{ const mem=po.rows.filter(r=>r.group===v.id);
+    h+=`<div class="po-node po-drop" data-podrop="${v.id}"><div class="row between"><span class="row" style="gap:6px;align-items:center"><span class="tag">węzeł</span><input data-vn="${v.id}" value="${esc(v.name)}" style="width:220px"><span class="muted small">${mem.length} el.</span></span><button class="lnk" data-a="poDelNode" data-x="${v.id}" title="Usuń węzeł">✕</button></div>`
+      + (mem.length? `<ul class="mt po-mem">${mem.map(r=>elRow(r,18)).join('')}</ul>` : `<div class="muted small po-hint">Przeciągnij tu elementy z „Struktura kontraktu”.</div>`) + '</div>'; });
+  const free=po.rows.filter(r=>!r.group);
+  h+=`<div class="po-node po-drop" data-podrop="__none"><div class="row between"><span class="row" style="gap:6px;align-items:center"><b>Struktura kontraktu (SAP)</b><span class="muted small">WBS element · przeciągnij ⋮⋮ do węzła</span></span></div><ul class="mt po-mem">${free.map(r=>elRow(r,(r.l-1)*16)).join('')||'<li class="muted small">wszystkie elementy przypisane do węzłów</li>'}</ul></div>`;
+  return h+'</div>'; }
 function newWiz(){ return {step:0, code:'M28', name:'M28 – modernizacja', type:'WEW', sel:[], p1s:['M28-01','M28-02'], open:{}, page:{}, imp:{}, busy:false, progress:[]}; }
 const eqP=(a,b)=>a.length===b.length && a.every((x,i)=>x===b[i]);
 const preP=(a,b)=>a.length<=b.length && a.every((x,i)=>x===b[i]); // a jest przodkiem (albo równe) b
@@ -1494,12 +1503,12 @@ function vWizard(){
     body=`
     <div class="note info"><b>Performance Objectives</b> – nadrzędna struktura kontraktu po stronie <b>CES</b>, po której raportuje się wykonanie (nie tylko po elemencie kosztowym). Kotwicą jest CES: element w kolumnie <span class="mono">WBS element</span> pociąga poddrzewo z globalnego mapowania, a strona P1S wchodzi jako dodatkowe zadania. Strukturę można zmieniać i grupować PSP we własnych, wirtualnych węzłach.</div>
     <section class="panel flat"><div class="row between"><h3>Struktura kontraktu (CES)</h3><span class="muted small">${w.po&&w.po.rows.length? w.po.rows.length+' elementów · '+w.po.vnodes.length+' węzłów wirtualnych' : 'eksport SAP / ręcznie'}</span></div>
-      <div class="row"><label class="btn primary">Wczytaj Excel / CSV<input type="file" accept=".xlsx,.xls,.csv,.txt,.tsv" data-xls="po" hidden></label><button class="btn" data-a="poDemo">Użyj przykładowych danych</button><button class="btn" data-a="poAddNode">+ Węzeł wirtualny</button>${w.po&&w.po.rows.length?`<button class="btn" data-a="poClear">Wyczyść</button>`:''}</div>
-      <span class="hint">Kolumny: <span class="mono">Project definition · Level · WBS element · Name · Person responsible · Profit center · … · Legacy WBS · Performance Obligation</span>. Plik <span class="mono">.xlsx</span> albo CSV/TXT (także wklejone z Excela – rozdzielane tabulatorem). <span class="mono">Legacy WBS</span> to strona P1S (dodatkowe zadanie); w kolumnie „grupa” przy elemencie przypiszesz go do węzła wirtualnego.</span>
+      <div class="row"><label class="btn primary">Wczytaj Excel / CSV<input type="file" accept=".xlsx,.xls,.csv,.txt,.tsv" data-xls="po" hidden></label><button class="btn" data-a="poDemo">Użyj przykładowych danych</button><button class="btn" data-a="poAddNode">+ węzeł</button>${w.po&&w.po.rows.length?`<button class="btn" data-a="poClear">Wyczyść</button>`:''}</div>
+      <span class="hint">Kolumny: <span class="mono">Project definition · Level · WBS element · Name · Person responsible · Profit center · … · Legacy WBS · Performance Obligation</span>. Plik <span class="mono">.xlsx</span> albo CSV/TXT (także wklejone z Excela – rozdzielane tabulatorem). <span class="mono">Legacy WBS</span> to strona P1S. „+ węzeł” tworzy węzeł, element przeciągasz do niego za uchwyt (⋮⋮), nazwy zmieniasz w miejscu (✎).</span>
       ${poTreeHtml(w)}</section>
-    <section class="panel flat"><div class="row between"><h3>Zakres pociągnięty z mapowania · drzewo P1S</h3><span class="muted small">${nf(total)} PROJORG</span></div>
+    <section class="panel flat"><div class="row between"><h3>Strona P1S (LOG.WBS) · wg mapowania CES↔P1S</h3><span class="muted small">${nf(total)} PROJORG</span></div>
       <div class="row">${selChips(w.sel,w.p1s,true)||'<span class="muted">nic nie zaznaczono – zaznacz w drzewie poniżej</span>'}</div>
-      <span class="hint">Globalne mapowanie CES↔P1S (bez wpływu na projekt) rozwiązuje stronę P1S kontraktu; tu potwierdzasz węzły wchodzące do projektu jako dodatkowe zadania. PROJORG należący do innego projektu jest pomijany.</span>
+      <span class="hint">Mapowanie CES↔P1S to <b>odrębna struktura</b> łącząca elementy obu systemów – <a href="#" data-a="nav" data-x="mapa">ADMIN → Mapowanie</a>. Drzewo pochodzi z <span class="mono">LOG.WBS</span> (ma strukturę drzewa, więc łatwo się odnaleźć); strona P1S kontraktu wynika z kolumny <span class="mono">Legacy WBS</span> przez to mapowanie. PROJORG należący do innego projektu jest pomijany.</span>
     ${taken.length?`<div class="note warn">W zaznaczonych grupach ${taken.length} PROJORG należy już do innych projektów i zostanie pominięte: ${taken.map(o=>o+' ('+scopeOfOrg(o).code+')').join(', ')}.</div>`:''}
     ${p1sInput()}
       ${S.mp.pq.trim().length>=3? `${p1sCatalog(true,true)}<button class="btn small" data-a="pqClear">Wyczyść wyszukiwanie</button>` : `<ul class="mt">${wizTree()}</ul>`}</section>`;
@@ -1964,10 +1973,12 @@ const A={
   wunsel:x=>{ const w=S.wiz, p=x.split('|'); w.sel=w.sel.filter(q=>!eqP(q,p)); render(); },
   wpage:x=>{ const w=S.wiz, [px,d]=x.split('|'); w.page[px]=Math.max(0,Math.min((w.page[px]||0)+Number(d),Math.ceil(CAT[px].cnt/25)-1)); render(); },
   atog:x=>{ const w=S.wiz; (w.aopen ||= {})[x]=!w.aopen[x]; render(); },
-  poDemo:()=>{ const w=S.wiz; w.po={rows:PO_SAMPLE.map(r=>({k:r.c,c:r.c,pd:'4D06WP',l:r.l,name:r.n,resp:'Maciejak, Dawid PGGF03',prctr:'PIDCABIN',legacy:r.legacy,po:r.po,group:null})), vnodes:[], nextV:1}; render(); },
-  poClear:()=>{ S.wiz.po={rows:[],vnodes:[],nextV:1}; render(); },
+  poDemo:()=>{ const w=S.wiz; w.po={rows:PO_SAMPLE.map(r=>({k:r.c,c:r.c,pd:'4D06WP',l:r.l,name:r.n,resp:'Maciejak, Dawid PGGF03',prctr:'PIDCABIN',legacy:r.legacy,po:r.po,group:null})), vnodes:[], nextV:1, editing:null}; render(); },
+  poClear:()=>{ S.wiz.po={rows:[],vnodes:[],nextV:1,editing:null}; render(); },
   poAddNode:()=>{ const w=S.wiz; w.po=w.po||{rows:[],vnodes:[],nextV:1}; const id='V'+(w.po.nextV++); w.po.vnodes.push({id,name:'Węzeł '+id}); render(); },
   poDelNode:(x)=>{ const w=S.wiz; if(!w.po) return; w.po.vnodes=w.po.vnodes.filter(v=>v.id!==x); w.po.rows.forEach(r=>{ if(r.group===x) r.group=null; }); render(); },
+  poEdit:(x)=>{ if(S.wiz.po) S.wiz.po.editing=x; render(); },
+  poEditDone:()=>{ if(S.wiz.po) S.wiz.po.editing=null; render(); },
   xlsTpl:()=>{ const w=S.wiz; saveBook(w.code.toUpperCase()+'_slowniki_projektu.xlsx', sampleDicts(w.code,wizOrgs(w),w.type,false)); },
   xlsDemo:()=>{ const w=S.wiz; for(const [n,aoa] of sampleDicts(w.code,wizOrgs(w),w.type,true)){ const k=n==='WP i CAM'?'wp':n==='Stawki CAS'?'cas':'harm'; w.imp[k]={file:'przykład (wygenerowany)', sheet:n, raw:aoa}; } render(); },
   ximpDel:x=>{ if(S.view.name==='dict') S.view={...S.view, ximp:null}; else delete S.wiz.imp[x]; render(); },
@@ -2046,6 +2057,7 @@ document.addEventListener('input',e=>{
   const t=e.target;
   if(t.dataset.w!==undefined) S.wiz[t.dataset.w]=t.value;
   if(t.dataset.vn!==undefined){ const v=(S.wiz.po?.vnodes||[]).find(v=>v.id===t.dataset.vn); if(v) v.name=t.value; }
+  if(t.dataset.poname!==undefined){ const r=(S.wiz.po?.rows||[]).find(r=>r.k===t.dataset.poname); if(r) r.name=t.value; }
   for(const [k,set,id] of [['mq',v=>{S.mp.q=v; S.mp.cpage=0;},'#mq'],['pq',v=>{S.mp.pq=v;},'#pq'],['aq',v=>{S.adm.q=v; S.adm.pg=0;},'#aq'],['pf',v=>{S.pul.q=v;},'#pf']])
     if(t.dataset[k]!==undefined){ set(t.value); const pos=t.selectionStart; render(); const n=$(id); if(n){ n.focus(); n.setSelectionRange(pos,pos); } }
 });
@@ -2057,11 +2069,17 @@ document.addEventListener('change',e=>{
     if(t.checked){ w.sel=w.sel.filter(p=>!preP(path,p)); w.p1s=w.p1s.filter(o=>!pathHas(path,rawCat(o))); w.sel.push(path); } else w.sel=w.sel.filter(p=>!eqP(p,path));
     render(); }
   if(t.dataset.xls!==undefined){ const f=t.files?.[0], tg=t.dataset.xls; t.value=''; if(f) xlsLoad(tg,f); }
-  if(t.dataset.pogrp!==undefined){ const r=S.wiz.po?.rows.find(x=>x.k===t.dataset.pogrp); if(r){ r.group=t.value||null; } render(); }
   if(t.dataset.aold!==undefined){ S.adm.old=t.checked; render(); }
   if(t.dataset.mz!==undefined){ S.mp.z=t.value; S.mp.cpage=0; render(); }
   if(t.dataset.dall!==undefined){ S.view={...S.view, all:t.checked}; render(); }
 });
+/* drag & drop PO: element (data-podrag) → węzeł / struktura (data-podrop) */
+let PODRAG=null;
+document.addEventListener('dragstart',e=>{ const el=e.target.closest?.('[data-podrag]'); if(!el) return; PODRAG=el.dataset.podrag; e.dataTransfer.setData('text/plain',PODRAG); e.dataTransfer.effectAllowed='move'; document.body.classList.add('dragging'); });
+document.addEventListener('dragend',()=>{ if(PODRAG!==null){ PODRAG=null; document.body.classList.remove('dragging'); document.querySelectorAll('[data-podrop].over').forEach(x=>x.classList.remove('over')); } });
+document.addEventListener('dragover',e=>{ if(PODRAG===null) return; const t=e.target.closest?.('[data-podrop]'); if(!t) return; e.preventDefault(); e.dataTransfer.dropEffect='move'; t.classList.add('over'); });
+document.addEventListener('dragleave',e=>{ if(PODRAG===null) return; const t=e.target.closest?.('[data-podrop]'); if(t && !t.contains(e.relatedTarget)) t.classList.remove('over'); });
+document.addEventListener('drop',e=>{ if(PODRAG===null) return; const t=e.target.closest?.('[data-podrop]'); if(!t) return; e.preventDefault(); const key=PODRAG; PODRAG=null; document.body.classList.remove('dragging'); const grp=t.dataset.podrop==='__none'?null:t.dataset.podrop; const r=S.wiz.po?.rows.find(x=>x.k===key); if(r) r.group=grp; render(); });
 /* drag & drop: CES (data-drag) → P1S (data-drop) */
 let DRAG=null;
 function dropOk(t){ return t.dataset.drop==='__unmap' || !!nodeOf(t.dataset.drop); }
