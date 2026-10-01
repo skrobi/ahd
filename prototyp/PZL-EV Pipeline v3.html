@@ -805,7 +805,7 @@ function vPulpit(){
 
 /* ---------- PROJEKTY ---------- */
 function vZakresy(){
-  return `<div class="head"><div><h1>Projekty</h1><p class="sub">Projekt (zakres) = program albo pula projektów liczona razem (M8). Obejmuje projekty P1S; koszty CES trafiają do niego przez mapowanie.</p></div>
+  return `<div class="head"><div><h1>Projekty</h1><p class="sub">Projekt = struktura kontraktu Performance Objectives po stronie CES. Mapowanie CES↔P1S jest globalne i nie ma wpływu na projekt.</p></div>
     <button class="btn primary" data-a="wizard">+ Nowy projekt</button></div>
   <div class="tbl-wrap"><table><thead><tr><th>Kod</th><th>Nazwa</th><th>Typ</th><th>Zakres P1S</th><th class="r">WP</th><th class="r">CAM</th><th>Aktywny przebieg</th></tr></thead><tbody>
   ${Object.values(S.zakresy).map(z=>{const a=activeRuns(z.id)[0];return `<tr class="click" data-a="zakres" data-x="${z.id}"><td><b>${esc(z.code)}</b></td><td>${esc(z.name)}</td><td>${esc(TYPES[z.type].label)}</td><td class="small">${selChips(z.sel||[],z.p1s,false)||'—'}</td><td class="r">${wpsOf(z.id).length}</td><td class="r">${camsOf(z.id).length}</td><td>${a?pill(runState(a).s, runLabel(a)):'<span class="muted">—</span>'}</td></tr>`}).join('')}
@@ -1242,7 +1242,7 @@ function vMapa(){
   const chip=(k,l)=>`<button data-a="mfil" data-x="${k}" aria-pressed="${mp.f===k}" ${k==='all'?'':`title="${esc(MSTL[k])}"`}>${k==='all'?l:mpill(k)} <b class="num">${k==='all'?tot:(V.counts[k]||0)}</b></button>`;
   return `
   <div class="head"><div><div class="eyebrow">${back}ADMIN</div><h1>Mapowanie CES ↔ P1S</h1>
-    <p class="sub">Przypisanie elementów CES do elementów P1S. Źródłem prawdy jest raport mapowań; finanse mogą go globalnie korygować – korekta ma pierwszeństwo, zapis z historią.</p></div></div>
+    <p class="sub">Mapowanie jest <b>globalne</b> i nie ma wpływu na projekty – tworzenie projektu (Performance Objectives) tylko je czyta. Przypisanie elementów CES do elementów P1S; źródłem prawdy jest raport mapowań, finanse mogą go korygować – korekta ma pierwszeństwo, zapis z historią.</p></div></div>
   <div class="facts"><span>Raport mapowań SAP↔CES: <b>${esc(REP_META.src)}</b> · odczyt ${esc(REP_META.at)}</span><span>Elementy CES w danych: <b>${all.length}</b>, w raporcie: <b>${all.filter(x=>REP_EL[x.c]).length}</b></span><span>Korekty: <b>${activeRules().length}</b> aktywnych</span></div>
   <div class="filters">
     <input type="text" id="mq" data-mq value="${esc(mp.q)}" placeholder="Szukaj w CES: kod lub opis" aria-label="Szukaj w CES" style="flex:1 1 220px">
@@ -1299,7 +1299,18 @@ function rulesTable(){
 }
 
 /* ---------- KREATOR PRZELICZENIA ---------- */
-const WSTEPS=['Podstawowe','Projekty P1S','Słowniki projektu','Foldery','Podsumowanie'];
+const WSTEPS=['Podstawowe','Performance Objectives','Słowniki projektu','Foldery','Podsumowanie'];
+const PO_SAMPLE=[
+ {l:1,c:'4D06WP',n:'projekt produkcyjny kabiny',legacy:'AC-CAB',po:''},
+ {l:2,c:'4D06WP.RA',n:'Kabina MY10 #64',legacy:'AC-CAB.6.38',po:'SAC-PZLCABMY10-00001'},
+ {l:3,c:'4D06WP.01',n:'Kabina MY10 #64',legacy:'AC-CAB.6.38',po:''},
+ {l:4,c:'4D06WP000001',n:'konstruktorzy',legacy:'AC-CAB.6.38.01',po:''},
+ {l:4,c:'4D06WP000002',n:'technolodzy',legacy:'AC-CAB.6.38.02',po:''},
+ {l:3,c:'4D06WP.02',n:'Cabin',legacy:'AC-CAB.6.38.03',po:''},
+ {l:4,c:'4D06WP000003',n:'Cabin',legacy:'AC-CAB.6.38.03',po:''},
+ {l:4,c:'4D06WP000004',n:'LWR AFT TRANSITION 0352',legacy:'AC-CAB.6.38.03.01',po:''},
+];
+function poDemoTree(){ return `<ul class="mt">`+PO_SAMPLE.map(r=>`<li style="margin-left:${(r.l-1)*18}px"><span class="mono">${esc(r.c)}</span> ${esc(r.n)} ${r.po?`<span class="tag">PO ${esc(r.po)}</span>`:''}${r.legacy?` <span class="muted small">P1S: ${esc(r.legacy)}</span>`:''}</li>`).join('')+`<li style="margin-left:36px" class="muted"><span class="tag">wirtualny</span> własny węzeł raportowy (przykład grupowania PSP)</li></ul>`; }
 function newWiz(){ return {step:0, code:'M28', name:'M28 – modernizacja', type:'WEW', sel:[], p1s:['M28-01','M28-02'], open:{}, page:{}, imp:{}, busy:false, progress:[]}; }
 const eqP=(a,b)=>a.length===b.length && a.every((x,i)=>x===b[i]);
 const preP=(a,b)=>a.length<=b.length && a.every((x,i)=>x===b[i]); // a jest przodkiem (albo równe) b
@@ -1465,11 +1476,16 @@ function vWizard(){
   if(w.step===1){
     const taken=Object.keys(P1S_ORG).filter(o=>selHas(w.sel,o) && scopeOfOrg(o));
     body=`
-    <div class="field"><label>Zakres projektu · ${nf(total)} PROJORG</label>
+    <div class="note info"><b>Performance Objectives</b> – nadrzędna struktura kontraktu po stronie <b>CES</b>, po której raportuje się wykonanie (nie tylko po elemencie kosztowym). Kotwicą jest CES: element w kolumnie <span class="mono">WBS element</span> pociąga poddrzewo z globalnego mapowania, a strona P1S wchodzi jako dodatkowe zadania. Strukturę można zmieniać i grupować PSP we własnych, wirtualnych węzłach.</div>
+    <section class="panel flat"><div class="row between"><h3>Struktura kontraktu (CES)</h3><span class="muted small">eksport SAP / ręcznie</span></div>
+      <div class="row"><button class="btn primary" disabled>Wczytaj Excel (struktura kontraktu)</button><button class="btn" disabled>Zbuduj ręcznie</button><button class="btn" disabled>+ Węzeł wirtualny</button></div>
+      <span class="hint">Kolumny: <span class="mono">Project definition · Level · WBS element · Name · Person responsible · Profit center · … · Legacy WBS · Performance Obligation</span>. <span class="mono">Legacy WBS</span> to strona P1S (dodatkowe zadanie). Prototyp pokazuje model na przykładowych danych; wczytywanie Excela i edycja węzłów – w pełnej wersji.</span>
+      ${poDemoTree()}</section>
+    <section class="panel flat"><div class="row between"><h3>Zakres pociągnięty z mapowania · drzewo P1S</h3><span class="muted small">${nf(total)} PROJORG</span></div>
       <div class="row">${selChips(w.sel,w.p1s,true)||'<span class="muted">nic nie zaznaczono – zaznacz w drzewie poniżej</span>'}</div>
-      <span class="hint">Zaznacz całe grupy albo pojedyncze PROJORG – na dowolnym poziomie. Grupa obejmuje wszystkie swoje PROJORG i ich elementy WBS/PSP. PROJORG należący do innego projektu jest pomijany.</span></div>
+      <span class="hint">Globalne mapowanie CES↔P1S (bez wpływu na projekt) rozwiązuje stronę P1S kontraktu; tu potwierdzasz węzły wchodzące do projektu jako dodatkowe zadania. PROJORG należący do innego projektu jest pomijany.</span>
     ${taken.length?`<div class="note warn">W zaznaczonych grupach ${taken.length} PROJORG należy już do innych projektów i zostanie pominięte: ${taken.map(o=>o+' ('+scopeOfOrg(o).code+')').join(', ')}.</div>`:''}
-    <section class="panel flat"><div class="row between"><h3>Drzewo P1S · Z_KAT_ZBIORCZA › Z_KATEGORIA › Z_OPIS › PROJORG</h3><span class="muted small">${nf(P1S_TOTAL)} PROJORG</span></div>${p1sInput()}
+    ${p1sInput()}
       ${S.mp.pq.trim().length>=3? `${p1sCatalog(true,true)}<button class="btn small" data-a="pqClear">Wyczyść wyszukiwanie</button>` : `<ul class="mt">${wizTree()}</ul>`}</section>`;
   }
   if(w.step===2) body=`
@@ -1504,12 +1520,12 @@ function vWizard(){
      ${!total?'<div class="note crit">Zaznacz co najmniej jedną grupę albo PROJORG w kroku 2.</div>':''}
      ${errs.length?`<div class="note crit">Słowniki z błędami: ${errs.map(k=>DEFS[k].name).join(', ')}. Popraw plik albo usuń import w kroku 3.</div>`:''}
      <section class="panel flat"><div class="row between"><h3>Baza analityczna · drzewo ↔ WP ↔ CAM ↔ budżet ↔ harmonogram</h3><button class="btn small" data-a="anExp">Pobierz (xlsx)</button></div>
-       <p class="muted small">Tak zostanie połączone w bazie: element P1S z drzewa → WP (WP i CAM) → budżet i daty (Harmonogram i budżet) → elementy CES przypisane w mapowaniu. Rozwiń PROJORG, aby zobaczyć elementy.</p>
+       <p class="muted small">Tak zostanie połączone w bazie: węzeł Performance Objectives (CES) → strona P1S (dodatkowe zadanie) → WP (WP i CAM) → budżet i daty (Harmonogram i budżet). Rozwiń PROJORG, aby zobaczyć elementy.</p>
        ${analyticHtml(A)}
        ${Object.keys(A.cams).length?`<h3>Wg CAM</h3><div class="tbl-wrap"><table><thead><tr><th>CAM</th><th class="r">WP</th><th class="r">BAC [h]</th><th>Start</th><th>Koniec</th></tr></thead><tbody>${Object.entries(A.cams).sort().map(([c,v])=>`<tr><td>${esc(c)}</td><td class="r num">${v.wp}</td><td class="r num">${nf(v.bac)}</td><td class="num">${v.start||'—'}</td><td class="num">${v.finish||'—'}</td></tr>`).join('')}</tbody></table></div>`:''}</section>`;
   }
   const canCreate=!dup && w.code.trim() && total>0 && !errs.length;
-  return `<div class="head"><div><div class="eyebrow"><a href="#" data-a="nav" data-x="zakresy">Projekty</a> / nowy</div><h1>Nowy projekt</h1><p class="sub">Kreator rejestruje projekt, zapisuje zakres z drzewa P1S, wczytuje słowniki projektu z Excela i tworzy foldery.</p></div></div>
+  return `<div class="head"><div><div class="eyebrow"><a href="#" data-a="nav" data-x="zakresy">Projekty</a> / nowy</div><h1>Nowy projekt</h1><p class="sub">Kreator rejestruje projekt, buduje strukturę Performance Objectives (CES), wczytuje słowniki projektu z Excela i tworzy foldery.</p></div></div>
   ${steps}<section class="panel">${body}
   <div class="row between"><button class="btn" data-a="wback" ${w.step===0||w.busy?'disabled':''}>Wstecz</button>
   ${w.step<WSTEPS.length-1?`<button class="btn primary" data-a="wnext">Dalej</button>`: w.progress.length&&!w.busy? `<button class="btn primary" data-a="zakres" data-x="${esc(w.code.toUpperCase())}">Przejdź do projektu</button>` : `<button class="btn primary" data-a="wcreate" ${canCreate&&!w.busy?'':'disabled'}>Utwórz projekt</button>`}</div></section>`;
