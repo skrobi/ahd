@@ -33,7 +33,7 @@ Role, zakres danych i egzekwowanie – `docs/uprawnienia.md`.
 | **Przebieg** | kroki i etapy (F06), panel wybranego etapu, znacznik stanu, problemy, rewizje, dziennik | akcje etapów |
 | **Słowniki** | słowniki globalne i projektu: tabela z filtrowaniem, historia zmian (F03) | dodaj / edytuj / zamknij ważność wiersza; pobierz / wczytaj Excel |
 | **Mapowanie CES ↔ P1S** | dwa drzewa, statusy, węzeł „Nieprzypisane” (F04) | korekta elementu / projektu CES, usunięcie korekty, historia |
-| **Administracja** | definicje źródeł, role i grupy AD (F08) | dodaj / zmień |
+| **Administracja** | definicje źródeł, lokalizacje RABIT, role i grupy AD (F08) | dodaj / zmień |
 
 Nagłówek aplikacji – `docs/architektura.md`, rozdz. 3.
 
@@ -106,7 +106,8 @@ Ekran opisany w `docs/mapowanie-ces-p1s.md`, rozdz. 11; reguły – tamże.
 
 ### F05. Import
 
-- **Importuj** – import z folderu RABIT (WebDAV) albo z folderu `Do_importu` (`docs/pipeline-fazy.md`, G1).
+- **Importuj** – import ze wszystkich aktywnych lokalizacji RABIT (WebDAV) i z folderu `Do_importu`
+  (`docs/pipeline-fazy.md`, G1).
 - Wynik importu: decyzja dla każdego pliku, liczba wierszy, problemy.
 - Historia importów: kto, kiedy, co – widoczna dla wszystkich.
 
@@ -129,6 +130,7 @@ Ekran opisany w `docs/mapowanie-ces-p1s.md`, rozdz. 11; reguły – tamże.
 ### F08. Administracja
 
 - Definicje źródeł (`docs/zrodla-danych.md`, rozdz. 2) – z historią.
+- Lokalizacje RABIT (`docs/zrodla-danych.md`, rozdz. 3): dodanie, zmiana, dezaktywacja.
 - Role i przypisane grupy AD (`docs/uprawnienia.md`, rozdz. 3).
 
 ---

@@ -169,7 +169,7 @@ ani osobnych aplikacji.
 | Audyt | każda akcja z użytkownikiem AD i czasem; historia słowników i korekt |
 | Spójność | ta sama wersja silnika EV u wszystkich (kontrola minimalnej wersji aplikacji) |
 | Odporność | przerwana operacja nie zostawia częściowych danych (transakcje, idempotentny import) |
-| Utrzymanie | definicje źródeł, reguły walidacji źródeł i kalendarz okresów konfigurowane w aplikacji, bez zmiany kodu |
+| Utrzymanie | definicje źródeł, lokalizacje RABIT, reguły walidacji źródeł i kalendarz okresów konfigurowane w aplikacji, bez zmiany kodu |
 
 ---
 
@@ -200,4 +200,4 @@ ani osobnych aplikacji.
 | # | Kwestia |
 |---|---|
 | O5 | Serwer bazy `PZL_EV` – na instancji z `PZLPROD` (odczyt w procedurach między bazami) czy osobny serwer (serwer połączony) |
-| O6 | Forma dystrybucji `PZL-EV.exe`. Test na stanowisku PZL: (1) uruchomienie pliku z dysku lokalnego i z udziału sieciowego, potrzeba podpisu kodu; (2) połączenie z MS SQL TEST kontem Windows; (3) odczyt folderu RABIT przez WebDAV; (4) czas załadowania pliku RABIT ok. 85 MB do bazy |
+| O6 | Forma dystrybucji `PZL-EV.exe`. Test na stanowisku PZL: (1) uruchomienie pliku z dysku lokalnego i z udziału sieciowego, potrzeba podpisu kodu; (2) połączenie z MS SQL TEST kontem Windows; (3) odczyt lokalizacji RABIT przez WebDAV; (4) czas załadowania pliku RABIT ok. 85 MB do bazy |
