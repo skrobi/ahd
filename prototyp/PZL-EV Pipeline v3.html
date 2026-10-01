@@ -217,6 +217,12 @@ tr.closed td.k{text-decoration:line-through}
 body.dragging [data-drop]{outline:1px dashed var(--line)}
 [data-drop].over{background:var(--ok-soft);outline:2px solid var(--ok)}
 [data-drop].over.bad{background:var(--crit-soft);outline:2px solid var(--crit)}
+.lnk{all:unset;cursor:pointer;color:var(--accent);padding:0 3px}
+.pogrip{cursor:grab;color:var(--muted);user-select:none;touch-action:none;padding:0 4px}
+tr.po-row.over>td{background:var(--ok-soft);box-shadow:inset 0 0 0 1px var(--ok)}
+tr.po-root td{color:var(--muted);font-size:.8rem}
+body.po-dragging,body.po-dragging *{cursor:grabbing!important}
+.po-ghost{position:fixed;z-index:9999;pointer-events:none;background:var(--surface);border:1px solid var(--accent);border-radius:6px;padding:2px 8px;font-size:.8rem;box-shadow:0 6px 16px rgba(0,0,0,.25)}
 .seg{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden}
 .seg button{all:unset;cursor:pointer;padding:4px 10px;font-size:.8rem;color:var(--muted)}
 .seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}
@@ -448,9 +454,10 @@ const DEFS = {
   kursy:{name:'Kursy USD/PLN', cols:[{k:'okres',l:'Okres',t:'text'},{k:'kurs',l:'USD/PLN',t:'num',min:0.01,d:4}], key:['okres']},
   prefiksy:{name:'Prefiksy plików RABIT', cols:[{k:'prefix',l:'Prefiks nazwy pliku',t:'text'},{k:'src',l:'Kod źródła',t:'text'},{k:'opis',l:'Opis',t:'text',opt:true}], key:['prefix']},
   wp:{name:'WP i CAM', cols:[{k:'wp',l:'WP',t:'text'},{k:'p1s',l:'Element P1S',t:'list',src:'scopeNodes'},{k:'cam',l:'CAM',t:'list',src:'people'},{k:'cat',l:'Cost Category',t:'list',src:'cats'}], key:['wp'], uniq:['p1s']},
-  harm:{name:'Harmonogram i budżet', cols:[{k:'wp',l:'WP',t:'list',src:'scopeWp'},{k:'bac',l:'BAC [h]',t:'num',min:0},{k:'start',l:'Start',t:'date'},{k:'finish',l:'Koniec',t:'date'}], key:['wp'], rules:[['start','finish']]},
+  harm:{name:'Harmonogram i budżet', cols:[{k:'wp',l:'WP',t:'list',src:'scopeWp'},{k:'bac',l:'BAC HOURS [h]',t:'num',min:0},{k:'bacmat',l:'BAC MATERIAL [PLN]',t:'num',min:0},{k:'start',l:'Start',t:'date'},{k:'finish',l:'Koniec',t:'date'}], key:['wp'], rules:[['start','finish']]},
   katgr:{name:'Grupy kategorii', cols:[{k:'p1s',l:'Element P1S',t:'p1s'},{k:'name',l:'Nazwa grupy (zastępuje Z_OPIS)',t:'text'}], key:['p1s']},
-  cas:{name:'Stawki CAS', cols:[{k:'dept',l:'Wydział',t:'text'},{k:'year',l:'Rok',t:'int'},{k:'rate',l:'Stawka CAS [USD/h]',t:'num',min:0.01,d:2}], key:['dept','year']}
+  cas:{name:'Stawki CAS', cols:[{k:'dept',l:'Wydział',t:'text'},{k:'year',l:'Rok',t:'int'},{k:'rate',l:'Stawka CAS [USD/h]',t:'num',min:0.01,d:2}], key:['dept','year']},
+  excl:{name:'Wykluczenia', cols:[{k:'ce',l:'Cost Element',t:'text',opt:true},{k:'wbs',l:'WBS Element',t:'text',opt:true},{k:'partner',l:'Partner object',t:'text',opt:true},{k:'opis',l:'Opis',t:'text'}], key:['ce','wbs','partner']}
 };
 
 function stageDefs(type, kind){
@@ -805,7 +812,7 @@ function vPulpit(){
 
 /* ---------- PROJEKTY ---------- */
 function vZakresy(){
-  return `<div class="head"><div><h1>Projekty</h1><p class="sub">Projekt (zakres) = program albo pula projektów liczona razem (M8). Obejmuje projekty P1S; koszty CES trafiają do niego przez mapowanie.</p></div>
+  return `<div class="head"><div><h1>Projekty</h1><p class="sub">Projekt = struktura kontraktu Performance Objectives po stronie CES. Mapowanie CES↔P1S jest globalne i nie ma wpływu na projekt.</p></div>
     <button class="btn primary" data-a="wizard">+ Nowy projekt</button></div>
   <div class="tbl-wrap"><table><thead><tr><th>Kod</th><th>Nazwa</th><th>Typ</th><th>Zakres P1S</th><th class="r">WP</th><th class="r">CAM</th><th>Aktywny przebieg</th></tr></thead><tbody>
   ${Object.values(S.zakresy).map(z=>{const a=activeRuns(z.id)[0];return `<tr class="click" data-a="zakres" data-x="${z.id}"><td><b>${esc(z.code)}</b></td><td>${esc(z.name)}</td><td>${esc(TYPES[z.type].label)}</td><td class="small">${selChips(z.sel||[],z.p1s,false)||'—'}</td><td class="r">${wpsOf(z.id).length}</td><td class="r">${camsOf(z.id).length}</td><td>${a?pill(runState(a).s, runLabel(a)):'<span class="muted">—</span>'}</td></tr>`}).join('')}
@@ -1242,7 +1249,7 @@ function vMapa(){
   const chip=(k,l)=>`<button data-a="mfil" data-x="${k}" aria-pressed="${mp.f===k}" ${k==='all'?'':`title="${esc(MSTL[k])}"`}>${k==='all'?l:mpill(k)} <b class="num">${k==='all'?tot:(V.counts[k]||0)}</b></button>`;
   return `
   <div class="head"><div><div class="eyebrow">${back}ADMIN</div><h1>Mapowanie CES ↔ P1S</h1>
-    <p class="sub">Przypisanie elementów CES do elementów P1S. Źródłem prawdy jest raport mapowań; finanse mogą go globalnie korygować – korekta ma pierwszeństwo, zapis z historią.</p></div></div>
+    <p class="sub">Mapowanie jest <b>globalne</b> i nie ma wpływu na projekty – tworzenie projektu (Performance Objectives) tylko je czyta. Przypisanie elementów CES do elementów P1S; źródłem prawdy jest raport mapowań, finanse mogą go korygować – korekta ma pierwszeństwo, zapis z historią.</p></div></div>
   <div class="facts"><span>Raport mapowań SAP↔CES: <b>${esc(REP_META.src)}</b> · odczyt ${esc(REP_META.at)}</span><span>Elementy CES w danych: <b>${all.length}</b>, w raporcie: <b>${all.filter(x=>REP_EL[x.c]).length}</b></span><span>Korekty: <b>${activeRules().length}</b> aktywnych</span></div>
   <div class="filters">
     <input type="text" id="mq" data-mq value="${esc(mp.q)}" placeholder="Szukaj w CES: kod lub opis" aria-label="Szukaj w CES" style="flex:1 1 220px">
@@ -1299,14 +1306,53 @@ function rulesTable(){
 }
 
 /* ---------- KREATOR PRZELICZENIA ---------- */
-const WSTEPS=['Podstawowe','Projekty P1S','Słowniki projektu','Foldery','Podsumowanie'];
+const WSTEPS=['Podstawowe','Performance Objectives','Słowniki projektu','Foldery','Podsumowanie'];
+const PO_SAMPLE=[
+ {l:1,c:'4D06WP',n:'projekt produkcyjny kabiny',legacy:'AC-CAB',po:''},
+ {l:2,c:'4D06WP.RA',n:'Kabina MY10 #64',legacy:'AC-CAB.6.38',po:'SAC-PZLCABMY10-00001'},
+ {l:3,c:'4D06WP.01',n:'Kabina MY10 #64',legacy:'AC-CAB.6.38',po:''},
+ {l:4,c:'4D06WP000001',n:'konstruktorzy',legacy:'AC-CAB.6.38.01',po:''},
+ {l:4,c:'4D06WP000002',n:'technolodzy',legacy:'AC-CAB.6.38.02',po:''},
+ {l:3,c:'4D06WP.02',n:'Cabin',legacy:'AC-CAB.6.38.03',po:''},
+ {l:4,c:'4D06WP000003',n:'Cabin',legacy:'AC-CAB.6.38.03',po:''},
+ {l:4,c:'4D06WP000004',n:'LWR AFT TRANSITION 0352',legacy:'AC-CAB.6.38.03.01',po:''},
+];
+function parsePO(rows){ if(!rows||!rows.length) return null;
+  const hi=rows.findIndex(r=>r.map(nrm).includes('wbs element')); if(hi<0) return null;
+  const H=rows[hi].map(nrm), col=n=>H.indexOf(n);
+  const ic=col('wbs element'), il=col('level'), ipd=col('project definition'), inm=col('name'), ires=col('person responsible'), ipc=col('profit center'), ileg=col('legacy wbs'), ipo=col('performance obligation');
+  const g=(r,i)=>i>=0?String(r[i]??'').trim():'', out=[];
+  rows.slice(hi+1).forEach(r=>{ const c=g(r,ic); if(!c) return;
+    out.push({k:c, c, pd:g(r,ipd), l:Number(g(r,il))||1, name:g(r,inm), resp:g(r,ires), prctr:g(r,ipc), legacy:g(r,ileg), po:g(r,ipo), group:null}); });
+  return out.length? out : null; }
+function poFromRows(rows){ let seq=1; const nodes=[], stack=[];
+  (rows||[]).forEach(r=>{ const id='E'+(seq++), lvl=Number(r.l)||1;
+    while(stack.length && stack[stack.length-1].lvl>=lvl) stack.pop();
+    const parent=stack.length? stack[stack.length-1].id : null;
+    nodes.push({id, parent, kind:'el', name:r.name||'', c:r.c||'', legacy:r.legacy||'', po:r.po||''});
+    stack.push({lvl, id}); });
+  return {seq, nodes, editing:null}; }
+function poTable(w){ const po=w.po;
+  const tool=`<div class="row" style="gap:8px;margin-bottom:8px"><label class="btn primary">Wczytaj Excel / CSV<input type="file" accept=".xlsx,.xls,.csv,.txt,.tsv" data-xls="po" hidden></label><button class="btn" data-a="poDemo">Przykładowe dane</button><button class="btn" data-a="poAddNode">+ węzeł</button>${po&&po.nodes.length?`<button class="btn" data-a="poClear">Wyczyść</button>`:''}</div>`;
+  const nodes=(po&&po.nodes)||[];
+  const byParent={}; nodes.forEach(n=>{ (byParent[n.parent||'']||(byParent[n.parent||'']=[])).push(n); });
+  const vnodes=nodes.filter(n=>n.kind==='v'), ed=n=>po&&po.editing===n.id;
+  const nameCell=n=> ed(n)? `<input data-poname="${n.id}" value="${esc(n.name)}" style="width:100%">` : `${n.kind==='v'?'<span class="tag">węzeł</span> ':''}${n.name?esc(n.name):'<span class="muted">—</span>'}`;
+  const cesCell=n=> n.kind==='v'?'<span class="muted">—</span>': ed(n)?`<input data-poces="${n.id}" value="${esc(n.c)}" style="width:100%">`:(n.c?`<span class="mono">${esc(n.c)}</span>`:'<span class="muted">—</span>');
+  const p1sCell=n=> n.kind==='v'?'<span class="muted">—</span>': ed(n)?`<input data-pop1s="${n.id}" value="${esc(n.legacy)}" style="width:100%">`:(n.legacy?`<span class="mono">${esc(n.legacy)}</span>`:'<span class="muted">—</span>');
+  const act=n=>`<div class="row" style="gap:4px;justify-content:flex-end;flex-wrap:nowrap;align-items:center">${ed(n)?`<button class="btn small primary" data-a="poEditDone">Gotowe</button>`:`<button class="lnk" data-a="poEdit" data-x="${n.id}" title="Edytuj">✎</button>`}<button class="lnk" data-a="poAdd" data-x="${n.id}" title="Dodaj podwęzeł">＋</button><button class="lnk" data-a="poDel" data-x="${n.id}" title="Usuń">✕</button></div>`;
+  const rows=[], walk=(pid,d)=>{ (byParent[pid||'']||[]).forEach(n=>{ rows.push(`<tr class="po-row" data-ponode="${n.id}"><td style="padding-left:${8+d*18}px"><span class="pogrip" data-pogrip="${n.id}" title="Przeciągnij, aby przenieść">⋮⋮</span> ${nameCell(n)}</td><td>${cesCell(n)}</td><td>${p1sCell(n)}</td><td class="r">${act(n)}</td></tr>`); walk(n.id,d+1); }); };
+  walk('',0);
+  const rootRow=`<tr class="po-row po-root" data-ponode=""><td colspan="4">⤒ korzeń — przeciągnij tutaj element z listy P1S, aby dodać (albo wiersz, aby odpiąć od węzła)</td></tr>`;
+  const empty=`<tr><td colspan="4" class="muted">Brak struktury. Wczytaj Excel/CSV, użyj przykładowych danych albo przeciągnij PROJORG z listy P1S poniżej.</td></tr>`;
+  return tool+`<div class="tbl-wrap"><table><thead><tr><th>Nazwa</th><th>Element CES</th><th>P1S (powiązany)</th><th class="r">Akcje</th></tr></thead><tbody>${rootRow}${rows.length?rows.join(''):empty}</tbody></table></div>`; }
 function newWiz(){ return {step:0, code:'M28', name:'M28 – modernizacja', type:'WEW', sel:[], p1s:['M28-01','M28-02'], open:{}, page:{}, imp:{}, busy:false, progress:[]}; }
 const eqP=(a,b)=>a.length===b.length && a.every((x,i)=>x===b[i]);
 const preP=(a,b)=>a.length<=b.length && a.every((x,i)=>x===b[i]); // a jest przodkiem (albo równe) b
 const wInScope=(w,org)=> w.p1s.includes(org) || selHas(w.sel,org);
 function pickRow(org){ const w=S.wiz, o=orgInfo(org), z=scopeOfOrg(org), grp=selHas(w.sel,org);
-  return `<li><label class="chk ${z||grp?'dis':''}"><input type="checkbox" data-wp="${org}" ${w.p1s.includes(org)||grp?'checked':''} ${z||grp?'disabled':''}><span><span class="mono">${org}</span> · ${esc(o.name)} <span class="tag">${esc(catLabel(catOf(org)))||'bez kategorii w WBS'}</span>${z?` <span class="muted small">należy do ${esc(z.code)}</span>`:grp?' <span class="muted small">w zaznaczonej grupie</span>':''}</span></label></li>`; }
-function wDicts(w){ return ['wp','harm'].concat(w.type==='CAS'?['cas']:[]); }
+  return `<li><span class="pogrip" data-poadd="${org}" title="Przeciągnij do kontraktu (Performance Objectives)">⋮⋮</span> <label class="chk ${z||grp?'dis':''}"><input type="checkbox" data-wp="${org}" ${w.p1s.includes(org)||grp?'checked':''} ${z||grp?'disabled':''}><span><span class="mono">${org}</span> · ${esc(o.name)} <span class="tag">${esc(catLabel(catOf(org)))||'bez kategorii w WBS'}</span>${z?` <span class="muted small">należy do ${esc(z.code)}</span>`:grp?' <span class="muted small">w zaznaczonej grupie</span>':''}</span></label></li>`; }
+function wDicts(w){ return ['wp','harm'].concat(w.type==='CAS'?['cas']:[]).concat('excl'); }
 /* Drzewo wyboru: Z_KAT_ZBIORCZA → Z_KATEGORIA → Z_OPIS → PROJORG (strony po 25). Checkbox na każdym poziomie, rozwijanie w dół. */
 function wizTree(){
   const w=S.wiz, T=new Map();
@@ -1327,7 +1373,7 @@ function wizTree(){
   return h;
 }
 function wOrgRow(org,depth){ const w=S.wiz, o=orgInfo(org), z=scopeOfOrg(org), grp=selHas(w.sel,org);
-  return `<li><div class="trow" style="padding-left:${depth*18}px"><span class="tg blank"></span><label class="wck ${z?'dis':''}"><input type="checkbox" data-wp="${org}" ${w.p1s.includes(org)||grp?'checked':''} ${z||grp?'disabled':''}><span><span class="mono">${org}</span> ${esc(o.name)}${z?` <span class="tag">${esc(z.code)}</span> <span class="muted small">należy do innego projektu</span>`:''}</span></label></div></li>`; }
+  return `<li><div class="trow" style="padding-left:${depth*18}px"><span class="tg blank"></span><span class="pogrip" data-poadd="${org}" title="Przeciągnij do kontraktu (Performance Objectives)">⋮⋮</span><label class="wck ${z?'dis':''}"><input type="checkbox" data-wp="${org}" ${w.p1s.includes(org)||grp?'checked':''} ${z||grp?'disabled':''}><span><span class="mono">${org}</span> ${esc(o.name)}${z?` <span class="tag">${esc(z.code)}</span> <span class="muted small">należy do innego projektu</span>`:''}</span></label></div></li>`; }
 function selChips(sel,orgs,x){ return [...sel.map(p=>`<span class="tag" title="grupa – wszystkie jej PROJORG">${esc(p.join(' › '))} · ${nf(pathCount(p))}${x?` <button class="x-btn" data-a="wunsel" data-x="${esc(p.join('|'))}" aria-label="Usuń ${esc(p.join(' › '))}">×</button>`:''}</span>`),
   ...orgs.filter(o=>!selHas(sel,o)).map(o=>`<span class="tag">${o} · ${esc(orgInfo(o)?.name||'')}${x?` <button class="x-btn" data-a="wunpick" data-x="${o}" aria-label="Usuń ${o}">×</button>`:''}</span>`)].join(' '); }
 
@@ -1338,14 +1384,15 @@ let XLSXP=null;
 function loadXLSX(){ return XLSXP ||= new Promise((res,rej)=>{ if(window.XLSX) return res(window.XLSX); const s=document.createElement('script'); s.src=XLSX_URL; s.onload=()=>res(window.XLSX); s.onerror=()=>{ XLSXP=null; rej(new Error('nie udało się wczytać biblioteki Excel')); }; document.head.appendChild(s); }); }
 const XDEF={
   wp:{sheet:['wp i cam','wp','cam'], cols:{wp:['wp','work package','pakiet pracy'], p1s:['element p1s','element','wbs','wbs element','psp','p1s'], cam:['cam','control account manager'], cat:['cost category','kategoria kosztu','kategoria','cat']}},
-  harm:{sheet:['harmonogram i budzet','harmonogram','budzet','budget'], cols:{wp:['wp','work package'], bac:['bac','budzet','budget'], start:['start','od','poczatek'], finish:['koniec','finish','do','end']}},
-  cas:{sheet:['stawki cas','cas'], cols:{dept:['wydzial','dept'], year:['rok','year'], rate:['stawka cas','stawka','rate']}}
+  harm:{sheet:['harmonogram i budzet','harmonogram','budzet','budget'], cols:{wp:['wp','work package'], bac:['bac hours','bac','budzet godzin','bac h'], bacmat:['bac material','budzet materialowy','material','bac mat'], start:['start','od','poczatek'], finish:['koniec','finish','do','end']}},
+  cas:{sheet:['stawki cas','cas'], cols:{dept:['wydzial','dept'], year:['rok','year'], rate:['stawka cas','stawka','rate']}},
+  excl:{sheet:['wykluczenia','exclusions','wyklucz'], cols:{ce:['cost element','element kosztowy','ce','nr elementu kosztowego'], wbs:['wbs element','wbs','element wbs','psp'], partner:['partner object','partner','obiekt partnera'], opis:['opis','description','uzasadnienie','komentarz']}}
 };
 const nrm=s=>String(s??'').toLowerCase().replace(/ł/g,'l').normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/\[.*?\]|\(.*?\)/g,'').replace(/[^a-z0-9]+/g,' ').trim();
 function parseCSV(txt){ const L=txt.replace(/\r/g,'').split('\n').filter(l=>l.trim()), f=L[0]||'', d=[';','\t',','].sort((a,b)=>f.split(b).length-f.split(a).length)[0];
   return L.map(l=>{ const out=[]; let cur='', q=false; for(const ch of l){ if(ch==='"') q=!q; else if(ch===d && !q){ out.push(cur); cur=''; } else cur+=ch; } out.push(cur); return out.map(x=>x.trim()); }); }
 async function readBook(file){
-  if(/\.csv$/i.test(file.name)) return [{name:file.name.replace(/\.csv$/i,''), rows:parseCSV(await file.text())}];
+  if(/\.(csv|txt|tsv)$/i.test(file.name)) return [{name:file.name.replace(/\.(csv|txt|tsv)$/i,''), rows:parseCSV(await file.text())}];
   const X=await loadXLSX(), wb=X.read(await file.arrayBuffer(), {type:'array'});
   return wb.SheetNames.map(n=>({name:n, rows:X.utils.sheet_to_json(wb.Sheets[n], {header:1, raw:true, defval:''})}));
 }
@@ -1360,7 +1407,7 @@ const CATSET=['Labor','Material','Subcontract'];
 function parseDict(kind,raw,ctx){
   const def=DEFS[kind], out={rows:[], issues:[], miss:[]}, h=headerIdx(kind,raw||[]);
   if(!h){ out.miss=Object.keys(XDEF[kind].cols); return out; } if(h.miss.length){ out.miss=h.miss; return out; }
-  const seen={}, seenEl={}, lab=k=>def.cols.find(c=>c.k===k).l;
+  const seen={}, seenEl={}, seenEx={}, lab=k=>def.cols.find(c=>c.k===k).l;
   raw.slice(h.hi+1).forEach((r,ri)=>{ if(!r.some(v=>String(v).trim())) return;
     const line=h.hi+ri+2, v={}, iss=[], E=m=>iss.push({line,lvl:'err',msg:m}), Wn=m=>iss.push({line,lvl:'warn',msg:m});
     for(const c of def.cols){ const x=r[h.idx[c.k]]; v[c.k]= c.t==='date'? toYmd(x) : String(x??'').trim(); }
@@ -1375,6 +1422,7 @@ function parseDict(kind,raw,ctx){
         else if(seenEl[v.p1s]) E(`${v.p1s} ma już WP ${seenEl[v.p1s]} – jeden element P1S = jeden WP`); else seenEl[v.p1s]=v.wp; }
       if(v.cam && !PEOPLE.includes(v.cam)) Wn(`CAM „${v.cam}” spoza listy osób – sprawdź pisownię`);
     }
+    if(kind==='excl'){ if(!(v.ce||v.wbs||v.partner)) E('podaj co najmniej jedno z: Cost Element, WBS Element, Partner object'); const ck=[v.ce,v.wbs,v.partner].map(x=>(x||'').toLowerCase()).join('|'); if(v.ce||v.wbs||v.partner){ if(seenEx[ck]) E(`powtórzona kombinacja (wiersz ${seenEx[ck]})`); else seenEx[ck]=line; } }
     if(kind==='harm'){ if(v.wp && ctx.wps && !ctx.wps.has(v.wp)) E(`WP ${v.wp} nie ma w „WP i CAM”`); else if(v.wp && !ctx.wps) Wn('nie wczytano „WP i CAM” – nie sprawdzono WP');
       if(/^\d{4}/.test(v.start) && /^\d{4}/.test(v.finish) && v.start>v.finish) E('„Start” później niż „Koniec”'); }
     const key=def.key.map(k=>String(v[k]).toLowerCase()).join('|'); if(def.key.every(k=>v[k])){ if(seen[key]) E(`powtórzony klucz ${def.key.map(k=>lab(k)+' '+v[k]).join(', ')} (wiersz ${seen[key]})`); else seen[key]=line; }
@@ -1388,11 +1436,12 @@ function wizParsed(w){ const ctx=wizCtx(w), P={};
   const wps = P.wp ? new Set(P.wp.rows.filter(r=>!r.bad).map(r=>r.v.wp)) : null;
   if(w.imp.harm) P.harm=parseDict('harm',w.imp.harm.raw,{...ctx, wps});
   if(w.imp.cas && w.type==='CAS') P.cas=parseDict('cas',w.imp.cas.raw,ctx);
+  if(w.imp.excl) P.excl=parseDict('excl',w.imp.excl.raw,ctx);
   return P; }
 const bad = p => p && (p.miss.length || p.issues.some(i=>i.lvl==='err'));
 function impPanel(kind,imp,p){
   const def=DEFS[kind];
-  if(!imp) return `<section class="panel flat"><div class="row between"><h3>${def.name}</h3>${pill('todo','nie wczytano')}</div><p class="muted small">Kolumny: ${def.cols.map(c=>c.l).join(' · ')}. Bez słownika pierwszy przebieg będzie zablokowany.</p></section>`;
+  if(!imp) return `<section class="panel flat"><div class="row between"><h3>${def.name}</h3>${pill('todo','nie wczytano')}</div><p class="muted small">Kolumny: ${def.cols.map(c=>c.l).join(' · ')}. ${kind==='excl'?'Słownik opcjonalny – wskazane elementy są pomijane w przeliczeniu (min. 1 z 3 pól kluczowych; opis wymagany).':'Bez słownika pierwszy przebieg będzie zablokowany.'}</p></section>`;
   const errs=p.issues.filter(i=>i.lvl==='err'), warns=p.issues.filter(i=>i.lvl==='warn');
   const st = p.miss.length? pill('crit','brak kolumn') : errs.length? pill('crit',errs.length+' błędów') : pill('ok',p.rows.length+' wierszy');
   return `<section class="panel flat"><div class="row between"><h3>${def.name}</h3><span class="row">${st}${warns.length?pill('warn',warns.length+' ostrzeżeń'):''}<button class="btn small" data-a="ximpDel" data-x="${kind}">Usuń</button></span></div>
@@ -1413,15 +1462,22 @@ async function saveBook(filename,sheets){ // sheets: [[nazwa, [[nagłówki], ...
   await saveFile(filename, new Blob([X.write(wb,{type:'array',bookType:'xlsx'})]));
 }
 /* Przykład / szablon dla zakresu: WP na elementach poziomu 2 PROJORG z zakresu (w próbce danych). */
-function sampleDicts(code,orgs,type,fill){
-  const nodes=orgs.flatMap(o=>orgInfo(o).nodes.filter(n=>n[2]===2)).slice(0,40), C=code.toUpperCase().replace(/[^A-Z0-9]/g,'');
+function sampleDicts(code,els,type,fill){
+  const nodes=(els||[]).slice(0,40), C=code.toUpperCase().replace(/[^A-Z0-9]/g,'');
   const wp=nodes.map((n,i)=>[C+'-WP-'+(101+i), n[0], fill?PEOPLE[(i*3+2)%PEOPLE.length]:'', 'Labor']);
   const src=fill? wp.slice(0,-1) : wp; // w przykładzie ostatni element bez WP
-  const harm=(fill? src.slice(0,-1) : src).map((r,i)=>[r[0], fill? 600+i*150 : '', fill?'2026-10-01':'', fill?'2027-06-30':'']); // w przykładzie ostatni WP bez budżetu
+  const harm=(fill? src.slice(0,-1) : src).map((r,i)=>[r[0], fill? 600+i*150 : '', fill? 20000+i*5000 : '', fill?'2026-10-01':'', fill?'2027-06-30':'']); // w przykładzie ostatni WP bez budżetu
   const S_=[['WP i CAM',[DEFS.wp.cols.map(c=>c.l),...src]],['Harmonogram i budżet',[DEFS.harm.cols.map(c=>c.l),...harm]]];
   if(type==='CAS') S_.push(['Stawki CAS',[DEFS.cas.cols.map(c=>c.l),...(fill?[['W-101','2026','55.20']]:[])]]);
+  const ex = fill? [ [ (nodes[0]&&nodes[0][0])||'', '', '', 'Element spoza zakresu kontraktu – wyłączony z EV' ],
+    [ '0057100000', '', '', 'Proj Sttlmnt Bill – rozliczenie, nie koszt' ],
+    [ '', '', 'IC-TRANSFER', 'Przeksięgowania międzyfirmowe – pomijane' ] ] : [];
+  S_.push(['Wykluczenia',[DEFS.excl.cols.map(c=>c.l),...ex]]);
   return S_;
 }
+function wizEls(w){ const po=(w.po&&w.po.nodes.filter(n=>n.kind==='el'))||[];
+  if(po.length) return po.map(n=>[n.legacy||n.c||n.id, n.name||n.c||n.legacy||'']);
+  return wizOrgs(w).flatMap(o=>orgInfo(o).nodes.filter(n=>n[2]===2)).slice(0,40).map(n=>[n[0],n[1]]); }
 const wizOrgs = w => [...new Set([...w.p1s, ...Object.keys(P1S_ORG).filter(o=>selHas(w.sel,o))])].filter(o=>!scopeOfOrg(o));
 
 /* Baza analityczna: drzewo P1S (kategoria → PROJORG → element) połączone z WP, CAM, budżetem, harmonogramem i elementami CES. */
@@ -1434,22 +1490,22 @@ function analytic(orgs,wpRows,harmRows){
     for(const n of o.nodes){ const w=byEl[n[0]], h=w&&byWp[w.wp], ces=cesN[n[0]]||0;
       const st = w ? (h && h.bac!=='' ? 'ok' : 'noBud') : (ces||n[3]) ? 'noWp' : '';
       if(st==='noWp') issues.noWp.push(n[0]); if(st==='noBud') issues.noBud.push(w.wp);
-      rows.push({kz:k?.kz||'', kat:k?.kat||'', opis:k?.opis||'', org, c:n[0], n:n[1], l:n[2], wp:w?.wp||'', cam:w?.cam||'', cat:w?.cat||'', bac:h?.bac??'', start:h?.start||'', finish:h?.finish||'', ces, st}); } }
-  const cams={}; for(const v of wpRows){ const h=byWp[v.wp], c=(cams[v.cam] ||= {wp:0, bac:0, start:'', finish:''}); c.wp++; if(h){ c.bac+=Number(h.bac)||0; if(h.start&&(!c.start||h.start<c.start)) c.start=h.start; if(h.finish&&h.finish>c.finish) c.finish=h.finish; } }
+      rows.push({kz:k?.kz||'', kat:k?.kat||'', opis:k?.opis||'', org, c:n[0], n:n[1], l:n[2], wp:w?.wp||'', cam:w?.cam||'', cat:w?.cat||'', bac:h?.bac??'', bacmat:h?.bacmat??'', start:h?.start||'', finish:h?.finish||'', ces, st}); } }
+  const cams={}; for(const v of wpRows){ const h=byWp[v.wp], c=(cams[v.cam] ||= {wp:0, bac:0, bacmat:0, start:'', finish:''}); c.wp++; if(h){ c.bac+=Number(h.bac)||0; c.bacmat+=Number(h.bacmat)||0; if(h.start&&(!c.start||h.start<c.start)) c.start=h.start; if(h.finish&&h.finish>c.finish) c.finish=h.finish; } }
   return {rows, issues, cams};
 }
 function analyticHtml(A){
   const mp=S.wiz||{}, open=mp.aopen||{}, stl={ok:pill('ok','WP + budżet'), noBud:pill('warn','WP bez budżetu'), noWp:pill('warn','brak WP'), '':'<span class="muted small">—</span>'};
   const G=new Map(); for(const r of A.rows){ const k=r.kz?[r.kz,r.kat,r.opis].join(' › '):'Bez kategorii w WBS'; (G.get(k)||G.set(k,new Map()).get(k)); const M=G.get(k); (M.get(r.org)||M.set(r.org,[]).get(r.org)).push(r); }
-  const sumB=rs=>sum(rs.map(r=>Number(r.bac)||0)), roll=rs=>`<td class="num">${rs.filter(r=>r.wp).length} WP</td><td class="num">${new Set(rs.filter(r=>r.cam).map(r=>r.cam)).size} CAM</td><td></td><td class="r num">${nf(sumB(rs))}</td><td></td><td></td><td class="r num">${sum(rs.map(r=>r.ces))}</td>`;
+  const sumB=rs=>sum(rs.map(r=>Number(r.bac)||0)), sumBM=rs=>sum(rs.map(r=>Number(r.bacmat)||0)), roll=rs=>`<td class="num">${rs.filter(r=>r.wp).length} WP</td><td class="num">${new Set(rs.filter(r=>r.cam).map(r=>r.cam)).size} CAM</td><td></td><td class="r num">${nf(sumB(rs))}</td><td class="r num">${nf(sumBM(rs))}</td><td></td><td></td><td class="r num">${sum(rs.map(r=>r.ces))}</td>`;
   let body='';
   for(const [k,M] of G){ const all=[...M.values()].flat();
     body+=`<tr class="l1"><td><b>${esc(k)}</b></td>${roll(all)}<td>${all.some(r=>r.st==='noWp'||r.st==='noBud')?pill('warn','do uzupełnienia'):pill('ok','kompletne')}</td></tr>`;
     for(const [org,rs] of M){ const op=!!open[org];
       body+=`<tr class="l2"><td style="padding-left:22px"><button class="tg" data-a="atog" data-x="${org}" aria-label="${op?'Zwiń':'Rozwiń'} ${org}">${op?'▾':'▸'}</button> <span class="mono"><b>${org}</b></span> ${esc(orgInfo(org).name)}</td>${roll(rs)}<td>${rs.some(r=>r.st==='noWp'||r.st==='noBud')?pill('warn','do uzupełnienia'):''}</td></tr>`;
-      if(op) body+=rs.filter(r=>r.l>1).map(r=>`<tr><td style="padding-left:${30+r.l*14}px"><span class="mono">${r.c}</span> <span class="small">${esc(r.n)}</span></td><td class="mono">${esc(r.wp)||'—'}</td><td>${esc(r.cam)||'—'}</td><td>${esc(r.cat)}</td><td class="r num">${r.bac===''?'—':nf(Number(r.bac))}</td><td class="num">${r.start||'—'}</td><td class="num">${r.finish||'—'}</td><td class="r num">${r.ces||''}</td><td>${stl[r.st]}</td></tr>`).join('');
+      if(op) body+=rs.filter(r=>r.l>1).map(r=>`<tr><td style="padding-left:${30+r.l*14}px"><span class="mono">${r.c}</span> <span class="small">${esc(r.n)}</span></td><td class="mono">${esc(r.wp)||'—'}</td><td>${esc(r.cam)||'—'}</td><td>${esc(r.cat)}</td><td class="r num">${r.bac===''?'—':nf(Number(r.bac))}</td><td class="r num">${r.bacmat===''?'—':nf(Number(r.bacmat))}</td><td class="num">${r.start||'—'}</td><td class="num">${r.finish||'—'}</td><td class="r num">${r.ces||''}</td><td>${stl[r.st]}</td></tr>`).join('');
     } }
-  return `<div class="tbl-wrap"><table class="atree"><thead><tr><th>Kategoria › PROJORG › element P1S</th><th>WP</th><th>CAM</th><th>Cost Category</th><th class="r">BAC [h]</th><th>Start</th><th>Koniec</th><th class="r">El. CES</th><th>Stan</th></tr></thead><tbody>${body||'<tr><td colspan="9" class="muted">Brak elementów P1S w próbce danych dla zakresu.</td></tr>'}</tbody></table></div>`;
+  return `<div class="tbl-wrap"><table class="atree"><thead><tr><th>Kategoria › PROJORG › element P1S</th><th>WP</th><th>CAM</th><th>Cost Category</th><th class="r">BAC HOURS [h]</th><th class="r">BAC MATERIAL [PLN]</th><th>Start</th><th>Koniec</th><th class="r">El. CES</th><th>Stan</th></tr></thead><tbody>${body||'<tr><td colspan="10" class="muted">Brak elementów P1S w próbce danych dla zakresu.</td></tr>'}</tbody></table></div>`;
 }
 function vWizard(){
   const w=S.wiz || (S.wiz=newWiz()); w.sel ||= []; w.open ||= {}; w.page ||= {}; w.imp ||= {};
@@ -1465,11 +1521,15 @@ function vWizard(){
   if(w.step===1){
     const taken=Object.keys(P1S_ORG).filter(o=>selHas(w.sel,o) && scopeOfOrg(o));
     body=`
-    <div class="field"><label>Zakres projektu · ${nf(total)} PROJORG</label>
+    <div class="note info"><b>Performance Objectives</b> – nadrzędna struktura kontraktu po stronie <b>CES</b>, po której raportuje się wykonanie (nie tylko po elemencie kosztowym). Kotwicą jest CES: element w kolumnie <span class="mono">WBS element</span> pociąga poddrzewo z globalnego mapowania, a strona P1S wchodzi jako dodatkowe zadania. Strukturę można zmieniać i grupować PSP we własnych, wirtualnych węzłach.</div>
+    <section class="panel flat"><div class="row between"><h3>Struktura kontraktu (CES)</h3><span class="muted small">${w.po&&w.po.nodes.length? w.po.nodes.filter(n=>n.kind==='el').length+' elementów · '+w.po.nodes.filter(n=>n.kind==='v').length+' węzłów' : 'eksport SAP / ręcznie'}</span></div>
+      <span class="hint">Tabela kontraktu: <b>Nazwa</b> · <b>Element CES</b> (WBS) · <b>P1S</b> (powiązany, Legacy WBS). Przeciągnij wiersz za uchwyt ⋮⋮ na węzeł (albo na „korzeń”, aby odpiąć). Elementy WBS możesz też przeciągać z listy P1S poniżej wprost do kontraktu. Po prawej: edytuj (✎), dodaj podwęzeł (＋), usuń (✕). „+ węzeł” dodaje węzeł wirtualny; wczytasz też eksport SAP (.xlsx) albo CSV/TXT (wklejone z Excela).</span>
+      ${poTable(w)}</section>
+    <section class="panel flat"><div class="row between"><h3>Strona P1S (LOG.WBS) · wg mapowania CES↔P1S</h3><span class="muted small">${nf(total)} PROJORG</span></div>
       <div class="row">${selChips(w.sel,w.p1s,true)||'<span class="muted">nic nie zaznaczono – zaznacz w drzewie poniżej</span>'}</div>
-      <span class="hint">Zaznacz całe grupy albo pojedyncze PROJORG – na dowolnym poziomie. Grupa obejmuje wszystkie swoje PROJORG i ich elementy WBS/PSP. PROJORG należący do innego projektu jest pomijany.</span></div>
+      <span class="hint">Mapowanie CES↔P1S to <b>odrębna struktura</b> łącząca elementy obu systemów – <a href="#" data-a="nav" data-x="mapa">ADMIN → Mapowanie</a>. Drzewo pochodzi z <span class="mono">LOG.WBS</span> (ma strukturę drzewa, więc łatwo się odnaleźć). <b>Przeciągnij PROJORG za uchwyt ⋮⋮ do tabeli kontraktu powyżej</b>, aby zbudować listę z własnych elementów WBS. PROJORG należący do innego projektu jest pomijany.</span>
     ${taken.length?`<div class="note warn">W zaznaczonych grupach ${taken.length} PROJORG należy już do innych projektów i zostanie pominięte: ${taken.map(o=>o+' ('+scopeOfOrg(o).code+')').join(', ')}.</div>`:''}
-    <section class="panel flat"><div class="row between"><h3>Drzewo P1S · Z_KAT_ZBIORCZA › Z_KATEGORIA › Z_OPIS › PROJORG</h3><span class="muted small">${nf(P1S_TOTAL)} PROJORG</span></div>${p1sInput()}
+    ${p1sInput()}
       ${S.mp.pq.trim().length>=3? `${p1sCatalog(true,true)}<button class="btn small" data-a="pqClear">Wyczyść wyszukiwanie</button>` : `<ul class="mt">${wizTree()}</ul>`}</section>`;
   }
   if(w.step===2) body=`
@@ -1479,7 +1539,7 @@ function vWizard(){
     ${wDicts(w).map(k=>impPanel(k,w.imp[k],P[k])).join('')}
     <div class="stack"><h3>Słowniki globalne</h3><p class="muted small">Przypinane razem ze słownikami projektu w każdym przebiegu.</p>
       <ul class="checks">${['stawki','kalendarz','kursy'].map(d=>`<li><span class="ic ok">✓</span><span>${dname(d)} <span class="tag">${rowsOf(d)} wierszy · zmiana ${esc(S.dicts[d].lastAt)}</span></span></li>`).join('')}</ul></div>
-    <div class="note">CAM przypisujesz do WP w arkuszu „WP i CAM” – na tej podstawie powstają pliki dla CAM. Słownik z błędami nie zostanie zapisany; bez słowników pierwszy przebieg jest zablokowany.</div>`;
+    <div class="note">CAM przypisujesz do WP w arkuszu „WP i CAM” – na tej podstawie powstają pliki dla CAM. Słownik z błędami nie zostanie zapisany; bez słowników WP/CAM i Harmonogram pierwszy przebieg jest zablokowany. Słownik <b>„Wykluczenia”</b> (Cost Element / WBS Element / Partner object + opis; wystarczy 1 z 3 pól, opis wymagany) jest opcjonalny – wskazane elementy są pomijane w przeliczeniu.</div>`;
   if(w.step===3) body=`<pre class="tree">${esc(folderTree(w.code||'KOD'))}</pre>
     <ul class="checks"><li><span class="ic ok">✓</span><span>Korzeń <span class="mono">${esc(ROOT)}</span> dostępny (ścieżka UNC)</span></li>
       <li><span class="ic ok">✓</span><span>Masz prawo zapisu w <span class="mono">Projekty\\</span></span></li>
@@ -1496,7 +1556,7 @@ function vWizard(){
      <ul class="checks">
       ${chk(total>0,'Zakres: '+nf(total)+' PROJORG'+(orgs.length?` (w próbce danych: ${orgs.length}, ${A.rows.length} elementów WBS/PSP)`:''),'crit')}
       ${chk(ok('wp').length>0, ok('wp').length? `WP i CAM: ${ok('wp').length} WP, ${Object.keys(A.cams).length} CAM` : bad(P.wp)?'WP i CAM: plik z błędami – nie zostanie zapisany':'WP i CAM: nie wczytano – słownik pusty, pierwszy przebieg zablokowany')}
-      ${chk(ok('harm').length>0 && !A.issues.noBud.length, ok('harm').length? `Harmonogram i budżet: ${ok('harm').length} WP, BAC ${nf(sum(ok('harm').map(v=>Number(v.bac)||0)))} h${A.issues.noBud.length?` · bez budżetu: ${A.issues.noBud.join(', ')}`:''}` : 'Harmonogram i budżet: nie wczytano')}
+      ${chk(ok('harm').length>0 && !A.issues.noBud.length, ok('harm').length? `Harmonogram i budżet: ${ok('harm').length} WP, BAC ${nf(sum(ok('harm').map(v=>Number(v.bac)||0)))} h + ${nf(sum(ok('harm').map(v=>Number(v.bacmat)||0)))} PLN mat.${A.issues.noBud.length?` · bez budżetu: ${A.issues.noBud.join(', ')}`:''}` : 'Harmonogram i budżet: nie wczytano')}
       ${A.issues.noWp.length? chk(false,`Elementy z kosztami CES lub zaawansowaniem bez WP: ${A.issues.noWp.join(', ')} – nie trafią do żadnego WP w EV`) : ''}
       ${chk(true,`Koszty CES: ${inCes.length} elementów CES przypisanych do zakresu (ADMIN → Mapowanie)${unm.length?` · ${unm.length} UNMAPPED z propozycją w zakresie`:''}`)}
      </ul>
@@ -1504,12 +1564,12 @@ function vWizard(){
      ${!total?'<div class="note crit">Zaznacz co najmniej jedną grupę albo PROJORG w kroku 2.</div>':''}
      ${errs.length?`<div class="note crit">Słowniki z błędami: ${errs.map(k=>DEFS[k].name).join(', ')}. Popraw plik albo usuń import w kroku 3.</div>`:''}
      <section class="panel flat"><div class="row between"><h3>Baza analityczna · drzewo ↔ WP ↔ CAM ↔ budżet ↔ harmonogram</h3><button class="btn small" data-a="anExp">Pobierz (xlsx)</button></div>
-       <p class="muted small">Tak zostanie połączone w bazie: element P1S z drzewa → WP (WP i CAM) → budżet i daty (Harmonogram i budżet) → elementy CES przypisane w mapowaniu. Rozwiń PROJORG, aby zobaczyć elementy.</p>
+       <p class="muted small">Tak zostanie połączone w bazie: węzeł Performance Objectives (CES) → strona P1S (dodatkowe zadanie) → WP (WP i CAM) → budżet i daty (Harmonogram i budżet). Rozwiń PROJORG, aby zobaczyć elementy.</p>
        ${analyticHtml(A)}
-       ${Object.keys(A.cams).length?`<h3>Wg CAM</h3><div class="tbl-wrap"><table><thead><tr><th>CAM</th><th class="r">WP</th><th class="r">BAC [h]</th><th>Start</th><th>Koniec</th></tr></thead><tbody>${Object.entries(A.cams).sort().map(([c,v])=>`<tr><td>${esc(c)}</td><td class="r num">${v.wp}</td><td class="r num">${nf(v.bac)}</td><td class="num">${v.start||'—'}</td><td class="num">${v.finish||'—'}</td></tr>`).join('')}</tbody></table></div>`:''}</section>`;
+       ${Object.keys(A.cams).length?`<h3>Wg CAM</h3><div class="tbl-wrap"><table><thead><tr><th>CAM</th><th class="r">WP</th><th class="r">BAC HOURS [h]</th><th class="r">BAC MATERIAL [PLN]</th><th>Start</th><th>Koniec</th></tr></thead><tbody>${Object.entries(A.cams).sort().map(([c,v])=>`<tr><td>${esc(c)}</td><td class="r num">${v.wp}</td><td class="r num">${nf(v.bac)}</td><td class="r num">${nf(v.bacmat)}</td><td class="num">${v.start||'—'}</td><td class="num">${v.finish||'—'}</td></tr>`).join('')}</tbody></table></div>`:''}</section>`;
   }
   const canCreate=!dup && w.code.trim() && total>0 && !errs.length;
-  return `<div class="head"><div><div class="eyebrow"><a href="#" data-a="nav" data-x="zakresy">Projekty</a> / nowy</div><h1>Nowy projekt</h1><p class="sub">Kreator rejestruje projekt, zapisuje zakres z drzewa P1S, wczytuje słowniki projektu z Excela i tworzy foldery.</p></div></div>
+  return `<div class="head"><div><div class="eyebrow"><a href="#" data-a="nav" data-x="zakresy">Projekty</a> / nowy</div><h1>Nowy projekt</h1><p class="sub">Kreator rejestruje projekt, buduje strukturę Performance Objectives (CES), wczytuje słowniki projektu z Excela i tworzy foldery.</p></div></div>
   ${steps}<section class="panel">${body}
   <div class="row between"><button class="btn" data-a="wback" ${w.step===0||w.busy?'disabled':''}>Wstecz</button>
   ${w.step<WSTEPS.length-1?`<button class="btn primary" data-a="wnext">Dalej</button>`: w.progress.length&&!w.busy? `<button class="btn primary" data-a="zakres" data-x="${esc(w.code.toUpperCase())}">Przejdź do projektu</button>` : `<button class="btn primary" data-a="wcreate" ${canCreate&&!w.busy?'':'disabled'}>Utwórz projekt</button>`}</div></section>`;
@@ -1932,8 +1992,15 @@ const A={
   wunsel:x=>{ const w=S.wiz, p=x.split('|'); w.sel=w.sel.filter(q=>!eqP(q,p)); render(); },
   wpage:x=>{ const w=S.wiz, [px,d]=x.split('|'); w.page[px]=Math.max(0,Math.min((w.page[px]||0)+Number(d),Math.ceil(CAT[px].cnt/25)-1)); render(); },
   atog:x=>{ const w=S.wiz; (w.aopen ||= {})[x]=!w.aopen[x]; render(); },
-  xlsTpl:()=>{ const w=S.wiz; saveBook(w.code.toUpperCase()+'_slowniki_projektu.xlsx', sampleDicts(w.code,wizOrgs(w),w.type,false)); },
-  xlsDemo:()=>{ const w=S.wiz; for(const [n,aoa] of sampleDicts(w.code,wizOrgs(w),w.type,true)){ const k=n==='WP i CAM'?'wp':n==='Stawki CAS'?'cas':'harm'; w.imp[k]={file:'przykład (wygenerowany)', sheet:n, raw:aoa}; } render(); },
+  poDemo:()=>{ S.wiz.po=poFromRows(PO_SAMPLE.map(r=>({c:r.c,l:r.l,name:r.n,legacy:r.legacy,po:r.po}))); render(); },
+  poClear:()=>{ S.wiz.po={seq:1,nodes:[],editing:null}; render(); },
+  poAddNode:()=>{ const w=S.wiz; w.po=w.po||{seq:1,nodes:[],editing:null}; const id='V'+(w.po.seq++); w.po.nodes.push({id,parent:null,kind:'v',name:'Nowy węzeł',c:'',legacy:'',po:''}); w.po.editing=id; render(); },
+  poAdd:(x)=>{ const w=S.wiz; if(!w.po) return; const id='V'+(w.po.seq++); w.po.nodes.push({id,parent:x,kind:'v',name:'Nowy węzeł',c:'',legacy:'',po:''}); w.po.editing=id; render(); },
+  poDel:(x)=>{ const po=S.wiz.po; if(!po) return; const n=po.nodes.find(z=>z.id===x); if(!n) return; po.nodes.forEach(z=>{ if(z.parent===x) z.parent=n.parent; }); po.nodes=po.nodes.filter(z=>z.id!==x); if(po.editing===x) po.editing=null; render(); },
+  poEdit:(x)=>{ if(S.wiz.po) S.wiz.po.editing=x; render(); },
+  poEditDone:()=>{ if(S.wiz.po) S.wiz.po.editing=null; render(); },
+  xlsTpl:()=>{ const w=S.wiz; saveBook(w.code.toUpperCase()+'_slowniki_projektu.xlsx', sampleDicts(w.code,wizEls(w),w.type,false)); },
+  xlsDemo:()=>{ const w=S.wiz; let orgs=wizOrgs(w); if(!orgs.length){ orgs=Object.keys(P1S_ORG).filter(o=>!scopeOfOrg(o)).slice(0,4); w.p1s=[...new Set([...w.p1s,...orgs])]; } const els=orgs.flatMap(o=>orgInfo(o).nodes.filter(n=>n[2]===2)).slice(0,40).map(n=>[n[0],n[1]]); const K={'WP i CAM':'wp','Harmonogram i budżet':'harm','Stawki CAS':'cas','Wykluczenia':'excl'}; for(const [n,aoa] of sampleDicts(w.code,els,w.type,true)){ const k=K[n]; if(k) w.imp[k]={file:'przykład (wygenerowany)', sheet:n, raw:aoa}; } render(); },
   ximpDel:x=>{ if(S.view.name==='dict') S.view={...S.view, ximp:null}; else delete S.wiz.imp[x]; render(); },
   ximpSave:()=>{ const d=S.dicts[S.view.id], x=S.view.ximp, p=parseDict(d.kind,x.raw,dictCtx(d)); if(bad(p)) return;
     const D=ximpDiff(d,p);
@@ -1943,8 +2010,8 @@ const A={
     S.view={...S.view, ximp:null}; save(); render(); toast('Słownik zastąpiony (stan #'+S.dbRev+').'); },
   xlsDictExp:x=>{ const d=S.dicts[x], def=DEFS[d.kind]; saveBook(S.zakresy[d.scope].code+'_'+def.name.replace(/\s+/g,'_')+'.xlsx', [[def.name,[def.cols.map(c=>c.l), ...active(d).map(r=>def.cols.map(c=>r.v[c.k]))]]]); },
   anExp:()=>{ const w=S.wiz, P=wizParsed(w), ok=k=>P[k] && !bad(P[k]) ? P[k].rows.map(r=>r.v) : [], A=analytic(wizOrgs(w),ok('wp'),ok('harm'));
-    saveBook(w.code.toUpperCase()+'_baza_analityczna.xlsx', [['Baza analityczna',[['Z_KAT_ZBIORCZA','Z_KATEGORIA','Z_OPIS','PROJORG','Element P1S','Opis','STUFE','WP','CAM','Cost Category','BAC [h]','Start','Koniec','Elementy CES','Stan'],
-      ...A.rows.map(r=>[r.kz,r.kat,r.opis,r.org,r.c,r.n,r.l,r.wp,r.cam,r.cat,r.bac===''?'':Number(r.bac),r.start,r.finish,r.ces,{ok:'WP + budżet',noBud:'WP bez budżetu',noWp:'brak WP'}[r.st]||''])]]]); },
+    saveBook(w.code.toUpperCase()+'_baza_analityczna.xlsx', [['Baza analityczna',[['Z_KAT_ZBIORCZA','Z_KATEGORIA','Z_OPIS','PROJORG','Element P1S','Opis','STUFE','WP','CAM','Cost Category','BAC HOURS [h]','BAC MATERIAL [PLN]','Start','Koniec','Elementy CES','Stan'],
+      ...A.rows.map(r=>[r.kz,r.kat,r.opis,r.org,r.c,r.n,r.l,r.wp,r.cam,r.cat,r.bac===''?'':Number(r.bac),r.bacmat===''?'':Number(r.bacmat),r.start,r.finish,r.ces,{ok:'WP + budżet',noBud:'WP bez budżetu',noWp:'brak WP'}[r.st]||''])]]]); },
 
   /* przebieg */
   newrun:x=>{ S.modal={zid:x, kind:'weekly'}; render(); },
@@ -2009,6 +2076,9 @@ document.addEventListener('click',e=>{
 document.addEventListener('input',e=>{
   const t=e.target;
   if(t.dataset.w!==undefined) S.wiz[t.dataset.w]=t.value;
+  if(t.dataset.poname!==undefined){ const n=(S.wiz.po?.nodes||[]).find(n=>n.id===t.dataset.poname); if(n) n.name=t.value; }
+  if(t.dataset.poces!==undefined){ const n=(S.wiz.po?.nodes||[]).find(n=>n.id===t.dataset.poces); if(n) n.c=t.value; }
+  if(t.dataset.pop1s!==undefined){ const n=(S.wiz.po?.nodes||[]).find(n=>n.id===t.dataset.pop1s); if(n) n.legacy=t.value; }
   for(const [k,set,id] of [['mq',v=>{S.mp.q=v; S.mp.cpage=0;},'#mq'],['pq',v=>{S.mp.pq=v;},'#pq'],['aq',v=>{S.adm.q=v; S.adm.pg=0;},'#aq'],['pf',v=>{S.pul.q=v;},'#pf']])
     if(t.dataset[k]!==undefined){ set(t.value); const pos=t.selectionStart; render(); const n=$(id); if(n){ n.focus(); n.setSelectionRange(pos,pos); } }
 });
@@ -2024,6 +2094,23 @@ document.addEventListener('change',e=>{
   if(t.dataset.mz!==undefined){ S.mp.z=t.value; S.mp.cpage=0; render(); }
   if(t.dataset.dall!==undefined){ S.view={...S.view, all:t.checked}; render(); }
 });
+/* drag & drop PO (pointer events – mysz i dotyk): wiersz ⋮⋮ → węzeł / korzeń */
+let POD=null, POGHOST=null;
+function poDescSet(id){ const po=S.wiz&&S.wiz.po; if(!po) return new Set(); const bp={}; po.nodes.forEach(n=>{ (bp[n.parent||'']||(bp[n.parent||'']=[])).push(n); }); const out=new Set(); (function go(pp){ (bp[pp]||[]).forEach(c=>{ out.add(c.id); go(c.id); }); })(id); return out; }
+function poGhostAt(e){ if(POGHOST){ POGHOST.style.left=(e.clientX+12)+'px'; POGHOST.style.top=(e.clientY+14)+'px'; } }
+function poTargetAt(e){ const el=document.elementFromPoint(e.clientX,e.clientY); const tr=el&&el.closest&&el.closest('tr.po-row'); if(!tr) return null; const id=tr.getAttribute('data-ponode'); if(!POD.add){ if(id===POD.id) return null; if(id && POD.bad.has(id)) return null; } return tr; }
+document.addEventListener('pointerdown',e=>{ const g=e.target.closest&&e.target.closest('[data-pogrip],[data-poadd]'); if(!g) return; e.preventDefault();
+  if(g.dataset.poadd!==undefined){ const code=g.dataset.poadd, oi=(typeof orgInfo==='function'&&orgInfo(code))||null; POD={add:true, code, name:(oi&&oi.name)||code}; }
+  else POD={id:g.dataset.pogrip, bad:poDescSet(g.dataset.pogrip)};
+  document.body.classList.add('po-dragging'); try{ g.setPointerCapture(e.pointerId); }catch(_){ }
+  POGHOST=document.createElement('div'); POGHOST.className='po-ghost';
+  POGHOST.textContent = POD.add? ('＋ '+POD.code+' '+(POD.name||'')) : ('↪ '+((()=>{ const n=S.wiz.po&&S.wiz.po.nodes.find(z=>z.id===POD.id); return (n&&(n.name||n.c))||'przenoszę'; })()));
+  document.body.appendChild(POGHOST); poGhostAt(e); });
+document.addEventListener('pointermove',e=>{ if(!POD) return; poGhostAt(e); document.querySelectorAll('tr.po-row.over').forEach(x=>x.classList.remove('over')); const tr=poTargetAt(e); if(tr) tr.classList.add('over'); });
+document.addEventListener('pointerup',e=>{ if(!POD) return; const tr=poTargetAt(e); document.querySelectorAll('tr.po-row.over').forEach(x=>x.classList.remove('over')); document.body.classList.remove('po-dragging'); if(POGHOST){ POGHOST.remove(); POGHOST=null; } const d=POD; POD=null; if(!tr) return; const par=tr.getAttribute('data-ponode')||null;
+  if(d.add){ const w=S.wiz; w.po=w.po||{seq:1,nodes:[],editing:null}; const id='E'+(w.po.seq++); w.po.nodes.push({id,parent:par,kind:'el',name:d.name||'',c:'',legacy:d.code||'',po:''}); render(); }
+  else { const n=S.wiz.po&&S.wiz.po.nodes.find(z=>z.id===d.id); if(n){ n.parent=par; render(); } } });
+document.addEventListener('pointercancel',()=>{ if(!POD) return; document.querySelectorAll('tr.po-row.over').forEach(x=>x.classList.remove('over')); document.body.classList.remove('po-dragging'); if(POGHOST){ POGHOST.remove(); POGHOST=null; } POD=null; });
 /* drag & drop: CES (data-drag) → P1S (data-drop) */
 let DRAG=null;
 function dropOk(t){ return t.dataset.drop==='__unmap' || !!nodeOf(t.dataset.drop); }
@@ -2037,6 +2124,12 @@ document.addEventListener('keydown',e=>{ if(e.key==='Escape' && S.modal){ S.moda
   const t=e.target; if((e.key==='Enter'||e.key===' ') && t.matches?.('[role="button"][data-a]')){ e.preventDefault(); t.click(); } });
 async function xlsLoad(tg,file){
   let sheets; try{ sheets=await readBook(file); }catch(e){ return toast('Nie udało się odczytać pliku: '+(e.message||e)); }
+  if(tg==='po'){ const w=S.wiz; let rows=null;
+    for(const sh of sheets){ const pr=parsePO(sh.rows); if(pr){ rows=pr; break; } }
+    if(!rows){ toast('W pliku nie ma kolumny „WBS element” – sprawdź nagłówki (jak w eksporcie SAP).'); }
+    else { w.po=poFromRows(rows); toast('Wczytano strukturę kontraktu: '+rows.length+' elementów.'); }
+    save(); render(); return;
+  }
   if(tg==='wiz'){ const w=S.wiz, hit=[];
     for(const k of wDicts(w)){ const sh=pickSheet(k,sheets); if(sh){ w.imp[k]={file:file.name, sheet:sh.name, raw:sh.rows}; hit.push(DEFS[k].name); } }
     toast(hit.length? 'Wczytano: '+hit.join(', ') : 'W pliku nie ma arkusza ani kolumn słowników projektu – sprawdź nagłówki (jak w szablonie).');
