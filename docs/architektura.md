@@ -1,336 +1,203 @@
-# PZL-EV – Architektura rozwiązania
+# PZL-EV – Architektura
 
-Wersja: 1.2 (wstępny projekt; 1.1: ustalenia z prototypu v3 – M16–M26 w `docs/mapowanie-ces-p1s.md`;
-1.2: przepływ i etapy przeniesione do `docs/pipeline-fazy.md`)
-Status: **do akceptacji** – dokument nie zawiera implementacji.
+Zakres: technologia, uruchomienie i dystrybucja, warstwy i moduły aplikacji, podział logiki między aplikację
+i bazę, dysk sieciowy, środowiska, wymagania niefunkcjonalne i ryzyka.
 
-Powiązane dokumenty: `readme.md` (kontekst biznesowy), `docs/funkcjonalnosc.md` (specyfikacja
-funkcjonalna), `docs/pipeline-fazy.md` (przepływ i etapy), `prototyp/pzl-ev-prototyp.html` (klikalny prototyp).
-
----
-
-## 1. Kontekst i cele architektury
-
-Proces EV w PZL Mielec jest dziś wykonywany ręcznie w Excelu przez każdego analityka osobno.
-Architektura ma zapewnić:
-
-1. **Jedno źródło stanu** – każdy widzi, co zostało przetworzone, przez kogo i na jakich danych.
-2. **Odtwarzalność** – każdy wynik EV można odtworzyć (wersje słowników i danych są zapamiętane).
-3. **Kontrolę jakości danych** – walidacja słowników i plików przed użyciem.
-4. **Niezależność projektów** – programy nie czekają na siebie.
-5. **Wdrażalność w PZL** – bez serwera aplikacyjnego, z podziałem TEST (developer) / PROD (admin).
+Powiązane: `docs/model-danych.md` (dane i wersjonowanie), `docs/pipeline-fazy.md` (przepływ),
+`docs/uprawnienia.md` (role), `docs/funkcjonalnosc.md` (ekrany i funkcje).
 
 ---
 
-## 2. Decyzje architektoniczne
+## 1. Cele architektury
 
-| # | Decyzja | Uzasadnienie |
-|---|---|---|
-| D1 | Aplikacja w **Pythonie**, uruchamiana **lokalnie** przez użytkownika | brak konieczności uruchamiania na serwerze; każdy może mieć własną instancję |
-| D2 | Interfejs **przeglądarkowy** (lokalny serwer na `localhost`) | wygoda; ta sama aplikacja może później trafić na serwer |
-| D3 | **Centralna, zdalna baza MS SQL** dla danych (importy, przebiegi, wyniki EV); słowniki i przypisania – SQLite (D26) | każdy widzi, co już przetworzono, kto i kiedy |
-| D4 | **Logika biznesowa w bazie** (procedury, widoki); Python = orkiestracja, pliki, walidacja struktury, generowanie Excel | wynik nie zależy od wersji aplikacji na danym komputerze |
-| D5 | Logowanie do bazy **po AD** (Windows Authentication) | brak haseł na stanowiskach, audyt „kto co zrobił” |
-| D6 | Developer pracuje na **TEST**, wdrożenia na **PROD** wykonuje admin | wymóg organizacyjny PZL |
-| D7 | *(zmienione 30.09.2026: dowolny dzień tygodnia zamiast poniedziałku)* Przebiegi **co tydzień** ~~(poniedziałek)~~ – **w dowolny dzień tygodnia**, okres rozliczeniowy **miesięczny** | rytm pracy zespołu |
-| D8 | Wolumen danych przez sieć nie stanowi problemu | ładowanie z aplikacji lokalnej do bazy zdalnej |
-| D9 | **Brak podziału uprawnień** w finansach – każda osoba z finansów może prowadzić każdy projekt | zastępstwa, ciągłość pracy; AD służy do audytu |
-| D10 | Pliki dla finansów wymagają **formalnego potwierdzenia w aplikacji** (może je wykonać osoba prowadząca przebieg) | kontrola przed wysłaniem plików do CAM; zapis kto/kiedy |
-| D11 | Dopuszczalne ponowne przeliczenie EV | każde przeliczenie = nowa rewizja, poprzednie zostają |
-| D12 | Oryginały plików w centralnym folderze (Landing Zone), w bazie ścieżka + hash | odtwarzalność bez przyrostu bazy |
-| D13 | *(M22, M23: projekt = węzły drzewa P1S wybrane w kreatorze, zamiast programu / puli)* **Wszystko per projekt** (program / pula projektów); przebieg przypina stan słowników i przypisań (D27) | brak pipeline globalnego i przekazywania pracy, prosta współbieżność |
-| D14 | Tydzień: zaawansowanie z **produkcji** + uzupełnienia; **zamknięcie miesiąca: zaawansowanie wyłącznie od CAM** | bieżąca informacja co tydzień, formalne dane na zamknięcie |
-| D15 | Korzeń folderów na **dysku sieciowym** (UNC) | wspólna ścieżka dla wszystkich |
-| D16 | **CAM pracują wyłącznie na plikach** | bez wdrażania aplikacji u CAM |
-| D20 | ⚠ *(M9: wszystkie koszty CES liczone, `NO_P1S` odłożony – M14; UNMAPPED – P10)* Zamknięcie miesiąca wymaga przypisania elementów z kosztem | kompletność EV formalnego |
-| D23 | **Rozwiązanie docelowe: pliki RABIT kopiowane przez WebDAV** (`\\host@SSL\DavWWWRoot\…`, konto Windows użytkownika) do `00_Global\RABIT\Do_importu` komendą `pobierz` – tylko nowe i zmienione; następnie `import` do bazy | test 29.09.2026: WebDAV działa; API REST, synchronizacja i eksport do Excela nie są dostępne |
-| D22 | Awaryjnie (np. plik > 50 MB – limit usługi WebClient): pojedynczy plik pobrany ręcznie w przeglądarce do `00_Global\RABIT\Do_importu` | import traktuje go tak samo |
-| D27 | **Snapshot słowników w MS SQL:** przy przypięciu (start przebiegu / przeliczenie) aplikacja kopiuje stan bazy słowników do schematu `dict` w MS SQL z identyfikatorem wersji – procedury EV (D4) czytają słowniki z MS SQL, a przebieg pozostaje odtwarzalny | logika EV w MS SQL nie może czytać pliku SQLite |
-| D26 | **Lekka baza plikowa (SQLite) w repozytorium PZL-EV na dysku sieciowym** dla **wszystkich słowników, przypisań i konfiguracji** (mapowanie CES ↔ P1S, mapa przypisań WP/CAM, harmonogramy, budżety, stawki, kalendarz, kursy, źródła RABIT), edytowanych w interfejsie aplikacji (CRUD + drzewo); **Excel nie jest źródłem słowników** (M13, M15); dane importów (miliony wierszy) pozostają w MS SQL (M4). Przebieg kopiuje przypięty stan słowników do MS SQL (D27). Ryzyka SMB (blokady, brak WAL) ograniczane: krótkie transakcje, jeden zapis naraz, kopie pliku | brak konieczności serwera bazy; proste wdrożenie |
-| D25 | *(zastąpione w części: M16–M19 – źródłem prawdy jest raport mapowań SAP↔CES z `PZLPROD`, w bazie PZL-EV tylko korekty elementu / projektu CES; bez reguły projektu → `PROJORG`, wyjątków i `include_children`)* **Mapowanie CES ↔ P1S jako warstwa w bazie PZL-EV** *(przyjęte: M1–M3 – SQLite na dysku sieciowym, P1S z `PZLPROD.LOG.WBS`, bez 1:wiele)*: reguła projektu CES → projekt P1S (dziedziczona logicznie przez wszystkie obecne i przyszłe WBS), wyjątki WBS → WBS (pierwszeństwo), `include_children`, `NO_P1S`, relacje wiele:1 (**1:wiele niedozwolone** – koszt CES pokazywany raz), historia i `valid_from/valid_to`; zarządzanie w UI (dwa drzewa). Szczegóły i analiza spójności: `docs/mapowanie-ces-p1s.md` | struktury CES i P1S są niezależne; jedno zatwierdzenie projektu zamiast mapowania każdego WBS |
-| D24 | *(M15: prefiksy jako konfiguracja w bazie słowników; CSV tylko w MVP. M21: bez listy źródeł wymaganych przez projekt)* **Plik mówi, czym jest.** Źródło pliku RABIT rozpoznawane po **prefiksie nazwy** (`konfiguracja/zrodla_rabit.csv`, wygrywa najdłuższy prefiks); importowany jest **każdy rozpoznany plik** samodzielnie (np. `ACTUALS_PAF_01/_02/_03`), bez kontroli „zestawów”; plik nierozpoznany nie jest importowany. Zakres danych projektu wynika z jego elementów w drzewie P1S, a jedna paczka RABIT może obejmować wiele projektów | proste nazwy plików RABIT |
-| D21 | *(M21: przebieg przypina wszystkie zaimportowane pliki i wybiera wiersze elementów projektu z drzewa P1S – bez słownika struktury)* **Import plików SAP (RABIT) jest globalny, bez projektu**: wszystkie pliki z folderu, import tylko nowych (SHA-256), wiersze w postaci surowej; przebieg projektu wybiera swoje dane po elementach WBS ze słownika struktury | przy pobieraniu nie wiadomo, do którego projektu należy plik |
+1. **Jedno źródło stanu** – wszystkie dane w centralnej bazie MS SQL; każdy widzi, co przetworzono, kto
+   i na jakich danych.
+2. **Odtwarzalność** – każdy wynik EV można odtworzyć (`docs/model-danych.md`, rozdz. 4).
+3. **Kontrola jakości danych** – dane są sprawdzane, zanim zostaną użyte (`docs/pipeline-fazy.md`, rozdz. 1.3).
+4. **Niezależność projektów** – przebieg dotyczy jednego projektu, projekty nie czekają na siebie.
+5. **Prostota wdrożenia i utrzymania** – jeden plik aplikacji, bez serwera aplikacyjnego i bez lokalnej bazy.
 
 ---
 
-## 3. Widok ogólny
+## 2. Technologia
 
-```
- Stanowisko osoby z finansów                          Centralnie
- ┌─────────────────────────────────────┐     ┌──────────────────────────────────┐
- │ Przeglądarka  ⇄  PZL-EV (Python)    │     │ MS SQL – baza PZL_EV (TEST / PROD)│
- │                  - orkiestracja     │◄───►│  meta  – projekty, przebiegi,     │
- │                  - odczyt plików    │ AD  │          etapy, dziennik, blokady│
- │                  - walidacja        │     │  stg   – surowe dane z plików    │
- │                  - generowanie xlsx │     │  dict  – snapshot słowników (D27)│
- └──────────────┬──────────────────────┘     │  hist  – snapshoty danych        │
-                │ uprawnienia użytkownika    │  ev    – wyniki i rewizje EV     │
- ┌──────────────▼──────────────────────┐     │  procedury = logika biznesowa    │
- │ Dysk sieciowy \\serwer\udział\PZL-EV│     └──────────────┬───────────────────┘
- │  baza słowników (SQLite), RABIT,    │                    │ odczyt
- │  Landing Zone                        │     ┌──────────────▼───────────────────┐
- └──────────────▲──────────────────────┘     │ splmcd03: PZLPROD.LOG, PZL_SAP   │
-                │ pliki                       │ (dane produkcyjne P1S, vAHDD)    │
-      CAM (Excel) · SAP CES (RABIT / ręcznie) └──────────────────────────────────┘
-```
-
----
-
-## 4. Komponenty
-
-### 4.1 Aplikacja PZL-EV (Python, lokalnie)
-
-- Lokalny serwer WWW + przeglądarka. Aplikacja jest **bezstanowa** – cały stan jest w bazie.
-- Odpowiada za: orkiestrację etapów, odczyt i kopiowanie plików, walidację struktury i typów,
-  ładowanie danych do `stg`, generowanie plików Excel, wywołanie procedur SQL.
-- Długie operacje (np. import 700 000 wierszy) w tle, z postępem.
-- Przy starcie sprawdza zgodność z bazą: **minimalna wymagana wersja aplikacji** i **wersja schematu**
-  zapisane w bazie; niezgodna aplikacja odmawia pracy.
-- Profile konfiguracji TEST / PROD (serwer bazy, korzeń folderów); brak haseł w konfiguracji.
-
-### 4.2 Baza PZL-EV (MS SQL)
-
-- Jedyne źródło stanu i historii. Logika biznesowa w procedurach i widokach.
-- Szczegóły w rozdz. 8.
-
-### 4.3 Dysk sieciowy
-
-- Magazyn plików wejściowych i wyjściowych oraz archiwum oryginałów (Landing Zone).
-- Szczegóły w rozdz. 7.
-
-### 4.4 Źródła danych
-
-| Źródło | System | Dane | Sposób pozyskania |
-|---|---|---|---|
-| CJI3, ZRD_KKAJ, Net Inv | SAP **CES** (finansowy) | koszty rzeczywiste, zobowiązania | eksport RABIT na SharePoint, kopiowany przez WebDAV (D23), pliki na projekt (także wieloczęściowe) |
-| Dane produkcyjne | SAP **P1S** (produkcyjny) | zaawansowanie godzin i materiałów | np. `PZLPROD.LOG.vAHDD` na `splmcd03` (do potwierdzenia, O10) |
-| Słowniki i przypisania | baza słowników PZL-EV (SQLite, dysk sieciowy) | korekty mapowania CES↔P1S, WP i CAM, harmonogram i budżet, Cost Category, stawki, kalendarz, kursy, prefiksy RABIT | interfejs aplikacji (D26); słowniki projektu i Cost Category także pobranie / wczytanie Excela (M24, M26) |
-| Struktura P1S | MS SQL `splmcd03` | `PZLPROD.LOG.WBS`, `LOG.WBS_DIC`; kategoryzacja WBS (M20) | odczyt (M6, M20) |
-| Raport mapowań SAP↔CES | `PZLPROD` | przypisania elementów CES ↔ P1S (`pspnr_sap` / `pspnr_ces`, M16) | zapytanie, tylko odczyt |
-| Pliki CAM | Excel | zaawansowanie od CAM | pliki zwrócone przez CAM |
-| Cobra | Sikorsky | budżet i harmonogram (SAC) | do ustalenia |
-
----
-
-## 5. Projekt
-
-- **Projekt** (dawniej „zakres” – M22) = projekt PZL-EV budowany do przeliczania wskaźników EV.
-- **Zakres projektu** = węzły drzewa P1S zaznaczone w kreatorze (M23): grupy z różnych poziomów kategoryzacji
-  (`sel`) i pojedyncze `PROJORG` (`p1s`), z ich elementami WBS/PSP. `PROJORG` należy do co najwyżej
-  jednego projektu (pojedynczy `PROJORG` przed grupą, wśród grup – projekt utworzony wcześniej).
-- Typ projektu: **SAC**, **CAS**, **Wewnętrzny** – wyznacza szablon etapów (np. plik Cobra tylko w SAC)
-  i wymagane słowniki (np. stawki CAS tylko w CAS).
-- Słowniki projektu (M24): WP i CAM, Harmonogram i budżet, w CAS Stawki CAS, Cost Category –
-  zmiany w projekcie (M26).
-- Projekt tworzy się w aplikacji (kreator, `docs/funkcjonalnosc.md` F01): rejestracja w bazie, foldery,
-  słowniki projektu, baza analityczna (M25).
-
-> *Wcześniej (zastąpione: M22, M23):* zakres = program albo pula małych projektów raportowanych razem;
-> zawartość (elementy P1S, WP, CAM, harmonogram, budżet) z mapy przypisań (M8).
-
----
-
-## 6. Słowniki, przypisania i wersjonowanie
-
-### 6.1 Zawartość i miejsce (D26, M13)
-
-| Obszar | Przykłady | Zasięg |
-|---|---|---|
-| Mapowanie CES ↔ P1S | korekty elementu CES i projektu CES względem raportu mapowań (M18); ~~reguła projektu CES → `PROJORG`, wyjątki WBS~~ (zastąpione: M16–M18) | globalny (`docs/mapowanie-ces-p1s.md`) |
-| Słowniki projektu | WP i CAM (element P1S → WP, CAM, Cost Category), Harmonogram i budżet, Stawki CAS (CAS), Cost Category – zmiany w projekcie (M24, M26) | projekt |
-| Cost Category | numer elementu kosztowego → Opis, Obszar, Cost Category (M26) | globalny + zmiany w projekcie |
-| Finansowe | stawki wydziałów, stawki CAS, kursy walut | globalny / projekt |
-| Kalendarz | okresy rozliczeniowe | globalny |
-| Konfiguracja importu | prefiksy plików RABIT → źródło (M21) | globalny |
-
-Wszystko w bazie słowników (SQLite na dysku sieciowym), edycja w interfejsie aplikacji. Excel nie jest
-źródłem słowników (M13) – słowniki projektu i Cost Category można pobrać do Excela i wczytać z tą samą
-walidacją i podglądem różnic (M24, M26). Przypisania z raportu mapowań nie są kopiowane – czytane z
-`PZLPROD` (M16).
-
-### 6.2 Dwie osie czasu
-
-- **biznesowa** – ValidFrom / ValidTo wpisane w interfejsie (od kiedy obowiązuje wartość),
-- **techniczna** – wersja stanu słowników i przebieg, który ją przypiął.
-
-### 6.3 Mapa przypisań projektu (M8) *(zastąpione: M22–M24 – rozdz. 5, `docs/funkcjonalnosc.md` F01)*
-
-- Projekt = konkretny program albo program indywidualny.
-- Elementy P1S projektu (drzewo z `LOG.WBS`, korzeń `PROJORG`) przypisane do **WP**, **CAM**, kategorii;
-  na tej samej mapie **harmonogram** i **budżet**.
-- Koszty CES trafiają do projektu przez mapowanie CES ↔ P1S (`docs/mapowanie-ces-p1s.md`).
-- Ten sam element nie może należeć do dwóch projektów w nakładających się okresach.
-- CAM z mapy przypisań wyznacza listę CAM i podział plików CAM.
-- Nowe elementy (CES po imporcie, P1S z `LOG.WBS`) pojawiają się w interfejsie jako wymagające uwagi –
-  bez eksportu do plików.
-
-### 6.4 Walidacja
-
-Walidacja **przy zapisie w interfejsie** (reguły deklaratywne per słownik): wymagane pola, typy,
-unikalność, nakładające się okresy, odwołania między słownikami, reguły biznesowe. Błędny zapis jest
-odrzucany z komunikatem – nie powstaje błędna wersja. Szczegóły: `docs/funkcjonalnosc.md`, rozdz. 5.
-
----
-
-## 7. Pliki i foldery
-
-### 7.1 Struktura (D15)
-
-```
-\\serwer\udział\PZL-EV\                 korzeń środowiska (osobny dla TEST i PROD)
-├── 00_Global\Baza\                 baza słowników i przypisań (SQLite, D26) + kopie
-├── 00_Global\RABIT\Do_importu\     kopie plików RABIT (WebDAV, D23)
-├── 01_LandingZone\<RRRR-MM-DD>\<IdImportu>\   archiwum oryginałów (bez podziału na projekty)
-└── Projekty\<Projekt>\
-    ├── Finanse\<RRRR-MM>\           pliki pośrednie dla finansów
-    ├── CAM\<RRRR-MM>\Wyslane\       pliki do uzupełnienia przez CAM
-    ├── CAM\<RRRR-MM>\Zwrocone\      pliki zwrócone przez CAM
-    └── EV\<RRRR-MM>\                wyniki EV, plik dla Cobra
-```
-
-- Ścieżki UNC (nie litery dysków); w bazie ścieżki **względne** od korzenia środowiska.
-- Aplikacja sprawdza strukturę folderów przy otwarciu projektu.
-- Dostęp: finanse – zapis w całym `PZL-EV`; CAM – zapis w `CAM\…\Zwrocone`, odczyt w `Wyslane`
-  swojego projektu (nadaje IT).
-
-### 7.2 Landing Zone i integralność
-
-- Każdy importowany plik jest najpierw kopiowany do Landing Zone; przetwarzana jest kopia
-  (plik źródłowy może być otwarty w Excelu).
-- Hash SHA-256 zapisany w bazie. Aplikacja działa na uprawnieniach użytkownika, więc Landing Zone
-  nie jest chroniona uprawnieniami – zmianę pliku po imporcie wykrywa hash.
-
-### 7.3 Pliki SAP (D21)
-
-- Źródło (D23): folder RABIT na SharePoint czytany przez **WebDAV** (usługa WebClient Windows, konto
-  użytkownika), np. `\\lmsp4-intl.external.lmco.com@SSL\DavWWWRoot\sites\RabbitReporting\Shared Documents\E456659`;
-  kopie w `00_Global\RABIT\Do_importu`.
-- Niedostępne dla użytkownika (sprawdzone 29.09.2026) i usunięte z kodu: API REST SharePoint, synchronizacja
-  OneDrive, eksport listy do Excela (Office List OLEDB / owssvr), pobieranie ZIP.
-- Kod: `pzl_ev/etap1` (`pobierz`, `import`, `historia`), konfiguracja `konfiguracja/`, instrukcja `docs/mvp-etap1.md`, DDL `sql/mssql/001_etap1_import.sql`.
-- Jeśli RABIT pozwala – eksport do CSV/TXT (brak limitu wierszy, brak konwersji typów przez Excel).
-
-### 7.4 Pliki CAM
-
-- Jeden plik na CAM w ramach projektu (rekomendacja, O3).
-- Ukryty arkusz: ID przebiegu, projekt, okres, CAM, wersja szablonu. Komórki poza polami do
-  uzupełnienia zablokowane.
-
----
-
-## 8. Baza danych
-
-### 8.1 Schematy
-
-| Schemat | Zawartość |
+| Obszar | Rozwiązanie |
 |---|---|
-| `meta` | projekty, szablony etapów, przebiegi, etapy, zdarzenia (dziennik), blokady, pliki (ścieżka, hash), wersja aplikacji i schematu |
-| `stg` | surowe dane z plików (per przebieg i plik) |
-| `dict` | **snapshoty** słowników i przypisań przypięte przez przebiegi (kopia z bazy słowników SQLite, D27) – źródłem prawdy jest baza słowników |
-| `hist` | snapshoty danych źródłowych (CES, P1S, CAM) |
-| `ev` | wyniki łączenia, zaawansowanie z pochodzeniem, kalkulacje EV (rewizje) |
+| Język i platforma | C#, .NET 10 LTS |
+| Interfejs | WPF, wzorzec MVVM |
+| Baza danych | MS SQL Server – centralna baza `PZL_EV`, osobna dla TEST i PROD |
+| Dostęp do bazy | Microsoft.Data.SqlClient i Dapper (wywołania procedur, odczyt widoków); SqlBulkCopy – ładowanie wierszy importu |
+| Excel | ClosedXML – generowanie plików i wymiana słowników; OpenXML SDK – strumieniowy odczyt dużych plików RABIT |
+| Źródła plikowe | WebDAV (SharePoint RABIT przez usługę WebClient Windows), SMB (dysk sieciowy) |
+| Log techniczny | Serilog; zdarzenia biznesowe (kto, co, kiedy) – dziennik w bazie |
+| Uwierzytelnienie | konto Windows / AD (Windows Authentication do MS SQL) |
 
-### 8.2 Główne encje (do szczegółowego projektu)
+---
 
-| Encja | Opis |
+## 3. Uruchomienie i dystrybucja
+
+- **`PZL-EV.exe`** – jedna aplikacja dla wszystkich ról, publikowana jako *self-contained, single-file*:
+  nie wymaga instalacji .NET, nie uruchamia lokalnego serwera i nie ma lokalnej bazy. Działa na komputerze
+  użytkownika i łączy się bezpośrednio z bazą MS SQL oraz źródłami plikowymi.
+- Funkcje dostępne w aplikacji wynikają z roli użytkownika (`docs/uprawnienia.md`).
+- Profil środowiska (TEST / PROD) określa serwer bazy i korzeń folderów; konfiguracja nie zawiera haseł.
+  Nagłówek aplikacji pokazuje środowisko, użytkownika, rolę oraz wersję aplikacji i schematu.
+- Przy starcie aplikacja sprawdza w bazie **minimalną wymaganą wersję aplikacji** i **wersję schematu**;
+  niezgodna wersja odmawia pracy i informuje, co zaktualizować. Dzięki temu wszyscy liczą EV tą samą wersją
+  silnika.
+- Długie operacje (import, łączenie źródeł) działają w tle z widocznym postępem.
+- Forma dystrybucji pliku wymaga potwierdzenia testem na stanowisku PZL (O6).
+
+---
+
+## 4. Widok ogólny
+
+```text
+ Stanowisko użytkownika                               Centralnie
+ ┌──────────────────────────────┐            ┌────────────────────────────────────┐
+ │ PZL-EV.exe (WPF)             │  konto AD  │ MS SQL – baza PZL_EV (TEST / PROD) │
+ │  – ekrany według roli        │◄──────────►│  procedury i widoki                │
+ │  – orkiestracja etapów       │            │  importy, słowniki, mapowanie,     │
+ │  – import i walidacja        │            │  przebiegi, rewizje, wyniki,       │
+ │  – silnik EVM                │            │  problemy, dziennik                │
+ │  – pliki Excel               │            └─────────────────┬──────────────────┘
+ └──────┬──────────────┬────────┘                              │ odczyt
+        │ WebDAV       │ SMB                 ┌─────────────────▼──────────────────┐
+        ▼              ▼                     │ splmcd03: PZLPROD.LOG, PZL_SAP     │
+ SharePoint RABIT   Dysk sieciowy            │ struktura P1S, raport mapowań,     │
+ (raporty SAP CES)  (pliki dla finansów,     │ zaawansowanie z produkcji          │
+                     CAM, wyniki EV)         └────────────────────────────────────┘
+```
+
+Źródła i ich znaczenie – `docs/zrodla-danych.md`.
+
+---
+
+## 5. Warstwy i moduły
+
+Aplikacja jest jednym plikiem wykonywalnym, wewnętrznie podzielonym na warstwy i moduły. Nie ma mikroserwisów
+ani osobnych aplikacji.
+
+### 5.1 Warstwy
+
+| Warstwa | Odpowiedzialność |
 |---|---|
-| `meta.Zakres` | projekt (M22 – nazwa encji do ustalenia w projekcie bazy): kod, nazwa, typ (SAC/CAS/WEW), zakres P1S (`sel` + `p1s`, M23; wcześniej: pula), data utworzenia, twórca |
-| `meta.Przebieg` | projekt, rodzaj, okres, tydzień, status, rewizja EV, zamrożenie |
-| `meta.EtapPrzebiegu` | przebieg, etap, status, kto/kiedy, wersje wejść |
-| `meta.Zdarzenie` | dziennik: przebieg, kto (AD), kiedy, opis |
-| `meta.Plik` | ścieżka względna, hash, rozmiar, liczba wierszy, przebieg, źródło |
-| `dict.StanSlownikow` | przypięty stan bazy słowników: wersja / znacznik czasu, kto, kiedy, przebieg |
-| `dict.*` (tabele snapshotu) | kopie słowników i przypisań dla danego stanu (mapowanie, mapa przypisań, stawki, kalendarz, kursy) |
-| `ev.Zaawansowanie` | WP, okres, wartość, pochodzenie (CAM/PRODUKCJA/ANALITYK), kto/kiedy |
-| `ev.Wynik` | przebieg, rewizja, WP/projekt, BAC, BCWS, BCWP, ACWP, wskaźniki |
+| UI (WPF) | ekrany i widoki według roli; bez logiki biznesowej |
+| Application | przypadki użycia: uruchamianie etapów, sprawdzanie bramek i roli, obsługa długich operacji |
+| Domain | pojęcia i reguły: projekt, przebieg, rewizja, słowniki, walidacja przy zapisie |
+| Processing | parsery źródeł (wersjonowane) – przekształcenie wierszy surowych do postaci kanonicznej |
+| EVM | silnik obliczeń EV (`docs/ev-obliczenia.md`) – bez zależności od pozostałych warstw poza Domain |
+| Authorization | rola użytkownika z grup AD, dostęp do funkcji (`docs/uprawnienia.md`) |
+| Excel | odczyt i generowanie plików: słowniki, pliki dla finansów i CAM, wyniki |
+| File Connectors | WebDAV, SMB |
+| SQL Access | wywołania procedur, odczyt widoków, ładowanie wsadowe |
 
-### 8.3 Bezpieczeństwo i audyt
+### 5.2 Moduły funkcjonalne
 
-- Grupa AD finansów → rola `pzl_ev_user`; osobno `pzl_ev_admin` (wdrożenia).
-- Użytkownicy nie mają praw do tabel – wyłącznie EXECUTE na procedurach i SELECT na widokach.
-- Brak uprawnień per projekt (D9). Baza wymusza reguły procesu (bramki etapów, jeden przebieg na
-  projekt i tydzień, zamrożenie okresu), bo aplikacja działa lokalnie i nie może być jedyną kontrolą.
+| Moduł | Zakres | Opis |
+|---|---|---|
+| Shell / UI | nawigacja, nagłówek, pulpit | `docs/funkcjonalnosc.md` |
+| Source Management | definicje źródeł | `docs/zrodla-danych.md`, rozdz. 2 |
+| Import | pobranie i załadowanie plików | `docs/pipeline-fazy.md`, G1 |
+| Data Quality | kontrole i problemy (ERROR / WARNING) | `docs/pipeline-fazy.md`, rozdz. 1.3 |
+| Master Data | słowniki globalne i projektu | `docs/slowniki.md` |
+| Mapping | mapowanie CES ↔ P1S | `docs/mapowanie-ces-p1s.md` |
+| Project Run | projekty, przebiegi, etapy, rewizje | `docs/pipeline-fazy.md`, `docs/model-danych.md` |
+| CAM / Progress | zaawansowanie: produkcja, uzupełnienia, pliki CAM | `docs/pipeline-fazy.md`, P5–P7 |
+| Reconciliation | łączenie źródeł | `docs/pipeline-fazy.md`, P3 |
+| EVM Engine | obliczenia EV | `docs/ev-obliczenia.md` |
+| Export | pliki wynikowe, plik dla Cobra | `docs/funkcjonalnosc.md`, rozdz. 4 |
+| Audit | dziennik zdarzeń, historia | `docs/model-danych.md`, rozdz. 3 |
+| Administration | role, konfiguracja | `docs/uprawnienia.md`, `docs/funkcjonalnosc.md` |
+
+---
+
+## 6. Podział logiki między aplikację i bazę
+
+| Baza (procedury i widoki) | Aplikacja |
+|---|---|
+| wybór danych projektu według znacznika stanu | orkiestracja etapów przebiegu (każdy etap uruchamia użytkownik) |
+| łączenie źródeł i agregacje dużych wolumenów | import plików: odczyt, rozpoznanie, parsowanie |
+| reguły procesu: jeden przebieg na projekt i tydzień, bramki etapów, zamrożenie | walidacja przy zapisie słowników |
+| historia zmian i dziennik | silnik EVM |
+| widoki dla raportów BI | generowanie plików Excel i pliku dla Cobra |
+
+- Aplikacja korzysta z bazy wyłącznie przez procedury i widoki. Użytkownicy nie mają praw do tabel –
+  mają prawo wykonywania procedur i odczytu widoków. Wyjątkiem jest ładowanie wsadowe wierszy importu
+  (SqlBulkCopy) do tabeli przyjęć, na której rola ma wyłącznie prawo INSERT.
+- Reguły procesu są wymuszane w procedurach – aplikacja działa na stanowisku użytkownika i nie może być jedyną
+  kontrolą.
 - Każda procedura zapisuje użytkownika AD (`ORIGINAL_LOGIN()`) w dzienniku.
 
 ---
 
-## 9. Środowiska i wdrożenia
+## 7. Dysk sieciowy
+
+```text
+\\serwer\udział\PZL-EV\                 korzeń środowiska (osobny dla TEST i PROD)
+├── 00_Global\RABIT\Do_importu\         pliki RABIT pobrane ręcznie (powyżej limitu WebDAV)
+└── Projekty\<Projekt>\
+    ├── Finanse\<RRRR-MM>\              pliki dla finansów (P4)
+    ├── CAM\<RRRR-MM>\Wyslane\          pliki dla CAM (P6, przebieg zamykający)
+    ├── CAM\<RRRR-MM>\Zwrocone\         pliki zwrócone przez CAM
+    └── EV\<RRRR-MM>\                   wyniki EV i plik dla Cobra (P9)
+```
+
+- Ścieżki UNC (nie litery dysków); w bazie zapisywane są ścieżki **względne** od korzenia środowiska.
+- Aplikacja sprawdza strukturę folderów przy otwarciu projektu.
+- Uprawnienia do folderów – `docs/uprawnienia.md`, rozdz. 5.
+- Oryginalne pliki RABIT nie są archiwizowane – ich treść i hash są w bazie (`docs/model-danych.md`, rozdz. 1).
+
+---
+
+## 8. Środowiska i wdrożenia
 
 - **TEST** – developer; osobna baza i osobny korzeń folderów.
-- **PROD** – wdraża administrator.
-- Zmiany bazy jako numerowane, idempotentne skrypty migracyjne w repozytorium (lub projekt SSDT/DACPAC);
-  baza przechowuje numer wersji schematu.
-- Paczka wdrożeniowa: skrypty + instrukcja dla admina + wymagana wersja aplikacji.
-- Aplikacja: dystrybucja z repozytorium / udziału sieciowego, instalacja Pythona i pakietów na
-  stanowiskach (forma do ustalenia, O6).
+- **PROD** – wdraża administrator (IT).
+- Zmiany bazy jako numerowane, idempotentne skrypty migracyjne w repozytorium (`sql/mssql/`); baza przechowuje
+  wersję schematu i minimalną wymaganą wersję aplikacji.
+- Paczka wdrożeniowa: skrypty bazy, plik `PZL-EV.exe`, instrukcja dla administratora.
 
 ---
 
-## 10. Integracja z istniejącymi obiektami (`splmcd03`)
-
-Na podstawie eksportu metadanych (`dependencies.csv`, `resolved_objects.csv`):
-
-- `uspUpdateAHDD` orkiestruje `uspUpdateAHDD_ORDER`, `_PSPNR`, `_VORNR` (ta ostatnia wywołuje
-  `uspUpdateZMTO`). Istnieje mechanizm logowania błędów i statusu odświeżenia
-  (`ReportErrorInfo`, `StatusAktualizacjiRaportow`, `TableList`) – warto go wykorzystać do kontroli
-  świeżości danych produkcyjnych.
-- `vAHDD` jest aktualny dopiero po przebiegu `uspUpdateAHDD` – przebieg tygodniowy sprawdza
-  datę odświeżenia przed pobraniem zaawansowania.
-- Dane SAP P1S są replikowane do `PZL_SAP` (`Z_R3_PRPS_TBL`, `AUFK`, `AFKO`, `AFPO`, `AFVC/AFVV`, `JEST`…).
-  Tabel kosztowych CES (podstawa CJI3) w eksporcie nie ma – koszty pochodzą z plików.
-- `LOG.WBS` – tylko P1S. `Stanowiska`, `LearningCurve`, `PeriodDates`, `EmployeesHist` to istniejące
-  tabele słownikowe – ich los do ustalenia (O9).
-- Eksport zawiera tylko metadane; do szczegółowego projektu potrzebne są definicje
-  (`vAHDD`, `WBS`, `uspUpdateAHDD_VORNR`) i kolumny tabel.
-
----
-
-## 11. Wymagania niefunkcjonalne
+## 9. Wymagania niefunkcjonalne
 
 | Obszar | Wymaganie |
 |---|---|
-| Wydajność | import 700 000+ wierszy na projekt w czasie akceptowalnym dla przebiegu tygodniowego (ładowanie wsadowe) |
-| Odtwarzalność | każdy wynik EV odtwarzalny z przypiętego stanu słowników i zarejestrowanych plików |
-| Audyt | każda akcja z użytkownikiem AD i czasem; historia wersji słowników |
-| Spójność | ta sama wersja logiki dla wszystkich użytkowników (logika w bazie, kontrola wersji aplikacji) |
+| Wydajność | import 700 000+ wierszy (plik ok. 85 MB) w czasie akceptowalnym dla przebiegu tygodniowego – ładowanie wsadowe, bez podglądu danych |
+| Odtwarzalność | każdy wynik EV odtwarzalny ze znacznika stanu i wersji silnika (`docs/model-danych.md`, rozdz. 4) |
+| Audyt | każda akcja z użytkownikiem AD i czasem; historia słowników i korekt |
+| Spójność | ta sama wersja silnika EV u wszystkich (kontrola minimalnej wersji aplikacji) |
 | Odporność | przerwana operacja nie zostawia częściowych danych (transakcje, idempotentny import) |
-| Utrzymanie | reguły walidacji i szablony etapów konfigurowalne bez zmiany kodu |
+| Utrzymanie | definicje źródeł, reguły walidacji źródeł i kalendarz okresów konfigurowane w aplikacji, bez zmiany kodu |
 
 ---
 
-## 12. Ryzyka i punkty newralgiczne
+## 10. Ryzyka
 
-| # | Ryzyko | Rozwiązanie |
+| # | Ryzyko | Ograniczenie |
 |---|---|---|
-| 1 | Różne wersje aplikacji u użytkowników | logika w bazie, kontrola minimalnej wersji |
-| 2 | Przebiegi trwające dni | trwały stan w bazie, kontynuacja przez inną osobę, unieważnianie etapów |
-| 3 | Zmiana słownika w trakcie przebiegu | przypinanie stanu, decyzja o przeliczeniu w dzienniku |
-| 4 | Różne litery dysków | UNC + ścieżki względne |
-| 5 | Pliki otwarte w Excelu na dysku sieciowym | kopia do Landing Zone przed przetwarzaniem |
-| 6 | Pliki CAM zmienione poza polami / z innego przebiegu | identyfikator i blokady w szablonie, kontrola przy imporcie |
-| 7 | Excel zmienia typy (WBS jako liczba, daty, zera wiodące) | walidacja typów, CSV dla SAP |
-| 8 | Etykiety poufności / szyfrowanie plików | do weryfikacji z IT |
-| 9 | Reguły procesu omijane przez bezpośrednie połączenie z bazą | kontrola w procedurach |
-| 15 | SQLite na dysku sieciowym (blokady SMB, brak WAL, uszkodzenie przy zerwaniu połączenia) | krótkie transakcje, jeden zapis naraz, kopie pliku (D26, `docs/mapowanie-ces-p1s.md` 4.1) |
-| 10 | Istniejące słowniki w `PZLPROD.LOG` | `WBS`, `WBS_DIC` – źródło struktury P1S (odczyt, M6); pozostałe – O9 |
-| 11 | Nieaktualne `vAHDD` | kontrola świeżości przed etapem 6 |
-| 12 | Mieszanie źródeł zaawansowania | zapis pochodzenia, bramka „tylko CAM” na zamknięciu |
-| 13 | Nowe elementy SAP bez przypisania | wykrywanie w etapie 4, eksport propozycji, bramka na zamknięciu |
-| 14 | Różne zapisy tego samego CAM | ostrzeżenie walidacji (inaczej powstają dwa pliki CAM) |
+| 1 | Różne wersje aplikacji u użytkowników dają różne wyniki EV | kontrola minimalnej wersji w bazie; wersja silnika w rewizji |
+| 2 | Uruchamianie pliku exe zablokowane (AppLocker, antywirus) | test przed decyzją o formie dystrybucji (O6); podpis kodu; alternatywnie instalacja zarządzana przez IT |
+| 3 | Przebiegi trwające dni | trwały stan w bazie, kontynuacja przez inną osobę, unieważnianie etapów |
+| 4 | Zmiana słowników lub nowe importy w trakcie przebiegu | znacznik stanu, decyzja „kontynuuj / przypnij ponownie” w dzienniku |
+| 5 | Zmiana istniejących wierszy w `PZLPROD` (założenie przyrostowości) | odczyt bez kopiowania; zmiana raportu mapowań lub `LOG.WBS` nie jest wykrywana i może zmienić wynik odtworzenia rewizji |
+| 6 | Nieaktualne dane produkcyjne (`vAHDD`) | kontrola świeżości w P0 |
+| 7 | Mieszanie źródeł zaawansowania | zapis pochodzenia; w przebiegu zamykającym wyłącznie CAM |
+| 8 | Nowe elementy SAP bez przypisania | wykrywanie po imporcie i w P3; blokada w przebiegu zamykającym |
+| 9 | Pliki CAM zmienione poza polami lub z innego przebiegu | identyfikator i blokady w szablonie, kontrola przy imporcie |
+| 10 | Excel zmienia typy (WBS jako liczba, daty, zera wiodące) | walidacja typów; CSV z RABIT, jeśli dostępny |
+| 11 | Reguły procesu omijane przez bezpośrednie połączenie z bazą | reguły w procedurach, brak praw do tabel |
+| 12 | Różne litery dysków | ścieżki UNC, w bazie ścieżki względne |
+| 13 | Etykiety poufności / szyfrowanie plików | do weryfikacji z IT |
+| 14 | Przyrost danych w bazie (wiersze importów co tydzień) | retencja (`docs/model-danych.md`, O32) |
+| 15 | Wsparcie .NET 10 LTS kończy się w listopadzie 2028 | przejście na kolejną wersję LTS przed tym terminem |
 
 ---
 
-## 13. Otwarte decyzje
+## 11. Otwarte kwestie
 
-| # | Pytanie | Rekomendacja |
-|---|---|---|
-| O3 | Plik CAM: jeden na CAM czy jeden na program? | jeden na CAM |
-| O5 | Serwer / baza dla PZL-EV | osobna baza `PZL_EV`; część danych z `splmcd03` |
-| O6 | Forma dystrybucji aplikacji | do ustalenia |
-| O7 | Czy RABIT może eksportować CSV/TXT? | CSV preferowany |
-| O9 | Los słowników w `PZLPROD.LOG` (`Stanowiska`, `LearningCurve`, `PeriodDates`) | do ustalenia z właścicielami |
-| O10 | Źródło zaawansowania z produkcji (np. `vAHDD`) | do ustalenia |
-| O11 | Zasady uzupełniania braków (ostatnia znana wartość / plan / ręcznie) | do ustalenia |
-| O14 | Logika łączenia źródeł (etap 4) | do przedstawienia przez zespół |
-| O15 | Źródło ETC | otwarte pytanie z readme |
-| O19–O26 | Kwestie z prototypu v3 (przypinanie raportu mapowań, korekta projektu CES, kategorie, zakres z grupy, baza analityczna, Cost Category) | `docs/funkcjonalnosc.md`, rozdz. 9 |
+| # | Kwestia |
+|---|---|
+| O5 | Serwer bazy `PZL_EV` – na instancji z `PZLPROD` (odczyt w procedurach między bazami) czy osobny serwer (serwer połączony) |
+| O6 | Forma dystrybucji `PZL-EV.exe`. Test na stanowisku PZL: (1) uruchomienie pliku z dysku lokalnego i z udziału sieciowego, potrzeba podpisu kodu; (2) połączenie z MS SQL TEST kontem Windows; (3) odczyt folderu RABIT przez WebDAV; (4) czas załadowania pliku RABIT ok. 85 MB do bazy |
