@@ -100,8 +100,82 @@ ani osobnych aplikacji.
 
 ### 5.2 Moduły funkcjonalne
 
-| Moduł | Zakres | Opis |
-|---|---|---|
+Każdy moduł jest folderem `Modules/<Folder>/` i właścicielem swoich ekranów oraz etapów przebiegu
+(`docs/pipeline-fazy.md`). Moduł bez własnego ekranu pokazuje panele swoich etapów na ekranie Przebiegu.
+
+| Moduł | Folder | Zakres | Etapy | Opis |
+|---|---|---|---|---|
+| Shell (powłoka, nie moduł) | `Shell/` | okno, nagłówek, menu, nawigacja, lista modułów | – | `docs/funkcjonalnosc.md`, rozdz. 2 |
+| Pulpit | `Dashboard` | pulpit, „Wymaga uwagi”, ostatnie zdarzenia (F07) | – | `docs/funkcjonalnosc.md` |
+| Import | `Import` | pobranie i załadowanie plików, parsery źródeł (F05) | G1 | `docs/zrodla-danych.md` |
+| Mapping | `Mapping` | mapowanie CES ↔ P1S (F04) | G2 | `docs/mapowanie-ces-p1s.md` |
+| Master Data | `MasterData` | słowniki globalne i projektu (F03) | G3 | `docs/slowniki.md` |
+| Projects | `Projects` | projekty, kreator, Performance Objectives, gotowość (F01, F02) | – | `docs/performance-objectives.md` |
+| Runs | `Runs` | przebiegi, ekran przebiegu, przypięcie stanu, walidacja, zamknięcie (F06) | P0, P1, P2, Z | `docs/pipeline-fazy.md`, `docs/model-danych.md` |
+| Reconciliation | `Reconciliation` | łączenie źródeł, pliki dla finansów | P3, P4 | `docs/pipeline-fazy.md` |
+| CAM / Progress | `Progress` | zaawansowanie: produkcja, uzupełnienia, pliki CAM | P5, P6, P7 | `docs/pipeline-fazy.md` |
+| EVM Engine | `Evm` | obliczenia EV | P8 | `docs/ev-obliczenia.md` |
+| Export | `Export` | pliki wynikowe, plik dla Cobra | P9 | `docs/funkcjonalnosc.md`, rozdz. 4 |
+| Administration | `Administration` | definicje źródeł, lokalizacje RABIT, role (F08) | – | `docs/zrodla-danych.md`, `docs/uprawnienia.md` |
+
+Kontrola jakości (`meta.Problem`) i dziennik zdarzeń nie są modułami – to mechanizmy wspólne (`Shared`),
+z których korzysta każdy moduł; pokazują je Pulpit i ekran Przebiegu.
+
+### 5.3 Struktura kodu
+
+Jeden projekt, moduły jako foldery; przestrzeń nazw odpowiada ścieżce folderu (`PzlEv.Modules.Dashboard.ViewModels`
+↔ `Modules/Dashboard/ViewModels/`). Wzorzec pokazuje aplikacja testowa `poc-wpf/src/` – Pulpit jako moduł
+z pełnym ekranem, pozostałe moduły jako ekrany zastępcze z przypisanymi etapami.
+
+```text
+App.xaml(.cs)                      start, logowanie, obsługa wyjątków
+Shell/                             okno, menu, nawigacja; ModuleCatalog.cs – lista modułów
+Modules/<Moduł>/
+  <Moduł>Module.cs                 plik wejścia: klucz, menu, dokumentacja, etapy, utworzenie ekranu
+  Views/ ViewModels/ Models/       ekran, jego logika prezentacji, modele modułu
+  Data/                            źródło danych modułu: interfejs + dane przykładowe / dostęp do bazy
+  Services/ Stages/                przypadki użycia, parsery, implementacje etapów (IStage)
+Shared/
+  Utils/                           MVVM, konwertery, kontrakt modułu i nawigacji; później dostęp do SQL, Excel, plików
+  Models/                          modele wspólne, klucze modułów, kontrakt etapu (Models/Pipeline)
+  Views/Templates/                 wygląd całej aplikacji: paleta, style, układ strony
+  Views/Partials/                  fragmenty wielokrotnego użytku: pigułka statusu, nagłówek ekranu, ekran zastępczy
+```
+
+Podfolder modułu powstaje dopiero, gdy ma zawartość. Warstwy z rozdz. 5.1 mieszczą się w tym układzie:
+UI – `Views`, `ViewModels`, `Shared/Views`; Application i Processing – `Services`, `Stages`; Domain – `Models`
+modułu i `Shared/Models`; Excel, File Connectors, SQL Access – `Shared/Utils` (wspólne) albo `Data` (modułu).
+
+**Zależności** – sprawdzane przy każdej budowie (`poc-wpf/ArchitectureRules.targets`, błąd `PZLARCH`):
+
+- moduł korzysta tylko z `Shared`; nie zna innego modułu ani `Shell`,
+- `Shared` nie zna modułów ani `Shell`,
+- `Shell` zna konkretne moduły tylko w `ModuleCatalog.cs`; poza nim – wyłącznie kontrakt `IModule`,
+- moduły komunikują się przez bazę (etapy – `docs/pipeline-fazy.md`, rozdz. 1.1), nawigację po kluczu
+  (`INavigator`, `ModuleKeys`) albo kontrakt w `Shared`,
+- silnik EVM zależy wyłącznie od modeli (rozdz. 5.1).
+
+**Konwencje:** jeden typ w pliku, nazwa pliku = nazwa typu; sufiksy `…Module`, `…View`, `…ViewModel`,
+`I…DataSource`, `…SampleData`; kolory i style wyłącznie z `Shared/Views/Templates`; fragment trafia do
+`Shared/Views/Partials`, gdy używa go drugi moduł; log z kontekstem modułu (`Log.ForContext("Module", …)`).
+
+**Kontrakt etapu** (`Shared/Models/Pipeline`): `StageDescriptor` (kod, nazwa, krok, zakres, czy wymaga
+decyzji człowieka) deklarowany przez moduł-właściciela i `IStage` (bramka wejścia, akcja z bramką wyjścia,
+wynik z kontrolami ERROR / WARNING / PASS). Ten sam kontrakt obsługuje uruchomienie etapu z ekranu przez
+analityka i późniejsze łączenie etapów bez udziału człowieka – łańcuch zatrzymuje się na etapie wymagającym
+decyzji (P4, P6, Z) albo z wynikiem ERROR.
+
+**Nowy moduł:**
+
+1. Wiersz w tabeli 5.2 (folder, zakres, etapy, dokument).
+2. Klucz w `Shared/Models/ModuleKeys.cs`.
+3. `Modules/<Moduł>/<Moduł>Module.cs` implementujący `IModule`; do czasu implementacji ekran zastępczy
+   (`PlaceholderView.Create`).
+4. Ekran: `Views/<Moduł>View.xaml`, `ViewModels/<Moduł>ViewModel.cs`; dane przez `Data/I<Moduł>DataSource`.
+5. Jedna linia w `Shell/ModuleCatalog.cs`.
+6. Budowa (`build.cmd`) – reguły zależności i przestrzeni nazw muszą przejść.
+
+---|---|---|
 | Shell / UI | nawigacja, nagłówek, pulpit | `docs/funkcjonalnosc.md` |
 | Source Management | definicje źródeł | `docs/zrodla-danych.md`, rozdz. 2 |
 | Import | pobranie i załadowanie plików | `docs/pipeline-fazy.md`, G1 |
