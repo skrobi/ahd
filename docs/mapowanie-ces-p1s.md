@@ -14,11 +14,12 @@ Powiązane: `docs/zrodla-danych.md` (raport kosztów CES, struktura P1S i drzewo
 - PZL-EV jest warstwą mapowania między systemami; danych w SAP nie modyfikuje.
 - Mapowanie jest **częścią administracyjną**: przypisuje elementy CES do elementów P1S, bez kwot i bez
   drzewa kosztów. Koszty łączy przebieg (`docs/pipeline-fazy.md`, P3).
-- Mapowanie jest **globalne** – niezależne od projektów PZL-EV. Element CES trafia do projektu PZL-EV przez
-  element P1S, do którego jest przypisany, i zakres projektu (`docs/funkcjonalnosc.md`, F01).
+- Mapowanie jest **globalne i administracyjne** – niezależne od projektów PZL-EV i bez wpływu na nie. Zakres
+  projektu wyznacza nakładka Performance Objectives (`docs/performance-objectives.md`), która przy budowie
+  **czyta** mapowanie, żeby dołączyć stronę P1S jako dodatkowe zadania.
 
 ```text
-SAP CES → projekt CES / WBS CES → mapowanie PZL-EV → element P1S → zakres projektu PZL-EV
+SAP CES → projekt CES / WBS CES → mapowanie PZL-EV (globalne) → element P1S
 ```
 
 ---

@@ -46,12 +46,12 @@ Definicje źródeł i ich prefiksy są konfiguracją importu – `docs/zrodla-da
 
 | Słownik | Zawartość | Klucz |
 |---|---|---|
-| WP i CAM | element P1S z zakresu projektu → WP, CAM, Cost Category (Labor / Material / Subcontract – O24) | element P1S |
+| WP i CAM | element P1S projektu → WP, CAM, Cost Category (Labor / Material / Subcontract – O24); powiązanie z nakładką Performance Objectives – O44 | element P1S |
 | Harmonogram i budżet | WP → `BAC HOURS`, `BAC MATERIAL`, Planowany Start, Planowany Koniec – baseline projektu | WP |
 | Stawki CAS | stawki CAS projektu (zawartość – O37) | do ustalenia |
 | Cost Category – zmiany w projekcie | zmiany i uzupełnienia słownika globalnego Cost Category dla projektu (rozdz. 6) | numer elementu kosztowego |
 
-- Słowniki projektu powstają w kreatorze projektu z plików Excel (szablon z elementami P1S zakresu – jeden
+- Słowniki projektu powstają w kreatorze projektu z plików Excel (szablon z elementami projektu – jeden
   plik z arkuszami albo osobne pliki / CSV) i są dalej utrzymywane w aplikacji (`docs/funkcjonalnosc.md`, F01, F03).
 - Harmonogram i budżet mogą się zmieniać w trakcie projektu – każda zmiana jest w historii, a przebieg liczy
   na stanie z chwili przypięcia.
@@ -91,7 +91,7 @@ Kontekst biznesowy typów – `readme.md`.
 
 | Reguła | Poziom |
 |---|---|
-| element P1S należy do zakresu projektu i nie należy do innego projektu | ERROR |
+| element P1S należy do projektu i nie należy do innego projektu | ERROR |
 | jeden WP na element P1S | ERROR |
 | WP wymaga CAM | ERROR |
 | CAM wybierany z listy osób; przy wczytaniu z Excela CAM spoza listy osób | – / WARNING |

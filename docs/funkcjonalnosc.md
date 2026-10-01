@@ -26,8 +26,8 @@ Role, zakres danych i egzekwowanie – `docs/uprawnienia.md`.
 |---|---|---|
 | **Pulpit** | karty projektów ze stanem bieżącego przebiegu, „Wymaga uwagi”, ostatnie zdarzenia (F07) | przejście do projektu / przebiegu, nowy projekt |
 | **Import** | import źródeł, historia importów, decyzje dla plików (F05) | importuj |
-| **Projekty** | lista projektów: typ, zakres P1S (liczba `PROJORG`), aktywny przebieg, folder | nowy projekt |
-| **Projekt** | gotowość (F02), zakres P1S, słowniki projektu, historia przebiegów, struktura folderów | nowy przebieg; pobierz / wczytaj słowniki z Excela |
+| **Projekty** | lista projektów: typ, rozmiar nakładki Performance Objectives, aktywny przebieg, folder | nowy projekt |
+| **Projekt** | gotowość (F02), nakładka Performance Objectives, słowniki projektu, historia przebiegów, struktura folderów | nowy przebieg; pobierz / wczytaj słowniki z Excela |
 | **Kreator projektu** | 5 kroków (F01) | utwórz projekt |
 | **Przebiegi** | wszystkie przebiegi wszystkich projektów: tydzień, czy zamykający, stan, osoba | przejście do przebiegu |
 | **Przebieg** | kroki i etapy (F06), panel wybranego etapu, znacznik stanu, problemy, rewizje, dziennik | akcje etapów |
@@ -51,30 +51,23 @@ Nagłówek aplikacji – `docs/architektura.md`, rozdz. 3.
 | Kod | unikalny; używany w nazwach folderów, plików i przebiegów |
 | Nazwa | opis |
 | Typ | SAC, CAS albo wewnętrzny – wyznacza wymagane słowniki (`docs/slowniki.md`, rozdz. 4) |
-| Zakres P1S | węzły drzewa P1S (`docs/zrodla-danych.md`, rozdz. 5.3): grupy z dowolnych poziomów kategoryzacji (`sel` – ścieżki grup) i pojedyncze `PROJORG` (`p1s`), z ich elementami WBS/PSP |
-
-Reguły zakresu:
-
-- Grupa obejmuje wszystkie swoje `PROJORG` i ich elementy WBS/PSP.
-- `PROJORG` należy do co najwyżej jednego projektu. `PROJORG` należący do innego projektu jest pomijany.
-- Pojedynczo wskazany `PROJORG` ma pierwszeństwo przed grupą; wśród grup wygrywa projekt utworzony wcześniej.
-- `PROJORG` pojawiający się później w zaznaczonej grupie – O22.
+| Zakres | nakładka **Performance Objectives** – struktura kontraktu CES (`docs/performance-objectives.md`) |
 
 Kroki kreatora:
 
 1. **Podstawowe** – kod, nazwa, typ; aplikacja pokazuje słowniki wymagane dla typu.
-2. **Projekty P1S** – drzewo P1S rozwijane w dół, z polem wyboru na każdym poziomie; można zaznaczyć kilka grup
-   z różnych poziomów oraz pojedyncze `PROJORG`.
-3. **Słowniki projektu** – wczytanie słowników projektu z Excela (szablon do pobrania z elementami P1S zakresu);
+2. **Performance Objectives** – budowa nakładki kontraktu CES (`docs/performance-objectives.md`): wczytanie
+   z Excela albo ręcznie, z możliwością grupowania elementów we własnych węzłach. Nakładka wyznacza zakres
+   projektu; strona P1S wchodzi do drzewa jako dodatkowe zadania przez globalne mapowanie.
+3. **Słowniki projektu** – wczytanie słowników projektu z Excela (szablon do pobrania z elementami zakresu);
    zawartość i walidacja – `docs/slowniki.md`, rozdz. 3 i 5; słownik z błędem ERROR nie zostaje zapisany.
    Lista słowników globalnych z bieżącym stanem.
 4. **Foldery** – podgląd struktury `Projekty\<Projekt>\` (`docs/architektura.md`, rozdz. 7); kontrole:
    dostępność korzenia, prawo zapisu, brak folderu o tym kodzie; informacja o zgłoszeniu do IT dostępu CAM
    do folderu `Zwrocone`.
 5. **Podsumowanie (baza analityczna)**:
-   - drzewo (`Z_KATEGORIA` → `Z_OPIS` → element P1S) połączone z WP, CAM, BAC, datami i liczbą elementów CES
-     przypisanych w mapowaniu,
-   - braki: element z kosztami CES albo zaawansowaniem bez WP, WP bez budżetu,
+   - drzewo nakładki Performance Objectives połączone z WP, CAM, BAC i datami,
+   - braki: element nakładki bez WP, WP bez budżetu,
    - sumy kontrolne: budżet, godziny, koszty materiałów; zestawienie według CAM; eksport do xlsx.
 
    **Utwórz projekt** – rejestracja w bazie, utworzenie folderów, kontrola struktury.
@@ -87,7 +80,7 @@ Lista kontrolna na ekranie projektu:
 
 | Kontrola | Poziom |
 |---|---|
-| zakres P1S obejmuje co najmniej jeden `PROJORG` | ERROR |
+| nakładka Performance Objectives zawiera co najmniej jeden element | ERROR |
 | wymagane słowniki projektu dla typu są wypełnione | ERROR – blokuje uruchomienie przebiegu |
 | WP mają przypisanego CAM | WARNING – bez tego nie powstaną pliki CAM |
 | struktura folderów zgodna z konfiguracją | WARNING |
@@ -182,6 +175,5 @@ potwierdzenia.
 | O3 | Plik CAM: jeden na CAM (rekomendacja) czy jeden na projekt? |
 | O16 | Zawartość plików dla finansów (P4) – lista i układ |
 | O17 | Układ pliku CAM – które pola uzupełnia CAM (zaawansowanie %, ETC, komentarz) |
-| O22 | Czy `PROJORG`, które później pojawią się w zaznaczonej grupie, mają wchodzić do projektu automatycznie? |
 | O23 | Baza analityczna także na stronie projektu (po zmianie słowników), nie tylko w kreatorze? |
 | O26 | Panel „Koszty wg kategorii P1S” na stronie projektu – w v1 czy później? |
