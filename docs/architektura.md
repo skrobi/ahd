@@ -21,6 +21,12 @@ Powiązane: `docs/model-danych.md` (dane i wersjonowanie), `docs/pipeline-fazy.m
 
 ## 2. Technologia
 
+Kierunek **wstępny** – do potwierdzenia testem na stanowisku PZL (O6, aplikacja testowa `poc-wpf/`).
+
+**Bez SQLite.** Wszystkie słowniki, mapowania, konfiguracja, definicje źródeł, wersje reguł, użytkownicy i role,
+zakresy uprawnień oraz historia zmian są w bazie MS SQL; aplikacja nie ma lokalnej bazy ani bazy plikowej
+na dysku sieciowym.
+
 | Obszar | Rozwiązanie |
 |---|---|
 | Język i platforma | C#, .NET 10 LTS |
@@ -200,4 +206,4 @@ ani osobnych aplikacji.
 | # | Kwestia |
 |---|---|
 | O5 | Serwer bazy `PZL_EV` – na instancji z `PZLPROD` (odczyt w procedurach między bazami) czy osobny serwer (serwer połączony) |
-| O6 | Forma dystrybucji `PZL-EV.exe`. Test na stanowisku PZL: (1) uruchomienie pliku z dysku lokalnego i z udziału sieciowego, potrzeba podpisu kodu; (2) połączenie z MS SQL TEST kontem Windows; (3) odczyt lokalizacji RABIT przez WebDAV; (4) czas załadowania pliku RABIT ok. 85 MB do bazy |
+| O6 | Forma dystrybucji `PZL-EV.exe`. Test na stanowisku PZL: (1) uruchomienie pliku z dysku lokalnego i z udziału sieciowego, potrzeba podpisu kodu; (2) połączenie z MS SQL TEST kontem Windows; (3) odczyt lokalizacji RABIT przez WebDAV; (4) czas załadowania pliku RABIT ok. 85 MB do bazy. Aplikacja testowa `poc-wpf/` (Pulpit, bez bazy) sprawdza punkt (1) i pakiety z rozdz. 2; punkty (2)–(4) wymagają osobnego testu |
