@@ -456,7 +456,8 @@ const DEFS = {
   wp:{name:'WP i CAM', cols:[{k:'wp',l:'WP',t:'text'},{k:'p1s',l:'Element P1S',t:'list',src:'scopeNodes'},{k:'cam',l:'CAM',t:'list',src:'people'},{k:'cat',l:'Cost Category',t:'list',src:'cats'}], key:['wp'], uniq:['p1s']},
   harm:{name:'Harmonogram i budżet', cols:[{k:'wp',l:'WP',t:'list',src:'scopeWp'},{k:'bac',l:'BAC [h]',t:'num',min:0},{k:'start',l:'Start',t:'date'},{k:'finish',l:'Koniec',t:'date'}], key:['wp'], rules:[['start','finish']]},
   katgr:{name:'Grupy kategorii', cols:[{k:'p1s',l:'Element P1S',t:'p1s'},{k:'name',l:'Nazwa grupy (zastępuje Z_OPIS)',t:'text'}], key:['p1s']},
-  cas:{name:'Stawki CAS', cols:[{k:'dept',l:'Wydział',t:'text'},{k:'year',l:'Rok',t:'int'},{k:'rate',l:'Stawka CAS [USD/h]',t:'num',min:0.01,d:2}], key:['dept','year']}
+  cas:{name:'Stawki CAS', cols:[{k:'dept',l:'Wydział',t:'text'},{k:'year',l:'Rok',t:'int'},{k:'rate',l:'Stawka CAS [USD/h]',t:'num',min:0.01,d:2}], key:['dept','year']},
+  excl:{name:'Wykluczenia', cols:[{k:'ce',l:'Cost Element',t:'text',opt:true},{k:'wbs',l:'WBS Element',t:'text',opt:true},{k:'partner',l:'Partner object',t:'text',opt:true},{k:'opis',l:'Opis',t:'text'}], key:['ce','wbs','partner']}
 };
 
 function stageDefs(type, kind){
@@ -1351,7 +1352,7 @@ const preP=(a,b)=>a.length<=b.length && a.every((x,i)=>x===b[i]); // a jest przo
 const wInScope=(w,org)=> w.p1s.includes(org) || selHas(w.sel,org);
 function pickRow(org){ const w=S.wiz, o=orgInfo(org), z=scopeOfOrg(org), grp=selHas(w.sel,org);
   return `<li><span class="pogrip" data-poadd="${org}" title="Przeciągnij do kontraktu (Performance Objectives)">⋮⋮</span> <label class="chk ${z||grp?'dis':''}"><input type="checkbox" data-wp="${org}" ${w.p1s.includes(org)||grp?'checked':''} ${z||grp?'disabled':''}><span><span class="mono">${org}</span> · ${esc(o.name)} <span class="tag">${esc(catLabel(catOf(org)))||'bez kategorii w WBS'}</span>${z?` <span class="muted small">należy do ${esc(z.code)}</span>`:grp?' <span class="muted small">w zaznaczonej grupie</span>':''}</span></label></li>`; }
-function wDicts(w){ return ['wp','harm'].concat(w.type==='CAS'?['cas']:[]); }
+function wDicts(w){ return ['wp','harm'].concat(w.type==='CAS'?['cas']:[]).concat('excl'); }
 /* Drzewo wyboru: Z_KAT_ZBIORCZA → Z_KATEGORIA → Z_OPIS → PROJORG (strony po 25). Checkbox na każdym poziomie, rozwijanie w dół. */
 function wizTree(){
   const w=S.wiz, T=new Map();
@@ -1384,7 +1385,8 @@ function loadXLSX(){ return XLSXP ||= new Promise((res,rej)=>{ if(window.XLSX) r
 const XDEF={
   wp:{sheet:['wp i cam','wp','cam'], cols:{wp:['wp','work package','pakiet pracy'], p1s:['element p1s','element','wbs','wbs element','psp','p1s'], cam:['cam','control account manager'], cat:['cost category','kategoria kosztu','kategoria','cat']}},
   harm:{sheet:['harmonogram i budzet','harmonogram','budzet','budget'], cols:{wp:['wp','work package'], bac:['bac','budzet','budget'], start:['start','od','poczatek'], finish:['koniec','finish','do','end']}},
-  cas:{sheet:['stawki cas','cas'], cols:{dept:['wydzial','dept'], year:['rok','year'], rate:['stawka cas','stawka','rate']}}
+  cas:{sheet:['stawki cas','cas'], cols:{dept:['wydzial','dept'], year:['rok','year'], rate:['stawka cas','stawka','rate']}},
+  excl:{sheet:['wykluczenia','exclusions','wyklucz'], cols:{ce:['cost element','element kosztowy','ce','nr elementu kosztowego'], wbs:['wbs element','wbs','element wbs','psp'], partner:['partner object','partner','obiekt partnera'], opis:['opis','description','uzasadnienie','komentarz']}}
 };
 const nrm=s=>String(s??'').toLowerCase().replace(/ł/g,'l').normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/\[.*?\]|\(.*?\)/g,'').replace(/[^a-z0-9]+/g,' ').trim();
 function parseCSV(txt){ const L=txt.replace(/\r/g,'').split('\n').filter(l=>l.trim()), f=L[0]||'', d=[';','\t',','].sort((a,b)=>f.split(b).length-f.split(a).length)[0];
@@ -1405,7 +1407,7 @@ const CATSET=['Labor','Material','Subcontract'];
 function parseDict(kind,raw,ctx){
   const def=DEFS[kind], out={rows:[], issues:[], miss:[]}, h=headerIdx(kind,raw||[]);
   if(!h){ out.miss=Object.keys(XDEF[kind].cols); return out; } if(h.miss.length){ out.miss=h.miss; return out; }
-  const seen={}, seenEl={}, lab=k=>def.cols.find(c=>c.k===k).l;
+  const seen={}, seenEl={}, seenEx={}, lab=k=>def.cols.find(c=>c.k===k).l;
   raw.slice(h.hi+1).forEach((r,ri)=>{ if(!r.some(v=>String(v).trim())) return;
     const line=h.hi+ri+2, v={}, iss=[], E=m=>iss.push({line,lvl:'err',msg:m}), Wn=m=>iss.push({line,lvl:'warn',msg:m});
     for(const c of def.cols){ const x=r[h.idx[c.k]]; v[c.k]= c.t==='date'? toYmd(x) : String(x??'').trim(); }
@@ -1420,6 +1422,7 @@ function parseDict(kind,raw,ctx){
         else if(seenEl[v.p1s]) E(`${v.p1s} ma już WP ${seenEl[v.p1s]} – jeden element P1S = jeden WP`); else seenEl[v.p1s]=v.wp; }
       if(v.cam && !PEOPLE.includes(v.cam)) Wn(`CAM „${v.cam}” spoza listy osób – sprawdź pisownię`);
     }
+    if(kind==='excl'){ if(!(v.ce||v.wbs||v.partner)) E('podaj co najmniej jedno z: Cost Element, WBS Element, Partner object'); const ck=[v.ce,v.wbs,v.partner].map(x=>(x||'').toLowerCase()).join('|'); if(v.ce||v.wbs||v.partner){ if(seenEx[ck]) E(`powtórzona kombinacja (wiersz ${seenEx[ck]})`); else seenEx[ck]=line; } }
     if(kind==='harm'){ if(v.wp && ctx.wps && !ctx.wps.has(v.wp)) E(`WP ${v.wp} nie ma w „WP i CAM”`); else if(v.wp && !ctx.wps) Wn('nie wczytano „WP i CAM” – nie sprawdzono WP');
       if(/^\d{4}/.test(v.start) && /^\d{4}/.test(v.finish) && v.start>v.finish) E('„Start” później niż „Koniec”'); }
     const key=def.key.map(k=>String(v[k]).toLowerCase()).join('|'); if(def.key.every(k=>v[k])){ if(seen[key]) E(`powtórzony klucz ${def.key.map(k=>lab(k)+' '+v[k]).join(', ')} (wiersz ${seen[key]})`); else seen[key]=line; }
@@ -1433,11 +1436,12 @@ function wizParsed(w){ const ctx=wizCtx(w), P={};
   const wps = P.wp ? new Set(P.wp.rows.filter(r=>!r.bad).map(r=>r.v.wp)) : null;
   if(w.imp.harm) P.harm=parseDict('harm',w.imp.harm.raw,{...ctx, wps});
   if(w.imp.cas && w.type==='CAS') P.cas=parseDict('cas',w.imp.cas.raw,ctx);
+  if(w.imp.excl) P.excl=parseDict('excl',w.imp.excl.raw,ctx);
   return P; }
 const bad = p => p && (p.miss.length || p.issues.some(i=>i.lvl==='err'));
 function impPanel(kind,imp,p){
   const def=DEFS[kind];
-  if(!imp) return `<section class="panel flat"><div class="row between"><h3>${def.name}</h3>${pill('todo','nie wczytano')}</div><p class="muted small">Kolumny: ${def.cols.map(c=>c.l).join(' · ')}. Bez słownika pierwszy przebieg będzie zablokowany.</p></section>`;
+  if(!imp) return `<section class="panel flat"><div class="row between"><h3>${def.name}</h3>${pill('todo','nie wczytano')}</div><p class="muted small">Kolumny: ${def.cols.map(c=>c.l).join(' · ')}. ${kind==='excl'?'Słownik opcjonalny – wskazane elementy są pomijane w przeliczeniu (min. 1 z 3 pól kluczowych; opis wymagany).':'Bez słownika pierwszy przebieg będzie zablokowany.'}</p></section>`;
   const errs=p.issues.filter(i=>i.lvl==='err'), warns=p.issues.filter(i=>i.lvl==='warn');
   const st = p.miss.length? pill('crit','brak kolumn') : errs.length? pill('crit',errs.length+' błędów') : pill('ok',p.rows.length+' wierszy');
   return `<section class="panel flat"><div class="row between"><h3>${def.name}</h3><span class="row">${st}${warns.length?pill('warn',warns.length+' ostrzeżeń'):''}<button class="btn small" data-a="ximpDel" data-x="${kind}">Usuń</button></span></div>
@@ -1458,15 +1462,22 @@ async function saveBook(filename,sheets){ // sheets: [[nazwa, [[nagłówki], ...
   await saveFile(filename, new Blob([X.write(wb,{type:'array',bookType:'xlsx'})]));
 }
 /* Przykład / szablon dla zakresu: WP na elementach poziomu 2 PROJORG z zakresu (w próbce danych). */
-function sampleDicts(code,orgs,type,fill){
-  const nodes=orgs.flatMap(o=>orgInfo(o).nodes.filter(n=>n[2]===2)).slice(0,40), C=code.toUpperCase().replace(/[^A-Z0-9]/g,'');
+function sampleDicts(code,els,type,fill){
+  const nodes=(els||[]).slice(0,40), C=code.toUpperCase().replace(/[^A-Z0-9]/g,'');
   const wp=nodes.map((n,i)=>[C+'-WP-'+(101+i), n[0], fill?PEOPLE[(i*3+2)%PEOPLE.length]:'', 'Labor']);
   const src=fill? wp.slice(0,-1) : wp; // w przykładzie ostatni element bez WP
   const harm=(fill? src.slice(0,-1) : src).map((r,i)=>[r[0], fill? 600+i*150 : '', fill?'2026-10-01':'', fill?'2027-06-30':'']); // w przykładzie ostatni WP bez budżetu
   const S_=[['WP i CAM',[DEFS.wp.cols.map(c=>c.l),...src]],['Harmonogram i budżet',[DEFS.harm.cols.map(c=>c.l),...harm]]];
   if(type==='CAS') S_.push(['Stawki CAS',[DEFS.cas.cols.map(c=>c.l),...(fill?[['W-101','2026','55.20']]:[])]]);
+  const ex = fill? [ [ (nodes[0]&&nodes[0][0])||'', '', '', 'Element spoza zakresu kontraktu – wyłączony z EV' ],
+    [ '0057100000', '', '', 'Proj Sttlmnt Bill – rozliczenie, nie koszt' ],
+    [ '', '', 'IC-TRANSFER', 'Przeksięgowania międzyfirmowe – pomijane' ] ] : [];
+  S_.push(['Wykluczenia',[DEFS.excl.cols.map(c=>c.l),...ex]]);
   return S_;
 }
+function wizEls(w){ const po=(w.po&&w.po.nodes.filter(n=>n.kind==='el'))||[];
+  if(po.length) return po.map(n=>[n.legacy||n.c||n.id, n.name||n.c||n.legacy||'']);
+  return wizOrgs(w).flatMap(o=>orgInfo(o).nodes.filter(n=>n[2]===2)).slice(0,40).map(n=>[n[0],n[1]]); }
 const wizOrgs = w => [...new Set([...w.p1s, ...Object.keys(P1S_ORG).filter(o=>selHas(w.sel,o))])].filter(o=>!scopeOfOrg(o));
 
 /* Baza analityczna: drzewo P1S (kategoria → PROJORG → element) połączone z WP, CAM, budżetem, harmonogramem i elementami CES. */
@@ -1528,7 +1539,7 @@ function vWizard(){
     ${wDicts(w).map(k=>impPanel(k,w.imp[k],P[k])).join('')}
     <div class="stack"><h3>Słowniki globalne</h3><p class="muted small">Przypinane razem ze słownikami projektu w każdym przebiegu.</p>
       <ul class="checks">${['stawki','kalendarz','kursy'].map(d=>`<li><span class="ic ok">✓</span><span>${dname(d)} <span class="tag">${rowsOf(d)} wierszy · zmiana ${esc(S.dicts[d].lastAt)}</span></span></li>`).join('')}</ul></div>
-    <div class="note">CAM przypisujesz do WP w arkuszu „WP i CAM” – na tej podstawie powstają pliki dla CAM. Słownik z błędami nie zostanie zapisany; bez słowników pierwszy przebieg jest zablokowany.</div>`;
+    <div class="note">CAM przypisujesz do WP w arkuszu „WP i CAM” – na tej podstawie powstają pliki dla CAM. Słownik z błędami nie zostanie zapisany; bez słowników WP/CAM i Harmonogram pierwszy przebieg jest zablokowany. Słownik <b>„Wykluczenia”</b> (Cost Element / WBS Element / Partner object + opis; wystarczy 1 z 3 pól, opis wymagany) jest opcjonalny – wskazane elementy są pomijane w przeliczeniu.</div>`;
   if(w.step===3) body=`<pre class="tree">${esc(folderTree(w.code||'KOD'))}</pre>
     <ul class="checks"><li><span class="ic ok">✓</span><span>Korzeń <span class="mono">${esc(ROOT)}</span> dostępny (ścieżka UNC)</span></li>
       <li><span class="ic ok">✓</span><span>Masz prawo zapisu w <span class="mono">Projekty\\</span></span></li>
@@ -1988,8 +1999,8 @@ const A={
   poDel:(x)=>{ const po=S.wiz.po; if(!po) return; const n=po.nodes.find(z=>z.id===x); if(!n) return; po.nodes.forEach(z=>{ if(z.parent===x) z.parent=n.parent; }); po.nodes=po.nodes.filter(z=>z.id!==x); if(po.editing===x) po.editing=null; render(); },
   poEdit:(x)=>{ if(S.wiz.po) S.wiz.po.editing=x; render(); },
   poEditDone:()=>{ if(S.wiz.po) S.wiz.po.editing=null; render(); },
-  xlsTpl:()=>{ const w=S.wiz; saveBook(w.code.toUpperCase()+'_slowniki_projektu.xlsx', sampleDicts(w.code,wizOrgs(w),w.type,false)); },
-  xlsDemo:()=>{ const w=S.wiz; for(const [n,aoa] of sampleDicts(w.code,wizOrgs(w),w.type,true)){ const k=n==='WP i CAM'?'wp':n==='Stawki CAS'?'cas':'harm'; w.imp[k]={file:'przykład (wygenerowany)', sheet:n, raw:aoa}; } render(); },
+  xlsTpl:()=>{ const w=S.wiz; saveBook(w.code.toUpperCase()+'_slowniki_projektu.xlsx', sampleDicts(w.code,wizEls(w),w.type,false)); },
+  xlsDemo:()=>{ const w=S.wiz; let orgs=wizOrgs(w); if(!orgs.length){ orgs=Object.keys(P1S_ORG).filter(o=>!scopeOfOrg(o)).slice(0,4); w.p1s=[...new Set([...w.p1s,...orgs])]; } const els=orgs.flatMap(o=>orgInfo(o).nodes.filter(n=>n[2]===2)).slice(0,40).map(n=>[n[0],n[1]]); const K={'WP i CAM':'wp','Harmonogram i budżet':'harm','Stawki CAS':'cas','Wykluczenia':'excl'}; for(const [n,aoa] of sampleDicts(w.code,els,w.type,true)){ const k=K[n]; if(k) w.imp[k]={file:'przykład (wygenerowany)', sheet:n, raw:aoa}; } render(); },
   ximpDel:x=>{ if(S.view.name==='dict') S.view={...S.view, ximp:null}; else delete S.wiz.imp[x]; render(); },
   ximpSave:()=>{ const d=S.dicts[S.view.id], x=S.view.ximp, p=parseDict(d.kind,x.raw,dictCtx(d)); if(bad(p)) return;
     const D=ximpDiff(d,p);

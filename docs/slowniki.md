@@ -50,6 +50,7 @@ Definicje źródeł i ich prefiksy są konfiguracją importu – `docs/zrodla-da
 | Harmonogram i budżet | WP → `BAC HOURS`, `BAC MATERIAL`, Planowany Start, Planowany Koniec – baseline projektu | WP |
 | Stawki CAS | stawki CAS projektu (zawartość – O37) | do ustalenia |
 | Cost Category – zmiany w projekcie | zmiany i uzupełnienia słownika globalnego Cost Category dla projektu (rozdz. 6) | numer elementu kosztowego |
+| Wykluczenia | elementy pomijane w przeliczeniu projektu: kombinacja `Cost Element`, `WBS Element`, `Partner object` (co najmniej jedno z trzech) + wymagany opis (rozdz. 7) – **opcjonalny** | kombinacja trzech pól |
 
 - Słowniki projektu powstają w kreatorze projektu z plików Excel (szablon z elementami projektu – jeden
   plik z arkuszami albo osobne pliki / CSV) i są dalej utrzymywane w aplikacji (`docs/funkcjonalnosc.md`, F01, F03).
@@ -121,6 +122,14 @@ Kontekst biznesowy typów – `readme.md`.
 | numer elementu kosztowego unikalny w słowniku (globalnym / zmianach projektu); zapisywany jako tekst – numer liczbowy uzupełniany zerami do 10 znaków | ERROR |
 | numer w słowniku bez Cost Category | WARNING |
 
+### 5.6 Wykluczenia
+
+| Reguła | Poziom |
+|---|---|
+| co najmniej jedno z pól `Cost Element`, `WBS Element`, `Partner object` wypełnione | ERROR |
+| opis wypełniony | ERROR |
+| powtórzona kombinacja `Cost Element` + `WBS Element` + `Partner object` | ERROR |
+
 Kontrole słowników względem danych przebiegu (np. wydział z kosztów bez stawki, numer elementu kosztowego bez
 wpisu w Cost Category) – `docs/pipeline-fazy.md`, P2.
 
@@ -148,6 +157,25 @@ wpisu w Cost Category) – `docs/pipeline-fazy.md`, P2.
 | O37 | Jakie stawki CAS są wykorzystywane i w jakim układzie |
 
 ---
+
+## 7. Wykluczenia
+
+Opcjonalny słownik projektu wskazujący elementy danych źródłowych, które **nie są brane pod uwagę** w przeliczeniu
+projektu (łączeniu źródeł i EV). Wyklucza się po kombinacji trzech pól z raportu kosztów CES
+(`docs/zrodla-danych.md`, rozdz. 4):
+
+| Pole | Znaczenie |
+|---|---|
+| `Cost Element` | numer elementu kosztowego |
+| `WBS Element` | element WBS CES |
+| `Partner object` | obiekt partnera (np. przeksięgowania międzyfirmowe) |
+| Opis | powód wykluczenia – **wymagany** |
+
+- Nie trzeba wypełniać wszystkich trzech pól kluczowych: wystarczy jedno, dwa albo komplet. Im mniej pól, tym
+  szersze dopasowanie (np. sam `Cost Element` wyklucza wszystkie wiersze z tym elementem kosztowym).
+- Wiersz danych jest wykluczony, gdy pasuje do wszystkich **wypełnionych** pól reguły.
+- Wykluczenia są stosowane w przebiegu przed łączeniem źródeł (`docs/pipeline-fazy.md`, P3); wykluczony koszt
+  nie trafia do EV i jest wykazany osobno w raporcie przebiegu.
 
 ## Załącznik A. Początkowa zawartość słownika Cost Category
 
