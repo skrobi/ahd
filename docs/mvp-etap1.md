@@ -4,6 +4,8 @@ Narzędzie w Pythonie (`pzl_ev/etap1`) zbudowane do sprawdzenia dostępu do RABI
 do bazy. Nie jest aplikacją docelową – docelowy import opisują `docs/pipeline-fazy.md` (G1)
 i `docs/zrodla-danych.md`. Narzędzie różni się od rozwiązania docelowego: kopiuje oryginały plików do Landing
 Zone, czyta prefiksy z pliku CSV zamiast z definicji źródeł w bazie i domyślnie zapisuje do pliku SQLite.
+SQLite jest tylko lokalnym ustawieniem domyślnym tego narzędzia – nie występuje w architekturze docelowej
+(`docs/architektura.md`, rozdz. 2).
 
 ## Zasada
 
