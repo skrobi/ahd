@@ -44,6 +44,24 @@ W LM pakiety pobiera się z proxy **eFOSS (Nexus)**, nie z nuget.org:
 - **Proxy (jeśli wymagane w sieci):** `HTTP_PROXY=http://proxy-lmi.global.lmco.com:80` – ustaw w konfiguracji
   użytkownika / zmiennej środowiskowej, nie w pliku w repo (zależne od stanowiska).
 
+**Poświadczenia z wiersza poleceń (na maszynie developera, nie w repo).** Źródło `eFOSS` jest już w
+`poc-wpf/NuGet.config`, więc dodaj tylko poświadczenia do **konfiguracji użytkownika** (`%APPDATA%\NuGet\NuGet.Config`):
+
+```bat
+dotnet nuget disable source nuget.org
+dotnet nuget update source eFOSS -u <NTID> -p <TOKEN> --store-password-in-clear-text --configfile "%APPDATA%\NuGet\NuGet.Config"
+```
+
+Bezpieczniej (token nie ląduje w żadnym pliku) – zmienna środowiskowa sesji budowy:
+
+```bat
+set NuGetPackageSourceCredentials_eFOSS=Username=<NTID>;Password=<TOKEN>
+build.cmd
+```
+
+Nie uruchamiaj `dotnet nuget add/update source` w katalogu `poc-wpf/` bez `--configfile` – dopisałoby token do
+wersjonowanego `NuGet.config`. Używaj konfiguracji użytkownika albo zmiennej środowiskowej.
+
 **Tokenu nie wpisujemy do `poc-wpf/NuGet.config` ani nie commitujemy do repozytorium.**
 
 Wynik: `publish\PZL-EV.exe` (ok. 70–100 MB – zawiera runtime .NET i WPF).
