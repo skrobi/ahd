@@ -78,9 +78,10 @@ i utrzymywaną na ekranie Administracja (`docs/funkcjonalnosc.md`, F08).
 
 ---
 
-## 4. Raport kosztów CES (ACTUALS)
+## 4. Raporty kosztów rzeczywistych CES (`ACTUALS_*`)
 
-Układ kolumn:
+Pliki z prefiksem `ACTUALS_` to zrzuty kosztów rzeczywistych pobierane z SAP CES przez RABIT, w formacie Excel
+(`.xlsx`). Wszystkie mają ten sam układ kolumn:
 
 `Project Definition | WBS Element | Cost Element | Cost element descr. | Cost element name | CO object name |
 Transaction Currency | Value TranCurr | Object Currency | Value in Obj. Crcy | Report currency | Val.in rep.cur. |
@@ -217,6 +218,6 @@ Kontrole danych względem okresu przebiegu i słowników – `docs/pipeline-fazy
 |---|---|
 | O7 | Czy RABIT może eksportować CSV/TXT? (CSV preferowany) |
 | O10 | Źródło zaawansowania z produkcji (`vAHDD`) – potwierdzenie i definicja widoku |
-| O27 | Zawartość poszczególnych raportów RABIT (koszty, zobowiązania, „PZL roll”, „hedge”, „workaround”), rzeczywiste prefiksy i definicje źródeł |
+| O27 | Zawartość pozostałych raportów RABIT (zobowiązania, „PZL roll”, „hedge”, „workaround”), ich prefiksy i definicje źródeł; układ `ACTUALS_*` – rozdz. 4 |
 | O28 | Które dane pochodzą z Cobra i w jakiej formie |
 | O38 | Wycofanie pliku, którego RABIT już nie generuje (dziś jego ostatnia wersja pozostaje najnowsza) |
