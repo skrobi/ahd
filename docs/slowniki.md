@@ -47,10 +47,10 @@ Definicje źródeł i ich prefiksy są konfiguracją importu – `docs/zrodla-da
 | Słownik | Zawartość | Klucz |
 |---|---|---|
 | WP i CAM | element P1S projektu → WP, CAM, Cost Category (Labor / Material / Subcontract – O24); powiązanie z nakładką Performance Objectives – O44 | element P1S |
-| Harmonogram i budżet | WP → `BAC HOURS`, `BAC MATERIAL`, Planowany Start, Planowany Koniec – baseline projektu | WP |
+| Harmonogram i budżet | WP → `BAC HOURS` (godziny), `BAC MATERIAL` (koszt materiałów), Planowany Start, Planowany Koniec – baseline projektu | WP |
 | Stawki CAS | stawki CAS projektu (zawartość – O37) | do ustalenia |
 | Cost Category – zmiany w projekcie | zmiany i uzupełnienia słownika globalnego Cost Category dla projektu (rozdz. 6) | numer elementu kosztowego |
-| Wykluczenia | elementy pomijane w przeliczeniu projektu: kombinacja `Cost Element`, `WBS Element`, `Partner object` (co najmniej jedno z trzech) + wymagany opis (rozdz. 7) – **opcjonalny** | kombinacja trzech pól |
+| Wykluczenia | elementy pomijane na późniejszym etapie analizy: kombinacja `Cost Element`, `WBS Element`, `Partner object` (co najmniej jedno z trzech) + wymagany opis (rozdz. 7) – **opcjonalny** | kombinacja trzech pól |
 
 - Słowniki projektu powstają w kreatorze projektu z plików Excel (szablon z elementami projektu – jeden
   plik z arkuszami albo osobne pliki / CSV) i są dalej utrzymywane w aplikacji (`docs/funkcjonalnosc.md`, F01, F03).
@@ -146,23 +146,11 @@ wpisu w Cost Category) – `docs/pipeline-fazy.md`, P2.
 
 ---
 
-## 7. Otwarte kwestie
-
-| # | Kwestia |
-|---|---|
-| O9 | Los istniejących tabel słownikowych w `PZLPROD.LOG` (`Stanowiska`, `LearningCurve`, `PeriodDates`, `EmployeesHist`) – do ustalenia z właścicielami |
-| O18 | Numeracja tygodni w kalendarzu okresów (ISO czy wewnętrzna) |
-| O24 | Kolumna „Cost Category” w słowniku „WP i CAM” ma stałe wartości Labor / Material / Subcontract – czy ma przyjmować kategorie ze słownika Cost Category? |
-| O25 | Numer elementu kosztowego bez wpisu w Cost Category: ERROR (dziś) czy WARNING? |
-| O37 | Jakie stawki CAS są wykorzystywane i w jakim układzie |
-
----
-
 ## 7. Wykluczenia
 
-Opcjonalny słownik projektu wskazujący elementy danych źródłowych, które **nie są brane pod uwagę** w przeliczeniu
-projektu (łączeniu źródeł i EV). Wyklucza się po kombinacji trzech pól z raportu kosztów CES
-(`docs/zrodla-danych.md`, rozdz. 4):
+Opcjonalny słownik projektu wskazujący elementy danych źródłowych, które **nie są brane pod uwagę** na
+późniejszym etapie analizy. Definiowany jest na etapie projektu; stosowany później (poza bieżącym zakresem – O48).
+Wyklucza się po kombinacji trzech pól z raportu kosztów CES (`docs/zrodla-danych.md`, rozdz. 4):
 
 | Pole | Znaczenie |
 |---|---|
@@ -174,8 +162,20 @@ projektu (łączeniu źródeł i EV). Wyklucza się po kombinacji trzech pól z 
 - Nie trzeba wypełniać wszystkich trzech pól kluczowych: wystarczy jedno, dwa albo komplet. Im mniej pól, tym
   szersze dopasowanie (np. sam `Cost Element` wyklucza wszystkie wiersze z tym elementem kosztowym).
 - Wiersz danych jest wykluczony, gdy pasuje do wszystkich **wypełnionych** pól reguły.
-- Wykluczenia są stosowane w przebiegu przed łączeniem źródeł (`docs/pipeline-fazy.md`, P3); wykluczony koszt
-  nie trafia do EV i jest wykazany osobno w raporcie przebiegu.
+- Moment zastosowania (który etap analizy, jak wykazywać wykluczony koszt) – O48.
+
+---
+
+## 8. Otwarte kwestie
+
+| # | Kwestia |
+|---|---|
+| O9 | Los istniejących tabel słownikowych w `PZLPROD.LOG` (`Stanowiska`, `LearningCurve`, `PeriodDates`, `EmployeesHist`) – do ustalenia z właścicielami |
+| O18 | Numeracja tygodni w kalendarzu okresów (ISO czy wewnętrzna) |
+| O24 | Kolumna „Cost Category” w słowniku „WP i CAM” ma stałe wartości Labor / Material / Subcontract – czy ma przyjmować kategorie ze słownika Cost Category? |
+| O25 | Numer elementu kosztowego bez wpisu w Cost Category: ERROR (dziś) czy WARNING? |
+| O37 | Jakie stawki CAS są wykorzystywane i w jakim układzie |
+| O48 | Wykluczenia: na którym etapie analizy są stosowane i jak wykazywany jest wykluczony koszt |
 
 ## Załącznik A. Początkowa zawartość słownika Cost Category
 
