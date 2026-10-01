@@ -12,7 +12,7 @@ Powiązane: `docs/pipeline-fazy.md` (G1 – przebieg importu, P5–P6 – pobran
 
 | Źródło | System | Dane | Pozyskanie |
 |---|---|---|---|
-| Raporty CES (CJI3, ZRD_KKAJ, Net Inv) | SAP CES przez RABIT | koszty rzeczywiste, zobowiązania | import plików z SharePoint przez WebDAV (rozdz. 3) |
+| Raporty CES (CJI3, ZRD_KKAJ, Net Inv) | SAP CES przez RABIT | koszty rzeczywiste, zobowiązania | import plików z lokalizacji RABIT na SharePoint przez WebDAV (rozdz. 3) |
 | Struktura P1S i kategoryzacja | `PZLPROD.LOG.WBS`, `LOG.WBS_DIC` (`splmcd03`) | drzewo elementów P1S, kategorie | odczyt bezpośredni, źródło przyrostowe (rozdz. 5) |
 | Raport mapowań SAP↔CES | `PZLPROD` | przypisania elementów CES do P1S | odczyt bezpośredni, źródło przyrostowe (`docs/mapowanie-ces-p1s.md`, rozdz. 2) |
 | Zaawansowanie z produkcji | `PZLPROD.LOG.vAHDD` (O10) | zaawansowanie godzin i materiałów | odczyt w etapie P5 (rozdz. 6) |
@@ -61,9 +61,15 @@ i utrzymywaną na ekranie Administracja (`docs/funkcjonalnosc.md`, F08).
   przebieg według zakresu projektu (`docs/pipeline-fazy.md`, P1).
 - Duże raporty są dzielone na części (`_01`, `_02`, `_03`) – każda część to osobny plik tego samego źródła,
   o układzie zgodnym z definicją. Pliki o innym układzie to osobne źródła z własnymi definicjami.
-- **Dostęp:** folder RABIT na SharePoint czytany przez WebDAV (usługa WebClient Windows, konto użytkownika),
-  ścieżka w postaci `\\lmsp4-intl.external.lmco.com@SSL\DavWWWRoot\sites\RabbitReporting\Shared Documents\E456659`.
-  Usługa WebClient ma limit rozmiaru pliku (domyślnie ok. 50 MB, `FileSizeLimitInBytes` zmienia administrator);
+- **Lokalizacje RABIT:** raporty mogą trafiać do wielu folderów na SharePoint. Lista lokalizacji jest
+  konfiguracją importu w bazie (`meta.SourceLocation`, ekran Administracja – `docs/funkcjonalnosc.md`, F08):
+  nazwa, ścieżka, aktywna. Przykład ścieżki:
+  `\\lmsp4-intl.external.lmco.com@SSL\DavWWWRoot\sites\RabbitReporting\Shared Documents\E456659`.
+- Plik jest identyfikowany przez **lokalizację i nazwę** – pliki o tej samej nazwie w różnych lokalizacjach to
+  różne pliki. Rozpoznanie źródła po prefiksie (rozdz. 2) nie zależy od lokalizacji.
+- **Dostęp:** lokalizacje są czytane przez WebDAV (usługa WebClient Windows, konto użytkownika). Konto
+  uruchamiające import musi mieć dostęp do wszystkich aktywnych lokalizacji. Usługa WebClient ma limit
+  rozmiaru pliku (domyślnie ok. 50 MB, `FileSizeLimitInBytes` zmienia administrator);
   większy plik pobiera się ręcznie w przeglądarce do folderu `00_Global\RABIT\Do_importu`
   (`docs/architektura.md`, rozdz. 7) i importuje tak samo.
 - Niedostępne dla użytkownika: API REST SharePoint, synchronizacja OneDrive, eksport listy do Excela,
@@ -194,6 +200,7 @@ Poziomy ERROR / WARNING – `docs/pipeline-fazy.md`, rozdz. 1.3.
 
 | Reguła | Poziom | Kiedy |
 |---|---|---|
+| lokalizacja RABIT niedostępna (brak dostępu, błąd WebDAV) | ERROR dla lokalizacji – pozostałe lokalizacje importują się dalej | import |
 | plik bez pasującego prefiksu | WARNING (plik nierozpoznany, nieimportowany) | import |
 | sygnatura kolumn niezgodna z definicją (zmiana układu raportu) | ERROR dla wersji pliku – dane kanoniczne nie powstają do czasu aktualizacji definicji | import |
 | wartość niezgodna z typem kolumny | ERROR | import |

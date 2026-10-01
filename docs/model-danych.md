@@ -103,7 +103,7 @@ w historii z informacją, kto i kiedy go zastąpił.
 Znacznik stanu to moment zapisany w przebiegu w etapie P1. Przebieg czyta wszystkie dane wewnętrzne
 **w stanie na ten moment** (oś techniczna):
 
-- najnowszą wersję każdego pliku źródłowego zaimportowaną do tego momentu, w wersji kanonicznej
+- najnowszą wersję każdego pliku źródłowego (lokalizacja + nazwa) zaimportowaną do tego momentu, w wersji kanonicznej
   obowiązującej w tym momencie,
 - słowniki globalne i słowniki projektu (w tym harmonogram i budżet),
 - zakres projektu,
@@ -142,7 +142,8 @@ istniejących wierszy w tych źródłach nie jest wykrywana (`docs/architektura.
 | Encja | Opis |
 |---|---|
 | `meta.ImportBatch` | uruchomienie importu: kto, komputer, wersja aplikacji, liczniki, status |
-| `meta.SourceFile` | wersja pliku (klucz SHA-256): nazwa, kod źródła, data raportu (modyfikacja w RABIT), kolumny, sygnatura kolumn, liczba wierszy, import |
+| `meta.SourceLocation` | lokalizacje RABIT: nazwa, ścieżka, aktywna (`docs/zrodla-danych.md`, rozdz. 3) |
+| `meta.SourceFile` | wersja pliku (klucz SHA-256): lokalizacja, nazwa, kod źródła, data raportu (modyfikacja w RABIT), kolumny, sygnatura kolumn, liczba wierszy, import |
 | `meta.SourceFileSeen` | decyzja dla każdego pliku w każdym imporcie (`docs/pipeline-fazy.md`, G1) |
 | `meta.SourceDefinition` | definicja źródła (`docs/zrodla-danych.md`, rozdz. 2) |
 | `stg.RawRow` | surowe wiersze: wersja pliku, numer wiersza, wartości |
