@@ -4,17 +4,21 @@ Cel: **zanim ruszy implementacja**, sprawdzić, czy założenia technologiczne p
 jeden `PZL-EV.exe` z dysku sieciowego na stanowisku PZL – bez instalacji .NET, bez lokalnego
 serwera i bez lokalnej bazy – z pakietami dostępnymi w PZL.
 
-Zakres: **tylko Pulpit z prototypu** (`prototyp/pzl-ev-prototyp.html`, `vPulpit()`), dane przykładowe,
-**bez połączenia z bazą**. Pozostałe pozycje menu pokazują ekran zastępczy.
+Zakres: **Pulpit z prototypu** (`prototyp/pzl-ev-prototyp.html`, `vPulpit()`) i ekran **Diagnostyka**, dane
+przykładowe, **bez połączenia z bazą**. Pozostałe pozycje menu pokazują ekran zastępczy modułu (dokumentacja
+i etapy, które moduł przejmie).
+
+Kod ma docelową strukturę modułową (`docs/architektura.md`, rozdz. 5.3) – po pozytywnym teście jest
+rozwijany jako właściwa aplikacja.
 
 ## Co aplikacja sprawdza
 
 | Założenie | Jak sprawdzane |
 |---|---|
-| C# / .NET 10, WPF + MVVM | aplikacja jest WPF z widokiem związanym z `MainViewModel` |
+| C# / .NET 10, WPF + MVVM | powłoka i moduły: widoki (`…View.xaml`) związane z `…ViewModel` |
 | self-contained, single-file, bez instalacji .NET | publikacja `build.cmd` → jeden `PZL-EV.exe`; uruchomienie na komputerze bez .NET |
-| uruchomienie z dysku sieciowego | start `PZL-EV.exe` ze ścieżki UNC; panel pokazuje „Uruchomiono z” |
-| Dapper, Microsoft.Data.SqlClient, ClosedXML (OpenXML) | pakiety są w projekcie; panel **Diagnostyka środowiska** pokazuje wersje wczytane w runtime z bundla (bez łączenia z bazą) |
+| uruchomienie z dysku sieciowego | start `PZL-EV.exe` ze ścieżki UNC; ekran Diagnostyka pokazuje „Uruchomiono z” |
+| Dapper, Microsoft.Data.SqlClient, ClosedXML (OpenXML) | pakiety są w projekcie; ekran **Diagnostyka** pokazuje wersje wczytane w runtime z bundla (bez łączenia z bazą) |
 | Serilog | log w `logs\pzl-ev-test-RRRRMMDD.log` obok `.exe` (sprawdza też prawo zapisu w tym miejscu) |
 | konto Windows / AD | panel pokazuje `DOMENA\użytkownik` |
 
@@ -104,11 +108,11 @@ Wynik: `publish\PZL-EV.exe` (ok. 70–100 MB – zawiera runtime .NET i WPF).
    `\\serwer\udzial\PZL-EV\_test\PZL-EV.exe`).
 3. Sprawdź:
    - [ ] okno się otwiera, widać Pulpit (karty faz globalnych, 3 projekty, Wymaga uwagi, Ostatnie zdarzenia),
-   - [ ] **Diagnostyka środowiska**: Runtime `.NET 10…`, 4 pakiety z wersjami, „Uruchomiono z” = ścieżka UNC,
+   - [ ] menu **Diagnostyka**: Runtime `.NET 10…`, 4 pakiety z wersjami, „Uruchomiono z” = ścieżka UNC,
    - [ ] konto Windows = Twoje konto AD,
-   - [ ] w folderze `.exe` powstał `logs\pzl-ev-test-*.log` z wpisami startu i pakietów
-     (jeśli folder jest tylko do odczytu – aplikacja się nie uruchomi; to też wynik testu),
-   - [ ] menu po lewej przełącza na ekran zastępczy i z powrotem.
+   - [ ] w folderze `.exe` powstał `logs\pzl-ev-test-*.log` z wpisami startu, listą modułów i – po wejściu
+     w Diagnostykę – pakietów (jeśli folder jest tylko do odczytu – aplikacja się nie uruchomi; to też wynik testu),
+   - [ ] pozostałe pozycje menu pokazują ekran zastępczy z dokumentacją i etapami modułu; „Wróć do Pulpitu” wraca.
 4. Powtórz na 2–3 stanowiskach (różni użytkownicy, różne polityki).
 
 ## Możliwe blokady (co oznaczają)
@@ -123,20 +127,26 @@ Wynik: `publish\PZL-EV.exe` (ok. 70–100 MB – zawiera runtime .NET i WPF).
 
 ## Struktura
 
+Zasady i przepis „Nowy moduł” – `docs/architektura.md`, rozdz. 5.3.
+
 ```
 poc-wpf/
 ├── build.cmd                    publikacja self-contained single-file win-x64
 ├── NuGet.config                 źródło pakietów = feed eFOSS (bez poświadczeń)
+├── ArchitectureRules.targets    granice modułów sprawdzane przy każdej budowie (błąd PZLARCH)
 └── src/
     ├── PzlEv.Test.csproj        net10.0-windows, WPF, pakiety z założeń
-    ├── App.xaml(.cs)            start, Serilog, obsługa wyjątków
-    ├── MainWindow.xaml(.cs)     powłoka (pasek środowiska, menu) + Pulpit
-    ├── Theme.xaml               paleta z prototypu
-    ├── ViewModels/MainViewModel.cs
-    ├── Models/Models.cs
-    ├── Mvvm/                    ObservableObject, RelayCommand, konwerter kolorów
-    ├── SampleData.cs            dane Pulpitu przeliczone z prototypu
-    └── PackageDiagnostics.cs    wersje pakietów wczytanych w runtime
+    ├── .editorconfig            przestrzeń nazw = folder (IDE0130)
+    ├── App.xaml(.cs)            start, Serilog, obsługa wyjątków, zasoby wspólne
+    ├── Shell/                   okno, menu, nawigacja; ModuleCatalog.cs – lista modułów
+    ├── Modules/
+    │   ├── Dashboard/           Pulpit – pełny ekran (Views, ViewModels, Models, Data)
+    │   ├── Diagnostics/         wynik testu stosu (wersje pakietów wczytanych w runtime)
+    │   └── Import/ Mapping/ …   pozostałe moduły: plik wejścia + etapy, ekran zastępczy
+    └── Shared/
+        ├── Utils/               MVVM, konwerter kolorów, kontrakt modułu i nawigacji
+        ├── Models/              modele wspólne, klucze modułów, kontrakt etapu (Pipeline/)
+        └── Views/
+            ├── Templates/       Theme.xaml – paleta z prototypu, style, układ strony
+            └── Partials/        pigułka statusu, kropka etapu, nagłówek ekranu, ekran zastępczy
 ```
-
-To jest aplikacja testowa – nie jest początkiem właściwego kodu (modułów, dostępu do danych, ról).

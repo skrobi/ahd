@@ -10,6 +10,10 @@
     REFERENCJĄ – żeby potwierdzić, że restore'ują się z Twojego feedu i pakują
     do jednego pliku .exe. Panel „Diagnostyka środowiska” pokazuje ich wersje
     wczytane w runtime z bundla.
+
+    Struktura kodu jest docelowa (docs/architektura.md, rozdz. 5.3): Shell/, Modules/<Moduł>/,
+    Shared/{Utils,Models,Views/Templates,Views/Partials}. Granice modułów sprawdza przy każdej
+    budowie ../ArchitectureRules.targets; przestrzeń nazw = folder (.editorconfig, IDE0130).
   -->
 
   <PropertyGroup>
@@ -19,7 +23,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <LangVersion>latest</LangVersion>
-    <RootNamespace>PzlEv.Test</RootNamespace>
+    <RootNamespace>PzlEv</RootNamespace>
     <AssemblyName>PZL-EV</AssemblyName>
 
     <!-- Model uruchomienia: jeden plik, self-contained, bez instalacji .NET. -->
@@ -32,6 +36,8 @@
     <!-- WPF nie wspiera trimmingu – zostawiamy wyłączony. -->
     <PublishTrimmed>false</PublishTrimmed>
     <SatelliteResourceLanguages>pl;en</SatelliteResourceLanguages>
+    <!-- Reguły stylu z .editorconfig (m.in. przestrzeń nazw = folder) sprawdzane przy budowie. -->
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
   </PropertyGroup>
 
   <ItemGroup>
@@ -43,5 +49,7 @@
     <PackageReference Include="Serilog" Version="4.2.0" />
     <PackageReference Include="Serilog.Sinks.File" Version="6.0.0" />
   </ItemGroup>
+
+  <Import Project="..\ArchitectureRules.targets" />
 
 </Project>

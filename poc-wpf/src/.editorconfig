@@ -1,0 +1,5 @@
+# Konwencje kodu PoC (docs/architektura.md, rozdz. 5.3).
+[*.cs]
+# Przestrzeń nazw = ścieżka folderu (PzlEv.Modules.Dashboard.ViewModels ↔ Modules/Dashboard/ViewModels).
+dotnet_style_namespace_match_folder = true
+dotnet_diagnostic.IDE0130.severity = warning
