@@ -454,7 +454,7 @@ const DEFS = {
   kursy:{name:'Kursy USD/PLN', cols:[{k:'okres',l:'Okres',t:'text'},{k:'kurs',l:'USD/PLN',t:'num',min:0.01,d:4}], key:['okres']},
   prefiksy:{name:'Prefiksy plików RABIT', cols:[{k:'prefix',l:'Prefiks nazwy pliku',t:'text'},{k:'src',l:'Kod źródła',t:'text'},{k:'opis',l:'Opis',t:'text',opt:true}], key:['prefix']},
   wp:{name:'WP i CAM', cols:[{k:'wp',l:'WP',t:'text'},{k:'p1s',l:'Element P1S',t:'list',src:'scopeNodes'},{k:'cam',l:'CAM',t:'list',src:'people'},{k:'cat',l:'Cost Category',t:'list',src:'cats'}], key:['wp'], uniq:['p1s']},
-  harm:{name:'Harmonogram i budżet', cols:[{k:'wp',l:'WP',t:'list',src:'scopeWp'},{k:'bac',l:'BAC [h]',t:'num',min:0},{k:'start',l:'Start',t:'date'},{k:'finish',l:'Koniec',t:'date'}], key:['wp'], rules:[['start','finish']]},
+  harm:{name:'Harmonogram i budżet', cols:[{k:'wp',l:'WP',t:'list',src:'scopeWp'},{k:'bac',l:'BAC HOURS [h]',t:'num',min:0},{k:'bacmat',l:'BAC MATERIAL [PLN]',t:'num',min:0},{k:'start',l:'Start',t:'date'},{k:'finish',l:'Koniec',t:'date'}], key:['wp'], rules:[['start','finish']]},
   katgr:{name:'Grupy kategorii', cols:[{k:'p1s',l:'Element P1S',t:'p1s'},{k:'name',l:'Nazwa grupy (zastępuje Z_OPIS)',t:'text'}], key:['p1s']},
   cas:{name:'Stawki CAS', cols:[{k:'dept',l:'Wydział',t:'text'},{k:'year',l:'Rok',t:'int'},{k:'rate',l:'Stawka CAS [USD/h]',t:'num',min:0.01,d:2}], key:['dept','year']},
   excl:{name:'Wykluczenia', cols:[{k:'ce',l:'Cost Element',t:'text',opt:true},{k:'wbs',l:'WBS Element',t:'text',opt:true},{k:'partner',l:'Partner object',t:'text',opt:true},{k:'opis',l:'Opis',t:'text'}], key:['ce','wbs','partner']}
@@ -1384,7 +1384,7 @@ let XLSXP=null;
 function loadXLSX(){ return XLSXP ||= new Promise((res,rej)=>{ if(window.XLSX) return res(window.XLSX); const s=document.createElement('script'); s.src=XLSX_URL; s.onload=()=>res(window.XLSX); s.onerror=()=>{ XLSXP=null; rej(new Error('nie udało się wczytać biblioteki Excel')); }; document.head.appendChild(s); }); }
 const XDEF={
   wp:{sheet:['wp i cam','wp','cam'], cols:{wp:['wp','work package','pakiet pracy'], p1s:['element p1s','element','wbs','wbs element','psp','p1s'], cam:['cam','control account manager'], cat:['cost category','kategoria kosztu','kategoria','cat']}},
-  harm:{sheet:['harmonogram i budzet','harmonogram','budzet','budget'], cols:{wp:['wp','work package'], bac:['bac','budzet','budget'], start:['start','od','poczatek'], finish:['koniec','finish','do','end']}},
+  harm:{sheet:['harmonogram i budzet','harmonogram','budzet','budget'], cols:{wp:['wp','work package'], bac:['bac hours','bac','budzet godzin','bac h'], bacmat:['bac material','budzet materialowy','material','bac mat'], start:['start','od','poczatek'], finish:['koniec','finish','do','end']}},
   cas:{sheet:['stawki cas','cas'], cols:{dept:['wydzial','dept'], year:['rok','year'], rate:['stawka cas','stawka','rate']}},
   excl:{sheet:['wykluczenia','exclusions','wyklucz'], cols:{ce:['cost element','element kosztowy','ce','nr elementu kosztowego'], wbs:['wbs element','wbs','element wbs','psp'], partner:['partner object','partner','obiekt partnera'], opis:['opis','description','uzasadnienie','komentarz']}}
 };
@@ -1466,7 +1466,7 @@ function sampleDicts(code,els,type,fill){
   const nodes=(els||[]).slice(0,40), C=code.toUpperCase().replace(/[^A-Z0-9]/g,'');
   const wp=nodes.map((n,i)=>[C+'-WP-'+(101+i), n[0], fill?PEOPLE[(i*3+2)%PEOPLE.length]:'', 'Labor']);
   const src=fill? wp.slice(0,-1) : wp; // w przykładzie ostatni element bez WP
-  const harm=(fill? src.slice(0,-1) : src).map((r,i)=>[r[0], fill? 600+i*150 : '', fill?'2026-10-01':'', fill?'2027-06-30':'']); // w przykładzie ostatni WP bez budżetu
+  const harm=(fill? src.slice(0,-1) : src).map((r,i)=>[r[0], fill? 600+i*150 : '', fill? 20000+i*5000 : '', fill?'2026-10-01':'', fill?'2027-06-30':'']); // w przykładzie ostatni WP bez budżetu
   const S_=[['WP i CAM',[DEFS.wp.cols.map(c=>c.l),...src]],['Harmonogram i budżet',[DEFS.harm.cols.map(c=>c.l),...harm]]];
   if(type==='CAS') S_.push(['Stawki CAS',[DEFS.cas.cols.map(c=>c.l),...(fill?[['W-101','2026','55.20']]:[])]]);
   const ex = fill? [ [ (nodes[0]&&nodes[0][0])||'', '', '', 'Element spoza zakresu kontraktu – wyłączony z EV' ],
@@ -1490,22 +1490,22 @@ function analytic(orgs,wpRows,harmRows){
     for(const n of o.nodes){ const w=byEl[n[0]], h=w&&byWp[w.wp], ces=cesN[n[0]]||0;
       const st = w ? (h && h.bac!=='' ? 'ok' : 'noBud') : (ces||n[3]) ? 'noWp' : '';
       if(st==='noWp') issues.noWp.push(n[0]); if(st==='noBud') issues.noBud.push(w.wp);
-      rows.push({kz:k?.kz||'', kat:k?.kat||'', opis:k?.opis||'', org, c:n[0], n:n[1], l:n[2], wp:w?.wp||'', cam:w?.cam||'', cat:w?.cat||'', bac:h?.bac??'', start:h?.start||'', finish:h?.finish||'', ces, st}); } }
-  const cams={}; for(const v of wpRows){ const h=byWp[v.wp], c=(cams[v.cam] ||= {wp:0, bac:0, start:'', finish:''}); c.wp++; if(h){ c.bac+=Number(h.bac)||0; if(h.start&&(!c.start||h.start<c.start)) c.start=h.start; if(h.finish&&h.finish>c.finish) c.finish=h.finish; } }
+      rows.push({kz:k?.kz||'', kat:k?.kat||'', opis:k?.opis||'', org, c:n[0], n:n[1], l:n[2], wp:w?.wp||'', cam:w?.cam||'', cat:w?.cat||'', bac:h?.bac??'', bacmat:h?.bacmat??'', start:h?.start||'', finish:h?.finish||'', ces, st}); } }
+  const cams={}; for(const v of wpRows){ const h=byWp[v.wp], c=(cams[v.cam] ||= {wp:0, bac:0, bacmat:0, start:'', finish:''}); c.wp++; if(h){ c.bac+=Number(h.bac)||0; c.bacmat+=Number(h.bacmat)||0; if(h.start&&(!c.start||h.start<c.start)) c.start=h.start; if(h.finish&&h.finish>c.finish) c.finish=h.finish; } }
   return {rows, issues, cams};
 }
 function analyticHtml(A){
   const mp=S.wiz||{}, open=mp.aopen||{}, stl={ok:pill('ok','WP + budżet'), noBud:pill('warn','WP bez budżetu'), noWp:pill('warn','brak WP'), '':'<span class="muted small">—</span>'};
   const G=new Map(); for(const r of A.rows){ const k=r.kz?[r.kz,r.kat,r.opis].join(' › '):'Bez kategorii w WBS'; (G.get(k)||G.set(k,new Map()).get(k)); const M=G.get(k); (M.get(r.org)||M.set(r.org,[]).get(r.org)).push(r); }
-  const sumB=rs=>sum(rs.map(r=>Number(r.bac)||0)), roll=rs=>`<td class="num">${rs.filter(r=>r.wp).length} WP</td><td class="num">${new Set(rs.filter(r=>r.cam).map(r=>r.cam)).size} CAM</td><td></td><td class="r num">${nf(sumB(rs))}</td><td></td><td></td><td class="r num">${sum(rs.map(r=>r.ces))}</td>`;
+  const sumB=rs=>sum(rs.map(r=>Number(r.bac)||0)), sumBM=rs=>sum(rs.map(r=>Number(r.bacmat)||0)), roll=rs=>`<td class="num">${rs.filter(r=>r.wp).length} WP</td><td class="num">${new Set(rs.filter(r=>r.cam).map(r=>r.cam)).size} CAM</td><td></td><td class="r num">${nf(sumB(rs))}</td><td class="r num">${nf(sumBM(rs))}</td><td></td><td></td><td class="r num">${sum(rs.map(r=>r.ces))}</td>`;
   let body='';
   for(const [k,M] of G){ const all=[...M.values()].flat();
     body+=`<tr class="l1"><td><b>${esc(k)}</b></td>${roll(all)}<td>${all.some(r=>r.st==='noWp'||r.st==='noBud')?pill('warn','do uzupełnienia'):pill('ok','kompletne')}</td></tr>`;
     for(const [org,rs] of M){ const op=!!open[org];
       body+=`<tr class="l2"><td style="padding-left:22px"><button class="tg" data-a="atog" data-x="${org}" aria-label="${op?'Zwiń':'Rozwiń'} ${org}">${op?'▾':'▸'}</button> <span class="mono"><b>${org}</b></span> ${esc(orgInfo(org).name)}</td>${roll(rs)}<td>${rs.some(r=>r.st==='noWp'||r.st==='noBud')?pill('warn','do uzupełnienia'):''}</td></tr>`;
-      if(op) body+=rs.filter(r=>r.l>1).map(r=>`<tr><td style="padding-left:${30+r.l*14}px"><span class="mono">${r.c}</span> <span class="small">${esc(r.n)}</span></td><td class="mono">${esc(r.wp)||'—'}</td><td>${esc(r.cam)||'—'}</td><td>${esc(r.cat)}</td><td class="r num">${r.bac===''?'—':nf(Number(r.bac))}</td><td class="num">${r.start||'—'}</td><td class="num">${r.finish||'—'}</td><td class="r num">${r.ces||''}</td><td>${stl[r.st]}</td></tr>`).join('');
+      if(op) body+=rs.filter(r=>r.l>1).map(r=>`<tr><td style="padding-left:${30+r.l*14}px"><span class="mono">${r.c}</span> <span class="small">${esc(r.n)}</span></td><td class="mono">${esc(r.wp)||'—'}</td><td>${esc(r.cam)||'—'}</td><td>${esc(r.cat)}</td><td class="r num">${r.bac===''?'—':nf(Number(r.bac))}</td><td class="r num">${r.bacmat===''?'—':nf(Number(r.bacmat))}</td><td class="num">${r.start||'—'}</td><td class="num">${r.finish||'—'}</td><td class="r num">${r.ces||''}</td><td>${stl[r.st]}</td></tr>`).join('');
     } }
-  return `<div class="tbl-wrap"><table class="atree"><thead><tr><th>Kategoria › PROJORG › element P1S</th><th>WP</th><th>CAM</th><th>Cost Category</th><th class="r">BAC [h]</th><th>Start</th><th>Koniec</th><th class="r">El. CES</th><th>Stan</th></tr></thead><tbody>${body||'<tr><td colspan="9" class="muted">Brak elementów P1S w próbce danych dla zakresu.</td></tr>'}</tbody></table></div>`;
+  return `<div class="tbl-wrap"><table class="atree"><thead><tr><th>Kategoria › PROJORG › element P1S</th><th>WP</th><th>CAM</th><th>Cost Category</th><th class="r">BAC HOURS [h]</th><th class="r">BAC MATERIAL [PLN]</th><th>Start</th><th>Koniec</th><th class="r">El. CES</th><th>Stan</th></tr></thead><tbody>${body||'<tr><td colspan="10" class="muted">Brak elementów P1S w próbce danych dla zakresu.</td></tr>'}</tbody></table></div>`;
 }
 function vWizard(){
   const w=S.wiz || (S.wiz=newWiz()); w.sel ||= []; w.open ||= {}; w.page ||= {}; w.imp ||= {};
@@ -1556,7 +1556,7 @@ function vWizard(){
      <ul class="checks">
       ${chk(total>0,'Zakres: '+nf(total)+' PROJORG'+(orgs.length?` (w próbce danych: ${orgs.length}, ${A.rows.length} elementów WBS/PSP)`:''),'crit')}
       ${chk(ok('wp').length>0, ok('wp').length? `WP i CAM: ${ok('wp').length} WP, ${Object.keys(A.cams).length} CAM` : bad(P.wp)?'WP i CAM: plik z błędami – nie zostanie zapisany':'WP i CAM: nie wczytano – słownik pusty, pierwszy przebieg zablokowany')}
-      ${chk(ok('harm').length>0 && !A.issues.noBud.length, ok('harm').length? `Harmonogram i budżet: ${ok('harm').length} WP, BAC ${nf(sum(ok('harm').map(v=>Number(v.bac)||0)))} h${A.issues.noBud.length?` · bez budżetu: ${A.issues.noBud.join(', ')}`:''}` : 'Harmonogram i budżet: nie wczytano')}
+      ${chk(ok('harm').length>0 && !A.issues.noBud.length, ok('harm').length? `Harmonogram i budżet: ${ok('harm').length} WP, BAC ${nf(sum(ok('harm').map(v=>Number(v.bac)||0)))} h + ${nf(sum(ok('harm').map(v=>Number(v.bacmat)||0)))} PLN mat.${A.issues.noBud.length?` · bez budżetu: ${A.issues.noBud.join(', ')}`:''}` : 'Harmonogram i budżet: nie wczytano')}
       ${A.issues.noWp.length? chk(false,`Elementy z kosztami CES lub zaawansowaniem bez WP: ${A.issues.noWp.join(', ')} – nie trafią do żadnego WP w EV`) : ''}
       ${chk(true,`Koszty CES: ${inCes.length} elementów CES przypisanych do zakresu (ADMIN → Mapowanie)${unm.length?` · ${unm.length} UNMAPPED z propozycją w zakresie`:''}`)}
      </ul>
@@ -1566,7 +1566,7 @@ function vWizard(){
      <section class="panel flat"><div class="row between"><h3>Baza analityczna · drzewo ↔ WP ↔ CAM ↔ budżet ↔ harmonogram</h3><button class="btn small" data-a="anExp">Pobierz (xlsx)</button></div>
        <p class="muted small">Tak zostanie połączone w bazie: węzeł Performance Objectives (CES) → strona P1S (dodatkowe zadanie) → WP (WP i CAM) → budżet i daty (Harmonogram i budżet). Rozwiń PROJORG, aby zobaczyć elementy.</p>
        ${analyticHtml(A)}
-       ${Object.keys(A.cams).length?`<h3>Wg CAM</h3><div class="tbl-wrap"><table><thead><tr><th>CAM</th><th class="r">WP</th><th class="r">BAC [h]</th><th>Start</th><th>Koniec</th></tr></thead><tbody>${Object.entries(A.cams).sort().map(([c,v])=>`<tr><td>${esc(c)}</td><td class="r num">${v.wp}</td><td class="r num">${nf(v.bac)}</td><td class="num">${v.start||'—'}</td><td class="num">${v.finish||'—'}</td></tr>`).join('')}</tbody></table></div>`:''}</section>`;
+       ${Object.keys(A.cams).length?`<h3>Wg CAM</h3><div class="tbl-wrap"><table><thead><tr><th>CAM</th><th class="r">WP</th><th class="r">BAC HOURS [h]</th><th class="r">BAC MATERIAL [PLN]</th><th>Start</th><th>Koniec</th></tr></thead><tbody>${Object.entries(A.cams).sort().map(([c,v])=>`<tr><td>${esc(c)}</td><td class="r num">${v.wp}</td><td class="r num">${nf(v.bac)}</td><td class="r num">${nf(v.bacmat)}</td><td class="num">${v.start||'—'}</td><td class="num">${v.finish||'—'}</td></tr>`).join('')}</tbody></table></div>`:''}</section>`;
   }
   const canCreate=!dup && w.code.trim() && total>0 && !errs.length;
   return `<div class="head"><div><div class="eyebrow"><a href="#" data-a="nav" data-x="zakresy">Projekty</a> / nowy</div><h1>Nowy projekt</h1><p class="sub">Kreator rejestruje projekt, buduje strukturę Performance Objectives (CES), wczytuje słowniki projektu z Excela i tworzy foldery.</p></div></div>
@@ -2010,8 +2010,8 @@ const A={
     S.view={...S.view, ximp:null}; save(); render(); toast('Słownik zastąpiony (stan #'+S.dbRev+').'); },
   xlsDictExp:x=>{ const d=S.dicts[x], def=DEFS[d.kind]; saveBook(S.zakresy[d.scope].code+'_'+def.name.replace(/\s+/g,'_')+'.xlsx', [[def.name,[def.cols.map(c=>c.l), ...active(d).map(r=>def.cols.map(c=>r.v[c.k]))]]]); },
   anExp:()=>{ const w=S.wiz, P=wizParsed(w), ok=k=>P[k] && !bad(P[k]) ? P[k].rows.map(r=>r.v) : [], A=analytic(wizOrgs(w),ok('wp'),ok('harm'));
-    saveBook(w.code.toUpperCase()+'_baza_analityczna.xlsx', [['Baza analityczna',[['Z_KAT_ZBIORCZA','Z_KATEGORIA','Z_OPIS','PROJORG','Element P1S','Opis','STUFE','WP','CAM','Cost Category','BAC [h]','Start','Koniec','Elementy CES','Stan'],
-      ...A.rows.map(r=>[r.kz,r.kat,r.opis,r.org,r.c,r.n,r.l,r.wp,r.cam,r.cat,r.bac===''?'':Number(r.bac),r.start,r.finish,r.ces,{ok:'WP + budżet',noBud:'WP bez budżetu',noWp:'brak WP'}[r.st]||''])]]]); },
+    saveBook(w.code.toUpperCase()+'_baza_analityczna.xlsx', [['Baza analityczna',[['Z_KAT_ZBIORCZA','Z_KATEGORIA','Z_OPIS','PROJORG','Element P1S','Opis','STUFE','WP','CAM','Cost Category','BAC HOURS [h]','BAC MATERIAL [PLN]','Start','Koniec','Elementy CES','Stan'],
+      ...A.rows.map(r=>[r.kz,r.kat,r.opis,r.org,r.c,r.n,r.l,r.wp,r.cam,r.cat,r.bac===''?'':Number(r.bac),r.bacmat===''?'':Number(r.bacmat),r.start,r.finish,r.ces,{ok:'WP + budżet',noBud:'WP bez budżetu',noWp:'brak WP'}[r.st]||''])]]]); },
 
   /* przebieg */
   newrun:x=>{ S.modal={zid:x, kind:'weekly'}; render(); },
