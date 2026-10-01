@@ -5,8 +5,8 @@ Plik CSV (separator `;`, UTF-8, edytowalny w Excelu) w katalogu konfiguracji:
     zrodla_rabit.csv      Prefiks;KodZrodla;Opis
                           ACTUALS_PAF;ACTUALS_PAF;Koszty rzeczywiste PAF
 
-Plik mówi, czym jest (prefiks → źródło). Zakres danych projektu wynika z jego elementów w drzewie P1S
-(M21 w docs/mapowanie-ces-p1s.md) – bez listy źródeł wymaganych przez projekt.
+Plik mówi, czym jest (prefiks → źródło). Import nie zna projektów – bez listy źródeł wymaganych przez
+projekt (docs/zrodla-danych.md).
 Wiersze zaczynające się od `#` są pomijane.
 """
 
