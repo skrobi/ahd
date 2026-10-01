@@ -157,6 +157,12 @@ ani osobnych aplikacji.
 - Zmiany bazy jako numerowane, idempotentne skrypty migracyjne w repozytorium (`sql/mssql/`); baza przechowuje
   wersję schematu i minimalną wymaganą wersję aplikacji.
 - Paczka wdrożeniowa: skrypty bazy, plik `PZL-EV.exe`, instrukcja dla administratora.
+- **Pakiety (NuGet):** zależności (Dapper, Microsoft.Data.SqlClient, ClosedXML/OpenXML, Serilog) przywracane
+  są z firmowego proxy **eFOSS (Nexus)** – `https://nexus.global.lmco.com/repository/nuget-proxy-v3/index.json`,
+  nie z nuget.org. Źródło ustawia wersjonowany `NuGet.config`; logowanie: NTID + token dostępu eFOSS
+  (generowany w `efoss.global.lmco.com/accesstoken`, wymaga charge number i CAM). Token trzymany poza
+  repozytorium (Windows Credential Manager albo zmienna środowiskowa budowy); nigdy nie jest commitowany.
+  Konfiguracja i rozwiązywanie problemów – `poc-wpf/README.md`.
 
 ---
 
