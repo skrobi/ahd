@@ -17,7 +17,7 @@ public interface IImportStore
     /// <summary>Importy „w toku” bez zakończenia (np. po awarii aplikacji) → „przerwany”; wywoływane po założeniu blokady.</summary>
     void AbandonRunning(DateTimeOffset at);
 
-    /// <summary>Ostatnia rozstrzygnięta decyzja dla pliku (lokalizacja + nazwa) – do pominięcia po metadanych.</summary>
+    /// <summary>Ostatnia rozstrzygnięta decyzja dla pliku (lokalizacja + nazwa), którego treść jest w bazie – do pominięcia po metadanych.</summary>
     SourceFileSeenRow? LastSettled(string location, string fileName);
 
     SourceFileRow? FindByHash(string sha256);
