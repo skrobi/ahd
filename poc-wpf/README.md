@@ -45,14 +45,12 @@ W LM pakiety pobiera się z proxy **eFOSS (Nexus)**, nie z nuget.org:
   - budowa z wiersza poleceń (`build.cmd`, CI): zmienna środowiskowa sesji
     `NuGetPackageSourceCredentials_eFOSS=Username=<NTID>;Password=<token>`;
   - albo użytkownikowy `NuGet.config` (poza repo) z sekcją `<packageSourceCredentials>`.
-- **Proxy:** `http://proxy-lmi.global.lmco.com:80` – `nexus.global.lmco.com` nie jest rozwiązywany
-  bezpośrednio przez DNS stanowiska, ruch idzie przez proxy; wymagana sieć LM (w biurze albo VPN).
-  NuGet czyta proxy **tylko** z konfiguracji użytkownika albo ze zmiennej `http_proxy` – nie z `NuGet.config`
-  w repo. `build.cmd` ustawia zmienną sam (jeśli nie jest ustawiona); dla Visual Studio i ręcznego `dotnet`
-  ustaw raz w konfiguracji użytkownika:
+- **Bez proxy:** `nexus.global.lmco.com` łączy się **bezpośrednio**, bez proxy (dokumentacja eFOSS, Quick start
+  pkt 4); wymagana sieć LM (w biurze albo VPN). `build.cmd` ustawia `NO_PROXY=.lmco.com`, więc ewentualne
+  `HTTP_PROXY` stanowiska nie obejmuje nexusa. Jeśli wcześniej ustawiono proxy w konfiguracji użytkownika, usuń je:
 
   ```powershell
-  dotnet nuget config set http_proxy http://proxy-lmi.global.lmco.com:80 --configfile "$env:APPDATA\NuGet\NuGet.Config"
+  dotnet nuget config unset http_proxy --configfile "$env:APPDATA\NuGet\NuGet.Config"
   ```
 
 **Token dla `build.cmd` (zalecane).** Utwórz obok `build.cmd` plik `eFOSS.local.cmd` (jest w `.gitignore`,
@@ -88,16 +86,16 @@ $env:NuGetPackageSourceCredentials_eFOSS = "Username=<NTID>;Password=<TOKEN>"
 
 ```powershell
 dotnet nuget list source                  # oczekiwane: tylko eFOSS (włączone)
-curl.exe -s -o NUL -w "%{http_code}`n" -x http://proxy-lmi.global.lmco.com:80 https://nexus.global.lmco.com/repository/nuget-proxy-v3/index.json
+curl.exe -s -o NUL -w "%{http_code}`n" --noproxy "*" https://nexus.global.lmco.com/repository/nuget-proxy-v3/index.json
 git diff -- NuGet.config                  # token nie może trafić do pliku w repo
 ```
 
 | Wynik | Znaczenie |
 |---|---|
-| NU1301 „Żądana nazwa jest prawidłowa, ale dane żądanego typu nie zostały znalezione” (`nexus.global.lmco.com:443`) | NuGet łączył się bez proxy – uruchom `build.cmd` (ustawia proxy) albo ustaw proxy w konfiguracji użytkownika |
-| ten sam NU1301, ale z nazwą `proxy-lmi.global.lmco.com` | proxy nieosiągalne – stanowisko poza siecią LM / VPN |
-| `curl` → `200` albo `401` | sieć i proxy działają (`401` – feed wymaga logowania) |
-| `curl` → `000` / błąd połączenia | proxy nieosiągalne – sprawdź VPN |
+| NU1301 „Żądana nazwa jest prawidłowa, ale dane żądanego typu nie zostały znalezione” (`nexus.global.lmco.com:443`) | stanowisko nie widzi nexusa – sprawdź sieć LM / VPN (`curl` poniżej) |
+| NU1301 z nazwą proxy (np. `proxy-lmi…`) | NuGet idzie przez proxy, a nie powinien – usuń `http_proxy` z konfiguracji użytkownika (wyżej) |
+| `curl` → `200` albo `401` | połączenie z nexusem działa (`401` – feed wymaga logowania) |
+| `curl` → `000` / błąd połączenia | brak połączenia z nexusem – sprawdź VPN |
 | NU1301 z `401 Unauthorized` | brak poświadczeń albo nieważny token – wygeneruj nowy token |
 | `407 Proxy Authentication Required` | proxy wymaga logowania – zgłoszenie do IT / konfiguracja `http_proxy.user` w konfiguracji użytkownika |
 
