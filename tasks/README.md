@@ -29,34 +29,34 @@ zmiana zakresu zadania w trakcie realizacji wymaga uzgodnienia.
 
 | Zadanie | Moduł | Zależy od | Otwarte kwestie | Status |
 |---|---|---|---|---|
-| [F0.1 Przeniesienie PoC do docelowej aplikacji](F0.1-przeniesienie-poc-do-docelowej-aplikacji.md) | Shell / całość | – | – | do zrobienia |
-| [F0.2 Projekt testów i uruchamianie testów w budowie](F0.2-projekt-testow-i-uruchamianie-testow-w-budowie.md) | całość | F0.1 | – | do zrobienia |
-| [F0.3 Konfiguracja aplikacji](F0.3-konfiguracja-aplikacji.md) | Shell | F0.1 | – | do zrobienia |
-| [F0.4 Warstwa danych przejściowa (w pamięci)](F0.4-warstwa-danych-przejsciowa-w-pamieci.md) | Shared | F0.2 | – | do zrobienia |
-| [F0.5 Usługi wspólne: użytkownik, dziennik, problemy](F0.5-uslugi-wspolne-uzytkownik-dziennik-problemy.md) | Shared | F0.4 | – | do zrobienia |
+| [F0.1 Przeniesienie PoC do docelowej aplikacji](F0.1-przeniesienie-poc-do-docelowej-aplikacji.md) | Shell / całość | – | – | zrobione |
+| [F0.2 Projekt testów i uruchamianie testów w budowie](F0.2-projekt-testow-i-uruchamianie-testow-w-budowie.md) | całość | F0.1 | – | zrobione |
+| [F0.3 Konfiguracja aplikacji](F0.3-konfiguracja-aplikacji.md) | Shell | F0.1 | – | zrobione |
+| [F0.4 Warstwa danych przejściowa (w pamięci)](F0.4-warstwa-danych-przejsciowa-w-pamieci.md) | Shared | F0.2 | – | zrobione |
+| [F0.5 Usługi wspólne: użytkownik, dziennik, problemy](F0.5-uslugi-wspolne-uzytkownik-dziennik-problemy.md) | Shared | F0.4 | – | zrobione |
 | [F0.6 Silnik etapów](F0.6-silnik-etapow.md) | Shared / Runs | F0.5 | – | do zrobienia |
-| [F0.7 Pliki: Excel, CSV, dysk sieciowy](F0.7-pliki-excel-csv-dysk-sieciowy.md) | Shared | F0.2 | – | do zrobienia |
-| [F0.8 Wspólne elementy interfejsu](F0.8-wspolne-elementy-interfejsu.md) | Shared/Views | F0.1 | – | do zrobienia |
-| [F0.9 Dane wzorcowe](F0.9-dane-wzorcowe.md) | testdata | F0.4 | decyzja: próbki od użytkownika | do zrobienia |
+| [F0.7 Pliki: Excel, CSV, dysk sieciowy](F0.7-pliki-excel-csv-dysk-sieciowy.md) | Shared | F0.2 | – | w toku |
+| [F0.8 Wspólne elementy interfejsu](F0.8-wspolne-elementy-interfejsu.md) | Shared/Views | F0.1 | – | w toku |
+| [F0.9 Dane wzorcowe](F0.9-dane-wzorcowe.md) | testdata | F0.4 | decyzja: próbki od użytkownika | w toku |
 
 ## F1. Słowniki globalne (G3)
 
 | Zadanie | Moduł | Zależy od | Otwarte kwestie | Status |
 |---|---|---|---|---|
-| [F1.1 Mechanizm słownika: historia, walidacja, równoczesna edycja](F1.1-mechanizm-slownika-historia-walidacja-rownoczesn.md) | MasterData | F0.4, F0.5 | – | do zrobienia |
-| [F1.2 Słowniki globalne: kalendarz, stawki, kursy, Cost Category, osoby](F1.2-slowniki-globalne-kalendarz-stawki-kursy-cost-ca.md) | MasterData | F1.1 | O18 | do zrobienia |
-| [F1.3 Wymiana słowników przez Excel](F1.3-wymiana-slownikow-przez-excel.md) | MasterData | F1.1, F0.7 | – | do zrobienia |
-| [F1.4 Ekran Słowniki](F1.4-ekran-slowniki.md) | MasterData | F1.1–F1.3, F0.8 | – | do zrobienia |
+| [F1.1 Mechanizm słownika: historia, walidacja, równoczesna edycja](F1.1-mechanizm-slownika-historia-walidacja-rownoczesn.md) | MasterData | F0.4, F0.5 | – | zrobione |
+| [F1.2 Słowniki globalne: kalendarz, stawki, kursy, Cost Category, osoby](F1.2-slowniki-globalne-kalendarz-stawki-kursy-cost-ca.md) | MasterData | F1.1 | O18 | zrobione |
+| [F1.3 Wymiana słowników przez Excel](F1.3-wymiana-slownikow-przez-excel.md) | MasterData | F1.1, F0.7 | – | zrobione |
+| [F1.4 Ekran Słowniki](F1.4-ekran-slowniki.md) | MasterData | F1.1–F1.3, F0.8 | – | zrobione |
 
 ## F2. Import (G1) i definicje źródeł
 
 | Zadanie | Moduł | Zależy od | Otwarte kwestie | Status |
 |---|---|---|---|---|
-| [F2.1 Definicje źródeł i lokalizacje RABIT](F2.1-definicje-zrodel-i-lokalizacje-rabit.md) | Administration / Import | F0.4, F0.5 | O27 | do zrobienia |
-| [F2.2 Import plików (G1)](F2.2-import-plikow-g1.md) | Import | F2.1, F0.7 | O29, O31 | do zrobienia |
-| [F2.3 Parser ACTUALS_* → dane kanoniczne](F2.3-parser-actuals-dane-kanoniczne.md) | Import | F2.2 | O27, O7 | do zrobienia |
-| [F2.4 Ekran Import](F2.4-ekran-import.md) | Import | F2.2, F2.3, F0.8 | – | do zrobienia |
-| [F2.5 Narzędzie testowe w Pythonie](F2.5-narzedzie-testowe-w-pythonie.md) | Import | F2.4 | – | do zrobienia |
+| [F2.1 Definicje źródeł i lokalizacje RABIT](F2.1-definicje-zrodel-i-lokalizacje-rabit.md) | Administration / Import | F0.4, F0.5 | O27 | zrobione |
+| [F2.2 Import plików (G1)](F2.2-import-plikow-g1.md) | Import | F2.1, F0.7 | O29, O31 | zrobione |
+| [F2.3 Parser ACTUALS_* → dane kanoniczne](F2.3-parser-actuals-dane-kanoniczne.md) | Import | F2.2 | O27, O7 | zrobione |
+| [F2.4 Ekran Import](F2.4-ekran-import.md) | Import | F2.2, F2.3, F0.8 | – | zrobione |
+| [F2.5 Narzędzie testowe w Pythonie](F2.5-narzedzie-testowe-w-pythonie.md) | Import | F2.4 | – | czeka na decyzję |
 
 ## F3. Mapowanie CES ↔ P1S (G2)
 

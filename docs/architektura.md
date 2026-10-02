@@ -124,22 +124,28 @@ z których korzysta każdy moduł; pokazują je Pulpit i ekran Przebiegu.
 ### 5.3 Struktura kodu
 
 Jeden projekt, moduły jako foldery; przestrzeń nazw odpowiada ścieżce folderu (`PzlEv.Modules.Dashboard.ViewModels`
-↔ `Modules/Dashboard/ViewModels/`). Wzorzec pokazuje kod `app/src/` – Pulpit jako moduł
-z pełnym ekranem, pozostałe moduły jako ekrany zastępcze z przypisanymi etapami.
+↔ `Modules/Dashboard/ViewModels/`). Wzorzec pokazuje kod `app/src/` – moduły z pełnym ekranem
+(Pulpit, Słowniki, Import, Administracja) i ekrany zastępcze z przypisanymi etapami dla pozostałych.
 
 ```text
-App.xaml(.cs)                      start, logowanie, obsługa wyjątków
+App.xaml(.cs)                      start: konfiguracja → usługi wspólne → moduły → powłoka; logowanie
 Shell/                             okno, menu, nawigacja; ModuleCatalog.cs – lista modułów
 Modules/<Moduł>/
-  <Moduł>Module.cs                 plik wejścia: klucz, menu, dokumentacja, etapy, utworzenie ekranu
-  Views/ ViewModels/ Models/       ekran, jego logika prezentacji, modele modułu
-  Data/                            źródło danych modułu: interfejs + dane przykładowe / dostęp do bazy
-  Services/ Stages/                przypadki użycia, parsery, implementacje etapów (IStage)
+  <Moduł>Module.cs                 plik wejścia: klucz, menu, dokumentacja, etapy, dane startowe, utworzenie ekranu
+  Views/ ViewModels/               ekran i jego logika prezentacji (WPF)
+  Models/                          modele modułu
+  Data/                            magazyn danych modułu: I<Moduł>Store (kontrakt) + InMemory<Moduł>Store; dane startowe
+  Services/ Stages/                przypadki użycia, walidacja, parsery, implementacje etapów (IStage)
 Shared/
-  Utils/                           MVVM, konwertery, kontrakt modułu i nawigacji; później dostęp do SQL, Excel, plików
-  Models/                          modele wspólne, klucze modułów, kontrakt etapu (Models/Pipeline)
-  Views/Templates/                 wygląd całej aplikacji: paleta, style, układ strony
-  Views/Partials/                  fragmenty wielokrotnego użytku: pigułka statusu, nagłówek ekranu, ekran zastępczy
+  Utils/Ui/                        MVVM, konwertery, okna wyboru pliku, kontrakt modułu i nawigacji (WPF)
+  Utils/Config/                    konfiguracja pzl-ev.json
+  Utils/Data/                      warstwa danych w pamięci, czas, użytkownik, dziennik, problemy, usługi wspólne
+  Utils/Files/                     Excel, CSV/TXT, liczby polskie, daty, sygnatura kolumn, SHA-256
+  Models/                          modele wspólne, klucze modułów, wynik kontroli (Issue), kontrakt etapu (Pipeline)
+  Models/Db/                       wiersze tabel schematu (meta, stg, can, dict) – wspólne jak schemat bazy
+  Models/Sources/                  parsery i układy kolumn źródeł (kontrakt danych)
+  Views/Templates/                 wygląd całej aplikacji: paleta, style, tabele, układ strony
+  Views/Partials/                  fragmenty wielokrotnego użytku: pigułka statusu, wynik kontroli, nagłówek ekranu, ekran zastępczy
 ```
 
 Podfolder modułu powstaje dopiero, gdy ma zawartość. Warstwy z rozdz. 5.1 mieszczą się w tym układzie:
@@ -155,8 +161,21 @@ modułu i `Shared/Models`; Excel, File Connectors, SQL Access – `Shared/Utils`
   (`INavigator`, `ModuleKeys`) albo kontrakt w `Shared`,
 - silnik EVM zależy wyłącznie od modeli (rozdz. 5.1).
 
+**Warstwa danych przejściowa.** Do czasu bazy TEST (`tasks/F10`) moduły pracują na danych w pamięci
+(`DataMode=InMemory` w `pzl-ev.json`): `InMemoryDatabase` trzyma tabele o kształcie schematu MS SQL (typy wierszy
+w `Shared/Models/Db`), a stan zapisuje do pliku (`InMemoryStatePath`). Moduł korzysta z danych wyłącznie przez
+swój magazyn `Data/I<Moduł>Store` – kontrakt odpowiadający przyszłym procedurom i widokom; implementacja
+`InMemory<Moduł>Store` zostanie zastąpiona przez `Sql<Moduł>Store` bez zmian w ekranach, serwisach i testach.
+Moduły wymieniają dane przez wspólne tabele (jak przez bazę), nie przez swoje typy.
+
+**Testy** (`app/tests`, xUnit, `net10.0`): projekt kompiluje pliki logiki aplikacji – wszystko poza `Views`,
+`ViewModels`, `Shell`, `Shared/Utils/Ui` i plikami `*Module.cs` – więc logika nie może używać typów WPF i testy
+działają także poza Windows. Magazyny mają **testy kontraktu** (klasa abstrakcyjna `…StoreContract`), uruchamiane
+dla wersji w pamięci, a w F10 także dla wersji SQL. Dane wzorcowe z oczekiwanymi sumami – `app/testdata`.
+`build.cmd` uruchamia testy przed publikacją.
+
 **Konwencje:** jeden typ w pliku, nazwa pliku = nazwa typu; sufiksy `…Module`, `…View`, `…ViewModel`,
-`I…DataSource`, `…SampleData`; kolory i style wyłącznie z `Shared/Views/Templates`; fragment trafia do
+`I…Store`, `InMemory…Store`, `…Service`, `…Seed`; kolory i style wyłącznie z `Shared/Views/Templates`; fragment trafia do
 `Shared/Views/Partials`, gdy używa go drugi moduł; log z kontekstem modułu (`Log.ForContext("Module", …)`).
 
 **Kontrakt etapu** (`Shared/Models/Pipeline`): `StageDescriptor` (kod, nazwa, krok, zakres, czy wymaga
@@ -171,24 +190,10 @@ decyzji (P4, P6, Z) albo z wynikiem ERROR.
 2. Klucz w `Shared/Models/ModuleKeys.cs`.
 3. `Modules/<Moduł>/<Moduł>Module.cs` implementujący `IModule`; do czasu implementacji ekran zastępczy
    (`PlaceholderView.Create`).
-4. Ekran: `Views/<Moduł>View.xaml`, `ViewModels/<Moduł>ViewModel.cs`; dane przez `Data/I<Moduł>DataSource`.
+4. Dane: `Data/I<Moduł>Store` + `Data/InMemory<Moduł>Store` (tabele w `Shared/Models/Db`), test kontraktu magazynu;
+   ekran: `Views/<Moduł>View.xaml`, `ViewModels/<Moduł>ViewModel.cs`.
 5. Jedna linia w `Shell/ModuleCatalog.cs`.
-6. Budowa (`build.cmd`) – reguły zależności i przestrzeni nazw muszą przejść.
-
----|---|---|
-| Shell / UI | nawigacja, nagłówek, pulpit | `docs/funkcjonalnosc.md` |
-| Source Management | definicje źródeł | `docs/zrodla-danych.md`, rozdz. 2 |
-| Import | pobranie i załadowanie plików | `docs/pipeline-fazy.md`, G1 |
-| Data Quality | kontrole i problemy (ERROR / WARNING) | `docs/pipeline-fazy.md`, rozdz. 1.3 |
-| Master Data | słowniki globalne i projektu | `docs/slowniki.md` |
-| Mapping | mapowanie CES ↔ P1S | `docs/mapowanie-ces-p1s.md` |
-| Project Run | projekty, przebiegi, etapy, rewizje | `docs/pipeline-fazy.md`, `docs/model-danych.md` |
-| CAM / Progress | zaawansowanie: produkcja, uzupełnienia, pliki CAM | `docs/pipeline-fazy.md`, P5–P7 |
-| Reconciliation | łączenie źródeł | `docs/pipeline-fazy.md`, P3 |
-| EVM Engine | obliczenia EV | `docs/ev-obliczenia.md` |
-| Export | pliki wynikowe, plik dla Cobra | `docs/funkcjonalnosc.md`, rozdz. 4 |
-| Audit | dziennik zdarzeń, historia | `docs/model-danych.md`, rozdz. 3 |
-| Administration | role, konfiguracja | `docs/uprawnienia.md`, `docs/funkcjonalnosc.md` |
+6. Budowa (`build.cmd`) – reguły zależności i przestrzeni nazw oraz testy muszą przejść.
 
 ---
 
@@ -232,6 +237,9 @@ decyzji (P4, P6, Z) albo z wynikiem ERROR.
 
 ## 8. Środowiska i wdrożenia
 
+- **Konfiguracja środowiska:** plik `pzl-ev.json` obok `PZL-EV.exe` – `Environment`, `NetworkRoot` (korzeń
+  folderów środowiska, rozdz. 7), `DataMode` (`InMemory` do czasu bazy TEST, potem `Sql`), `InMemoryStatePath`,
+  `ConnectionString`; brak pliku = wartości domyślne (`app/README.md`).
 - **TEST** – developer; osobna baza i osobny korzeń folderów.
 - **PROD** – wdraża administrator (IT).
 - Zmiany bazy jako numerowane, idempotentne skrypty migracyjne w repozytorium (`sql/mssql/`); baza przechowuje

@@ -1,5 +1,8 @@
 # Narzędzie testowe: pobranie plików RABIT i import do bazy (Python)
 
+> Import docelowy jest w aplikacji (`app/`, ekran Import RABIT – `tasks/F2.2`). Narzędzie zostaje jako narzędzie
+> diagnostyczne (dostęp WebDAV, inspekcja plików) do czasu decyzji o jego wycofaniu (`tasks/F2.5`).
+
 Narzędzie w Pythonie (`pzl_ev/etap1`) zbudowane do sprawdzenia dostępu do RABIT przez WebDAV i importu plików
 do bazy. Nie jest aplikacją docelową – docelowy import opisują `docs/pipeline-fazy.md` (G1)
 i `docs/zrodla-danych.md`. Narzędzie różni się od rozwiązania docelowego: kopiuje oryginały plików do Landing

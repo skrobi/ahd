@@ -143,12 +143,12 @@ istniejących wierszy w tych źródłach nie jest wykrywana (`docs/architektura.
 |---|---|
 | `meta.ImportBatch` | uruchomienie importu: kto, komputer, wersja aplikacji, liczniki, status |
 | `meta.SourceLocation` | lokalizacje RABIT: nazwa, ścieżka, aktywna (`docs/zrodla-danych.md`, rozdz. 3) |
-| `meta.SourceFile` | wersja pliku (klucz SHA-256): lokalizacja, nazwa, kod źródła, data raportu (modyfikacja w RABIT), kolumny, sygnatura kolumn, liczba wierszy, import |
+| `meta.SourceFile` | wersja pliku (klucz SHA-256): lokalizacja, nazwa, kod źródła, data raportu (modyfikacja w RABIT), kolumny, sygnatura kolumn, liczba wierszy, import, stan danych kanonicznych (utworzone albo powód braku) |
 | `meta.SourceFileSeen` | decyzja dla każdego pliku w każdym imporcie (`docs/pipeline-fazy.md`, G1) |
 | `meta.SourceDefinition` | definicja źródła (`docs/zrodla-danych.md`, rozdz. 2) |
 | `stg.RawRow` | surowe wiersze: wersja pliku, numer wiersza, wartości |
-| `can.<Źródło>` | dane kanoniczne źródła: wersja pliku, wersja parsera, kolumny typowane |
-| `dict.*` | słowniki (`docs/slowniki.md`) i korekty mapowania (`docs/mapowanie-ces-p1s.md`, rozdz. 8) |
+| `can.<Źródło>` | dane kanoniczne źródła: wersja pliku, wersja parsera, kolumny typowane; dla kosztów rzeczywistych – `can.Actuals` (wspólna dla źródeł `ACTUALS_*`, odróżnianych wersją pliku) |
+| `dict.*` | słowniki (`docs/slowniki.md`) i korekty mapowania (`docs/mapowanie-ces-p1s.md`, rozdz. 8). Wiersz słownika ma identyfikator wiersza logicznego i kolejne wersje (kto i kiedy zapisał, kto i kiedy zastąpił); w warstwie danych w pamięci – jedna tabela `dict.Entry` z wartościami kolumn według opisu słownika; układ tabel MS SQL – F10.1 |
 | `meta.Projekt` | kod, nazwa, typ (SAC / CAS / wewnętrzny) |
 | `meta.PerformanceObjective` | węzły nakładki kontraktu projektu: element WBS CES, poziom, rodzic, wirtualny węzeł, atrybuty, historia (`docs/performance-objectives.md`) – wyznacza zakres projektu |
 | `meta.Przebieg` | projekt, tydzień, okres, czy zamykający, znacznik stanu, status, zamrożenie |
