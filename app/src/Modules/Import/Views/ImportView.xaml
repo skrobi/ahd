@@ -35,6 +35,57 @@
             </StackPanel>
         </Border>
 
+        <!-- Test dostępu do SharePoint: metody A–H (jak narzedzia/test_dostepu_rabit.py w narzędziu w Pythonie) -->
+        <Expander Header="Test dostępu do SharePoint – która droga działa (metody A–H)" Margin="0,0,0,12">
+            <Border Style="{StaticResource Panel}" Margin="0,6,0,0">
+                <StackPanel>
+                    <TextBlock Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="0,0,0,8"
+                               Text="A owssvr.dll (Eksport do Excela) · B OLEDB (połączenie Excela) · C WebDAV \…\DavWWWRoot (Eksplorator) · D pobranie jednego pliku · E WebDAV przez HTTPS z aplikacji (bez usługi WebClient) · F REST API · G usługa Lists.asmx · H mapowanie (net use). Test niczego nie importuje i nie zapisuje zawartości plików." />
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="190" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <TextBlock Grid.Row="0" Text="Link do folderu" VerticalAlignment="Center" />
+                        <TextBox Grid.Row="0" Grid.Column="1" Style="{StaticResource Input}" Margin="0,2"
+                                 Text="{Binding AccessFolder, UpdateSourceTrigger=PropertyChanged}"
+                                 ToolTip="Adres folderu z przeglądarki (https://…) albo ścieżka \host@SSL\DavWWWRoot\…" />
+                        <TextBlock Grid.Row="1" Text="Link do pliku (opcjonalnie)" VerticalAlignment="Center" />
+                        <TextBox Grid.Row="1" Grid.Column="1" Style="{StaticResource Input}" Margin="0,2"
+                                 Text="{Binding AccessFile, UpdateSourceTrigger=PropertyChanged}"
+                                 ToolTip="Metoda D – w bibliotece przy pliku „…” → Kopiuj link; puste = pierwszy plik z działającej listy" />
+                        <TextBlock Grid.Row="2" Text="ID listy (A, B, G)" VerticalAlignment="Center" />
+                        <TextBox Grid.Row="2" Grid.Column="1" Style="{StaticResource Input}" Margin="0,2"
+                                 Text="{Binding AccessListId, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Grid.Row="3" Text="ID widoku (A, B)" VerticalAlignment="Center" />
+                        <TextBox Grid.Row="3" Grid.Column="1" Style="{StaticResource Input}" Margin="0,2"
+                                 Text="{Binding AccessViewId, UpdateSourceTrigger=PropertyChanged}" />
+                    </Grid>
+                    <Button Content="Uruchom test" Style="{StaticResource BtnPrimary}" HorizontalAlignment="Left" Margin="0,8,0,8"
+                            Command="{Binding TestAccess}" />
+                    <TextBlock Text="{Binding AccessEnvironment}" Style="{StaticResource MonoText}" TextWrapping="Wrap" Margin="0,0,0,8" />
+                    <ItemsControl ItemsSource="{Binding AccessResults}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <StackPanel Margin="0,0,0,8">
+                                    <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextWrapping="Wrap" />
+                                    <TextBlock Text="{Binding Text}" Style="{StaticResource MonoText}" TextWrapping="Wrap" Margin="16,2,0,0" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <TextBlock Text="{Binding AccessConclusion}" FontWeight="SemiBold" TextWrapping="Wrap" />
+                    <TextBlock Text="{Binding AccessReport}" Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="0,4,0,0" />
+                </StackPanel>
+            </Border>
+        </Expander>
+
         <!-- Sprawdzenie źródeł (bez importu) -->
         <Border Style="{StaticResource Panel}" Margin="0,0,0,12"
                 Visibility="{Binding HasCheck, Converter={StaticResource BoolToVisibility}}">

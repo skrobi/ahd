@@ -77,6 +77,11 @@ i utrzymywaną na ekranie Administracja (`docs/funkcjonalnosc.md`, F08).
   (`docs/architektura.md`, rozdz. 7) i importuje tak samo.
 - Niedostępne dla użytkownika: API REST SharePoint, synchronizacja OneDrive, eksport listy do Excela,
   pobieranie ZIP.
+- **Test dostępu** (ekran Import): drogi A–H do folderu RABIT – jak `test_dostepu_rabit.py` z narzędzia w Pythonie
+  (A–D) oraz drogi .NET (E–H); raport w `logs\`. Najczęstsza przyczyna braku dostępu przez WebDAV przy działającej
+  przeglądarce: adres z kropkami to dla Windows strefa Internet – usługa WebClient nie wysyła logowania Windows,
+  dopóki adres nie jest w strefie Intranet lokalny albo w `AuthForwardServerList`
+  (`HKLM\SYSTEM\CurrentControlSet\Services\WebClient\Parameters`); za proxy – adres musi być na liście wyjątków.
 - Import czyta tylko główny folder lokalizacji (bez podfolderów – jak domyślnie narzędzie w Pythonie). Gdy folder
   nie ma plików, a ma podfoldery – WARNING z ich nazwami. **Sprawdź źródła** (ekran Import) pokazuje bez importu
   dostęp, czytaną ścieżkę, pliki i ich rozpoznanie; szczegóły – log aplikacji (`app/README.md`).
