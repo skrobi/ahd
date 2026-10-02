@@ -46,6 +46,14 @@ ZAMROŻENIE – przebieg zamykający okres
 Struktura P1S i raport mapowań nie są kopiowane do bazy PZL-EV – procedury czytają je z `PZLPROD`
 (rozdz. 3.4).
 
+**Nazwy w bazie:** warstwy z tabeli wyżej są częścią nazwy tabeli, a nie osobnymi schematami. Wszystkie obiekty są w
+jednym schemacie z konfiguracji, z sygnaturą przed nazwą: `[<Schema>].[<Sygnatura><WARSTWA>_<Nazwa>]`, np.
+`meta.ImportBatch` → `[FINOP].[PZLEV_META_ImportBatch]` (TEST: baza `PZLTEST`, schemat `FINOP`, sygnatura `PZLEV_`;
+`docs/architektura.md`, rozdz. 8). Kolumny – nazwy angielskie jak w kodzie (słowa zastrzeżone SQL zastąpione:
+`UserName`, `DataRows`, `CheckName`); każda tabela zapisu ma `DbLogin DEFAULT ORIGINAL_LOGIN()`; czas –
+`DATETIMEOFFSET(7)`, kwoty – `DECIMAL(28,8)`; tabele z historią – `RecordedAt/By`, `SupersededAt/By`, unikalność
+kluczy wśród bieżących wersji (indeksy filtrowane).
+
 ---
 
 ## 3. Historia i wersjonowanie
@@ -143,12 +151,12 @@ istniejących wierszy w tych źródłach nie jest wykrywana (`docs/architektura.
 |---|---|
 | `meta.ImportBatch` | uruchomienie importu: kto, komputer, wersja aplikacji, liczniki, status |
 | `meta.SourceLocation` | lokalizacje RABIT: nazwa, ścieżka, aktywna (`docs/zrodla-danych.md`, rozdz. 3) |
-| `meta.SourceFile` | wersja pliku (klucz SHA-256): lokalizacja, nazwa, kod źródła, data raportu (modyfikacja w RABIT), kolumny, sygnatura kolumn, liczba wierszy, import |
+| `meta.SourceFile` | wersja pliku (klucz SHA-256): lokalizacja, nazwa, kod źródła, data raportu (modyfikacja w RABIT), kolumny, sygnatura kolumn, liczba wierszy, import, stan danych kanonicznych (utworzone albo powód braku) |
 | `meta.SourceFileSeen` | decyzja dla każdego pliku w każdym imporcie (`docs/pipeline-fazy.md`, G1) |
 | `meta.SourceDefinition` | definicja źródła (`docs/zrodla-danych.md`, rozdz. 2) |
 | `stg.RawRow` | surowe wiersze: wersja pliku, numer wiersza, wartości |
-| `can.<Źródło>` | dane kanoniczne źródła: wersja pliku, wersja parsera, kolumny typowane |
-| `dict.*` | słowniki (`docs/slowniki.md`) i korekty mapowania (`docs/mapowanie-ces-p1s.md`, rozdz. 8) |
+| `can.<Źródło>` | dane kanoniczne źródła: wersja pliku, wersja parsera, kolumny typowane; dla kosztów rzeczywistych – `can.Actuals` (wspólna dla źródeł `ACTUALS_*`, odróżnianych wersją pliku) |
+| `dict.*` | słowniki (`docs/slowniki.md`) i korekty mapowania (`docs/mapowanie-ces-p1s.md`, rozdz. 8). Wiersz słownika ma identyfikator wiersza logicznego i kolejne wersje (kto i kiedy zapisał, kto i kiedy zastąpił); w MS SQL – osobna tabela z typowanymi kolumnami na słownik (rozdz. 5.1) |
 | `meta.Projekt` | kod, nazwa, typ (SAC / CAS / wewnętrzny) |
 | `meta.PerformanceObjective` | węzły nakładki kontraktu projektu: element WBS CES, poziom, rodzic, wirtualny węzeł, atrybuty, historia (`docs/performance-objectives.md`) – wyznacza zakres projektu |
 | `meta.Przebieg` | projekt, tydzień, okres, czy zamykający, znacznik stanu, status, zamrożenie |
@@ -161,9 +169,32 @@ istniejących wierszy w tych źródłach nie jest wykrywana (`docs/architektura.
 | `ev.Zaawansowanie` | przebieg, WP, wartość, pochodzenie, wartość z produkcji (podpowiedź dla CAM), kto, kiedy |
 | `ev.Wynik` | rewizja, poziom (WP, CAM, `PROJORG`, projekt), wskaźniki EV (`docs/ev-obliczenia.md`) |
 
-Schemat bazy powstaje skryptami migracyjnymi (`docs/architektura.md`, rozdz. 8). Istniejący skrypt
-`sql/mssql/001_etap1_import.sql` tworzy tabele importu (`meta.ImportBatch`, `meta.SourceFile`,
-`meta.SourceFileSeen`, `stg.RawRow`).
+Schemat bazy powstaje skryptami migracyjnymi (`docs/architektura.md`, rozdz. 8).
+
+### 5.1 Tabele etapu 1 – migracja `sql/mssql/001_etap1_import_slowniki_projekty.sql`
+
+Bez metodologii EV; kolejne tabele dochodzą kolejnymi migracjami.
+
+| Tabela (sygnatura `PZLEV_`) | Zawartość |
+|---|---|
+| `META_SchemaVersion`, sekwencja `META_LogicalId` | wersja schematu i minimalna wersja aplikacji; identyfikatory wierszy logicznych |
+| `META_SourceDefinition`, `META_SourceLocation` | definicje źródeł i lokalizacje RABIT z historią |
+| `META_ImportBatch`, `META_SourceFile`, `META_SourceFileSeen` | importy, wersje plików (SHA-256), decyzje dla plików |
+| `STG_RawRow` | wiersze surowe (JSON wartości), kompresja PAGE |
+| `CAN_Actuals` | koszty rzeczywiste `ACTUALS_*` (kolumny typowane), kompresja PAGE |
+| `META_Journal`, `META_Problem` | dziennik zdarzeń (`meta.Zdarzenie`) i problemy |
+| `META_Project`, `META_PerformanceObjective` | projekty (kod, nazwa, typ SAC / CAS / WEWNETRZNY) i nakładka Performance Objectives z historią |
+| `DICT_Calendar`, `DICT_DepartmentRate`, `DICT_FxRate`, `DICT_CostCategory`, `DICT_Person` | słowniki globalne – tabela z typowanymi kolumnami na słownik; `Project` NULL = globalny (w Cost Category `Project` = zmiany w projekcie) |
+| `DICT_WpCam`, `DICT_ScheduleBudget`, `DICT_Exclusion` | słowniki projektu (F4.3); Stawki CAS – po ustaleniu zawartości (O37) |
+
+**Dane startowe – migracja `sql/mssql/002_dane_startowe.sql`:** definicje źródeł `ACTUALS_PAF` i `ACTUALS_CES`
+(parser ACTUALS, układ kolumn – `docs/zrodla-danych.md`, rozdz. 4), aktywna lokalizacja RABIT E456659, kalendarz
+okresów 2026–2027 (tygodnie ISO, okres według czwartku, ostatni tydzień okresu zamykający), Cost Category
+(załącznik A, `docs/slowniki.md`). Skrypt dopisuje tylko brakujące wiersze i zapisuje wpis w dzienniku.
+
+Aplikacja zapisuje dziś do tabel importu, konfiguracji importu, słowników globalnych, dziennika i problemów;
+tabele projektów i słowników projektu czekają na moduły F4. Blokada importu – plik na dysku sieciowym
+(`docs/pipeline-fazy.md`, rozdz. 1.3), `sp_getapplock` razem z procedurami (F10.2).
 
 ---
 

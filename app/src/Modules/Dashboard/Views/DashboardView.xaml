@@ -1,0 +1,146 @@
+<UserControl x:Class="PzlEv.Modules.Dashboard.Views.DashboardView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:partials="clr-namespace:PzlEv.Shared.Views.Partials">
+
+    <!-- Pigułki (Pill) i kropki etapów (StageDot) rysują szablony wspólne z Shared/Views/Partials/Partials.xaml. -->
+    <StackPanel>
+        <partials:PageHeader Eyebrow="{Binding Eyebrow}" Title="Pulpit"
+                             Subtitle="Stan z bazy środowiska: import RABIT, źródła, słowniki globalne, projekty i dziennik zdarzeń.">
+            <partials:PageHeader.Actions>
+                <StackPanel Orientation="Horizontal">
+                    <Button Content="Odśwież" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding Refresh}" />
+                    <Button Content="Import RABIT" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding OpenImport}" />
+                    <Button Content="Nowy projekt" Style="{StaticResource BtnPrimary}" Command="{Binding NewProject}" />
+                </StackPanel>
+            </partials:PageHeader.Actions>
+        </partials:PageHeader>
+
+        <!-- Błąd odczytu z bazy -->
+        <Border Background="{StaticResource CritSoft}" CornerRadius="6" Padding="12,8" Margin="0,0,0,12"
+                Visibility="{Binding HasError, Converter={StaticResource BoolToVisibility}}">
+            <TextBlock Text="{Binding Error}" Foreground="{StaticResource Crit}" FontWeight="SemiBold" TextWrapping="Wrap" />
+        </Border>
+
+        <!-- Karty faz globalnych -->
+        <ItemsControl ItemsSource="{Binding GlobalCards}" Margin="0,0,0,20">
+            <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate><UniformGrid Columns="3" /></ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                    <Border Style="{StaticResource Panel}" Margin="0,0,12,0">
+                        <StackPanel>
+                            <DockPanel Margin="0,0,0,6">
+                                <Border DockPanel.Dock="Right" Style="{StaticResource Tag}">
+                                    <TextBlock Text="{Binding Tag}" FontSize="11" Foreground="{StaticResource Muted}" />
+                                </Border>
+                                <TextBlock Text="{Binding Code}" FontWeight="SemiBold" FontSize="15" />
+                            </DockPanel>
+                            <TextBlock Text="{Binding Subtitle}" Style="{StaticResource MutedText}" FontSize="12"
+                                       Margin="0,0,0,8" />
+                            <ItemsControl ItemsSource="{Binding Pills}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                            </ItemsControl>
+                        </StackPanel>
+                    </Border>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+
+        <!-- Karty projektów (META_Project); przebiegów jeszcze nie ma w bazie -->
+        <Border Style="{StaticResource Panel}" Margin="0,0,0,20"
+                Visibility="{Binding NoProjects, Converter={StaticResource BoolToVisibility}}">
+            <TextBlock Text="Brak projektów w bazie." Style="{StaticResource MutedText}" />
+        </Border>
+        <ItemsControl ItemsSource="{Binding ZakresCards}" Margin="0,0,0,20">
+            <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate><UniformGrid Columns="3" /></ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                    <Border Style="{StaticResource Panel}" Margin="0,0,12,0">
+                        <StackPanel>
+                            <DockPanel Margin="0,0,0,4">
+                                <Border DockPanel.Dock="Right" Style="{StaticResource Tag}">
+                                    <TextBlock Text="{Binding TypeLabel}" FontSize="11" Foreground="{StaticResource Muted}" />
+                                </Border>
+                                <TextBlock Text="{Binding Code}" FontWeight="SemiBold" FontSize="15" />
+                            </DockPanel>
+                            <TextBlock Text="{Binding Name}" Style="{StaticResource MutedText}" Margin="0,0,0,6" />
+                            <ContentControl Content="{Binding ScopeWarning}" />
+                            <DockPanel Margin="0,4,0,6">
+                                <ContentControl DockPanel.Dock="Right" Content="{Binding RunStatus}" />
+                                <TextBlock Text="{Binding RunId}" Style="{StaticResource MonoText}" FontSize="12" />
+                            </DockPanel>
+                            <ItemsControl ItemsSource="{Binding Dots}" Margin="0,0,0,6">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                            </ItemsControl>
+                            <TextBlock Text="{Binding RunLine}" TextWrapping="Wrap" />
+                            <TextBlock Text="{Binding LastBy}" Style="{StaticResource MutedText}" FontSize="12" Margin="0,2,0,0" />
+                        </StackPanel>
+                    </Border>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+
+        <!-- Wymaga uwagi + Ostatnie zdarzenia -->
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <Border Grid.Column="0" Style="{StaticResource Panel}" Margin="0,0,12,0">
+                <StackPanel>
+                    <DockPanel Margin="0,0,0,10">
+                        <Border DockPanel.Dock="Right" Style="{StaticResource CountBadge}">
+                            <TextBlock Text="{Binding AttentionCount}" FontFamily="{StaticResource FMono}"
+                                       Foreground="{StaticResource Muted}" />
+                        </Border>
+                        <TextBlock Text="Wymaga uwagi – ostatni import" Style="{StaticResource H2}" />
+                    </DockPanel>
+                    <TextBlock Text="Brak ostrzeżeń i błędów." Style="{StaticResource MutedText}"
+                               Visibility="{Binding NoAttention, Converter={StaticResource BoolToVisibility}}" />
+                    <ItemsControl ItemsSource="{Binding Attention}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1" Padding="0,6">
+                                    <DockPanel>
+                                        <ContentControl DockPanel.Dock="Left" Width="96" VerticalAlignment="Top"
+                                                        Content="{Binding Tag}" />
+                                        <TextBlock Text="{Binding Text}" TextWrapping="Wrap" VerticalAlignment="Center" />
+                                    </DockPanel>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </Border>
+
+            <Border Grid.Column="1" Style="{StaticResource Panel}">
+                <StackPanel>
+                    <TextBlock Text="Ostatnie zdarzenia" Style="{StaticResource H2}" Margin="0,0,0,10" />
+                    <TextBlock Text="Brak wpisów w dzienniku." Style="{StaticResource MutedText}"
+                               Visibility="{Binding NoEvents, Converter={StaticResource BoolToVisibility}}" />
+                    <ItemsControl ItemsSource="{Binding Events}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <StackPanel Margin="0,0,0,8">
+                                    <TextBlock FontSize="11" Foreground="{StaticResource Muted}" FontFamily="{StaticResource FMono}">
+                                        <Run Text="{Binding When, Mode=OneWay}" /><Run Text=" · " /><Run Text="{Binding Where, Mode=OneWay}" /><Run Text=" · " /><Run Text="{Binding Who, Mode=OneWay}" />
+                                    </TextBlock>
+                                    <TextBlock Text="{Binding Message}" TextWrapping="Wrap" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </Border>
+        </Grid>
+    </StackPanel>
+</UserControl>

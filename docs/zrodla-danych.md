@@ -31,7 +31,7 @@ i utrzymywaną na ekranie Administracja (`docs/funkcjonalnosc.md`, F08).
 | Element definicji | Znaczenie |
 |---|---|
 | Kod źródła | identyfikator, np. `ACTUALS_CES` |
-| Rozpoznanie pliku | prefiks nazwy pliku; wygrywa najdłuższy pasujący prefiks, bez rozróżniania wielkości liter |
+| Rozpoznanie pliku | prefiks nazwy pliku (początek nazwy, np. `ACTUALS_` obejmuje wszystkie pliki `ACTUALS_…`; zapis `ACTUALS_*` znaczy to samo); wygrywa najdłuższy pasujący prefiks, bez rozróżniania wielkości liter |
 | Typ raportu | np. koszty rzeczywiste, zobowiązania, prognoza |
 | Oczekiwany schemat | kolumny i ich typy; sygnatura kolumn (odcisk układu nagłówków) |
 | Ziarno | co oznacza jeden wiersz (np. pozycja kosztowa elementu WBS i elementu kosztowego w okresie) |
@@ -48,6 +48,10 @@ i utrzymywaną na ekranie Administracja (`docs/funkcjonalnosc.md`, F08).
   kolumn (np. wszystkie `ACTUALS_*` – rozdz. 4). Układy nie są łączone w jedno źródło.
 - Plik bez pasującego prefiksu nie jest importowany; po dodaniu definicji zostanie zaimportowany przy kolejnym
   imporcie.
+- **Etap 1 (aplikacja):** definicja na ekranie Administracja to kod, prefiks, typ raportu, oczekiwane kolumny
+  (sygnatura), parser i aktywność. Ziarno, klucz, znaczenie okresu, waluta i format liczb wynikają z parsera (rozdz. 4)
+  – nie są polami definicji. Definicję można usunąć: bieżąca wersja zostaje zamknięta (historia i zaimportowane dane
+  zostają), pliki o tym prefiksie są odtąd nierozpoznane, a kod i prefiks można użyć ponownie.
 - Wiersze surowe są zapisywane zawsze. Dane kanoniczne powstają tylko z pliku zgodnego ze schematem definicji.
 - Definicje powstają dla źródeł w miarę ustalania ich zawartości (O27).
 
@@ -65,7 +69,8 @@ i utrzymywaną na ekranie Administracja (`docs/funkcjonalnosc.md`, F08).
   samego źródła, o układzie zgodnym z definicją. Pliki o innym prefiksie to osobne źródła (rozdz. 2).
 - **Lokalizacje RABIT:** raporty mogą trafiać do wielu folderów na SharePoint. Lista lokalizacji jest
   konfiguracją importu w bazie (`meta.SourceLocation`, ekran Administracja – `docs/funkcjonalnosc.md`, F08):
-  nazwa, ścieżka, aktywna. Przykład ścieżki:
+  nazwa, ścieżka, aktywna. Link do folderu SharePoint skopiowany z przeglądarki jest zamieniany na ścieżkę WebDAV.
+  Przykład ścieżki:
   `\\lmsp4-intl.external.lmco.com@SSL\DavWWWRoot\sites\RabbitReporting\Shared Documents\E456659`.
 - Plik jest identyfikowany przez **lokalizację i nazwę** – pliki o tej samej nazwie w różnych lokalizacjach to
   różne pliki. Rozpoznanie źródła po prefiksie (rozdz. 2) nie zależy od lokalizacji.
@@ -76,6 +81,26 @@ i utrzymywaną na ekranie Administracja (`docs/funkcjonalnosc.md`, F08).
   (`docs/architektura.md`, rozdz. 7) i importuje tak samo.
 - Niedostępne dla użytkownika: API REST SharePoint, synchronizacja OneDrive, eksport listy do Excela,
   pobieranie ZIP.
+- Najczęstsza przyczyna braku dostępu przez WebDAV przy działającej przeglądarce: adres z kropkami to dla Windows
+  strefa Internet – usługa WebClient nie wysyła logowania Windows, dopóki adres nie jest w strefie Intranet lokalny
+  albo w `AuthForwardServerList` (`HKLM\SYSTEM\CurrentControlSet\Services\WebClient\Parameters`); za proxy – adres
+  musi być na liście wyjątków.
+- **Ustalenia testu dostępu (stanowisko analityka, 2026-10-02):** SharePoint RABIT jest za bramą logowania F5 (BIG-IP).
+  Działa tylko WebDAV przez usługę WebClient i dopiero po zalogowaniu do bramy (wcześniej: przez Office – „Eksport do
+  Excela” albo otwarcie pliku w Excelu); po wygaśnięciu sesji logowanie trzeba powtórzyć. Drogi HTTP z aplikacji
+  (`owssvr.dll`, pobranie pliku, PROPFIND, REST, `Lists.asmx`) kończą się na stronie logowania bramy albo HTTP 403;
+  provider OLEDB listy niedostępny dla procesu 64-bit. Test dostępu (drogi A–I) służył tylko diagnozie i został
+  usunięty z aplikacji.
+- **Logowanie do bramy w aplikacji** – część **Importuj** i **Sprawdź źródła** (ekran Import, zawsze przed odczytem
+  lokalizacji SharePoint): jak Office – protokół MS-OFBA (zapytanie z `X-FORMS_BASED_AUTH_ACCEPTED: t`, odpowiedź 403
+  z adresem strony logowania i adresem powrotu); okno logowania na silniku przeglądarki Windows, który dzieli trwałe
+  ciasteczka z usługą WebClient – przy ważnej sesji zamyka się samo. Bez MS-OFBA okno otwiera stronę folderu.
+  Czy sesja z okna aplikacji wystarcza usłudze WebClient – do potwierdzenia na stanowisku.
+- .NET zwraca na ścieżkach WebDAV nazwy plików z końcowym znakiem `\0` oraz wpisy „.” i „..”
+  (dotnet/runtime#62429) – import czyści nazwy (`FolderEntries`); narzędzie w Pythonie tego problemu nie miało.
+- Import czyta tylko główny folder lokalizacji (bez podfolderów – jak domyślnie narzędzie w Pythonie). Gdy folder
+  nie ma plików, a ma podfoldery – WARNING z ich nazwami. **Sprawdź źródła** (ekran Import) pokazuje bez importu
+  dostęp, czytaną ścieżkę, pliki i ich rozpoznanie; szczegóły – log aplikacji (`app/README.md`).
 - Format: jeśli RABIT pozwala – CSV/TXT (brak limitu wierszy i konwersji typów przez Excel; O7).
 
 ---
@@ -106,6 +131,10 @@ USD | 261,54 | PLN | 1 254,51 | USD | 261,54 | 0,000 | … | 2026 | 2026-03-29 |
 
 - Liczby w formacie polskim (spacja tysięcy, przecinek dziesiętny).
 - Struktura CES jest **płaska**: projekt → lista elementów WBS (numeracja ciągła z lukami).
+- Dane kanoniczne (parser `ACTUALS`): wymagane `WBS Element`, `Fiscal Year`, `Period`; numer elementu kosztowego
+  złożony z cyfr uzupełniany zerami do 10 znaków; minus na końcu liczby (zapis SAP, np. `48,00-`) oznacza wartość
+  ujemną. Klucz wiersza nie jest ustalony (O27) – bez kontroli duplikatów. Kontrola przepływu przy imporcie:
+  liczba wierszy i sumy `Value in Obj. Crcy` i `Val.in rep.cur.` danych kanonicznych zgodne z wierszami surowymi.
 
 ---
 
@@ -206,6 +235,8 @@ Poziomy ERROR / WARNING – `docs/pipeline-fazy.md`, rozdz. 1.3.
 |---|---|---|
 | lokalizacja RABIT niedostępna (brak dostępu, błąd WebDAV) | ERROR dla lokalizacji – pozostałe lokalizacje importują się dalej | import |
 | plik bez pasującego prefiksu | WARNING (plik nierozpoznany, nieimportowany) | import |
+| brak aktywnej lokalizacji RABIT | WARNING – import czyta tylko folder `Do_importu` | import |
+| folder lokalizacji bez plików, z podfolderami | WARNING z nazwami podfolderów (import ich nie czyta) | import |
 | sygnatura kolumn niezgodna z definicją (zmiana układu raportu) | ERROR dla wersji pliku – dane kanoniczne nie powstają do czasu aktualizacji definicji | import |
 | wartość niezgodna z typem kolumny | ERROR | import |
 | duplikat klucza w pliku albo między częściami jednego źródła | ERROR | import / P2 |

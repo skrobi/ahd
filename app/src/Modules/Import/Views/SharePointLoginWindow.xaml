@@ -1,0 +1,19 @@
+<Window x:Class="PzlEv.Modules.Import.Views.SharePointLoginWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Logowanie do SharePoint" WindowStartupLocation="CenterOwner" ShowInTaskbar="False"
+        Background="{StaticResource Bg}" FontFamily="{StaticResource FBody}" FontSize="13">
+    <DockPanel>
+        <Border DockPanel.Dock="Top" Padding="12,8">
+            <DockPanel>
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Margin="12,0,0,0">
+                    <Button Content="Gotowe" Style="{StaticResource Btn}" Margin="0,0,8,0" Click="OnDone"
+                            ToolTip="Zamknij okno jako zalogowane (gdy strona SharePoint jest już widoczna)" />
+                    <Button Content="Anuluj" Style="{StaticResource Btn}" IsCancel="True" Click="OnCancel" />
+                </StackPanel>
+                <TextBlock x:Name="Info" TextWrapping="Wrap" VerticalAlignment="Center" />
+            </DockPanel>
+        </Border>
+        <WebBrowser x:Name="Browser" />
+    </DockPanel>
+</Window>
