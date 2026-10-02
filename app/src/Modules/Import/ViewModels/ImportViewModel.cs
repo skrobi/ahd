@@ -6,6 +6,7 @@ using PzlEv.Modules.Import.Models;
 using PzlEv.Modules.Import.Services;
 using PzlEv.Shared.Models;
 using PzlEv.Shared.Models.Db;
+using PzlEv.Shared.Utils.Files;
 using PzlEv.Shared.Utils.Ui.Mvvm;
 using Serilog;
 
@@ -13,7 +14,8 @@ namespace PzlEv.Modules.Import.ViewModels;
 
 /// <summary>
 /// Ekran Import RABIT (F05): uruchomienie importu, wynik dla każdego pliku, problemy, historia importów;
-/// sprawdzenie źródeł bez importu (co aplikacja widzi w każdej lokalizacji); test dostępu do SharePoint (metody A–H).
+/// sprawdzenie źródeł bez importu (co aplikacja widzi w każdej lokalizacji); logowanie do SharePoint za bramą F5
+/// (jak Office, MS-OFBA) z listą pasujących plików i ich datami; test dostępu do SharePoint (metody A–I).
 /// </summary>
 public sealed class ImportViewModel : ObservableObject
 {
@@ -21,6 +23,10 @@ public sealed class ImportViewModel : ObservableObject
 
     private readonly ImportService _service;
     private readonly IImportStore _store;
+    private readonly ISharePointLoginDialog _login;
+    private readonly List<FileCheck> _allFileChecks = [];
+    private bool _showAllFiles;
+    private bool _needsLogin;
     private CancellationTokenSource? _cancellation;
     private bool _isRunning;
     private string _progress = "";
@@ -34,15 +40,18 @@ public sealed class ImportViewModel : ObservableObject
     private string _accessConclusion = "";
     private string _accessReport = "";
 
-    public ImportViewModel(ImportService service, IImportStore store)
+    public ImportViewModel(ImportService service, IImportStore store, ISharePointLoginDialog login)
     {
         _service = service;
         _store = store;
+        _login = login;
         Run = new AsyncRelayCommand(DoRun, () => !_isRunning);
         Cancel = new RelayCommand(_ => _cancellation?.Cancel(), _ => _isRunning);
         Refresh = new RelayCommand(_ => Reload(), _ => !_isRunning);
         Check = new AsyncRelayCommand(DoCheck, () => !_isRunning);
         TestAccess = new AsyncRelayCommand(DoTestAccess, () => !_isRunning);
+        Login = new AsyncRelayCommand(DoLogin, () => !_isRunning);
+        LoginAndRun = new AsyncRelayCommand(DoLoginAndRun, () => !_isRunning);
         Reload();
     }
 
@@ -61,6 +70,20 @@ public sealed class ImportViewModel : ObservableObject
     public ObservableCollection<FileCheck> FileChecks { get; } = [];
 
     public bool HasCheck => LocationChecks.Count > 0;
+
+    /// <summary>false – w sprawdzeniu źródeł tylko pliki pasujące do definicji (z datami); true – wszystkie.</summary>
+    public bool ShowAllFiles
+    {
+        get => _showAllFiles;
+        set
+        {
+            if (SetProperty(ref _showAllFiles, value))
+                FillFileChecks();
+        }
+    }
+
+    /// <summary>Ostatni import nie dotarł do lokalizacji SharePoint – propozycja „Zaloguj i ponów”.</summary>
+    public bool NeedsLogin { get => _needsLogin; private set => SetProperty(ref _needsLogin, value); }
 
     public ObservableCollection<AccessMethodResult> AccessResults { get; } = [];
 
@@ -92,6 +115,10 @@ public sealed class ImportViewModel : ObservableObject
     public ICommand Check { get; }
 
     public ICommand TestAccess { get; }
+
+    public ICommand Login { get; }
+
+    public ICommand LoginAndRun { get; }
 
     public string Progress { get => _progress; private set => SetProperty(ref _progress, value); }
 
@@ -125,6 +152,7 @@ public sealed class ImportViewModel : ObservableObject
         Progress = "Import w toku…";
         Files.Clear();
         Issues.Clear();
+        NeedsLogin = false;
         OnPropertyChanged(nameof(HasIssues));
         _cancellation = new CancellationTokenSource();
         var progress = new Progress<string>(message => Progress = message);
@@ -136,6 +164,7 @@ public sealed class ImportViewModel : ObservableObject
             foreach (var issue in result.Issues)
                 Issues.Add(issue);
             Summary = $"Import #{result.BatchId}: {result.Summary}";
+            NeedsLogin = result.UnavailableSharePoint.Count > 0;
             Progress = "";
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
@@ -156,28 +185,124 @@ public sealed class ImportViewModel : ObservableObject
     private async Task DoCheck()
     {
         IsRunning = true;
+        try
+        {
+            if (await CheckSources() is not null)
+                Progress = "";
+        }
+        finally
+        {
+            IsRunning = false;
+        }
+    }
+
+    /// <summary>Sprawdzenie źródeł (bez importu); null – przerwane błędem (opis w Progress).</summary>
+    private async Task<SourcesCheckResult?> CheckSources()
+    {
         Progress = "Sprawdzanie źródeł…";
         LocationChecks.Clear();
+        _allFileChecks.Clear();
         FileChecks.Clear();
         try
         {
             var result = await Task.Run(_service.Check);
             foreach (var location in result.Locations)
                 LocationChecks.Add(location);
-            foreach (var file in result.Files)
-                FileChecks.Add(file);
-            Progress = "";
+            _allFileChecks.AddRange(result.Files);
+            FillFileChecks();
+            return result;
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
             Logger.Error(ex, "Sprawdzenie źródeł przerwane błędem");
             Progress = $"Sprawdzenie źródeł przerwane błędem: {ex.Message}";
+            return null;
+        }
+        finally
+        {
+            OnPropertyChanged(nameof(HasCheck));
+        }
+    }
+
+    private void FillFileChecks()
+    {
+        FileChecks.Clear();
+        foreach (var file in _allFileChecks.Where(f => _showAllFiles || f.Matches).OrderByDescending(f => f.Matches).ThenByDescending(f => f.Modified))
+            FileChecks.Add(file);
+    }
+
+    /// <summary>
+    /// Logowanie do każdej bramy SharePoint aktywnych lokalizacji (jak Office – MS-OFBA, inaczej strona folderu
+    /// w oknie aplikacji); true – wszystkie okna zakończone zalogowaniem.
+    /// </summary>
+    private async Task<bool> LoginToSharePoint()
+    {
+        var addresses = Locations.Where(l => !l.IsManualFolder)
+            .Select(l => SharePointAddress.Parse(l.ConfiguredPath))
+            .OfType<SharePointAddress>()
+            .DistinctBy(a => a.Origin, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        if (addresses.Count == 0)
+        {
+            Progress = "Brak aktywnej lokalizacji SharePoint – włącz lokalizację w Administracji.";
+            return false;
+        }
+        foreach (var address in addresses)
+        {
+            Progress = $"Logowanie do {address.Host}…";
+            var (request, probe) = await Task.Run(() =>
+            {
+                using var test = new RabitAccessTest();
+                return test.Ofba(address, CancellationToken.None);
+            });
+            Logger.Information("Logowanie SharePoint {Host}: {Status} – {Details}", address.Host, probe.Status, string.Join(" | ", probe.Details));
+            if (!_login.Login(request ?? SharePointLogin.Fallback(address)))
+            {
+                Progress = $"Logowanie do {address.Host} anulowane.";
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private async Task DoLogin()
+    {
+        IsRunning = true;
+        try
+        {
+            if (!await LoginToSharePoint())
+                return;
+            ShowAllFiles = false;
+            if (await CheckSources() is not { } check)
+                return;
+            var sharePoint = check.Locations.Where(l => WebDavPath.IsWebDav(l.Path)).ToList();
+            var matching = check.Files.Where(f => f.Matches).ToList();
+            Progress = sharePoint.Count > 0 && sharePoint.All(l => l.Accessible)
+                ? $"Zalogowano – pliki pasujące do definicji: {matching.Count}" +
+                  (matching.Count > 0 ? $", najnowszy z {matching.Max(f => f.ModifiedLocal):yyyy-MM-dd HH:mm}" : "") + " (lista poniżej, z datami modyfikacji)."
+                : "Logowanie zakończone, ale lokalizacja SharePoint nadal niedostępna – brama nie udostępniła sesji usłudze WebClient. " +
+                  "Na razie zaloguj się przez Excel („Eksport do Excela”) i uruchom test dostępu.";
         }
         finally
         {
             IsRunning = false;
-            OnPropertyChanged(nameof(HasCheck));
         }
+    }
+
+    private async Task DoLoginAndRun()
+    {
+        IsRunning = true;
+        bool loggedIn;
+        try
+        {
+            loggedIn = await LoginToSharePoint();
+        }
+        finally
+        {
+            IsRunning = false;
+        }
+        if (loggedIn)
+            await DoRun();
     }
 
     private async Task DoTestAccess()

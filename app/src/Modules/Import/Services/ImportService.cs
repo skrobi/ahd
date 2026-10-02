@@ -52,7 +52,9 @@ public sealed class ImportService(IImportStore store, AppServices services)
             try
             {
                 var (found, ignored, subfolders) = ListFiles(location);
-                var status = $"dostęp OK: plików {found.Count}" +
+                var matching = found.Where(f => SourceMatcher.Match(f.Name, definitions) is not null).ToList();
+                var newest = matching.Count > 0 ? $" (najnowszy z {matching.Max(f => f.LastWriteTime):yyyy-MM-dd HH:mm})" : "";
+                var status = $"dostęp OK: plików {found.Count}, pasujących do definicji {matching.Count}{newest}" +
                              (ignored.Count > 0 ? $", pominiętych tymczasowych {ignored.Count}" : "") +
                              (subfolders.Count > 0 ? $", podfoldery (import ich nie czyta): {string.Join(", ", subfolders.Take(10))}" : "");
                 locations.Add(new LocationCheck(location.Name, location.ConfiguredPath, location.Path, true, status));
@@ -67,7 +69,7 @@ public sealed class ImportService(IImportStore store, AppServices services)
                         : last is not null && last.Size == file.Length && last.ModifiedAt == modified
                             ? "zostanie pominięty – bez zmian od importu"
                             : TabularFileReader.IsSupported(file.Name) ? "zostanie zaimportowany" : $"format {file.Extension} nieobsługiwany";
-                    files.Add(new FileCheck(location.Name, file.Name, file.Length, modified, recognition, note));
+                    files.Add(new FileCheck(location.Name, file.Name, file.Length, modified, recognition, note, definition is not null));
                     Logger.Information("Sprawdzenie: {Location} / {File} ({Size} B, {Modified:u}) → {Recognition}; {Note}",
                         location.Name, file.Name, file.Length, modified, recognition, note);
                 }
@@ -113,6 +115,7 @@ public sealed class ImportService(IImportStore store, AppServices services)
         var results = new List<FileResult>();
         var issues = new List<Issue>();
         var cancelled = false;
+        var unavailableSharePoint = new List<string>();
 
         void Problem(string check, Issue issue)
         {
@@ -148,6 +151,8 @@ public sealed class ImportService(IImportStore store, AppServices services)
                 Logger.Error(ex, "Lokalizacja {Location} niedostępna ({Path})", location.Name, location.Path);
                 var hint = WebDavPath.IsWebDav(location.Path) ? $" {WebDavPath.AccessHint}" : "";
                 Problem("lokalizacja niedostępna", Issue.Error($"Lokalizacja niedostępna: {ex.GetType().Name}: {ex.Message} ({location.Path}).{hint}", location.Name));
+                if (WebDavPath.IsWebDav(location.Path))
+                    unavailableSharePoint.Add(location.Name);
                 progress?.Report($"{location.Name}: niedostępna");
                 continue;
             }
@@ -172,7 +177,7 @@ public sealed class ImportService(IImportStore store, AppServices services)
         store.FinishBatch(batchId, services.Clock.Now, results.Count, Count(FileDecisions.Imported), Count(FileDecisions.Skipped),
             Count(FileDecisions.Duplicate), Count(FileDecisions.Unrecognized), Count(FileDecisions.Error), status);
 
-        var run = new ImportRunResult(batchId, results, issues, cancelled);
+        var run = new ImportRunResult(batchId, results, issues, cancelled) { UnavailableSharePoint = unavailableSharePoint };
         services.Journal.Add(Area, $"Import #{batchId}: {run.Summary}");
         Logger.Information("Import #{Batch} koniec: {Summary}", batchId, run.Summary);
         services.Database.Commit();

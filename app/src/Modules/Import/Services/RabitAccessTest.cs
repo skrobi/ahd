@@ -25,6 +25,7 @@ namespace PzlEv.Modules.Import.Services;
 /// <item>F – REST API SharePoint (_api/web/GetFolderByServerRelativeUrl)</item>
 /// <item>G – usługa SOAP Lists.asmx (GetListItems)</item>
 /// <item>H – połączenie sieciowe WNetAddConnection2 (jak „Mapuj dysk sieciowy” / net use) i lista UNC</item>
+/// <item>I – MS-OFBA: czy brama / SharePoint pozwala zalogować się jak Office (okno logowania w aplikacji)</item>
 /// </list>
 /// HTTP: konto Windows (Kerberos/NTLM) jak przeglądarka; nagłówek X-FORMS_BASED_AUTH_ACCEPTED: f prosi SharePoint
 /// z kilkoma metodami logowania o logowanie Windows zamiast formularza; przekierowania są opisywane w szczegółach.
@@ -88,6 +89,7 @@ public sealed partial class RabitAccessTest : IDisposable
         Step("F", () => Rest(address, cancellation));
         Step("G", () => Soap(address, input, cancellation));
         Step("H", () => Map(address));
+        Step("I", () => Ofba(address, cancellation).Result);
         var fileLink = input.FileLink.Trim().Length > 0
             ? input.FileLink.Trim()
             : results.Where(r => r.Works).SelectMany(r => r.Files).FirstOrDefault(f => f.Url is not null)?.Url;
@@ -106,6 +108,8 @@ public sealed partial class RabitAccessTest : IDisposable
         var listing = new[] { "A", "B", "F", "G" }.Any(Ok);
         if (Ok("C") || Ok("H"))
             return @"WNIOSEK: WebDAV (\\…\DavWWWRoot) działa – import czyta lokalizację jak dotąd.";
+        if (Ok("I"))
+            return "WNIOSEK: WebDAV wymaga zalogowania do bramy – brama pozwala zalogować się jak Office (I): na ekranie Import użyj „Zaloguj do SharePoint”.";
         if (Ok("E"))
             return "WNIOSEK: działa WebDAV przez HTTPS z aplikacji (E), bez usługi WebClient – przekaż raport, przełączę import lokalizacji SharePoint na tę metodę.";
         if (listing && Ok("D"))
@@ -350,6 +354,49 @@ public sealed partial class RabitAccessTest : IDisposable
             });
     }
 
+    // ---- I: MS-OFBA ----------------------------------------------------------------------------------------
+
+    /// <summary>
+    /// Czy brama / SharePoint odpowiada jak dla Office (403 z adresem strony logowania) – warianty zapytania po kolei;
+    /// zwraca dane okna logowania, gdy któryś zadziałał.
+    /// </summary>
+    public (SharePointLoginRequest? Request, AccessMethodResult Result) Ofba(SharePointAddress address, CancellationToken cancellation)
+    {
+        const string name = "MS-OFBA – logowanie jak Office (strona logowania bramy w oknie aplikacji)";
+        var details = new List<string>();
+        var target = new Uri(address.FolderUrl);
+        foreach (var (method, agent, header) in SharePointLogin.Variants)
+        {
+            details.Add($"Wariant: {method}" + (header ? $", {SharePointLogin.AcceptedHeader}: t" : "") + (agent is null ? "" : $", User-Agent: {agent}"));
+            try
+            {
+                using var response = Send(new HttpMethod(method), address.FolderUrl, request =>
+                {
+                    request.Headers.Remove(SharePointLogin.AcceptedHeader);
+                    if (header)
+                        request.Headers.TryAddWithoutValidation(SharePointLogin.AcceptedHeader, "t");
+                    if (agent is not null)
+                        request.Headers.TryAddWithoutValidation("User-Agent", agent);
+                    if (method == "PROPFIND")
+                        request.Headers.Add("Depth", "0");
+                }, details, _timeout, cancellation, maxRedirects: 0);
+                if (SharePointLogin.ReadChallenge(response, target, address) is { } login)
+                {
+                    details.Add($"Brama obsługuje MS-OFBA: strona logowania {Safe(login.LoginUrl)}, powrót {Safe(login.ReturnUrl!)}, okno {login.Width}x{login.Height}");
+                    return (login, new AccessMethodResult("I", name, AccessStatus.Works, details, []));
+                }
+                if (response.Headers.Location is { } location)
+                    details.Add($"Przekierowanie: {(location.IsAbsoluteUri ? Safe(location) : location.OriginalString.Split('?')[0])}");
+            }
+            catch (Exception ex) when (ex is not OutOfMemoryException && !(ex is OperationCanceledException && cancellation.IsCancellationRequested))
+            {
+                details.Add(WindowsAccess.Describe(ex));
+            }
+        }
+        details.Add("Brak odpowiedzi MS-OFBA (403 z X-FORMS_BASED_AUTH_REQUIRED) – „Zaloguj do SharePoint” otworzy stronę folderu w oknie aplikacji.");
+        return (null, new AccessMethodResult("I", name, AccessStatus.Fails, details, []));
+    }
+
     // ---- D: pobranie jednego pliku -------------------------------------------------------------------------
 
     private AccessMethodResult Download(string? fileLink, CancellationToken cancellation)
@@ -404,7 +451,8 @@ public sealed partial class RabitAccessTest : IDisposable
     }
 
     /// <summary>Żądanie z opisem każdego kroku (także przekierowań, maks. 5) w szczegółach metody.</summary>
-    private HttpResponseMessage Send(HttpMethod method, string url, Action<HttpRequestMessage>? setup, List<string> trace, TimeSpan timeout, CancellationToken cancellation)
+    private HttpResponseMessage Send(HttpMethod method, string url, Action<HttpRequestMessage>? setup, List<string> trace, TimeSpan timeout,
+        CancellationToken cancellation, int maxRedirects = 5)
     {
         var uri = new Uri(url);
         var current = method;
@@ -426,7 +474,7 @@ public sealed partial class RabitAccessTest : IDisposable
                 throw new TimeoutException($"brak odpowiedzi serwera w {timeout.TotalSeconds:0} s ({current} {Safe(uri)})");
             }
             trace.Add($"HTTP {(int)response.StatusCode} {current} {Safe(uri)}");
-            if ((int)response.StatusCode is >= 300 and < 400 && response.Headers.Location is { } location && hop < 5)
+            if ((int)response.StatusCode is >= 300 and < 400 && response.Headers.Location is { } location && hop < maxRedirects)
             {
                 // 301/302/303 – dalej GET (jak przeglądarka, np. strona logowania); 307/308 – ta sama metoda.
                 if ((int)response.StatusCode is 301 or 302 or 303)

@@ -104,7 +104,7 @@ public sealed class RabitAccessTestTests
         var propfind = server.Requests.First(r => r.Method.Method == "PROPFIND");
         Assert.Equal("1", propfind.Headers.GetValues("Depth").Single());
         Assert.Equal("f", propfind.Headers.GetValues("X-FORMS_BASED_AUTH_ACCEPTED").Single());
-        Assert.Equal(["A", "B", "C", "D", "E", "F", "G", "H"], result.Methods.Select(m => m.Code));
+        Assert.Equal(["A", "B", "C", "D", "E", "F", "G", "H", "I"], result.Methods.Select(m => m.Code));
         Assert.Contains("[DZIAŁA] E.", result.Report);
     }
 
@@ -172,5 +172,73 @@ public sealed class RabitAccessTestTests
         Assert.Equal(AccessStatus.Skipped, result.Methods.Single(m => m.Code == "D").Status);
         if (!OperatingSystem.IsWindows())
             Assert.All(result.Methods.Where(m => m.Code is "B" or "C" or "H"), m => Assert.Equal(AccessStatus.Skipped, m.Status));
+    }
+
+    [Fact]
+    public void Ofba_challenge_gives_login_window_like_office()
+    {
+        var server = new FakeSharePoint()
+            .On("OPTIONS", FolderPath + "/", request =>
+                request.Headers.TryGetValues("X-FORMS_BASED_AUTH_ACCEPTED", out var accepted) && accepted.Single() == "t"
+                    ? new HttpResponseMessage(HttpStatusCode.Forbidden)
+                    {
+                        Headers =
+                        {
+                            { "X-FORMS_BASED_AUTH_REQUIRED", "https://gate.example.com/my.policy?ofba=1&token=sekret" },
+                            { "X-FORMS_BASED_AUTH_RETURN_URL", "https://gate.example.com/ofba/done/" },
+                            { "X-FORMS_BASED_AUTH_DIALOG_SIZE", "800x600" },
+                        },
+                        Content = new StringContent(""),
+                    }
+                    : new HttpResponseMessage(HttpStatusCode.Found) { Headers = { Location = new Uri("https://gate.example.com/my.policy") }, Content = new StringContent("") });
+        using var test = new RabitAccessTest(server);
+
+        var result = test.Run(Input());
+
+        var ofba = result.Methods.Single(m => m.Code == "I");
+        Assert.True(ofba.Works, ofba.Text);
+        Assert.Contains(ofba.Details, d => d.StartsWith("Brama obsługuje MS-OFBA") && d.Contains("okno 800x600") && !d.Contains("sekret"));
+        Assert.Contains("Zaloguj do SharePoint", result.Conclusion);
+        var (login, _) = test.Ofba(SharePointAddress.Parse(Folder)!, CancellationToken.None);
+        Assert.Equal("https://gate.example.com/my.policy?ofba=1&token=sekret", login!.LoginUrl.AbsoluteUri);
+        Assert.True(login.IsOfba);
+        Assert.True(login.IsDone(new Uri("https://gate.example.com/ofba/done/?x=1")));
+        Assert.False(login.IsDone(new Uri("https://gate.example.com/my.policy")));
+    }
+
+    [Fact]
+    public void Webdav_agent_variant_is_tried_when_options_is_redirected()
+    {
+        var server = new FakeSharePoint()
+            .On("OPTIONS", FolderPath + "/", _ => new HttpResponseMessage(HttpStatusCode.Found) { Headers = { Location = new Uri("https://gate.example.com/F5Networks-SSO-Req") }, Content = new StringContent("") })
+            .On("PROPFIND", FolderPath + "/", request => request.Headers.UserAgent.ToString().Contains("Microsoft-WebDAV-MiniRedir")
+                ? new HttpResponseMessage(HttpStatusCode.Forbidden) { Headers = { { "X-FORMS_BASED_AUTH_REQUIRED", "/login" } }, Content = new StringContent("") }
+                : new HttpResponseMessage(HttpStatusCode.Unauthorized) { Content = new StringContent("") });
+        using var test = new RabitAccessTest(server);
+
+        var (login, result) = test.Ofba(SharePointAddress.Parse(Folder)!, CancellationToken.None);
+
+        Assert.True(result.Works, result.Text);
+        Assert.Equal("https://sp.example.com/login", login!.LoginUrl.AbsoluteUri);
+        Assert.Equal(login.LoginUrl, login.ReturnUrl);   // bez adresu powrotu – adres logowania ([MS-OFBA] 2.2.2)
+        Assert.Equal((660, 495), (login.Width, login.Height));
+        Assert.Contains("Przekierowanie: https://gate.example.com/F5Networks-SSO-Req", result.Details);
+    }
+
+    [Fact]
+    public void Without_ofba_login_window_opens_folder_and_ends_on_sharepoint_page()
+    {
+        using var test = new RabitAccessTest(new FakeSharePoint());
+
+        var (login, result) = test.Ofba(SharePointAddress.Parse(Folder)!, CancellationToken.None);
+        var fallback = SharePointLogin.Fallback(SharePointAddress.Parse(Folder)!);
+
+        Assert.Null(login);
+        Assert.False(result.Works);
+        Assert.False(fallback.IsOfba);
+        Assert.Equal(Folder + "/", fallback.LoginUrl.AbsoluteUri);
+        Assert.False(fallback.IsDone(new Uri("https://gate.example.com/my.policy")));
+        Assert.False(fallback.IsDone(new Uri("https://sp.example.com/my.policy")));
+        Assert.True(fallback.IsDone(new Uri("https://sp.example.com/sites/RabbitReporting/Shared%20Documents/Forms/AllItems.aspx?RootFolder=x")));
     }
 }

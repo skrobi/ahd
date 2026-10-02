@@ -123,6 +123,19 @@ public sealed class ImportServiceTests : IDisposable
 
         Assert.Contains(run.Issues, i => i.Level == CheckLevel.Error && i.Element == "RABIT test" && i.Message.StartsWith("Lokalizacja niedostępna"));
         Assert.Equal(FileDecisions.Imported, Assert.Single(run.Files).Decision);
+        Assert.Empty(run.UnavailableSharePoint);                       // folder lokalny – nie SharePoint
+
+    }
+
+    [Fact]
+    public void Unavailable_sharepoint_location_is_offered_login()
+    {
+        _config.SaveLocation(new LocationInput(null, null, "RABIT SP", @"\\sp.example.com@SSL\DavWWWRoot\sites\R\Shared Documents\E1", Active: true));
+
+        var run = _import.Run();
+
+        Assert.Equal(["RABIT SP"], run.UnavailableSharePoint);
+        Assert.Contains(run.Issues, i => i.Element == "RABIT SP" && i.Message.Contains("bramą logowania F5"));
     }
 
     [Fact]
@@ -242,7 +255,7 @@ public sealed class ImportServiceTests : IDisposable
         var location = check.Locations.Single(l => l.Name == "RABIT test");
         Assert.True(location.Accessible);
         Assert.Equal(rabit, location.Path);
-        Assert.Contains("plików 2", location.Status);
+        Assert.Contains("plików 2, pasujących do definicji 1 (najnowszy z ", location.Status);
         Assert.Contains("pominiętych tymczasowych 1", location.Status);
         Assert.Contains("Archiwum", location.Status);
         Assert.True(check.Locations.Single(l => l.Name == "Do_importu").Accessible);
@@ -250,7 +263,10 @@ public sealed class ImportServiceTests : IDisposable
         var actuals = check.Files.Single(f => f.FileName == "ACTUALS_PAF2_B6_AC1.csv");
         Assert.StartsWith("ACTUALS_PAF", actuals.Recognition);
         Assert.Equal("zostanie zaimportowany", actuals.Note);
-        Assert.Equal("nierozpoznany", check.Files.Single(f => f.FileName == "RAPORT_NIEZNANY.csv").Recognition);
+        Assert.True(actuals.Matches);
+        var unknown = check.Files.Single(f => f.FileName == "RAPORT_NIEZNANY.csv");
+        Assert.Equal("nierozpoznany", unknown.Recognition);
+        Assert.False(unknown.Matches);
         Assert.Empty(_store.Batches(10));                               // sprawdzenie niczego nie importuje
     }
 

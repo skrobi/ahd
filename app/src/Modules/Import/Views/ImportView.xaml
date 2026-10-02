@@ -8,6 +8,8 @@
             <partials:PageHeader.Actions>
                 <StackPanel Orientation="Horizontal">
                     <Button Content="Odśwież" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding Refresh}" />
+                    <Button Content="Zaloguj do SharePoint" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding Login}"
+                            ToolTip="Logowanie do bramy F5 jak w Office; potem lista plików pasujących do definicji z datami modyfikacji." />
                     <Button Content="Sprawdź źródła" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding Check}"
                             ToolTip="Bez importu: dostęp do każdej lokalizacji, widoczne pliki i podfoldery, jak każdy plik zostałby rozpoznany." />
                     <Button Content="Anuluj" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding Cancel}" />
@@ -36,11 +38,11 @@
         </Border>
 
         <!-- Test dostępu do SharePoint: metody A–H (jak narzedzia/test_dostepu_rabit.py w narzędziu w Pythonie) -->
-        <Expander Header="Test dostępu do SharePoint – która droga działa (metody A–H)" Margin="0,0,0,12">
+        <Expander Header="Test dostępu do SharePoint – która droga działa (metody A–I)" Margin="0,0,0,12">
             <Border Style="{StaticResource Panel}" Margin="0,6,0,0">
                 <StackPanel>
                     <TextBlock Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="0,0,0,8"
-                               Text="A owssvr.dll (Eksport do Excela) · B OLEDB (połączenie Excela) · C WebDAV \…\DavWWWRoot (Eksplorator) · D pobranie jednego pliku · E WebDAV przez HTTPS z aplikacji (bez usługi WebClient) · F REST API · G usługa Lists.asmx · H mapowanie (net use). Test niczego nie importuje i nie zapisuje zawartości plików." />
+                               Text="A owssvr.dll (Eksport do Excela) · B OLEDB (połączenie Excela) · C WebDAV \\…\DavWWWRoot (Eksplorator) · D pobranie jednego pliku · E WebDAV przez HTTPS z aplikacji (bez usługi WebClient) · F REST API · G usługa Lists.asmx · H mapowanie (net use) · I logowanie jak Office (MS-OFBA). Test niczego nie importuje i nie zapisuje zawartości plików." />
                     <Grid>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="190" />
@@ -55,7 +57,7 @@
                         <TextBlock Grid.Row="0" Text="Link do folderu" VerticalAlignment="Center" />
                         <TextBox Grid.Row="0" Grid.Column="1" Style="{StaticResource Input}" Margin="0,2"
                                  Text="{Binding AccessFolder, UpdateSourceTrigger=PropertyChanged}"
-                                 ToolTip="Adres folderu z przeglądarki (https://…) albo ścieżka \host@SSL\DavWWWRoot\…" />
+                                 ToolTip="Adres folderu z przeglądarki (https://…) albo ścieżka \\host@SSL\DavWWWRoot\…" />
                         <TextBlock Grid.Row="1" Text="Link do pliku (opcjonalnie)" VerticalAlignment="Center" />
                         <TextBox Grid.Row="1" Grid.Column="1" Style="{StaticResource Input}" Margin="0,2"
                                  Text="{Binding AccessFile, UpdateSourceTrigger=PropertyChanged}"
@@ -90,7 +92,10 @@
         <Border Style="{StaticResource Panel}" Margin="0,0,0,12"
                 Visibility="{Binding HasCheck, Converter={StaticResource BoolToVisibility}}">
             <StackPanel>
-                <TextBlock Text="Sprawdzenie źródeł" Style="{StaticResource H2}" FontSize="15" Margin="0,0,0,6" />
+                <DockPanel Margin="0,0,0,6">
+                    <CheckBox DockPanel.Dock="Right" Content="Pokaż wszystkie pliki" IsChecked="{Binding ShowAllFiles}" VerticalAlignment="Center" />
+                    <TextBlock Text="Sprawdzenie źródeł – pliki pasujące do definicji" Style="{StaticResource H2}" FontSize="15" />
+                </DockPanel>
                 <ItemsControl ItemsSource="{Binding LocationChecks}">
                     <ItemsControl.ItemTemplate>
                         <DataTemplate>
@@ -112,7 +117,7 @@
                         <DataGridTextColumn Header="Lokalizacja" Binding="{Binding Location}" />
                         <DataGridTextColumn Header="Plik" Binding="{Binding FileName}" />
                         <DataGridTextColumn Header="Rozmiar [B]" Binding="{Binding Size}" />
-                        <DataGridTextColumn Header="Zmodyfikowano" Binding="{Binding Modified, StringFormat=yyyy-MM-dd HH:mm}" />
+                        <DataGridTextColumn Header="Zmodyfikowano" Binding="{Binding ModifiedLocal, StringFormat=yyyy-MM-dd HH:mm}" />
                         <DataGridTextColumn Header="Rozpoznany jako" Binding="{Binding Recognition}" />
                         <DataGridTextColumn Header="Uwagi" Binding="{Binding Note}" Width="*" />
                     </DataGrid.Columns>
@@ -140,6 +145,8 @@
             <StackPanel>
                 <TextBlock Text="Problemy importu" Style="{StaticResource H2}" FontSize="15" Margin="0,0,0,6" />
                 <ItemsControl ItemsSource="{Binding Issues}" />
+                <Button Content="Zaloguj do SharePoint i ponów import" Style="{StaticResource BtnPrimary}" HorizontalAlignment="Left" Margin="0,8,0,0"
+                        Command="{Binding LoginAndRun}" Visibility="{Binding NeedsLogin, Converter={StaticResource BoolToVisibility}}" />
             </StackPanel>
         </Border>
 
