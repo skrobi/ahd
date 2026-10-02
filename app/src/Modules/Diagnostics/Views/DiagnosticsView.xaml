@@ -1,0 +1,88 @@
+<UserControl x:Class="PzlEv.Modules.Diagnostics.Views.DiagnosticsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:partials="clr-namespace:PzlEv.Shared.Views.Partials">
+    <StackPanel>
+        <partials:PageHeader Eyebrow="Test stosu" Title="Diagnostyka środowiska"
+                             Subtitle="Jeśli widzisz ten ekran z wersjami pakietów, .exe uruchomił się bez instalacji .NET, a pakiety z założeń wczytały się z jednego pliku." />
+
+        <Border Style="{StaticResource Panel}" BorderBrush="{StaticResource Accent}">
+            <StackPanel>
+                <Grid Margin="0,0,0,8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="140" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition />
+                        <RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition />
+                    </Grid.RowDefinitions>
+                    <TextBlock Grid.Row="0" Text="Runtime" Foreground="{StaticResource Muted}" />
+                    <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding Runtime}" Style="{StaticResource MonoText}" />
+                    <TextBlock Grid.Row="1" Text="System" Foreground="{StaticResource Muted}" />
+                    <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding Os}" Style="{StaticResource MonoText}" />
+                    <TextBlock Grid.Row="2" Text="Uruchomiono z" Foreground="{StaticResource Muted}" />
+                    <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding ExePath}" Style="{StaticResource MonoText}" TextWrapping="Wrap" />
+                    <TextBlock Grid.Row="3" Text="Konto Windows" Foreground="{StaticResource Muted}" />
+                    <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding WindowsUser}" Style="{StaticResource MonoText}" />
+                    <TextBlock Grid.Row="4" Text="Wersja aplikacji" Foreground="{StaticResource Muted}" />
+                    <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding AppVersion}" Style="{StaticResource MonoText}" />
+                    <TextBlock Grid.Row="5" Text="Środowisko" Foreground="{StaticResource Muted}" />
+                    <TextBlock Grid.Row="5" Grid.Column="1" Text="{Binding Environment}" Style="{StaticResource MonoText}" />
+                    <TextBlock Grid.Row="6" Text="Dane" Foreground="{StaticResource Muted}" />
+                    <TextBlock Grid.Row="6" Grid.Column="1" Text="{Binding Database}" Style="{StaticResource MonoText}" TextWrapping="Wrap" />
+                    <TextBlock Grid.Row="7" Text="Korzeń folderów" Foreground="{StaticResource Muted}" />
+                    <TextBlock Grid.Row="7" Grid.Column="1" Text="{Binding NetworkRoot}" Style="{StaticResource MonoText}" TextWrapping="Wrap" />
+                    <TextBlock Grid.Row="8" Text="Folder Do_importu" Foreground="{StaticResource Muted}" />
+                    <TextBlock Grid.Row="8" Grid.Column="1" Text="{Binding ImportFolder}" Style="{StaticResource MonoText}" TextWrapping="Wrap" />
+                </Grid>
+                <ItemsControl ItemsSource="{Binding Packages}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Grid Margin="0,2">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="220" />
+                                    <ColumnDefinition Width="140" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="{Binding Name}" FontWeight="Medium" />
+                                <TextBlock Grid.Column="1" Text="{Binding Version}" Style="{StaticResource MonoText}" />
+                                <TextBlock Grid.Column="2" Text="{Binding Location}" Foreground="{StaticResource Muted}" TextWrapping="Wrap" />
+                            </Grid>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+        </Border>
+
+        <!-- Migracje bazy: skrypty sql/mssql wbudowane w aplikację; wykonane są pomijane -->
+        <Border Style="{StaticResource Panel}" Margin="0,12,0,0">
+            <StackPanel>
+                <DockPanel Margin="0,0,0,8">
+                    <Button DockPanel.Dock="Right" Content="Migracja" Style="{StaticResource BtnPrimary}" Command="{Binding Migrate}"
+                            ToolTip="Wykonuje skrypty, których nie ma jeszcze w bazie; wykonane pomija" />
+                    <StackPanel>
+                        <TextBlock Text="Migracje bazy" Style="{StaticResource H2}" FontSize="15" />
+                        <TextBlock Text="Tabele i dane startowe (definicje źródeł, lokalizacja RABIT, kalendarz, Cost Category)."
+                                   Style="{StaticResource MutedText}" FontSize="12" TextWrapping="Wrap" />
+                    </StackPanel>
+                </DockPanel>
+                <ItemsControl ItemsSource="{Binding Migrations}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Grid Margin="0,2">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="320" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="{Binding Name}" Style="{StaticResource MonoText}" />
+                                <TextBlock Grid.Column="1" Text="{Binding Status}" Foreground="{StaticResource Muted}" TextWrapping="Wrap" />
+                            </Grid>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <TextBlock Text="{Binding MigrationStatus}" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,8,0,0" />
+            </StackPanel>
+        </Border>
+    </StackPanel>
+</UserControl>

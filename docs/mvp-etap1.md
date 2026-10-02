@@ -1,5 +1,8 @@
 # Narzędzie testowe: pobranie plików RABIT i import do bazy (Python)
 
+> Import docelowy jest w aplikacji (`app/`, ekran Import RABIT – `tasks/F2.2`). Narzędzie zostaje jako narzędzie
+> diagnostyczne (dostęp WebDAV, inspekcja plików) do czasu decyzji o jego wycofaniu (`tasks/F2.5`).
+
 Narzędzie w Pythonie (`pzl_ev/etap1`) zbudowane do sprawdzenia dostępu do RABIT przez WebDAV i importu plików
 do bazy. Nie jest aplikacją docelową – docelowy import opisują `docs/pipeline-fazy.md` (G1)
 i `docs/zrodla-danych.md`. Narzędzie różni się od rozwiązania docelowego: kopiuje oryginały plików do Landing
@@ -102,8 +105,9 @@ Kilka plików jednego źródła (`ACTUALS_PAF_01`, `_02`, `_03`) importuje się 
 mają różne kolumny.
 
 Opcje:
-- `--baza` – adres bazy; domyślnie plik SQLite `pzl_ev_mvp.sqlite` w katalogu Landing Zone. MS SQL: `--baza mssql://SERWER/PZL_EV_TEST` (konto Windows; tabele tworzy
-  administrator skryptem `sql/mssql/001_etap1_import.sql`),
+- `--baza` – adres bazy; domyślnie plik SQLite `pzl_ev_mvp.sqlite` w katalogu Landing Zone. MS SQL: `--baza mssql://SERWER/PZL_EV_TEST` (konto Windows; skrypt
+  `001_etap1_import.sql` dla narzędzia w Pythonie usunięty 2026-10-02 – baza MS SQL jest obsługiwana przez aplikację
+  PZL-EV, migracje `sql/mssql/`),
 - `--folder` może wskazywać także pojedynczy plik,
 - `--pelne-sprawdzenie` – liczy hash także plików bez zmian w metadanych,
 - `--webdav "<link>"` zamiast `--folder` – import bezpośrednio z SharePoint, bez kopii w `Do_importu`.

@@ -1,0 +1,126 @@
+<UserControl x:Class="PzlEv.Modules.Import.Views.ImportView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:partials="clr-namespace:PzlEv.Shared.Views.Partials">
+    <StackPanel>
+        <partials:PageHeader Eyebrow="Faza globalna G1" Title="Import RABIT"
+                             Subtitle="Importuj: logowanie do SharePoint, lista plików pasujących do definicji, import. Każda nowa wersja raportu trafia do bazy jako wiersze surowe z pochodzeniem; dla źródeł z parserem powstają dane kanoniczne. Błąd jednego pliku nie zatrzymuje pozostałych.">
+            <partials:PageHeader.Actions>
+                <StackPanel Orientation="Horizontal">
+                    <Button Content="Odśwież" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding Refresh}" />
+                    <Button Content="Sprawdź źródła" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding Check}"
+                            ToolTip="Logowanie do SharePoint i lista plików pasujących do definicji z datami – bez importu." />
+                    <Button Content="Anuluj" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding Cancel}" />
+                    <Button Content="Importuj" Style="{StaticResource BtnPrimary}" Command="{Binding Run}"
+                            ToolTip="Logowanie do SharePoint, sprawdzenie źródeł i import – tylko jedna osoba naraz." />
+                </StackPanel>
+            </partials:PageHeader.Actions>
+        </partials:PageHeader>
+
+        <!-- Import trwa u innej osoby (blokada wspólna) -->
+        <Border Background="{StaticResource WarnSoft}" CornerRadius="6" Padding="12,8" Margin="0,0,0,12"
+                Visibility="{Binding IsRunningElsewhere, Converter={StaticResource BoolToVisibility}}">
+            <TextBlock Text="{Binding RunningElsewhere}" Foreground="{StaticResource Warn}" FontWeight="SemiBold" TextWrapping="Wrap" />
+        </Border>
+
+        <!-- Skąd import czyta pliki -->
+        <Border Style="{StaticResource Panel}" Margin="0,0,0,12">
+            <StackPanel>
+                <TextBlock Text="Źródła plików" Style="{StaticResource H2}" FontSize="15" Margin="0,0,0,6" />
+                <ItemsControl ItemsSource="{Binding Locations}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <DockPanel Margin="0,2">
+                                <TextBlock DockPanel.Dock="Left" Width="160" Text="{Binding Name}" FontWeight="Medium" />
+                                <TextBlock Text="{Binding Path}" Style="{StaticResource MonoText}" TextWrapping="Wrap" />
+                            </DockPanel>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <TextBlock Text="{Binding DefinitionsText}" Style="{StaticResource MutedText}" Margin="0,6,0,0" TextWrapping="Wrap" />
+                <TextBlock Text="{Binding ManualFolderText}" Style="{StaticResource MutedText}" Margin="0,2,0,0" TextWrapping="Wrap" />
+                <TextBlock Text="{Binding LogText}" Style="{StaticResource MutedText}" Margin="0,2,0,0" TextWrapping="Wrap" />
+            </StackPanel>
+        </Border>
+
+        <!-- Stan importu: rozpoczęty / nie rozpoczęty / zakończony -->
+        <TextBlock Text="{Binding Summary}" FontWeight="SemiBold" Margin="0,0,0,4" TextWrapping="Wrap" />
+        <TextBlock Text="{Binding Progress}" Style="{StaticResource MonoText}" Margin="0,0,0,8" TextWrapping="Wrap" />
+
+        <!-- Pliki: po sprawdzeniu „zostanie zaimportowany”, w trakcie importu – status na bieżąco -->
+        <Border Style="{StaticResource Panel}" Margin="0,0,0,12"
+                Visibility="{Binding HasFiles, Converter={StaticResource BoolToVisibility}}">
+            <StackPanel>
+                <DockPanel Margin="0,0,0,6">
+                    <CheckBox DockPanel.Dock="Right" Content="Pokaż wszystkie pliki" IsChecked="{Binding ShowAllFiles}" VerticalAlignment="Center" />
+                    <TextBlock Text="Pliki pasujące do definicji" Style="{StaticResource H2}" FontSize="15" />
+                </DockPanel>
+                <ItemsControl ItemsSource="{Binding LocationChecks}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <StackPanel Margin="0,2,0,6">
+                                <DockPanel>
+                                    <TextBlock DockPanel.Dock="Left" Width="160" Text="{Binding Name}" FontWeight="Medium" />
+                                    <TextBlock Text="{Binding Status}" TextWrapping="Wrap" />
+                                </DockPanel>
+                                <TextBlock Margin="160,0,0,0" Style="{StaticResource MonoText}" TextWrapping="Wrap"
+                                           Text="{Binding Path, StringFormat='czytana ścieżka: {0}'}" />
+                            </StackPanel>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <DataGrid Style="{StaticResource DataTable}" ItemsSource="{Binding Files}" IsReadOnly="True" MaxHeight="360" Margin="0,6,0,0">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="Lokalizacja" Binding="{Binding Location}" />
+                        <DataGridTextColumn Header="Plik" Binding="{Binding FileName}" />
+                        <DataGridTextColumn Header="Zmodyfikowano" Binding="{Binding ModifiedLocal, StringFormat=yyyy-MM-dd HH:mm}" />
+                        <DataGridTextColumn Header="Rozmiar [B]" Binding="{Binding Size}" />
+                        <DataGridTextColumn Header="Rozpoznany jako" Binding="{Binding Recognition}" />
+                        <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="*" />
+                    </DataGrid.Columns>
+                </DataGrid>
+            </StackPanel>
+        </Border>
+
+        <Border Style="{StaticResource Panel}" Margin="0,0,0,12"
+                Visibility="{Binding HasIssues, Converter={StaticResource BoolToVisibility}}">
+            <StackPanel>
+                <TextBlock Text="Problemy importu" Style="{StaticResource H2}" FontSize="15" Margin="0,0,0,6" />
+                <ItemsControl ItemsSource="{Binding Issues}" />
+            </StackPanel>
+        </Border>
+
+        <!-- Historia importów (widoczna dla wszystkich) -->
+        <Border Style="{StaticResource Panel}" Margin="0,4,0,0">
+            <StackPanel>
+                <TextBlock Text="Historia importów" Style="{StaticResource H2}" FontSize="15" Margin="0,0,0,6" />
+                <DataGrid Style="{StaticResource DataTable}" ItemsSource="{Binding Batches}" SelectedItem="{Binding SelectedBatch}"
+                          IsReadOnly="True" MaxHeight="220">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="#" Binding="{Binding Id}" />
+                        <DataGridTextColumn Header="Start" Binding="{Binding StartedAt, StringFormat=yyyy-MM-dd HH:mm}" />
+                        <DataGridTextColumn Header="Kto" Binding="{Binding User}" />
+                        <DataGridTextColumn Header="Komputer" Binding="{Binding Machine}" />
+                        <DataGridTextColumn Header="Pliki" Binding="{Binding Files}" />
+                        <DataGridTextColumn Header="Zaimp." Binding="{Binding Imported}" />
+                        <DataGridTextColumn Header="Pomin." Binding="{Binding Skipped}" />
+                        <DataGridTextColumn Header="Dupl." Binding="{Binding Duplicates}" />
+                        <DataGridTextColumn Header="Nierozp." Binding="{Binding Unrecognized}" />
+                        <DataGridTextColumn Header="Błędy" Binding="{Binding Errors}" />
+                        <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="*" />
+                    </DataGrid.Columns>
+                </DataGrid>
+                <TextBlock Text="Pliki wybranego importu" FontWeight="SemiBold" Margin="0,10,0,4" />
+                <DataGrid Style="{StaticResource DataTable}" ItemsSource="{Binding BatchFiles}" IsReadOnly="True" MaxHeight="240">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="Plik" Binding="{Binding FileName}" />
+                        <DataGridTextColumn Header="Decyzja" Binding="{Binding Decision}" />
+                        <DataGridTextColumn Header="Źródło" Binding="{Binding SourceCode}" />
+                        <DataGridTextColumn Header="Wiersze" Binding="{Binding Rows}" />
+                        <DataGridTextColumn Header="Opis" Binding="{Binding Description}" Width="*" />
+                    </DataGrid.Columns>
+                </DataGrid>
+            </StackPanel>
+        </Border>
+    </StackPanel>
+</UserControl>

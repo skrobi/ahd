@@ -21,7 +21,7 @@ Powiązane: `docs/model-danych.md` (dane i wersjonowanie), `docs/pipeline-fazy.m
 
 ## 2. Technologia
 
-Kierunek **wstępny** – do potwierdzenia testem na stanowisku PZL (O6, aplikacja testowa `poc-wpf/`).
+Kierunek **wstępny** – do potwierdzenia testem na stanowisku PZL (O6, aplikacja `app/`).
 
 **Bez SQLite.** Wszystkie słowniki, mapowania, konfiguracja, definicje źródeł, wersje reguł, użytkownicy i role,
 zakresy uprawnień oraz historia zmian są w bazie MS SQL; aplikacja nie ma lokalnej bazy ani bazy plikowej
@@ -124,29 +124,35 @@ z których korzysta każdy moduł; pokazują je Pulpit i ekran Przebiegu.
 ### 5.3 Struktura kodu
 
 Jeden projekt, moduły jako foldery; przestrzeń nazw odpowiada ścieżce folderu (`PzlEv.Modules.Dashboard.ViewModels`
-↔ `Modules/Dashboard/ViewModels/`). Wzorzec pokazuje aplikacja testowa `poc-wpf/src/` – Pulpit jako moduł
-z pełnym ekranem, pozostałe moduły jako ekrany zastępcze z przypisanymi etapami.
+↔ `Modules/Dashboard/ViewModels/`). Wzorzec pokazuje kod `app/src/` – moduły z pełnym ekranem
+(Pulpit, Słowniki, Import, Administracja) i ekrany zastępcze z przypisanymi etapami dla pozostałych.
 
 ```text
-App.xaml(.cs)                      start, logowanie, obsługa wyjątków
+App.xaml(.cs)                      start: konfiguracja → usługi wspólne → moduły → powłoka; logowanie
 Shell/                             okno, menu, nawigacja; ModuleCatalog.cs – lista modułów
 Modules/<Moduł>/
   <Moduł>Module.cs                 plik wejścia: klucz, menu, dokumentacja, etapy, utworzenie ekranu
-  Views/ ViewModels/ Models/       ekran, jego logika prezentacji, modele modułu
-  Data/                            źródło danych modułu: interfejs + dane przykładowe / dostęp do bazy
-  Services/ Stages/                przypadki użycia, parsery, implementacje etapów (IStage)
+  Views/ ViewModels/               ekran i jego logika prezentacji (WPF)
+  Models/                          modele modułu
+  Data/                            magazyn danych modułu: I<Moduł>Store (kontrakt) + Sql<Moduł>Store
+  Services/ Stages/                przypadki użycia, walidacja, parsery, implementacje etapów (IStage)
 Shared/
-  Utils/                           MVVM, konwertery, kontrakt modułu i nawigacji; później dostęp do SQL, Excel, plików
-  Models/                          modele wspólne, klucze modułów, kontrakt etapu (Models/Pipeline)
-  Views/Templates/                 wygląd całej aplikacji: paleta, style, układ strony
-  Views/Partials/                  fragmenty wielokrotnego użytku: pigułka statusu, nagłówek ekranu, ekran zastępczy
+  Utils/Ui/                        MVVM, konwertery, okna wyboru pliku, kontrakt modułu i nawigacji (WPF)
+  Utils/Config/                    konfiguracja pzl-ev.json
+  Utils/Data/                      baza MS SQL (Sql/: połączenie, migracje, dziennik, problemy), czas, użytkownik, blokady operacji, usługi wspólne
+  Utils/Files/                     Excel, CSV/TXT, liczby polskie, daty, sygnatura kolumn, SHA-256
+  Models/                          modele wspólne, klucze modułów, wynik kontroli (Issue), kontrakt etapu (Pipeline)
+  Models/Db/                       wiersze tabel schematu (meta, stg, can, dict) – wspólne jak schemat bazy
+  Models/Sources/                  parsery i układy kolumn źródeł (kontrakt danych)
+  Views/Templates/                 wygląd całej aplikacji: paleta, style, tabele, układ strony
+  Views/Partials/                  fragmenty wielokrotnego użytku: pigułka statusu, wynik kontroli, nagłówek ekranu, ekran zastępczy
 ```
 
 Podfolder modułu powstaje dopiero, gdy ma zawartość. Warstwy z rozdz. 5.1 mieszczą się w tym układzie:
 UI – `Views`, `ViewModels`, `Shared/Views`; Application i Processing – `Services`, `Stages`; Domain – `Models`
 modułu i `Shared/Models`; Excel, File Connectors, SQL Access – `Shared/Utils` (wspólne) albo `Data` (modułu).
 
-**Zależności** – sprawdzane przy każdej budowie (`poc-wpf/ArchitectureRules.targets`, błąd `PZLARCH`):
+**Zależności** – sprawdzane przy każdej budowie (`app/ArchitectureRules.targets`, błąd `PZLARCH`):
 
 - moduł korzysta tylko z `Shared`; nie zna innego modułu ani `Shell`,
 - `Shared` nie zna modułów ani `Shell`,
@@ -155,8 +161,20 @@ modułu i `Shared/Models`; Excel, File Connectors, SQL Access – `Shared/Utils`
   (`INavigator`, `ModuleKeys`) albo kontrakt w `Shared`,
 - silnik EVM zależy wyłącznie od modeli (rozdz. 5.1).
 
+**Warstwa danych.** Aplikacja pracuje wyłącznie na bazie MS SQL środowiska (`pzl-ev.json`, rozdz. 8). Moduł korzysta
+z danych przez swój magazyn `Data/I<Moduł>Store` (kontrakt odpowiadający procedurom i widokom) w implementacji
+`Data/Sql<Moduł>Store`; wiersze tabel – `Shared/Models/Db`. Moduły wymieniają dane przez wspólne tabele, nie przez
+swoje typy. Wersji danych w pamięci nie ma (usunięta 2026-10-02 z aplikacji i z testów); Pulpit także czyta
+wyłącznie z bazy (`Dashboard/Data/SqlDashboardData`).
+
+**Testy** (`app/tests`, xUnit, `net10.0`): projekt kompiluje pliki logiki aplikacji – wszystko poza `Views`,
+`ViewModels`, `Shell`, `Shared/Utils/Ui` i plikami `*Module.cs` – więc logika nie może używać typów WPF i testy
+działają także poza Windows. Testy magazynów i serwisów działają na bazie SQL (`TestDatabase`, atrybut `[SqlFact]`);
+bez zmiennej `PZLEV_TEST_SQL` są pomijane. Dane wzorcowe z oczekiwanymi sumami – `app/testdata`.
+`build.cmd` uruchamia testy przed publikacją.
+
 **Konwencje:** jeden typ w pliku, nazwa pliku = nazwa typu; sufiksy `…Module`, `…View`, `…ViewModel`,
-`I…DataSource`, `…SampleData`; kolory i style wyłącznie z `Shared/Views/Templates`; fragment trafia do
+`I…Store`, `Sql…Store`, `…Service`; kolory i style wyłącznie z `Shared/Views/Templates`; fragment trafia do
 `Shared/Views/Partials`, gdy używa go drugi moduł; log z kontekstem modułu (`Log.ForContext("Module", …)`).
 
 **Kontrakt etapu** (`Shared/Models/Pipeline`): `StageDescriptor` (kod, nazwa, krok, zakres, czy wymaga
@@ -171,24 +189,11 @@ decyzji (P4, P6, Z) albo z wynikiem ERROR.
 2. Klucz w `Shared/Models/ModuleKeys.cs`.
 3. `Modules/<Moduł>/<Moduł>Module.cs` implementujący `IModule`; do czasu implementacji ekran zastępczy
    (`PlaceholderView.Create`).
-4. Ekran: `Views/<Moduł>View.xaml`, `ViewModels/<Moduł>ViewModel.cs`; dane przez `Data/I<Moduł>DataSource`.
+4. Dane: tabele w nowej migracji `sql/mssql/NNN_*.sql` (dane startowe – osobna migracja `NNN_dane_*.sql`), `Data/I<Moduł>Store` + `Data/Sql<Moduł>Store` (wiersze w
+   `Shared/Models/Db`) i testy `[SqlFact]` na bazie testowej;
+   ekran: `Views/<Moduł>View.xaml`, `ViewModels/<Moduł>ViewModel.cs`.
 5. Jedna linia w `Shell/ModuleCatalog.cs`.
-6. Budowa (`build.cmd`) – reguły zależności i przestrzeni nazw muszą przejść.
-
----|---|---|
-| Shell / UI | nawigacja, nagłówek, pulpit | `docs/funkcjonalnosc.md` |
-| Source Management | definicje źródeł | `docs/zrodla-danych.md`, rozdz. 2 |
-| Import | pobranie i załadowanie plików | `docs/pipeline-fazy.md`, G1 |
-| Data Quality | kontrole i problemy (ERROR / WARNING) | `docs/pipeline-fazy.md`, rozdz. 1.3 |
-| Master Data | słowniki globalne i projektu | `docs/slowniki.md` |
-| Mapping | mapowanie CES ↔ P1S | `docs/mapowanie-ces-p1s.md` |
-| Project Run | projekty, przebiegi, etapy, rewizje | `docs/pipeline-fazy.md`, `docs/model-danych.md` |
-| CAM / Progress | zaawansowanie: produkcja, uzupełnienia, pliki CAM | `docs/pipeline-fazy.md`, P5–P7 |
-| Reconciliation | łączenie źródeł | `docs/pipeline-fazy.md`, P3 |
-| EVM Engine | obliczenia EV | `docs/ev-obliczenia.md` |
-| Export | pliki wynikowe, plik dla Cobra | `docs/funkcjonalnosc.md`, rozdz. 4 |
-| Audit | dziennik zdarzeń, historia | `docs/model-danych.md`, rozdz. 3 |
-| Administration | role, konfiguracja | `docs/uprawnienia.md`, `docs/funkcjonalnosc.md` |
+6. Budowa (`build.cmd`) – reguły zależności i przestrzeni nazw oraz testy muszą przejść.
 
 ---
 
@@ -216,6 +221,7 @@ decyzji (P4, P6, Z) albo z wynikiem ERROR.
 ```text
 \\serwer\udział\PZL-EV\                 korzeń środowiska (osobny dla TEST i PROD)
 ├── 00_Global\RABIT\Do_importu\         pliki RABIT pobrane ręcznie (powyżej limitu WebDAV)
+├── 00_Global\RABIT\import.lock         blokada importu (docelowo sp_getapplock – F10.2)
 └── Projekty\<Projekt>\
     ├── Finanse\<RRRR-MM>\              pliki dla finansów (P4)
     ├── CAM\<RRRR-MM>\Wyslane\          pliki dla CAM (P6, przebieg zamykający)
@@ -232,10 +238,17 @@ decyzji (P4, P6, Z) albo z wynikiem ERROR.
 
 ## 8. Środowiska i wdrożenia
 
+- **Konfiguracja środowiska:** plik `pzl-ev.json` obok `PZL-EV.exe` – przełącznik `Env` (`TEST` / `PROD`) i sekcja
+  `Environments.<Env>`: `NetworkRoot` (korzeń folderów środowiska, rozdz. 7) i `Sql` (serwer, baza, schemat,
+  sygnatura tabel – logowanie kontem AD). Plik jest wymagany – wzór z opisem ustawień `app/pzl-ev.json` kopiowany
+  obok exe przy budowie; brak pliku albo pola = komunikat przy starcie (`app/README.md`). TEST: `pzltestdb.intl.lmco.com`, baza `PZLTEST`, schemat `FINOP`, sygnatura `PZLEV_`.
 - **TEST** – developer; osobna baza i osobny korzeń folderów.
 - **PROD** – wdraża administrator (IT).
-- Zmiany bazy jako numerowane, idempotentne skrypty migracyjne w repozytorium (`sql/mssql/`); baza przechowuje
-  wersję schematu i minimalną wymaganą wersję aplikacji.
+- Zmiany bazy jako numerowane, idempotentne skrypty migracyjne w repozytorium (`sql/mssql/NNN_*.sql`, zmienne
+  sqlcmd `$(Schema)` i `$(Prefix)`); baza przechowuje wersję schematu i minimalną wymaganą wersję aplikacji
+  (`META_SchemaVersion`). Skrypty są wbudowane w exe; brakujące wykonuje przycisk Diagnostyka → Migracja (wykonane
+  pomija, `sp_getapplock` chroni przed równoczesnym uruchomieniem) albo pytanie przy starcie. Dane startowe (presety)
+  – osobne migracje `NNN_dane_*.sql` (`002_dane_startowe.sql`); aplikacja nie dopisuje danych z kodu.
 - Paczka wdrożeniowa: skrypty bazy, plik `PZL-EV.exe`, instrukcja dla administratora.
 - **Pakiety (NuGet):** zależności (Dapper, Microsoft.Data.SqlClient, ClosedXML/OpenXML, Serilog) przywracane
   są z firmowego proxy **eFOSS (Nexus)** – `https://nexus.global.lmco.com/repository/nuget-proxy-v3/index.json`,
@@ -244,7 +257,7 @@ decyzji (P4, P6, Z) albo z wynikiem ERROR.
   token dostępu eFOSS (generowany w `efoss.global.lmco.com/accesstoken`, wymaga charge number i CAM).
   Token trzymany poza repozytorium (Windows Credential Manager albo zmienna środowiskowa budowy); nigdy nie
   jest commitowany.
-  Konfiguracja i rozwiązywanie problemów – `poc-wpf/README.md`.
+  Konfiguracja i rozwiązywanie problemów – `app/README.md`.
 
 ---
 
@@ -288,4 +301,4 @@ decyzji (P4, P6, Z) albo z wynikiem ERROR.
 | # | Kwestia |
 |---|---|
 | O5 | Serwer bazy `PZL_EV` – na instancji z `PZLPROD` (odczyt w procedurach między bazami) czy osobny serwer (serwer połączony) |
-| O6 | Forma dystrybucji `PZL-EV.exe`. Test na stanowisku PZL: (1) uruchomienie pliku z dysku lokalnego i z udziału sieciowego, potrzeba podpisu kodu; (2) połączenie z MS SQL TEST kontem Windows; (3) odczyt lokalizacji RABIT przez WebDAV; (4) czas załadowania pliku RABIT ok. 85 MB do bazy. Aplikacja testowa `poc-wpf/` (Pulpit, bez bazy) sprawdza punkt (1) i pakiety z rozdz. 2; punkty (2)–(4) wymagają osobnego testu |
+| O6 | Forma dystrybucji `PZL-EV.exe`. Test na stanowisku PZL: (1) uruchomienie pliku z dysku lokalnego i z udziału sieciowego, potrzeba podpisu kodu; (2) połączenie z MS SQL TEST kontem Windows; (3) odczyt lokalizacji RABIT przez WebDAV; (4) czas załadowania pliku RABIT ok. 85 MB do bazy. Aplikacja `app/` (lista kontrolna testu stosu w `app/README.md`) sprawdza punkt (1) i pakiety z rozdz. 2; punkty (2)–(4) wymagają osobnego testu |
