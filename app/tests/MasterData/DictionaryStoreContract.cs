@@ -2,13 +2,12 @@ using PzlEv.Modules.MasterData.Data;
 using PzlEv.Modules.MasterData.Models;
 using PzlEv.Modules.MasterData.Services;
 using PzlEv.Tests.TestSupport;
-using PzlEv.Tests.InMemory;
 using Xunit;
 
 namespace PzlEv.Tests.MasterData;
 
 /// <summary>
-/// Testy kontraktu magazynu słowników – te same dla wersji w pamięci i wersji SQL (baza testowa – TestStores).
+/// Testy kontraktu magazynu słowników na bazie testowej (TestDatabase).
 /// </summary>
 public sealed class DictionaryStoreContract : IDisposable
 {
@@ -16,11 +15,9 @@ public sealed class DictionaryStoreContract : IDisposable
 
     public void Dispose() => _databases.ForEach(d => d.Dispose());
 
-    private (IDictionaryStore Store, TestClock Clock, TestUser User) Create(string kind)
+    private (IDictionaryStore Store, TestClock Clock, TestUser User) Create()
     {
         var services = new TestServices();
-        if (kind != TestStores.Sql)
-            return (new InMemoryDictionaryStore(services.Database, services.Clock, services.User), services.Clock, services.User);
         var database = new TestDatabase();
         _databases.Add(database);
         return (new SqlDictionaryStore(database.Sql, services.Clock, services.User), services.Clock, services.User);
@@ -31,11 +28,10 @@ public sealed class DictionaryStoreContract : IDisposable
 
     private static RowChange Add(string dept, string rate) => new(RowChangeKind.Added, null, null, $"{dept} | 2026", Rate(dept, rate));
 
-    [Theory]
-    [MemberData(nameof(TestStores.Kinds), MemberType = typeof(TestStores))]
-    public void Added_rows_are_current_with_version_1(string kind)
+    [SqlFact]
+    public void Added_rows_are_current_with_version_1()
     {
-        var (store, _, user) = Create(kind);
+        var (store, _, user) = Create();
         var result = store.Save("department-rates", null, [Add("W30", "100"), Add("W40", "110")]);
 
         Assert.True(result.Success);
@@ -46,11 +42,10 @@ public sealed class DictionaryStoreContract : IDisposable
         Assert.All(rows, r => Assert.Equal(user.Account, r.RecordedBy));
     }
 
-    [Theory]
-    [MemberData(nameof(TestStores.Kinds), MemberType = typeof(TestStores))]
-    public void Update_keeps_history_and_as_of_returns_previous_state(string kind)
+    [SqlFact]
+    public void Update_keeps_history_and_as_of_returns_previous_state()
     {
-        var (store, clock, user) = Create(kind);
+        var (store, clock, user) = Create();
         store.Save("department-rates", null, [Add("W30", "100")]);
         var before = clock.Now;
         var row = Assert.Single(store.Current("department-rates"));
@@ -70,11 +65,10 @@ public sealed class DictionaryStoreContract : IDisposable
         Assert.Equal("120", Assert.Single(store.Current("department-rates")).Values["Labor Rate"]);
     }
 
-    [Theory]
-    [MemberData(nameof(TestStores.Kinds), MemberType = typeof(TestStores))]
-    public void Remove_closes_current_version_without_deleting_history(string kind)
+    [SqlFact]
+    public void Remove_closes_current_version_without_deleting_history()
     {
-        var (store, clock, _) = Create(kind);
+        var (store, clock, _) = Create();
         store.Save("department-rates", null, [Add("W30", "100")]);
         var row = Assert.Single(store.Current("department-rates"));
         clock.Advance(TimeSpan.FromMinutes(5));
@@ -86,11 +80,10 @@ public sealed class DictionaryStoreContract : IDisposable
         Assert.NotNull(version.SupersededAt);
     }
 
-    [Theory]
-    [MemberData(nameof(TestStores.Kinds), MemberType = typeof(TestStores))]
-    public void Stale_version_is_a_conflict_and_nothing_is_saved(string kind)
+    [SqlFact]
+    public void Stale_version_is_a_conflict_and_nothing_is_saved()
     {
-        var (store, clock, _) = Create(kind);
+        var (store, clock, _) = Create();
         store.Save("department-rates", null, [Add("W30", "100"), Add("W40", "110")]);
         var rows = store.Current("department-rates");
         var w30 = rows.Single(r => r.Values["Department"] == "W30");
@@ -110,22 +103,20 @@ public sealed class DictionaryStoreContract : IDisposable
         Assert.Equal("110", store.Current("department-rates").Single(r => r.RowId == w40.RowId).Values["Labor Rate"]);
     }
 
-    [Theory]
-    [MemberData(nameof(TestStores.Kinds), MemberType = typeof(TestStores))]
-    public void Duplicate_key_is_rejected(string kind)
+    [SqlFact]
+    public void Duplicate_key_is_rejected()
     {
-        var (store, _, _) = Create(kind);
+        var (store, _, _) = Create();
         store.Save("department-rates", null, [Add("W30", "100")]);
         var result = store.Save("department-rates", null, [Add("W30", "200")]);
         Assert.False(result.Success);
         Assert.Single(store.Current("department-rates"));
     }
 
-    [Theory]
-    [MemberData(nameof(TestStores.Kinds), MemberType = typeof(TestStores))]
-    public void Dictionaries_and_projects_are_separate(string kind)
+    [SqlFact]
+    public void Dictionaries_and_projects_are_separate()
     {
-        var (store, _, _) = Create(kind);
+        var (store, _, _) = Create();
         store.Save("department-rates", null, [Add("W30", "100")]);
         store.Save("department-rates", "M28", [Add("W30", "100")]);
         Assert.Single(store.Current("department-rates"));
@@ -133,11 +124,10 @@ public sealed class DictionaryStoreContract : IDisposable
         Assert.Empty(store.Current("fx-rates"));
     }
 
-    [Theory]
-    [MemberData(nameof(TestStores.Kinds), MemberType = typeof(TestStores))]
-    public void Seed_of_every_global_dictionary_reads_back_unchanged(string kind)
+    [SqlFact]
+    public void Seed_of_every_global_dictionary_reads_back_unchanged()
     {
-        var (store, _, _) = Create(kind);
+        var (store, _, _) = Create();
 
         MasterDataSeed.EnsureSeeded(store, 2026);
         store.Save(GlobalDictionaries.FxRates, null, [new RowChange(RowChangeKind.Added, null, null, "USD | 2026-10",

@@ -6,14 +6,21 @@
     <!-- Pigułki (Pill) i kropki etapów (StageDot) rysują szablony wspólne z Shared/Views/Partials/Partials.xaml. -->
     <StackPanel>
         <partials:PageHeader Eyebrow="{Binding Eyebrow}" Title="Pulpit"
-                             Subtitle="Fazy globalne (import RABIT, mapowanie CES↔P1S) i stan przebiegów wszystkich projektów.">
+                             Subtitle="Stan z bazy środowiska: import RABIT, źródła, słowniki globalne, projekty i dziennik zdarzeń.">
             <partials:PageHeader.Actions>
                 <StackPanel Orientation="Horizontal">
+                    <Button Content="Odśwież" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding Refresh}" />
                     <Button Content="Import RABIT" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding OpenImport}" />
                     <Button Content="Nowy projekt" Style="{StaticResource BtnPrimary}" Command="{Binding NewProject}" />
                 </StackPanel>
             </partials:PageHeader.Actions>
         </partials:PageHeader>
+
+        <!-- Błąd odczytu z bazy -->
+        <Border Background="{StaticResource CritSoft}" CornerRadius="6" Padding="12,8" Margin="0,0,0,12"
+                Visibility="{Binding HasError, Converter={StaticResource BoolToVisibility}}">
+            <TextBlock Text="{Binding Error}" Foreground="{StaticResource Crit}" FontWeight="SemiBold" TextWrapping="Wrap" />
+        </Border>
 
         <!-- Karty faz globalnych -->
         <ItemsControl ItemsSource="{Binding GlobalCards}" Margin="0,0,0,20">
@@ -43,7 +50,11 @@
             </ItemsControl.ItemTemplate>
         </ItemsControl>
 
-        <!-- Karty projektów -->
+        <!-- Karty projektów (META_Project); przebiegów jeszcze nie ma w bazie -->
+        <Border Style="{StaticResource Panel}" Margin="0,0,0,20"
+                Visibility="{Binding NoProjects, Converter={StaticResource BoolToVisibility}}">
+            <TextBlock Text="Brak projektów w bazie." Style="{StaticResource MutedText}" />
+        </Border>
         <ItemsControl ItemsSource="{Binding ZakresCards}" Margin="0,0,0,20">
             <ItemsControl.ItemsPanel>
                 <ItemsPanelTemplate><UniformGrid Columns="3" /></ItemsPanelTemplate>
@@ -91,8 +102,10 @@
                             <TextBlock Text="{Binding AttentionCount}" FontFamily="{StaticResource FMono}"
                                        Foreground="{StaticResource Muted}" />
                         </Border>
-                        <TextBlock Text="Wymaga uwagi" Style="{StaticResource H2}" />
+                        <TextBlock Text="Wymaga uwagi – ostatni import" Style="{StaticResource H2}" />
                     </DockPanel>
+                    <TextBlock Text="Brak ostrzeżeń i błędów." Style="{StaticResource MutedText}"
+                               Visibility="{Binding NoAttention, Converter={StaticResource BoolToVisibility}}" />
                     <ItemsControl ItemsSource="{Binding Attention}">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
@@ -112,6 +125,8 @@
             <Border Grid.Column="1" Style="{StaticResource Panel}">
                 <StackPanel>
                     <TextBlock Text="Ostatnie zdarzenia" Style="{StaticResource H2}" Margin="0,0,0,10" />
+                    <TextBlock Text="Brak wpisów w dzienniku." Style="{StaticResource MutedText}"
+                               Visibility="{Binding NoEvents, Converter={StaticResource BoolToVisibility}}" />
                     <ItemsControl ItemsSource="{Binding Events}">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>

@@ -150,9 +150,11 @@ wersjonowanego `NuGet.config`. Używaj konfiguracji użytkownika albo zmiennej �
 Wynik: `publish\PZL-EV.exe` (ok. 70–100 MB – zawiera runtime .NET i WPF).
 
 **Testy** (`tests/PzlEv.Tests.csproj`, xUnit): `build.cmd` uruchamia je przed publikacją; ręcznie – `dotnet test tests\PzlEv.Tests.csproj`.
-Testy magazynów (import, administracja, słowniki, migracje) działają też na bazie SQL, gdy zmienna środowiskowa
-`PZLEV_TEST_SQL` zawiera ciąg połączenia (np. `Server=pzltestdb.intl.lmco.com;Database=PZLTEST;Integrated Security=True;Encrypt=True`):
-każdy test zakłada w schemacie `FINOP` tabele z losową sygnaturą (`T…_`) i usuwa je po sobie.
+Testy magazynów i serwisów (import, administracja, słowniki, Pulpit, migracje) działają tylko na bazie SQL – nie ma
+wersji w pamięci. Wymagają zmiennej środowiskowej `PZLEV_TEST_SQL` z ciągiem połączenia (np.
+`Server=pzltestdb.intl.lmco.com;Database=PZLTEST;Integrated Security=True;Encrypt=True`); bez niej są pomijane
+(`build.cmd` wypisuje ostrzeżenie). Każdy test zakłada w schemacie `FINOP` tabele z losową sygnaturą (`T…_`)
+i usuwa je po sobie – nie dotyka tabel aplikacji (`PZLEV_*`).
 Pakiety testowe (xUnit) przy pierwszym pobraniu z eFOSS trafiają do zatwierdzenia – do tego czasu `build.cmd`
 pomija testy z ostrzeżeniem.
 
@@ -162,7 +164,9 @@ pomija testy z ostrzeżeniem.
 2. Na komputerze **bez zainstalowanego .NET** uruchom go ze ścieżki UNC (dwuklik albo
    `\\serwer\udzial\PZL-EV\_test\PZL-EV.exe`).
 3. Sprawdź:
-   - [ ] okno się otwiera, widać Pulpit (karty faz globalnych, 3 projekty, Wymaga uwagi, Ostatnie zdarzenia),
+   - [ ] okno się otwiera, widać Pulpit z danymi z bazy: ostatni import, źródła importu, liczba wierszy słowników
+     globalnych, projekty, ostrzeżenia ostatniego importu i dziennik (na pustej bazie – „Brak importów w bazie”,
+     „Brak projektów w bazie”),
    - [ ] menu **Diagnostyka**: Runtime `.NET 10…`, 4 pakiety z wersjami, „Uruchomiono z” = ścieżka UNC,
    - [ ] konto Windows = Twoje konto AD,
    - [ ] w folderze `.exe` powstał `logs\pzl-ev-*.log` z wpisami startu, listą modułów i – po wejściu

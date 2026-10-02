@@ -7,7 +7,7 @@ using PzlEv.Shared.Utils.Ui.Modularity;
 
 namespace PzlEv.Modules.Dashboard;
 
-/// <summary>Pulpit (F07). Jedyny moduł z pełnym ekranem w PoC – wzorzec dla kolejnych modułów.</summary>
+/// <summary>Pulpit (F07): tylko dane z bazy środowiska (SqlDashboardData).</summary>
 public sealed class DashboardModule : IModule
 {
     public string Key => ModuleKeys.Dashboard;
@@ -16,7 +16,6 @@ public sealed class DashboardModule : IModule
 
     public string Doc => "docs/funkcjonalnosc.md (F07)";
 
-    // Źródło danych wybierane tutaj: dane przykładowe → docelowo implementacja na widokach bazy.
     public FrameworkElement CreateView(ModuleContext context)
-        => new DashboardView { DataContext = new DashboardViewModel(new DashboardSampleData(), context.Navigator) };
+        => new DashboardView { DataContext = new DashboardViewModel(new SqlDashboardData(context.Services), context.Navigator) };
 }

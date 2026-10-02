@@ -28,6 +28,7 @@ dotnet restore tests\PzlEv.Tests.csproj >nul 2>&1
 if errorlevel 1 (
   echo UWAGA: pakiety testow ^(xUnit^) niedostepne w eFOSS - testy pominiete.
 ) else (
+  if not defined PZLEV_TEST_SQL echo UWAGA: brak zmiennej PZLEV_TEST_SQL - testy na bazie SQL pominiete ^(README.md^).
   dotnet test tests\PzlEv.Tests.csproj -c Release --no-restore || (echo Testy nie przeszly - publikacja przerwana. & exit /b 1)
 )
 

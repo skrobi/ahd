@@ -21,4 +21,8 @@ public sealed record ImportBatchRow(
     int Duplicates,
     int Unrecognized,
     int Errors,
-    string Status);
+    string Status)
+{
+    /// <summary>Odwołanie problemów (meta.Problem.Reference) zgłoszonych w danym imporcie.</summary>
+    public static string ProblemReference(long batchId) => $"import:{batchId}";
+}
