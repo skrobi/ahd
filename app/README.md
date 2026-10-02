@@ -44,6 +44,10 @@ wydłużają zapis stanu.
    ta sama treść pod inną nazwą – „duplikat”; plik o nieznanym prefiksie – „nierozpoznany”.
 3. **Administracja** – definicje `ACTUALS_PAF`, `ACTUALS_CES`; lokalizacja RABIT E456659 jest nieaktywna – włącz ją
    na stanowisku z dostępem do SharePoint (WebDAV) i uruchom import.
+4. **Import nie widzi plików** – na ekranie Import **Sprawdź źródła** (nic nie importuje): dla każdej lokalizacji
+   ścieżka zapisana i faktycznie czytana (WebDAV), dostęp albo pełny błąd, liczba plików, podfoldery (import czyta
+   tylko główny folder lokalizacji), a dla każdego pliku – jak zostałby rozpoznany. To samo, wraz z decyzją dla
+   każdego pliku importu i pełną treścią wyjątków, trafia do `logs\pzl-ev-RRRRMMDD.log` obok `.exe`.
 
 ## Test stosu – co aplikacja sprawdza
 
