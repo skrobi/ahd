@@ -6,10 +6,9 @@ cd /d "%~dp0"
 
 dotnet --version || (echo Brak .NET SDK - zainstaluj .NET 10 SDK & exit /b 1)
 
-rem eFOSS (nexus.global.lmco.com) jest osiagalny tylko przez proxy LM. NuGet nie czyta proxy z NuGet.config
-rem w repo - tylko z konfiguracji uzytkownika albo ze zmiennej http_proxy (ustawiana tu, jesli jej brak).
-if not defined HTTP_PROXY set HTTP_PROXY=http://proxy-lmi.global.lmco.com:80
-echo Proxy NuGet: %HTTP_PROXY%
+rem eFOSS: nexus.global.lmco.com BEZ proxy (dokumentacja eFOSS, Quick start pkt 4). Gdyby na stanowisku
+rem bylo ustawione HTTP_PROXY, wylaczamy je dla domen .lmco.com.
+set NO_PROXY=.lmco.com,nexus.global.lmco.com
 
 rem Token eFOSS: lokalny plik eFOSS.local.cmd obok build.cmd (NIE w repozytorium - jest w .gitignore).
 rem Tresc pliku (jedna linia):
@@ -19,7 +18,7 @@ if not defined NuGetPackageSourceCredentials_eFOSS echo UWAGA: brak tokenu eFOSS
 
 dotnet restore src\PzlEv.Test.csproj -r win-x64 || (
   echo.
-  echo Restore nieudany. NU1301 "nazwa jest prawidlowa..." = brak polaczenia z eFOSS ^(VPN / proxy^),
+  echo Restore nieudany. NU1301 = brak polaczenia z eFOSS ^(siec LM / VPN, proxy w konfiguracji NuGet^),
   echo 401 Unauthorized = brak lub niewazny token eFOSS. Patrz README.md, "Pakiety NuGet w srodowisku LM".
   exit /b 1
 )

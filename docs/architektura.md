@@ -239,8 +239,8 @@ decyzji (P4, P6, Z) albo z wynikiem ERROR.
 - Paczka wdrożeniowa: skrypty bazy, plik `PZL-EV.exe`, instrukcja dla administratora.
 - **Pakiety (NuGet):** zależności (Dapper, Microsoft.Data.SqlClient, ClosedXML/OpenXML, Serilog) przywracane
   są z firmowego proxy **eFOSS (Nexus)** – `https://nexus.global.lmco.com/repository/nuget-proxy-v3/index.json`,
-  nie z nuget.org, przez firmowe proxy LM (wymagana sieć LM / VPN). Źródło ustawia wersjonowany
-  `NuGet.config`, proxy – skrypt budowy (NuGet nie czyta proxy z konfiguracji w repo); logowanie: NTID +
+  nie z nuget.org; połączenie bezpośrednie, bez proxy (wymagana sieć LM / VPN). Źródło ustawia wersjonowany
+  `NuGet.config`; logowanie: NTID +
   token dostępu eFOSS (generowany w `efoss.global.lmco.com/accesstoken`, wymaga charge number i CAM).
   Token trzymany poza repozytorium (Windows Credential Manager albo zmienna środowiskowa budowy); nigdy nie
   jest commitowany.
