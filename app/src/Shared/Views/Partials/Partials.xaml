@@ -12,6 +12,9 @@
     <!-- Poziom (ok / warn / crit / …) → pędzel z palety (Templates/Theme.xaml). -->
     <conv:LevelBrushConverter x:Key="LevelBrush" />
 
+    <!-- Widoczność z wartości tak/nie (ViewModel: Has…, Needs…) -->
+    <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
+
     <!-- Pigułka statusu -->
     <DataTemplate DataType="{x:Type models:Pill}">
         <Border Background="{Binding Level, Converter={StaticResource LevelBrush}, ConverterParameter=bg}"
