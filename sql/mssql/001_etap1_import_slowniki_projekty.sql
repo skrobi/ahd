@@ -1,10 +1,10 @@
 /* PZL-EV – migracja 001: tabele etapu 1 (import i parsowanie RABIT, słowniki globalne, projekty, dziennik, problemy).
    Bez metodologii EV – kolejne tabele dochodzą kolejnymi migracjami (002, 003…).
 
-   Nazwy: [$(Schema)].[$(Prefix)<WARSTWA>_<Nazwa>], np. [LOG].[PZLEV_META_ImportBatch] (docs/model-danych.md, rozdz. 2).
-   Zmienne: Schema (np. LOG), Prefix (np. PZLEV_) – z pzl-ev.json (Environments.<Env>.Sql).
+   Nazwy: [$(Schema)].[$(Prefix)<WARSTWA>_<Nazwa>], np. [FINOP].[PZLEV_META_ImportBatch] (docs/model-danych.md, rozdz. 2).
+   Zmienne: Schema (np. FINOP), Prefix (np. PZLEV_) – z pzl-ev.json (Environments.<Env>.Sql).
    Uruchomienie: aplikacja (przy starcie, za zgodą użytkownika) albo
-       sqlcmd -S pzltestdb.intl.lmco.com -d PZLTEST -E -v Schema=LOG Prefix=PZLEV_ -i 001_etap1_import_slowniki_projekty.sql
+       sqlcmd -S pzltestdb.intl.lmco.com -d PZLTEST -E -v Schema=FINOP Prefix=PZLEV_ -i 001_etap1_import_slowniki_projekty.sql
    Skrypt jest idempotentny: tworzy tylko brakujące obiekty i zapisuje wersję schematu 1.
    Czas: DATETIMEOFFSET(7) – pełna precyzja (data modyfikacji pliku porównywana dokładnie); kwoty i ilości: DECIMAL(28,8); DbLogin – konto, którym faktycznie zapisano wiersz. */
 

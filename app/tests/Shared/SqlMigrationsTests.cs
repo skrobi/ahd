@@ -9,13 +9,13 @@ namespace PzlEv.Tests.Shared;
 /// <summary>Migracje schematu (sql/mssql) i nazwy obiektów z konfiguracji.</summary>
 public sealed class SqlMigrationsTests
 {
-    private static readonly SqlDatabase Prod = new(new SqlSettings("pzltestdb.intl.lmco.com", "PZLTEST", "LOG", "PZLEV_"), "0.8.0");
+    private static readonly SqlDatabase Prod = new(new SqlSettings("pzltestdb.intl.lmco.com", "PZLTEST", "FINOP", "PZLEV_"), "0.8.0");
 
     [Fact]
     public void Logical_names_map_to_schema_and_signature()
     {
-        Assert.Equal("[LOG].[PZLEV_META_ImportBatch]", Prod.Table("meta.ImportBatch"));
-        Assert.Equal("[LOG].[PZLEV_DICT_FxRate]", Prod.Table("dict.FxRate"));
+        Assert.Equal("[FINOP].[PZLEV_META_ImportBatch]", Prod.Table("meta.ImportBatch"));
+        Assert.Equal("[FINOP].[PZLEV_DICT_FxRate]", Prod.Table("dict.FxRate"));
         Assert.Contains("Integrated Security=True", Prod.ConnectionString);
         Assert.Contains("Application Name=\"PZL-EV 0.8.0\"", Prod.ConnectionString);
     }
@@ -27,11 +27,11 @@ public sealed class SqlMigrationsTests
         Assert.Equal(1, script.Number);
         Assert.Equal(1, SqlMigrations.Required);
 
-        var batches = SqlMigrations.Batches(script.Text, "LOG", "PZLEV_").ToList();
+        var batches = SqlMigrations.Batches(script.Text, "FINOP", "PZLEV_").ToList();
 
         Assert.True(batches.Count > 5);
         Assert.DoesNotContain(batches, b => b.Contains("$(Schema)") || b.Contains("$(Prefix)"));
-        Assert.Contains(batches, b => b.Contains("CREATE TABLE [LOG].[PZLEV_META_Project]"));
+        Assert.Contains(batches, b => b.Contains("CREATE TABLE [FINOP].[PZLEV_META_Project]"));
     }
 
     [Theory]

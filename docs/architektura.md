@@ -241,7 +241,7 @@ decyzji (P4, P6, Z) albo z wynikiem ERROR.
 - **Konfiguracja środowiska:** plik `pzl-ev.json` obok `PZL-EV.exe` – przełącznik `Env` (`TEST` / `PROD`) i sekcja
   `Environments.<Env>`: `NetworkRoot` (korzeń folderów środowiska, rozdz. 7), `DataMode` (`Sql` albo `InMemory`),
   `Sql` (serwer, baza, schemat, sygnatura tabel – logowanie kontem AD); brak pliku = wartości domyślne
-  (`app/README.md`). TEST: `pzltestdb.intl.lmco.com`, baza `PZLTEST`, schemat `LOG`, sygnatura `PZLEV_`.
+  (`app/README.md`). TEST: `pzltestdb.intl.lmco.com`, baza `PZLTEST`, schemat `FINOP`, sygnatura `PZLEV_`.
 - **TEST** – developer; osobna baza i osobny korzeń folderów.
 - **PROD** – wdraża administrator (IT).
 - Zmiany bazy jako numerowane, idempotentne skrypty migracyjne w repozytorium (`sql/mssql/NNN_*.sql`, zmienne

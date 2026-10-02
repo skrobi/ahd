@@ -8,12 +8,12 @@ namespace PzlEv.Tests.TestSupport;
 /// <summary>
 /// Baza MS SQL do testów magazynów: ciąg połączenia w zmiennej środowiskowej PZLEV_TEST_SQL (np. baza TEST albo
 /// lokalny SQL Server). Każda instancja zakłada tabele migracjami (sql/mssql) z własną, losową sygnaturą w schemacie
-/// LOG i usuwa je po teście – testy nie dotykają tabel aplikacji i mogą działać równolegle.
+/// FINOP i usuwa je po teście – testy nie dotykają tabel aplikacji i mogą działać równolegle.
 /// </summary>
 public sealed class TestDatabase : IDisposable
 {
     public const string Variable = "PZLEV_TEST_SQL";
-    public const string Schema = "LOG";
+    public const string Schema = "FINOP";
 
     public TestDatabase()
     {

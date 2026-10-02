@@ -32,7 +32,7 @@ public sealed class SqlDatabase
 
     public string Describe => Settings.Describe;
 
-    /// <summary>Nazwa obiektu z nazwy logicznej „warstwa.Nazwa”, np. „dict.FxRate” → [LOG].[PZLEV_DICT_FxRate].</summary>
+    /// <summary>Nazwa obiektu z nazwy logicznej „warstwa.Nazwa”, np. „dict.FxRate” → [FINOP].[PZLEV_DICT_FxRate].</summary>
     public string Table(string logical)
     {
         var dot = logical.IndexOf('.');

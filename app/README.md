@@ -22,7 +22,7 @@ Plik `pzl-ev.json` obok `PZL-EV.exe` (opcjonalny – brak pliku = wartości domy
     "TEST": {
       "NetworkRoot": "\\\\serwer\\udzial\\PZL-EV-TEST",
       "DataMode": "Sql",
-      "Sql": { "Server": "pzltestdb.intl.lmco.com", "Database": "PZLTEST", "Schema": "LOG", "TablePrefix": "PZLEV_" }
+      "Sql": { "Server": "pzltestdb.intl.lmco.com", "Database": "PZLTEST", "Schema": "FINOP", "TablePrefix": "PZLEV_" }
     },
     "PROD": { "...": "przy uruchomieniu PROD" }
   }
@@ -35,7 +35,7 @@ Plik `pzl-ev.json` obok `PZL-EV.exe` (opcjonalny – brak pliku = wartości domy
 | `NetworkRoot` | `%LOCALAPPDATA%\PZL-EV\TEST-root` | korzeń folderów środowiska (`docs/architektura.md`, rozdz. 7); import czyta `00_Global\RABIT\Do_importu` |
 | `DataMode` | `InMemory` | `Sql` – baza MS SQL środowiska; `InMemory` – dane w pamięci (tryb zapasowy, lokalny dla stanowiska) |
 | `Sql.Server`, `Sql.Database` | – | serwer i baza; logowanie kontem AD użytkownika (bez hasła w pliku) |
-| `Sql.Schema`, `Sql.TablePrefix` | –, `PZLEV_` | schemat i sygnatura tabel: `[LOG].[PZLEV_META_ImportBatch]` (`docs/model-danych.md`, rozdz. 2); tylko litery, cyfry i `_` |
+| `Sql.Schema`, `Sql.TablePrefix` | –, `PZLEV_` | schemat i sygnatura tabel: `[FINOP].[PZLEV_META_ImportBatch]` (`docs/model-danych.md`, rozdz. 2); tylko litery, cyfry i `_` |
 | `Sql.TrustServerCertificate` | `false` | `true` tylko gdy certyfikat serwera nie jest zaufany na stanowisku |
 | `InMemoryStatePath` | `%LOCALAPPDATA%\PZL-EV\inmemory-state.json` | plik stanu trybu `InMemory` |
 
@@ -44,7 +44,7 @@ Wcześniejszy układ płaski (`Environment`, `NetworkRoot`, `DataMode`, `InMemor
 **Baza danych:** przy starcie aplikacja sprawdza wersję schematu (`META_SchemaVersion`). Gdy brakuje tabel albo
 migracji, pyta o zgodę i wykonuje skrypty `sql/mssql/NNN_*.sql` (wbudowane w exe) – konto AD musi mieć prawo
 tworzenia tabel w schemacie. Te same skrypty można uruchomić ręcznie:
-`sqlcmd -S pzltestdb.intl.lmco.com -d PZLTEST -E -v Schema=LOG Prefix=PZLEV_ -i sql\mssql\001_etap1_import_slowniki_projekty.sql`.
+`sqlcmd -S pzltestdb.intl.lmco.com -d PZLTEST -E -v Schema=FINOP Prefix=PZLEV_ -i sql\mssql\001_etap1_import_slowniki_projekty.sql`.
 Przy pierwszym starcie na pustej bazie moduły zapisują dane startowe (kalendarz, Cost Category, definicje
 `ACTUALS_*`, lokalizacja E456659).
 
@@ -169,7 +169,7 @@ Wynik: `publish\PZL-EV.exe` (ok. 70–100 MB – zawiera runtime .NET i WPF).
 **Testy** (`tests/PzlEv.Tests.csproj`, xUnit): `build.cmd` uruchamia je przed publikacją; ręcznie – `dotnet test tests\PzlEv.Tests.csproj`.
 Testy magazynów (import, administracja, słowniki, migracje) działają też na bazie SQL, gdy zmienna środowiskowa
 `PZLEV_TEST_SQL` zawiera ciąg połączenia (np. `Server=pzltestdb.intl.lmco.com;Database=PZLTEST;Integrated Security=True;Encrypt=True`):
-każdy test zakłada w schemacie `LOG` tabele z losową sygnaturą (`T…_`) i usuwa je po sobie.
+każdy test zakłada w schemacie `FINOP` tabele z losową sygnaturą (`T…_`) i usuwa je po sobie.
 Pakiety testowe (xUnit) przy pierwszym pobraniu z eFOSS trafiają do zatwierdzenia – do tego czasu `build.cmd`
 pomija testy z ostrzeżeniem.
 
