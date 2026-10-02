@@ -7,7 +7,8 @@ namespace PzlEv.Tests.TestSupport;
 
 /// <summary>
 /// Baza MS SQL do testów magazynów: ciąg połączenia w zmiennej środowiskowej PZLEV_TEST_SQL (np. baza TEST albo
-/// lokalny SQL Server). Każda instancja zakłada tabele migracjami (sql/mssql) z własną, losową sygnaturą w schemacie
+/// lokalny SQL Server). Każda instancja zakłada tabele migracjami (sql/mssql; dane startowe NNN_dane_* tylko
+/// z presets: true) z własną, losową sygnaturą w schemacie
 /// FINOP i usuwa je po teście – testy nie dotykają tabel aplikacji i mogą działać równolegle. Zakładanie i usuwanie
 /// tabel (DDL) jest szeregowane w procesie testów – równoległe DDL w jednym schemacie kończyły się zakleszczeniem.
 /// </summary>
@@ -18,12 +19,12 @@ public sealed class TestDatabase : IDisposable
 
     private static readonly object Ddl = new();
 
-    public TestDatabase()
+    public TestDatabase(bool presets = false)
     {
         var connection = ConnectionString ?? throw new InvalidOperationException($"Brak zmiennej {Variable} – testy SQL wyłączone");
         Sql = new SqlDatabase(new SqlSettings("", "", Schema, $"T{Guid.NewGuid():N}"[..9] + "_", ConnectionString: connection), "test");
         lock (Ddl)
-            SqlMigrations.Apply(Sql);
+            SqlMigrations.Apply(Sql, presets);
     }
 
     public static string? ConnectionString => Environment.GetEnvironmentVariable(Variable) is { Length: > 0 } value ? value : null;

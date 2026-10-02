@@ -43,11 +43,7 @@ public partial class App : Application
             var config = AppConfigLoader.Load(AppContext.BaseDirectory);
             Log.Information("Środowisko {Environment}, baza {Database}, korzeń {NetworkRoot}", config.Environment, config.Sql.Describe, config.NetworkRoot);
             _services = AppServices.Create(config, version);
-            if (!EnsureSchema(_services.Sql))
-            {
-                Shutdown(1);
-                return;
-            }
+            OfferMigrations(_services.Sql);
             var modules = ModuleCatalog.Create(_services);
             var window = new ShellWindow { DataContext = new ShellViewModel(modules, _services) };
             window.Show();
@@ -67,26 +63,29 @@ public partial class App : Application
     }
 
     /// <summary>
-    /// Schemat bazy w wersji wymaganej przez aplikację (sql/mssql). Brakujące migracje – za zgodą użytkownika
-    /// (konto AD z prawem tworzenia tabel w schemacie). false – aplikacja nie startuje.
+    /// Brakujące migracje bazy (sql/mssql) – pytanie przy starcie. „Nie” – aplikacja startuje, a migracje można wykonać
+    /// później: Diagnostyka → Migracja (wymaga prawa tworzenia tabel w schemacie).
     /// </summary>
-    private static bool EnsureSchema(SqlDatabase sql)
+    private static void OfferMigrations(SqlDatabase sql)
     {
-        var current = SqlMigrations.CurrentVersion(sql);
-        var required = SqlMigrations.Required;
-        Log.Information("Baza {Database}: wersja schematu {Current}, wymagana {Required}", sql.Describe, current, required);
-        if (current >= required)
-            return true;
+        var pending = SqlMigrations.Pending(sql);
+        Log.Information("Baza {Database}: wersja schematu {Current}, do wykonania {Pending}", sql.Describe, SqlMigrations.CurrentVersion(sql),
+            pending.Count == 0 ? "–" : string.Join(", ", pending.Select(s => s.Name)));
+        if (pending.Count == 0)
+            return;
         var answer = MessageBox.Show(
-            $"Baza {sql.Describe}\nWersja schematu PZL-EV: {current}, wymagana: {required}.\n\n" +
-            "Utworzyć / zaktualizować tabele teraz? (wymaga prawa tworzenia tabel w schemacie)",
-            "PZL-EV – schemat bazy danych", MessageBoxButton.YesNo, MessageBoxImage.Question);
+            $"Baza {sql.Describe}\nMigracje do wykonania:\n{string.Join("\n", pending.Select(s => "  • " + s.Name))}\n\n" +
+            "Wykonać teraz? (wymaga prawa tworzenia tabel w schemacie)\n\n" +
+            "Nie – aplikacja uruchomi się bez nich; migracje wykonasz później: Diagnostyka → Migracja.",
+            "PZL-EV – migracje bazy danych", MessageBoxButton.YesNo, MessageBoxImage.Question);
         if (answer != MessageBoxResult.Yes)
-            return false;
+        {
+            Log.Warning("Migracje odłożone przez użytkownika");
+            return;
+        }
         var applied = SqlMigrations.Apply(sql);
         Log.Information("Wykonane migracje: {Scripts}", string.Join(", ", applied));
-        MessageBox.Show($"Wykonano: {string.Join(", ", applied)}", "PZL-EV – schemat bazy danych", MessageBoxButton.OK, MessageBoxImage.Information);
-        return true;
+        MessageBox.Show($"Wykonano: {string.Join(", ", applied)}", "PZL-EV – migracje bazy danych", MessageBoxButton.OK, MessageBoxImage.Information);
     }
 
     private void OnUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)

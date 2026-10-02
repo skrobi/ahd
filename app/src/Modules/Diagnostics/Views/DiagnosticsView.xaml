@@ -54,5 +54,35 @@
                 </ItemsControl>
             </StackPanel>
         </Border>
+
+        <!-- Migracje bazy: skrypty sql/mssql wbudowane w aplikację; wykonane są pomijane -->
+        <Border Style="{StaticResource Panel}" Margin="0,12,0,0">
+            <StackPanel>
+                <DockPanel Margin="0,0,0,8">
+                    <Button DockPanel.Dock="Right" Content="Migracja" Style="{StaticResource BtnPrimary}" Command="{Binding Migrate}"
+                            ToolTip="Wykonuje skrypty, których nie ma jeszcze w bazie; wykonane pomija" />
+                    <StackPanel>
+                        <TextBlock Text="Migracje bazy" Style="{StaticResource H2}" FontSize="15" />
+                        <TextBlock Text="Tabele i dane startowe (definicje źródeł, lokalizacja RABIT, kalendarz, Cost Category)."
+                                   Style="{StaticResource MutedText}" FontSize="12" TextWrapping="Wrap" />
+                    </StackPanel>
+                </DockPanel>
+                <ItemsControl ItemsSource="{Binding Migrations}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Grid Margin="0,2">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="320" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="{Binding Name}" Style="{StaticResource MonoText}" />
+                                <TextBlock Grid.Column="1" Text="{Binding Status}" Foreground="{StaticResource Muted}" TextWrapping="Wrap" />
+                            </Grid>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <TextBlock Text="{Binding MigrationStatus}" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,8,0,0" />
+            </StackPanel>
+        </Border>
     </StackPanel>
 </UserControl>

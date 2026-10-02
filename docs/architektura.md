@@ -131,10 +131,10 @@ Jeden projekt, moduły jako foldery; przestrzeń nazw odpowiada ścieżce folder
 App.xaml(.cs)                      start: konfiguracja → usługi wspólne → moduły → powłoka; logowanie
 Shell/                             okno, menu, nawigacja; ModuleCatalog.cs – lista modułów
 Modules/<Moduł>/
-  <Moduł>Module.cs                 plik wejścia: klucz, menu, dokumentacja, etapy, dane startowe, utworzenie ekranu
+  <Moduł>Module.cs                 plik wejścia: klucz, menu, dokumentacja, etapy, utworzenie ekranu
   Views/ ViewModels/               ekran i jego logika prezentacji (WPF)
   Models/                          modele modułu
-  Data/                            magazyn danych modułu: I<Moduł>Store (kontrakt) + Sql<Moduł>Store; dane startowe
+  Data/                            magazyn danych modułu: I<Moduł>Store (kontrakt) + Sql<Moduł>Store
   Services/ Stages/                przypadki użycia, walidacja, parsery, implementacje etapów (IStage)
 Shared/
   Utils/Ui/                        MVVM, konwertery, okna wyboru pliku, kontrakt modułu i nawigacji (WPF)
@@ -174,7 +174,7 @@ bez zmiennej `PZLEV_TEST_SQL` są pomijane. Dane wzorcowe z oczekiwanymi sumami 
 `build.cmd` uruchamia testy przed publikacją.
 
 **Konwencje:** jeden typ w pliku, nazwa pliku = nazwa typu; sufiksy `…Module`, `…View`, `…ViewModel`,
-`I…Store`, `Sql…Store`, `…Service`, `…Seed`; kolory i style wyłącznie z `Shared/Views/Templates`; fragment trafia do
+`I…Store`, `Sql…Store`, `…Service`; kolory i style wyłącznie z `Shared/Views/Templates`; fragment trafia do
 `Shared/Views/Partials`, gdy używa go drugi moduł; log z kontekstem modułu (`Log.ForContext("Module", …)`).
 
 **Kontrakt etapu** (`Shared/Models/Pipeline`): `StageDescriptor` (kod, nazwa, krok, zakres, czy wymaga
@@ -189,7 +189,7 @@ decyzji (P4, P6, Z) albo z wynikiem ERROR.
 2. Klucz w `Shared/Models/ModuleKeys.cs`.
 3. `Modules/<Moduł>/<Moduł>Module.cs` implementujący `IModule`; do czasu implementacji ekran zastępczy
    (`PlaceholderView.Create`).
-4. Dane: tabele w nowej migracji `sql/mssql/NNN_*.sql`, `Data/I<Moduł>Store` + `Data/Sql<Moduł>Store` (wiersze w
+4. Dane: tabele w nowej migracji `sql/mssql/NNN_*.sql` (dane startowe – osobna migracja `NNN_dane_*.sql`), `Data/I<Moduł>Store` + `Data/Sql<Moduł>Store` (wiersze w
    `Shared/Models/Db`) i testy `[SqlFact]` na bazie testowej;
    ekran: `Views/<Moduł>View.xaml`, `ViewModels/<Moduł>ViewModel.cs`.
 5. Jedna linia w `Shell/ModuleCatalog.cs`.
@@ -246,7 +246,9 @@ decyzji (P4, P6, Z) albo z wynikiem ERROR.
 - **PROD** – wdraża administrator (IT).
 - Zmiany bazy jako numerowane, idempotentne skrypty migracyjne w repozytorium (`sql/mssql/NNN_*.sql`, zmienne
   sqlcmd `$(Schema)` i `$(Prefix)`); baza przechowuje wersję schematu i minimalną wymaganą wersję aplikacji
-  (`META_SchemaVersion`). Skrypty są wbudowane w exe – aplikacja przy starcie wykonuje brakujące za zgodą użytkownika.
+  (`META_SchemaVersion`). Skrypty są wbudowane w exe; brakujące wykonuje przycisk Diagnostyka → Migracja (wykonane
+  pomija, `sp_getapplock` chroni przed równoczesnym uruchomieniem) albo pytanie przy starcie. Dane startowe (presety)
+  – osobne migracje `NNN_dane_*.sql` (`002_dane_startowe.sql`); aplikacja nie dopisuje danych z kodu.
 - Paczka wdrożeniowa: skrypty bazy, plik `PZL-EV.exe`, instrukcja dla administratora.
 - **Pakiety (NuGet):** zależności (Dapper, Microsoft.Data.SqlClient, ClosedXML/OpenXML, Serilog) przywracane
   są z firmowego proxy **eFOSS (Nexus)** – `https://nexus.global.lmco.com/repository/nuget-proxy-v3/index.json`,

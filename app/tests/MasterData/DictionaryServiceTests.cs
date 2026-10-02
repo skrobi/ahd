@@ -13,16 +13,22 @@ namespace PzlEv.Tests.MasterData;
 public sealed class DictionaryServiceTests : IDisposable
 {
     private readonly TestServices _services = new();
-    private readonly TestDatabase? _database;
-    private readonly IDictionaryStore _store = null!;
-    private readonly IJournal _journal = null!;
-    private readonly DictionaryService _service = null!;
+    private TestDatabase? _database;
+    private IDictionaryStore _store = null!;
+    private IJournal _journal = null!;
+    private DictionaryService _service = null!;
 
     public DictionaryServiceTests()
     {
-        if (TestDatabase.ConnectionString is null)
-            return;   // testy pominięte (SqlFact)
-        _database = new TestDatabase();
+        if (TestDatabase.ConnectionString is not null)   // bez bazy testy są pominięte (SqlFact)
+            Use(presets: false);
+    }
+
+    /// <summary>Baza testowa: same tabele albo tabele z danymi startowymi (migracja 002).</summary>
+    private void Use(bool presets)
+    {
+        _database?.Dispose();
+        _database = new TestDatabase(presets);
         _store = new SqlDictionaryStore(_database.Sql, _services.Clock, _services.User);
         _journal = new SqlJournal(_database.Sql, _services.Clock, _services.User);
         _service = new DictionaryService(_store, _journal);
@@ -87,7 +93,7 @@ public sealed class DictionaryServiceTests : IDisposable
     [SqlFact]
     public void Excel_export_and_import_roundtrip_has_no_differences()
     {
-        MasterDataSeed.EnsureSeeded(_store, 2026);
+        Use(presets: true);
         var path = TempXlsx();
         try
         {
@@ -171,9 +177,9 @@ public sealed class DictionaryServiceTests : IDisposable
     }
 
     [SqlFact]
-    public void Seeded_calendar_is_valid_and_cost_category_matches_appendix_a()
+    public void Preset_calendar_is_valid_and_cost_category_matches_appendix_a()
     {
-        MasterDataSeed.EnsureSeeded(_store, 2026);
+        Use(presets: true);
         var calendarSpec = GlobalDictionaries.Get(GlobalDictionaries.Calendar);
         var calendar = _service.Load(calendarSpec);
 
@@ -185,8 +191,6 @@ public sealed class DictionaryServiceTests : IDisposable
         Assert.Equal(33, costCategory.Count);
         var warning = Assert.Single(DictionaryValidator.Validate(CostCategory, costCategory));
         Assert.Contains("0057100000", warning.Message);
-
-        Assert.Equal(0, MasterDataSeed.EnsureSeeded(_store, 2026)); // drugi raz – bez zmian
     }
 
     private static string TempXlsx() => Path.Combine(Path.GetTempPath(), $"pzl-ev-{Guid.NewGuid():N}.xlsx");

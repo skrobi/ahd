@@ -30,18 +30,6 @@ public sealed class SourceConfigServiceTests : IDisposable
         new(id, version, code, prefix, "test", parser == SourceParsers.Actuals ? SourceParsers.ActualsColumns : ["A", "B"], parser, Active: true);
 
     [SqlFact]
-    public void Seed_creates_actuals_definitions_and_inactive_rabit_location()
-    {
-        Use();
-        Assert.Equal(3, SourceConfigSeed.EnsureSeeded(_service));
-        Assert.Equal(["ACTUALS_CES", "ACTUALS_PAF"], _service.Definitions().Select(d => d.Code));
-        Assert.All(_service.Definitions(), d => Assert.Equal("7c59f446fe9c3d5e", d.Signature));
-        var location = Assert.Single(_service.Locations());
-        Assert.False(location.Active);
-        Assert.Equal(0, SourceConfigSeed.EnsureSeeded(_service));
-    }
-
-    [SqlFact]
     public void Prefix_must_be_unique_ignoring_case()
     {
         Use();
