@@ -43,9 +43,11 @@ public sealed class SqlPresetsTests : IDisposable
         Assert.All(definitions, d =>
         {
             Assert.Equal(d.Code, d.Prefix);
-            Assert.Equal(SourceParsers.ActualsColumns, d.Columns);
-            Assert.Equal(HeaderSignature.Compute(SourceParsers.ActualsColumns), d.Signature);
-            Assert.Equal((SourceParsers.Actuals, SourceConfigService.ActualsParserVersion, true, 1), (d.Parser, d.ParserVersion, d.Active, d.Version));
+            Assert.Equal(ActualsLayout.Columns, d.Columns);
+            Assert.Equal(HeaderSignature.Compute(ActualsLayout.Columns), d.Signature);
+            Assert.Equal((ActualsLayout.Parser, 1, true, 1), (d.Parser, d.ParserVersion, d.Active, d.Version));
+            Assert.Equal(22, d.Mapping.Count);                                                  // migracja 004 – standardowy układ
+            Assert.Equal(["WbsElement", "FiscalYear", "Period"], d.Mapping.Where(m => m.Required).Select(m => m.Field));
         });
         var location = Assert.Single(_sources.Locations());
         Assert.Equal(("RABIT E456659", RabitPath, true), (location.Name, location.Path, location.Active));
@@ -69,7 +71,7 @@ public sealed class SqlPresetsTests : IDisposable
 
         // presety są zwykłymi wierszami – zmiana w Administracji tworzy nową wersję
         var ces = definitions.Single(d => d.Code == "ACTUALS_CES");
-        Assert.True(_sources.SaveDefinition(new DefinitionInput(ces.DefinitionId, ces.Version, ces.Code, ces.Prefix, ces.ReportType, ces.Columns, ces.Parser, Active: false)).Success);
+        Assert.True(_sources.SaveDefinition(new DefinitionInput(ces.DefinitionId, ces.Version, ces.Code, ces.Prefix, ces.ReportType, ces.Columns, ces.Parser, Active: false, ces.Mapping)).Success);
         Assert.Equal(2, _sources.Definitions().Single(d => d.Code == "ACTUALS_CES").Version);
     }
 
@@ -78,7 +80,8 @@ public sealed class SqlPresetsTests : IDisposable
     {
         Use(presets: false);
         Assert.True(_sources.SaveDefinition(new DefinitionInput(null, null, "ACTUALS_PAF", "ACTUALS_PAF", "moja definicja",
-            SourceParsers.ActualsColumns, SourceParsers.Actuals, Active: true)).Success);
+            ActualsLayout.Columns, ActualsLayout.Parser, Active: true,
+            ActualsLayout.Mapping(_sources.Parsers().Single(p => p.Code == ActualsLayout.Parser).Fields))).Success);
         Assert.True(_sources.SaveLocation(new LocationInput(null, null, "RABIT E456659", RabitPath, Active: false)).Success);   // dawne dane startowe aplikacji
         var spec = GlobalDictionaries.Get(GlobalDictionaries.CostCategory);
         var own = new Dictionary<string, string?> { ["Numer elementu kosztowego"] = "0051105550", ["Opis"] = "własny", ["Obszar"] = null, ["Cost Category"] = "Inna" };

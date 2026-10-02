@@ -249,6 +249,9 @@ decyzji (P4, P6, Z) albo z wynikiem ERROR.
   (`META_SchemaVersion`). Skrypty są wbudowane w exe; brakujące wykonuje przycisk Diagnostyka → Migracja (wykonane
   pomija, `sp_getapplock` chroni przed równoczesnym uruchomieniem) albo pytanie przy starcie. Dane startowe (presety)
   – osobne migracje `NNN_dane_*.sql` (`002_dane_startowe.sql`); aplikacja nie dopisuje danych z kodu.
+  Wyjątek od zasady „schemat = migracje”: tabele danych kanonicznych parserów `CAN_<Tabela>` zakłada i rozszerza
+  zapis parsera w Administracji (tylko dodanie tabeli, kolumny albo wydłużenie tekstu; bez usuwania i zmiany typu) –
+  wymaga prawa tworzenia i zmiany tabel; w PROD wykonuje to administrator.
 - Paczka wdrożeniowa: skrypty bazy, plik `PZL-EV.exe`, instrukcja dla administratora.
 - **Pakiety (NuGet):** zależności (Dapper, Microsoft.Data.SqlClient, ClosedXML/OpenXML, Serilog) przywracane
   są z firmowego proxy **eFOSS (Nexus)** – `https://nexus.global.lmco.com/repository/nuget-proxy-v3/index.json`,

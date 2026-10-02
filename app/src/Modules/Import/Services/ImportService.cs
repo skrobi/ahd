@@ -270,8 +270,18 @@ public sealed class ImportService(IImportStore store, AppServices services)
         var data = TabularFileReader.Read(content, file.Name);
         var signature = HeaderSignature.Compute(data.Headers);
         ParseResult? parsed = null;
-        if (definition.Parser == SourceParsers.Actuals)
+        ParserRow? parser = null;
+        if (definition.Parser != SourceParsers.None)
         {
+            parser = store.ActiveParser(definition.Parser);
+            var notReady = parser is null
+                ? $"parser {definition.Parser} definicji {definition.Code} nie istnieje albo jest nieaktywny"
+                : definition.Mapping.Count == 0 ? $"definicja {definition.Code} nie ma mapowania kolumn na pola parsera {parser.Code}" : null;
+            if (notReady is not null)
+            {
+                problem("parser i mapowanie", Issue.Error($"{file.Name}: {notReady} – plik nie zapisany w bazie; uzupełnij w Administracji i zaimportuj ponownie", location.Name));
+                return (FileDecisions.Error, $"{notReady} – nie zapisany", sha, data.Rows.Count);
+            }
             if (signature != definition.Signature)
             {
                 var layout = $"układ kolumn niezgodny z definicją {definition.Code} (sygnatura pliku {signature}, oczekiwana {definition.Signature})";
@@ -280,7 +290,7 @@ public sealed class ImportService(IImportStore store, AppServices services)
                     location.Name));
                 return (FileDecisions.Error, $"{layout} – nie zapisany", sha, data.Rows.Count);
             }
-            parsed = ActualsParser.Parse(0, data.Headers, data.Rows);
+            parsed = MappedParser.Parse(parser!, definition.Mapping, data.Headers, data.Rows);
             if (parsed.ErrorCount > 0)
             {
                 foreach (var issue in parsed.Issues)
@@ -297,48 +307,56 @@ public sealed class ImportService(IImportStore store, AppServices services)
         if (fileId is null)
             return (FileDecisions.Duplicate, DuplicateText(store.FindByHash(sha)!), sha, null);
 
-        var canonical = CreateCanonical(fileId.Value, file.Name, location.Name, data, parsed, problem);
+        var canonical = CreateCanonical(fileId.Value, file.Name, location.Name, data, parser, definition.Mapping, parsed, problem);
         var rowsText = data.Rows.Count.ToString("#,0", CultureInfo.GetCultureInfo("pl-PL"));
         return (FileDecisions.Imported, $"{definition.Code}, {rowsText} wierszy; {canonical}", sha, data.Rows.Count);
     }
 
-    /// <summary>Dane kanoniczne (wiersze sprawdzone przed zapisem pliku); zwraca opis wyniku do decyzji pliku.</summary>
-    private string CreateCanonical(long fileId, string fileName, string locationName, TabularData data, ParseResult? parsed, Action<string, Issue> problem)
+    /// <summary>Dane kanoniczne (wiersze sprawdzone przed zapisem pliku) w tabeli parsera; zwraca opis wyniku do decyzji pliku.</summary>
+    private string CreateCanonical(long fileId, string fileName, string locationName, TabularData data, ParserRow? parser,
+        IReadOnlyList<ColumnMapping> mapping, ParseResult? parsed, Action<string, Issue> problem)
     {
-        if (parsed is null)
+        if (parser is null || parsed is null)
         {
-            store.CompleteCanonical(fileId, "brak – źródło bez parsera (tylko wiersze surowe)", [], null);
+            store.CompleteCanonical(fileId, "brak – źródło bez parsera (tylko wiersze surowe)", null, null);
             return "tylko wiersze surowe (źródło bez parsera)";
         }
-        var rows = parsed.Rows.Select(r => r with { FileId = fileId }).ToList();
-        store.CompleteCanonical(fileId, "utworzone", rows, ActualsParser.Version);
-        return VerifyFlow(fileName, locationName, data, rows, problem);
+        store.CompleteCanonical(fileId, "utworzone", new CanonicalData(parser, parsed.Fields, parsed.Rows), parser.Version);
+        return VerifyFlow(fileName, locationName, data, mapping, parsed, parser, problem);
     }
 
     /// <summary>
-    /// Kontrola przepływu: liczba wierszy i sumy kwot danych kanonicznych zgodne z wierszami surowymi
-    /// (sumy z wierszy surowych liczone niezależnie od parsera).
+    /// Kontrola przepływu: liczba wierszy i sumy pól liczbowych (kwoty) danych kanonicznych zgodne z wierszami surowymi
+    /// (sumy z wierszy surowych liczone niezależnie od parsera, z kolumn pliku według mapowania).
     /// </summary>
-    private static string VerifyFlow(string fileName, string locationName, TabularData raw, IReadOnlyList<ActualsRow> canonical, Action<string, Issue> problem)
+    private static string VerifyFlow(string fileName, string locationName, TabularData raw, IReadOnlyList<ColumnMapping> mapping, ParseResult parsed,
+        ParserRow parser, Action<string, Issue> problem)
     {
-        decimal RawSum(string column)
+        var sums = new List<(string Column, decimal Raw, decimal Canonical)>();
+        for (var i = 0; i < parsed.Fields.Count; i++)
         {
+            var field = parsed.Fields[i];
+            if (field.Type != FieldTypes.Decimal)
+                continue;
+            var column = mapping.First(m => string.Equals(m.Field, field.Field, StringComparison.OrdinalIgnoreCase)).Column;
             var index = raw.Headers.ToList().FindIndex(h => string.Equals(h.Trim(), column, StringComparison.OrdinalIgnoreCase));
-            return raw.Rows.Sum(r => index < r.Length && PolishNumber.TryParse(r[index], out var v) ? v : 0m);
+            var rawSum = raw.Rows.Sum(r => index < r.Length && PolishNumber.TryParse(r[index], out var v) ? v : 0m);
+            var position = i;
+            var canonicalSum = parsed.Rows.Sum(r => r.Values[position] as decimal? ?? 0m);
+            sums.Add((column, rawSum, canonicalSum));
         }
 
-        var rawObj = RawSum("Value in Obj. Crcy");
-        var rawRep = RawSum("Val.in rep.cur.");
-        var canObj = canonical.Sum(r => r.ValueObjCrcy ?? 0m);
-        var canRep = canonical.Sum(r => r.ValueRepCur ?? 0m);
-        if (raw.Rows.Count != canonical.Count || rawObj != canObj || rawRep != canRep)
+        var differences = sums.Where(s => s.Raw != s.Canonical).ToList();
+        if (raw.Rows.Count != parsed.Rows.Count || differences.Count > 0)
         {
             problem("kontrola przepływu", Issue.Error(
-                $"{fileName}: dane kanoniczne niezgodne z surowymi (wiersze {raw.Rows.Count}/{canonical.Count}, suma PLN {rawObj}/{canObj}, suma USD {rawRep}/{canRep})",
+                $"{fileName}: dane kanoniczne niezgodne z surowymi (wiersze {raw.Rows.Count}/{parsed.Rows.Count}" +
+                string.Concat(differences.Select(d => $", suma {d.Column} {d.Raw}/{d.Canonical}")) + ")",
                 locationName));
             return "BŁĄD kontroli przepływu – patrz problemy";
         }
-        return $"dane kanoniczne: {canonical.Count} wierszy, suma Value in Obj. Crcy {PolishNumber.ToDisplay(canObj)}, suma Val.in rep.cur. {PolishNumber.ToDisplay(canRep)}";
+        return $"dane kanoniczne ({parser.Code}): {parsed.Rows.Count} wierszy" +
+               string.Concat(sums.Select(s => $", suma {s.Column} {PolishNumber.ToDisplay(s.Canonical)}"));
     }
 
     private static string DuplicateText(SourceFileRow existing) =>

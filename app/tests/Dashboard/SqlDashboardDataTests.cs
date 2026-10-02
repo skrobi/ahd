@@ -44,7 +44,7 @@ public sealed class SqlDashboardDataTests : IDisposable
         Assert.All(cards[2].Pills, p => Assert.EndsWith(": 0", p.Text));
         Assert.Empty(_data.ZakresCards());
         Assert.Empty(_data.Attention());
-        Assert.Empty(_data.Events());
+        Assert.All(_data.Events(), e => Assert.StartsWith("Migracja", e.Message));   // tylko wpisy migracji (np. parser ACTUALS z 004)
     }
 
     [SqlFact]

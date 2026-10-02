@@ -1,13 +1,14 @@
 using Dapper;
 using Microsoft.Data.SqlClient;
+using PzlEv.Modules.Import.Models;
 using PzlEv.Shared.Models.Db;
 using PzlEv.Shared.Utils.Data.Sql;
 
 namespace PzlEv.Modules.Import.Data;
 
 /// <summary>
-/// Import w bazie: META_ImportBatch, META_SourceFile, META_SourceFileSeen, STG_RawRow, CAN_Actuals – ten sam kontrakt
-/// co wersja w pamięci. Wiersze surowe i kanoniczne zapisywane wsadowo (SqlBulkCopy) w transakcji z wersją pliku.
+/// Import w bazie: META_ImportBatch, META_SourceFile, META_SourceFileSeen, STG_RawRow i tabele parserów (CAN_*).
+/// Wiersze surowe i kanoniczne zapisywane wsadowo (SqlBulkCopy) w transakcji.
 /// </summary>
 public sealed class SqlImportStore(SqlDatabase db) : IImportStore
 {
@@ -17,7 +18,7 @@ public sealed class SqlImportStore(SqlDatabase db) : IImportStore
     private readonly string _files = db.Table(DbTables.SourceFile);
     private readonly string _seen = db.Table(DbTables.SourceFileSeen);
     private readonly string _raw = db.Table(DbTables.RawRow);
-    private readonly string _actuals = db.Table(DbTables.Actuals);
+    private readonly string _parsers = db.Table(DbTables.Parser);
 
     private const string BatchColumns = "BatchId AS Id, StartedAt, FinishedAt, UserName AS [User], Machine, AppVersion, Files, Imported, Skipped, Duplicates, Unrecognized, Errors, Status";
 
@@ -29,22 +30,18 @@ public sealed class SqlImportStore(SqlDatabase db) : IImportStore
 
     private static readonly (string Name, Type Type)[] RawColumns = [("FileId", typeof(long)), ("RowNumber", typeof(int)), ("Data", typeof(string))];
 
-    private static readonly (string Name, Type Type)[] ActualsColumns =
-    [
-        ("FileId", typeof(long)), ("RowNumber", typeof(int)), ("ParserVersion", typeof(int)), ("ProjectDefinition", typeof(string)),
-        ("WbsElement", typeof(string)), ("CostElement", typeof(string)), ("CostElementDescr", typeof(string)), ("CostElementName", typeof(string)),
-        ("CoObjectName", typeof(string)), ("TransactionCurrency", typeof(string)), ("ValueTranCurr", typeof(decimal)), ("ObjectCurrency", typeof(string)),
-        ("ValueObjCrcy", typeof(decimal)), ("ReportCurrency", typeof(string)), ("ValueRepCur", typeof(decimal)), ("TotalQuantity", typeof(decimal)),
-        ("PartnerCctr", typeof(string)), ("SourceObjectName", typeof(string)), ("PartnerObjectClass", typeof(string)), ("PartnerObject", typeof(string)),
-        ("OriginalMaterial", typeof(string)), ("OriginalMaterialDescription", typeof(string)), ("FiscalYear", typeof(int)), ("CreatedOn", typeof(DateTime)),
-        ("Period", typeof(int)),
-    ];
-
     public IReadOnlyList<SourceDefinitionRow> ActiveDefinitions()
     {
         using var connection = db.Open();
         return connection.Query<SqlDefinitionRow>($"SELECT {SqlDefinitionRow.Columns} FROM {_definitions} WHERE SupersededAt IS NULL AND Active = 1 ORDER BY Code")
             .Select(r => r.ToRow()).ToList();
+    }
+
+    public ParserRow? ActiveParser(string code)
+    {
+        using var connection = db.Open();
+        return connection.QuerySingleOrDefault<SqlParserRow>(
+            $"SELECT {SqlParserRow.Columns} FROM {_parsers} WHERE SupersededAt IS NULL AND Active = 1 AND Code = @code", new { code })?.ToRow();
     }
 
     public IReadOnlyList<SourceLocationRow> ActiveLocations()
@@ -119,19 +116,15 @@ public sealed class SqlImportStore(SqlDatabase db) : IImportStore
         }
     }
 
-    public void CompleteCanonical(long fileId, string status, IReadOnlyList<ActualsRow> rows, int? parserVersion) =>
+    public void CompleteCanonical(long fileId, string status, CanonicalData? data, int? parserVersion) =>
         db.InTransaction((connection, transaction) =>
         {
-            SqlBulk.Insert(connection, transaction, _actuals, ActualsColumns, rows.Select(r => new object?[]
-            {
-                r.FileId, r.RowNumber, r.ParserVersion, r.ProjectDefinition, r.WbsElement, r.CostElement, r.CostElementDescr, r.CostElementName,
-                r.CoObjectName, r.TransactionCurrency, r.ValueTranCurr, r.ObjectCurrency, r.ValueObjCrcy, r.ReportCurrency, r.ValueRepCur,
-                r.TotalQuantity, r.PartnerCctr, r.SourceObjectName, r.PartnerObjectClass, r.PartnerObject, r.OriginalMaterial,
-                r.OriginalMaterialDescription, r.FiscalYear, r.CreatedOn?.ToDateTime(TimeOnly.MinValue), r.Period,
-            }));
+            if (data is not null)
+                SqlBulk.Insert(connection, transaction, db.Table(data.Parser.LogicalTable), SqlCanonical.BulkColumns(data.Fields),
+                    data.Rows.Select(r => (object?[])[fileId, r.RowNumber, data.Parser.Version, .. r.Values]));
             return connection.Execute(
                 $"UPDATE {_files} SET CanonicalStatus = @status, CanonicalRows = @count, ParserVersion = @parserVersion WHERE FileId = @fileId",
-                new { status, count = rows.Count, parserVersion, fileId }, transaction);
+                new { status, count = data?.Rows.Count ?? 0, parserVersion, fileId }, transaction);
         });
 
     public void RecordSeen(SourceFileSeenRow seen)
@@ -183,13 +176,8 @@ public sealed class SqlImportStore(SqlDatabase db) : IImportStore
             .ToList();
     }
 
-    public IReadOnlyList<ActualsRow> Actuals(long fileId)
-    {
-        using var connection = db.Open();
-        return connection.Query<ActualsDbRow>($"SELECT * FROM {_actuals} WHERE FileId = @fileId ORDER BY RowNumber, ParserVersion", new { fileId })
-            .Select(r => r.ToRow())
-            .ToList();
-    }
+    public IReadOnlyList<IReadOnlyDictionary<string, object?>> CanonicalRows(ParserRow parser, long fileId) =>
+        SqlCanonical.Rows(db, parser.LogicalTable, fileId);
 
     private sealed class BatchRow
     {
@@ -253,43 +241,5 @@ public sealed class SqlImportStore(SqlDatabase db) : IImportStore
         public string Description { get; set; } = "";
 
         public SourceFileSeenRow ToRow() => new(Id, BatchId, Location, FileName, Size, ModifiedAt, Sha256, Decision, SourceCode, DataRows, Description);
-    }
-
-    private sealed class ActualsDbRow
-    {
-        public long FileId { get; set; }
-        public int RowNumber { get; set; }
-        public int ParserVersion { get; set; }
-        public string? ProjectDefinition { get; set; }
-        public string WbsElement { get; set; } = "";
-        public string? CostElement { get; set; }
-        public string? CostElementDescr { get; set; }
-        public string? CostElementName { get; set; }
-        public string? CoObjectName { get; set; }
-        public string? TransactionCurrency { get; set; }
-        public decimal? ValueTranCurr { get; set; }
-        public string? ObjectCurrency { get; set; }
-        public decimal? ValueObjCrcy { get; set; }
-        public string? ReportCurrency { get; set; }
-        public decimal? ValueRepCur { get; set; }
-        public decimal? TotalQuantity { get; set; }
-        public string? PartnerCctr { get; set; }
-        public string? SourceObjectName { get; set; }
-        public string? PartnerObjectClass { get; set; }
-        public string? PartnerObject { get; set; }
-        public string? OriginalMaterial { get; set; }
-        public string? OriginalMaterialDescription { get; set; }
-        public int FiscalYear { get; set; }
-        public DateTime? CreatedOn { get; set; }
-        public int Period { get; set; }
-
-        public ActualsRow ToRow() =>
-            new(FileId, RowNumber, ParserVersion, ProjectDefinition, WbsElement, CostElement, CostElementDescr, CostElementName, CoObjectName,
-                TransactionCurrency, Norm(ValueTranCurr), ObjectCurrency, Norm(ValueObjCrcy), ReportCurrency, Norm(ValueRepCur), Norm(TotalQuantity),
-                PartnerCctr, SourceObjectName, PartnerObjectClass, PartnerObject, OriginalMaterial, OriginalMaterialDescription, FiscalYear,
-                CreatedOn is { } d ? DateOnly.FromDateTime(d) : null, Period);
-
-        /// <summary>DECIMAL(28,8) zwraca zera końcowe (10.50000000) – ta sama wartość co przy zapisie.</summary>
-        private static decimal? Norm(decimal? value) => value / 1.000000000000000000000000000000000m;
     }
 }
