@@ -251,6 +251,11 @@ public sealed class ImportService(IImportStore store, AppServices services)
         return new FileResult(location.Name, file.Name, decision, sourceCode, rows, description);
     }
 
+    /// <summary>
+    /// Treść pliku. Źródło z parserem przechodzi walidację przed zapisem (sygnatura kolumn zgodna z definicją, wartości
+    /// zgodne z typami) – plik, który jej nie przejdzie, nie trafia do bazy (decyzja „błąd”, problem w rejestrze);
+    /// przy kolejnym imporcie jest pobierany ponownie, więc po poprawie definicji wystarczy zaimportować jeszcze raz.
+    /// </summary>
     private (string Decision, string Description, string? Sha, int? Rows) ImportContent(
         long batchId, ImportLocation location, FileInfo file, DateTimeOffset modified, SourceDefinitionRow definition, Action<string, Issue> problem)
     {
@@ -264,6 +269,26 @@ public sealed class ImportService(IImportStore store, AppServices services)
 
         var data = TabularFileReader.Read(content, file.Name);
         var signature = HeaderSignature.Compute(data.Headers);
+        ParseResult? parsed = null;
+        if (definition.Parser == SourceParsers.Actuals)
+        {
+            if (signature != definition.Signature)
+            {
+                var layout = $"układ kolumn niezgodny z definicją {definition.Code} (sygnatura pliku {signature}, oczekiwana {definition.Signature})";
+                problem("sygnatura kolumn", Issue.Error(
+                    $"{file.Name}: {layout} – plik nie zapisany w bazie; popraw „Oczekiwane kolumny” w Administracji i zaimportuj ponownie",
+                    location.Name));
+                return (FileDecisions.Error, $"{layout} – nie zapisany", sha, data.Rows.Count);
+            }
+            parsed = ActualsParser.Parse(0, data.Headers, data.Rows);
+            if (parsed.ErrorCount > 0)
+            {
+                foreach (var issue in parsed.Issues)
+                    problem("wartość niezgodna z typem", issue with { Element = $"{file.Name}, {issue.Element}" });
+                return (FileDecisions.Error, $"{parsed.ErrorCount} błędów wartości – nie zapisany", sha, data.Rows.Count);
+            }
+        }
+
         var now = services.Clock.Now;
         var fileId = store.RegisterFile(new SourceFileRow(
             0, sha, location.Path, file.Name, definition.Code, file.Length, modified, data.FileType, data.Sheet, data.Encoding,
@@ -272,40 +297,22 @@ public sealed class ImportService(IImportStore store, AppServices services)
         if (fileId is null)
             return (FileDecisions.Duplicate, DuplicateText(store.FindByHash(sha)!), sha, null);
 
-        var canonical = CreateCanonical(fileId.Value, file.Name, location.Name, definition, data, signature, problem);
+        var canonical = CreateCanonical(fileId.Value, file.Name, location.Name, data, parsed, problem);
         var rowsText = data.Rows.Count.ToString("#,0", CultureInfo.GetCultureInfo("pl-PL"));
         return (FileDecisions.Imported, $"{definition.Code}, {rowsText} wierszy; {canonical}", sha, data.Rows.Count);
     }
 
-    /// <summary>Dane kanoniczne według parsera definicji; zwraca opis wyniku do decyzji pliku.</summary>
-    private string CreateCanonical(long fileId, string fileName, string locationName, SourceDefinitionRow definition, TabularData data,
-        string signature, Action<string, Issue> problem)
+    /// <summary>Dane kanoniczne (wiersze sprawdzone przed zapisem pliku); zwraca opis wyniku do decyzji pliku.</summary>
+    private string CreateCanonical(long fileId, string fileName, string locationName, TabularData data, ParseResult? parsed, Action<string, Issue> problem)
     {
-        if (definition.Parser != SourceParsers.Actuals)
+        if (parsed is null)
         {
             store.CompleteCanonical(fileId, "brak – źródło bez parsera (tylko wiersze surowe)", [], null);
             return "tylko wiersze surowe (źródło bez parsera)";
         }
-        if (signature != definition.Signature)
-        {
-            store.CompleteCanonical(fileId, "brak – sygnatura kolumn niezgodna z definicją", [], null);
-            problem("sygnatura kolumn", Issue.Error(
-                $"{fileName}: układ kolumn niezgodny z definicją {definition.Code} (sygnatura {signature}, oczekiwana {definition.Signature}) – dane kanoniczne nie powstały do czasu aktualizacji definicji",
-                locationName));
-            return "BRAK danych kanonicznych – zmieniony układ kolumn";
-        }
-
-        var parsed = ActualsParser.Parse(fileId, data.Headers, data.Rows);
-        if (parsed.ErrorCount > 0)
-        {
-            store.CompleteCanonical(fileId, $"brak – {parsed.ErrorCount} błędów wartości", [], null);
-            foreach (var issue in parsed.Issues)
-                problem("wartość niezgodna z typem", issue with { Element = $"{fileName}, {issue.Element}" });
-            return $"BRAK danych kanonicznych – {parsed.ErrorCount} błędów wartości";
-        }
-
-        store.CompleteCanonical(fileId, "utworzone", parsed.Rows, ActualsParser.Version);
-        return VerifyFlow(fileName, locationName, data, parsed.Rows, problem);
+        var rows = parsed.Rows.Select(r => r with { FileId = fileId }).ToList();
+        store.CompleteCanonical(fileId, "utworzone", rows, ActualsParser.Version);
+        return VerifyFlow(fileName, locationName, data, rows, problem);
     }
 
     /// <summary>

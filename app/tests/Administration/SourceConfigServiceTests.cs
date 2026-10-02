@@ -4,6 +4,7 @@ using PzlEv.Modules.Administration.Services;
 using PzlEv.Shared.Models.Sources;
 using PzlEv.Shared.Utils.Data;
 using PzlEv.Shared.Utils.Data.Sql;
+using PzlEv.Shared.Utils.Files;
 using PzlEv.Tests.TestSupport;
 using Xunit;
 
@@ -28,6 +29,35 @@ public sealed class SourceConfigServiceTests : IDisposable
 
     private static DefinitionInput Definition(string code, string prefix, long? id = null, int? version = null, string parser = SourceParsers.Actuals) =>
         new(id, version, code, prefix, "test", parser == SourceParsers.Actuals ? SourceParsers.ActualsColumns : ["A", "B"], parser, Active: true);
+
+    [Fact]
+    public void Columns_are_one_per_line_or_header_row_pasted_from_excel()
+    {
+        var pasted = string.Join("\t", SourceParsers.ActualsColumns) + "\r\n";   // wiersz nagłówków skopiowany z Excela
+
+        Assert.Equal(SourceParsers.ActualsColumns, SourceConfigService.ParseColumns(pasted));
+        Assert.Equal(SourceParsers.ActualsColumns, SourceConfigService.ParseColumns(string.Join("\r\n", SourceParsers.ActualsColumns.Select(c => $"  {c} ")) + "\r\n\r\n"));
+        Assert.Equal("7c59f446fe9c3d5e", SourceConfigService.Signature(SourceConfigService.ParseColumns(pasted)));
+        Assert.Equal("", SourceConfigService.Signature([]));
+    }
+
+    [SqlFact]
+    public void Changed_columns_are_saved_as_new_version_with_new_signature()
+    {
+        Use();
+        Assert.True(_service.SaveDefinition(Definition("ACTUALS_PAF", "ACTUALS_PAF")).Success);
+        var saved = Assert.Single(_service.Definitions());
+        var pasted = "Dodatkowa\t" + string.Join("\t", SourceParsers.ActualsColumns);
+
+        Assert.True(_service.SaveDefinition(new DefinitionInput(saved.DefinitionId, saved.Version, saved.Code, saved.Prefix, saved.ReportType,
+            [pasted], saved.Parser, saved.Active)).Success);
+
+        var changed = Assert.Single(_service.Definitions());
+        Assert.Equal(2, changed.Version);
+        Assert.Equal(["Dodatkowa", .. SourceParsers.ActualsColumns], changed.Columns);
+        Assert.Equal(HeaderSignature.Compute(["Dodatkowa", .. SourceParsers.ActualsColumns]), changed.Signature);
+        Assert.NotEqual(saved.Signature, changed.Signature);
+    }
 
     [SqlFact]
     public void Prefix_must_be_unique_ignoring_case()

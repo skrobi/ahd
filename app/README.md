@@ -28,15 +28,17 @@ zmieni). Brak pliku albo błąd w nim = komunikat przy starcie z nazwą pola –
 **Baza danych – migracje:** skrypty `sql/mssql/NNN_*.sql` są wbudowane w exe:
 - `001_etap1_import_slowniki_projekty.sql` – tabele etapu 1;
 - `002_dane_startowe.sql` – presety: definicje źródeł `ACTUALS_PAF` i `ACTUALS_CES`, aktywna lokalizacja RABIT
-  E456659, kalendarz okresów 2026–2027, Cost Category (załącznik A).
+  E456659, kalendarz okresów 2026–2027, Cost Category (załącznik A);
+- `003_usuniecie_plikow_niezgodnych.sql` – usuwa pliki zapisane do wersji 0.11 mimo niezgodności z definicją
+  (układ kolumn, typy wartości) wraz z wierszami surowymi; kolejny import pobierze je ponownie.
 
 Migracje wykonuje przycisk **Diagnostyka → Migracja** – uruchamia po kolei skrypty, których numeru nie ma
 w `META_SchemaVersion`, a wykonane pomija. Lista na tym ekranie pokazuje, które skrypty są wykonane (kiedy, kto)
 i które czekają. Przy starcie aplikacja pyta o brakujące migracje: **Tak** – wykonuje je od razu, **Nie** – startuje
 bez nich. Konto AD musi mieć prawo tworzenia tabel w schemacie. Dwie osoby uruchamiające migrację jednocześnie nie
 wykonają skryptu dwa razy (`sp_getapplock`). Skrypty można też uruchomić ręcznie, po kolei:
-`sqlcmd -S pzltestdb.intl.lmco.com -d PZLTEST -E -v Schema=FINOP Prefix=PZLEV_ -i sql\mssql\001_etap1_import_slowniki_projekty.sql`
-(i tak samo `002_dane_startowe.sql`). Dane startowe są tylko w migracji – aplikacja sama nic nie dopisuje;
+`sqlcmd -S pzltestdb.intl.lmco.com -d PZLTEST -E -f 65001 -v Schema=FINOP Prefix=PZLEV_ -i sql\mssql\001_etap1_import_slowniki_projekty.sql`
+(i tak samo kolejne; `-f 65001` – skrypty są w UTF-8). Dane startowe są tylko w migracji – aplikacja sama nic nie dopisuje;
 usunięta definicja nie wraca.
 
 Ustawienia, baza i ścieżki widać na ekranie **Diagnostyka** i w stopce okna.
