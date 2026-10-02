@@ -192,6 +192,11 @@ Bez metodologii EV; kolejne tabele dochodzą kolejnymi migracjami.
 okresów 2026–2027 (tygodnie ISO, okres według czwartku, ostatni tydzień okresu zamykający), Cost Category
 (załącznik A, `docs/slowniki.md`). Skrypt dopisuje tylko brakujące wiersze i zapisuje wpis w dzienniku.
 
+**Migracja `sql/mssql/003_usuniecie_plikow_niezgodnych.sql`:** usuwa wersje plików (`META_SourceFile`) zapisane do
+wersji aplikacji 0.11 mimo niezgodności z definicją źródła (układ kolumn, typy wartości) wraz z ich wierszami
+surowymi; historia decyzji (`META_SourceFileSeen`) zostaje. Od wersji 0.12 taki plik nie trafia do bazy
+(`docs/zrodla-danych.md`, rozdz. 2).
+
 Aplikacja zapisuje dziś do tabel importu, konfiguracji importu, słowników globalnych, dziennika i problemów;
 tabele projektów i słowników projektu czekają na moduły F4. Blokada importu – plik na dysku sieciowym
 (`docs/pipeline-fazy.md`, rozdz. 1.3), `sp_getapplock` razem z procedurami (F10.2).

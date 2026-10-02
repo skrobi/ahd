@@ -52,7 +52,13 @@ i utrzymywaną na ekranie Administracja (`docs/funkcjonalnosc.md`, F08).
   (sygnatura), parser i aktywność. Ziarno, klucz, znaczenie okresu, waluta i format liczb wynikają z parsera (rozdz. 4)
   – nie są polami definicji. Definicję można usunąć: bieżąca wersja zostaje zamknięta (historia i zaimportowane dane
   zostają), pliki o tym prefiksie są odtąd nierozpoznane, a kod i prefiks można użyć ponownie.
-- Wiersze surowe są zapisywane zawsze. Dane kanoniczne powstają tylko z pliku zgodnego ze schematem definicji.
+- Oczekiwane kolumny: jedna w wierszu albo wiersz nagłówków wklejony z Excela (kolumny rozdzielone tabulatorem);
+  przycisk „Kolumny z pliku…” wczytuje wiersz nagłówków z pliku źródła tak samo jak import. Pod polem widać sygnaturę
+  wpisanego układu – do porównania z sygnaturą pliku z komunikatu importu. Zapis tworzy nową wersję definicji.
+- Źródło z parserem (ACTUALS): plik jest zapisywany w bazie (wersja pliku, wiersze surowe, dane kanoniczne) tylko
+  wtedy, gdy przejdzie walidację – sygnatura kolumn zgodna z definicją i wartości zgodne z typami. Plik, który jej
+  nie przejdzie, ma decyzję „błąd” i nie zostawia danych w bazie; przy kolejnym imporcie jest pobierany ponownie
+  (pomijane są tylko pliki, których treść jest w bazie). Źródło bez parsera – zapisywane są wiersze surowe.
 - Definicje powstają dla źródeł w miarę ustalania ich zawartości (O27).
 
 ---
@@ -237,8 +243,8 @@ Poziomy ERROR / WARNING – `docs/pipeline-fazy.md`, rozdz. 1.3.
 | plik bez pasującego prefiksu | WARNING (plik nierozpoznany, nieimportowany) | import |
 | brak aktywnej lokalizacji RABIT | WARNING – import czyta tylko folder `Do_importu` | import |
 | folder lokalizacji bez plików, z podfolderami | WARNING z nazwami podfolderów (import ich nie czyta) | import |
-| sygnatura kolumn niezgodna z definicją (zmiana układu raportu) | ERROR dla wersji pliku – dane kanoniczne nie powstają do czasu aktualizacji definicji | import |
-| wartość niezgodna z typem kolumny | ERROR | import |
+| sygnatura kolumn niezgodna z definicją (zmiana układu raportu) | ERROR dla pliku – plik nie jest zapisywany w bazie; po poprawie „Oczekiwanych kolumn” kolejny import pobiera go ponownie | import |
+| wartość niezgodna z typem kolumny | ERROR dla pliku (wiersz i kolumna) – plik nie jest zapisywany w bazie | import |
 | duplikat klucza w pliku albo między częściami jednego źródła | ERROR | import / P2 |
 | reguły szczegółowe źródła | wg definicji | import |
 

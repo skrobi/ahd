@@ -66,9 +66,15 @@
                     <CheckBox Grid.Row="4" Grid.Column="1" VerticalAlignment="Center" IsChecked="{Binding DefActive}" />
 
                 </Grid>
-                <TextBlock Text="Oczekiwane kolumny (jedna w wierszu, w kolejności z pliku – wyznaczają sygnaturę układu)" Style="{StaticResource Label}" />
-                <TextBox Style="{StaticResource Field}" Text="{Binding DefColumns, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True"
-                         Height="120" VerticalScrollBarVisibility="Auto" FontFamily="{StaticResource FMono}" />
+                <DockPanel MaxWidth="720" HorizontalAlignment="Left">
+                    <Button DockPanel.Dock="Right" Content="Kolumny z pliku…" Style="{StaticResource Btn}" Command="{Binding ColumnsFromFile}"
+                            ToolTip="Wczytuje wiersz nagłówków z pliku źródła (pierwszy wiersz pierwszego arkusza – tak samo jak import)" />
+                    <TextBlock Text="Oczekiwane kolumny (jedna w wierszu albo wiersz nagłówków wklejony z Excela; kolejność jak w pliku – wyznaczają sygnaturę układu)"
+                               Style="{StaticResource Label}" TextWrapping="Wrap" />
+                </DockPanel>
+                <TextBox Style="{StaticResource Field}" Text="{Binding DefColumns, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" AcceptsTab="True"
+                         Height="160" MaxWidth="720" HorizontalAlignment="Stretch" VerticalScrollBarVisibility="Auto" FontFamily="{StaticResource FMono}" />
+                <TextBlock Text="{Binding DefSignatureText}" Style="{StaticResource MutedText}" FontSize="12" Margin="0,2,0,0" />
                 <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
                     <Button Content="Zapisz definicję" Style="{StaticResource BtnPrimary}" Margin="0,0,8,0" Command="{Binding SaveDefinition}" />
                     <Button Content="Usuń definicję" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding DeleteDefinition}"
@@ -76,6 +82,7 @@
                     <Button Content="Potwierdź usunięcie" Style="{StaticResource Btn}" Command="{Binding ConfirmDeleteDefinition}"
                             Visibility="{Binding DeletePending, Converter={StaticResource BoolToVisibility}}" />
                 </StackPanel>
+                <TextBlock Text="{Binding DefinitionMessage}" TextWrapping="Wrap" FontWeight="SemiBold" Margin="0,6,0,0" MaxWidth="720" HorizontalAlignment="Left" />
 
                 <TextBlock Text="Historia definicji" FontWeight="SemiBold" Margin="0,14,0,4" />
                 <DataGrid Style="{StaticResource DataTable}" ItemsSource="{Binding DefinitionHistory}" IsReadOnly="True" MaxHeight="160">
