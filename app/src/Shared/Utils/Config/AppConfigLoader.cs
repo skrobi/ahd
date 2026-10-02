@@ -83,7 +83,7 @@ public static partial class AppConfigLoader
         var database = Text(section, "Database");
         if (connectionString is null && (server is null || database is null))
             throw new InvalidOperationException($"{FileName}: {at} – wymagane Server i Database (albo ConnectionString)");
-        var schema = Text(section, "Schema") ?? throw new InvalidOperationException($"{FileName}: {at}.Schema – pole wymagane (np. LOG)");
+        var schema = Text(section, "Schema") ?? throw new InvalidOperationException($"{FileName}: {at}.Schema – pole wymagane (np. FINOP)");
         var prefix = Text(section, "TablePrefix") ?? DefaultTablePrefix;
         // Schemat i sygnatura trafiają do nazw obiektów SQL – tylko litery, cyfry i _.
         if (!Identifier().IsMatch(schema))

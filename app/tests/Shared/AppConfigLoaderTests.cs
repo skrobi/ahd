@@ -60,7 +60,7 @@ public class AppConfigLoaderTests
                 "TEST": {
                   "NetworkRoot": "\\\\serwer\\udzial\\PZL-EV-TEST",
                   "DataMode": "Sql",
-                  "Sql": { "Server": "pzltestdb.intl.lmco.com", "Database": "PZLTEST", "Schema": "LOG", "TablePrefix": "PZLEV_" }
+                  "Sql": { "Server": "pzltestdb.intl.lmco.com", "Database": "PZLTEST", "Schema": "FINOP", "TablePrefix": "PZLEV_" }
                 },
                 "PROD": { "DataMode": "Sql", "Sql": { "Server": "prod", "Database": "PZLPROD", "Schema": "EV" } }
               }
@@ -70,7 +70,7 @@ public class AppConfigLoaderTests
         Assert.Equal("TEST", config.Environment);
         Assert.Equal(DataMode.Sql, config.DataMode);
         Assert.Equal(@"\\serwer\udzial\PZL-EV-TEST", config.NetworkRoot);
-        Assert.Equal(new SqlSettings("pzltestdb.intl.lmco.com", "PZLTEST", "LOG", "PZLEV_"), config.Sql);
+        Assert.Equal(new SqlSettings("pzltestdb.intl.lmco.com", "PZLTEST", "FINOP", "PZLEV_"), config.Sql);
     }
 
     [Fact]
@@ -87,7 +87,7 @@ public class AppConfigLoaderTests
     [InlineData("""{ "Env": "PROD", "Environments": { "TEST": {} } }""", "Environments.PROD")]
     [InlineData("""{ "Env": "TEST", "Environments": { "TEST": { "DataMode": "Sql" } } }""", "sekcji Sql")]
     [InlineData("""{ "Env": "TEST", "Environments": { "TEST": { "Sql": { "Server": "s", "Database": "d" } } } }""", "Schema")]
-    [InlineData("""{ "Env": "TEST", "Environments": { "TEST": { "Sql": { "Server": "s", "Database": "d", "Schema": "LOG]; DROP" } } } }""", "dozwolone litery")]
+    [InlineData("""{ "Env": "TEST", "Environments": { "TEST": { "Sql": { "Server": "s", "Database": "d", "Schema": "FINOP]; DROP" } } } }""", "dozwolone litery")]
     public void Invalid_environment_configuration_is_reported(string json, string message) =>
         Assert.Contains(message, Assert.Throws<InvalidOperationException>(() => LoadJson(json)).Message);
 }
