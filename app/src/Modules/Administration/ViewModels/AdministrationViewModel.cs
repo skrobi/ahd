@@ -1,18 +1,26 @@
 using System.Collections.ObjectModel;
+using System.IO;
 using System.Windows.Input;
 using PzlEv.Modules.Administration.Models;
 using PzlEv.Modules.Administration.Services;
 using PzlEv.Shared.Models;
 using PzlEv.Shared.Models.Db;
 using PzlEv.Shared.Models.Sources;
+using PzlEv.Shared.Utils.Files;
+using PzlEv.Shared.Utils.Ui.Dialogs;
 using PzlEv.Shared.Utils.Ui.Mvvm;
+using Serilog;
 
 namespace PzlEv.Modules.Administration.ViewModels;
 
 /// <summary>Ekran Administracja (F08): definicje źródeł i lokalizacje RABIT – dodanie, zmiana, dezaktywacja, usunięcie definicji, historia.</summary>
 public sealed class AdministrationViewModel : ObservableObject
 {
+    private static readonly ILogger Logger = Log.ForContext("Module", ModuleKeys.Administration);
+
     private readonly SourceConfigService _service;
+    private readonly IFileDialogs _dialogs;
+    private string _definitionMessage = "";
     private SourceDefinitionRow? _selectedDefinition;
     private SourceLocationRow? _selectedLocation;
     private string _status = "";
@@ -30,9 +38,11 @@ public sealed class AdministrationViewModel : ObservableObject
     private string _locName = "", _locPath = "";
     private bool _locActive = true;
 
-    public AdministrationViewModel(SourceConfigService service)
+    public AdministrationViewModel(SourceConfigService service, IFileDialogs dialogs)
     {
         _service = service;
+        _dialogs = dialogs;
+        ColumnsFromFile = new RelayCommand(_ => LoadColumnsFromFile());
         NewDefinition = new RelayCommand(_ => ClearDefinitionForm());
         SaveDefinition = new RelayCommand(_ => DoSaveDefinition());
         DeleteDefinition = new RelayCommand(_ => AskDeleteDefinition(), _ => _defId is not null);
@@ -58,6 +68,7 @@ public sealed class AdministrationViewModel : ObservableObject
 
     public ICommand NewDefinition { get; }
     public ICommand SaveDefinition { get; }
+    public ICommand ColumnsFromFile { get; }
     public ICommand DeleteDefinition { get; }
     public ICommand ConfirmDeleteDefinition { get; }
     public ICommand NewLocation { get; }
@@ -90,6 +101,7 @@ public sealed class AdministrationViewModel : ObservableObject
             DefParser = value.Parser;
             DefActive = value.Active;
             DeletePending = false;
+            DefinitionMessage = "";
             OnPropertyChanged(nameof(DefinitionFormTitle));
             DefinitionHistory.Clear();
             foreach (var version in _service.DefinitionHistory(value.DefinitionId).Reverse())
@@ -116,7 +128,28 @@ public sealed class AdministrationViewModel : ObservableObject
     public string DefCode { get => _defCode; set => SetProperty(ref _defCode, value); }
     public string DefPrefix { get => _defPrefix; set => SetProperty(ref _defPrefix, value); }
     public string DefReportType { get => _defReportType; set => SetProperty(ref _defReportType, value); }
-    public string DefColumns { get => _defColumns; set => SetProperty(ref _defColumns, value); }
+    public string DefColumns
+    {
+        get => _defColumns;
+        set
+        {
+            if (SetProperty(ref _defColumns, value))
+                OnPropertyChanged(nameof(DefSignatureText));
+        }
+    }
+
+    /// <summary>Sygnatura wpisanego układu – do porównania z sygnaturą pliku z komunikatu importu.</summary>
+    public string DefSignatureText
+    {
+        get
+        {
+            var columns = SourceConfigService.ParseColumns(DefColumns);
+            return columns.Count == 0 ? "Brak kolumn." : $"Kolumn: {columns.Count}, sygnatura układu: {SourceConfigService.Signature(columns)}";
+        }
+    }
+
+    /// <summary>Wynik ostatniej operacji na definicji (pod przyciskami formularza).</summary>
+    public string DefinitionMessage { get => _definitionMessage; private set => SetProperty(ref _definitionMessage, value); }
     public string DefParser { get => _defParser; set => SetProperty(ref _defParser, value ?? SourceParsers.None); }
     public bool DefActive { get => _defActive; set => SetProperty(ref _defActive, value); }
 
@@ -144,6 +177,7 @@ public sealed class AdministrationViewModel : ObservableObject
         DefColumns = string.Join(Environment.NewLine, SourceParsers.ActualsColumns);
         DefParser = SourceParsers.Actuals;
         DefActive = true;
+        DefinitionMessage = "";
         DefinitionHistory.Clear();
         OnPropertyChanged(nameof(DefinitionFormTitle));
         Status = "Nowa definicja – kolumny wstępnie wypełnione układem ACTUALS_*; zmień, jeśli źródło ma inny układ.";
@@ -162,8 +196,36 @@ public sealed class AdministrationViewModel : ObservableObject
     private void DoSaveDefinition()
     {
         var input = new DefinitionInput(_defId, _defVersion, DefCode, DefPrefix, DefReportType,
-            DefColumns.Split('\n').Select(c => c.Trim()).ToList(), DefParser, DefActive);
-        Show(_service.SaveDefinition(input));
+            SourceConfigService.ParseColumns(DefColumns), DefParser, DefActive);
+        var result = _service.SaveDefinition(input);
+        Show(result);
+        if (result.Success)   // formularz zostaje na zapisanej definicji – widać zapisane kolumny, wersję i sygnaturę
+            SelectedDefinition = Definitions.FirstOrDefault(d => d.Code == DefinitionCode(input.Code));
+        DefinitionMessage = string.Join(Environment.NewLine, new[] { result.Message }.Concat(result.Issues.Select(i => "• " + i.Message)));
+    }
+
+    private static string DefinitionCode(string code) => code.Trim().ToUpperInvariant();
+
+    /// <summary>Oczekiwane kolumny z wiersza nagłówków pliku źródła (ten sam odczyt co przy imporcie).</summary>
+    private void LoadColumnsFromFile()
+    {
+        var path = _dialogs.OpenExcel("Plik źródła – kolumny z wiersza nagłówków");
+        if (path is null)
+            return;
+        try
+        {
+            var data = TabularFileReader.Read(File.ReadAllBytes(path), Path.GetFileName(path));
+            DefColumns = string.Join(Environment.NewLine, data.Headers);
+            var signature = HeaderSignature.Compute(data.Headers);
+            DefinitionMessage = $"Kolumny z pliku {Path.GetFileName(path)}{(data.Sheet is null ? "" : $" (arkusz {data.Sheet})")}: {data.Headers.Count}, " +
+                                $"sygnatura pliku {signature}. Sprawdź i kliknij „Zapisz definicję”." +
+                                (data.Headers.Any(string.IsNullOrWhiteSpace) ? " Uwaga: plik ma kolumny bez nagłówka – sygnatura pliku je uwzględnia, definicja nie." : "");
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            Logger.Warning(ex, "Kolumny z pliku {Path}: błąd odczytu", path);
+            DefinitionMessage = $"Nie udało się odczytać pliku {Path.GetFileName(path)}: {ex.Message}";
+        }
     }
 
     private void AskDeleteDefinition()
@@ -178,7 +240,9 @@ public sealed class AdministrationViewModel : ObservableObject
         if (_defId is not { } id || _defVersion is not { } version)
             return;
         DeletePending = false;
-        Show(_service.DeleteDefinition(id, version));
+        var result = _service.DeleteDefinition(id, version);
+        Show(result);
+        DefinitionMessage = result.Message;
     }
 
     private void DoSaveLocation() =>

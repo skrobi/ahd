@@ -5,6 +5,7 @@ using PzlEv.Modules.Administration.ViewModels;
 using PzlEv.Modules.Administration.Views;
 using PzlEv.Shared.Models;
 using PzlEv.Shared.Utils.Data;
+using PzlEv.Shared.Utils.Ui.Dialogs;
 using PzlEv.Shared.Utils.Ui.Modularity;
 
 namespace PzlEv.Modules.Administration;
@@ -25,5 +26,5 @@ public sealed class AdministrationModule : IModule
         _service = new SourceConfigService(new SqlSourceConfigStore(services.Sql, services.Clock, services.User), services.Journal);
 
     public FrameworkElement CreateView(ModuleContext context) =>
-        new AdministrationView { DataContext = new AdministrationViewModel(_service!) };
+        new AdministrationView { DataContext = new AdministrationViewModel(_service!, new FileDialogs()) };
 }

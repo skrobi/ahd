@@ -26,19 +26,29 @@ public sealed partial class SourceConfigService(ISourceConfigStore store, IJourn
 
     public IReadOnlyList<SourceLocationRow> Locations() => store.Locations();
 
+    /// <summary>
+    /// Kolumny z pola „Oczekiwane kolumny”: jedna w wierszu albo rozdzielone tabulatorem (wiersz nagłówków skopiowany
+    /// z Excela); puste pomijane.
+    /// </summary>
+    public static IReadOnlyList<string> ParseColumns(string text) =>
+        text.Split(['\r', '\n', '\t'], StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+
+    /// <summary>Sygnatura układu kolumn definicji – porównywana przy imporcie z sygnaturą nagłówków pliku.</summary>
+    public static string Signature(IReadOnlyList<string> columns) => columns.Count > 0 ? HeaderSignature.Compute(columns) : "";
+
     public ConfigSaveResult SaveDefinition(DefinitionInput input)
     {
         input = input with
         {
             Code = input.Code.Trim().ToUpperInvariant(),
             Prefix = input.Prefix.Trim().TrimEnd('*').Trim(),
-            Columns = input.Columns.Select(c => c.Trim()).Where(c => c.Length > 0).ToList(),
+            Columns = ParseColumns(string.Join("\n", input.Columns)),
         };
         var issues = ValidateDefinition(input);
         if (issues.Count > 0)
             return new ConfigSaveResult(false, issues, "Definicja ma błędy – nie zapisano.");
 
-        var signature = input.Columns.Count > 0 ? HeaderSignature.Compute(input.Columns) : "";
+        var signature = Signature(input.Columns);
         var parserVersion = input.Parser == SourceParsers.Actuals ? ActualsParserVersion : 0;
         var conflict = store.SaveDefinition(input, signature, parserVersion);
         if (conflict is not null)

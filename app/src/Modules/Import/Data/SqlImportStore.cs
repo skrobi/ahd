@@ -73,7 +73,12 @@ public sealed class SqlImportStore(SqlDatabase db) : IImportStore
     {
         using var connection = db.Open();
         return connection.QuerySingleOrDefault<SeenRow>(
-            $"SELECT TOP (1) {SeenColumns} FROM {_seen} WHERE FileName = @fileName AND Location = @location AND Decision IN @settled ORDER BY Id DESC",
+            $"""
+            SELECT TOP (1) {SeenColumns} FROM {_seen} s
+            WHERE s.FileName = @fileName AND s.Location = @location AND s.Decision IN @settled
+              AND EXISTS (SELECT 1 FROM {_files} f WHERE f.Sha256 = s.Sha256)
+            ORDER BY s.Id DESC
+            """,
             new { location, fileName, settled = FileDecisions.Settled.ToArray() })?.ToRow();
     }
 

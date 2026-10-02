@@ -6,7 +6,7 @@
    Stawki wydziałów, kursy walut, osoby i projekty – bez danych startowych.
 
    Uruchomienie: aplikacja (Diagnostyka → Migracja albo pytanie przy starcie) albo
-       sqlcmd -S pzltestdb.intl.lmco.com -d PZLTEST -E -v Schema=FINOP Prefix=PZLEV_ -i 002_dane_startowe.sql
+       sqlcmd -S pzltestdb.intl.lmco.com -d PZLTEST -E -f 65001 -v Schema=FINOP Prefix=PZLEV_ -i 002_dane_startowe.sql
    Skrypt dopisuje tylko brakujące wiersze (istniejące kody, prefiksy, lata kalendarza i elementy kosztowe zostają bez zmian),
    więc nie dubluje danych zapisanych wcześniej w aplikacji. Wyjątek: lokalizacja E456659 zapisana przez wcześniejsze
    dane startowe aplikacji jako nieaktywna (wersja 1) dostaje wersję 2 – aktywną. Wiersze zapisuje konto uruchamiające. */

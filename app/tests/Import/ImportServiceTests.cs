@@ -264,25 +264,33 @@ public sealed class ImportServiceTests : IDisposable
     }
 
     [SqlFact]
-    public void Changed_column_layout_keeps_raw_rows_but_no_canonical_data()
+    public void Changed_column_layout_is_an_error_file_is_not_stored_and_is_imported_after_definition_fix()
     {
         Use();
         Directory.CreateDirectory(ImportFolder);
         var lines = File.ReadAllLines(TestServices.TestData("RABIT", "ACTUALS_PAF_01.csv"));
-        File.WriteAllLines(Path.Combine(ImportFolder, "ACTUALS_PAF_01.csv"), lines.Select(l => l[(l.IndexOf(';') + 1)..])); // bez pierwszej kolumny
+        File.WriteAllLines(Path.Combine(ImportFolder, "ACTUALS_PAF_01.csv"), lines.Select((l, i) => (i == 0 ? "Dodatkowa;" : "x;") + l)); // dodatkowa kolumna
 
-        var run = _import.Run();
+        var first = _import.Run();
 
-        Assert.Equal(FileDecisions.Imported, Assert.Single(run.Files).Decision);
-        Assert.Contains(run.Issues, i => i.Level == CheckLevel.Error && i.Message.Contains("układ kolumn niezgodny"));
-        var file = _store.FindByHash(Assert.Single(_store.Seen(run.BatchId)).Sha256!)!;
-        Assert.StartsWith("brak – sygnatura", file.CanonicalStatus);
-        Assert.Equal(6, _store.RawRows(file.Id).Count);
-        Assert.Empty(_store.Actuals(file.Id));
+        Assert.Equal(FileDecisions.Error, Assert.Single(first.Files).Decision);
+        Assert.Contains(first.Issues, i => i.Level == CheckLevel.Error && i.Message.Contains("układ kolumn niezgodny") && i.Message.Contains("nie zapisany w bazie"));
+        Assert.Null(_store.FindByHash(Assert.Single(_store.Seen(first.BatchId)).Sha256!));   // ani plik, ani wiersze surowe
+        Assert.Equal(ImportService.WillImport, Assert.Single(_import.Check().Files).Note);   // nie jest „bez zmian”
+
+        var paf = _config.Definitions().Single(d => d.Code == "ACTUALS_PAF");
+        Assert.True(_config.SaveDefinition(new DefinitionInput(paf.DefinitionId, paf.Version, paf.Code, paf.Prefix, paf.ReportType,
+            ["Dodatkowa", .. SourceParsers.ActualsColumns], paf.Parser, paf.Active)).Success);
+        var second = _import.Run();   // ten sam plik, te same metadane – pobrany ponownie
+
+        Assert.Equal(FileDecisions.Imported, Assert.Single(second.Files).Decision);
+        var file = _store.FindByHash(Assert.Single(_store.Seen(second.BatchId)).Sha256!)!;
+        Assert.Equal("utworzone", file.CanonicalStatus);
+        Assert.Equal(6, _store.Actuals(file.Id).Count);
     }
 
     [SqlFact]
-    public void Value_type_error_blocks_canonical_data_with_row_number()
+    public void Value_type_error_is_an_error_with_row_number_and_file_is_not_stored()
     {
         Use();
         Directory.CreateDirectory(ImportFolder);
@@ -292,9 +300,11 @@ public sealed class ImportServiceTests : IDisposable
 
         var run = _import.Run();
 
+        var result = Assert.Single(run.Files);
+        Assert.Equal(FileDecisions.Error, result.Decision);
+        Assert.Equal("1 błędów wartości – nie zapisany", result.Description);
         Assert.Contains(run.Issues, i => i.Message.StartsWith("Value in Obj. Crcy: 'dwa tysiące'") && i.Element!.EndsWith("wiersz danych 3"));
-        var file = _store.FindByHash(Assert.Single(_store.Seen(run.BatchId)).Sha256!)!;
-        Assert.Empty(_store.Actuals(file.Id));
+        Assert.Null(_store.FindByHash(Assert.Single(_store.Seen(run.BatchId)).Sha256!));
     }
 
     [SqlFact]
