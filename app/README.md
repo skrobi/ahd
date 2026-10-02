@@ -1,17 +1,51 @@
-# PZL-EV – aplikacja testowa stosu (.NET 10 / WPF)
+# PZL-EV – aplikacja (.NET 10 / WPF)
 
-Cel: **zanim ruszy implementacja**, sprawdzić, czy założenia technologiczne pozwalają uruchomić
-jeden `PZL-EV.exe` z dysku sieciowego na stanowisku PZL – bez instalacji .NET, bez lokalnego
-serwera i bez lokalnej bazy – z pakietami dostępnymi w PZL.
+Aplikacja PZL-EV rozwijana według planu w `tasks/` (`tasks/README.md`). Powstała z aplikacji testowej stosu
+i nadal służy do sprawdzenia uruchomienia jednego `PZL-EV.exe` z dysku sieciowego (O6, sekcja „Test stosu”).
 
-Zakres: **Pulpit z prototypu** (`prototyp/pzl-ev-prototyp.html`, `vPulpit()`) i ekran **Diagnostyka**, dane
-przykładowe, **bez połączenia z bazą**. Pozostałe pozycje menu pokazują ekran zastępczy modułu (dokumentacja
-i etapy, które moduł przejmie).
+Stan: **Słowniki** (słowniki globalne – F1), **Import RABIT** i **Administracja** (import plików, definicje
+źródeł, lokalizacje – F2), **Pulpit** (dane przykładowe) i **Diagnostyka**. Pozostałe pozycje menu pokazują ekran
+zastępczy modułu (dokumentacja i etapy, które moduł przejmie). Do czasu bazy TEST dane są **w pamięci**
+(tryb przejściowy – sekcja „Konfiguracja i dane”).
 
-Kod ma docelową strukturę modułową (`docs/architektura.md`, rozdz. 5.3) – po pozytywnym teście jest
-rozwijany jako właściwa aplikacja.
+Kod ma strukturę modułową (`docs/architektura.md`, rozdz. 5.3).
 
-## Co aplikacja sprawdza
+## Konfiguracja i dane
+
+Plik `pzl-ev.json` obok `PZL-EV.exe` (opcjonalny – brak pliku = wartości domyślne):
+
+```json
+{
+  "Environment": "TEST",
+  "NetworkRoot": "\\\\serwer\\udzial\\PZL-EV-TEST",
+  "DataMode": "InMemory",
+  "InMemoryStatePath": "C:\\Users\\<login>\\AppData\\Local\\PZL-EV\\inmemory-state.json"
+}
+```
+
+| Ustawienie | Domyślnie | Znaczenie |
+|---|---|---|
+| `Environment` | `TEST` | nazwa środowiska w nagłówku |
+| `NetworkRoot` | `%LOCALAPPDATA%\PZL-EV\TEST-root` | korzeń folderów środowiska (`docs/architektura.md`, rozdz. 7); import czyta `00_Global\RABIT\Do_importu` |
+| `DataMode` | `InMemory` | dane w pamięci (do czasu bazy TEST); `Sql` – po F10 |
+| `InMemoryStatePath` | `%LOCALAPPDATA%\PZL-EV\inmemory-state.json` | plik stanu danych w pamięci – dane przetrwają restart; usunięcie pliku = start od danych startowych |
+
+Ustawienia i ścieżki widać na ekranie **Diagnostyka**. Tryb w pamięci jest lokalny dla stanowiska (bez
+współdzielenia danych) i przeznaczony do testów na mniejszych plikach – duże pliki RABIT (setki tysięcy wierszy)
+wydłużają zapis stanu.
+
+**Ręczny test F1 / F2:**
+
+1. **Słowniki** – kalendarz okresów i Cost Category mają dane startowe. Zmień wartość, **Zapisz**; zaznacz wiersz –
+   historia pokazuje poprzednią wersję. **Pobierz do Excela** → zmień / dodaj / usuń wiersz → **Wczytaj z Excela** –
+   podgląd różnic (+/~/−), **Zatwierdź wczytanie**. Błędna wartość (np. tekst w liczbie) – wynik walidacji, brak zapisu.
+2. **Import RABIT** – skopiuj `testdata/RABIT/ACTUALS_PAF_01.csv` do folderu `Do_importu` (ścieżka na ekranie),
+   **Importuj** – plik „zaimportowany”, 6 wierszy, sumy jak w `testdata/README.md`; ponowny import – „pominięty”;
+   ta sama treść pod inną nazwą – „duplikat”; plik o nieznanym prefiksie – „nierozpoznany”.
+3. **Administracja** – definicje `ACTUALS_PAF`, `ACTUALS_CES`; lokalizacja RABIT E456659 jest nieaktywna – włącz ją
+   na stanowisku z dostępem do SharePoint (WebDAV) i uruchom import.
+
+## Test stosu – co aplikacja sprawdza
 
 | Założenie | Jak sprawdzane |
 |---|---|
@@ -106,7 +140,11 @@ wersjonowanego `NuGet.config`. Używaj konfiguracji użytkownika albo zmiennej �
 
 Wynik: `publish\PZL-EV.exe` (ok. 70–100 MB – zawiera runtime .NET i WPF).
 
-## Test (stanowisko użytkownika)
+**Testy** (`tests/PzlEv.Tests.csproj`, xUnit): `build.cmd` uruchamia je przed publikacją; ręcznie – `dotnet test tests\PzlEv.Tests.csproj`.
+Pakiety testowe (xUnit) przy pierwszym pobraniu z eFOSS trafiają do zatwierdzenia – do tego czasu `build.cmd`
+pomija testy z ostrzeżeniem.
+
+## Test stosu (stanowisko użytkownika)
 
 1. Skopiuj `publish\PZL-EV.exe` do folderu na dysku sieciowym, np. `\\serwer\udzial\PZL-EV\_test\`.
 2. Na komputerze **bez zainstalowanego .NET** uruchom go ze ścieżki UNC (dwuklik albo
@@ -132,26 +170,32 @@ Wynik: `publish\PZL-EV.exe` (ok. 70–100 MB – zawiera runtime .NET i WPF).
 
 ## Struktura
 
-Zasady i przepis „Nowy moduł” – `docs/architektura.md`, rozdz. 5.3.
+Zasady, warstwa danych przejściowa, testy i przepis „Nowy moduł” – `docs/architektura.md`, rozdz. 5.3.
 
 ```
-poc-wpf/
-├── build.cmd                    publikacja self-contained single-file win-x64
+app/
+├── build.cmd                    restore, testy, publikacja self-contained single-file win-x64
 ├── NuGet.config                 źródło pakietów = feed eFOSS (bez poświadczeń)
 ├── ArchitectureRules.targets    granice modułów sprawdzane przy każdej budowie (błąd PZLARCH)
+├── testdata/                    dane wzorcowe z oczekiwanymi sumami (F0.9)
+├── tests/PzlEv.Tests.csproj     testy logiki (xUnit, net10.0 – bez WPF), testy kontraktu magazynów
 └── src/
-    ├── PzlEv.Test.csproj        net10.0-windows, WPF, pakiety z założeń
+    ├── PzlEv.csproj             net10.0-windows, WPF, pakiety z założeń
     ├── .editorconfig            przestrzeń nazw = folder (IDE0130)
-    ├── App.xaml(.cs)            start, Serilog, obsługa wyjątków, zasoby wspólne
+    ├── App.xaml(.cs)            start: konfiguracja → usługi wspólne → moduły → powłoka
     ├── Shell/                   okno, menu, nawigacja; ModuleCatalog.cs – lista modułów
     ├── Modules/
-    │   ├── Dashboard/           Pulpit – pełny ekran (Views, ViewModels, Models, Data)
-    │   ├── Diagnostics/         wynik testu stosu (wersje pakietów wczytanych w runtime)
-    │   └── Import/ Mapping/ …   pozostałe moduły: plik wejścia + etapy, ekran zastępczy
+    │   ├── MasterData/          Słowniki globalne (F1)
+    │   ├── Import/              Import RABIT (F2)
+    │   ├── Administration/      definicje źródeł, lokalizacje RABIT (F2)
+    │   ├── Dashboard/           Pulpit (dane przykładowe)
+    │   ├── Diagnostics/         test stosu i konfiguracja środowiska
+    │   └── Mapping/ Runs/ …     pozostałe moduły: plik wejścia + etapy, ekran zastępczy
     └── Shared/
-        ├── Utils/               MVVM, konwerter kolorów, kontrakt modułu i nawigacji
-        ├── Models/              modele wspólne, klucze modułów, kontrakt etapu (Pipeline/)
+        ├── Utils/Ui/            MVVM, konwertery, okna wyboru pliku, kontrakt modułu (WPF)
+        ├── Utils/Config|Data|Files/  konfiguracja, dane w pamięci, dziennik, problemy, Excel/CSV
+        ├── Models/              modele wspólne; Db/ – tabele schematu; Sources/ – układy źródeł; Pipeline/ – kontrakt etapu
         └── Views/
-            ├── Templates/       Theme.xaml – paleta z prototypu, style, układ strony
-            └── Partials/        pigułka statusu, kropka etapu, nagłówek ekranu, ekran zastępczy
+            ├── Templates/       Theme.xaml – paleta z prototypu, style, tabele, układ strony
+            └── Partials/        pigułka statusu, wynik kontroli, nagłówek ekranu, ekran zastępczy
 ```

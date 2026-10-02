@@ -106,6 +106,10 @@ USD | 261,54 | PLN | 1 254,51 | USD | 261,54 | 0,000 | … | 2026 | 2026-03-29 |
 
 - Liczby w formacie polskim (spacja tysięcy, przecinek dziesiętny).
 - Struktura CES jest **płaska**: projekt → lista elementów WBS (numeracja ciągła z lukami).
+- Dane kanoniczne (parser `ACTUALS`): wymagane `WBS Element`, `Fiscal Year`, `Period`; numer elementu kosztowego
+  złożony z cyfr uzupełniany zerami do 10 znaków; minus na końcu liczby (zapis SAP, np. `48,00-`) oznacza wartość
+  ujemną. Klucz wiersza nie jest ustalony (O27) – bez kontroli duplikatów. Kontrola przepływu przy imporcie:
+  liczba wierszy i sumy `Value in Obj. Crcy` i `Val.in rep.cur.` danych kanonicznych zgodne z wierszami surowymi.
 
 ---
 
