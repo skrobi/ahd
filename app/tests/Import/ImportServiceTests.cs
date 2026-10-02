@@ -2,6 +2,7 @@ using PzlEv.Modules.Administration.Data;
 using PzlEv.Modules.Administration.Models;
 using PzlEv.Modules.Administration.Services;
 using PzlEv.Modules.Import.Data;
+using PzlEv.Modules.Import.Models;
 using PzlEv.Modules.Import.Services;
 using PzlEv.Shared.Models.Db;
 using PzlEv.Shared.Models.Pipeline;
@@ -123,19 +124,78 @@ public sealed class ImportServiceTests : IDisposable
 
         Assert.Contains(run.Issues, i => i.Level == CheckLevel.Error && i.Element == "RABIT test" && i.Message.StartsWith("Lokalizacja niedostępna"));
         Assert.Equal(FileDecisions.Imported, Assert.Single(run.Files).Decision);
-        Assert.Empty(run.UnavailableSharePoint);                       // folder lokalny – nie SharePoint
-
     }
 
     [Fact]
-    public void Unavailable_sharepoint_location_is_offered_login()
+    public void Unavailable_sharepoint_location_explains_gateway_login()
     {
         _config.SaveLocation(new LocationInput(null, null, "RABIT SP", @"\\sp.example.com@SSL\DavWWWRoot\sites\R\Shared Documents\E1", Active: true));
 
         var run = _import.Run();
 
-        Assert.Equal(["RABIT SP"], run.UnavailableSharePoint);
-        Assert.Contains(run.Issues, i => i.Element == "RABIT SP" && i.Message.Contains("bramą logowania F5"));
+        Assert.Contains(run.Issues, i => i.Element == "RABIT SP" && i.Message.StartsWith("Lokalizacja niedostępna") && i.Message.Contains("bramą logowania F5"));
+    }
+
+    /// <summary>Postęp zbierany synchronicznie (Progress&lt;T&gt; w aplikacji przekazuje go do wątku UI).</summary>
+    private sealed class Collect(Action<ImportProgress>? onReport = null) : IProgress<ImportProgress>
+    {
+        public List<ImportProgress> Items { get; } = [];
+
+        public void Report(ImportProgress value)
+        {
+            Items.Add(value);
+            onReport?.Invoke(value);
+        }
+    }
+
+    [Fact]
+    public void Import_start_is_in_history_and_file_status_changes_during_import()
+    {
+        CopySample(ImportFolder, "ACTUALS_PAF_01.csv");
+        string? statusAtStart = null;
+        var progress = new Collect(p =>
+        {
+            if (p.BatchId is not null)
+                statusAtStart = _store.Batches(1).Single().Status;
+        });
+
+        var run = _import.Run(progress);
+
+        Assert.Equal(ImportBatchStatus.Running, statusAtStart);                   // wpis „w toku” od początku importu
+        Assert.Contains(_services.Journal.Recent(5), e => e.Message == $"Import #{run.BatchId} rozpoczęty (PZL\\analityk, {Environment.MachineName})");
+        Assert.Equal(["importowanie…", "zaimportowany"],
+            progress.Items.Where(p => p.FileName == "ACTUALS_PAF_01.csv").Select(p => p.Status!.Split(" – ")[0]));
+        Assert.Equal("zakończony", _store.Batches(1).Single().Status);
+    }
+
+    [Fact]
+    public void Import_does_not_start_while_another_person_imports()
+    {
+        CopySample(ImportFolder, "ACTUALS_PAF_01.csv");
+        var other = new TestServices().App(_root);   // druga osoba – ten sam folder sieciowy, osobna baza
+        using var lease = other.Locks.TryAcquire(ImportService.LockName, out _);
+        Assert.NotNull(lease);
+
+        var run = _import.Run();
+
+        Assert.NotNull(run.NotStarted);
+        Assert.StartsWith(@"Import nie rozpoczęty – trwa import: PZL\analityk (", run.NotStarted);
+        Assert.Empty(run.Files);
+        Assert.Empty(_store.Batches(10));
+        Assert.NotNull(_import.RunningImport());
+    }
+
+    [Fact]
+    public void Lock_is_released_after_import_and_unfinished_import_is_marked()
+    {
+        var stale = _store.BeginBatch(_services.Clock.Now, "ktos", "PC1", "test");   // np. awaria aplikacji w trakcie importu
+
+        var run = _import.Run();
+
+        Assert.Null(run.NotStarted);
+        Assert.Null(_import.RunningImport());
+        Assert.Equal(ImportBatchStatus.Abandoned, _store.Batches(10).Single(b => b.Id == stale).Status);
+        Assert.Null(_import.Run().NotStarted);
     }
 
     [Fact]
@@ -155,7 +215,7 @@ public sealed class ImportServiceTests : IDisposable
     [Fact]
     public void Longest_prefix_wins()
     {
-        _config.SaveDefinition(new DefinitionInput(null, null, "ACTUALS", "ACTUALS", "ogólny", ["A"], "", [], "", "", "", SourceParsers.None, true));
+        _config.SaveDefinition(new DefinitionInput(null, null, "ACTUALS", "ACTUALS", "ogólny", ["A"], SourceParsers.None, true));
         CopySample(ImportFolder, "ACTUALS_PAF_01.csv");
 
         Assert.Equal("ACTUALS_PAF", Assert.Single(_import.Run().Files).SourceCode);
@@ -166,10 +226,9 @@ public sealed class ImportServiceTests : IDisposable
     {
         // Wszystkie ACTUALS_… jako jedno źródło: istniejące definicje wyłączone, nowa z prefiksem „ACTUALS_*”.
         foreach (var d in _config.Definitions())
-            _config.SaveDefinition(new DefinitionInput(d.DefinitionId, d.Version, d.Code, d.Prefix, d.ReportType, d.Columns, d.Grain,
-                d.KeyColumns, d.PeriodMeaning, d.Currency, d.NumberFormat, d.Parser, Active: false));
+            _config.SaveDefinition(new DefinitionInput(d.DefinitionId, d.Version, d.Code, d.Prefix, d.ReportType, d.Columns, d.Parser, Active: false));
         _config.SaveDefinition(new DefinitionInput(null, null, "ACTUALS", "ACTUALS_*", "Koszty rzeczywiste CES", SourceParsers.ActualsColumns,
-            "", [], "", "", "", SourceParsers.Actuals, true));
+            SourceParsers.Actuals, true));
         CopySample(ImportFolder, "ACTUALS_PAF2_B6_AC1.csv");
 
         var result = Assert.Single(_import.Run().Files);
@@ -283,7 +342,7 @@ public sealed class ImportServiceTests : IDisposable
         var location = check.Locations.Single(l => l.Name == "RABIT test");
         Assert.False(location.Accessible);
         Assert.StartsWith("BRAK DOSTĘPU", location.Status);
-        Assert.Equal("zostanie pominięty – bez zmian od importu", Assert.Single(check.Files).Note);
+        Assert.Equal(ImportService.WillSkip, Assert.Single(check.Files).Note);
     }
 
     [Fact]

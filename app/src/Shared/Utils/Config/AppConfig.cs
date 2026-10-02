@@ -13,6 +13,9 @@ public sealed record AppConfig(
     string InMemoryStatePath,
     string? ConnectionString)
 {
+    /// <summary>Folder wspólny RABIT: Do_importu i blokada importu (import.lock).</summary>
+    public string RabitFolder => Path.Combine(NetworkRoot, "00_Global", "RABIT");
+
     /// <summary>Folder plików RABIT pobranych ręcznie (docs/zrodla-danych.md, rozdz. 3).</summary>
-    public string ImportFolder => Path.Combine(NetworkRoot, "00_Global", "RABIT", "Do_importu");
+    public string ImportFolder => Path.Combine(RabitFolder, "Do_importu");
 }

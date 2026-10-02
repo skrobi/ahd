@@ -48,6 +48,10 @@ i utrzymywaną na ekranie Administracja (`docs/funkcjonalnosc.md`, F08).
   kolumn (np. wszystkie `ACTUALS_*` – rozdz. 4). Układy nie są łączone w jedno źródło.
 - Plik bez pasującego prefiksu nie jest importowany; po dodaniu definicji zostanie zaimportowany przy kolejnym
   imporcie.
+- **Etap 1 (aplikacja):** definicja na ekranie Administracja to kod, prefiks, typ raportu, oczekiwane kolumny
+  (sygnatura), parser i aktywność. Ziarno, klucz, znaczenie okresu, waluta i format liczb wynikają z parsera (rozdz. 4)
+  – nie są polami definicji. Definicję można usunąć: bieżąca wersja zostaje zamknięta (historia i zaimportowane dane
+  zostają), pliki o tym prefiksie są odtąd nierozpoznane, a kod i prefiks można użyć ponownie.
 - Wiersze surowe są zapisywane zawsze. Dane kanoniczne powstają tylko z pliku zgodnego ze schematem definicji.
 - Definicje powstają dla źródeł w miarę ustalania ich zawartości (O27).
 
@@ -77,21 +81,21 @@ i utrzymywaną na ekranie Administracja (`docs/funkcjonalnosc.md`, F08).
   (`docs/architektura.md`, rozdz. 7) i importuje tak samo.
 - Niedostępne dla użytkownika: API REST SharePoint, synchronizacja OneDrive, eksport listy do Excela,
   pobieranie ZIP.
-- **Test dostępu** (ekran Import): drogi A–H do folderu RABIT – jak `test_dostepu_rabit.py` z narzędzia w Pythonie
-  (A–D) oraz drogi .NET (E–H); raport w `logs\`. Najczęstsza przyczyna braku dostępu przez WebDAV przy działającej
-  przeglądarce: adres z kropkami to dla Windows strefa Internet – usługa WebClient nie wysyła logowania Windows,
-  dopóki adres nie jest w strefie Intranet lokalny albo w `AuthForwardServerList`
-  (`HKLM\SYSTEM\CurrentControlSet\Services\WebClient\Parameters`); za proxy – adres musi być na liście wyjątków.
+- Najczęstsza przyczyna braku dostępu przez WebDAV przy działającej przeglądarce: adres z kropkami to dla Windows
+  strefa Internet – usługa WebClient nie wysyła logowania Windows, dopóki adres nie jest w strefie Intranet lokalny
+  albo w `AuthForwardServerList` (`HKLM\SYSTEM\CurrentControlSet\Services\WebClient\Parameters`); za proxy – adres
+  musi być na liście wyjątków.
 - **Ustalenia testu dostępu (stanowisko analityka, 2026-10-02):** SharePoint RABIT jest za bramą logowania F5 (BIG-IP).
-  Działa tylko WebDAV przez usługę WebClient (C, H) i dopiero po zalogowaniu przez Office („Eksport do Excela”
-  z biblioteki albo otwarcie pliku w Excelu); po wygaśnięciu sesji logowanie trzeba powtórzyć. Drogi HTTP z aplikacji
+  Działa tylko WebDAV przez usługę WebClient i dopiero po zalogowaniu do bramy (wcześniej: przez Office – „Eksport do
+  Excela” albo otwarcie pliku w Excelu); po wygaśnięciu sesji logowanie trzeba powtórzyć. Drogi HTTP z aplikacji
   (`owssvr.dll`, pobranie pliku, PROPFIND, REST, `Lists.asmx`) kończą się na stronie logowania bramy albo HTTP 403;
-  provider OLEDB listy niedostępny dla procesu 64-bit.
-- **Logowanie do bramy w aplikacji** (ekran Import, **Zaloguj do SharePoint**): jak Office – protokół MS-OFBA
-  (zapytanie z `X-FORMS_BASED_AUTH_ACCEPTED: t`, odpowiedź 403 z adresem strony logowania i adresem powrotu); okno
-  logowania na silniku przeglądarki Windows, który dzieli trwałe ciasteczka z usługą WebClient. Bez MS-OFBA okno
-  otwiera stronę folderu. Po zalogowaniu – sprawdzenie źródeł: pliki pasujące do definicji z datami modyfikacji.
-  Czy brama zapisuje sesję dostępną dla WebDAV – do potwierdzenia na stanowisku (test dostępu, metoda I).
+  provider OLEDB listy niedostępny dla procesu 64-bit. Test dostępu (drogi A–I) służył tylko diagnozie i został
+  usunięty z aplikacji.
+- **Logowanie do bramy w aplikacji** – część **Importuj** i **Sprawdź źródła** (ekran Import, zawsze przed odczytem
+  lokalizacji SharePoint): jak Office – protokół MS-OFBA (zapytanie z `X-FORMS_BASED_AUTH_ACCEPTED: t`, odpowiedź 403
+  z adresem strony logowania i adresem powrotu); okno logowania na silniku przeglądarki Windows, który dzieli trwałe
+  ciasteczka z usługą WebClient – przy ważnej sesji zamyka się samo. Bez MS-OFBA okno otwiera stronę folderu.
+  Czy sesja z okna aplikacji wystarcza usłudze WebClient – do potwierdzenia na stanowisku.
 - .NET zwraca na ścieżkach WebDAV nazwy plików z końcowym znakiem `\0` oraz wpisy „.” i „..”
   (dotnet/runtime#62429) – import czyści nazwy (`FolderEntries`); narzędzie w Pythonie tego problemu nie miało.
 - Import czyta tylko główny folder lokalizacji (bez podfolderów – jak domyślnie narzędzie w Pythonie). Gdy folder

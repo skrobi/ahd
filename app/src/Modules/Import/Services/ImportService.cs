@@ -20,12 +20,18 @@ namespace PzlEv.Modules.Import.Services;
 public sealed class ImportService(IImportStore store, AppServices services)
 {
     public const string Area = "Import";
+    public const string LockName = "import";
+    public const string WillImport = "zostanie zaimportowany";
+    public const string WillSkip = "zostanie pominięty – bez zmian od ostatniego importu";
     private const string ManualFolderName = "Do_importu";
     public const string NoRabitLocation =
         "Brak aktywnej lokalizacji RABIT – import czyta tylko folder Do_importu; w Administracji zaznacz „Aktywna” przy lokalizacji.";
 
     /// <summary>Log importu (plik logs\pzl-ev-*.log obok exe): ścieżki, dostęp, decyzje, pełne błędy.</summary>
     private static readonly ILogger Logger = Log.ForContext("Module", "import");
+
+    /// <summary>Kto teraz importuje (blokada wspólna dla wszystkich użytkowników); null – nikt.</summary>
+    public LockHolder? RunningImport() => services.Locks.Holder(LockName);
 
     public IReadOnlyList<ImportLocation> Locations() =>
         store.ActiveLocations().Select(l => new ImportLocation(l.Name, WebDavPath.ToUnc(l.Path), false, l.Path))
@@ -67,8 +73,8 @@ public sealed class ImportService(IImportStore store, AppServices services)
                     var note = definition is null
                         ? "żaden aktywny prefiks nie pasuje do początku nazwy"
                         : last is not null && last.Size == file.Length && last.ModifiedAt == modified
-                            ? "zostanie pominięty – bez zmian od importu"
-                            : TabularFileReader.IsSupported(file.Name) ? "zostanie zaimportowany" : $"format {file.Extension} nieobsługiwany";
+                            ? WillSkip
+                            : TabularFileReader.IsSupported(file.Name) ? WillImport : $"format {file.Extension} nieobsługiwany";
                     files.Add(new FileCheck(location.Name, file.Name, file.Length, modified, recognition, note, definition is not null));
                     Logger.Information("Sprawdzenie: {Location} / {File} ({Size} B, {Modified:u}) → {Recognition}; {Note}",
                         location.Name, file.Name, file.Length, modified, recognition, note);
@@ -105,17 +111,32 @@ public sealed class ImportService(IImportStore store, AppServices services)
         Logger.Information("Aktywne definicje źródeł: {Definitions}",
             definitions.Count == 0 ? "BRAK" : string.Join("; ", definitions.Select(d => $"{d.Code}: prefiks '{d.Prefix}', parser {(d.Parser.Length == 0 ? "brak" : d.Parser)}, kolumn {d.Columns.Count}")));
 
-    public ImportRunResult Run(IProgress<string>? progress = null, CancellationToken cancellation = default)
+    /// <summary>
+    /// Import ze wszystkich lokalizacji. Tylko jedna osoba naraz (blokada operacji): gdy import trwa u kogoś
+    /// innego – wynik z NotStarted. Wpis „w toku” w historii od początku importu.
+    /// </summary>
+    public ImportRunResult Run(IProgress<ImportProgress>? progress = null, CancellationToken cancellation = default)
     {
+        using var lease = services.Locks.TryAcquire(LockName, out var holder);
+        if (lease is null)
+        {
+            var busy = $"Import nie rozpoczęty – trwa import: {holder!.Text}.";
+            Logger.Warning(busy);
+            return new ImportRunResult(0, [], [Issue.Warning(busy, "import")], false) { NotStarted = busy };
+        }
+
+        store.AbandonRunning(services.Clock.Now);
         var definitions = store.ActiveDefinitions();
         var batchId = store.BeginBatch(services.Clock.Now, services.User.Account, Environment.MachineName, services.AppVersion);
+        services.Journal.Add(Area, $"Import #{batchId} rozpoczęty ({services.User.Account}, {Environment.MachineName})");
+        services.Database.Commit();
         Logger.Information("Import #{Batch} start – {User} na {Machine}, wersja {Version}", batchId, services.User.Account, Environment.MachineName, services.AppVersion);
+        progress?.Report(new ImportProgress($"Import #{batchId} rozpoczęty…", BatchId: batchId));
         LogDefinitions(definitions);
         var reference = $"import:{batchId}";
         var results = new List<FileResult>();
         var issues = new List<Issue>();
         var cancelled = false;
-        var unavailableSharePoint = new List<string>();
 
         void Problem(string check, Issue issue)
         {
@@ -151,9 +172,7 @@ public sealed class ImportService(IImportStore store, AppServices services)
                 Logger.Error(ex, "Lokalizacja {Location} niedostępna ({Path})", location.Name, location.Path);
                 var hint = WebDavPath.IsWebDav(location.Path) ? $" {WebDavPath.AccessHint}" : "";
                 Problem("lokalizacja niedostępna", Issue.Error($"Lokalizacja niedostępna: {ex.GetType().Name}: {ex.Message} ({location.Path}).{hint}", location.Name));
-                if (WebDavPath.IsWebDav(location.Path))
-                    unavailableSharePoint.Add(location.Name);
-                progress?.Report($"{location.Name}: niedostępna");
+                progress?.Report(new ImportProgress($"{location.Name}: niedostępna"));
                 continue;
             }
 
@@ -164,9 +183,11 @@ public sealed class ImportService(IImportStore store, AppServices services)
                     cancelled = true;
                     break;
                 }
+                progress?.Report(new ImportProgress($"[{results.Count + 1}] {location.Name} / {file.Name}: importowanie…", null, location.Name, file.Name, "importowanie…"));
                 var result = ImportFile(batchId, location, file, definitions, Problem);
                 results.Add(result);
-                progress?.Report($"[{results.Count}] {location.Name} / {file.Name}: {result.Decision}");
+                progress?.Report(new ImportProgress($"[{results.Count}] {location.Name} / {file.Name}: {result.Decision}", null, location.Name, file.Name,
+                    $"{result.Decision} – {result.Description}"));
             }
             if (cancelled)
                 break;
@@ -177,7 +198,7 @@ public sealed class ImportService(IImportStore store, AppServices services)
         store.FinishBatch(batchId, services.Clock.Now, results.Count, Count(FileDecisions.Imported), Count(FileDecisions.Skipped),
             Count(FileDecisions.Duplicate), Count(FileDecisions.Unrecognized), Count(FileDecisions.Error), status);
 
-        var run = new ImportRunResult(batchId, results, issues, cancelled) { UnavailableSharePoint = unavailableSharePoint };
+        var run = new ImportRunResult(batchId, results, issues, cancelled);
         services.Journal.Add(Area, $"Import #{batchId}: {run.Summary}");
         Logger.Information("Import #{Batch} koniec: {Summary}", batchId, run.Summary);
         services.Database.Commit();

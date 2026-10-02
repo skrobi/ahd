@@ -9,7 +9,7 @@ using PzlEv.Shared.Utils.Ui.Mvvm;
 
 namespace PzlEv.Modules.Administration.ViewModels;
 
-/// <summary>Ekran Administracja (F08): definicje źródeł i lokalizacje RABIT – dodanie, zmiana, dezaktywacja, historia.</summary>
+/// <summary>Ekran Administracja (F08): definicje źródeł i lokalizacje RABIT – dodanie, zmiana, dezaktywacja, usunięcie definicji, historia.</summary>
 public sealed class AdministrationViewModel : ObservableObject
 {
     private readonly SourceConfigService _service;
@@ -20,9 +20,9 @@ public sealed class AdministrationViewModel : ObservableObject
     // Formularz definicji.
     private long? _defId;
     private int? _defVersion;
-    private string _defCode = "", _defPrefix = "", _defReportType = "", _defColumns = "", _defGrain = "", _defKeyColumns = "";
-    private string _defPeriodMeaning = "", _defCurrency = "", _defNumberFormat = "", _defParser = SourceParsers.Actuals;
+    private string _defCode = "", _defPrefix = "", _defReportType = "", _defColumns = "", _defParser = SourceParsers.Actuals;
     private bool _defActive = true;
+    private bool _deletePending;
 
     // Formularz lokalizacji.
     private long? _locId;
@@ -35,6 +35,8 @@ public sealed class AdministrationViewModel : ObservableObject
         _service = service;
         NewDefinition = new RelayCommand(_ => ClearDefinitionForm());
         SaveDefinition = new RelayCommand(_ => DoSaveDefinition());
+        DeleteDefinition = new RelayCommand(_ => AskDeleteDefinition(), _ => _defId is not null);
+        ConfirmDeleteDefinition = new RelayCommand(_ => DoDeleteDefinition(), _ => _deletePending);
         NewLocation = new RelayCommand(_ => ClearLocationForm());
         SaveLocation = new RelayCommand(_ => DoSaveLocation());
         Reload();
@@ -56,12 +58,17 @@ public sealed class AdministrationViewModel : ObservableObject
 
     public ICommand NewDefinition { get; }
     public ICommand SaveDefinition { get; }
+    public ICommand DeleteDefinition { get; }
+    public ICommand ConfirmDeleteDefinition { get; }
     public ICommand NewLocation { get; }
     public ICommand SaveLocation { get; }
 
     public string Status { get => _status; private set => SetProperty(ref _status, value); }
 
     public bool HasIssues => Issues.Count > 0;
+
+    /// <summary>Usunięcie definicji czeka na potwierdzenie (drugi przycisk).</summary>
+    public bool DeletePending { get => _deletePending; private set => SetProperty(ref _deletePending, value); }
 
     public string DefinitionFormTitle => _defId is null ? "Nowa definicja źródła" : $"Zmiana definicji {_defCode} (wersja {_defVersion})";
 
@@ -80,13 +87,9 @@ public sealed class AdministrationViewModel : ObservableObject
             DefPrefix = value.Prefix;
             DefReportType = value.ReportType;
             DefColumns = string.Join(Environment.NewLine, value.Columns);
-            DefGrain = value.Grain;
-            DefKeyColumns = string.Join(", ", value.KeyColumns);
-            DefPeriodMeaning = value.PeriodMeaning;
-            DefCurrency = value.Currency;
-            DefNumberFormat = value.NumberFormat;
             DefParser = value.Parser;
             DefActive = value.Active;
+            DeletePending = false;
             OnPropertyChanged(nameof(DefinitionFormTitle));
             DefinitionHistory.Clear();
             foreach (var version in _service.DefinitionHistory(value.DefinitionId).Reverse())
@@ -114,11 +117,6 @@ public sealed class AdministrationViewModel : ObservableObject
     public string DefPrefix { get => _defPrefix; set => SetProperty(ref _defPrefix, value); }
     public string DefReportType { get => _defReportType; set => SetProperty(ref _defReportType, value); }
     public string DefColumns { get => _defColumns; set => SetProperty(ref _defColumns, value); }
-    public string DefGrain { get => _defGrain; set => SetProperty(ref _defGrain, value); }
-    public string DefKeyColumns { get => _defKeyColumns; set => SetProperty(ref _defKeyColumns, value); }
-    public string DefPeriodMeaning { get => _defPeriodMeaning; set => SetProperty(ref _defPeriodMeaning, value); }
-    public string DefCurrency { get => _defCurrency; set => SetProperty(ref _defCurrency, value); }
-    public string DefNumberFormat { get => _defNumberFormat; set => SetProperty(ref _defNumberFormat, value); }
     public string DefParser { get => _defParser; set => SetProperty(ref _defParser, value ?? SourceParsers.None); }
     public bool DefActive { get => _defActive; set => SetProperty(ref _defActive, value); }
 
@@ -141,7 +139,8 @@ public sealed class AdministrationViewModel : ObservableObject
         SelectedDefinition = null;
         _defId = null;
         _defVersion = null;
-        DefCode = DefPrefix = DefReportType = DefGrain = DefKeyColumns = DefPeriodMeaning = DefCurrency = DefNumberFormat = "";
+        DefCode = DefPrefix = DefReportType = "";
+        DeletePending = false;
         DefColumns = string.Join(Environment.NewLine, SourceParsers.ActualsColumns);
         DefParser = SourceParsers.Actuals;
         DefActive = true;
@@ -163,10 +162,23 @@ public sealed class AdministrationViewModel : ObservableObject
     private void DoSaveDefinition()
     {
         var input = new DefinitionInput(_defId, _defVersion, DefCode, DefPrefix, DefReportType,
-            DefColumns.Split('\n').Select(c => c.Trim()).ToList(), DefGrain,
-            DefKeyColumns.Split([',', ';']).Select(c => c.Trim()).ToList(),
-            DefPeriodMeaning, DefCurrency, DefNumberFormat, DefParser, DefActive);
+            DefColumns.Split('\n').Select(c => c.Trim()).ToList(), DefParser, DefActive);
         Show(_service.SaveDefinition(input));
+    }
+
+    private void AskDeleteDefinition()
+    {
+        DeletePending = true;
+        Status = $"Usunąć definicję {DefCode} (prefiks {DefPrefix})? Pliki o tym prefiksie nie będą importowane; historia i zaimportowane dane zostają. " +
+                 "Kliknij „Potwierdź usunięcie”.";
+    }
+
+    private void DoDeleteDefinition()
+    {
+        if (_defId is not { } id || _defVersion is not { } version)
+            return;
+        DeletePending = false;
+        Show(_service.DeleteDefinition(id, version));
     }
 
     private void DoSaveLocation() =>

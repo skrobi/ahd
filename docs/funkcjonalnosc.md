@@ -100,7 +100,11 @@ Ekran opisany w `docs/mapowanie-ces-p1s.md`, rozdz. 11; reguły – tamże.
 ### F05. Import
 
 - **Importuj** – import ze wszystkich aktywnych lokalizacji RABIT (WebDAV) i z folderu `Do_importu`
-  (`docs/pipeline-fazy.md`, G1).
+  (`docs/pipeline-fazy.md`, G1): logowanie do SharePoint (brama F5, jak Office), lista plików pasujących do
+  definicji z datami („zostanie zaimportowany”), import ze zmianą statusu każdego pliku. Tylko jedna osoba naraz –
+  druga widzi, kto importuje i od kiedy.
+- **Sprawdź źródła** – to samo bez importu.
+- Import zapisuje dane w bazie; plików z SharePoint nie kopiuje do `Do_importu` (folder na pliki pobrane ręcznie).
 - Wynik importu: decyzja dla każdego pliku, liczba wierszy, problemy.
 - Historia importów: kto, kiedy, co – widoczna dla wszystkich.
 
@@ -122,7 +126,7 @@ Ekran opisany w `docs/mapowanie-ces-p1s.md`, rozdz. 11; reguły – tamże.
 
 ### F08. Administracja
 
-- Definicje źródeł (`docs/zrodla-danych.md`, rozdz. 2) – z historią.
+- Definicje źródeł (`docs/zrodla-danych.md`, rozdz. 2) – z historią: dodanie, zmiana, dezaktywacja, usunięcie.
 - Lokalizacje RABIT (`docs/zrodla-danych.md`, rozdz. 3): dodanie, zmiana, dezaktywacja.
 - Role i przypisane grupy AD (`docs/uprawnienia.md`, rozdz. 3).
 

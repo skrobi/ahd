@@ -19,7 +19,7 @@ public sealed class TestServices
     /// <summary>Usługi aplikacji z korzeniem folderów w katalogu tymczasowym testu.</summary>
     public AppServices App(string networkRoot) =>
         new(AppConfigLoader.Defaults() with { NetworkRoot = networkRoot, InMemoryStatePath = Path.Combine(networkRoot, "state.json") },
-            Clock, User, Database, Journal, Problems, "test");
+            Clock, User, Database, Journal, Problems, "test", new FileOperationLock(Path.Combine(networkRoot, "00_Global", "RABIT"), Clock, User));
 
     /// <summary>Plik danych wzorcowych (app/testdata) skopiowany do katalogu testów.</summary>
     public static string TestData(params string[] parts) => Path.Combine([AppContext.BaseDirectory, "testdata", .. parts]);
