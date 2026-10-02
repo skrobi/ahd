@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Testy logiki PZL-EV. Projekt kompiluje pliki logiki aplikacji (src/) dla net10.0 – bez WPF:
+    wszystko poza widokami, ViewModelami, powłoką, Shared/Utils/Ui, plikami wejścia modułów (*Module.cs)
+    i modułem Diagnostyka. Użycie typu WPF w logice = błąd budowy testów (logika ma działać bez UI,
+    docs/architektura.md, rozdz. 5.3). Testy działają także poza Windows.
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <RootNamespace>PzlEv.Tests</RootNamespace>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\src\**\*.cs"
+             Exclude="..\src\obj\**;..\src\bin\**;..\src\**\Views\**;..\src\**\ViewModels\**;..\src\Shell\**;..\src\Shared\Utils\Ui\**;..\src\App.xaml.cs;..\src\Modules\*\*Module.cs;..\src\Modules\Diagnostics\**"
+             LinkBase="App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
+    <!-- Te same wersje co w aplikacji (src/PzlEv.csproj). -->
+    <PackageReference Include="ClosedXML" Version="0.104.2" />
+    <PackageReference Include="Serilog" Version="4.2.0" />
+  </ItemGroup>
+
+</Project>

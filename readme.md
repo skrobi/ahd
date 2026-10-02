@@ -29,7 +29,8 @@ Każda reguła jest opisana w jednym dokumencie; pozostałe dokumenty do niego o
 | `docs/uprawnienia.md` | konto AD, role, zakres danych (kontrakt RBAC) |
 | `docs/funkcjonalnosc.md` | użytkownicy, ekrany, funkcje, pliki generowane, scenariusze, zakres wersji |
 | `docs/mvp-etap1.md` | instrukcja narzędzia testowego w Pythonie (WebDAV, import) |
-| `poc-wpf/` | aplikacja testowa stosu C#/.NET 10 + WPF (Pulpit z prototypu, bez bazy) – sprawdzenie uruchomienia `PZL-EV.exe` z dysku sieciowego (O6); kod w docelowej strukturze modułów (`docs/architektura.md`, rozdz. 5.3) |
+| `app/` | aplikacja PZL-EV (C#/.NET 10 + WPF): kod w strukturze modułów (`docs/architektura.md`, rozdz. 5.3), testy, budowa `build.cmd`; do czasu bazy TEST dane w pamięci |
+| `tasks/` | plan budowy: fazy i zadania (kontrakt implementacyjny – `CLAUDE.md`, rozdz. 9) |
 | `pzl_ev/`, `tests/`, `konfiguracja/`, `sql/mssql/` | kod i testy narzędzia testowego, przykładowa konfiguracja prefiksów, skrypt tabel importu MS SQL |
 | `prototyp/*.html` | klikalne prototypy na danych przykładowych; pokazują wcześniejszy stan koncepcji – obowiązuje dokumentacja |
 | `dependencies.csv`, `resolved_objects.csv`, `export_log.txt` | eksport metadanych obiektów SQL z `splmcd03` (`PZLPROD.LOG`, `PZL_SAP`) |

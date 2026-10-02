@@ -1,0 +1,44 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:models="clr-namespace:PzlEv.Shared.Models"
+                    xmlns:conv="clr-namespace:PzlEv.Shared.Utils.Ui.Converters">
+
+    <!--
+      Fragmenty wielokrotnego użytku (Shared/Views/Partials) – szablony danych dla modeli wspólnych.
+      Szablony bez klucza (DataType) działają automatycznie: ContentControl / ItemsControl z obiektem Pill
+      albo StageDot wyświetla go tak samo w każdym module.
+    -->
+
+    <!-- Poziom (ok / warn / crit / …) → pędzel z palety (Templates/Theme.xaml). -->
+    <conv:LevelBrushConverter x:Key="LevelBrush" />
+
+    <!-- Pigułka statusu -->
+    <DataTemplate DataType="{x:Type models:Pill}">
+        <Border Background="{Binding Level, Converter={StaticResource LevelBrush}, ConverterParameter=bg}"
+                CornerRadius="10" Padding="8,1" Margin="0,0,6,4" HorizontalAlignment="Left">
+            <TextBlock Text="{Binding Text}" FontSize="12" FontWeight="Medium"
+                       Foreground="{Binding Level, Converter={StaticResource LevelBrush}, ConverterParameter=fg}" />
+        </Border>
+    </DataTemplate>
+
+    <!-- Wynik kontroli (Issue): poziom jako pigułka, miejsce, opis – walidacja zapisu, import, etapy -->
+    <DataTemplate DataType="{x:Type models:Issue}">
+        <DockPanel Margin="0,2">
+            <Border DockPanel.Dock="Left" Width="78" CornerRadius="10" Padding="8,1" Margin="0,0,8,0" VerticalAlignment="Top"
+                    Background="{Binding LevelColor, Converter={StaticResource LevelBrush}, ConverterParameter=bg}">
+                <TextBlock Text="{Binding LevelText}" FontSize="11" FontWeight="Medium" HorizontalAlignment="Center"
+                           Foreground="{Binding LevelColor, Converter={StaticResource LevelBrush}, ConverterParameter=fg}" />
+            </Border>
+            <TextBlock DockPanel.Dock="Left" Text="{Binding Element}" FontFamily="{DynamicResource FMono}" FontSize="12" Margin="0,1,8,0"
+                       Foreground="{DynamicResource Muted}" />
+            <TextBlock Text="{Binding Message}" TextWrapping="Wrap" />
+        </DockPanel>
+    </DataTemplate>
+
+    <!-- Kropka statusu etapu na osi przebiegu -->
+    <DataTemplate DataType="{x:Type models:StageDot}">
+        <Ellipse Width="11" Height="11" Margin="0,0,5,0"
+                 Fill="{Binding Level, Converter={StaticResource LevelBrush}, ConverterParameter=fg}" />
+    </DataTemplate>
+
+</ResourceDictionary>
