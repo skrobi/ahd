@@ -87,6 +87,11 @@ i utrzymywaną na ekranie Administracja (`docs/funkcjonalnosc.md`, F08).
   z biblioteki albo otwarcie pliku w Excelu); po wygaśnięciu sesji logowanie trzeba powtórzyć. Drogi HTTP z aplikacji
   (`owssvr.dll`, pobranie pliku, PROPFIND, REST, `Lists.asmx`) kończą się na stronie logowania bramy albo HTTP 403;
   provider OLEDB listy niedostępny dla procesu 64-bit.
+- **Logowanie do bramy w aplikacji** (ekran Import, **Zaloguj do SharePoint**): jak Office – protokół MS-OFBA
+  (zapytanie z `X-FORMS_BASED_AUTH_ACCEPTED: t`, odpowiedź 403 z adresem strony logowania i adresem powrotu); okno
+  logowania na silniku przeglądarki Windows, który dzieli trwałe ciasteczka z usługą WebClient. Bez MS-OFBA okno
+  otwiera stronę folderu. Po zalogowaniu – sprawdzenie źródeł: pliki pasujące do definicji z datami modyfikacji.
+  Czy brama zapisuje sesję dostępną dla WebDAV – do potwierdzenia na stanowisku (test dostępu, metoda I).
 - .NET zwraca na ścieżkach WebDAV nazwy plików z końcowym znakiem `\0` oraz wpisy „.” i „..”
   (dotnet/runtime#62429) – import czyści nazwy (`FolderEntries`); narzędzie w Pythonie tego problemu nie miało.
 - Import czyta tylko główny folder lokalizacji (bez podfolderów – jak domyślnie narzędzie w Pythonie). Gdy folder

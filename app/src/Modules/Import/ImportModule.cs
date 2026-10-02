@@ -27,6 +27,6 @@ public sealed class ImportModule : IModule
     public FrameworkElement CreateView(ModuleContext context)
     {
         var store = new InMemoryImportStore(context.Services.Database);
-        return new ImportView { DataContext = new ImportViewModel(new ImportService(store, context.Services), store) };
+        return new ImportView { DataContext = new ImportViewModel(new ImportService(store, context.Services), store, new SharePointLoginDialog()) };
     }
 }

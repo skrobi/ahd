@@ -48,10 +48,14 @@ wydłużają zapis stanu.
    ścieżka zapisana i faktycznie czytana (WebDAV), dostęp albo pełny błąd, liczba plików, podfoldery (import czyta
    tylko główny folder lokalizacji), a dla każdego pliku – jak zostałby rozpoznany. To samo, wraz z decyzją dla
    każdego pliku importu i pełną treścią wyjątków, trafia do `logs\pzl-ev-RRRRMMDD.log` obok `.exe`.
-5. **Lokalizacja SharePoint niedostępna** – na ekranie Import rozwiń **Test dostępu do SharePoint** i **Uruchom test**
+5. **Logowanie do SharePoint (brama F5)** – **Zaloguj do SharePoint** na ekranie Import otwiera okno logowania jak
+   w Office (MS-OFBA); po zalogowaniu aplikacja od razu pokazuje pliki pasujące do definicji z datami modyfikacji
+   (**Pokaż wszystkie pliki** – także nierozpoznane). Gdy import nie dotrze do lokalizacji SharePoint – przycisk
+   **Zaloguj do SharePoint i ponów import**.
+6. **Lokalizacja SharePoint niedostępna** – na ekranie Import rozwiń **Test dostępu do SharePoint** i **Uruchom test**
    (jak `test_dostepu_rabit.py` w narzędziu w Pythonie). Sprawdza drogi A–H: A `owssvr.dll`, B OLEDB (Excel),
    C WebDAV `\\…\DavWWWRoot` (Eksplorator), D pobranie pliku, E WebDAV przez HTTPS z aplikacji (bez usługi
-   WebClient), F REST API, G `Lists.asmx`, H mapowanie (`net use`), oraz środowisko: konto, strefę zabezpieczeń
+   WebClient), F REST API, G `Lists.asmx`, H mapowanie (`net use`), I logowanie jak Office (MS-OFBA), oraz środowisko: konto, strefę zabezpieczeń
    adresu, proxy, stan usługi WebClient, `AuthForwardServerList`. Raport bez zawartości plików:
    `logs\test-dostepu-rabit-*.txt`.
 
