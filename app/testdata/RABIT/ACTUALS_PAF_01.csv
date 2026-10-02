@@ -1,7 +1,7 @@
-Project Definition;WBS Element;Cost Element;Cost element descr.;Cost element name;CO object name;Transaction Currency;Value TranCurr;Object Currency;Value in Obj. Crcy;Report currency;Val.in rep.cur.;Total Quantity;Partner-CCtr;Source object name;Partner Object Class;Partner object;Original material;Original material description;Fiscal Year;Created on;Period
-2DI473;2DI473001001;51105550;PZL Material Consumption;PZL Mat Consump;PAF2 - materiały pod RTS batch 6;USD;261,54;PLN;1 254,51;USD;261,54;0,000;;;;;;;2026;2026-03-29;3
-2DI473;2DI473001001;92212550;PZL Machining (W30);PZL Machining (W30);PAF2 - obróbka;PLN;4 800,00;PLN;4 800,00;USD;1 000,00;32,000;W30;Obróbka CNC;KSTL;PZW30;;;2026;2026-03-30;3
-2DI473;2DI473001002;94410550;PZL Des Eng/Proc Eng;PZL Des Eng/Proc Eng;PAF2 - konstrukcja;PLN;2 400,00;PLN;2 400,00;USD;500,00;12,000;E10;Konstrukcja;KSTL;PZE10;;;2026;2026-03-31;3
-2DI473;2DI473001002;57120550;PZL Travel;PZL Travel;PAF2 - delegacja;EUR;100,00;PLN;430,00;USD;89,58;0,000;;;;;;;2026;2026-03-31;3
-4D03GZ;4D03GZ000001;51105550;PZL Material Consumption;PZL Mat Consump;CAB - korekta materiału;USD;48,00-;PLN;230,40-;USD;48,00-;0,000;;;;;MAT-001;Blacha Al 2 mm;2026;2026-03-31;3
-4D03GZ;4D03GZ000041;9221X550;PZL MFG Indirect;PZL MFG Indirect;CAB - koszty pośrednie;PLN;1 920,00;PLN;1 920,00;USD;400,00;16,000;W51;Montaż;KSTL;PZW51;;;2026;2026-03-31;3
+Project Definition;WBS Element;Cost Element;Cost element name;CO object name;Transaction Currency;Value TranCurr;Object Currency;Value in Obj. Crcy;Report currency;Val.in rep.cur.;Total Quantity;Partner Object Class;Partner object;Original material;Original material description;Original Order Number;Item;Purchase order number;Fiscal Year;Created on;Period;Invoice Number
+2DI473;2DI473001001;51105550;PZL Mat Consump;PAF2 - materiały pod RTS batch 6;USD;261,54;PLN;1 254,51;USD;261,54;0,000;;;;;8000123401;10;4500012301;2026;2026-03-29;3;FV/2026/03/011
+2DI473;2DI473001001;92212550;PZL Machining (W30);PAF2 - obróbka;PLN;4 800,00;PLN;4 800,00;USD;1 000,00;32,000;KSTL;PZW30;;;8000123402;20;;2026;2026-03-30;3;
+2DI473;2DI473001002;94410550;PZL Des Eng/Proc Eng;PAF2 - konstrukcja;PLN;2 400,00;PLN;2 400,00;USD;500,00;12,000;KSTL;PZE10;;;8000123403;30;;2026;2026-03-31;3;
+2DI473;2DI473001002;57120550;PZL Travel;PAF2 - delegacja;EUR;100,00;PLN;430,00;USD;89,58;0,000;;;;;;;4500012304;2026;2026-03-31;3;FV/2026/03/014
+4D03GZ;4D03GZ000001;51105550;PZL Mat Consump;CAB - korekta materiału;USD;48,00-;PLN;230,40-;USD;48,00-;0,000;;;MAT-001;Blacha Al 2 mm;8000123405;10;4500012305;2026;2026-03-31;3;FV/2026/03/015
+4D03GZ;4D03GZ000041;9221X550;PZL MFG Indirect;CAB - koszty pośrednie;PLN;1 920,00;PLN;1 920,00;USD;400,00;16,000;KSTL;PZW51;;;;;;2026;2026-03-31;3;

@@ -42,8 +42,6 @@ public sealed class ImportServiceTests : IDisposable
 
     private string ImportFolder => _app.Config.ImportFolder;
 
-    private IReadOnlyList<ParserField> ParserFields => _store.ActiveParser(ActualsLayout.Parser)!.Fields;
-
     /// <summary>Dane kanoniczne pliku z tabeli parsera ACTUALS.</summary>
     private IReadOnlyList<IReadOnlyDictionary<string, object?>> Canonical(long fileId) => _store.CanonicalRows(_store.ActiveParser(ActualsLayout.Parser)!, fileId);
 
@@ -86,7 +84,9 @@ public sealed class ImportServiceTests : IDisposable
         Assert.Equal("0051105550", actuals[0]["CostElement"]);
         Assert.Equal(-230.40m, (decimal)actuals[4]["ValueObjCrcy"]!);               // minus na końcu (zapis SAP)
         Assert.Equal(new DateTime(2026, 3, 29), actuals[0]["CreatedOn"]);
-        Assert.Null(actuals[0]["InvoiceNumber"]);                                   // pole parsera bez kolumny w pliku
+        Assert.Equal(("8000123401", "10", "4500012301", "FV/2026/03/011"),
+            (actuals[0]["OriginalOrderNumber"], actuals[0]["Item"], actuals[0]["PurchaseOrderNumber"], actuals[0]["InvoiceNumber"]));
+        Assert.Null(actuals[0]["PartnerCctr"]);                                     // pole parsera bez kolumny w pliku
         Assert.Equal("zakończony", _store.Batches(1).Single().Status);
         Assert.Contains(_app.Journal.Recent(5), e => e.Message.StartsWith($"Import #{run.BatchId}"));
     }
@@ -235,7 +235,7 @@ public sealed class ImportServiceTests : IDisposable
         _config.SaveLocation(new LocationInput(null, null, "RABIT test", rabit, Active: true));
         CopySample(ImportFolder, "ACTUALS_PAF_01.csv");
         var other = CopySample(rabit, "ACTUALS_PAF_01.csv");
-        File.AppendAllText(other, "2DI473;2DI473001003;51105550;x;x;x;PLN;1,00;PLN;1,00;USD;0,25;0,000;;;;;;;2026;2026-03-31;3\r\n");
+        File.AppendAllText(other, "2DI473;2DI473001003;51105550;x;x;PLN;1,00;PLN;1,00;USD;0,25;0,000;;;;;;;;2026;2026-03-31;3;\r\n");
 
         var run = _import.Run();
 
@@ -246,7 +246,7 @@ public sealed class ImportServiceTests : IDisposable
     public void Longest_prefix_wins()
     {
         Use();
-        _config.SaveDefinition(new DefinitionInput(null, null, "ACTUALS", "ACTUALS", "ogólny", ["A"], SourceParsers.None, true));
+        _config.SaveDefinition(new DefinitionInput(null, null, "ACTUALS", "ACTUALS", "ogólny", SourceParsers.None, true));
         CopySample(ImportFolder, "ACTUALS_PAF_01.csv");
 
         Assert.Equal("ACTUALS_PAF", Assert.Single(_import.Run().Files).SourceCode);
@@ -258,9 +258,8 @@ public sealed class ImportServiceTests : IDisposable
         Use();
         // Wszystkie ACTUALS_… jako jedno źródło: istniejące definicje wyłączone, nowa z prefiksem „ACTUALS_*”.
         foreach (var d in _config.Definitions())
-            Assert.True(_config.SaveDefinition(new DefinitionInput(d.DefinitionId, d.Version, d.Code, d.Prefix, d.ReportType, d.Columns, d.Parser, Active: false, d.Mapping)).Success);
-        _config.SaveDefinition(new DefinitionInput(null, null, "ACTUALS", "ACTUALS_*", "Koszty rzeczywiste CES", ActualsLayout.Columns,
-            ActualsLayout.Parser, true, ActualsLayout.Mapping(ParserFields)));
+            Assert.True(_config.SaveDefinition(new DefinitionInput(d.DefinitionId, d.Version, d.Code, d.Prefix, d.ReportType, d.Parser, Active: false)).Success);
+        _config.SaveDefinition(new DefinitionInput(null, null, "ACTUALS", "ACTUALS_*", "Koszty rzeczywiste CES", ActualsLayout.Parser, true));
         CopySample(ImportFolder, "ACTUALS_PAF2_B6_AC1.csv");
 
         var result = Assert.Single(_import.Run().Files);
@@ -269,30 +268,51 @@ public sealed class ImportServiceTests : IDisposable
         Assert.Equal("ACTUALS", result.SourceCode);
     }
 
+    /// <summary>Zapisuje nową wersję parsera ACTUALS ze zmienionymi polami.</summary>
+    private void ChangeActualsParser(Func<ParserField, ParserField> change)
+    {
+        var parser = _config.Parsers().Single(p => p.Code == ActualsLayout.Parser);
+        var saved = _config.SaveParser(new ParserInput(parser.ParserId, parser.Version, parser.Code, parser.Name, parser.Fields.Select(change).ToList(), parser.Active));
+        Assert.True(saved.Success, saved.Message + string.Join("; ", saved.Issues.Select(i => i.Message)));
+    }
+
     [SqlFact]
-    public void Changed_column_layout_is_an_error_file_is_not_stored_and_is_imported_after_definition_fix()
+    public void Missing_parser_column_is_an_error_file_is_not_stored_and_is_imported_after_parser_fix()
     {
         Use();
         Directory.CreateDirectory(ImportFolder);
         var lines = File.ReadAllLines(TestServices.TestData("RABIT", "ACTUALS_PAF_01.csv"));
-        File.WriteAllLines(Path.Combine(ImportFolder, "ACTUALS_PAF_01.csv"), lines.Select((l, i) => (i == 0 ? "Dodatkowa;" : "x;") + l)); // dodatkowa kolumna
+        File.WriteAllLines(Path.Combine(ImportFolder, "ACTUALS_PAF_01.csv"), lines.Select(l => l[..l.LastIndexOf(';')]));   // bez Invoice Number
 
         var first = _import.Run();
 
         Assert.Equal(FileDecisions.Error, Assert.Single(first.Files).Decision);
-        Assert.Contains(first.Issues, i => i.Level == CheckLevel.Error && i.Message.Contains("układ kolumn niezgodny") && i.Message.Contains("nie zapisany w bazie"));
+        Assert.Contains(first.Issues, i => i.Level == CheckLevel.Error && i.Message.Contains("brak kolumn parsera ACTUALS: Invoice Number") && i.Message.Contains("nie zapisany w bazie"));
         Assert.Null(_store.FindByHash(Assert.Single(_store.Seen(first.BatchId)).Sha256!));   // ani plik, ani wiersze surowe
         Assert.Equal(ImportService.WillImport, Assert.Single(_import.Check().Files).Note);   // nie jest „bez zmian”
 
-        var paf = _config.Definitions().Single(d => d.Code == "ACTUALS_PAF");
-        Assert.True(_config.SaveDefinition(new DefinitionInput(paf.DefinitionId, paf.Version, paf.Code, paf.Prefix, paf.ReportType,
-            ["Dodatkowa", .. ActualsLayout.Columns], paf.Parser, paf.Active, paf.Mapping)).Success);
+        ChangeActualsParser(f => f.Field == "InvoiceNumber" ? f with { Column = "" } : f);   // pole przestaje być czytane z pliku
         var second = _import.Run();   // ten sam plik, te same metadane – pobrany ponownie
 
         Assert.Equal(FileDecisions.Imported, Assert.Single(second.Files).Decision);
         var file = _store.FindByHash(Assert.Single(_store.Seen(second.BatchId)).Sha256!)!;
         Assert.Equal("utworzone", file.CanonicalStatus);
         Assert.Equal(6, Canonical(file.Id).Count);
+        Assert.All(Canonical(file.Id), r => Assert.Null(r["InvoiceNumber"]));
+    }
+
+    [SqlFact]
+    public void Extra_column_in_file_is_imported_raw_only()
+    {
+        Use();
+        Directory.CreateDirectory(ImportFolder);
+        var lines = File.ReadAllLines(TestServices.TestData("RABIT", "ACTUALS_PAF_01.csv"));
+        File.WriteAllLines(Path.Combine(ImportFolder, "ACTUALS_PAF_01.csv"), lines.Select((l, i) => (i == 0 ? "Dodatkowa;" : "x;") + l));
+
+        var result = Assert.Single(_import.Run().Files);
+
+        Assert.Equal(FileDecisions.Imported, result.Decision);
+        Assert.EndsWith("kolumny spoza parsera (tylko wiersze surowe): Dodatkowa", result.Description);
     }
 
     [SqlFact]
@@ -313,66 +333,17 @@ public sealed class ImportServiceTests : IDisposable
         Assert.Null(_store.FindByHash(Assert.Single(_store.Seen(run.BatchId)).Sha256!));
     }
 
-    /// <summary>Nowy układ raportu (bez 3 kolumn opisowych, z 4 nowymi) – kolumny i mapowanie ustawione w definicji.</summary>
-    private static readonly string[] NewLayout =
-    [
-        "Project Definition", "WBS Element", "Cost Element", "Cost element name", "CO object name", "Transaction Currency", "Value TranCurr",
-        "Object Currency", "Value in Obj. Crcy", "Report currency", "Val.in rep.cur.", "Total Quantity", "Partner Object Class", "Partner object",
-        "Original material", "Original material description", "Original Order Number", "Item", "Purchase order number", "Fiscal Year",
-        "Created on", "Period", "Invoice Number",
-    ];
-
-    /// <summary>Plik wzorcowy przepisany na nowy układ; nowe kolumny: ORD{n}, {n}0, PO{n}, FV/{n}.</summary>
-    private void WriteNewLayoutFile(string name)
-    {
-        var lines = File.ReadAllLines(TestServices.TestData("RABIT", "ACTUALS_PAF_01.csv"));
-        var header = lines[0].Split(';');
-        var output = new List<string> { string.Join(";", NewLayout) };
-        for (var r = 1; r < lines.Length; r++)
-        {
-            var values = header.Zip(lines[r].Split(';')).ToDictionary(p => p.First, p => p.Second);
-            values["Original Order Number"] = $"ORD{r}";
-            values["Item"] = $"{r}0";
-            values["Purchase order number"] = $"PO{r}";
-            values["Invoice Number"] = $"FV/{r}";
-            output.Add(string.Join(";", NewLayout.Select(c => values[c])));
-        }
-        Directory.CreateDirectory(ImportFolder);
-        File.WriteAllLines(Path.Combine(ImportFolder, name), output);
-    }
-
-    [SqlFact]
-    public void New_layout_is_imported_by_mapping_new_columns_to_parser_fields()
-    {
-        Use();
-        var paf = _config.Definitions().Single(d => d.Code == "ACTUALS_PAF");
-        var saved = _config.SaveDefinition(new DefinitionInput(paf.DefinitionId, paf.Version, paf.Code, paf.Prefix, paf.ReportType, NewLayout,
-            paf.Parser, paf.Active, ActualsLayout.Mapping(ParserFields, NewLayout)));
-        Assert.True(saved.Success, string.Join("; ", saved.Issues.Select(i => i.Message)));
-        WriteNewLayoutFile("ACTUALS_PAF2_B6_AC1.csv");
-
-        var run = _import.Run();
-
-        var result = Assert.Single(run.Files);
-        Assert.Equal(FileDecisions.Imported, result.Decision);
-        Assert.Contains("dane kanoniczne (ACTUALS): 6 wierszy, suma Value TranCurr", result.Description);
-        var rows = Canonical(_store.FindByHash(Assert.Single(_store.Seen(run.BatchId)).Sha256!)!.Id);
-        Assert.Equal(6, rows.Count);
-        Assert.Equal(("ORD1", "10", "PO1", "FV/1"), (rows[0]["OriginalOrderNumber"], rows[0]["Item"], rows[0]["PurchaseOrderNumber"], rows[0]["InvoiceNumber"]));
-        Assert.Null(rows[0]["PartnerCctr"]);                         // kolumny nie ma w nowym układzie
-        Assert.Equal(10574.11m, rows.Sum(a => (decimal)a["ValueObjCrcy"]!));
-    }
-
     [SqlFact]
     public void Source_with_parser_created_in_application_is_imported_to_its_own_table()
     {
         Use();
         var parserSaved = _config.SaveParser(new ParserInput(null, null, "KOSZTY", "Koszty – skrót",
-            [new("Wbs", "WBS Element", FieldTypes.Text, 50), new("Pln", "Value in Obj. Crcy", FieldTypes.Decimal), new("Rok", "Fiscal Year", FieldTypes.Integer)], true));
+        [
+            new("Wbs", "WBS Element", FieldTypes.Text, 50, Required: true), new("Pln", "Value in Obj. Crcy", FieldTypes.Decimal),
+            new("Rok", "Fiscal Year", FieldTypes.Integer),
+        ], true));
         Assert.True(parserSaved.Success, parserSaved.Message);
-        var fields = _config.Parsers().Single(p => p.Code == "KOSZTY").Fields;
-        Assert.True(_config.SaveDefinition(new DefinitionInput(null, null, "SKROT", "SKROT_", "test", ActualsLayout.Columns, "KOSZTY", true,
-            SourceConfigService.MapByName(ActualsLayout.Columns, fields))).Success);
+        Assert.True(_config.SaveDefinition(new DefinitionInput(null, null, "SKROT", "SKROT_", "test", "KOSZTY", true)).Success);
         CopySample(ImportFolder, "SKROT_01.csv");
 
         var run = _import.Run();
@@ -388,10 +359,7 @@ public sealed class ImportServiceTests : IDisposable
     public void Required_field_empty_in_a_row_is_an_error_and_file_is_not_stored()
     {
         Use();
-        var paf = _config.Definitions().Single(d => d.Code == "ACTUALS_PAF");
-        var mapping = paf.Mapping.Select(m => m.Field == "PartnerObject" ? m with { Required = true } : m).ToList();
-        Assert.True(_config.SaveDefinition(new DefinitionInput(paf.DefinitionId, paf.Version, paf.Code, paf.Prefix, paf.ReportType, paf.Columns,
-            paf.Parser, paf.Active, mapping)).Success);
+        ChangeActualsParser(f => f.Field == "PartnerObject" ? f with { Required = true } : f);
         CopySample(ImportFolder, "ACTUALS_PAF_01.csv");   // Partner object pusty w części wierszy
 
         var run = _import.Run();
@@ -402,17 +370,17 @@ public sealed class ImportServiceTests : IDisposable
     }
 
     [SqlFact]
-    public void Definition_with_parser_but_without_mapping_is_an_error()
+    public void Inactive_parser_is_an_error_and_file_is_not_stored()
     {
         Use();
-        using (var connection = _database!.Sql.Open())   // np. definicja o niestandardowym układzie sprzed migracji 004
-            Dapper.SqlMapper.Execute(connection, $"UPDATE {_database.Sql.Table("meta.SourceDefinition")} SET Mapping = NULL WHERE Code = 'ACTUALS_PAF'");
+        var parser = _config.Parsers().Single(p => p.Code == ActualsLayout.Parser);
+        Assert.True(_config.SaveParser(new ParserInput(parser.ParserId, parser.Version, parser.Code, parser.Name, parser.Fields, Active: false)).Success);
         CopySample(ImportFolder, "ACTUALS_PAF_01.csv");
 
         var run = _import.Run();
 
         Assert.Equal(FileDecisions.Error, Assert.Single(run.Files).Decision);
-        Assert.Contains(run.Issues, i => i.Message.Contains("definicja ACTUALS_PAF nie ma mapowania kolumn na pola parsera ACTUALS"));
+        Assert.Contains(run.Issues, i => i.Message.Contains("parser ACTUALS definicji ACTUALS_PAF nie istnieje albo jest nieaktywny"));
         Assert.Null(_store.FindByHash(Assert.Single(_store.Seen(run.BatchId)).Sha256!));
     }
 
@@ -423,7 +391,7 @@ public sealed class ImportServiceTests : IDisposable
         Directory.CreateDirectory(ImportFolder);
         var sample = TabularFileReader.Read(TestServices.TestData("RABIT", "ACTUALS_PAF_01.csv"));
         var rows = sample.Rows.Select(r => (IReadOnlyList<object?>)r.Select((v, i) =>
-            i is 7 or 9 or 11 or 12 && PolishNumber.TryParse(v, out var d) ? d : (object?)v).ToList());
+            i is 6 or 8 or 10 or 11 && PolishNumber.TryParse(v, out var d) ? d : (object?)v).ToList());
         ExcelTableWriter.Write(Path.Combine(ImportFolder, "ACTUALS_PAF_01.xlsx"), "Sheet1", sample.Headers, rows);
 
         var run = _import.Run();

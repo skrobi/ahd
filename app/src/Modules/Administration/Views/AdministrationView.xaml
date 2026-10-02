@@ -15,7 +15,7 @@
 
     <StackPanel>
         <partials:PageHeader Eyebrow="Konfiguracja importu" Title="Administracja"
-                             Subtitle="Definicje źródeł (rozpoznanie pliku po prefiksie, układ kolumn, mapowanie kolumn na pola parsera), parsery (tabele danych kanonicznych i ich pola) i lokalizacje RABIT. Zmiany mają historię." />
+                             Subtitle="Definicje źródeł (rozpoznanie pliku po prefiksie i parser), parsery (układ kolumn pliku, typy, pola wymagane – tabela danych kanonicznych) i lokalizacje RABIT. Zmiany mają historię." />
 
         <TextBlock Text="{Binding Status}" TextWrapping="Wrap" Margin="0,0,0,8" />
         <Border Style="{StaticResource Panel}" Margin="0,0,0,12"
@@ -37,7 +37,6 @@
                         <DataGridTextColumn Header="Prefiks" Binding="{Binding Prefix}" />
                         <DataGridTextColumn Header="Typ raportu" Binding="{Binding ReportType}" Width="*" />
                         <DataGridTextColumn Header="Parser" Binding="{Binding Parser}" />
-                        <DataGridTextColumn Header="Sygnatura" Binding="{Binding Signature}" />
                         <DataGridCheckBoxColumn Header="Aktywna" Binding="{Binding Active, Mode=OneWay}" />
                         <DataGridTextColumn Header="Wersja" Binding="{Binding Version}" />
                     </DataGrid.Columns>
@@ -61,54 +60,12 @@
                     <TextBox Grid.Row="2" Grid.Column="1" Style="{StaticResource Field}" Text="{Binding DefReportType, UpdateSourceTrigger=PropertyChanged}" />
                     <TextBlock Grid.Row="3" Text="Parser" Style="{StaticResource Label}" />
                     <ComboBox Grid.Row="3" Grid.Column="1" Margin="0,3" ItemsSource="{Binding ParserOptions}" DisplayMemberPath="Label"
-                              SelectedValuePath="Value" SelectedValue="{Binding DefParser}" />
+                              SelectedValuePath="Value" SelectedValue="{Binding DefParser}"
+                              ToolTip="Parser pilnuje układu kolumn pliku, typów i pól wymaganych (sekcja Parsery); „brak” – tylko wiersze surowe" />
                     <TextBlock Grid.Row="4" Text="Aktywna" Style="{StaticResource Label}" />
                     <CheckBox Grid.Row="4" Grid.Column="1" VerticalAlignment="Center" IsChecked="{Binding DefActive}" />
 
                 </Grid>
-                <DockPanel MaxWidth="720" HorizontalAlignment="Left">
-                    <Button DockPanel.Dock="Right" Content="Kolumny z pliku…" Style="{StaticResource Btn}" Command="{Binding ColumnsFromFile}"
-                            ToolTip="Wczytuje wiersz nagłówków z pliku źródła (pierwszy wiersz pierwszego arkusza – tak samo jak import)" />
-                    <TextBlock Text="Oczekiwane kolumny (jedna w wierszu albo wiersz nagłówków wklejony z Excela; kolejność jak w pliku – wyznaczają sygnaturę układu)"
-                               Style="{StaticResource Label}" TextWrapping="Wrap" />
-                </DockPanel>
-                <TextBox Style="{StaticResource Field}" Text="{Binding DefColumns, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" AcceptsTab="True"
-                         Height="160" MaxWidth="720" HorizontalAlignment="Stretch" VerticalScrollBarVisibility="Auto" FontFamily="{StaticResource FMono}" />
-                <TextBlock Text="{Binding DefSignatureText}" Style="{StaticResource MutedText}" FontSize="12" Margin="0,2,0,0" />
-
-                <!-- Mapowanie: kolumna pliku → pole parsera (kolumna tabeli CAN_…) -->
-                <DockPanel Margin="0,12,0,4">
-                    <Button DockPanel.Dock="Right" Content="Mapuj po nazwach" Style="{StaticResource Btn}" Command="{Binding MapByName}"
-                            ToolTip="Kolumnom bez pola przypisuje pole parsera o tej samej nazwie (w pliku albo w bazie)" />
-                    <TextBlock Text="Mapowanie kolumn na pola parsera" FontWeight="SemiBold" VerticalAlignment="Center" />
-                </DockPanel>
-                <TextBlock Text="{Binding MappingSummary}" Style="{StaticResource MutedText}" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,4" />
-                <DataGrid Style="{StaticResource DataTable}" ItemsSource="{Binding Mapping}" MaxHeight="360"
-                          IsEnabled="{Binding HasParser}">
-                    <DataGrid.Columns>
-                        <DataGridTextColumn Header="Kolumna w pliku" Binding="{Binding Column, Mode=OneWay}" IsReadOnly="True" />
-                        <DataGridTextColumn Header="Przykład z pliku" Binding="{Binding Sample, Mode=OneWay}" IsReadOnly="True" MaxWidth="220" />
-                        <DataGridTemplateColumn Header="→ Pole w bazie" Width="*">
-                            <DataGridTemplateColumn.CellTemplate>
-                                <DataTemplate>
-                                    <ComboBox ItemsSource="{Binding DataContext.FieldOptions, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                              DisplayMemberPath="Label" SelectedValuePath="Field"
-                                              SelectedValue="{Binding Field, UpdateSourceTrigger=PropertyChanged}" Margin="0,1" />
-                                </DataTemplate>
-                            </DataGridTemplateColumn.CellTemplate>
-                        </DataGridTemplateColumn>
-                        <DataGridTextColumn Header="Typ" Binding="{Binding TypeText, Mode=OneWay}" IsReadOnly="True" />
-                        <DataGridTemplateColumn Header="Wymagane">
-                            <DataGridTemplateColumn.CellTemplate>
-                                <DataTemplate>
-                                    <CheckBox IsChecked="{Binding Required, UpdateSourceTrigger=PropertyChanged}" IsEnabled="{Binding IsMapped}"
-                                              HorizontalAlignment="Center" VerticalAlignment="Center"
-                                              ToolTip="Wartość musi być w każdym wierszu – inaczej plik nie przejdzie walidacji" />
-                                </DataTemplate>
-                            </DataGridTemplateColumn.CellTemplate>
-                        </DataGridTemplateColumn>
-                    </DataGrid.Columns>
-                </DataGrid>
                 <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
                     <Button Content="Zapisz definicję" Style="{StaticResource BtnPrimary}" Margin="0,0,8,0" Command="{Binding SaveDefinition}" />
                     <Button Content="Usuń definicję" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding DeleteDefinition}"
@@ -126,7 +83,7 @@
                         <DataGridTextColumn Header="Kto" Binding="{Binding RecordedBy}" />
                         <DataGridTextColumn Header="Zamknięta" Binding="{Binding SupersededAt, StringFormat=yyyy-MM-dd HH:mm}" />
                         <DataGridTextColumn Header="Prefiks" Binding="{Binding Prefix}" />
-                        <DataGridTextColumn Header="Sygnatura" Binding="{Binding Signature}" />
+                        <DataGridTextColumn Header="Parser" Binding="{Binding Parser}" />
                         <DataGridCheckBoxColumn Header="Aktywna" Binding="{Binding Active, Mode=OneWay}" />
                     </DataGrid.Columns>
                 </DataGrid>
@@ -141,7 +98,7 @@
                     <TextBlock Text="Parsery" Style="{StaticResource H2}" />
                 </DockPanel>
                 <TextBlock Style="{StaticResource MutedText}" Margin="0,0,0,8" TextWrapping="Wrap"
-                           Text="Parser to tabela danych kanonicznych (CAN_…) i jej pola. Definicja źródła mapuje na nie kolumny pliku. Nowe pole dokłada kolumnę w tabeli; pola usuniętego z parsera kolumna zostaje (dane zapisane). Zapis zmienia tabele – wymaga prawa tworzenia i zmiany tabel w bazie." />
+                           Text="Parser opisuje układ pliku: każde pole to kolumna w pliku (typ, wymagane) i kolumna tabeli danych kanonicznych CAN_…. Brak kolumny parsera w pliku = błąd importu; kolumny pliku spoza parsera trafiają tylko do wierszy surowych. Nowe pole dokłada kolumnę w tabeli; pola usuniętego z parsera kolumna zostaje (dane zapisane). Zapis zmienia tabele – wymaga prawa tworzenia i zmiany tabel w bazie." />
                 <DataGrid Style="{StaticResource DataTable}" ItemsSource="{Binding Parsers}" SelectedItem="{Binding Selected}"
                           IsReadOnly="True" MaxHeight="160">
                     <DataGrid.Columns>
@@ -174,24 +131,29 @@
                 </Grid>
 
                 <DockPanel Margin="0,8,0,4">
-                    <Button DockPanel.Dock="Right" Content="Dodaj pole" Style="{StaticResource Btn}" Command="{Binding AddField}" />
-                    <TextBlock Text="Pola (kolumny tabeli)" FontWeight="SemiBold" VerticalAlignment="Center" />
+                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                        <Button Content="Kolumny z pliku…" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding ColumnsFromFile}"
+                                ToolTip="Porównuje parser z wierszem nagłówków przykładowego pliku: nowe kolumny dochodzą jako pola, przy polach – przykłady wartości" />
+                        <Button Content="Dodaj pole" Style="{StaticResource Btn}" Command="{Binding AddField}" />
+                    </StackPanel>
+                    <TextBlock Text="Pola: kolumna w pliku → kolumna w bazie" FontWeight="SemiBold" VerticalAlignment="Center" />
                 </DockPanel>
                 <DataGrid Style="{StaticResource DataTable}" ItemsSource="{Binding Fields}" MaxHeight="360">
                     <DataGrid.Columns>
+                        <DataGridTemplateColumn Header="Kolumna w pliku" Width="*">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <TextBox Text="{Binding Column, UpdateSourceTrigger=PropertyChanged}" BorderThickness="0"
+                                             ToolTip="Nazwa nagłówka w pliku (bez rozróżniania wielkości liter); pusta – pole nie jest czytane z pliku" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTextColumn Header="Przykład z pliku" Binding="{Binding Sample, Mode=OneWay}" IsReadOnly="True" MaxWidth="200" />
                         <DataGridTemplateColumn Header="Pole w bazie" Width="190">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
                                     <TextBox Text="{Binding Field, UpdateSourceTrigger=PropertyChanged}" BorderThickness="0" FontFamily="{StaticResource FMono}"
                                              ToolTip="Nazwa kolumny w bazie: litera, potem litery, cyfry i _ (np. InvoiceNumber)" />
-                                </DataTemplate>
-                            </DataGridTemplateColumn.CellTemplate>
-                        </DataGridTemplateColumn>
-                        <DataGridTemplateColumn Header="Kolumna w pliku (podpowiedź)" Width="*">
-                            <DataGridTemplateColumn.CellTemplate>
-                                <DataTemplate>
-                                    <TextBox Text="{Binding Label, UpdateSourceTrigger=PropertyChanged}" BorderThickness="0"
-                                             ToolTip="Nazwa kolumny w pliku – „Mapuj po nazwach” przypisze ją do tego pola" />
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
@@ -217,6 +179,15 @@
                                 <DataTemplate>
                                     <TextBox Text="{Binding PadDigits, UpdateSourceTrigger=PropertyChanged}" IsEnabled="{Binding IsText}" BorderThickness="0"
                                              ToolTip="Tekst z samych cyfr dopełniany zerami z lewej do tej długości (np. 10 dla numeru elementu kosztowego)" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTemplateColumn Header="Wymagane" Width="80">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <CheckBox IsChecked="{Binding Required, UpdateSourceTrigger=PropertyChanged}" IsEnabled="{Binding HasColumn}"
+                                              HorizontalAlignment="Center" VerticalAlignment="Center"
+                                              ToolTip="Wartość musi być w każdym wierszu – inaczej plik nie przejdzie walidacji" />
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>

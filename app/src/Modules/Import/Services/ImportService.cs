@@ -109,7 +109,7 @@ public sealed class ImportService(IImportStore store, AppServices services)
 
     private static void LogDefinitions(IReadOnlyList<SourceDefinitionRow> definitions) =>
         Logger.Information("Aktywne definicje źródeł: {Definitions}",
-            definitions.Count == 0 ? "BRAK" : string.Join("; ", definitions.Select(d => $"{d.Code}: prefiks '{d.Prefix}', parser {(d.Parser.Length == 0 ? "brak" : d.Parser)}, kolumn {d.Columns.Count}")));
+            definitions.Count == 0 ? "BRAK" : string.Join("; ", definitions.Select(d => $"{d.Code}: prefiks '{d.Prefix}', parser {(d.Parser.Length == 0 ? "brak" : d.Parser)}")));
 
     /// <summary>
     /// Import ze wszystkich lokalizacji. Tylko jedna osoba naraz (blokada operacji): gdy import trwa u kogoś
@@ -252,9 +252,9 @@ public sealed class ImportService(IImportStore store, AppServices services)
     }
 
     /// <summary>
-    /// Treść pliku. Źródło z parserem przechodzi walidację przed zapisem (sygnatura kolumn zgodna z definicją, wartości
-    /// zgodne z typami) – plik, który jej nie przejdzie, nie trafia do bazy (decyzja „błąd”, problem w rejestrze);
-    /// przy kolejnym imporcie jest pobierany ponownie, więc po poprawie definicji wystarczy zaimportować jeszcze raz.
+    /// Treść pliku. Źródło z parserem przechodzi walidację przed zapisem (kolumny parsera obecne w pliku, pola wymagane
+    /// wypełnione, wartości zgodne z typami) – plik, który jej nie przejdzie, nie trafia do bazy (decyzja „błąd”, problem
+    /// w rejestrze); przy kolejnym imporcie jest pobierany ponownie, więc po poprawie parsera wystarczy zaimportować jeszcze raz.
     /// </summary>
     private (string Decision, string Description, string? Sha, int? Rows) ImportContent(
         long batchId, ImportLocation location, FileInfo file, DateTimeOffset modified, SourceDefinitionRow definition, Action<string, Issue> problem)
@@ -274,23 +274,21 @@ public sealed class ImportService(IImportStore store, AppServices services)
         if (definition.Parser != SourceParsers.None)
         {
             parser = store.ActiveParser(definition.Parser);
-            var notReady = parser is null
-                ? $"parser {definition.Parser} definicji {definition.Code} nie istnieje albo jest nieaktywny"
-                : definition.Mapping.Count == 0 ? $"definicja {definition.Code} nie ma mapowania kolumn na pola parsera {parser.Code}" : null;
-            if (notReady is not null)
+            if (parser is null)
             {
-                problem("parser i mapowanie", Issue.Error($"{file.Name}: {notReady} – plik nie zapisany w bazie; uzupełnij w Administracji i zaimportuj ponownie", location.Name));
+                var notReady = $"parser {definition.Parser} definicji {definition.Code} nie istnieje albo jest nieaktywny";
+                problem("parser", Issue.Error($"{file.Name}: {notReady} – plik nie zapisany w bazie; popraw w Administracji i zaimportuj ponownie", location.Name));
                 return (FileDecisions.Error, $"{notReady} – nie zapisany", sha, data.Rows.Count);
             }
-            if (signature != definition.Signature)
+            parsed = MappedParser.Parse(parser, data.Headers, data.Rows);
+            if (parsed.MissingColumns.Count > 0)
             {
-                var layout = $"układ kolumn niezgodny z definicją {definition.Code} (sygnatura pliku {signature}, oczekiwana {definition.Signature})";
-                problem("sygnatura kolumn", Issue.Error(
-                    $"{file.Name}: {layout} – plik nie zapisany w bazie; popraw „Oczekiwane kolumny” w Administracji i zaimportuj ponownie",
+                var layout = $"brak kolumn parsera {parser.Code}: {string.Join(", ", parsed.MissingColumns)}";
+                problem("układ kolumn", Issue.Error(
+                    $"{file.Name}: {layout} – plik nie zapisany w bazie; popraw kolumny parsera w Administracji (Parsery) i zaimportuj ponownie",
                     location.Name));
                 return (FileDecisions.Error, $"{layout} – nie zapisany", sha, data.Rows.Count);
             }
-            parsed = MappedParser.Parse(parser!, definition.Mapping, data.Headers, data.Rows);
             if (parsed.ErrorCount > 0)
             {
                 foreach (var issue in parsed.Issues)
@@ -307,14 +305,15 @@ public sealed class ImportService(IImportStore store, AppServices services)
         if (fileId is null)
             return (FileDecisions.Duplicate, DuplicateText(store.FindByHash(sha)!), sha, null);
 
-        var canonical = CreateCanonical(fileId.Value, file.Name, location.Name, data, parser, definition.Mapping, parsed, problem);
+        var canonical = CreateCanonical(fileId.Value, file.Name, location.Name, data, parser, parsed, problem);
         var rowsText = data.Rows.Count.ToString("#,0", CultureInfo.GetCultureInfo("pl-PL"));
-        return (FileDecisions.Imported, $"{definition.Code}, {rowsText} wierszy; {canonical}", sha, data.Rows.Count);
+        var extra = parsed is { ExtraColumns.Count: > 0 } ? $"; kolumny spoza parsera (tylko wiersze surowe): {string.Join(", ", parsed.ExtraColumns)}" : "";
+        return (FileDecisions.Imported, $"{definition.Code}, {rowsText} wierszy; {canonical}{extra}", sha, data.Rows.Count);
     }
 
     /// <summary>Dane kanoniczne (wiersze sprawdzone przed zapisem pliku) w tabeli parsera; zwraca opis wyniku do decyzji pliku.</summary>
     private string CreateCanonical(long fileId, string fileName, string locationName, TabularData data, ParserRow? parser,
-        IReadOnlyList<ColumnMapping> mapping, ParseResult? parsed, Action<string, Issue> problem)
+        ParseResult? parsed, Action<string, Issue> problem)
     {
         if (parser is null || parsed is null)
         {
@@ -322,15 +321,14 @@ public sealed class ImportService(IImportStore store, AppServices services)
             return "tylko wiersze surowe (źródło bez parsera)";
         }
         store.CompleteCanonical(fileId, "utworzone", new CanonicalData(parser, parsed.Fields, parsed.Rows), parser.Version);
-        return VerifyFlow(fileName, locationName, data, mapping, parsed, parser, problem);
+        return VerifyFlow(fileName, locationName, data, parsed, parser, problem);
     }
 
     /// <summary>
     /// Kontrola przepływu: liczba wierszy i sumy pól liczbowych (kwoty) danych kanonicznych zgodne z wierszami surowymi
-    /// (sumy z wierszy surowych liczone niezależnie od parsera, z kolumn pliku według mapowania).
+    /// (sumy z wierszy surowych liczone niezależnie od parsera, z kolumn pliku wskazanych w parserze).
     /// </summary>
-    private static string VerifyFlow(string fileName, string locationName, TabularData raw, IReadOnlyList<ColumnMapping> mapping, ParseResult parsed,
-        ParserRow parser, Action<string, Issue> problem)
+    private static string VerifyFlow(string fileName, string locationName, TabularData raw, ParseResult parsed, ParserRow parser, Action<string, Issue> problem)
     {
         var sums = new List<(string Column, decimal Raw, decimal Canonical)>();
         for (var i = 0; i < parsed.Fields.Count; i++)
@@ -338,7 +336,7 @@ public sealed class ImportService(IImportStore store, AppServices services)
             var field = parsed.Fields[i];
             if (field.Type != FieldTypes.Decimal)
                 continue;
-            var column = mapping.First(m => string.Equals(m.Field, field.Field, StringComparison.OrdinalIgnoreCase)).Column;
+            var column = field.Column;
             var index = raw.Headers.ToList().FindIndex(h => string.Equals(h.Trim(), column, StringComparison.OrdinalIgnoreCase));
             var rawSum = raw.Rows.Sum(r => index < r.Length && PolishNumber.TryParse(r[index], out var v) ? v : 0m);
             var position = i;

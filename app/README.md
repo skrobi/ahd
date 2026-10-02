@@ -31,9 +31,9 @@ zmieni). Brak pliku albo błąd w nim = komunikat przy starcie z nazwą pola –
   E456659, kalendarz okresów 2026–2027, Cost Category (załącznik A);
 - `003_usuniecie_plikow_niezgodnych.sql` – usuwa pliki zapisane do wersji 0.11 mimo niezgodności z definicją
   (układ kolumn, typy wartości) wraz z wierszami surowymi; kolejny import pobierze je ponownie;
-- `004_parsery_mapowanie_kolumn.sql` – parsery w bazie (Administracja → Parsery) i mapowanie kolumn w definicji;
-  parser ACTUALS z nowymi polami (`Original Order Number`, `Item`, `Purchase order number`, `Invoice Number`);
-  definicje o standardowym układzie ACTUALS dostają mapowanie, pozostałe mapuje się w Administracji.
+- `004_parsery.sql` – parsery w bazie (Administracja → Parsery): parser pilnuje układu pliku (kolumna w pliku → pole,
+  typ, wymagane), definicja źródła tylko go wskazuje; parser ACTUALS w układzie raportu z 2026-10 (nowe pola
+  `Original Order Number`, `Item`, `Purchase order number`, `Invoice Number`).
 
 Migracje wykonuje przycisk **Diagnostyka → Migracja** – uruchamia po kolei skrypty, których numeru nie ma
 w `META_SchemaVersion`, a wykonane pomija. Lista na tym ekranie pokazuje, które skrypty są wykonane (kiedy, kto)
@@ -54,12 +54,12 @@ Ustawienia, baza i ścieżki widać na ekranie **Diagnostyka** i w stopce okna.
 2. **Import RABIT** – skopiuj `testdata/RABIT/ACTUALS_PAF_01.csv` do folderu `Do_importu` (ścieżka na ekranie),
    **Importuj** – plik „zaimportowany”, 6 wierszy, sumy jak w `testdata/README.md`; ponowny import – „pominięty”;
    ta sama treść pod inną nazwą – „duplikat”; plik o nieznanym prefiksie – „nierozpoznany”.
-3. **Administracja** – definicje `ACTUALS_PAF`, `ACTUALS_CES` z mapowaniem na parser ACTUALS; lokalizacja RABIT
-   E456659 (migracja 002 – aktywna). Nowy układ raportu: wybierz definicję → **Kolumny z pliku…** (wiersz nagłówków
-   i przykładowe wartości) → **Mapuj po nazwach** → w siatce „Mapowanie” popraw pola i zaznacz **Wymagane** →
-   **Zapisz definicję**; import utworzy dane kanoniczne według mapowania.
-   **Parsery** – lista pól parsera (tabela `CAN_…`); **Dodaj pole** → nazwa w bazie, nazwa kolumny w pliku, typ →
-   **Zapisz parser** dokłada kolumnę w tabeli (wymaga prawa zmiany tabel). Nowy parser zakłada własną tabelę.
+3. **Administracja** – definicje `ACTUALS_PAF`, `ACTUALS_CES` (kod, prefiks, typ raportu, parser ACTUALS, aktywna);
+   lokalizacja RABIT E456659 (migracja 002 – aktywna). Nowe źródło o znanym układzie: **Nowa definicja** → kod,
+   prefiks, parser → **Zapisz definicję**. Nowy układ raportu: **Parsery** → wybierz parser → **Kolumny z pliku…**
+   (nowe kolumny dochodzą jako pola tekstowe, brakujące są oznaczone, siatka pokazuje przykładowe wartości) →
+   popraw pole w bazie, typ, **Wymagane** → **Zapisz parser** (dokłada kolumny w tabeli `CAN_…`; wymaga prawa zmiany
+   tabel); import utworzy dane kanoniczne według parsera. Nowy parser zakłada własną tabelę.
 4. **Import z SharePoint (brama F5)** – **Importuj**: okno logowania do SharePoint jak w Office (przy ważnej sesji
    zamyka się samo) → lista plików pasujących do definicji z datami, „zostanie zaimportowany” → import, status
    każdego pliku zmienia się na bieżąco; w historii od razu wpis „w toku”. Druga osoba w tym czasie widzi „Trwa
