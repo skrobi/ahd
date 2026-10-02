@@ -178,11 +178,11 @@ Bez metodologii EV; kolejne tabele dochodzą kolejnymi migracjami.
 | Tabela (sygnatura `PZLEV_`) | Zawartość |
 |---|---|
 | `META_SchemaVersion`, sekwencja `META_LogicalId` | wersja schematu i minimalna wersja aplikacji; identyfikatory wierszy logicznych |
-| `META_SourceDefinition`, `META_SourceLocation` | definicje źródeł (z mapowaniem kolumn – `Mapping`, migracja 004) i lokalizacje RABIT z historią |
-| `META_Parser` (004) | parsery: tabela danych kanonicznych `CAN_<Tabela>` i jej pola (typ, długość) z historią |
+| `META_SourceDefinition`, `META_SourceLocation` | definicje źródeł (kod, prefiks, typ raportu, parser, aktywna) i lokalizacje RABIT z historią |
+| `META_Parser` (004) | parsery: tabela danych kanonicznych `CAN_<Tabela>` i jej pola (kolumna w pliku, typ, długość, wymagane) z historią |
 | `META_ImportBatch`, `META_SourceFile`, `META_SourceFileSeen` | importy, wersje plików (SHA-256), decyzje dla plików |
 | `STG_RawRow` | wiersze surowe (JSON wartości), kompresja PAGE |
-| `CAN_Actuals` | tabela parsera ACTUALS – koszty rzeczywiste `ACTUALS_*` (kolumny typowane, NULL dozwolony – wymagane wskazuje mapowanie), kompresja PAGE; kolejne parsery mają własne tabele `CAN_<Tabela>` zakładane z aplikacji |
+| `CAN_Actuals` | tabela parsera ACTUALS – koszty rzeczywiste `ACTUALS_*` (kolumny typowane, NULL dozwolony – wymagane wskazuje parser), kompresja PAGE; kolejne parsery mają własne tabele `CAN_<Tabela>` zakładane z aplikacji |
 | `META_Journal`, `META_Problem` | dziennik zdarzeń (`meta.Zdarzenie`) i problemy |
 | `META_Project`, `META_PerformanceObjective` | projekty (kod, nazwa, typ SAC / CAS / WEWNETRZNY) i nakładka Performance Objectives z historią |
 | `DICT_Calendar`, `DICT_DepartmentRate`, `DICT_FxRate`, `DICT_CostCategory`, `DICT_Person` | słowniki globalne – tabela z typowanymi kolumnami na słownik; `Project` NULL = globalny (w Cost Category `Project` = zmiany w projekcie) |
@@ -198,10 +198,11 @@ wersji aplikacji 0.11 mimo niezgodności z definicją źródła (układ kolumn, 
 surowymi; historia decyzji (`META_SourceFileSeen`) zostaje. Od wersji 0.12 taki plik nie trafia do bazy
 (`docs/zrodla-danych.md`, rozdz. 2).
 
-**Migracja `sql/mssql/004_parsery_mapowanie_kolumn.sql`:** tabela `META_Parser`, kolumna `Mapping` definicji źródła,
-`CAN_Actuals` jako tabela parsera ACTUALS (kolumny pól dopuszczają NULL; nowe pola `OriginalOrderNumber`, `Item`,
-`PurchaseOrderNumber`, `InvoiceNumber`), parser ACTUALS i mapowanie definicji o standardowym układzie ACTUALS.
-Definicje o innym układzie dostają mapowanie w aplikacji (wpis w dzienniku podaje ich liczbę). Zapis parsera
+**Migracja `sql/mssql/004_parsery.sql`:** tabela `META_Parser` (parser pilnuje układu pliku: kolumna w pliku, pole,
+typ, wymagane), `CAN_Actuals` jako tabela parsera ACTUALS (kolumny pól dopuszczają NULL; nowe pola
+`OriginalOrderNumber`, `Item`, `PurchaseOrderNumber`, `InvoiceNumber`) i parser ACTUALS w układzie raportu z 2026-10
+(`docs/zrodla-danych.md`, rozdz. 4). Kolumny `Columns`, `Signature`, `ParserVersion` definicji źródła dopuszczają
+NULL i nie są już używane – definicja wskazuje tylko parser. Zapis parsera
 w aplikacji zakłada albo rozszerza tabelę `CAN_<Tabela>` (`SqlCanonical`) – poza migracjami, w jednej transakcji
 z wersją parsera.
 

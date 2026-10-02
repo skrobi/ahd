@@ -23,7 +23,7 @@ public sealed class SqlSourceConfigStore(SqlDatabase db, IClock clock, ICurrentU
     public IReadOnlyList<SourceDefinitionRow> DefinitionHistory(long definitionId) =>
         QueryDefinitions($"SELECT {SqlDefinitionRow.Columns} FROM {_definitions} WHERE DefinitionId = @definitionId ORDER BY Version", new { definitionId });
 
-    public string? SaveDefinition(DefinitionInput input, string signature, int parserVersion)
+    public string? SaveDefinition(DefinitionInput input)
     {
         try
         {
@@ -45,15 +45,13 @@ public sealed class SqlSourceConfigStore(SqlDatabase db, IClock clock, ICurrentU
                 }
                 connection.Execute(
                     $"""
-                    INSERT INTO {_definitions} (DefinitionId, Version, Code, Prefix, ReportType, Columns, Signature, Parser, ParserVersion, Mapping, Active, RecordedAt, RecordedBy)
-                    VALUES (@DefinitionId, @Version, @Code, @Prefix, @ReportType, @Columns, @Signature, @Parser, @ParserVersion, @Mapping, @Active, @At, @User)
+                    INSERT INTO {_definitions} (DefinitionId, Version, Code, Prefix, ReportType, Parser, Active, RecordedAt, RecordedBy)
+                    VALUES (@DefinitionId, @Version, @Code, @Prefix, @ReportType, @Parser, @Active, @At, @User)
                     """,
                     new
                     {
                         DefinitionId = definitionId ?? db.NextLogicalId(connection, transaction), Version = version, input.Code, input.Prefix,
-                        input.ReportType, Columns = SqlJson.Write(input.Columns), Signature = signature, input.Parser, ParserVersion = parserVersion,
-                        Mapping = input.Mapping is { Count: > 0 } mapping ? SqlJson.Write(mapping) : null,
-                        input.Active, At = now, User = user.Account,
+                        input.ReportType, input.Parser, input.Active, At = now, User = user.Account,
                     },
                     transaction);
                 return (string?)null;

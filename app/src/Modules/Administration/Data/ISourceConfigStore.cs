@@ -13,8 +13,8 @@ public interface ISourceConfigStore
 
     IReadOnlyList<SourceDefinitionRow> DefinitionHistory(long definitionId);
 
-    /// <summary>Zapisuje definicję (signature – sygnatura kolumn); null = sukces, tekst = konflikt.</summary>
-    string? SaveDefinition(DefinitionInput input, string signature, int parserVersion);
+    /// <summary>Zapisuje definicję; null = sukces, tekst = konflikt.</summary>
+    string? SaveDefinition(DefinitionInput input);
 
     /// <summary>Usuwa definicję – zamyka bieżącą wersję bez następnej (historia zostaje); null = sukces, tekst = konflikt.</summary>
     string? DeleteDefinition(long definitionId, int version);

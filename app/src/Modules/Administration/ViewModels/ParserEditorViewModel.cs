@@ -1,20 +1,29 @@
 using System.Collections.ObjectModel;
+using System.IO;
 using System.Windows.Input;
 using PzlEv.Modules.Administration.Models;
 using PzlEv.Modules.Administration.Services;
+using PzlEv.Shared.Models;
 using PzlEv.Shared.Models.Db;
 using PzlEv.Shared.Models.Sources;
+using PzlEv.Shared.Utils.Files;
+using PzlEv.Shared.Utils.Ui.Dialogs;
 using PzlEv.Shared.Utils.Ui.Mvvm;
+using Serilog;
 
 namespace PzlEv.Modules.Administration.ViewModels;
 
 /// <summary>
-/// Administracja → Parsery: parser = tabela danych kanonicznych i jej pola (nazwa w bazie, nazwa kolumny w pliku jako
-/// podpowiedź mapowania, typ, długość, dopełnianie zerami). Zapis tworzy nową wersję i zakłada / rozszerza tabelę.
+/// Administracja → Parsery: parser = tabela danych kanonicznych i jej pola – pole w bazie, kolumna w pliku, typ, długość,
+/// dopełnianie zerami, wymagane. Parser pilnuje układu pliku. „Kolumny z pliku…” porównuje parser z wierszem nagłówków
+/// pliku (nowe kolumny → propozycje pól, przykłady wartości). Zapis tworzy nową wersję i zakłada / rozszerza tabelę.
 /// </summary>
 public sealed class ParserEditorViewModel : ObservableObject
 {
+    private static readonly ILogger Logger = Log.ForContext("Module", ModuleKeys.Administration);
+
     private readonly SourceConfigService _service;
+    private readonly IFileDialogs _dialogs;
     private readonly Action _saved;
     private ParserRow? _selected;
     private long? _parserId;
@@ -22,10 +31,12 @@ public sealed class ParserEditorViewModel : ObservableObject
     private string _code = "", _name = "", _table = "", _message = "";
     private bool _active = true;
 
-    public ParserEditorViewModel(SourceConfigService service, Action saved)
+    public ParserEditorViewModel(SourceConfigService service, IFileDialogs dialogs, Action saved)
     {
         _service = service;
+        _dialogs = dialogs;
         _saved = saved;
+        ColumnsFromFile = new RelayCommand(_ => LoadColumnsFromFile());
         NewParser = new RelayCommand(_ => Clear());
         AddField = new RelayCommand(_ => Fields.Add(new ParserFieldRowViewModel { Length = FieldTypes.DefaultTextLength.ToString() }));
         RemoveField = new RelayCommand(p =>
@@ -47,6 +58,7 @@ public sealed class ParserEditorViewModel : ObservableObject
     public IReadOnlyList<ParserOption> TypeOptions { get; } = FieldTypes.All.Select(t => new ParserOption(t, FieldTypes.Label(t))).ToList();
 
     public ICommand NewParser { get; }
+    public ICommand ColumnsFromFile { get; }
     public ICommand AddField { get; }
     public ICommand RemoveField { get; }
     public ICommand Save { get; }
@@ -113,7 +125,7 @@ public sealed class ParserEditorViewModel : ObservableObject
         Active = true;
         Fields.Clear();
         History.Clear();
-        Message = "Nowy parser: kod (np. FORECAST), nazwa i pola – każde pole to kolumna tabeli CAN_<kod>.";
+        Message = "Nowy parser: kod (np. FORECAST), nazwa i pola – najprościej „Kolumny z pliku…” z przykładowym plikiem źródła.";
         Changed();
     }
 
@@ -129,6 +141,40 @@ public sealed class ParserEditorViewModel : ObservableObject
         Selected = Parsers.FirstOrDefault(p => p.Code == code);
         Message = result.Message;
         _saved();
+    }
+
+    /// <summary>
+    /// Wiersz nagłówków przykładowego pliku (ten sam odczyt co import): kolumny bez pola dochodzą jako nowe pola (tekst –
+    /// sprawdź typ), pola z kolumną spoza pliku są oznaczone; przykłady wartości przy polach.
+    /// </summary>
+    private void LoadColumnsFromFile()
+    {
+        var path = _dialogs.OpenExcel("Przykładowy plik źródła – kolumny z wiersza nagłówków");
+        if (path is null)
+            return;
+        try
+        {
+            var data = TabularFileReader.Read(File.ReadAllBytes(path), Path.GetFileName(path));
+            var (added, missing) = SourceConfigService.CompareWithFile(Fields.Select(f => f.ToField()).ToList(), data.Headers);
+            foreach (var field in added)
+                Fields.Add(ParserFieldRowViewModel.From(field));
+            foreach (var row in Fields)
+            {
+                var index = data.Headers.ToList().FindIndex(h => string.Equals(h.Trim(), row.Column.Trim(), StringComparison.OrdinalIgnoreCase));
+                row.Sample = row.Column.Trim().Length == 0 ? ""
+                    : index < 0 ? "— brak kolumny w pliku —"
+                    : data.Rows.Select(r => index < r.Length ? r[index] : null).FirstOrDefault(v => !string.IsNullOrWhiteSpace(v))?.Trim() ?? "";
+            }
+            Message = $"Plik {Path.GetFileName(path)}{(data.Sheet is null ? "" : $" (arkusz {data.Sheet})")}: {data.Headers.Count} kolumn. " +
+                      (added.Count == 0 ? "Nowych kolumn brak. " : $"Nowe pola ({added.Count}): {string.Join(", ", added.Select(f => f.Column))} – sprawdź typy. ") +
+                      (missing.Count == 0 ? "" : $"Kolumn parsera nie ma w pliku: {string.Join(", ", missing.Select(f => f.Column))} – wyczyść „Kolumna w pliku” albo usuń pole. ") +
+                      "Zapisz parser.";
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            Logger.Warning(ex, "Kolumny z pliku {Path}: błąd odczytu", path);
+            Message = $"Nie udało się odczytać pliku {Path.GetFileName(path)}: {ex.Message}";
+        }
     }
 
     private void Changed()

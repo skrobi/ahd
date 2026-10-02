@@ -27,13 +27,9 @@ public sealed class SourceConfigServiceTests : IDisposable
 
     public void Dispose() => _database?.Dispose();
 
-    private IReadOnlyList<ParserField> ActualsFields => _service.Parsers().Single(p => p.Code == ActualsLayout.Parser).Fields;
-
-    /// <summary>Definicja z parserem ACTUALS (standardowy układ i mapowanie) albo bez parsera.</summary>
-    private DefinitionInput Definition(string code, string prefix, long? id = null, int? version = null, string parser = ActualsLayout.Parser) =>
-        parser == ActualsLayout.Parser
-            ? new(id, version, code, prefix, "test", ActualsLayout.Columns, parser, Active: true, ActualsLayout.Mapping(ActualsFields))
-            : new(id, version, code, prefix, "test", ["A", "B"], parser, Active: true);
+    /// <summary>Definicja z parserem ACTUALS albo bez parsera.</summary>
+    private static DefinitionInput Definition(string code, string prefix, long? id = null, int? version = null, string parser = ActualsLayout.Parser) =>
+        new(id, version, code, prefix, "test", parser, Active: true);
 
     private List<(string Name, string Type, int Length)> TableColumns(string table)
     {
@@ -46,32 +42,39 @@ public sealed class SourceConfigServiceTests : IDisposable
     }
 
     [Fact]
-    public void Columns_are_one_per_line_or_header_row_pasted_from_excel()
+    public void Field_name_is_proposed_from_file_column()
     {
-        var pasted = string.Join("\t", ActualsLayout.Columns) + "\r\n";   // wiersz nagłówków skopiowany z Excela
+        Assert.Equal("InvoiceNumber", SourceConfigService.FieldName("Invoice Number"));
+        Assert.Equal("ValInRepCur", SourceConfigService.FieldName("Val.in rep.cur."));
+        Assert.Equal("PartnerCCtr", SourceConfigService.FieldName("Partner-CCtr"));
+        Assert.Equal("WartoscZlecenia", SourceConfigService.FieldName("wartość zlecenia"));
+        Assert.Equal("F2026", SourceConfigService.FieldName("2026"));
+        Assert.Equal("Pole", SourceConfigService.FieldName("—"));
+    }
 
-        Assert.Equal(ActualsLayout.Columns, SourceConfigService.ParseColumns(pasted));
-        Assert.Equal(ActualsLayout.Columns, SourceConfigService.ParseColumns(string.Join("\r\n", ActualsLayout.Columns.Select(c => $"  {c} ")) + "\r\n\r\n"));
-        Assert.Equal("7c59f446fe9c3d5e", SourceConfigService.Signature(SourceConfigService.ParseColumns(pasted)));
-        Assert.Equal("", SourceConfigService.Signature([]));
+    [Fact]
+    public void Parser_compared_with_file_header_proposes_new_fields_and_lists_missing_columns()
+    {
+        ParserField[] fields = [new("WbsElement", "WBS Element", FieldTypes.Text, 100), new("Item", "Item", FieldTypes.Text, 50), new("Note", "", FieldTypes.Text)];
+
+        var (added, missing) = SourceConfigService.CompareWithFile(fields, ["wbs element", "Invoice Number", "item ", "", "Item No"]);
+
+        Assert.Equal([new ParserField("InvoiceNumber", "Invoice Number", FieldTypes.Text, 400), new ParserField("ItemNo", "Item No", FieldTypes.Text, 400)], added);
+        Assert.Empty(missing);
+        Assert.Equal(["WBS Element"], SourceConfigService.CompareWithFile(fields, ["Item"]).MissingInFile.Select(f => f.Column));
+        Assert.Equal(["Item2"], SourceConfigService.CompareWithFile([new("Item", "Pozycja", FieldTypes.Text)], ["Item"]).NewFields.Select(f => f.Field));
     }
 
     [SqlFact]
-    public void Changed_columns_are_saved_as_new_version_with_new_signature()
+    public void Definition_points_to_existing_active_parser_or_none()
     {
         Use();
+        Assert.Contains("Parser NIE_MA nie istnieje albo jest nieaktywny (Administracja → Parsery)",
+            _service.SaveDefinition(Definition("X", "X", parser: "NIE_MA")).Issues.Select(i => i.Message));
+
         Assert.True(_service.SaveDefinition(Definition("ACTUALS_PAF", "ACTUALS_PAF")).Success);
-        var saved = Assert.Single(_service.Definitions());
-        var pasted = "Dodatkowa\t" + string.Join("\t", ActualsLayout.Columns);
-
-        Assert.True(_service.SaveDefinition(new DefinitionInput(saved.DefinitionId, saved.Version, saved.Code, saved.Prefix, saved.ReportType,
-            [pasted], saved.Parser, saved.Active, saved.Mapping)).Success);
-
-        var changed = Assert.Single(_service.Definitions());
-        Assert.Equal(2, changed.Version);
-        Assert.Equal(["Dodatkowa", .. ActualsLayout.Columns], changed.Columns);
-        Assert.Equal(HeaderSignature.Compute(["Dodatkowa", .. ActualsLayout.Columns]), changed.Signature);
-        Assert.NotEqual(saved.Signature, changed.Signature);
+        Assert.Equal(("ACTUALS_PAF", "ACTUALS"), (Assert.Single(_service.Definitions()).Code, _service.Definitions()[0].Parser));
+        Assert.Contains(_journal.Recent(1), e => e.Message == "Definicja źródła ACTUALS_PAF (prefiks ACTUALS_PAF, parser ACTUALS) dodana");
     }
 
     [SqlFact]
@@ -82,27 +85,6 @@ public sealed class SourceConfigServiceTests : IDisposable
         var result = _service.SaveDefinition(Definition("ACTUALS_PAF2", "actuals_paf"));
         Assert.False(result.Success);
         Assert.Contains(result.Issues, i => i.Message.Contains("Prefiks actuals_paf jest już używany"));
-    }
-
-    [SqlFact]
-    public void Definition_with_parser_needs_mapping_of_its_columns_to_parser_fields()
-    {
-        Use();
-        string[] Errors(DefinitionInput input) => _service.SaveDefinition(input).Issues.Select(i => i.Message).ToArray();
-        var definition = Definition("X", "X");
-
-        Assert.Contains("Mapowanie: przypisz kolumnom pliku pola parsera ACTUALS (albo wybierz parser „brak” – tylko wiersze surowe)",
-            Errors(definition with { Mapping = [] }));
-        Assert.Contains("Mapowanie: kolumny Brak nie ma w oczekiwanych kolumnach", Errors(definition with { Mapping = [new("Brak", "WbsElement", true)] }));
-        Assert.Contains("Mapowanie: pola Nieznane nie ma w parserze ACTUALS", Errors(definition with { Mapping = [new("WBS Element", "Nieznane", true)] }));
-        Assert.Contains("Mapowanie: pole WbsElement przypisane kilku kolumnom (WBS Element, Project Definition)",
-            Errors(definition with { Mapping = [new("WBS Element", "WbsElement", true), new("Project Definition", "WbsElement", false)] }));
-        Assert.Contains("Parser NIE_MA nie istnieje albo jest nieaktywny (Administracja → Parsery)", Errors(definition with { Parser = "NIE_MA" }));
-
-        Assert.True(_service.SaveDefinition(definition with { Mapping = [new("wbs element", "WbsElement", true)] }).Success);   // jedno pole wystarczy
-        var saved = Assert.Single(_service.Definitions());
-        Assert.Equal([new ColumnMapping("WBS Element", "WbsElement", true)], saved.Mapping);   // pisownia kolumny z listy oczekiwanych
-        Assert.Equal(1, saved.ParserVersion);
     }
 
     [SqlFact]
@@ -119,7 +101,7 @@ public sealed class SourceConfigServiceTests : IDisposable
 
         Assert.True(v1.Success, string.Join("; ", v1.Issues.Select(i => i.Message)) + v1.Message);
         var parser = Assert.Single(_service.Parsers(), p => p.Code == "FORECAST");
-        Assert.Equal(("FORECAST", 1, "Year"), (parser.Table, parser.Version, parser.Fields[2].Label));   // pusta nazwa w pliku = nazwa pola
+        Assert.Equal(("FORECAST", 1, ""), (parser.Table, parser.Version, parser.Fields[2].Column));   // pole spoza pliku
         Assert.Equal(
             [("FileId", "bigint", 8), ("RowNumber", "int", 4), ("ParserVersion", "int", 4), ("Wbs", "nvarchar", 50), ("Amount", "decimal", 13),
              ("Year", "int", 4), ("Day", "date", 3)],
@@ -155,7 +137,10 @@ public sealed class SourceConfigServiceTests : IDisposable
     {
         Use();
         var result = _service.SaveParser(new ParserInput(null, null, "P2", "",
-            [new("Wbs Element", "", FieldTypes.Text), new("FileId", "", FieldTypes.Integer), new("A", "", "liczba"), new("a", "", FieldTypes.Text, 5000)], true));
+        [
+            new("Wbs Element", "K1", FieldTypes.Text), new("FileId", "K2", FieldTypes.Integer), new("A", "k1", "liczba"),
+            new("a", "", FieldTypes.Text, 5000, Required: true),
+        ], true));
 
         Assert.False(result.Success);
         Assert.Equal(
@@ -165,24 +150,27 @@ public sealed class SourceConfigServiceTests : IDisposable
             "Pole w bazie „FileId”: litera, potem litery, cyfry i _ (bez spacji), inne niż FileId, RowNumber, ParserVersion",
             "Pole A: typ wymagany (tekst, kwota / liczba, liczba całkowita, data)",
             "Pole a: długość tekstu od 1 do 4000",
+            "Pole a: wymagane, ale bez kolumny w pliku",
             "Pole A występuje kilka razy",
+            "Kolumna w pliku K1 przypisana kilku polom (Wbs Element, A)",
         ], result.Issues.Select(i => i.Message));
+        Assert.Contains("Pola: co najmniej jedno pole z kolumną w pliku",
+            _service.SaveParser(new ParserInput(null, null, "P3", "test", [new("A", "", FieldTypes.Text)], true)).Issues.Select(i => i.Message));
         Assert.DoesNotContain(_service.Parsers(), p => p.Code == "P2");
     }
 
     [SqlFact]
-    public void Field_used_in_definition_mapping_cannot_be_removed_from_parser()
+    public void Field_removed_from_parser_keeps_its_column_and_data_in_table()
     {
         Use();
-        Assert.True(_service.SaveDefinition(Definition("ACTUALS_PAF", "ACTUALS_PAF")).Success);
         var actuals = _service.Parsers().Single(p => p.Code == ActualsLayout.Parser);
 
         var result = _service.SaveParser(new ParserInput(actuals.ParserId, actuals.Version, actuals.Code, actuals.Name,
-            actuals.Fields.Where(f => f.Field != "WbsElement").ToList(), true));
+            actuals.Fields.Where(f => f.Field != "InvoiceNumber").ToList(), true));
 
-        Assert.False(result.Success);
-        Assert.Contains("Pole WbsElement jest zmapowane w definicji ACTUALS_PAF (kolumna WBS Element) – najpierw zmień mapowanie",
-            result.Issues.Select(i => i.Message));
+        Assert.True(result.Success, result.Message);
+        Assert.DoesNotContain(_service.Parsers().Single(p => p.Code == ActualsLayout.Parser).Fields, f => f.Field == "InvoiceNumber");
+        Assert.Contains(TableColumns("can.Actuals"), c => c.Name == "InvoiceNumber");
     }
 
     [SqlFact]

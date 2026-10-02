@@ -60,13 +60,19 @@ public sealed class SqlMigrationsTests
         Assert.Contains(database.Sql.Settings.TablePrefix + "META_PerformanceObjective", tables);
         Assert.Contains(database.Sql.Settings.TablePrefix + "DICT_ScheduleBudget", tables);
 
-        // 004: parser ACTUALS w bazie, CAN_Actuals – tabela parsera (kolumny dopuszczają NULL, nowe pola)
+        // 004: parser ACTUALS w bazie (układ pliku z 2026-10), CAN_Actuals – tabela parsera (kolumny dopuszczają NULL, nowe pola)
         var actuals = Assert.Single(new SqlSourceConfigStore(database.Sql, new TestServices().Clock, new TestUser()).Parsers());
         Assert.Equal(("ACTUALS", "Actuals", 26), (actuals.Code, actuals.Table, actuals.Fields.Count));
+        Assert.Equal(ActualsLayout.Columns, actuals.Fields.Where(f => f.Column.Length > 0).Select(f => f.Column));
+        Assert.Equal(["CostElementDescr", "PartnerCctr", "SourceObjectName"], actuals.Fields.Where(f => f.Column.Length == 0).Select(f => f.Field));
+        Assert.Equal(["WbsElement", "FiscalYear", "Period"], actuals.Fields.Where(f => f.Required).Select(f => f.Field));
         Assert.Equal(new ParserField("CostElement", "Cost Element", FieldTypes.Text, 10, 10), actuals.Fields.Single(f => f.Field == "CostElement"));
         var columns = connection.Query<(string Name, bool Nullable)>(
             "SELECT name, is_nullable FROM sys.columns WHERE object_id = OBJECT_ID(@table)", new { table = database.Sql.Table("can.Actuals") }).ToList();
         Assert.All(actuals.Fields, f => Assert.Contains(columns, c => c.Name == f.Field && c.Nullable));
+        var definitionColumns = connection.Query<(string Name, bool Nullable)>(   // kolumny, sygnatura i wersja parsera definicji nieużywane
+            "SELECT name, is_nullable FROM sys.columns WHERE object_id = OBJECT_ID(@table)", new { table = database.Sql.Table("meta.SourceDefinition") }).ToList();
+        Assert.All(["Columns", "Signature", "ParserVersion"], n => Assert.Contains(definitionColumns, c => c.Name == n && c.Nullable));
     }
 
     [SqlFact]

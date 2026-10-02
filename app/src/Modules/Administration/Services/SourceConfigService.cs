@@ -13,7 +13,7 @@ namespace PzlEv.Modules.Administration.Services;
 /// <summary>
 /// Definicje źródeł, parsery i lokalizacje RABIT (docs/zrodla-danych.md, rozdz. 2–3; F08): walidacja, zapis z historią,
 /// dziennik. Prefiks unikalny bez rozróżniania wielkości liter – każdy prefiks to osobne źródło. Parser to tabela danych
-/// kanonicznych i jej pola; definicja mapuje na nie kolumny pliku i wskazuje pola wymagane.
+/// kanonicznych i jej pola z kolumnami pliku, typami i polami wymaganymi – pilnuje układu pliku; definicja wskazuje parser.
 /// </summary>
 public sealed partial class SourceConfigService(ISourceConfigStore store, IJournal journal)
 {
@@ -25,28 +25,39 @@ public sealed partial class SourceConfigService(ISourceConfigStore store, IJourn
 
     public IReadOnlyList<SourceLocationRow> Locations() => store.Locations();
 
-    /// <summary>
-    /// Kolumny z pola „Oczekiwane kolumny”: jedna w wierszu albo rozdzielone tabulatorem (wiersz nagłówków skopiowany
-    /// z Excela); puste pomijane.
-    /// </summary>
-    public static IReadOnlyList<string> ParseColumns(string text) =>
-        text.Split(['\r', '\n', '\t'], StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
-
-    /// <summary>Sygnatura układu kolumn definicji – porównywana przy imporcie z sygnaturą nagłówków pliku.</summary>
-    public static string Signature(IReadOnlyList<string> columns) => columns.Count > 0 ? HeaderSignature.Compute(columns) : "";
-
-    /// <summary>„Mapuj po nazwach”: kolumna → pole parsera o tej samej nazwie w pliku (Label) albo w bazie (Field); bez wymaganych.</summary>
-    public static IReadOnlyList<ColumnMapping> MapByName(IReadOnlyList<string> columns, IReadOnlyList<ParserField> fields)
+    /// <summary>Nazwa pola w bazie z nazwy kolumny pliku: słowa wielką literą, bez znaków spoza A–Z i cyfr („Invoice Number” → InvoiceNumber).</summary>
+    public static string FieldName(string column)
     {
-        var mapping = new List<ColumnMapping>();
-        foreach (var column in columns)
+        var latin = string.Concat(column.Select(c => Polish.TryGetValue(c, out var l) ? l : c));
+        var name = string.Concat(NonAlphanumeric().Split(latin).Where(w => w.Length > 0).Select(w => char.ToUpperInvariant(w[0]) + w[1..]));
+        if (name.Length == 0)
+            name = "Pole";
+        if (!char.IsAsciiLetter(name[0]))
+            name = "F" + name;
+        return name.Length > 64 ? name[..64] : name;
+    }
+
+    /// <summary>
+    /// Parser a wiersz nagłówków pliku: kolumny pliku, których nie czyta żadne pole (propozycje nowych pól – tekst,
+    /// nazwa w bazie z nazwy kolumny) i pola, których kolumny nie ma w pliku.
+    /// </summary>
+    public static (IReadOnlyList<ParserField> NewFields, IReadOnlyList<ParserField> MissingInFile) CompareWithFile(
+        IReadOnlyList<ParserField> fields, IReadOnlyList<string> headers)
+    {
+        var columns = headers.Select(h => h.Trim()).Where(h => h.Length > 0).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        var names = fields.Select(f => f.Field).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var newFields = new List<ParserField>();
+        foreach (var column in columns.Where(c => fields.All(f => !string.Equals(f.Column, c, StringComparison.OrdinalIgnoreCase))))
         {
-            var field = fields.FirstOrDefault(f => string.Equals(f.Label, column, StringComparison.OrdinalIgnoreCase))
-                        ?? fields.FirstOrDefault(f => string.Equals(f.Field, column, StringComparison.OrdinalIgnoreCase));
-            if (field is not null && mapping.All(m => m.Field != field.Field))
-                mapping.Add(new ColumnMapping(column, field.Field, false));
+            var name = FieldName(column);
+            var unique = name;
+            for (var i = 2; names.Contains(unique); i++)
+                unique = $"{name}{i}";
+            names.Add(unique);
+            newFields.Add(new ParserField(unique, column, FieldTypes.Text, FieldTypes.DefaultTextLength));
         }
-        return mapping;
+        var missing = fields.Where(f => f.Column.Length > 0 && !columns.Contains(f.Column, StringComparer.OrdinalIgnoreCase)).ToList();
+        return (newFields, missing);
     }
 
     public IReadOnlyList<ParserRow> Parsers() => store.Parsers();
@@ -55,7 +66,7 @@ public sealed partial class SourceConfigService(ISourceConfigStore store, IJourn
 
     /// <summary>
     /// Zapisuje parser (nowa wersja) i zakłada albo rozszerza jego tabelę danych kanonicznych. Pola usunięte z parsera
-    /// zostają w tabeli (dane zapisane), ale nie mogą być używane w mapowaniu definicji.
+    /// zostają w tabeli (dane zapisane), ale import ich już nie wypełnia.
     /// </summary>
     public ConfigSaveResult SaveParser(ParserInput input)
     {
@@ -65,11 +76,11 @@ public sealed partial class SourceConfigService(ISourceConfigStore store, IJourn
             Code = current?.Code ?? input.Code.Trim().ToUpperInvariant(),
             Name = input.Name.Trim(),
             Fields = input.Fields
-                .Where(f => f.Field.Trim().Length > 0 || f.Label.Trim().Length > 0)
+                .Where(f => f.Field.Trim().Length > 0 || f.Column.Trim().Length > 0)
                 .Select(f => f with
                 {
                     Field = f.Field.Trim(),
-                    Label = f.Label.Trim().Length > 0 ? f.Label.Trim() : f.Field.Trim(),
+                    Column = f.Column.Trim(),
                     Length = f.Type == FieldTypes.Text ? f.Length ?? FieldTypes.DefaultTextLength : null,
                     PadDigits = f.Type == FieldTypes.Text ? f.PadDigits : null,
                 })
@@ -95,20 +106,17 @@ public sealed partial class SourceConfigService(ISourceConfigStore store, IJourn
         {
             Code = input.Code.Trim().ToUpperInvariant(),
             Prefix = input.Prefix.Trim().TrimEnd('*').Trim(),
-            Columns = ParseColumns(string.Join("\n", input.Columns)),
         };
-        var parser = ActiveParser(input.Parser);
-        input = input with { Mapping = parser is null ? [] : NormalizeMapping(input) };
-        var issues = ValidateDefinition(input, parser);
+        var issues = ValidateDefinition(input, ActiveParser(input.Parser));
         if (issues.Count > 0)
             return new ConfigSaveResult(false, issues, "Definicja ma błędy – nie zapisano.");
 
-        var signature = Signature(input.Columns);
-        var conflict = store.SaveDefinition(input, signature, parser?.Version ?? 0);
+        var conflict = store.SaveDefinition(input);
         if (conflict is not null)
             return new ConfigSaveResult(false, [], conflict);
 
-        journal.Add(Area, $"Definicja źródła {input.Code} (prefiks {input.Prefix}) {(input.DefinitionId is null ? "dodana" : "zmieniona")}{(input.Active ? "" : " – nieaktywna")}");
+        journal.Add(Area, $"Definicja źródła {input.Code} (prefiks {input.Prefix}, parser {(input.Parser.Length == 0 ? "brak" : input.Parser)}) " +
+                          $"{(input.DefinitionId is null ? "dodana" : "zmieniona")}{(input.Active ? "" : " – nieaktywna")}");
         return new ConfigSaveResult(true, [], $"Zapisano definicję {input.Code}.");
     }
 
@@ -151,17 +159,6 @@ public sealed partial class SourceConfigService(ISourceConfigStore store, IJourn
     private ParserRow? ActiveParser(string code) =>
         code == SourceParsers.None ? null : store.Parsers().FirstOrDefault(p => p.Code == code && p.Active);
 
-    /// <summary>Mapowanie z wpisami „kolumna → pole” (bez pustych), kolumny w pisowni z listy oczekiwanych kolumn.</summary>
-    private static List<ColumnMapping> NormalizeMapping(DefinitionInput input) =>
-        (input.Mapping ?? [])
-            .Where(m => m.Field.Trim().Length > 0)
-            .Select(m => m with
-            {
-                Column = input.Columns.FirstOrDefault(c => string.Equals(c, m.Column.Trim(), StringComparison.OrdinalIgnoreCase)) ?? m.Column.Trim(),
-                Field = m.Field.Trim(),
-            })
-            .ToList();
-
     private List<Issue> ValidateParser(ParserInput input, ParserRow? current)
     {
         var issues = new List<Issue>();
@@ -172,12 +169,12 @@ public sealed partial class SourceConfigService(ISourceConfigStore store, IJourn
             issues.Add(Issue.Error("Nazwa: pole wymagane", at));
         if (current is null && store.Parsers().Any(p => p.Code == input.Code))
             issues.Add(Issue.Error($"Parser {input.Code} już istnieje", at));
-        if (input.Fields.Count == 0)
-            issues.Add(Issue.Error("Pola: co najmniej jedno pole", at));
+        if (input.Fields.All(f => f.Column.Length == 0))
+            issues.Add(Issue.Error("Pola: co najmniej jedno pole z kolumną w pliku", at));
 
         foreach (var field in input.Fields)
         {
-            var name = field.Field.Length > 0 ? field.Field : field.Label;
+            var name = field.Field.Length > 0 ? field.Field : field.Column;
             if (!SqlCanonical.FieldName().IsMatch(field.Field) || SqlCanonical.FixedColumns.Contains(field.Field, StringComparer.OrdinalIgnoreCase))
                 issues.Add(Issue.Error($"Pole w bazie „{name}”: litera, potem litery, cyfry i _ (bez spacji), inne niż {string.Join(", ", SqlCanonical.FixedColumns)}", at));
             if (!FieldTypes.All.Contains(field.Type))
@@ -186,18 +183,14 @@ public sealed partial class SourceConfigService(ISourceConfigStore store, IJourn
                 issues.Add(Issue.Error($"Pole {name}: długość tekstu od 1 do {FieldTypes.MaxTextLength}", at));
             if (field.PadDigits is { } pad && (pad < 1 || pad > (field.Length ?? FieldTypes.DefaultTextLength)))
                 issues.Add(Issue.Error($"Pole {name}: dopełnianie zerami od 1 do długości pola", at));
+            if (field.Required && field.Column.Length == 0)
+                issues.Add(Issue.Error($"Pole {name}: wymagane, ale bez kolumny w pliku", at));
         }
         foreach (var duplicate in input.Fields.GroupBy(f => f.Field, StringComparer.OrdinalIgnoreCase).Where(g => g.Count() > 1 && g.Key.Length > 0))
             issues.Add(Issue.Error($"Pole {duplicate.Key} występuje kilka razy", at));
 
-        if (current is not null)
-        {
-            // Pole usunięte z parsera nie może zostać w mapowaniu definicji (import by go nie znalazł).
-            var removed = current.Fields.Select(f => f.Field).Except(input.Fields.Select(f => f.Field), StringComparer.OrdinalIgnoreCase).ToList();
-            foreach (var definition in store.Definitions().Where(d => d.Parser == current.Code))
-            foreach (var used in definition.Mapping.Where(m => removed.Contains(m.Field, StringComparer.OrdinalIgnoreCase)))
-                issues.Add(Issue.Error($"Pole {used.Field} jest zmapowane w definicji {definition.Code} (kolumna {used.Column}) – najpierw zmień mapowanie", at));
-        }
+        foreach (var duplicate in input.Fields.Where(f => f.Column.Length > 0).GroupBy(f => f.Column, StringComparer.OrdinalIgnoreCase).Where(g => g.Count() > 1))
+            issues.Add(Issue.Error($"Kolumna w pliku {duplicate.Key} przypisana kilku polom ({string.Join(", ", duplicate.Select(f => f.Field))})", at));
         return issues;
     }
 
@@ -220,25 +213,18 @@ public sealed partial class SourceConfigService(ISourceConfigStore store, IJourn
         if (others.Any(d => d.Code == input.Code))
             issues.Add(Issue.Error($"Kod {input.Code} jest już używany", at));
 
-        if (parser is null)
-            return issues;
-        var mapping = input.Mapping ?? [];
-        if (mapping.Count == 0)
-            issues.Add(Issue.Error($"Mapowanie: przypisz kolumnom pliku pola parsera {parser.Code} (albo wybierz parser „brak” – tylko wiersze surowe)", at));
-        foreach (var line in mapping)
-        {
-            if (!input.Columns.Contains(line.Column, StringComparer.OrdinalIgnoreCase))
-                issues.Add(Issue.Error($"Mapowanie: kolumny {line.Column} nie ma w oczekiwanych kolumnach", at));
-            if (parser.Fields.All(f => !string.Equals(f.Field, line.Field, StringComparison.OrdinalIgnoreCase)))
-                issues.Add(Issue.Error($"Mapowanie: pola {line.Field} nie ma w parserze {parser.Code}", at));
-        }
-        foreach (var duplicate in mapping.GroupBy(m => m.Field, StringComparer.OrdinalIgnoreCase).Where(g => g.Count() > 1))
-            issues.Add(Issue.Error($"Mapowanie: pole {duplicate.Key} przypisane kilku kolumnom ({string.Join(", ", duplicate.Select(m => m.Column))})", at));
-        foreach (var duplicate in mapping.GroupBy(m => m.Column, StringComparer.OrdinalIgnoreCase).Where(g => g.Count() > 1))
-            issues.Add(Issue.Error($"Mapowanie: kolumna {duplicate.Key} przypisana kilku polom", at));
         return issues;
     }
 
     [GeneratedRegex("^[A-Z0-9_]+$")]
     private static partial Regex CodePattern();
+
+    [GeneratedRegex("[^A-Za-z0-9]+")]
+    private static partial Regex NonAlphanumeric();
+
+    private static readonly Dictionary<char, char> Polish = new()
+    {
+        ['ą'] = 'a', ['ć'] = 'c', ['ę'] = 'e', ['ł'] = 'l', ['ń'] = 'n', ['ó'] = 'o', ['ś'] = 's', ['ź'] = 'z', ['ż'] = 'z',
+        ['Ą'] = 'A', ['Ć'] = 'C', ['Ę'] = 'E', ['Ł'] = 'L', ['Ń'] = 'N', ['Ó'] = 'O', ['Ś'] = 'S', ['Ź'] = 'Z', ['Ż'] = 'Z',
+    };
 }
