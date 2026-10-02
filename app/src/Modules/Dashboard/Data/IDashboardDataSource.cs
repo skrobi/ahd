@@ -3,8 +3,7 @@ using PzlEv.Modules.Dashboard.Models;
 namespace PzlEv.Modules.Dashboard.Data;
 
 /// <summary>
-/// Źródło danych Pulpitu. W PoC – DashboardSampleData; docelowo implementacja czytająca widoki bazy
-/// (Dapper). ViewModel zależy tylko od tego interfejsu, więc zamiana nie dotyka widoku ani ViewModelu.
+/// Źródło danych Pulpitu – SqlDashboardData (baza środowiska). ViewModel zależy tylko od tego interfejsu.
 /// </summary>
 public interface IDashboardDataSource
 {

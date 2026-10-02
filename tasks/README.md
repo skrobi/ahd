@@ -6,10 +6,10 @@ zmiana zakresu zadania w trakcie realizacji wymaga uzgodnienia.
 
 ## Zasady
 
-- **Dane:** aplikacja pracuje na bazie MS SQL (`PZLTEST.FINOP.PZLEV_*`); warstwa w pamięci była przejściowa (F0.4) – usunięta z aplikacji 2026-10-02, zostały atrapy w testach.
+- **Dane:** aplikacja pracuje na bazie MS SQL (`PZLTEST.FINOP.PZLEV_*`); warstwa w pamięci była przejściowa (F0.4) – usunięta 2026-10-02 z aplikacji i z testów; Pulpit czyta z bazy.
   Każdy moduł rozmawia z danymi przez `Data/I<Moduł>Store` – kontrakt odpowiadający przyszłym procedurom i widokom.
   Przejście na MS SQL (F10) zmienia tylko implementacje magazynów i skrypty `sql/mssql` (`docs/architektura.md`, rozdz. 5.3).
-- **Testy kontraktu:** ten sam zestaw testów na atrapach w pamięci i na bazie SQL (`PZLEV_TEST_SQL`).
+- **Testy kontraktu:** testy magazynów i serwisów na bazie SQL (`PZLEV_TEST_SQL`); bez bazy – pomijane.
 - **Weryfikacja przepływu:** każdy etap zapisuje liczbę wierszy i sumy kontrolne; dane wzorcowe (F0.9) mają oczekiwane wyniki.
 - **Kolejność typów projektów:** wewnętrzny → SAC → CAS.
 - **Status zadania** – w pliku zadania i w tabeli poniżej: do zrobienia / w toku / zrobione / zablokowane (O…).
@@ -32,7 +32,7 @@ zmiana zakresu zadania w trakcie realizacji wymaga uzgodnienia.
 | [F0.1 Przeniesienie PoC do docelowej aplikacji](F0.1-przeniesienie-poc-do-docelowej-aplikacji.md) | Shell / całość | – | – | zrobione |
 | [F0.2 Projekt testów i uruchamianie testów w budowie](F0.2-projekt-testow-i-uruchamianie-testow-w-budowie.md) | całość | F0.1 | – | zrobione |
 | [F0.3 Konfiguracja aplikacji](F0.3-konfiguracja-aplikacji.md) | Shell | F0.1 | – | zrobione |
-| [F0.4 Warstwa danych przejściowa (w pamięci)](F0.4-warstwa-danych-przejsciowa-w-pamieci.md) | Shared | F0.2 | – | zastąpione – baza SQL; atrapy w testach |
+| [F0.4 Warstwa danych przejściowa (w pamięci)](F0.4-warstwa-danych-przejsciowa-w-pamieci.md) | Shared | F0.2 | – | zastąpione – baza SQL |
 | [F0.5 Usługi wspólne: użytkownik, dziennik, problemy](F0.5-uslugi-wspolne-uzytkownik-dziennik-problemy.md) | Shared | F0.4 | – | zrobione |
 | [F0.6 Silnik etapów](F0.6-silnik-etapow.md) | Shared / Runs | F0.5 | – | do zrobienia |
 | [F0.7 Pliki: Excel, CSV, dysk sieciowy](F0.7-pliki-excel-csv-dysk-sieciowy.md) | Shared | F0.2 | – | w toku |
@@ -116,7 +116,7 @@ zmiana zakresu zadania w trakcie realizacji wymaga uzgodnienia.
 | Zadanie | Moduł | Zależy od | Otwarte kwestie | Status |
 |---|---|---|---|---|
 | [F9.1 P9 Publikacja](F9.1-p9-publikacja.md) | Export | F8.2 | O28 | do zrobienia |
-| [F9.2 Pulpit na danych](F9.2-pulpit-na-danych.md) | Dashboard | F5.6 | – | do zrobienia |
+| [F9.2 Pulpit na danych](F9.2-pulpit-na-danych.md) | Dashboard | F5.6 | – | w toku – etap 1 z bazy, przebiegi po F5 |
 | [F9.3 Test przepływu end-to-end](F9.3-test-przeplywu-end-to-end.md) | całość | F9.1 | – | do zrobienia |
 
 ## F10. Przejście na MS SQL

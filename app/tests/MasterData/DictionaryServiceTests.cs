@@ -1,24 +1,34 @@
 using PzlEv.Modules.MasterData.Data;
 using PzlEv.Modules.MasterData.Models;
 using PzlEv.Modules.MasterData.Services;
+using PzlEv.Shared.Utils.Data;
+using PzlEv.Shared.Utils.Data.Sql;
 using PzlEv.Shared.Utils.Files;
 using PzlEv.Tests.TestSupport;
-using PzlEv.Tests.InMemory;
 using Xunit;
 
 namespace PzlEv.Tests.MasterData;
 
-public class DictionaryServiceTests
+/// <summary>Serwis słowników na bazie testowej (TestDatabase).</summary>
+public sealed class DictionaryServiceTests : IDisposable
 {
     private readonly TestServices _services = new();
-    private readonly InMemoryDictionaryStore _store;
-    private readonly DictionaryService _service;
+    private readonly TestDatabase? _database;
+    private readonly IDictionaryStore _store = null!;
+    private readonly IJournal _journal = null!;
+    private readonly DictionaryService _service = null!;
 
     public DictionaryServiceTests()
     {
-        _store = new InMemoryDictionaryStore(_services.Database, _services.Clock, _services.User);
-        _service = new DictionaryService(_store, _services.Journal);
+        if (TestDatabase.ConnectionString is null)
+            return;   // testy pominięte (SqlFact)
+        _database = new TestDatabase();
+        _store = new SqlDictionaryStore(_database.Sql, _services.Clock, _services.User);
+        _journal = new SqlJournal(_database.Sql, _services.Clock, _services.User);
+        _service = new DictionaryService(_store, _journal);
     }
+
+    public void Dispose() => _database?.Dispose();
 
     private static DictionarySpec Rates => GlobalDictionaries.Get(GlobalDictionaries.DepartmentRates);
     private static DictionarySpec CostCategory => GlobalDictionaries.Get(GlobalDictionaries.CostCategory);
@@ -26,7 +36,7 @@ public class DictionaryServiceTests
     private static DictRow Rate(string dept, string rate, long? rowId = null, int? version = null) =>
         new(rowId, version, new Dictionary<string, string?> { ["Department"] = dept, ["Year"] = "2026", ["Labor Rate"] = rate, ["Overhead"] = "0" });
 
-    [Fact]
+    [SqlFact]
     public void Errors_block_saving()
     {
         var outcome = _service.Save(Rates, [Rate("W30", "abc")], [], confirmWarnings: false);
@@ -34,7 +44,7 @@ public class DictionaryServiceTests
         Assert.Empty(_store.Current(Rates.Code));
     }
 
-    [Fact]
+    [SqlFact]
     public void Warnings_need_confirmation()
     {
         DictRow[] rows = [new(null, null, new Dictionary<string, string?> { ["Numer elementu kosztowego"] = "123", ["Cost Category"] = null })];
@@ -48,7 +58,7 @@ public class DictionaryServiceTests
         Assert.Equal("0000000123", Assert.Single(_store.Current(CostCategory.Code)).Values["Numer elementu kosztowego"]);
     }
 
-    [Fact]
+    [SqlFact]
     public void Save_writes_changes_and_journal()
     {
         _service.Save(Rates, [Rate("W30", "100"), Rate("W40", "110")], [], false);
@@ -63,10 +73,10 @@ public class DictionaryServiceTests
         var current = _service.Load(Rates).ToDictionary(r => r["Department"]!);
         Assert.Equal(["W30", "W51"], current.Keys.Order());
         Assert.Equal("120", current["W30"]["Labor Rate"]);
-        Assert.Contains(_services.Journal.Recent(10), e => e.Message.Contains("Stawki wydziałów: +1 ~1 −1"));
+        Assert.Contains(_journal.Recent(10), e => e.Message.Contains("Stawki wydziałów: +1 ~1 −1"));
     }
 
-    [Fact]
+    [SqlFact]
     public void Unchanged_rows_give_no_changes()
     {
         _service.Save(Rates, [Rate("W30", "100")], [], false);
@@ -74,7 +84,7 @@ public class DictionaryServiceTests
         Assert.Equal(SaveStatus.NoChanges, outcome.Status);
     }
 
-    [Fact]
+    [SqlFact]
     public void Excel_export_and_import_roundtrip_has_no_differences()
     {
         MasterDataSeed.EnsureSeeded(_store, 2026);
@@ -92,7 +102,7 @@ public class DictionaryServiceTests
         }
     }
 
-    [Fact]
+    [SqlFact]
     public void Excel_import_shows_added_changed_and_removed_rows_and_applies_them()
     {
         _service.Save(Rates, [Rate("W30", "100"), Rate("W40", "110")], [], false);
@@ -125,7 +135,7 @@ public class DictionaryServiceTests
         }
     }
 
-    [Fact]
+    [SqlFact]
     public void Excel_file_with_errors_is_not_saved()
     {
         _service.Save(Rates, [Rate("W30", "100")], [], false);
@@ -144,7 +154,7 @@ public class DictionaryServiceTests
         }
     }
 
-    [Fact]
+    [SqlFact]
     public void Excel_without_key_column_is_rejected()
     {
         var path = TempXlsx();
@@ -160,7 +170,7 @@ public class DictionaryServiceTests
         }
     }
 
-    [Fact]
+    [SqlFact]
     public void Seeded_calendar_is_valid_and_cost_category_matches_appendix_a()
     {
         MasterDataSeed.EnsureSeeded(_store, 2026);

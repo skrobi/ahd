@@ -164,13 +164,13 @@ modułu i `Shared/Models`; Excel, File Connectors, SQL Access – `Shared/Utils`
 **Warstwa danych.** Aplikacja pracuje wyłącznie na bazie MS SQL środowiska (`pzl-ev.json`, rozdz. 8). Moduł korzysta
 z danych przez swój magazyn `Data/I<Moduł>Store` (kontrakt odpowiadający procedurom i widokom) w implementacji
 `Data/Sql<Moduł>Store`; wiersze tabel – `Shared/Models/Db`. Moduły wymieniają dane przez wspólne tabele, nie przez
-swoje typy. Tryb danych w pamięci został usunięty z aplikacji (2026-10-02) – magazyny w pamięci są tylko atrapami
-w testach (`app/tests/InMemory`).
+swoje typy. Wersji danych w pamięci nie ma (usunięta 2026-10-02 z aplikacji i z testów); Pulpit także czyta
+wyłącznie z bazy (`Dashboard/Data/SqlDashboardData`).
 
 **Testy** (`app/tests`, xUnit, `net10.0`): projekt kompiluje pliki logiki aplikacji – wszystko poza `Views`,
 `ViewModels`, `Shell`, `Shared/Utils/Ui` i plikami `*Module.cs` – więc logika nie może używać typów WPF i testy
-działają także poza Windows. Testy magazynów i serwisów wykonują te same scenariusze na atrapach w pamięci
-i – gdy ustawiono `PZLEV_TEST_SQL` – na bazie SQL (`TestStores`). Dane wzorcowe z oczekiwanymi sumami – `app/testdata`.
+działają także poza Windows. Testy magazynów i serwisów działają na bazie SQL (`TestDatabase`, atrybut `[SqlFact]`);
+bez zmiennej `PZLEV_TEST_SQL` są pomijane. Dane wzorcowe z oczekiwanymi sumami – `app/testdata`.
 `build.cmd` uruchamia testy przed publikacją.
 
 **Konwencje:** jeden typ w pliku, nazwa pliku = nazwa typu; sufiksy `…Module`, `…View`, `…ViewModel`,
@@ -190,7 +190,7 @@ decyzji (P4, P6, Z) albo z wynikiem ERROR.
 3. `Modules/<Moduł>/<Moduł>Module.cs` implementujący `IModule`; do czasu implementacji ekran zastępczy
    (`PlaceholderView.Create`).
 4. Dane: tabele w nowej migracji `sql/mssql/NNN_*.sql`, `Data/I<Moduł>Store` + `Data/Sql<Moduł>Store` (wiersze w
-   `Shared/Models/Db`), atrapa w `app/tests/InMemory` i testy na obu;
+   `Shared/Models/Db`) i testy `[SqlFact]` na bazie testowej;
    ekran: `Views/<Moduł>View.xaml`, `ViewModels/<Moduł>ViewModel.cs`.
 5. Jedna linia w `Shell/ModuleCatalog.cs`.
 6. Budowa (`build.cmd`) – reguły zależności i przestrzeni nazw oraz testy muszą przejść.

@@ -34,12 +34,9 @@ public sealed class SqlMigrationsTests
         Assert.Contains(batches, b => b.Contains("CREATE TABLE [FINOP].[PZLEV_META_Project]"));
     }
 
-    [Theory]
-    [MemberData(nameof(TestStores.Kinds), MemberType = typeof(TestStores))]
-    public void Migrations_create_stage_1_tables_once(string store)
+    [SqlFact]
+    public void Migrations_create_stage_1_tables_once()
     {
-        if (store != TestStores.Sql)
-            return;   // tylko na bazie testowej
         using var database = new TestDatabase();
 
         Assert.Equal(1, SqlMigrations.CurrentVersion(database.Sql));

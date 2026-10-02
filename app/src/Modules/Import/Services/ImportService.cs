@@ -132,7 +132,7 @@ public sealed class ImportService(IImportStore store, AppServices services)
         Logger.Information("Import #{Batch} start – {User} na {Machine}, wersja {Version}", batchId, services.User.Account, Environment.MachineName, services.AppVersion);
         progress?.Report(new ImportProgress($"Import #{batchId} rozpoczęty…", BatchId: batchId));
         LogDefinitions(definitions);
-        var reference = $"import:{batchId}";
+        var reference = ImportBatchRow.ProblemReference(batchId);
         var results = new List<FileResult>();
         var issues = new List<Issue>();
         var cancelled = false;

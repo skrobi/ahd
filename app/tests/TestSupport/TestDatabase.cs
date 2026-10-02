@@ -8,18 +8,22 @@ namespace PzlEv.Tests.TestSupport;
 /// <summary>
 /// Baza MS SQL do testów magazynów: ciąg połączenia w zmiennej środowiskowej PZLEV_TEST_SQL (np. baza TEST albo
 /// lokalny SQL Server). Każda instancja zakłada tabele migracjami (sql/mssql) z własną, losową sygnaturą w schemacie
-/// FINOP i usuwa je po teście – testy nie dotykają tabel aplikacji i mogą działać równolegle.
+/// FINOP i usuwa je po teście – testy nie dotykają tabel aplikacji i mogą działać równolegle. Zakładanie i usuwanie
+/// tabel (DDL) jest szeregowane w procesie testów – równoległe DDL w jednym schemacie kończyły się zakleszczeniem.
 /// </summary>
 public sealed class TestDatabase : IDisposable
 {
     public const string Variable = "PZLEV_TEST_SQL";
     public const string Schema = "FINOP";
 
+    private static readonly object Ddl = new();
+
     public TestDatabase()
     {
         var connection = ConnectionString ?? throw new InvalidOperationException($"Brak zmiennej {Variable} – testy SQL wyłączone");
         Sql = new SqlDatabase(new SqlSettings("", "", Schema, $"T{Guid.NewGuid():N}"[..9] + "_", ConnectionString: connection), "test");
-        SqlMigrations.Apply(Sql);
+        lock (Ddl)
+            SqlMigrations.Apply(Sql);
     }
 
     public static string? ConnectionString => Environment.GetEnvironmentVariable(Variable) is { Length: > 0 } value ? value : null;
@@ -27,6 +31,12 @@ public sealed class TestDatabase : IDisposable
     public SqlDatabase Sql { get; }
 
     public void Dispose()
+    {
+        lock (Ddl)
+            DropTables();
+    }
+
+    private void DropTables()
     {
         using var connection = Sql.Open();
         connection.Execute(
@@ -47,20 +57,12 @@ public sealed class TestDatabase : IDisposable
     }
 }
 
-/// <summary>Rodzaje magazynów w testach: zawsze w pamięci; SQL – gdy ustawiono PZLEV_TEST_SQL.</summary>
-public static class TestStores
+/// <summary>Test na bazie testowej (TestDatabase): pomijany, gdy nie ustawiono PZLEV_TEST_SQL.</summary>
+public sealed class SqlFactAttribute : FactAttribute
 {
-    public const string Memory = "pamięć";
-    public const string Sql = "sql";
-
-    public static TheoryData<string> Kinds
+    public SqlFactAttribute()
     {
-        get
-        {
-            var kinds = new TheoryData<string> { Memory };
-            if (TestDatabase.ConnectionString is not null)
-                kinds.Add(Sql);
-            return kinds;
-        }
+        if (TestDatabase.ConnectionString is null)
+            Skip = $"Brak bazy testowej – ustaw zmienną {TestDatabase.Variable} (app/README.md)";
     }
 }
