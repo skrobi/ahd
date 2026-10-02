@@ -13,7 +13,7 @@ namespace PzlEv.Modules.Import.ViewModels;
 
 /// <summary>
 /// Ekran Import RABIT (F05): uruchomienie importu, wynik dla każdego pliku, problemy, historia importów;
-/// sprawdzenie źródeł bez importu (co aplikacja widzi w każdej lokalizacji).
+/// sprawdzenie źródeł bez importu (co aplikacja widzi w każdej lokalizacji); test dostępu do SharePoint (metody A–H).
 /// </summary>
 public sealed class ImportViewModel : ObservableObject
 {
@@ -26,6 +26,13 @@ public sealed class ImportViewModel : ObservableObject
     private string _progress = "";
     private string _summary = "";
     private ImportBatchRow? _selectedBatch;
+    private string _accessFolder = "";
+    private string _accessFile = "";
+    private string _accessListId = AccessTestInput.RabitListId;
+    private string _accessViewId = AccessTestInput.RabitViewId;
+    private string _accessEnvironment = "";
+    private string _accessConclusion = "";
+    private string _accessReport = "";
 
     public ImportViewModel(ImportService service, IImportStore store)
     {
@@ -35,6 +42,7 @@ public sealed class ImportViewModel : ObservableObject
         Cancel = new RelayCommand(_ => _cancellation?.Cancel(), _ => _isRunning);
         Refresh = new RelayCommand(_ => Reload(), _ => !_isRunning);
         Check = new AsyncRelayCommand(DoCheck, () => !_isRunning);
+        TestAccess = new AsyncRelayCommand(DoTestAccess, () => !_isRunning);
         Reload();
     }
 
@@ -54,8 +62,26 @@ public sealed class ImportViewModel : ObservableObject
 
     public bool HasCheck => LocationChecks.Count > 0;
 
-    /// <summary>Katalog logu aplikacji (App.xaml.cs) – szczegóły importu i sprawdzenia źródeł.</summary>
-    public string LogText => $"Szczegóły (ścieżki, dostęp, decyzje, pełne błędy) w logu: {Path.Combine(AppContext.BaseDirectory, "logs")}";
+    public ObservableCollection<AccessMethodResult> AccessResults { get; } = [];
+
+    public string AccessFolder { get => _accessFolder; set => SetProperty(ref _accessFolder, value); }
+
+    public string AccessFile { get => _accessFile; set => SetProperty(ref _accessFile, value); }
+
+    public string AccessListId { get => _accessListId; set => SetProperty(ref _accessListId, value); }
+
+    public string AccessViewId { get => _accessViewId; set => SetProperty(ref _accessViewId, value); }
+
+    public string AccessEnvironment { get => _accessEnvironment; private set => SetProperty(ref _accessEnvironment, value); }
+
+    public string AccessConclusion { get => _accessConclusion; private set => SetProperty(ref _accessConclusion, value); }
+
+    public string AccessReport { get => _accessReport; private set => SetProperty(ref _accessReport, value); }
+
+    /// <summary>Katalog logu aplikacji (App.xaml.cs) – szczegóły importu i sprawdzenia źródeł, raporty testu dostępu.</summary>
+    private static string LogDirectory => Path.Combine(AppContext.BaseDirectory, "logs");
+
+    public string LogText => $"Szczegóły (ścieżki, dostęp, decyzje, pełne błędy) w logu: {LogDirectory}";
 
     public ICommand Run { get; }
 
@@ -64,6 +90,8 @@ public sealed class ImportViewModel : ObservableObject
     public ICommand Refresh { get; }
 
     public ICommand Check { get; }
+
+    public ICommand TestAccess { get; }
 
     public string Progress { get => _progress; private set => SetProperty(ref _progress, value); }
 
@@ -152,11 +180,59 @@ public sealed class ImportViewModel : ObservableObject
         }
     }
 
+    private async Task DoTestAccess()
+    {
+        IsRunning = true;
+        Progress = "Test dostępu…";
+        AccessResults.Clear();
+        AccessEnvironment = AccessConclusion = AccessReport = "";
+        var input = new AccessTestInput(AccessFolder, AccessFile, AccessListId, AccessViewId);
+        var progress = new Progress<string>(code => Progress = $"Test dostępu: metoda {code}…");
+        try
+        {
+            var result = await Task.Run(() =>
+            {
+                using var test = new RabitAccessTest();
+                return test.Run(input, progress);
+            });
+            AccessEnvironment = string.Join(Environment.NewLine, result.Environment);
+            foreach (var method in result.Methods)
+                AccessResults.Add(method);
+            AccessConclusion = result.Conclusion;
+            Progress = "";
+            var path = Path.Combine(LogDirectory, $"test-dostepu-rabit-{DateTime.Now:yyyyMMdd-HHmmss}.txt");
+            try
+            {
+                File.WriteAllText(path, result.Report);
+                AccessReport = $"Raport (bez zawartości plików): {path}";
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                AccessReport = $"Raport nie został zapisany ({ex.Message}) – jest w logu aplikacji.";
+            }
+        }
+        catch (ArgumentException ex)
+        {
+            Progress = ex.Message;
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            Logger.Error(ex, "Test dostępu przerwany błędem");
+            Progress = $"Test dostępu przerwany błędem: {ex.Message}";
+        }
+        finally
+        {
+            IsRunning = false;
+        }
+    }
+
     private void Reload()
     {
         Locations.Clear();
         foreach (var location in _service.Locations())
             Locations.Add(location);
+        if (AccessFolder.Length == 0)
+            AccessFolder = Locations.Where(l => !l.IsManualFolder).Select(l => SharePointAddress.Parse(l.ConfiguredPath)?.FolderUrl).FirstOrDefault(u => u is not null) ?? "";
         Batches.Clear();
         foreach (var batch in _store.Batches(50))
             Batches.Add(batch);
