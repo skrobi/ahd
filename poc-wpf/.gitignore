@@ -4,3 +4,4 @@ publish/
 logs/
 NuGet.local.config
 nuget.local.config
+eFOSS.local.cmd
