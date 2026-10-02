@@ -107,4 +107,31 @@ public class FileUtilsTests
         Assert.True(DateText.TryParse(text, out var date));
         Assert.Equal(new DateOnly(2026, 3, 29), date);
     }
+
+    [Theory]
+    [InlineData("ACTUALS_PAF2_B6_AC1.xlsx\0", "ACTUALS_PAF2_B6_AC1.xlsx")]   // nazwa z WebDAV w .NET (dotnet/runtime#62429)
+    [InlineData("ACTUALS_PAF2_B6_AC1.xlsx", "ACTUALS_PAF2_B6_AC1.xlsx")]
+    [InlineData(".\0", ".")]
+    public void Folder_entry_names_lose_trailing_null(string name, string expected) => Assert.Equal(expected, FolderEntries.CleanName(name));
+
+    [Fact]
+    public void Folder_entries_list_files_and_subfolders_sorted()
+    {
+        var root = Directory.CreateTempSubdirectory("pzl-ev-folder-").FullName;
+        try
+        {
+            File.WriteAllText(Path.Combine(root, "b.csv"), "x");
+            File.WriteAllText(Path.Combine(root, "A.xlsx"), "x");
+            Directory.CreateDirectory(Path.Combine(root, "Archiwum"));
+
+            var (files, folders) = FolderEntries.List(root);
+
+            Assert.Equal(["A.xlsx", "b.csv"], files.Select(f => f.Name));
+            Assert.Equal(["Archiwum"], folders);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
 }
