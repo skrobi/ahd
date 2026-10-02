@@ -2,8 +2,10 @@ using System.IO;
 using System.Reflection;
 using System.Windows;
 using System.Windows.Threading;
+using Microsoft.Data.SqlClient;
 using PzlEv.Shared.Utils.Config;
 using PzlEv.Shared.Utils.Data;
+using PzlEv.Shared.Utils.Data.Sql;
 using PzlEv.Shell;
 using Serilog;
 
@@ -41,10 +43,21 @@ public partial class App : Application
             var config = AppConfigLoader.Load(AppContext.BaseDirectory);
             Log.Information("Środowisko {Environment}, dane {DataMode}, korzeń {NetworkRoot}", config.Environment, config.DataMode, config.NetworkRoot);
             _services = AppServices.Create(config, version);
+            if (_services.Sql is { } sql && !EnsureSchema(sql))
+            {
+                Shutdown(1);
+                return;
+            }
             var modules = ModuleCatalog.Create(_services);
             _services.Database.Commit();
             var window = new ShellWindow { DataContext = new ShellViewModel(modules, _services) };
             window.Show();
+        }
+        catch (SqlException ex)
+        {
+            Log.Error(ex, "Brak połączenia z bazą");
+            MessageBox.Show($"Baza danych {_services?.Sql?.Describe}: {ex.Message}", "PZL-EV – baza danych niedostępna", MessageBoxButton.OK, MessageBoxImage.Error);
+            Shutdown(1);
         }
         catch (Exception ex) when (ex is InvalidOperationException or NotSupportedException or IOException)
         {
@@ -52,6 +65,29 @@ public partial class App : Application
             MessageBox.Show(ex.Message, "PZL-EV – nie można uruchomić", MessageBoxButton.OK, MessageBoxImage.Error);
             Shutdown(1);
         }
+    }
+
+    /// <summary>
+    /// Schemat bazy w wersji wymaganej przez aplikację (sql/mssql). Brakujące migracje – za zgodą użytkownika
+    /// (konto AD z prawem tworzenia tabel w schemacie). false – aplikacja nie startuje.
+    /// </summary>
+    private static bool EnsureSchema(SqlDatabase sql)
+    {
+        var current = SqlMigrations.CurrentVersion(sql);
+        var required = SqlMigrations.Required;
+        Log.Information("Baza {Database}: wersja schematu {Current}, wymagana {Required}", sql.Describe, current, required);
+        if (current >= required)
+            return true;
+        var answer = MessageBox.Show(
+            $"Baza {sql.Describe}\nWersja schematu PZL-EV: {current}, wymagana: {required}.\n\n" +
+            "Utworzyć / zaktualizować tabele teraz? (wymaga prawa tworzenia tabel w schemacie)",
+            "PZL-EV – schemat bazy danych", MessageBoxButton.YesNo, MessageBoxImage.Question);
+        if (answer != MessageBoxResult.Yes)
+            return false;
+        var applied = SqlMigrations.Apply(sql);
+        Log.Information("Wykonane migracje: {Scripts}", string.Join(", ", applied));
+        MessageBox.Show($"Wykonano: {string.Join(", ", applied)}", "PZL-EV – schemat bazy danych", MessageBoxButton.OK, MessageBoxImage.Information);
+        return true;
     }
 
     private void OnUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)

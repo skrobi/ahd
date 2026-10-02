@@ -33,7 +33,7 @@ public sealed class ShellViewModel : ObservableObject, INavigator
 
     public string Environment => _services.Config.Environment;
     public string Footer => $"Aplikacja {_services.AppVersion}";
-    public string DataModeText => "Dane w pamięci (tryb przejściowy)";
+    public string DataModeText => _services.DataDescription;
     public string WindowsUser => _services.User.Account;
 
     public IReadOnlyList<NavItem> Nav { get; }

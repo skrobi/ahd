@@ -7,6 +7,7 @@ using PzlEv.Modules.Import.Services;
 using PzlEv.Shared.Models.Db;
 using PzlEv.Shared.Models.Pipeline;
 using PzlEv.Shared.Models.Sources;
+using PzlEv.Shared.Utils.Data;
 using PzlEv.Shared.Utils.Files;
 using PzlEv.Tests.TestSupport;
 using Xunit;
@@ -18,16 +19,30 @@ public sealed class ImportServiceTests : IDisposable
 {
     private readonly TestServices _services = new();
     private readonly string _root = Directory.CreateTempSubdirectory("pzl-ev-import-").FullName;
-    private readonly SourceConfigService _config;
-    private readonly InMemoryImportStore _store;
-    private readonly ImportService _import;
+    private TestDatabase? _database;
+    private AppServices _app = null!;
+    private SourceConfigService _config = null!;
+    private IImportStore _store = null!;
+    private ImportService _import = null!;
 
-    public ImportServiceTests()
+    /// <summary>Magazyny testu: w pamięci albo w bazie testowej (TestStores).</summary>
+    private void Use(string store)
     {
-        _config = new SourceConfigService(new InMemorySourceConfigStore(_services.Database, _services.Clock, _services.User), _services.Journal);
+        if (store == TestStores.Sql)
+        {
+            _database = new TestDatabase();
+            _app = _services.App(_root, _database.Sql);
+            _config = new SourceConfigService(new SqlSourceConfigStore(_database.Sql, _services.Clock, _services.User), _app.Journal);
+            _store = new SqlImportStore(_database.Sql);
+        }
+        else
+        {
+            _app = _services.App(_root);
+            _config = new SourceConfigService(new InMemorySourceConfigStore(_services.Database, _services.Clock, _services.User), _app.Journal);
+            _store = new InMemoryImportStore(_services.Database);
+        }
         SourceConfigSeed.EnsureSeeded(_config);
-        _store = new InMemoryImportStore(_services.Database);
-        _import = new ImportService(_store, _services.App(_root));
+        _import = new ImportService(_store, _app);
     }
 
     private string ImportFolder => _services.App(_root).Config.ImportFolder;
@@ -40,11 +55,17 @@ public sealed class ImportServiceTests : IDisposable
         return target;
     }
 
-    public void Dispose() => Directory.Delete(_root, recursive: true);
-
-    [Fact]
-    public void Sample_file_is_imported_with_canonical_data_matching_expected_sums()
+    public void Dispose()
     {
+        _database?.Dispose();
+        Directory.Delete(_root, recursive: true);
+    }
+
+    [Theory]
+    [MemberData(nameof(TestStores.Kinds), MemberType = typeof(TestStores))]
+    public void Sample_file_is_imported_with_canonical_data_matching_expected_sums(string store)
+    {
+        Use(store);
         CopySample(ImportFolder, "ACTUALS_PAF_01.csv");
 
         var run = _import.Run();
@@ -67,12 +88,14 @@ public sealed class ImportServiceTests : IDisposable
         Assert.Equal(-230.40m, actuals[4].ValueObjCrcy);               // minus na końcu (zapis SAP)
         Assert.Equal(new DateOnly(2026, 3, 29), actuals[0].CreatedOn);
         Assert.Equal("zakończony", _store.Batches(1).Single().Status);
-        Assert.Contains(_services.Journal.Recent(5), e => e.Message.StartsWith($"Import #{run.BatchId}"));
+        Assert.Contains(_app.Journal.Recent(5), e => e.Message.StartsWith($"Import #{run.BatchId}"));
     }
 
-    [Fact]
-    public void Second_run_skips_unchanged_files()
+    [Theory]
+    [MemberData(nameof(TestStores.Kinds), MemberType = typeof(TestStores))]
+    public void Second_run_skips_unchanged_files(string store)
     {
+        Use(store);
         CopySample(ImportFolder, "ACTUALS_PAF_01.csv");
         _import.Run();
 
@@ -81,9 +104,11 @@ public sealed class ImportServiceTests : IDisposable
         Assert.Equal(FileDecisions.Skipped, Assert.Single(second.Files).Decision);
     }
 
-    [Fact]
-    public void Same_content_under_another_name_is_a_duplicate()
+    [Theory]
+    [MemberData(nameof(TestStores.Kinds), MemberType = typeof(TestStores))]
+    public void Same_content_under_another_name_is_a_duplicate(string store)
     {
+        Use(store);
         CopySample(ImportFolder, "ACTUALS_PAF_01.csv");
         _import.Run();
         CopySample(ImportFolder, "ACTUALS_PAF_02.csv");
@@ -95,9 +120,11 @@ public sealed class ImportServiceTests : IDisposable
         Assert.Contains("ACTUALS_PAF_01.csv", duplicate.Description);
     }
 
-    [Fact]
-    public void Unrecognized_corrupted_and_ignored_files_do_not_stop_the_import()
+    [Theory]
+    [MemberData(nameof(TestStores.Kinds), MemberType = typeof(TestStores))]
+    public void Unrecognized_corrupted_and_ignored_files_do_not_stop_the_import(string store)
     {
+        Use(store);
         CopySample(ImportFolder, "ACTUALS_PAF_01.csv");
         File.WriteAllText(Path.Combine(ImportFolder, "RAPORT_NIEZNANY.csv"), "A;B\n1;2\n");
         File.WriteAllBytes(Path.Combine(ImportFolder, "ACTUALS_CES_01.xlsx"), [1, 2, 3, 4, 5]);
@@ -111,12 +138,14 @@ public sealed class ImportServiceTests : IDisposable
         Assert.Equal(FileDecisions.Error, run.Files.Single(f => f.FileName == "ACTUALS_CES_01.xlsx").Decision);
         Assert.Contains(run.Issues, i => i.Level == CheckLevel.Warning && i.Message.Contains("RAPORT_NIEZNANY.csv"));
         Assert.Equal("zakończony z błędami", _store.Batches(1).Single().Status);
-        Assert.Contains(_services.Problems.ByReference($"import:{run.BatchId}"), p => p.Level == CheckLevel.Error);
+        Assert.Contains(_app.Problems.ByReference($"import:{run.BatchId}"), p => p.Level == CheckLevel.Error);
     }
 
-    [Fact]
-    public void Unavailable_location_is_an_error_and_manual_folder_is_still_imported()
+    [Theory]
+    [MemberData(nameof(TestStores.Kinds), MemberType = typeof(TestStores))]
+    public void Unavailable_location_is_an_error_and_manual_folder_is_still_imported(string store)
     {
+        Use(store);
         _config.SaveLocation(new LocationInput(null, null, "RABIT test", Path.Combine(_root, "brak-folderu"), Active: true));
         CopySample(ImportFolder, "ACTUALS_PAF_01.csv");
 
@@ -126,9 +155,11 @@ public sealed class ImportServiceTests : IDisposable
         Assert.Equal(FileDecisions.Imported, Assert.Single(run.Files).Decision);
     }
 
-    [Fact]
-    public void Unavailable_sharepoint_location_explains_gateway_login()
+    [Theory]
+    [MemberData(nameof(TestStores.Kinds), MemberType = typeof(TestStores))]
+    public void Unavailable_sharepoint_location_explains_gateway_login(string store)
     {
+        Use(store);
         _config.SaveLocation(new LocationInput(null, null, "RABIT SP", @"\\sp.example.com@SSL\DavWWWRoot\sites\R\Shared Documents\E1", Active: true));
 
         var run = _import.Run();
@@ -148,9 +179,11 @@ public sealed class ImportServiceTests : IDisposable
         }
     }
 
-    [Fact]
-    public void Import_start_is_in_history_and_file_status_changes_during_import()
+    [Theory]
+    [MemberData(nameof(TestStores.Kinds), MemberType = typeof(TestStores))]
+    public void Import_start_is_in_history_and_file_status_changes_during_import(string store)
     {
+        Use(store);
         CopySample(ImportFolder, "ACTUALS_PAF_01.csv");
         string? statusAtStart = null;
         var progress = new Collect(p =>
@@ -162,15 +195,17 @@ public sealed class ImportServiceTests : IDisposable
         var run = _import.Run(progress);
 
         Assert.Equal(ImportBatchStatus.Running, statusAtStart);                   // wpis „w toku” od początku importu
-        Assert.Contains(_services.Journal.Recent(5), e => e.Message == $"Import #{run.BatchId} rozpoczęty (PZL\\analityk, {Environment.MachineName})");
+        Assert.Contains(_app.Journal.Recent(5), e => e.Message == $"Import #{run.BatchId} rozpoczęty (PZL\\analityk, {Environment.MachineName})");
         Assert.Equal(["importowanie…", "zaimportowany"],
             progress.Items.Where(p => p.FileName == "ACTUALS_PAF_01.csv").Select(p => p.Status!.Split(" – ")[0]));
         Assert.Equal("zakończony", _store.Batches(1).Single().Status);
     }
 
-    [Fact]
-    public void Import_does_not_start_while_another_person_imports()
+    [Theory]
+    [MemberData(nameof(TestStores.Kinds), MemberType = typeof(TestStores))]
+    public void Import_does_not_start_while_another_person_imports(string store)
     {
+        Use(store);
         CopySample(ImportFolder, "ACTUALS_PAF_01.csv");
         var other = new TestServices().App(_root);   // druga osoba – ten sam folder sieciowy, osobna baza
         using var lease = other.Locks.TryAcquire(ImportService.LockName, out _);
@@ -185,9 +220,11 @@ public sealed class ImportServiceTests : IDisposable
         Assert.NotNull(_import.RunningImport());
     }
 
-    [Fact]
-    public void Lock_is_released_after_import_and_unfinished_import_is_marked()
+    [Theory]
+    [MemberData(nameof(TestStores.Kinds), MemberType = typeof(TestStores))]
+    public void Lock_is_released_after_import_and_unfinished_import_is_marked(string store)
     {
+        Use(store);
         var stale = _store.BeginBatch(_services.Clock.Now, "ktos", "PC1", "test");   // np. awaria aplikacji w trakcie importu
 
         var run = _import.Run();
@@ -198,9 +235,11 @@ public sealed class ImportServiceTests : IDisposable
         Assert.Null(_import.Run().NotStarted);
     }
 
-    [Fact]
-    public void Same_name_in_two_locations_are_different_files()
+    [Theory]
+    [MemberData(nameof(TestStores.Kinds), MemberType = typeof(TestStores))]
+    public void Same_name_in_two_locations_are_different_files(string store)
     {
+        Use(store);
         var rabit = Path.Combine(_root, "rabit");
         _config.SaveLocation(new LocationInput(null, null, "RABIT test", rabit, Active: true));
         CopySample(ImportFolder, "ACTUALS_PAF_01.csv");
@@ -212,18 +251,22 @@ public sealed class ImportServiceTests : IDisposable
         Assert.Equal(2, run.Files.Count(f => f.Decision == FileDecisions.Imported));
     }
 
-    [Fact]
-    public void Longest_prefix_wins()
+    [Theory]
+    [MemberData(nameof(TestStores.Kinds), MemberType = typeof(TestStores))]
+    public void Longest_prefix_wins(string store)
     {
+        Use(store);
         _config.SaveDefinition(new DefinitionInput(null, null, "ACTUALS", "ACTUALS", "ogólny", ["A"], SourceParsers.None, true));
         CopySample(ImportFolder, "ACTUALS_PAF_01.csv");
 
         Assert.Equal("ACTUALS_PAF", Assert.Single(_import.Run().Files).SourceCode);
     }
 
-    [Fact]
-    public void One_definition_with_actuals_asterisk_prefix_imports_all_actuals_files()
+    [Theory]
+    [MemberData(nameof(TestStores.Kinds), MemberType = typeof(TestStores))]
+    public void One_definition_with_actuals_asterisk_prefix_imports_all_actuals_files(string store)
     {
+        Use(store);
         // Wszystkie ACTUALS_… jako jedno źródło: istniejące definicje wyłączone, nowa z prefiksem „ACTUALS_*”.
         foreach (var d in _config.Definitions())
             _config.SaveDefinition(new DefinitionInput(d.DefinitionId, d.Version, d.Code, d.Prefix, d.ReportType, d.Columns, d.Parser, Active: false));
@@ -237,9 +280,11 @@ public sealed class ImportServiceTests : IDisposable
         Assert.Equal("ACTUALS", result.SourceCode);
     }
 
-    [Fact]
-    public void Changed_column_layout_keeps_raw_rows_but_no_canonical_data()
+    [Theory]
+    [MemberData(nameof(TestStores.Kinds), MemberType = typeof(TestStores))]
+    public void Changed_column_layout_keeps_raw_rows_but_no_canonical_data(string store)
     {
+        Use(store);
         Directory.CreateDirectory(ImportFolder);
         var lines = File.ReadAllLines(TestServices.TestData("RABIT", "ACTUALS_PAF_01.csv"));
         File.WriteAllLines(Path.Combine(ImportFolder, "ACTUALS_PAF_01.csv"), lines.Select(l => l[(l.IndexOf(';') + 1)..])); // bez pierwszej kolumny
@@ -254,9 +299,11 @@ public sealed class ImportServiceTests : IDisposable
         Assert.Empty(_store.Actuals(file.Id));
     }
 
-    [Fact]
-    public void Value_type_error_blocks_canonical_data_with_row_number()
+    [Theory]
+    [MemberData(nameof(TestStores.Kinds), MemberType = typeof(TestStores))]
+    public void Value_type_error_blocks_canonical_data_with_row_number(string store)
     {
+        Use(store);
         Directory.CreateDirectory(ImportFolder);
         var lines = File.ReadAllLines(TestServices.TestData("RABIT", "ACTUALS_PAF_01.csv"));
         lines[3] = lines[3].Replace("2 400,00;PLN;2 400,00", "2 400,00;PLN;dwa tysiące");
@@ -269,9 +316,11 @@ public sealed class ImportServiceTests : IDisposable
         Assert.Empty(_store.Actuals(file.Id));
     }
 
-    [Fact]
-    public void Excel_file_with_numeric_cells_is_imported()
+    [Theory]
+    [MemberData(nameof(TestStores.Kinds), MemberType = typeof(TestStores))]
+    public void Excel_file_with_numeric_cells_is_imported(string store)
     {
+        Use(store);
         Directory.CreateDirectory(ImportFolder);
         var sample = TabularFileReader.Read(TestServices.TestData("RABIT", "ACTUALS_PAF_01.csv"));
         var rows = sample.Rows.Select(r => (IReadOnlyList<object?>)r.Select((v, i) =>
@@ -285,9 +334,11 @@ public sealed class ImportServiceTests : IDisposable
         Assert.Equal(2203.12m, _store.Actuals(file.Id).Sum(a => a.ValueRepCur));
     }
 
-    [Fact]
-    public void Cancelled_import_stops_and_is_marked()
+    [Theory]
+    [MemberData(nameof(TestStores.Kinds), MemberType = typeof(TestStores))]
+    public void Cancelled_import_stops_and_is_marked(string store)
     {
+        Use(store);
         CopySample(ImportFolder, "ACTUALS_PAF_01.csv");
         using var cts = new CancellationTokenSource();
         cts.Cancel();
@@ -299,9 +350,11 @@ public sealed class ImportServiceTests : IDisposable
         Assert.Equal("przerwany", _store.Batches(1).Single().Status);
     }
 
-    [Fact]
-    public void Check_shows_access_files_recognition_and_subfolders_without_importing()
+    [Theory]
+    [MemberData(nameof(TestStores.Kinds), MemberType = typeof(TestStores))]
+    public void Check_shows_access_files_recognition_and_subfolders_without_importing(string store)
     {
+        Use(store);
         var rabit = Path.Combine(_root, "rabit");
         _config.SaveLocation(new LocationInput(null, null, "RABIT test", rabit, Active: true));
         CopySample(rabit, "ACTUALS_PAF2_B6_AC1.csv");
@@ -329,9 +382,11 @@ public sealed class ImportServiceTests : IDisposable
         Assert.Empty(_store.Batches(10));                               // sprawdzenie niczego nie importuje
     }
 
-    [Fact]
-    public void Check_reports_missing_rabit_location_unavailable_folder_and_unchanged_files()
+    [Theory]
+    [MemberData(nameof(TestStores.Kinds), MemberType = typeof(TestStores))]
+    public void Check_reports_missing_rabit_location_unavailable_folder_and_unchanged_files(string store)
     {
+        Use(store);
         CopySample(ImportFolder, "ACTUALS_PAF_01.csv");
         Assert.Contains(_import.Check().Locations, l => l.Name == "RABIT" && !l.Accessible && l.Status == ImportService.NoRabitLocation);
         _import.Run();
@@ -345,9 +400,11 @@ public sealed class ImportServiceTests : IDisposable
         Assert.Equal(ImportService.WillSkip, Assert.Single(check.Files).Note);
     }
 
-    [Fact]
-    public void Files_only_in_subfolders_are_reported()
+    [Theory]
+    [MemberData(nameof(TestStores.Kinds), MemberType = typeof(TestStores))]
+    public void Files_only_in_subfolders_are_reported(string store)
     {
+        Use(store);
         var rabit = Path.Combine(_root, "rabit");
         _config.SaveLocation(new LocationInput(null, null, "RABIT test", rabit, Active: true));
         CopySample(Path.Combine(rabit, "2026"), "ACTUALS_PAF_01.csv");

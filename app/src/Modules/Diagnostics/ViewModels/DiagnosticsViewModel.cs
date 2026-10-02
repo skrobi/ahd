@@ -14,7 +14,7 @@ public sealed class DiagnosticsViewModel
     public DiagnosticsViewModel(AppServices services)
     {
         Environment = services.Config.Environment;
-        DataMode = $"{services.Config.DataMode} (stan: {services.Config.InMemoryStatePath})";
+        DataMode = services.Sql is null ? $"{services.Config.DataMode} (stan: {services.Config.InMemoryStatePath})" : $"{services.Config.DataMode} – {services.DataDescription}";
         NetworkRoot = services.Config.NetworkRoot;
         ImportFolder = services.Config.ImportFolder;
         AppVersion = services.AppVersion;

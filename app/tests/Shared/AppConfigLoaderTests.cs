@@ -41,4 +41,53 @@ public class AppConfigLoaderTests
         var ex = Assert.Throws<InvalidOperationException>(() => AppConfigLoader.Load(dir));
         Assert.Contains("DataMode", ex.Message);
     }
+
+    private static AppConfig LoadJson(string json)
+    {
+        var dir = Directory.CreateTempSubdirectory().FullName;
+        File.WriteAllText(Path.Combine(dir, AppConfigLoader.FileName), json);
+        return AppConfigLoader.Load(dir);
+    }
+
+    [Fact]
+    public void Env_selects_environment_section_with_sql_database()
+    {
+        var config = LoadJson(
+            """
+            {
+              "Env": "TEST",
+              "Environments": {
+                "TEST": {
+                  "NetworkRoot": "\\\\serwer\\udzial\\PZL-EV-TEST",
+                  "DataMode": "Sql",
+                  "Sql": { "Server": "pzltestdb.intl.lmco.com", "Database": "PZLTEST", "Schema": "LOG", "TablePrefix": "PZLEV_" }
+                },
+                "PROD": { "DataMode": "Sql", "Sql": { "Server": "prod", "Database": "PZLPROD", "Schema": "EV" } }
+              }
+            }
+            """);
+
+        Assert.Equal("TEST", config.Environment);
+        Assert.Equal(DataMode.Sql, config.DataMode);
+        Assert.Equal(@"\\serwer\udzial\PZL-EV-TEST", config.NetworkRoot);
+        Assert.Equal(new SqlSettings("pzltestdb.intl.lmco.com", "PZLTEST", "LOG", "PZLEV_"), config.Sql);
+    }
+
+    [Fact]
+    public void Prod_switch_and_default_table_prefix()
+    {
+        var config = LoadJson("""{ "Env": "prod", "Environments": { "PROD": { "DataMode": "Sql", "Sql": { "Server": "s", "Database": "d", "Schema": "EV" } } } }""");
+
+        Assert.Equal("PROD", config.Environment);
+        Assert.Equal("PZLEV_", config.Sql!.TablePrefix);
+        Assert.Equal("EV", config.Sql.Schema);
+    }
+
+    [Theory]
+    [InlineData("""{ "Env": "PROD", "Environments": { "TEST": {} } }""", "Environments.PROD")]
+    [InlineData("""{ "Env": "TEST", "Environments": { "TEST": { "DataMode": "Sql" } } }""", "sekcji Sql")]
+    [InlineData("""{ "Env": "TEST", "Environments": { "TEST": { "Sql": { "Server": "s", "Database": "d" } } } }""", "Schema")]
+    [InlineData("""{ "Env": "TEST", "Environments": { "TEST": { "Sql": { "Server": "s", "Database": "d", "Schema": "LOG]; DROP" } } } }""", "dozwolone litery")]
+    public void Invalid_environment_configuration_is_reported(string json, string message) =>
+        Assert.Contains(message, Assert.Throws<InvalidOperationException>(() => LoadJson(json)).Message);
 }

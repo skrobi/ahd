@@ -23,7 +23,10 @@ public sealed class AdministrationModule : IModule
     // Magazyn danych: w trybie w pamięci InMemorySourceConfigStore; po F10 – magazyn SQL wybierany tutaj.
     public void Initialize(AppServices services)
     {
-        _service = new SourceConfigService(new InMemorySourceConfigStore(services.Database, services.Clock, services.User), services.Journal);
+        ISourceConfigStore store = services.Sql is { } sql
+            ? new SqlSourceConfigStore(sql, services.Clock, services.User)
+            : new InMemorySourceConfigStore(services.Database, services.Clock, services.User);
+        _service = new SourceConfigService(store, services.Journal);
         SourceConfigSeed.EnsureSeeded(_service);
     }
 
