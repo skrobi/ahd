@@ -31,7 +31,7 @@ public sealed partial class SourceConfigService(ISourceConfigStore store, IJourn
         input = input with
         {
             Code = input.Code.Trim().ToUpperInvariant(),
-            Prefix = input.Prefix.Trim(),
+            Prefix = input.Prefix.Trim().TrimEnd('*').Trim(),
             Columns = input.Columns.Select(c => c.Trim()).Where(c => c.Length > 0).ToList(),
             KeyColumns = input.KeyColumns.Select(c => c.Trim()).Where(c => c.Length > 0).ToList(),
         };
@@ -51,7 +51,8 @@ public sealed partial class SourceConfigService(ISourceConfigStore store, IJourn
 
     public ConfigSaveResult SaveLocation(LocationInput input)
     {
-        input = input with { Name = input.Name.Trim(), Path = input.Path.Trim() };
+        // Link do folderu SharePoint skopiowany z przeglądarki zamieniany na ścieżkę WebDAV (UNC).
+        input = input with { Name = input.Name.Trim(), Path = WebDavPath.ToUnc(input.Path) };
         var issues = new List<Issue>();
         if (input.Name.Length == 0)
             issues.Add(Issue.Error("Nazwa: pole wymagane", "lokalizacja"));
@@ -77,7 +78,9 @@ public sealed partial class SourceConfigService(ISourceConfigStore store, IJourn
         if (!CodePattern().IsMatch(input.Code))
             issues.Add(Issue.Error("Kod: wymagany, wielkie litery, cyfry i _ (np. ACTUALS_PAF)", at));
         if (input.Prefix.Length == 0)
-            issues.Add(Issue.Error("Prefiks: pole wymagane", at));
+            issues.Add(Issue.Error("Prefiks: pole wymagane (początek nazwy pliku, np. ACTUALS_PAF)", at));
+        else if (input.Prefix.IndexOfAny(['*', '?']) >= 0)
+            issues.Add(Issue.Error("Prefiks: znaki * i ? dozwolone tylko na końcu – prefiks to początek nazwy pliku (np. ACTUALS_ obejmuje wszystkie ACTUALS_…)", at));
         if (!SourceParsers.All.Contains(input.Parser))
             issues.Add(Issue.Error($"Parser '{input.Parser}' – dozwolone: brak, {SourceParsers.Actuals}", at));
 

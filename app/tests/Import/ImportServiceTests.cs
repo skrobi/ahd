@@ -149,6 +149,23 @@ public sealed class ImportServiceTests : IDisposable
     }
 
     [Fact]
+    public void One_definition_with_actuals_asterisk_prefix_imports_all_actuals_files()
+    {
+        // Wszystkie ACTUALS_… jako jedno źródło: istniejące definicje wyłączone, nowa z prefiksem „ACTUALS_*”.
+        foreach (var d in _config.Definitions())
+            _config.SaveDefinition(new DefinitionInput(d.DefinitionId, d.Version, d.Code, d.Prefix, d.ReportType, d.Columns, d.Grain,
+                d.KeyColumns, d.PeriodMeaning, d.Currency, d.NumberFormat, d.Parser, Active: false));
+        _config.SaveDefinition(new DefinitionInput(null, null, "ACTUALS", "ACTUALS_*", "Koszty rzeczywiste CES", SourceParsers.ActualsColumns,
+            "", [], "", "", "", SourceParsers.Actuals, true));
+        CopySample(ImportFolder, "ACTUALS_PAF2_B6_AC1.csv");
+
+        var result = Assert.Single(_import.Run().Files);
+
+        Assert.Equal(FileDecisions.Imported, result.Decision);
+        Assert.Equal("ACTUALS", result.SourceCode);
+    }
+
+    [Fact]
     public void Changed_column_layout_keeps_raw_rows_but_no_canonical_data()
     {
         Directory.CreateDirectory(ImportFolder);
