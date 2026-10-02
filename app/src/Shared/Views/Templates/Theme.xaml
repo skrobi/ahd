@@ -1,0 +1,184 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!--
+      Szablon wyglądu całej aplikacji (Shared/Views/Templates): paleta, czcionki, style tekstu, paneli,
+      przycisków i układu strony. Moduły używają tych kluczy – nie definiują własnych kolorów.
+      Paleta z prototypu (jasny motyw). Odwzorowanie tokenów :root z pzl-ev-prototyp.html.
+    -->
+    <Color x:Key="BgColor">#FFEEF2F3</Color>
+    <SolidColorBrush x:Key="Bg" Color="{StaticResource BgColor}" />
+    <SolidColorBrush x:Key="Surface" Color="#FFFFFFFF" />
+    <SolidColorBrush x:Key="Surface2" Color="#FFE4EAEC" />
+    <SolidColorBrush x:Key="Ink" Color="#FF13212A" />
+    <SolidColorBrush x:Key="Muted" Color="#FF566974" />
+    <SolidColorBrush x:Key="Line" Color="#FFCFD9DD" />
+    <SolidColorBrush x:Key="Accent" Color="#FF0A6A76" />
+    <SolidColorBrush x:Key="AccentInk" Color="#FFFFFFFF" />
+    <SolidColorBrush x:Key="AccentSoft" Color="#FFD5ECEE" />
+
+    <SolidColorBrush x:Key="Ok" Color="#FF1D7648" />
+    <SolidColorBrush x:Key="OkSoft" Color="#FFDCEFE4" />
+    <SolidColorBrush x:Key="Warn" Color="#FF9A5C05" />
+    <SolidColorBrush x:Key="WarnSoft" Color="#FFF6E8CF" />
+    <SolidColorBrush x:Key="Crit" Color="#FFB0271F" />
+    <SolidColorBrush x:Key="CritSoft" Color="#FFF7DCD9" />
+    <SolidColorBrush x:Key="Info" Color="#FF2C5A98" />
+    <SolidColorBrush x:Key="InfoSoft" Color="#FFDDE7F5" />
+    <SolidColorBrush x:Key="Stale" Color="#FF6C618F" />
+    <SolidColorBrush x:Key="StaleSoft" Color="#FFE7E3F2" />
+    <SolidColorBrush x:Key="Ready" Color="#FF2C5A98" />
+    <SolidColorBrush x:Key="ReadySoft" Color="#FFDDE7F5" />
+
+    <FontFamily x:Key="FBody">Segoe UI</FontFamily>
+    <FontFamily x:Key="FMono">Consolas</FontFamily>
+
+    <!-- Karta/panel -->
+    <Style x:Key="Panel" TargetType="Border">
+        <Setter Property="Background" Value="{StaticResource Surface}" />
+        <Setter Property="BorderBrush" Value="{StaticResource Line}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="10" />
+        <Setter Property="Padding" Value="16" />
+        <Setter Property="SnapsToDevicePixels" Value="True" />
+    </Style>
+
+    <Style x:Key="H1" TargetType="TextBlock">
+        <Setter Property="Foreground" Value="{StaticResource Ink}" />
+        <Setter Property="FontSize" Value="25" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+    <Style x:Key="H2" TargetType="TextBlock">
+        <Setter Property="Foreground" Value="{StaticResource Ink}" />
+        <Setter Property="FontSize" Value="18" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+    <Style x:Key="Eyebrow" TargetType="TextBlock">
+        <Setter Property="Foreground" Value="{StaticResource Muted}" />
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="FontFamily" Value="{StaticResource FMono}" />
+    </Style>
+    <Style x:Key="MutedText" TargetType="TextBlock">
+        <Setter Property="Foreground" Value="{StaticResource Muted}" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+    <Style x:Key="MonoText" TargetType="TextBlock">
+        <Setter Property="FontFamily" Value="{StaticResource FMono}" />
+        <Setter Property="Foreground" Value="{StaticResource Ink}" />
+    </Style>
+
+    <!-- Przycisk podstawowy -->
+    <Style x:Key="Btn" TargetType="Button">
+        <Setter Property="Background" Value="{StaticResource Surface2}" />
+        <Setter Property="Foreground" Value="{StaticResource Ink}" />
+        <Setter Property="BorderBrush" Value="{StaticResource Line}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="Padding" Value="12,7" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            CornerRadius="6" Padding="{TemplateBinding Padding}">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+    <Style x:Key="BtnPrimary" TargetType="Button" BasedOn="{StaticResource Btn}">
+        <Setter Property="Background" Value="{StaticResource Accent}" />
+        <Setter Property="Foreground" Value="{StaticResource AccentInk}" />
+        <Setter Property="BorderBrush" Value="{StaticResource Accent}" />
+    </Style>
+
+    <!-- Przycisk nawigacji -->
+    <Style x:Key="NavBtn" TargetType="Button">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Foreground" Value="{StaticResource Muted}" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="HorizontalContentAlignment" Value="Left" />
+        <Setter Property="Padding" Value="12,8" />
+        <Setter Property="FontWeight" Value="Medium" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="b" Background="{TemplateBinding Background}" CornerRadius="6"
+                            Padding="{TemplateBinding Padding}">
+                        <ContentPresenter HorizontalAlignment="Left" VerticalAlignment="Center" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="b" Property="Background" Value="{StaticResource Surface2}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- Etykieta w ramce (typ projektu, kod fazy) -->
+    <Style x:Key="Tag" TargetType="Border">
+        <Setter Property="BorderBrush" Value="{StaticResource Line}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="4" />
+        <Setter Property="Padding" Value="6,0" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <!-- Licznik w „pigułce” (menu, nagłówek panelu) -->
+    <Style x:Key="CountBadge" TargetType="Border">
+        <Setter Property="Background" Value="{StaticResource Surface2}" />
+        <Setter Property="CornerRadius" Value="10" />
+        <Setter Property="Padding" Value="7,0" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <!-- Układ strony modułu: przewijanie i marginesy – każdy ekran modułu jest w nim osadzony -->
+    <Style x:Key="PageHost" TargetType="ScrollViewer">
+        <Setter Property="VerticalScrollBarVisibility" Value="Auto" />
+        <Setter Property="Padding" Value="32,24,32,48" />
+    </Style>
+
+    <!-- Tabela danych (słowniki, import, administracja) -->
+    <Style x:Key="DataTable" TargetType="DataGrid">
+        <Setter Property="Background" Value="{StaticResource Surface}" />
+        <Setter Property="BorderBrush" Value="{StaticResource Line}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="RowBackground" Value="{StaticResource Surface}" />
+        <Setter Property="AlternationCount" Value="2" />
+        <Setter Property="AlternatingRowBackground" Value="#FFF6F8F9" />
+        <Setter Property="GridLinesVisibility" Value="Horizontal" />
+        <Setter Property="HorizontalGridLinesBrush" Value="{StaticResource Line}" />
+        <Setter Property="HeadersVisibility" Value="Column" />
+        <Setter Property="AutoGenerateColumns" Value="False" />
+        <Setter Property="CanUserAddRows" Value="False" />
+        <Setter Property="CanUserDeleteRows" Value="False" />
+        <Setter Property="SelectionMode" Value="Single" />
+        <Setter Property="RowHeaderWidth" Value="0" />
+        <Setter Property="MaxHeight" Value="520" />
+        <Setter Property="ColumnHeaderStyle">
+            <Setter.Value>
+                <Style TargetType="DataGridColumnHeader">
+                    <Setter Property="Background" Value="{StaticResource Surface2}" />
+                    <Setter Property="Foreground" Value="{StaticResource Muted}" />
+                    <Setter Property="FontWeight" Value="SemiBold" />
+                    <Setter Property="Padding" Value="8,6" />
+                    <Setter Property="BorderBrush" Value="{StaticResource Line}" />
+                    <Setter Property="BorderThickness" Value="0,0,1,1" />
+                </Style>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- Pole tekstowe formularza / filtra -->
+    <Style x:Key="Input" TargetType="TextBox">
+        <Setter Property="Padding" Value="6,4" />
+        <Setter Property="BorderBrush" Value="{StaticResource Line}" />
+        <Setter Property="Background" Value="{StaticResource Surface}" />
+    </Style>
+
+</ResourceDictionary>

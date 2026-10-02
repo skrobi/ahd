@@ -21,7 +21,7 @@ Powiązane: `docs/model-danych.md` (dane i wersjonowanie), `docs/pipeline-fazy.m
 
 ## 2. Technologia
 
-Kierunek **wstępny** – do potwierdzenia testem na stanowisku PZL (O6, aplikacja testowa `poc-wpf/`).
+Kierunek **wstępny** – do potwierdzenia testem na stanowisku PZL (O6, aplikacja `app/`).
 
 **Bez SQLite.** Wszystkie słowniki, mapowania, konfiguracja, definicje źródeł, wersje reguł, użytkownicy i role,
 zakresy uprawnień oraz historia zmian są w bazie MS SQL; aplikacja nie ma lokalnej bazy ani bazy plikowej
@@ -124,7 +124,7 @@ z których korzysta każdy moduł; pokazują je Pulpit i ekran Przebiegu.
 ### 5.3 Struktura kodu
 
 Jeden projekt, moduły jako foldery; przestrzeń nazw odpowiada ścieżce folderu (`PzlEv.Modules.Dashboard.ViewModels`
-↔ `Modules/Dashboard/ViewModels/`). Wzorzec pokazuje aplikacja testowa `poc-wpf/src/` – Pulpit jako moduł
+↔ `Modules/Dashboard/ViewModels/`). Wzorzec pokazuje kod `app/src/` – Pulpit jako moduł
 z pełnym ekranem, pozostałe moduły jako ekrany zastępcze z przypisanymi etapami.
 
 ```text
@@ -146,7 +146,7 @@ Podfolder modułu powstaje dopiero, gdy ma zawartość. Warstwy z rozdz. 5.1 mie
 UI – `Views`, `ViewModels`, `Shared/Views`; Application i Processing – `Services`, `Stages`; Domain – `Models`
 modułu i `Shared/Models`; Excel, File Connectors, SQL Access – `Shared/Utils` (wspólne) albo `Data` (modułu).
 
-**Zależności** – sprawdzane przy każdej budowie (`poc-wpf/ArchitectureRules.targets`, błąd `PZLARCH`):
+**Zależności** – sprawdzane przy każdej budowie (`app/ArchitectureRules.targets`, błąd `PZLARCH`):
 
 - moduł korzysta tylko z `Shared`; nie zna innego modułu ani `Shell`,
 - `Shared` nie zna modułów ani `Shell`,
@@ -244,7 +244,7 @@ decyzji (P4, P6, Z) albo z wynikiem ERROR.
   token dostępu eFOSS (generowany w `efoss.global.lmco.com/accesstoken`, wymaga charge number i CAM).
   Token trzymany poza repozytorium (Windows Credential Manager albo zmienna środowiskowa budowy); nigdy nie
   jest commitowany.
-  Konfiguracja i rozwiązywanie problemów – `poc-wpf/README.md`.
+  Konfiguracja i rozwiązywanie problemów – `app/README.md`.
 
 ---
 
@@ -288,4 +288,4 @@ decyzji (P4, P6, Z) albo z wynikiem ERROR.
 | # | Kwestia |
 |---|---|
 | O5 | Serwer bazy `PZL_EV` – na instancji z `PZLPROD` (odczyt w procedurach między bazami) czy osobny serwer (serwer połączony) |
-| O6 | Forma dystrybucji `PZL-EV.exe`. Test na stanowisku PZL: (1) uruchomienie pliku z dysku lokalnego i z udziału sieciowego, potrzeba podpisu kodu; (2) połączenie z MS SQL TEST kontem Windows; (3) odczyt lokalizacji RABIT przez WebDAV; (4) czas załadowania pliku RABIT ok. 85 MB do bazy. Aplikacja testowa `poc-wpf/` (Pulpit, bez bazy) sprawdza punkt (1) i pakiety z rozdz. 2; punkty (2)–(4) wymagają osobnego testu |
+| O6 | Forma dystrybucji `PZL-EV.exe`. Test na stanowisku PZL: (1) uruchomienie pliku z dysku lokalnego i z udziału sieciowego, potrzeba podpisu kodu; (2) połączenie z MS SQL TEST kontem Windows; (3) odczyt lokalizacji RABIT przez WebDAV; (4) czas załadowania pliku RABIT ok. 85 MB do bazy. Aplikacja `app/` (lista kontrolna testu stosu w `app/README.md`) sprawdza punkt (1) i pakiety z rozdz. 2; punkty (2)–(4) wymagają osobnego testu |
