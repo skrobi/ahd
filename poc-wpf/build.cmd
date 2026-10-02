@@ -11,6 +11,12 @@ rem w repo - tylko z konfiguracji uzytkownika albo ze zmiennej http_proxy (ustaw
 if not defined HTTP_PROXY set HTTP_PROXY=http://proxy-lmi.global.lmco.com:80
 echo Proxy NuGet: %HTTP_PROXY%
 
+rem Token eFOSS: lokalny plik eFOSS.local.cmd obok build.cmd (NIE w repozytorium - jest w .gitignore).
+rem Tresc pliku (jedna linia):
+rem   set NuGetPackageSourceCredentials_eFOSS=Username=^<NTID^>;Password=^<TOKEN^>
+if exist "%~dp0eFOSS.local.cmd" call "%~dp0eFOSS.local.cmd"
+if not defined NuGetPackageSourceCredentials_eFOSS echo UWAGA: brak tokenu eFOSS - utworz eFOSS.local.cmd ^(README.md^).
+
 dotnet restore src\PzlEv.Test.csproj -r win-x64 || (
   echo.
   echo Restore nieudany. NU1301 "nazwa jest prawidlowa..." = brak polaczenia z eFOSS ^(VPN / proxy^),
