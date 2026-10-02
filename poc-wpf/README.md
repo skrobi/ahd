@@ -55,6 +55,13 @@ W LM pakiety pobiera się z proxy **eFOSS (Nexus)**, nie z nuget.org:
   dotnet nuget config set http_proxy http://proxy-lmi.global.lmco.com:80 --configfile "$env:APPDATA\NuGet\NuGet.Config"
   ```
 
+**Token dla `build.cmd` (zalecane).** Utwórz obok `build.cmd` plik `eFOSS.local.cmd` (jest w `.gitignore`,
+nie trafi do repozytorium) z jedną linią – `build.cmd` wczyta go sam:
+
+```bat
+set NuGetPackageSourceCredentials_eFOSS=Username=<NTID>;Password=<TOKEN>
+```
+
 **Poświadczenia z wiersza poleceń (na maszynie developera, nie w repo).** Źródło `eFOSS` jest już w
 `poc-wpf/NuGet.config`, więc dodaj tylko poświadczenia do **konfiguracji użytkownika** (`%APPDATA%\NuGet\NuGet.Config`):
 
