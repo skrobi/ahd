@@ -52,7 +52,7 @@ public sealed class ImportServiceTests : IDisposable
         Assert.Equal(FileDecisions.Imported, result.Decision);
         Assert.Equal("ACTUALS_PAF", result.SourceCode);
         Assert.Equal(6, result.Rows);
-        Assert.Empty(run.Issues);
+        Assert.Equal(ImportService.NoRabitLocation, Assert.Single(run.Issues).Message);   // lokalizacja z seeda nieaktywna
 
         var seen = Assert.Single(_store.Seen(run.BatchId));
         var file = _store.FindByHash(seen.Sha256!)!;
@@ -209,7 +209,7 @@ public sealed class ImportServiceTests : IDisposable
         var run = _import.Run();
 
         var file = _store.FindByHash(Assert.Single(_store.Seen(run.BatchId)).Sha256!)!;
-        Assert.Empty(run.Issues);
+        Assert.DoesNotContain(run.Issues, i => i.Message != ImportService.NoRabitLocation);
         Assert.Equal(2203.12m, _store.Actuals(file.Id).Sum(a => a.ValueRepCur));
     }
 
@@ -225,5 +225,61 @@ public sealed class ImportServiceTests : IDisposable
         Assert.True(run.Cancelled);
         Assert.Empty(run.Files);
         Assert.Equal("przerwany", _store.Batches(1).Single().Status);
+    }
+
+    [Fact]
+    public void Check_shows_access_files_recognition_and_subfolders_without_importing()
+    {
+        var rabit = Path.Combine(_root, "rabit");
+        _config.SaveLocation(new LocationInput(null, null, "RABIT test", rabit, Active: true));
+        CopySample(rabit, "ACTUALS_PAF2_B6_AC1.csv");
+        File.WriteAllText(Path.Combine(rabit, "RAPORT_NIEZNANY.csv"), "A;B\n1;2\n");
+        File.WriteAllText(Path.Combine(rabit, "~$ACTUALS_PAF2_B6_AC1.csv"), "blokada Excela");
+        Directory.CreateDirectory(Path.Combine(rabit, "Archiwum"));
+
+        var check = _import.Check();
+
+        var location = check.Locations.Single(l => l.Name == "RABIT test");
+        Assert.True(location.Accessible);
+        Assert.Equal(rabit, location.Path);
+        Assert.Contains("plików 2", location.Status);
+        Assert.Contains("pominiętych tymczasowych 1", location.Status);
+        Assert.Contains("Archiwum", location.Status);
+        Assert.True(check.Locations.Single(l => l.Name == "Do_importu").Accessible);
+        Assert.DoesNotContain(check.Locations, l => l.Name == "RABIT");
+        var actuals = check.Files.Single(f => f.FileName == "ACTUALS_PAF2_B6_AC1.csv");
+        Assert.StartsWith("ACTUALS_PAF", actuals.Recognition);
+        Assert.Equal("zostanie zaimportowany", actuals.Note);
+        Assert.Equal("nierozpoznany", check.Files.Single(f => f.FileName == "RAPORT_NIEZNANY.csv").Recognition);
+        Assert.Empty(_store.Batches(10));                               // sprawdzenie niczego nie importuje
+    }
+
+    [Fact]
+    public void Check_reports_missing_rabit_location_unavailable_folder_and_unchanged_files()
+    {
+        CopySample(ImportFolder, "ACTUALS_PAF_01.csv");
+        Assert.Contains(_import.Check().Locations, l => l.Name == "RABIT" && !l.Accessible && l.Status == ImportService.NoRabitLocation);
+        _import.Run();
+        _config.SaveLocation(new LocationInput(null, null, "RABIT test", Path.Combine(_root, "brak-folderu"), Active: true));
+
+        var check = _import.Check();
+
+        var location = check.Locations.Single(l => l.Name == "RABIT test");
+        Assert.False(location.Accessible);
+        Assert.StartsWith("BRAK DOSTĘPU", location.Status);
+        Assert.Equal("zostanie pominięty – bez zmian od importu", Assert.Single(check.Files).Note);
+    }
+
+    [Fact]
+    public void Files_only_in_subfolders_are_reported()
+    {
+        var rabit = Path.Combine(_root, "rabit");
+        _config.SaveLocation(new LocationInput(null, null, "RABIT test", rabit, Active: true));
+        CopySample(Path.Combine(rabit, "2026"), "ACTUALS_PAF_01.csv");
+
+        var run = _import.Run();
+
+        Assert.Empty(run.Files);
+        Assert.Contains(run.Issues, i => i.Level == CheckLevel.Warning && i.Element == "RABIT test" && i.Message.Contains("podfoldery: 2026"));
     }
 }

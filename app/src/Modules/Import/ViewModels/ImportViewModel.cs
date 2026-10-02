@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.IO;
 using System.Windows.Input;
 using PzlEv.Modules.Import.Data;
 using PzlEv.Modules.Import.Models;
@@ -10,7 +11,10 @@ using Serilog;
 
 namespace PzlEv.Modules.Import.ViewModels;
 
-/// <summary>Ekran Import RABIT (F05): uruchomienie importu, wynik dla każdego pliku, problemy, historia importów.</summary>
+/// <summary>
+/// Ekran Import RABIT (F05): uruchomienie importu, wynik dla każdego pliku, problemy, historia importów;
+/// sprawdzenie źródeł bez importu (co aplikacja widzi w każdej lokalizacji).
+/// </summary>
 public sealed class ImportViewModel : ObservableObject
 {
     private static readonly ILogger Logger = Log.ForContext("Module", "import");
@@ -30,6 +34,7 @@ public sealed class ImportViewModel : ObservableObject
         Run = new AsyncRelayCommand(DoRun, () => !_isRunning);
         Cancel = new RelayCommand(_ => _cancellation?.Cancel(), _ => _isRunning);
         Refresh = new RelayCommand(_ => Reload(), _ => !_isRunning);
+        Check = new AsyncRelayCommand(DoCheck, () => !_isRunning);
         Reload();
     }
 
@@ -43,11 +48,22 @@ public sealed class ImportViewModel : ObservableObject
 
     public ObservableCollection<SourceFileSeenRow> BatchFiles { get; } = [];
 
+    public ObservableCollection<LocationCheck> LocationChecks { get; } = [];
+
+    public ObservableCollection<FileCheck> FileChecks { get; } = [];
+
+    public bool HasCheck => LocationChecks.Count > 0;
+
+    /// <summary>Katalog logu aplikacji (App.xaml.cs) – szczegóły importu i sprawdzenia źródeł.</summary>
+    public string LogText => $"Szczegóły (ścieżki, dostęp, decyzje, pełne błędy) w logu: {Path.Combine(AppContext.BaseDirectory, "logs")}";
+
     public ICommand Run { get; }
 
     public ICommand Cancel { get; }
 
     public ICommand Refresh { get; }
+
+    public ICommand Check { get; }
 
     public string Progress { get => _progress; private set => SetProperty(ref _progress, value); }
 
@@ -106,6 +122,33 @@ public sealed class ImportViewModel : ObservableObject
             IsRunning = false;
             OnPropertyChanged(nameof(HasIssues));
             Reload();
+        }
+    }
+
+    private async Task DoCheck()
+    {
+        IsRunning = true;
+        Progress = "Sprawdzanie źródeł…";
+        LocationChecks.Clear();
+        FileChecks.Clear();
+        try
+        {
+            var result = await Task.Run(_service.Check);
+            foreach (var location in result.Locations)
+                LocationChecks.Add(location);
+            foreach (var file in result.Files)
+                FileChecks.Add(file);
+            Progress = "";
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            Logger.Error(ex, "Sprawdzenie źródeł przerwane błędem");
+            Progress = $"Sprawdzenie źródeł przerwane błędem: {ex.Message}";
+        }
+        finally
+        {
+            IsRunning = false;
+            OnPropertyChanged(nameof(HasCheck));
         }
     }
 

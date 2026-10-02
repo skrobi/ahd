@@ -77,6 +77,9 @@ i utrzymywaną na ekranie Administracja (`docs/funkcjonalnosc.md`, F08).
   (`docs/architektura.md`, rozdz. 7) i importuje tak samo.
 - Niedostępne dla użytkownika: API REST SharePoint, synchronizacja OneDrive, eksport listy do Excela,
   pobieranie ZIP.
+- Import czyta tylko główny folder lokalizacji (bez podfolderów – jak domyślnie narzędzie w Pythonie). Gdy folder
+  nie ma plików, a ma podfoldery – WARNING z ich nazwami. **Sprawdź źródła** (ekran Import) pokazuje bez importu
+  dostęp, czytaną ścieżkę, pliki i ich rozpoznanie; szczegóły – log aplikacji (`app/README.md`).
 - Format: jeśli RABIT pozwala – CSV/TXT (brak limitu wierszy i konwersji typów przez Excel; O7).
 
 ---
@@ -211,6 +214,8 @@ Poziomy ERROR / WARNING – `docs/pipeline-fazy.md`, rozdz. 1.3.
 |---|---|---|
 | lokalizacja RABIT niedostępna (brak dostępu, błąd WebDAV) | ERROR dla lokalizacji – pozostałe lokalizacje importują się dalej | import |
 | plik bez pasującego prefiksu | WARNING (plik nierozpoznany, nieimportowany) | import |
+| brak aktywnej lokalizacji RABIT | WARNING – import czyta tylko folder `Do_importu` | import |
+| folder lokalizacji bez plików, z podfolderami | WARNING z nazwami podfolderów (import ich nie czyta) | import |
 | sygnatura kolumn niezgodna z definicją (zmiana układu raportu) | ERROR dla wersji pliku – dane kanoniczne nie powstają do czasu aktualizacji definicji | import |
 | wartość niezgodna z typem kolumny | ERROR | import |
 | duplikat klucza w pliku albo między częściami jednego źródła | ERROR | import / P2 |

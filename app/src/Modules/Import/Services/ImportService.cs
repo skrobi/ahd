@@ -7,6 +7,7 @@ using PzlEv.Shared.Models.Db;
 using PzlEv.Shared.Models.Sources;
 using PzlEv.Shared.Utils.Data;
 using PzlEv.Shared.Utils.Files;
+using Serilog;
 
 namespace PzlEv.Modules.Import.Services;
 
@@ -20,16 +21,95 @@ public sealed class ImportService(IImportStore store, AppServices services)
 {
     public const string Area = "Import";
     private const string ManualFolderName = "Do_importu";
+    public const string NoRabitLocation =
+        "Brak aktywnej lokalizacji RABIT – import czyta tylko folder Do_importu; w Administracji zaznacz „Aktywna” przy lokalizacji.";
+
+    /// <summary>Log importu (plik logs\pzl-ev-*.log obok exe): ścieżki, dostęp, decyzje, pełne błędy.</summary>
+    private static readonly ILogger Logger = Log.ForContext("Module", "import");
 
     public IReadOnlyList<ImportLocation> Locations() =>
-        store.ActiveLocations().Select(l => new ImportLocation(l.Name, WebDavPath.ToUnc(l.Path), false))
-            .Append(new ImportLocation(ManualFolderName, services.Config.ImportFolder, true))
+        store.ActiveLocations().Select(l => new ImportLocation(l.Name, WebDavPath.ToUnc(l.Path), false, l.Path))
+            .Append(new ImportLocation(ManualFolderName, services.Config.ImportFolder, true, services.Config.ImportFolder))
             .ToList();
+
+    /// <summary>
+    /// Sprawdzenie źródeł bez importu: dostęp do każdej lokalizacji, pliki i to, jak zostałyby rozpoznane;
+    /// wynik także w logu.
+    /// </summary>
+    public SourcesCheckResult Check()
+    {
+        var definitions = store.ActiveDefinitions();
+        LogDefinitions(definitions);
+        var locations = new List<LocationCheck>();
+        var files = new List<FileCheck>();
+        if (store.ActiveLocations().Count == 0)
+        {
+            locations.Add(new LocationCheck("RABIT", "", "", false, NoRabitLocation));
+            Logger.Warning(NoRabitLocation);
+        }
+        foreach (var location in Locations())
+        {
+            try
+            {
+                var (found, ignored, subfolders) = ListFiles(location);
+                var status = $"dostęp OK: plików {found.Count}" +
+                             (ignored.Count > 0 ? $", pominiętych tymczasowych {ignored.Count}" : "") +
+                             (subfolders.Count > 0 ? $", podfoldery (import ich nie czyta): {string.Join(", ", subfolders.Take(10))}" : "");
+                locations.Add(new LocationCheck(location.Name, location.ConfiguredPath, location.Path, true, status));
+                foreach (var file in found)
+                {
+                    var definition = SourceMatcher.Match(file.Name, definitions);
+                    var modified = new DateTimeOffset(file.LastWriteTimeUtc, TimeSpan.Zero);
+                    var last = definition is null ? null : store.LastSettled(location.Path, file.Name);
+                    var recognition = definition is null ? "nierozpoznany" : $"{definition.Code} (prefiks {SourceMatcher.Prefix(definition.Prefix)})";
+                    var note = definition is null
+                        ? "żaden aktywny prefiks nie pasuje do początku nazwy"
+                        : last is not null && last.Size == file.Length && last.ModifiedAt == modified
+                            ? "zostanie pominięty – bez zmian od importu"
+                            : TabularFileReader.IsSupported(file.Name) ? "zostanie zaimportowany" : $"format {file.Extension} nieobsługiwany";
+                    files.Add(new FileCheck(location.Name, file.Name, file.Length, modified, recognition, note));
+                    Logger.Information("Sprawdzenie: {Location} / {File} ({Size} B, {Modified:u}) → {Recognition}; {Note}",
+                        location.Name, file.Name, file.Length, modified, recognition, note);
+                }
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException and not OutOfMemoryException)
+            {
+                var status = $"BRAK DOSTĘPU: {ex.GetType().Name}: {ex.Message}" + (WebDavPath.IsWebDav(location.Path) ? $" {WebDavPath.AccessHint}" : "");
+                locations.Add(new LocationCheck(location.Name, location.ConfiguredPath, location.Path, false, status));
+                Logger.Error(ex, "Sprawdzenie: lokalizacja {Location} niedostępna ({Path})", location.Name, location.Path);
+            }
+        }
+        return new SourcesCheckResult(locations, files);
+    }
+
+    /// <summary>Pliki lokalizacji (bez podfolderów), pliki tymczasowe pominięte; zapis do logu. Brak dostępu = wyjątek.</summary>
+    private static (List<FileInfo> Files, List<string> Ignored, List<string> Subfolders) ListFiles(ImportLocation location)
+    {
+        Logger.Information("Lokalizacja {Location}: zapisana ścieżka {Configured}, czytana ścieżka {Path}", location.Name, location.ConfiguredPath, location.Path);
+        if (location.IsManualFolder)
+            Directory.CreateDirectory(location.Path);
+        var dir = new DirectoryInfo(location.Path);
+        if (!dir.Exists)
+            throw new DirectoryNotFoundException("folder nie istnieje albo brak dostępu (Directory.Exists = false)");
+        var all = dir.EnumerateFiles().OrderBy(f => f.Name, StringComparer.OrdinalIgnoreCase).ToList();
+        var subfolders = dir.EnumerateDirectories().Select(d => d.Name).OrderBy(n => n, StringComparer.OrdinalIgnoreCase).ToList();
+        var ignored = all.Where(f => SourceMatcher.IsIgnored(f.Name)).Select(f => f.Name).ToList();
+        var files = all.Where(f => !SourceMatcher.IsIgnored(f.Name)).ToList();
+        Logger.Information("Lokalizacja {Location}: plików {Count} ({Files}); pominięte tymczasowe: {Ignored}; podfoldery: {Subfolders}",
+            location.Name, files.Count, string.Join(", ", files.Select(f => f.Name)), string.Join(", ", ignored), string.Join(", ", subfolders));
+        return (files, ignored, subfolders);
+    }
+
+    private static void LogDefinitions(IReadOnlyList<SourceDefinitionRow> definitions) =>
+        Logger.Information("Aktywne definicje źródeł: {Definitions}",
+            definitions.Count == 0 ? "BRAK" : string.Join("; ", definitions.Select(d => $"{d.Code}: prefiks '{d.Prefix}', parser {(d.Parser.Length == 0 ? "brak" : d.Parser)}, kolumn {d.Columns.Count}")));
 
     public ImportRunResult Run(IProgress<string>? progress = null, CancellationToken cancellation = default)
     {
         var definitions = store.ActiveDefinitions();
         var batchId = store.BeginBatch(services.Clock.Now, services.User.Account, Environment.MachineName, services.AppVersion);
+        Logger.Information("Import #{Batch} start – {User} na {Machine}, wersja {Version}", batchId, services.User.Account, Environment.MachineName, services.AppVersion);
+        LogDefinitions(definitions);
         var reference = $"import:{batchId}";
         var results = new List<FileResult>();
         var issues = new List<Issue>();
@@ -39,6 +119,12 @@ public sealed class ImportService(IImportStore store, AppServices services)
         {
             issues.Add(issue);
             services.Problems.Add(Area, check, issue, reference);
+        }
+
+        if (store.ActiveLocations().Count == 0)
+        {
+            Logger.Warning(NoRabitLocation);
+            Problem("brak lokalizacji RABIT", Issue.Warning(NoRabitLocation, "RABIT"));
         }
 
         foreach (var location in Locations())
@@ -52,17 +138,17 @@ public sealed class ImportService(IImportStore store, AppServices services)
             List<FileInfo> files;
             try
             {
-                if (location.IsManualFolder)
-                    Directory.CreateDirectory(location.Path);
-                var dir = new DirectoryInfo(location.Path);
-                if (!dir.Exists)
-                    throw new DirectoryNotFoundException("folder nie istnieje albo brak dostępu");
-                files = dir.EnumerateFiles().Where(f => !SourceMatcher.IsIgnored(f.Name)).OrderBy(f => f.Name, StringComparer.OrdinalIgnoreCase).ToList();
+                (files, _, var subfolders) = ListFiles(location);
+                if (files.Count == 0 && subfolders.Count > 0)
+                    Problem("pliki w podfolderach", Issue.Warning(
+                        $"Brak plików w folderze lokalizacji, są podfoldery: {string.Join(", ", subfolders.Take(10))} – import nie czyta podfolderów; wskaż w Administracji folder z plikami.",
+                        location.Name));
             }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException or ArgumentException)
+            catch (Exception ex) when (ex is not OperationCanceledException and not OutOfMemoryException)
             {
+                Logger.Error(ex, "Lokalizacja {Location} niedostępna ({Path})", location.Name, location.Path);
                 var hint = WebDavPath.IsWebDav(location.Path) ? $" {WebDavPath.AccessHint}" : "";
-                Problem("lokalizacja niedostępna", Issue.Error($"Lokalizacja niedostępna: {ex.Message} ({location.Path}).{hint}", location.Name));
+                Problem("lokalizacja niedostępna", Issue.Error($"Lokalizacja niedostępna: {ex.GetType().Name}: {ex.Message} ({location.Path}).{hint}", location.Name));
                 progress?.Report($"{location.Name}: niedostępna");
                 continue;
             }
@@ -89,6 +175,7 @@ public sealed class ImportService(IImportStore store, AppServices services)
 
         var run = new ImportRunResult(batchId, results, issues, cancelled);
         services.Journal.Add(Area, $"Import #{batchId}: {run.Summary}");
+        Logger.Information("Import #{Batch} koniec: {Summary}", batchId, run.Summary);
         services.Database.Commit();
         return run;
     }
@@ -128,6 +215,7 @@ public sealed class ImportService(IImportStore store, AppServices services)
         catch (Exception ex) when (ex is not OperationCanceledException and not OutOfMemoryException)
         {
             // Błąd jednego pliku (uszkodzony Excel, brak dostępu, format) nie zatrzymuje importu pozostałych.
+            Logger.Error(ex, "Plik {Location} / {File}: błąd", location.Name, file.Name);
             var hint = ex is IOException && WebDavPath.IsWebDav(location.Path) ? $" {WebDavPath.SizeLimitHint}" : "";
             decision = FileDecisions.Error;
             description = $"{ex.GetType().Name}: {ex.Message}{hint}";
@@ -135,6 +223,8 @@ public sealed class ImportService(IImportStore store, AppServices services)
         }
 
         store.RecordSeen(new SourceFileSeenRow(0, batchId, location.Path, file.Name, file.Length, modified, sha, decision, sourceCode, rows, description));
+        Logger.Information("Plik {Location} / {File} ({Size} B, {Modified:u}): {Decision} – źródło {Source}; {Description}",
+            location.Name, file.Name, file.Length, modified, decision, sourceCode ?? "-", description);
         return new FileResult(location.Name, file.Name, decision, sourceCode, rows, description);
     }
 

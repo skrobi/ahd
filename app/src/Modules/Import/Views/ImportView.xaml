@@ -8,6 +8,8 @@
             <partials:PageHeader.Actions>
                 <StackPanel Orientation="Horizontal">
                     <Button Content="Odśwież" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding Refresh}" />
+                    <Button Content="Sprawdź źródła" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding Check}"
+                            ToolTip="Bez importu: dostęp do każdej lokalizacji, widoczne pliki i podfoldery, jak każdy plik zostałby rozpoznany." />
                     <Button Content="Anuluj" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding Cancel}" />
                     <Button Content="Importuj" Style="{StaticResource BtnPrimary}" Command="{Binding Run}" />
                 </StackPanel>
@@ -29,6 +31,41 @@
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
                 <TextBlock Text="{Binding DefinitionsText}" Style="{StaticResource MutedText}" Margin="0,6,0,0" />
+                <TextBlock Text="{Binding LogText}" Style="{StaticResource MutedText}" Margin="0,2,0,0" TextWrapping="Wrap" />
+            </StackPanel>
+        </Border>
+
+        <!-- Sprawdzenie źródeł (bez importu) -->
+        <Border Style="{StaticResource Panel}" Margin="0,0,0,12"
+                Visibility="{Binding HasCheck, Converter={StaticResource BoolToVisibility}}">
+            <StackPanel>
+                <TextBlock Text="Sprawdzenie źródeł" Style="{StaticResource H2}" FontSize="15" Margin="0,0,0,6" />
+                <ItemsControl ItemsSource="{Binding LocationChecks}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <StackPanel Margin="0,2,0,6">
+                                <DockPanel>
+                                    <TextBlock DockPanel.Dock="Left" Width="160" Text="{Binding Name}" FontWeight="Medium" />
+                                    <TextBlock Text="{Binding Status}" TextWrapping="Wrap" />
+                                </DockPanel>
+                                <TextBlock Margin="160,0,0,0" Style="{StaticResource MonoText}" TextWrapping="Wrap"
+                                           Text="{Binding ConfiguredPath, StringFormat='zapisana: {0}'}" />
+                                <TextBlock Margin="160,0,0,0" Style="{StaticResource MonoText}" TextWrapping="Wrap"
+                                           Text="{Binding Path, StringFormat='czytana: {0}'}" />
+                            </StackPanel>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <DataGrid Style="{StaticResource DataTable}" ItemsSource="{Binding FileChecks}" IsReadOnly="True" MaxHeight="300" Margin="0,6,0,0">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="Lokalizacja" Binding="{Binding Location}" />
+                        <DataGridTextColumn Header="Plik" Binding="{Binding FileName}" />
+                        <DataGridTextColumn Header="Rozmiar [B]" Binding="{Binding Size}" />
+                        <DataGridTextColumn Header="Zmodyfikowano" Binding="{Binding Modified, StringFormat=yyyy-MM-dd HH:mm}" />
+                        <DataGridTextColumn Header="Rozpoznany jako" Binding="{Binding Recognition}" />
+                        <DataGridTextColumn Header="Uwagi" Binding="{Binding Note}" Width="*" />
+                    </DataGrid.Columns>
+                </DataGrid>
             </StackPanel>
         </Border>
 
