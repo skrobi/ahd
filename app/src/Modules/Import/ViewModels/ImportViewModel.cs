@@ -57,7 +57,7 @@ public sealed class ImportViewModel : ObservableObject
 
     public bool HasIssues => Issues.Count > 0;
 
-    public string DefinitionsText => $"Rozpoznawane źródła (aktywne definicje): {string.Join(", ", _store.ActiveDefinitions().Select(d => $"{d.Code} ({d.Prefix}*)"))}";
+    public string DefinitionsText => $"Rozpoznawane źródła (aktywne definicje): {string.Join(", ", _store.ActiveDefinitions().Select(d => $"{d.Code} – pliki zaczynające się od {SourceMatcher.Prefix(d.Prefix)}"))}";
 
     public ImportBatchRow? SelectedBatch
     {

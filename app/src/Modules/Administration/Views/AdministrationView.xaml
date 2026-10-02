@@ -58,7 +58,8 @@
                     <TextBlock Grid.Row="0" Text="Kod źródła" Style="{StaticResource Label}" />
                     <TextBox Grid.Row="0" Grid.Column="1" Style="{StaticResource Field}" Text="{Binding DefCode, UpdateSourceTrigger=PropertyChanged}" />
                     <TextBlock Grid.Row="1" Text="Prefiks pliku" Style="{StaticResource Label}" />
-                    <TextBox Grid.Row="1" Grid.Column="1" Style="{StaticResource Field}" Text="{Binding DefPrefix, UpdateSourceTrigger=PropertyChanged}" />
+                    <TextBox Grid.Row="1" Grid.Column="1" Style="{StaticResource Field}" Text="{Binding DefPrefix, UpdateSourceTrigger=PropertyChanged}"
+                             ToolTip="Początek nazwy pliku, np. ACTUALS_ (wszystkie ACTUALS_…) albo ACTUALS_PAF; wygrywa najdłuższy pasujący prefiks" />
                     <TextBlock Grid.Row="2" Text="Typ raportu" Style="{StaticResource Label}" />
                     <TextBox Grid.Row="2" Grid.Column="1" Style="{StaticResource Field}" Text="{Binding DefReportType, UpdateSourceTrigger=PropertyChanged}" />
                     <TextBlock Grid.Row="3" Text="Parser" Style="{StaticResource Label}" />
@@ -129,7 +130,8 @@
                     <TextBlock Grid.Row="0" Text="Nazwa" Style="{StaticResource Label}" />
                     <TextBox Grid.Row="0" Grid.Column="1" Style="{StaticResource Field}" Text="{Binding LocName, UpdateSourceTrigger=PropertyChanged}" />
                     <TextBlock Grid.Row="1" Text="Ścieżka" Style="{StaticResource Label}" />
-                    <TextBox Grid.Row="1" Grid.Column="1" Style="{StaticResource Field}" Text="{Binding LocPath, UpdateSourceTrigger=PropertyChanged}" />
+                    <TextBox Grid.Row="1" Grid.Column="1" Style="{StaticResource Field}" Text="{Binding LocPath, UpdateSourceTrigger=PropertyChanged}"
+                             ToolTip="Ścieżka WebDAV (\\host@SSL\DavWWWRoot\sites\…) albo link do folderu SharePoint z przeglądarki – zostanie zamieniony na ścieżkę WebDAV" />
                     <TextBlock Grid.Row="2" Text="Aktywna" Style="{StaticResource Label}" />
                     <CheckBox Grid.Row="2" Grid.Column="1" VerticalAlignment="Center" IsChecked="{Binding LocActive}" />
                 </Grid>

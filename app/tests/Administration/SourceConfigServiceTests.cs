@@ -73,6 +73,25 @@ public class SourceConfigServiceTests
     }
 
     [Fact]
+    public void Asterisk_at_end_of_prefix_is_removed_and_inside_is_rejected()
+    {
+        Assert.True(_service.SaveDefinition(Definition("ACTUALS", "ACTUALS_*")).Success);
+        Assert.Equal("ACTUALS_", Assert.Single(_service.Definitions()).Prefix);
+
+        var inside = _service.SaveDefinition(Definition("X", "ACT*UALS"));
+        Assert.False(inside.Success);
+        Assert.Contains(inside.Issues, i => i.Message.Contains("znaki * i ?"));
+    }
+
+    [Fact]
+    public void SharePoint_link_is_saved_as_webdav_path()
+    {
+        _service.SaveLocation(new LocationInput(null, null, "RABIT", "https://lmsp4-intl.external.lmco.com/sites/RabbitReporting/Shared%20Documents/E456659", true));
+        Assert.Equal(@"\\lmsp4-intl.external.lmco.com@SSL\DavWWWRoot\sites\RabbitReporting\Shared Documents\E456659",
+            Assert.Single(_service.Locations()).Path);
+    }
+
+    [Fact]
     public void Location_requires_name_and_path()
     {
         var result = _service.SaveLocation(new LocationInput(null, null, " ", "", true));

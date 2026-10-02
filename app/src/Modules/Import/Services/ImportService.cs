@@ -22,7 +22,7 @@ public sealed class ImportService(IImportStore store, AppServices services)
     private const string ManualFolderName = "Do_importu";
 
     public IReadOnlyList<ImportLocation> Locations() =>
-        store.ActiveLocations().Select(l => new ImportLocation(l.Name, l.Path, false))
+        store.ActiveLocations().Select(l => new ImportLocation(l.Name, WebDavPath.ToUnc(l.Path), false))
             .Append(new ImportLocation(ManualFolderName, services.Config.ImportFolder, true))
             .ToList();
 
@@ -61,7 +61,8 @@ public sealed class ImportService(IImportStore store, AppServices services)
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException or ArgumentException)
             {
-                Problem("lokalizacja niedostępna", Issue.Error($"Lokalizacja niedostępna: {ex.Message} ({location.Path})", location.Name));
+                var hint = WebDavPath.IsWebDav(location.Path) ? $" {WebDavPath.AccessHint}" : "";
+                Problem("lokalizacja niedostępna", Issue.Error($"Lokalizacja niedostępna: {ex.Message} ({location.Path}).{hint}", location.Name));
                 progress?.Report($"{location.Name}: niedostępna");
                 continue;
             }
@@ -127,9 +128,10 @@ public sealed class ImportService(IImportStore store, AppServices services)
         catch (Exception ex) when (ex is not OperationCanceledException and not OutOfMemoryException)
         {
             // Błąd jednego pliku (uszkodzony Excel, brak dostępu, format) nie zatrzymuje importu pozostałych.
+            var hint = ex is IOException && WebDavPath.IsWebDav(location.Path) ? $" {WebDavPath.SizeLimitHint}" : "";
             decision = FileDecisions.Error;
-            description = $"{ex.GetType().Name}: {ex.Message}";
-            problem("błąd pliku", Issue.Error($"{file.Name}: {ex.Message}", location.Name));
+            description = $"{ex.GetType().Name}: {ex.Message}{hint}";
+            problem("błąd pliku", Issue.Error($"{file.Name}: {ex.Message}{hint}", location.Name));
         }
 
         store.RecordSeen(new SourceFileSeenRow(0, batchId, location.Path, file.Name, file.Length, modified, sha, decision, sourceCode, rows, description));

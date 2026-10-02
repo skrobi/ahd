@@ -31,7 +31,7 @@ i utrzymywaną na ekranie Administracja (`docs/funkcjonalnosc.md`, F08).
 | Element definicji | Znaczenie |
 |---|---|
 | Kod źródła | identyfikator, np. `ACTUALS_CES` |
-| Rozpoznanie pliku | prefiks nazwy pliku; wygrywa najdłuższy pasujący prefiks, bez rozróżniania wielkości liter |
+| Rozpoznanie pliku | prefiks nazwy pliku (początek nazwy, np. `ACTUALS_` obejmuje wszystkie pliki `ACTUALS_…`; zapis `ACTUALS_*` znaczy to samo); wygrywa najdłuższy pasujący prefiks, bez rozróżniania wielkości liter |
 | Typ raportu | np. koszty rzeczywiste, zobowiązania, prognoza |
 | Oczekiwany schemat | kolumny i ich typy; sygnatura kolumn (odcisk układu nagłówków) |
 | Ziarno | co oznacza jeden wiersz (np. pozycja kosztowa elementu WBS i elementu kosztowego w okresie) |
@@ -65,7 +65,8 @@ i utrzymywaną na ekranie Administracja (`docs/funkcjonalnosc.md`, F08).
   samego źródła, o układzie zgodnym z definicją. Pliki o innym prefiksie to osobne źródła (rozdz. 2).
 - **Lokalizacje RABIT:** raporty mogą trafiać do wielu folderów na SharePoint. Lista lokalizacji jest
   konfiguracją importu w bazie (`meta.SourceLocation`, ekran Administracja – `docs/funkcjonalnosc.md`, F08):
-  nazwa, ścieżka, aktywna. Przykład ścieżki:
+  nazwa, ścieżka, aktywna. Link do folderu SharePoint skopiowany z przeglądarki jest zamieniany na ścieżkę WebDAV.
+  Przykład ścieżki:
   `\\lmsp4-intl.external.lmco.com@SSL\DavWWWRoot\sites\RabbitReporting\Shared Documents\E456659`.
 - Plik jest identyfikowany przez **lokalizację i nazwę** – pliki o tej samej nazwie w różnych lokalizacjach to
   różne pliki. Rozpoznanie źródła po prefiksie (rozdz. 2) nie zależy od lokalizacji.
