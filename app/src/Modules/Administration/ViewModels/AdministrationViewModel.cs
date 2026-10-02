@@ -13,7 +13,10 @@ using Serilog;
 
 namespace PzlEv.Modules.Administration.ViewModels;
 
-/// <summary>Ekran Administracja (F08): definicje źródeł i lokalizacje RABIT – dodanie, zmiana, dezaktywacja, usunięcie definicji, historia.</summary>
+/// <summary>
+/// Ekran Administracja (F08): definicje źródeł z mapowaniem kolumn pliku na pola parsera, parsery (ParserEditor)
+/// i lokalizacje RABIT – dodanie, zmiana, dezaktywacja, usunięcie definicji, historia.
+/// </summary>
 public sealed class AdministrationViewModel : ObservableObject
 {
     private static readonly ILogger Logger = Log.ForContext("Module", ModuleKeys.Administration);
@@ -28,7 +31,10 @@ public sealed class AdministrationViewModel : ObservableObject
     // Formularz definicji.
     private long? _defId;
     private int? _defVersion;
-    private string _defCode = "", _defPrefix = "", _defReportType = "", _defColumns = "", _defParser = SourceParsers.Actuals;
+    private string _defCode = "", _defPrefix = "", _defReportType = "", _defColumns = "", _defParser = SourceParsers.None;
+    private IReadOnlyList<ParserField> _parserFields = [];
+    private bool _reloadingParsers;   // przebudowa listy parserów – lista wyboru może wtedy wyczyścić DefParser
+    private readonly Dictionary<string, string> _samples = new(StringComparer.OrdinalIgnoreCase);
     private bool _defActive = true;
     private bool _deletePending;
 
@@ -49,8 +55,13 @@ public sealed class AdministrationViewModel : ObservableObject
         ConfirmDeleteDefinition = new RelayCommand(_ => DoDeleteDefinition(), _ => _deletePending);
         NewLocation = new RelayCommand(_ => ClearLocationForm());
         SaveLocation = new RelayCommand(_ => DoSaveLocation());
+        MapByName = new RelayCommand(_ => DoMapByName(), _ => _parserFields.Count > 0);
+        ParserEditor = new ParserEditorViewModel(service, ReloadParsers);
         Reload();
     }
+
+    /// <summary>Administracja → Parsery.</summary>
+    public ParserEditorViewModel ParserEditor { get; }
 
     public ObservableCollection<SourceDefinitionRow> Definitions { get; } = [];
 
@@ -60,11 +71,31 @@ public sealed class AdministrationViewModel : ObservableObject
 
     public ObservableCollection<Issue> Issues { get; } = [];
 
-    public IReadOnlyList<ParserOption> ParserOptions { get; } =
-    [
-        new(SourceParsers.Actuals, "ACTUALS – koszty rzeczywiste CES"),
-        new(SourceParsers.None, "brak – tylko wiersze surowe"),
-    ];
+    /// <summary>Parsery do wyboru w definicji (z bazy) i „brak”.</summary>
+    public ObservableCollection<ParserOption> ParserOptions { get; } = [];
+
+    /// <summary>Pola wybranego parsera do mapowania; pierwsza pozycja – „tylko wiersze surowe”.</summary>
+    public ObservableCollection<FieldOption> FieldOptions { get; } = [];
+
+    /// <summary>Mapowanie: wiersz na każdą oczekiwaną kolumnę pliku.</summary>
+    public ObservableCollection<MappingRowViewModel> Mapping { get; } = [];
+
+    public string MappingSummary
+    {
+        get
+        {
+            if (_defParser == SourceParsers.None)
+                return "Parser „brak” – plik trafia tylko do wierszy surowych; mapowanie niepotrzebne.";
+            var mapped = Mapping.Count(r => r.IsMapped);
+            return $"Zmapowane kolumny: {mapped} z {Mapping.Count}, wymagane: {Mapping.Count(r => r.Required)}. " +
+                   "Kolumny bez pola trafiają tylko do wierszy surowych; pola bez kolumny zostają puste.";
+        }
+    }
+
+    public ICommand MapByName { get; }
+
+    /// <summary>Wybrany parser ma pola – mapowanie aktywne.</summary>
+    public bool HasParser => _parserFields.Count > 0;
 
     public ICommand NewDefinition { get; }
     public ICommand SaveDefinition { get; }
@@ -97,8 +128,10 @@ public sealed class AdministrationViewModel : ObservableObject
             DefCode = value.Code;
             DefPrefix = value.Prefix;
             DefReportType = value.ReportType;
+            _samples.Clear();
             DefColumns = string.Join(Environment.NewLine, value.Columns);
             DefParser = value.Parser;
+            ApplyMapping(value.Mapping);
             DefActive = value.Active;
             DeletePending = false;
             DefinitionMessage = "";
@@ -133,8 +166,10 @@ public sealed class AdministrationViewModel : ObservableObject
         get => _defColumns;
         set
         {
-            if (SetProperty(ref _defColumns, value))
-                OnPropertyChanged(nameof(DefSignatureText));
+            if (!SetProperty(ref _defColumns, value))
+                return;
+            OnPropertyChanged(nameof(DefSignatureText));
+            RebuildMapping();
         }
     }
 
@@ -150,7 +185,16 @@ public sealed class AdministrationViewModel : ObservableObject
 
     /// <summary>Wynik ostatniej operacji na definicji (pod przyciskami formularza).</summary>
     public string DefinitionMessage { get => _definitionMessage; private set => SetProperty(ref _definitionMessage, value); }
-    public string DefParser { get => _defParser; set => SetProperty(ref _defParser, value ?? SourceParsers.None); }
+    public string DefParser
+    {
+        get => _defParser;
+        set
+        {
+            if (_reloadingParsers || !SetProperty(ref _defParser, value ?? SourceParsers.None))
+                return;
+            UpdateFieldOptions();
+        }
+    }
     public bool DefActive { get => _defActive; set => SetProperty(ref _defActive, value); }
 
     public string LocName { get => _locName; set => SetProperty(ref _locName, value); }
@@ -165,7 +209,91 @@ public sealed class AdministrationViewModel : ObservableObject
         Locations.Clear();
         foreach (var l in _service.Locations())
             Locations.Add(l);
+        ReloadParsers();
     }
+
+    /// <summary>Parsery z bazy (po zapisie parsera – nowe pola od razu w mapowaniu).</summary>
+    private void ReloadParsers()
+    {
+        _reloadingParsers = true;
+        try
+        {
+            ParserOptions.Clear();
+            ParserOptions.Add(new ParserOption(SourceParsers.None, "brak – tylko wiersze surowe"));
+            foreach (var p in _service.Parsers())
+                ParserOptions.Add(new ParserOption(p.Code, $"{p.Code} – {p.Name}{(p.Active ? "" : " (nieaktywny)")}"));
+        }
+        finally
+        {
+            _reloadingParsers = false;
+        }
+        OnPropertyChanged(nameof(DefParser));
+        UpdateFieldOptions();
+    }
+
+    /// <summary>Pola wybranego parsera; wiersze mapowania z polem spoza parsera tracą przypisanie.</summary>
+    private void UpdateFieldOptions()
+    {
+        _parserFields = _service.Parsers().FirstOrDefault(p => p.Code == _defParser)?.Fields ?? [];
+        var fields = _parserFields;
+        // Listy wyboru w siatce mogą wyczyścić przypisania przy przebudowie listy pól – przywracane niżej.
+        var snapshot = Mapping.Select(r => (Row: r, r.Field, r.Required)).ToList();
+        FieldOptions.Clear();
+        FieldOptions.Add(new FieldOption("", "(tylko wiersze surowe)", ""));
+        foreach (var f in fields)
+            FieldOptions.Add(new FieldOption(f.Field, f.Label == f.Field ? f.Field : $"{f.Field} ({f.Label})", f.Type));
+        foreach (var (row, field, required) in snapshot)
+        {
+            var keep = fields.Any(f => f.Field == field);
+            row.Field = keep ? field : "";
+            row.Required = keep && required;
+            row.RefreshType();
+        }
+        OnPropertyChanged(nameof(MappingSummary));
+        OnPropertyChanged(nameof(HasParser));
+    }
+
+    /// <summary>Wiersze mapowania dla bieżących oczekiwanych kolumn – przypisania zostają dla kolumn o tej samej nazwie.</summary>
+    private void RebuildMapping()
+    {
+        var existing = Mapping.ToDictionary(r => r.Column, StringComparer.OrdinalIgnoreCase);
+        var rows = SourceConfigService.ParseColumns(DefColumns)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Select(c => existing.TryGetValue(c, out var row) ? row : new MappingRowViewModel(c, TypeOf, () => OnPropertyChanged(nameof(MappingSummary))))
+            .ToList();
+        foreach (var row in rows)
+            row.Sample = _samples.TryGetValue(row.Column, out var sample) ? sample : "";
+        Mapping.Clear();
+        foreach (var row in rows)
+            Mapping.Add(row);
+        OnPropertyChanged(nameof(MappingSummary));
+    }
+
+    private void ApplyMapping(IReadOnlyList<ColumnMapping> mapping)
+    {
+        foreach (var row in Mapping)
+        {
+            var line = mapping.FirstOrDefault(m => string.Equals(m.Column, row.Column, StringComparison.OrdinalIgnoreCase));
+            row.Field = line?.Field ?? "";
+            row.Required = line?.Required ?? false;
+        }
+    }
+
+    /// <summary>„Mapuj po nazwach”: kolumnom bez pola przypisuje pole o tej samej nazwie w pliku albo w bazie.</summary>
+    private void DoMapByName()
+    {
+        var taken = Mapping.Where(r => r.IsMapped).Select(r => r.Field).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var free = _parserFields.Where(f => !taken.Contains(f.Field)).ToList();
+        var suggested = SourceConfigService.MapByName(Mapping.Where(r => !r.IsMapped).Select(r => r.Column).ToList(), free);
+        foreach (var line in suggested)
+            Mapping.First(r => r.Column == line.Column).Field = line.Field;
+        DefinitionMessage = $"Mapuj po nazwach: przypisano {suggested.Count} kolumn. Zaznacz pola wymagane i zapisz definicję.";
+    }
+
+    private string TypeOf(string field) =>
+        _parserFields.FirstOrDefault(f => f.Field == field) is { } f
+            ? f.Type == FieldTypes.Text ? $"tekst ({f.Length ?? FieldTypes.DefaultTextLength})" : FieldTypes.Label(f.Type)
+            : "";
 
     private void ClearDefinitionForm()
     {
@@ -174,13 +302,14 @@ public sealed class AdministrationViewModel : ObservableObject
         _defVersion = null;
         DefCode = DefPrefix = DefReportType = "";
         DeletePending = false;
-        DefColumns = string.Join(Environment.NewLine, SourceParsers.ActualsColumns);
-        DefParser = SourceParsers.Actuals;
+        _samples.Clear();
+        DefColumns = "";
+        DefParser = SourceParsers.None;
         DefActive = true;
         DefinitionMessage = "";
         DefinitionHistory.Clear();
         OnPropertyChanged(nameof(DefinitionFormTitle));
-        Status = "Nowa definicja – kolumny wstępnie wypełnione układem ACTUALS_*; zmień, jeśli źródło ma inny układ.";
+        Status = "Nowa definicja – wczytaj kolumny („Kolumny z pliku…”), wybierz parser i zmapuj kolumny na jego pola.";
     }
 
     private void ClearLocationForm()
@@ -195,8 +324,9 @@ public sealed class AdministrationViewModel : ObservableObject
 
     private void DoSaveDefinition()
     {
+        var mapping = Mapping.Where(r => r.IsMapped).Select(r => new ColumnMapping(r.Column, r.Field, r.Required)).ToList();
         var input = new DefinitionInput(_defId, _defVersion, DefCode, DefPrefix, DefReportType,
-            SourceConfigService.ParseColumns(DefColumns), DefParser, DefActive);
+            SourceConfigService.ParseColumns(DefColumns), DefParser, DefActive, mapping);
         var result = _service.SaveDefinition(input);
         Show(result);
         if (result.Success)   // formularz zostaje na zapisanej definicji – widać zapisane kolumny, wersję i sygnaturę
@@ -215,7 +345,16 @@ public sealed class AdministrationViewModel : ObservableObject
         try
         {
             var data = TabularFileReader.Read(File.ReadAllBytes(path), Path.GetFileName(path));
+            _samples.Clear();
+            for (var i = 0; i < data.Headers.Count; i++)
+            {
+                var index = i;
+                var sample = data.Rows.Select(r => index < r.Length ? r[index] : null).FirstOrDefault(v => !string.IsNullOrWhiteSpace(v));
+                if (data.Headers[i].Length > 0 && sample is not null)
+                    _samples.TryAdd(data.Headers[i], sample.Trim());
+            }
             DefColumns = string.Join(Environment.NewLine, data.Headers);
+            RebuildMapping();   // przykłady także przy niezmienionych kolumnach
             var signature = HeaderSignature.Compute(data.Headers);
             DefinitionMessage = $"Kolumny z pliku {Path.GetFileName(path)}{(data.Sheet is null ? "" : $" (arkusz {data.Sheet})")}: {data.Headers.Count}, " +
                                 $"sygnatura pliku {signature}. Sprawdź i kliknij „Zapisz definicję”." +

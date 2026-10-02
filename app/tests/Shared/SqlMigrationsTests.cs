@@ -1,6 +1,8 @@
 using Dapper;
+using PzlEv.Modules.Administration.Data;
 using PzlEv.Modules.Import.Data;
 using PzlEv.Shared.Models.Db;
+using PzlEv.Shared.Models.Sources;
 using PzlEv.Shared.Utils.Config;
 using PzlEv.Shared.Utils.Data.Sql;
 using PzlEv.Tests.TestSupport;
@@ -26,9 +28,9 @@ public sealed class SqlMigrationsTests
     public void Scripts_are_embedded_numbered_and_parameterised()
     {
         var scripts = SqlMigrations.All();
-        Assert.Equal([1, 2, 3], scripts.Select(s => s.Number));
-        Assert.Equal([false, true, false], scripts.Select(s => s.IsPresets));   // 002_dane_startowe – dane startowe
-        Assert.Equal(3, SqlMigrations.Required);
+        Assert.Equal([1, 2, 3, 4], scripts.Select(s => s.Number));
+        Assert.Equal([false, true, false, false], scripts.Select(s => s.IsPresets));   // 002_dane_startowe – dane startowe
+        Assert.Equal(4, SqlMigrations.Required);
 
         var batches = SqlMigrations.Batches(scripts[0].Text, "FINOP", "PZLEV_").ToList();
         Assert.True(batches.Count > 5);
@@ -49,14 +51,22 @@ public sealed class SqlMigrationsTests
         Assert.Empty(SqlMigrations.Pending(database.Sql));
         var status = SqlMigrations.Status(database.Sql);
         Assert.All(status, s => Assert.NotNull(s.AppliedAt));
-        Assert.Equal(3, SqlMigrations.CurrentVersion(database.Sql));
+        Assert.Equal(4, SqlMigrations.CurrentVersion(database.Sql));
         using var connection = database.Sql.Open();
         var tables = connection.Query<string>(
             "SELECT t.name FROM sys.tables t JOIN sys.schemas s ON s.schema_id = t.schema_id WHERE s.name = @schema AND LEFT(t.name, LEN(@prefix)) = @prefix",
             new { schema = TestDatabase.Schema, prefix = database.Sql.Settings.TablePrefix }).ToList();
-        Assert.Equal(20, tables.Count);
+        Assert.Equal(21, tables.Count);   // 20 z migracji 001 + META_Parser (004)
         Assert.Contains(database.Sql.Settings.TablePrefix + "META_PerformanceObjective", tables);
         Assert.Contains(database.Sql.Settings.TablePrefix + "DICT_ScheduleBudget", tables);
+
+        // 004: parser ACTUALS w bazie, CAN_Actuals – tabela parsera (kolumny dopuszczają NULL, nowe pola)
+        var actuals = Assert.Single(new SqlSourceConfigStore(database.Sql, new TestServices().Clock, new TestUser()).Parsers());
+        Assert.Equal(("ACTUALS", "Actuals", 26), (actuals.Code, actuals.Table, actuals.Fields.Count));
+        Assert.Equal(new ParserField("CostElement", "Cost Element", FieldTypes.Text, 10, 10), actuals.Fields.Single(f => f.Field == "CostElement"));
+        var columns = connection.Query<(string Name, bool Nullable)>(
+            "SELECT name, is_nullable FROM sys.columns WHERE object_id = OBJECT_ID(@table)", new { table = database.Sql.Table("can.Actuals") }).ToList();
+        Assert.All(actuals.Fields, f => Assert.Contains(columns, c => c.Name == f.Field && c.Nullable));
     }
 
     [SqlFact]
@@ -84,7 +94,7 @@ public sealed class SqlMigrationsTests
             var sha = new string(hash, 64);
             var id = store.RegisterFile(new SourceFileRow(0, sha, "RABIT", name, "ACTUALS_PAF", 10, clock.Now, "csv", null, "utf-8", ";",
                 ["A"], "sygnatura", 1, batch, clock.Now, @"PZL\test", "w toku", 0, null), [["1"]])!.Value;
-            store.CompleteCanonical(id, canonicalStatus, [], null);
+            store.CompleteCanonical(id, canonicalStatus, null, null);
             store.RecordSeen(new SourceFileSeenRow(0, batch, "RABIT", name, 10, clock.Now, sha, FileDecisions.Imported, "ACTUALS_PAF", 1, "zapis wersji 0.11"));
             return id;
         }

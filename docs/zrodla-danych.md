@@ -49,14 +49,24 @@ i utrzymywaną na ekranie Administracja (`docs/funkcjonalnosc.md`, F08).
 - Plik bez pasującego prefiksu nie jest importowany; po dodaniu definicji zostanie zaimportowany przy kolejnym
   imporcie.
 - **Etap 1 (aplikacja):** definicja na ekranie Administracja to kod, prefiks, typ raportu, oczekiwane kolumny
-  (sygnatura), parser i aktywność. Ziarno, klucz, znaczenie okresu, waluta i format liczb wynikają z parsera (rozdz. 4)
-  – nie są polami definicji. Definicję można usunąć: bieżąca wersja zostaje zamknięta (historia i zaimportowane dane
+  (sygnatura), parser, **mapowanie kolumn** i aktywność. Znaczenie kolumn i typy wynikają z mapowania na pola parsera;
+  ziarno, klucz i znaczenie okresu – nie są polami definicji. Definicję można usunąć: bieżąca wersja zostaje zamknięta (historia i zaimportowane dane
   zostają), pliki o tym prefiksie są odtąd nierozpoznane, a kod i prefiks można użyć ponownie.
 - Oczekiwane kolumny: jedna w wierszu albo wiersz nagłówków wklejony z Excela (kolumny rozdzielone tabulatorem);
   przycisk „Kolumny z pliku…” wczytuje wiersz nagłówków z pliku źródła tak samo jak import. Pod polem widać sygnaturę
   wpisanego układu – do porównania z sygnaturą pliku z komunikatu importu. Zapis tworzy nową wersję definicji.
-- Źródło z parserem (ACTUALS): plik jest zapisywany w bazie (wersja pliku, wiersze surowe, dane kanoniczne) tylko
-  wtedy, gdy przejdzie walidację – sygnatura kolumn zgodna z definicją i wartości zgodne z typami. Plik, który jej
+- **Parser** (`meta.Parser`, Administracja → Parsery, z historią) to tabela danych kanonicznych `CAN_<Tabela>` i jej
+  pola: nazwa kolumny w bazie, nazwa kolumny w pliku (podpowiedź mapowania), typ (tekst z długością, kwota / liczba,
+  liczba całkowita, data), opcjonalnie dopełnianie zerami tekstu z cyfr. Zapis parsera zakłada tabelę albo dokłada
+  w niej kolumny (i wydłuża tekst); kolumn nie usuwa ani nie zmienia ich typu – pole usunięte z parsera zostaje
+  w tabeli z danymi, ale nie może być już zmapowane. Edycja parsera wymaga prawa tworzenia i zmiany tabel (jak migracje).
+- **Mapowanie** (definicja źródła): każda oczekiwana kolumna pliku → pole parsera albo „tylko wiersze surowe”;
+  w mapowaniu zaznacza się pola **wymagane** (wartość w każdym wierszu). Pole parsera bez kolumny zostaje puste.
+  „Mapuj po nazwach” przypisuje pola o tej samej nazwie; po „Kolumny z pliku…” siatka pokazuje przykładowe wartości.
+  Każda definicja ma własne mapowanie – kilka układów może zasilać ten sam parser.
+- Źródło z parserem: plik jest zapisywany w bazie (wersja pliku, wiersze surowe, dane kanoniczne) tylko
+  wtedy, gdy przejdzie walidację – sygnatura kolumn zgodna z definicją, mapowanie ustawione, pola wymagane wypełnione
+  i wartości zgodne z typami. Plik, który jej
   nie przejdzie, ma decyzję „błąd” i nie zostawia danych w bazie; przy kolejnym imporcie jest pobierany ponownie
   (pomijane są tylko pliki, których treść jest w bazie). Źródło bez parsera – zapisywane są wiersze surowe.
 - Definicje powstają dla źródeł w miarę ustalania ich zawartości (O27).
@@ -137,10 +147,13 @@ USD | 261,54 | PLN | 1 254,51 | USD | 261,54 | 0,000 | … | 2026 | 2026-03-29 |
 
 - Liczby w formacie polskim (spacja tysięcy, przecinek dziesiętny).
 - Struktura CES jest **płaska**: projekt → lista elementów WBS (numeracja ciągła z lukami).
-- Dane kanoniczne (parser `ACTUALS`): wymagane `WBS Element`, `Fiscal Year`, `Period`; numer elementu kosztowego
-  złożony z cyfr uzupełniany zerami do 10 znaków; minus na końcu liczby (zapis SAP, np. `48,00-`) oznacza wartość
-  ujemną. Klucz wiersza nie jest ustalony (O27) – bez kontroli duplikatów. Kontrola przepływu przy imporcie:
-  liczba wierszy i sumy `Value in Obj. Crcy` i `Val.in rep.cur.` danych kanonicznych zgodne z wierszami surowymi.
+- Dane kanoniczne – parser `ACTUALS` (tabela `CAN_Actuals`, migracja 004): pola wszystkich kolumn powyżej oraz
+  `Original Order Number`, `Item`, `Purchase order number`, `Invoice Number`; numer elementu kosztowego złożony
+  z cyfr uzupełniany zerami do 10 znaków; minus na końcu liczby (zapis SAP, np. `48,00-`) oznacza wartość ujemną.
+  Pola wymagane wskazuje mapowanie definicji (standardowy układ: `WBS Element`, `Fiscal Year`, `Period`); układ
+  raportu może się zmieniać – zmienia się wtedy kolumny i mapowanie definicji, nie kod. Klucz wiersza nie jest ustalony
+  (O27) – bez kontroli duplikatów. Kontrola przepływu przy imporcie: liczba wierszy i sumy wszystkich zmapowanych pól
+  liczbowych (kwot) danych kanonicznych zgodne z wierszami surowymi.
 
 ---
 
@@ -244,7 +257,8 @@ Poziomy ERROR / WARNING – `docs/pipeline-fazy.md`, rozdz. 1.3.
 | brak aktywnej lokalizacji RABIT | WARNING – import czyta tylko folder `Do_importu` | import |
 | folder lokalizacji bez plików, z podfolderami | WARNING z nazwami podfolderów (import ich nie czyta) | import |
 | sygnatura kolumn niezgodna z definicją (zmiana układu raportu) | ERROR dla pliku – plik nie jest zapisywany w bazie; po poprawie „Oczekiwanych kolumn” kolejny import pobiera go ponownie | import |
-| wartość niezgodna z typem kolumny | ERROR dla pliku (wiersz i kolumna) – plik nie jest zapisywany w bazie | import |
+| wartość niezgodna z typem pola, tekst dłuższy niż pole, puste pole wymagane | ERROR dla pliku (wiersz i kolumna) – plik nie jest zapisywany w bazie | import |
+| parser nieaktywny albo definicja bez mapowania | ERROR dla pliku – plik nie jest zapisywany w bazie | import |
 | duplikat klucza w pliku albo między częściami jednego źródła | ERROR | import / P2 |
 | reguły szczegółowe źródła | wg definicji | import |
 
