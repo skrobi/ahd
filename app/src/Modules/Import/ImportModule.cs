@@ -23,10 +23,10 @@ public sealed class ImportModule : IModule
         new("G1", "Import źródeł", "Faza globalna", StageScope.Global, CanAutoRun: true),
     ];
 
-    // Magazyn danych: w trybie w pamięci InMemoryImportStore; po F10 – magazyn SQL wybierany tutaj.
+    // Magazyn danych: baza MS SQL środowiska (DataMode = Sql) albo dane w pamięci.
     public FrameworkElement CreateView(ModuleContext context)
     {
-        var store = new InMemoryImportStore(context.Services.Database);
+        IImportStore store = context.Services.Sql is { } sql ? new SqlImportStore(sql) : new InMemoryImportStore(context.Services.Database);
         return new ImportView { DataContext = new ImportViewModel(new ImportService(store, context.Services), store, new SharePointLoginDialog()) };
     }
 }

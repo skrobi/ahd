@@ -123,9 +123,9 @@ zmiana zakresu zadania w trakcie realizacji wymaga uzgodnienia.
 
 | Zadanie | Moduł | Zależy od | Otwarte kwestie | Status |
 |---|---|---|---|---|
-| [F10.1 Skrypty migracyjne schematu](F10.1-skrypty-migracyjne-schematu.md) | baza | F0.4 | O5 | do zrobienia |
+| [F10.1 Skrypty migracyjne schematu](F10.1-skrypty-migracyjne-schematu.md) | baza | F0.4 | O5 | zrobione – etap 1; do wykonania na PZLTEST |
 | [F10.2 Procedury i widoki](F10.2-procedury-i-widoki.md) | baza | F10.1 | – | do zrobienia |
-| [F10.3 Magazyny SQL i testy kontraktu na bazie](F10.3-magazyny-sql-i-testy-kontraktu-na-bazie.md) | całość | F10.2 | – | do zrobienia |
+| [F10.3 Magazyny SQL i testy kontraktu na bazie](F10.3-magazyny-sql-i-testy-kontraktu-na-bazie.md) | całość | F10.2 | – | w toku – import, administracja, słowniki globalne |
 | [F10.4 PZLPROD, WebDAV, wydajność](F10.4-pzlprod-webdav-wydajnosc.md) | całość | F10.3 | O5, O6 | do zrobienia |
 | [F10.5 Paczka wdrożeniowa](F10.5-paczka-wdrozeniowa.md) | całość | F10.3 | – | do zrobienia |
 

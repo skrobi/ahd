@@ -238,13 +238,15 @@ decyzji (P4, P6, Z) albo z wynikiem ERROR.
 
 ## 8. Środowiska i wdrożenia
 
-- **Konfiguracja środowiska:** plik `pzl-ev.json` obok `PZL-EV.exe` – `Environment`, `NetworkRoot` (korzeń
-  folderów środowiska, rozdz. 7), `DataMode` (`InMemory` do czasu bazy TEST, potem `Sql`), `InMemoryStatePath`,
-  `ConnectionString`; brak pliku = wartości domyślne (`app/README.md`).
+- **Konfiguracja środowiska:** plik `pzl-ev.json` obok `PZL-EV.exe` – przełącznik `Env` (`TEST` / `PROD`) i sekcja
+  `Environments.<Env>`: `NetworkRoot` (korzeń folderów środowiska, rozdz. 7), `DataMode` (`Sql` albo `InMemory`),
+  `Sql` (serwer, baza, schemat, sygnatura tabel – logowanie kontem AD); brak pliku = wartości domyślne
+  (`app/README.md`). TEST: `pzltestdb.intl.lmco.com`, baza `PZLTEST`, schemat `LOG`, sygnatura `PZLEV_`.
 - **TEST** – developer; osobna baza i osobny korzeń folderów.
 - **PROD** – wdraża administrator (IT).
-- Zmiany bazy jako numerowane, idempotentne skrypty migracyjne w repozytorium (`sql/mssql/`); baza przechowuje
-  wersję schematu i minimalną wymaganą wersję aplikacji.
+- Zmiany bazy jako numerowane, idempotentne skrypty migracyjne w repozytorium (`sql/mssql/NNN_*.sql`, zmienne
+  sqlcmd `$(Schema)` i `$(Prefix)`); baza przechowuje wersję schematu i minimalną wymaganą wersję aplikacji
+  (`META_SchemaVersion`). Skrypty są wbudowane w exe – aplikacja przy starcie wykonuje brakujące za zgodą użytkownika.
 - Paczka wdrożeniowa: skrypty bazy, plik `PZL-EV.exe`, instrukcja dla administratora.
 - **Pakiety (NuGet):** zależności (Dapper, Microsoft.Data.SqlClient, ClosedXML/OpenXML, Serilog) przywracane
   są z firmowego proxy **eFOSS (Nexus)** – `https://nexus.global.lmco.com/repository/nuget-proxy-v3/index.json`,

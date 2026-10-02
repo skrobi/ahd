@@ -1,27 +1,40 @@
 using PzlEv.Modules.MasterData.Data;
 using PzlEv.Modules.MasterData.Models;
+using PzlEv.Modules.MasterData.Services;
 using PzlEv.Tests.TestSupport;
 using Xunit;
 
 namespace PzlEv.Tests.MasterData;
 
 /// <summary>
-/// Testy kontraktu magazynu słowników – te same dla wersji w pamięci i (F10.3) wersji SQL.
-/// Implementacja testu dostarcza magazyn, zegar i użytkownika.
+/// Testy kontraktu magazynu słowników – te same dla wersji w pamięci i wersji SQL (baza testowa – TestStores).
 /// </summary>
-public abstract class DictionaryStoreContract
+public sealed class DictionaryStoreContract : IDisposable
 {
-    protected abstract (IDictionaryStore Store, TestClock Clock, TestUser User) Create();
+    private readonly List<TestDatabase> _databases = [];
+
+    public void Dispose() => _databases.ForEach(d => d.Dispose());
+
+    private (IDictionaryStore Store, TestClock Clock, TestUser User) Create(string kind)
+    {
+        var services = new TestServices();
+        if (kind != TestStores.Sql)
+            return (new InMemoryDictionaryStore(services.Database, services.Clock, services.User), services.Clock, services.User);
+        var database = new TestDatabase();
+        _databases.Add(database);
+        return (new SqlDictionaryStore(database.Sql, services.Clock, services.User), services.Clock, services.User);
+    }
 
     private static Dictionary<string, string?> Rate(string dept, string rate) =>
         new() { ["Department"] = dept, ["Year"] = "2026", ["Labor Rate"] = rate, ["Overhead"] = "0" };
 
     private static RowChange Add(string dept, string rate) => new(RowChangeKind.Added, null, null, $"{dept} | 2026", Rate(dept, rate));
 
-    [Fact]
-    public void Added_rows_are_current_with_version_1()
+    [Theory]
+    [MemberData(nameof(TestStores.Kinds), MemberType = typeof(TestStores))]
+    public void Added_rows_are_current_with_version_1(string kind)
     {
-        var (store, _, user) = Create();
+        var (store, _, user) = Create(kind);
         var result = store.Save("department-rates", null, [Add("W30", "100"), Add("W40", "110")]);
 
         Assert.True(result.Success);
@@ -32,10 +45,11 @@ public abstract class DictionaryStoreContract
         Assert.All(rows, r => Assert.Equal(user.Account, r.RecordedBy));
     }
 
-    [Fact]
-    public void Update_keeps_history_and_as_of_returns_previous_state()
+    [Theory]
+    [MemberData(nameof(TestStores.Kinds), MemberType = typeof(TestStores))]
+    public void Update_keeps_history_and_as_of_returns_previous_state(string kind)
     {
-        var (store, clock, user) = Create();
+        var (store, clock, user) = Create(kind);
         store.Save("department-rates", null, [Add("W30", "100")]);
         var before = clock.Now;
         var row = Assert.Single(store.Current("department-rates"));
@@ -55,10 +69,11 @@ public abstract class DictionaryStoreContract
         Assert.Equal("120", Assert.Single(store.Current("department-rates")).Values["Labor Rate"]);
     }
 
-    [Fact]
-    public void Remove_closes_current_version_without_deleting_history()
+    [Theory]
+    [MemberData(nameof(TestStores.Kinds), MemberType = typeof(TestStores))]
+    public void Remove_closes_current_version_without_deleting_history(string kind)
     {
-        var (store, clock, _) = Create();
+        var (store, clock, _) = Create(kind);
         store.Save("department-rates", null, [Add("W30", "100")]);
         var row = Assert.Single(store.Current("department-rates"));
         clock.Advance(TimeSpan.FromMinutes(5));
@@ -70,10 +85,11 @@ public abstract class DictionaryStoreContract
         Assert.NotNull(version.SupersededAt);
     }
 
-    [Fact]
-    public void Stale_version_is_a_conflict_and_nothing_is_saved()
+    [Theory]
+    [MemberData(nameof(TestStores.Kinds), MemberType = typeof(TestStores))]
+    public void Stale_version_is_a_conflict_and_nothing_is_saved(string kind)
     {
-        var (store, clock, _) = Create();
+        var (store, clock, _) = Create(kind);
         store.Save("department-rates", null, [Add("W30", "100"), Add("W40", "110")]);
         var rows = store.Current("department-rates");
         var w30 = rows.Single(r => r.Values["Department"] == "W30");
@@ -93,33 +109,48 @@ public abstract class DictionaryStoreContract
         Assert.Equal("110", store.Current("department-rates").Single(r => r.RowId == w40.RowId).Values["Labor Rate"]);
     }
 
-    [Fact]
-    public void Duplicate_key_is_rejected()
+    [Theory]
+    [MemberData(nameof(TestStores.Kinds), MemberType = typeof(TestStores))]
+    public void Duplicate_key_is_rejected(string kind)
     {
-        var (store, _, _) = Create();
+        var (store, _, _) = Create(kind);
         store.Save("department-rates", null, [Add("W30", "100")]);
         var result = store.Save("department-rates", null, [Add("W30", "200")]);
         Assert.False(result.Success);
         Assert.Single(store.Current("department-rates"));
     }
 
-    [Fact]
-    public void Dictionaries_and_projects_are_separate()
+    [Theory]
+    [MemberData(nameof(TestStores.Kinds), MemberType = typeof(TestStores))]
+    public void Dictionaries_and_projects_are_separate(string kind)
     {
-        var (store, _, _) = Create();
+        var (store, _, _) = Create(kind);
         store.Save("department-rates", null, [Add("W30", "100")]);
         store.Save("department-rates", "M28", [Add("W30", "100")]);
         Assert.Single(store.Current("department-rates"));
         Assert.Single(store.Current("department-rates", "M28"));
         Assert.Empty(store.Current("fx-rates"));
     }
-}
 
-public sealed class InMemoryDictionaryStoreTests : DictionaryStoreContract
-{
-    protected override (IDictionaryStore Store, TestClock Clock, TestUser User) Create()
+    [Theory]
+    [MemberData(nameof(TestStores.Kinds), MemberType = typeof(TestStores))]
+    public void Seed_of_every_global_dictionary_reads_back_unchanged(string kind)
     {
-        var services = new TestServices();
-        return (new InMemoryDictionaryStore(services.Database, services.Clock, services.User), services.Clock, services.User);
+        var (store, _, _) = Create(kind);
+
+        MasterDataSeed.EnsureSeeded(store, 2026);
+        store.Save(GlobalDictionaries.FxRates, null, [new RowChange(RowChangeKind.Added, null, null, "USD | 2026-10",
+            new Dictionary<string, string?> { ["Waluta"] = "USD", ["Okres"] = "2026-10", ["Kurs"] = "3.98765432" })]);
+        store.Save(GlobalDictionaries.Persons, null, [new RowChange(RowChangeKind.Added, null, null, @"PZL\jan.kowalski",
+            new Dictionary<string, string?> { ["Konto AD"] = @"PZL\jan.kowalski", ["Imię i nazwisko"] = "Jan Kowalski" })]);
+
+        var calendar = store.Current(GlobalDictionaries.Calendar);
+        var expected = MasterDataSeed.CalendarRows(2026).Concat(MasterDataSeed.CalendarRows(2027)).ToList();
+        Assert.Equal(expected.Count, calendar.Count);
+        Assert.Equal(expected[0], calendar[0].Values);                      // daty RRRR-MM-DD, tak / nie, liczby całkowite
+        Assert.Contains(calendar, r => r.Values["Zamykający"] == "tak");
+        Assert.Equal(MasterDataSeed.CostCategoryRows().Count(), store.Current(GlobalDictionaries.CostCategory).Count);
+        Assert.Equal("3.98765432", Assert.Single(store.Current(GlobalDictionaries.FxRates)).Values["Kurs"]);
+        Assert.Equal("Jan Kowalski", Assert.Single(store.Current(GlobalDictionaries.Persons)).Values["Imię i nazwisko"]);
     }
 }

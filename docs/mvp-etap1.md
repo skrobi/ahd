@@ -105,8 +105,9 @@ Kilka plików jednego źródła (`ACTUALS_PAF_01`, `_02`, `_03`) importuje się 
 mają różne kolumny.
 
 Opcje:
-- `--baza` – adres bazy; domyślnie plik SQLite `pzl_ev_mvp.sqlite` w katalogu Landing Zone. MS SQL: `--baza mssql://SERWER/PZL_EV_TEST` (konto Windows; tabele tworzy
-  administrator skryptem `sql/mssql/001_etap1_import.sql`),
+- `--baza` – adres bazy; domyślnie plik SQLite `pzl_ev_mvp.sqlite` w katalogu Landing Zone. MS SQL: `--baza mssql://SERWER/PZL_EV_TEST` (konto Windows; skrypt
+  `001_etap1_import.sql` dla narzędzia w Pythonie usunięty 2026-10-02 – baza MS SQL jest obsługiwana przez aplikację
+  PZL-EV, migracje `sql/mssql/`),
 - `--folder` może wskazywać także pojedynczy plik,
 - `--pelne-sprawdzenie` – liczy hash także plików bez zmian w metadanych,
 - `--webdav "<link>"` zamiast `--folder` – import bezpośrednio z SharePoint, bez kopii w `Do_importu`.
