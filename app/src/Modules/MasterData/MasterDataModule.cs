@@ -1,14 +1,21 @@
 using System.Windows;
+using PzlEv.Modules.MasterData.Data;
+using PzlEv.Modules.MasterData.Services;
+using PzlEv.Modules.MasterData.ViewModels;
+using PzlEv.Modules.MasterData.Views;
 using PzlEv.Shared.Models;
 using PzlEv.Shared.Models.Pipeline;
+using PzlEv.Shared.Utils.Data;
+using PzlEv.Shared.Utils.Ui.Dialogs;
 using PzlEv.Shared.Utils.Ui.Modularity;
-using PzlEv.Shared.Views.Partials;
 
 namespace PzlEv.Modules.MasterData;
 
-/// <summary>Słowniki globalne i projektu (F03): edycja, historia, walidacja przy zapisie, wymiana przez Excel. W PoC: ekran zastępczy.</summary>
+/// <summary>Słowniki globalne (F03, G3): edycja z historią i walidacją, wymiana przez Excel.</summary>
 public sealed class MasterDataModule : IModule
 {
+    private IDictionaryStore? _store;
+
     public string Key => ModuleKeys.MasterData;
 
     public string? NavLabel => "Słowniki";
@@ -20,5 +27,15 @@ public sealed class MasterDataModule : IModule
         new("G3", "Utrzymanie słowników", "Faza globalna", StageScope.Global, CanAutoRun: false),
     ];
 
-    public FrameworkElement CreateView(ModuleContext context) => PlaceholderView.Create(this, context.Navigator);
+    // Magazyn danych: w trybie w pamięci InMemoryDictionaryStore; po F10 – magazyn SQL wybierany tutaj.
+    public void Initialize(AppServices services)
+    {
+        _store = new InMemoryDictionaryStore(services.Database, services.Clock, services.User);
+        var added = MasterDataSeed.EnsureSeeded(_store, services.Clock.Now.Year);
+        if (added > 0)
+            services.Journal.Add("Słowniki", $"Dane startowe słowników globalnych: {added} wierszy (kalendarz okresów, Cost Category)");
+    }
+
+    public FrameworkElement CreateView(ModuleContext context) =>
+        new MasterDataView { DataContext = new MasterDataViewModel(new DictionaryService(_store!, context.Services.Journal), new FileDialogs()) };
 }

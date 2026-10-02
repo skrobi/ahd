@@ -1,0 +1,107 @@
+<UserControl x:Class="PzlEv.Modules.MasterData.Views.MasterDataView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:partials="clr-namespace:PzlEv.Shared.Views.Partials">
+    <StackPanel>
+        <partials:PageHeader Eyebrow="Słowniki globalne" Title="Słowniki"
+                             Subtitle="Edycja z historią i walidacją przy zapisie (ERROR blokuje, WARNING wymaga potwierdzenia). Wymiana przez Excel: pobierz, zmień, wczytaj z podglądem różnic." />
+
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="230" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <!-- Lista słowników -->
+            <Border Style="{StaticResource Panel}" Margin="0,0,16,0" VerticalAlignment="Top" Padding="8">
+                <ListBox ItemsSource="{Binding Dictionaries}" SelectedItem="{Binding SelectedDictionary}"
+                         BorderThickness="0" Background="Transparent">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <DockPanel Width="190" Margin="0,4">
+                                <TextBlock DockPanel.Dock="Right" Text="{Binding CountText}" Style="{StaticResource MonoText}"
+                                           Foreground="{StaticResource Muted}" />
+                                <TextBlock Text="{Binding Name}" FontWeight="Medium" />
+                            </DockPanel>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </Border>
+
+            <StackPanel Grid.Column="1">
+                <TextBlock Text="{Binding Spec.Name}" Style="{StaticResource H2}" />
+                <TextBlock Text="{Binding Spec.Description}" Style="{StaticResource MutedText}" Margin="0,2,0,10" />
+
+                <!-- Akcje -->
+                <DockPanel Margin="0,0,0,8">
+                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                        <Button Content="Pobierz do Excela" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding Export}" />
+                        <Button Content="Wczytaj z Excela" Style="{StaticResource Btn}" Command="{Binding Import}" />
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal">
+                        <Button Content="Dodaj wiersz" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding AddRow}" />
+                        <Button Content="Usuń wiersz" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding RemoveRow}" />
+                        <Button Content="Odrzuć zmiany" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding Discard}" />
+                        <Button Content="Zapisz" Style="{StaticResource BtnPrimary}" Command="{Binding Save}" />
+                        <TextBlock Text="Filtr" VerticalAlignment="Center" Margin="16,0,6,0" Foreground="{StaticResource Muted}" />
+                        <TextBox Width="180" Style="{StaticResource Input}" Text="{Binding Filter, UpdateSourceTrigger=PropertyChanged}" />
+                    </StackPanel>
+                </DockPanel>
+                <TextBlock Text="{Binding Status}" TextWrapping="Wrap" Margin="0,0,0,8" />
+
+                <!-- Wiersze słownika: kolumny budowane według opisu słownika (MasterDataView.xaml.cs) -->
+                <DataGrid x:Name="RowsGrid" Style="{StaticResource DataTable}" ItemsSource="{Binding RowsView}"
+                          SelectedItem="{Binding SelectedRow}" />
+                <TextBlock Text="* kolumna klucza" Style="{StaticResource MutedText}" FontSize="11" Margin="0,4,0,0" />
+
+                <!-- Wynik walidacji -->
+                <Border Style="{StaticResource Panel}" Margin="0,12,0,0"
+                        Visibility="{Binding HasIssues, Converter={StaticResource BoolToVisibility}}">
+                    <StackPanel>
+                        <TextBlock Text="Wynik walidacji" Style="{StaticResource H2}" FontSize="15" Margin="0,0,0,6" />
+                        <ItemsControl ItemsSource="{Binding Issues}" />
+                        <Button Content="Zapisz mimo ostrzeżeń" Style="{StaticResource BtnPrimary}" HorizontalAlignment="Left"
+                                Margin="0,8,0,0" Command="{Binding SaveWithWarnings}"
+                                Visibility="{Binding NeedsConfirmation, Converter={StaticResource BoolToVisibility}}" />
+                    </StackPanel>
+                </Border>
+
+                <!-- Podgląd wczytania z Excela -->
+                <Border Style="{StaticResource Panel}" Margin="0,12,0,0" BorderBrush="{StaticResource Accent}"
+                        Visibility="{Binding HasPreview, Converter={StaticResource BoolToVisibility}}">
+                    <StackPanel>
+                        <TextBlock Text="{Binding PreviewTitle}" Style="{StaticResource H2}" FontSize="15" Margin="0,0,0,6" />
+                        <ItemsControl ItemsSource="{Binding PreviewLines}" Margin="0,0,0,6">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding}" Style="{StaticResource MonoText}" TextWrapping="Wrap" />
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <ItemsControl ItemsSource="{Binding PreviewIssues}" />
+                        <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                            <Button Content="Zatwierdź wczytanie" Style="{StaticResource BtnPrimary}" Margin="0,0,8,0" Command="{Binding ApplyImport}" />
+                            <Button Content="Anuluj" Style="{StaticResource Btn}" Command="{Binding CancelImport}" />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <!-- Historia zaznaczonego wiersza -->
+                <Border Style="{StaticResource Panel}" Margin="0,12,0,0"
+                        Visibility="{Binding HasHistory, Converter={StaticResource BoolToVisibility}}">
+                    <StackPanel>
+                        <TextBlock Text="Historia wiersza" Style="{StaticResource H2}" FontSize="15" Margin="0,0,0,6" />
+                        <DataGrid Style="{StaticResource DataTable}" ItemsSource="{Binding History}" IsReadOnly="True" MaxHeight="240">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Kiedy" Binding="{Binding When}" />
+                                <DataGridTextColumn Header="Kto" Binding="{Binding Who}" />
+                                <DataGridTextColumn Header="Wartości" Binding="{Binding Values}" Width="*" />
+                                <DataGridTextColumn Header="Wersja" Binding="{Binding Note}" />
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </Grid>
+    </StackPanel>
+</UserControl>
