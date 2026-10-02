@@ -1,6 +1,7 @@
 using PzlEv.Modules.Diagnostics.Models;
 using PzlEv.Modules.Diagnostics.Services;
 using PzlEv.Shared.Models;
+using PzlEv.Shared.Utils.Data;
 using Serilog;
 
 namespace PzlEv.Modules.Diagnostics.ViewModels;
@@ -10,8 +11,13 @@ public sealed class DiagnosticsViewModel
 {
     private static readonly ILogger Logger = Log.ForContext("Module", ModuleKeys.Diagnostics);
 
-    public DiagnosticsViewModel()
+    public DiagnosticsViewModel(AppServices services)
     {
+        Environment = services.Config.Environment;
+        DataMode = $"{services.Config.DataMode} (stan: {services.Config.InMemoryStatePath})";
+        NetworkRoot = services.Config.NetworkRoot;
+        ImportFolder = services.Config.ImportFolder;
+        AppVersion = services.AppVersion;
         try
         {
             Packages = PackageDiagnostics.Collect();
@@ -29,8 +35,14 @@ public sealed class DiagnosticsViewModel
 
     public IReadOnlyList<PackageInfo> Packages { get; }
 
+    public string Environment { get; }
+    public string DataMode { get; }
+    public string NetworkRoot { get; }
+    public string ImportFolder { get; }
+    public string AppVersion { get; }
+
     public string Runtime => PackageDiagnostics.Runtime;
     public string Os => PackageDiagnostics.Os;
     public string ExePath => PackageDiagnostics.ExePath;
-    public string WindowsUser => $@"{Environment.UserDomainName}\{Environment.UserName}";
+    public string WindowsUser => $@"{System.Environment.UserDomainName}\{System.Environment.UserName}";
 }

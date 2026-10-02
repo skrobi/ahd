@@ -1,12 +1,15 @@
 using System.Windows;
+using PzlEv.Modules.Import.Data;
+using PzlEv.Modules.Import.Services;
+using PzlEv.Modules.Import.ViewModels;
+using PzlEv.Modules.Import.Views;
 using PzlEv.Shared.Models;
 using PzlEv.Shared.Models.Pipeline;
 using PzlEv.Shared.Utils.Ui.Modularity;
-using PzlEv.Shared.Views.Partials;
 
 namespace PzlEv.Modules.Import;
 
-/// <summary>Import źródeł (F05): pobranie plików z lokalizacji RABIT i folderu Do_importu, parsery źródeł, historia importów. W PoC: ekran zastępczy.</summary>
+/// <summary>Import źródeł (F05, G1): lokalizacje RABIT i folder Do_importu → wiersze surowe i dane kanoniczne.</summary>
 public sealed class ImportModule : IModule
 {
     public string Key => ModuleKeys.Import;
@@ -20,5 +23,10 @@ public sealed class ImportModule : IModule
         new("G1", "Import źródeł", "Faza globalna", StageScope.Global, CanAutoRun: true),
     ];
 
-    public FrameworkElement CreateView(ModuleContext context) => PlaceholderView.Create(this, context.Navigator);
+    // Magazyn danych: w trybie w pamięci InMemoryImportStore; po F10 – magazyn SQL wybierany tutaj.
+    public FrameworkElement CreateView(ModuleContext context)
+    {
+        var store = new InMemoryImportStore(context.Services.Database);
+        return new ImportView { DataContext = new ImportViewModel(new ImportService(store, context.Services), store) };
+    }
 }

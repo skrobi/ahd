@@ -1,0 +1,141 @@
+<UserControl x:Class="PzlEv.Modules.Administration.Views.AdministrationView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:partials="clr-namespace:PzlEv.Shared.Views.Partials">
+    <UserControl.Resources>
+        <Style x:Key="Label" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource Muted}" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Margin" Value="0,4,10,4" />
+        </Style>
+        <Style x:Key="Field" TargetType="TextBox" BasedOn="{StaticResource Input}">
+            <Setter Property="Margin" Value="0,3" />
+        </Style>
+    </UserControl.Resources>
+
+    <StackPanel>
+        <partials:PageHeader Eyebrow="Konfiguracja importu" Title="Administracja"
+                             Subtitle="Definicje źródeł (rozpoznanie pliku po prefiksie, układ kolumn, parser) i lokalizacje RABIT. Zmiany mają historię; nic nie jest usuwane – dezaktywacja wyłącza element z importu." />
+
+        <TextBlock Text="{Binding Status}" TextWrapping="Wrap" Margin="0,0,0,8" />
+        <Border Style="{StaticResource Panel}" Margin="0,0,0,12"
+                Visibility="{Binding HasIssues, Converter={StaticResource BoolToVisibility}}">
+            <ItemsControl ItemsSource="{Binding Issues}" />
+        </Border>
+
+        <!-- Definicje źródeł -->
+        <Border Style="{StaticResource Panel}" Margin="0,0,0,16">
+            <StackPanel>
+                <DockPanel Margin="0,0,0,8">
+                    <Button DockPanel.Dock="Right" Content="Nowa definicja" Style="{StaticResource Btn}" Command="{Binding NewDefinition}" />
+                    <TextBlock Text="Definicje źródeł" Style="{StaticResource H2}" />
+                </DockPanel>
+                <DataGrid Style="{StaticResource DataTable}" ItemsSource="{Binding Definitions}" SelectedItem="{Binding SelectedDefinition}"
+                          IsReadOnly="True" MaxHeight="220">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="Kod" Binding="{Binding Code}" />
+                        <DataGridTextColumn Header="Prefiks" Binding="{Binding Prefix}" />
+                        <DataGridTextColumn Header="Typ raportu" Binding="{Binding ReportType}" Width="*" />
+                        <DataGridTextColumn Header="Parser" Binding="{Binding Parser}" />
+                        <DataGridTextColumn Header="Sygnatura" Binding="{Binding Signature}" />
+                        <DataGridCheckBoxColumn Header="Aktywna" Binding="{Binding Active, Mode=OneWay}" />
+                        <DataGridTextColumn Header="Wersja" Binding="{Binding Version}" />
+                    </DataGrid.Columns>
+                </DataGrid>
+
+                <TextBlock Text="{Binding DefinitionFormTitle}" FontWeight="SemiBold" Margin="0,14,0,4" />
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="150" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="24" />
+                        <ColumnDefinition Width="150" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition />
+                    </Grid.RowDefinitions>
+                    <TextBlock Grid.Row="0" Text="Kod źródła" Style="{StaticResource Label}" />
+                    <TextBox Grid.Row="0" Grid.Column="1" Style="{StaticResource Field}" Text="{Binding DefCode, UpdateSourceTrigger=PropertyChanged}" />
+                    <TextBlock Grid.Row="1" Text="Prefiks pliku" Style="{StaticResource Label}" />
+                    <TextBox Grid.Row="1" Grid.Column="1" Style="{StaticResource Field}" Text="{Binding DefPrefix, UpdateSourceTrigger=PropertyChanged}" />
+                    <TextBlock Grid.Row="2" Text="Typ raportu" Style="{StaticResource Label}" />
+                    <TextBox Grid.Row="2" Grid.Column="1" Style="{StaticResource Field}" Text="{Binding DefReportType, UpdateSourceTrigger=PropertyChanged}" />
+                    <TextBlock Grid.Row="3" Text="Parser" Style="{StaticResource Label}" />
+                    <ComboBox Grid.Row="3" Grid.Column="1" Margin="0,3" ItemsSource="{Binding ParserOptions}" DisplayMemberPath="Label"
+                              SelectedValuePath="Value" SelectedValue="{Binding DefParser}" />
+                    <TextBlock Grid.Row="4" Text="Aktywna" Style="{StaticResource Label}" />
+                    <CheckBox Grid.Row="4" Grid.Column="1" VerticalAlignment="Center" IsChecked="{Binding DefActive}" />
+
+                    <TextBlock Grid.Row="0" Grid.Column="3" Text="Ziarno" Style="{StaticResource Label}" />
+                    <TextBox Grid.Row="0" Grid.Column="4" Style="{StaticResource Field}" Text="{Binding DefGrain, UpdateSourceTrigger=PropertyChanged}" />
+                    <TextBlock Grid.Row="1" Grid.Column="3" Text="Kolumny klucza" Style="{StaticResource Label}" />
+                    <TextBox Grid.Row="1" Grid.Column="4" Style="{StaticResource Field}" Text="{Binding DefKeyColumns, UpdateSourceTrigger=PropertyChanged}"
+                             ToolTip="Nazwy kolumn rozdzielone przecinkiem; puste = bez kontroli duplikatów" />
+                    <TextBlock Grid.Row="2" Grid.Column="3" Text="Znaczenie okresu" Style="{StaticResource Label}" />
+                    <TextBox Grid.Row="2" Grid.Column="4" Style="{StaticResource Field}" Text="{Binding DefPeriodMeaning, UpdateSourceTrigger=PropertyChanged}" />
+                    <TextBlock Grid.Row="3" Grid.Column="3" Text="Waluta i jednostki" Style="{StaticResource Label}" />
+                    <TextBox Grid.Row="3" Grid.Column="4" Style="{StaticResource Field}" Text="{Binding DefCurrency, UpdateSourceTrigger=PropertyChanged}" />
+                    <TextBlock Grid.Row="4" Grid.Column="3" Text="Format liczb" Style="{StaticResource Label}" />
+                    <TextBox Grid.Row="4" Grid.Column="4" Style="{StaticResource Field}" Text="{Binding DefNumberFormat, UpdateSourceTrigger=PropertyChanged}" />
+                </Grid>
+                <TextBlock Text="Oczekiwane kolumny (jedna w wierszu, w kolejności z pliku – wyznaczają sygnaturę układu)" Style="{StaticResource Label}" />
+                <TextBox Style="{StaticResource Field}" Text="{Binding DefColumns, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True"
+                         Height="120" VerticalScrollBarVisibility="Auto" FontFamily="{StaticResource FMono}" />
+                <Button Content="Zapisz definicję" Style="{StaticResource BtnPrimary}" HorizontalAlignment="Left" Margin="0,8,0,0"
+                        Command="{Binding SaveDefinition}" />
+
+                <TextBlock Text="Historia definicji" FontWeight="SemiBold" Margin="0,14,0,4" />
+                <DataGrid Style="{StaticResource DataTable}" ItemsSource="{Binding DefinitionHistory}" IsReadOnly="True" MaxHeight="160">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="Wersja" Binding="{Binding Version}" />
+                        <DataGridTextColumn Header="Zapisano" Binding="{Binding RecordedAt, StringFormat=yyyy-MM-dd HH:mm}" />
+                        <DataGridTextColumn Header="Kto" Binding="{Binding RecordedBy}" />
+                        <DataGridTextColumn Header="Prefiks" Binding="{Binding Prefix}" />
+                        <DataGridTextColumn Header="Sygnatura" Binding="{Binding Signature}" />
+                        <DataGridCheckBoxColumn Header="Aktywna" Binding="{Binding Active, Mode=OneWay}" />
+                    </DataGrid.Columns>
+                </DataGrid>
+            </StackPanel>
+        </Border>
+
+        <!-- Lokalizacje RABIT -->
+        <Border Style="{StaticResource Panel}">
+            <StackPanel>
+                <DockPanel Margin="0,0,0,8">
+                    <Button DockPanel.Dock="Right" Content="Nowa lokalizacja" Style="{StaticResource Btn}" Command="{Binding NewLocation}" />
+                    <TextBlock Text="Lokalizacje RABIT" Style="{StaticResource H2}" />
+                </DockPanel>
+                <TextBlock Style="{StaticResource MutedText}" Margin="0,0,0,8"
+                           Text="Foldery SharePoint czytane przez WebDAV (ścieżka UNC, np. \\serwer@SSL\DavWWWRoot\sites\…). Import czyta też zawsze folder Do_importu środowiska." />
+                <DataGrid Style="{StaticResource DataTable}" ItemsSource="{Binding Locations}" SelectedItem="{Binding SelectedLocation}"
+                          IsReadOnly="True" MaxHeight="180">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="Nazwa" Binding="{Binding Name}" />
+                        <DataGridTextColumn Header="Ścieżka" Binding="{Binding Path}" Width="*" />
+                        <DataGridCheckBoxColumn Header="Aktywna" Binding="{Binding Active, Mode=OneWay}" />
+                        <DataGridTextColumn Header="Zmieniono" Binding="{Binding RecordedAt, StringFormat=yyyy-MM-dd HH:mm}" />
+                    </DataGrid.Columns>
+                </DataGrid>
+                <TextBlock Text="{Binding LocationFormTitle}" FontWeight="SemiBold" Margin="0,14,0,4" />
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="150" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition /><RowDefinition /><RowDefinition />
+                    </Grid.RowDefinitions>
+                    <TextBlock Grid.Row="0" Text="Nazwa" Style="{StaticResource Label}" />
+                    <TextBox Grid.Row="0" Grid.Column="1" Style="{StaticResource Field}" Text="{Binding LocName, UpdateSourceTrigger=PropertyChanged}" />
+                    <TextBlock Grid.Row="1" Text="Ścieżka" Style="{StaticResource Label}" />
+                    <TextBox Grid.Row="1" Grid.Column="1" Style="{StaticResource Field}" Text="{Binding LocPath, UpdateSourceTrigger=PropertyChanged}" />
+                    <TextBlock Grid.Row="2" Text="Aktywna" Style="{StaticResource Label}" />
+                    <CheckBox Grid.Row="2" Grid.Column="1" VerticalAlignment="Center" IsChecked="{Binding LocActive}" />
+                </Grid>
+                <Button Content="Zapisz lokalizację" Style="{StaticResource BtnPrimary}" HorizontalAlignment="Left" Margin="0,8,0,0"
+                        Command="{Binding SaveLocation}" />
+            </StackPanel>
+        </Border>
+    </StackPanel>
+</UserControl>

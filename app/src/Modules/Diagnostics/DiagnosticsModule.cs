@@ -16,5 +16,5 @@ public sealed class DiagnosticsModule : IModule
     public string Doc => "app/README.md";
 
     public FrameworkElement CreateView(ModuleContext context)
-        => new DiagnosticsView { DataContext = new DiagnosticsViewModel() };
+        => new DiagnosticsView { DataContext = new DiagnosticsViewModel(context.Services) };
 }
