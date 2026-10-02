@@ -25,14 +25,18 @@ public sealed class ImportServiceTests : IDisposable
     private IImportStore _store = null!;
     private ImportService _import = null!;
 
-    /// <summary>Magazyny testu w bazie testowej (TestDatabase).</summary>
+    /// <summary>
+    /// Magazyny testu w bazie testowej z danymi startowymi (migracja 002: definicje ACTUALS_PAF i ACTUALS_CES);
+    /// lokalizacja RABIT z presetów wyłączona – testy nie sięgają do SharePoint.
+    /// </summary>
     private void Use()
     {
-        _database = new TestDatabase();
+        _database = new TestDatabase(presets: true);
         _app = _services.App(_root, _database.Sql);
         _config = new SourceConfigService(new SqlSourceConfigStore(_database.Sql, _services.Clock, _services.User), _app.Journal);
         _store = new SqlImportStore(_database.Sql);
-        SourceConfigSeed.EnsureSeeded(_config);
+        var rabit = Assert.Single(_config.Locations());
+        Assert.True(_config.SaveLocation(new LocationInput(rabit.LocationId, rabit.Version, rabit.Name, rabit.Path, Active: false)).Success);
         _import = new ImportService(_store, _app);
     }
 
@@ -64,7 +68,7 @@ public sealed class ImportServiceTests : IDisposable
         Assert.Equal(FileDecisions.Imported, result.Decision);
         Assert.Equal("ACTUALS_PAF", result.SourceCode);
         Assert.Equal(6, result.Rows);
-        Assert.Equal(ImportService.NoRabitLocation, Assert.Single(run.Issues).Message);   // lokalizacja z seeda nieaktywna
+        Assert.Equal(ImportService.NoRabitLocation, Assert.Single(run.Issues).Message);   // lokalizacja z presetów wyłączona
 
         var seen = Assert.Single(_store.Seen(run.BatchId));
         var file = _store.FindByHash(seen.Sha256!)!;

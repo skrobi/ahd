@@ -15,10 +15,10 @@ public sealed class DictionaryStoreContract : IDisposable
 
     public void Dispose() => _databases.ForEach(d => d.Dispose());
 
-    private (IDictionaryStore Store, TestClock Clock, TestUser User) Create()
+    private (IDictionaryStore Store, TestClock Clock, TestUser User) Create(bool presets = false)
     {
         var services = new TestServices();
-        var database = new TestDatabase();
+        var database = new TestDatabase(presets);
         _databases.Add(database);
         return (new SqlDictionaryStore(database.Sql, services.Clock, services.User), services.Clock, services.User);
     }
@@ -125,22 +125,21 @@ public sealed class DictionaryStoreContract : IDisposable
     }
 
     [SqlFact]
-    public void Seed_of_every_global_dictionary_reads_back_unchanged()
+    public void Presets_and_every_global_dictionary_read_back_unchanged()
     {
-        var (store, _, _) = Create();
+        var (store, _, _) = Create(presets: true);
 
-        MasterDataSeed.EnsureSeeded(store, 2026);
         store.Save(GlobalDictionaries.FxRates, null, [new RowChange(RowChangeKind.Added, null, null, "USD | 2026-10",
             new Dictionary<string, string?> { ["Waluta"] = "USD", ["Okres"] = "2026-10", ["Kurs"] = "3.98765432" })]);
         store.Save(GlobalDictionaries.Persons, null, [new RowChange(RowChangeKind.Added, null, null, @"PZL\jan.kowalski",
             new Dictionary<string, string?> { ["Konto AD"] = @"PZL\jan.kowalski", ["Imię i nazwisko"] = "Jan Kowalski" })]);
 
         var calendar = store.Current(GlobalDictionaries.Calendar);
-        var expected = MasterDataSeed.CalendarRows(2026).Concat(MasterDataSeed.CalendarRows(2027)).ToList();
+        var expected = IsoCalendar.Rows(2026).Concat(IsoCalendar.Rows(2027)).ToList();
         Assert.Equal(expected.Count, calendar.Count);
         Assert.Equal(expected[0], calendar[0].Values);                      // daty RRRR-MM-DD, tak / nie, liczby całkowite
         Assert.Contains(calendar, r => r.Values["Zamykający"] == "tak");
-        Assert.Equal(MasterDataSeed.CostCategoryRows().Count(), store.Current(GlobalDictionaries.CostCategory).Count);
+        Assert.Equal(33, store.Current(GlobalDictionaries.CostCategory).Count);
         Assert.Equal("3.98765432", Assert.Single(store.Current(GlobalDictionaries.FxRates)).Values["Kurs"]);
         Assert.Equal("Jan Kowalski", Assert.Single(store.Current(GlobalDictionaries.Persons)).Values["Imię i nazwisko"]);
     }

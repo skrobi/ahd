@@ -1,9 +1,6 @@
 using Dapper;
-using PzlEv.Modules.Administration.Data;
-using PzlEv.Modules.Administration.Services;
 using PzlEv.Modules.Dashboard.Data;
 using PzlEv.Modules.Import.Data;
-using PzlEv.Modules.MasterData.Data;
 using PzlEv.Shared.Models;
 using PzlEv.Shared.Models.Db;
 using PzlEv.Shared.Utils.Data;
@@ -21,9 +18,9 @@ public sealed class SqlDashboardDataTests : IDisposable
     private AppServices _app = null!;
     private SqlDashboardData _data = null!;
 
-    private void Use()
+    private void Use(bool presets = false)
     {
-        _database = new TestDatabase();
+        _database = new TestDatabase(presets);
         _app = _services.App(_root, _database.Sql);
         _data = new SqlDashboardData(_app);
     }
@@ -53,9 +50,7 @@ public sealed class SqlDashboardDataTests : IDisposable
     [SqlFact]
     public void Shows_what_is_stored_in_the_database()
     {
-        Use();
-        SourceConfigSeed.EnsureSeeded(new SourceConfigService(new SqlSourceConfigStore(_database.Sql, _services.Clock, _services.User), _app.Journal));
-        MasterDataSeed.EnsureSeeded(new SqlDictionaryStore(_database.Sql, _services.Clock, _services.User), 2026);
+        Use(presets: true);
         var imports = new SqlImportStore(_database.Sql);
         var batch = imports.BeginBatch(_services.Clock.Now, _services.User.Account, "PC-1", "test");
         _app.Problems.Add("Import", "brak lokalizacji RABIT", Issue.Warning("Brak aktywnej lokalizacji RABIT", "RABIT"), ImportBatchRow.ProblemReference(batch));
@@ -68,7 +63,7 @@ public sealed class SqlDashboardDataTests : IDisposable
         var cards = _data.GlobalCards();
         Assert.StartsWith($"Ostatni import #{batch} · ", cards[0].Subtitle);
         Assert.Equal(["zakończony", "2 zaimportowane", "1 nierozpoznane"], cards[0].Pills.Select(p => p.Text));
-        Assert.Equal(["definicje aktywne: 2 z 2", "lokalizacje aktywne: 0 z 1"], cards[1].Pills.Select(p => p.Text));
+        Assert.Equal(["definicje aktywne: 2 z 2", "lokalizacje aktywne: 1 z 1"], cards[1].Pills.Select(p => p.Text));
         Assert.Contains(cards[2].Pills, p => p.Text == "Cost Category: 33");
         Assert.Contains(cards[2].Pills, p => p.Text == "stawki: 0");
         var project = Assert.Single(_data.ZakresCards());
@@ -77,6 +72,6 @@ public sealed class SqlDashboardDataTests : IDisposable
         var attention = Assert.Single(_data.Attention());
         Assert.Equal(new Pill("warn", $"Import #{batch}"), attention.Tag);
         Assert.Equal("RABIT: Brak aktywnej lokalizacji RABIT", attention.Text);
-        Assert.Contains(_data.Events(), e => e.Message.Contains("ACTUALS_PAF"));
+        Assert.Contains(_data.Events(), e => e.Message.StartsWith("Migracja 002 – dane startowe"));
     }
 }

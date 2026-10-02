@@ -6,7 +6,7 @@ using PzlEv.Shared.Utils.Ui.Modularity;
 
 namespace PzlEv.Modules.Diagnostics;
 
-/// <summary>Diagnostyka środowiska – moduł PoC: wynik testu stosu (runtime, pakiety, ścieżka, konto).</summary>
+/// <summary>Diagnostyka środowiska: wynik testu stosu (runtime, pakiety, ścieżka, konto) i migracje bazy.</summary>
 public sealed class DiagnosticsModule : IModule
 {
     public string Key => ModuleKeys.Diagnostics;

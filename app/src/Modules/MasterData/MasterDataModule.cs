@@ -27,14 +27,8 @@ public sealed class MasterDataModule : IModule
         new("G3", "Utrzymanie słowników", "Faza globalna", StageScope.Global, CanAutoRun: false),
     ];
 
-    // Magazyn danych: baza MS SQL środowiska (Sql*Store).
-    public void Initialize(AppServices services)
-    {
-        _store = new SqlDictionaryStore(services.Sql, services.Clock, services.User);
-        var added = MasterDataSeed.EnsureSeeded(_store, services.Clock.Now.Year);
-        if (added > 0)
-            services.Journal.Add("Słowniki", $"Dane startowe słowników globalnych: {added} wierszy (kalendarz okresów, Cost Category)");
-    }
+    // Magazyn danych: baza MS SQL środowiska (Sql*Store); dane startowe – migracja sql/mssql/002_dane_startowe.sql.
+    public void Initialize(AppServices services) => _store = new SqlDictionaryStore(services.Sql, services.Clock, services.User);
 
     public FrameworkElement CreateView(ModuleContext context) =>
         new MasterDataView { DataContext = new MasterDataViewModel(new DictionaryService(_store!, context.Services.Journal), new FileDialogs()) };

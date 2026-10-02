@@ -25,18 +25,25 @@ zmieni). Brak pliku albo błąd w nim = komunikat przy starcie z nazwą pola –
 | `Sql.Schema`, `Sql.TablePrefix` | schemat i sygnatura tabel: `[FINOP].[PZLEV_META_ImportBatch]` (`docs/model-danych.md`, rozdz. 2); tylko litery, cyfry i `_`; sygnatura domyślnie `PZLEV_` |
 | `Sql.TrustServerCertificate` | `true` tylko gdy połączenie zgłasza niezaufany certyfikat serwera |
 
-**Baza danych:** przy starcie aplikacja sprawdza wersję schematu (`META_SchemaVersion`). Gdy brakuje tabel albo
-migracji, pyta o zgodę i wykonuje skrypty `sql/mssql/NNN_*.sql` (wbudowane w exe) – konto AD musi mieć prawo
-tworzenia tabel w schemacie. Te same skrypty można uruchomić ręcznie:
-`sqlcmd -S pzltestdb.intl.lmco.com -d PZLTEST -E -v Schema=FINOP Prefix=PZLEV_ -i sql\mssql\001_etap1_import_slowniki_projekty.sql`.
-Przy pierwszym starcie na pustej bazie moduły zapisują dane startowe (kalendarz, Cost Category, definicje
-`ACTUALS_*`, lokalizacja E456659).
+**Baza danych – migracje:** skrypty `sql/mssql/NNN_*.sql` są wbudowane w exe:
+- `001_etap1_import_slowniki_projekty.sql` – tabele etapu 1;
+- `002_dane_startowe.sql` – presety: definicje źródeł `ACTUALS_PAF` i `ACTUALS_CES`, aktywna lokalizacja RABIT
+  E456659, kalendarz okresów 2026–2027, Cost Category (załącznik A).
+
+Migracje wykonuje przycisk **Diagnostyka → Migracja** – uruchamia po kolei skrypty, których numeru nie ma
+w `META_SchemaVersion`, a wykonane pomija. Lista na tym ekranie pokazuje, które skrypty są wykonane (kiedy, kto)
+i które czekają. Przy starcie aplikacja pyta o brakujące migracje: **Tak** – wykonuje je od razu, **Nie** – startuje
+bez nich. Konto AD musi mieć prawo tworzenia tabel w schemacie. Dwie osoby uruchamiające migrację jednocześnie nie
+wykonają skryptu dwa razy (`sp_getapplock`). Skrypty można też uruchomić ręcznie, po kolei:
+`sqlcmd -S pzltestdb.intl.lmco.com -d PZLTEST -E -v Schema=FINOP Prefix=PZLEV_ -i sql\mssql\001_etap1_import_slowniki_projekty.sql`
+(i tak samo `002_dane_startowe.sql`). Dane startowe są tylko w migracji – aplikacja sama nic nie dopisuje;
+usunięta definicja nie wraca.
 
 Ustawienia, baza i ścieżki widać na ekranie **Diagnostyka** i w stopce okna.
 
 **Ręczny test F1 / F2:**
 
-1. **Słowniki** – kalendarz okresów i Cost Category mają dane startowe. Zmień wartość, **Zapisz**; zaznacz wiersz –
+1. **Słowniki** – kalendarz okresów i Cost Category mają dane startowe (migracja 002). Zmień wartość, **Zapisz**; zaznacz wiersz –
    historia pokazuje poprzednią wersję. **Pobierz do Excela** → zmień / dodaj / usuń wiersz → **Wczytaj z Excela** –
    podgląd różnic (+/~/−), **Zatwierdź wczytanie**. Błędna wartość (np. tekst w liczbie) – wynik walidacji, brak zapisu.
 2. **Import RABIT** – skopiuj `testdata/RABIT/ACTUALS_PAF_01.csv` do folderu `Do_importu` (ścieżka na ekranie),
