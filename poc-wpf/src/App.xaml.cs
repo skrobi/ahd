@@ -1,10 +1,10 @@
 using System.IO;
 using System.Windows;
 using System.Windows.Threading;
-using PzlEv.Test.ViewModels;
+using PzlEv.Shell;
 using Serilog;
 
-namespace PzlEv.Test;
+namespace PzlEv;
 
 public partial class App : Application
 {
@@ -29,7 +29,8 @@ public partial class App : Application
 
         Log.Information("PZL-EV (test) start. BaseDirectory={BaseDirectory}", AppContext.BaseDirectory);
 
-        var window = new MainWindow { DataContext = new MainViewModel() };
+        // Lista modułów (Shell/ModuleCatalog.cs) → powłoka z menu i nawigacją.
+        var window = new ShellWindow { DataContext = new ShellViewModel(ModuleCatalog.Create()) };
         window.Show();
     }
 

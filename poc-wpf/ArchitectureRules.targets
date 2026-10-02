@@ -1,0 +1,67 @@
+<Project>
+  <!--
+    Granice modułów PZL-EV (docs/architektura.md, rozdz. 5.3) – sprawdzane przy każdej budowie
+    (Visual Studio, build.cmd, dotnet build). Naruszenie = błąd budowy PZLARCH z plikiem i linią.
+
+    Reguły (odwołanie = tekst „PzlEv.Shell” albo „PzlEv.Modules.<Moduł>” w pliku .cs lub .xaml):
+      1. Shared/                nie odwołuje się do Shell ani do modułów.
+      2. Modules/<A>/           nie odwołuje się do Shell ani do innego modułu <B>.
+      3. Shell/                 odwołuje się do modułów tylko w Shell/ModuleCatalog.cs (lista modułów).
+
+    Zadanie MSBuild kompilowane w locie (RoslynCodeTaskFactory – część MSBuild, bez pakietów NuGet).
+  -->
+  <UsingTask TaskName="PzlEvCheckModuleBoundaries" TaskFactory="RoslynCodeTaskFactory"
+             AssemblyFile="$(MSBuildToolsPath)\Microsoft.Build.Tasks.Core.dll">
+    <ParameterGroup>
+      <ProjectDir ParameterType="System.String" Required="true" />
+      <Files ParameterType="Microsoft.Build.Framework.ITaskItem[]" Required="true" />
+    </ParameterGroup>
+    <Task>
+      <Using Namespace="System" />
+      <Using Namespace="System.IO" />
+      <Using Namespace="System.Text.RegularExpressions" />
+      <Code Type="Fragment" Language="cs"><![CDATA[
+var root = Path.GetFullPath(ProjectDir).TrimEnd('\\', '/') + Path.DirectorySeparatorChar;
+var reference = new Regex(@"PzlEv\.(Shell|Modules\.(\w+))");
+foreach (var item in Files)
+{
+    var full = Path.GetFullPath(item.GetMetadata("FullPath"));
+    if (!full.StartsWith(root, StringComparison.OrdinalIgnoreCase)) continue;
+    var rel = full.Substring(root.Length).Replace('\\', '/');
+    if (rel.StartsWith("obj/") || rel.StartsWith("bin/")) continue;
+
+    var parts = rel.Split('/');
+    var area = parts[0];
+    var owner = area == "Modules" && parts.Length > 2 ? parts[1] : null;
+    var text = File.ReadAllText(full);
+
+    foreach (Match m in reference.Matches(text))
+    {
+        var target = m.Groups[2].Success ? m.Groups[2].Value : null; // null = Shell
+        string rule = null;
+        if (area == "Shared")
+            rule = "Shared nie może zależeć od Shell ani od modułów";
+        else if (owner != null && target == null)
+            rule = "moduł " + owner + " nie może zależeć od Shell (nawigacja przez INavigator)";
+        else if (owner != null && target != owner)
+            rule = "moduł " + owner + " nie może zależeć od modułu " + target + " (komunikacja przez Shared)";
+        else if (area == "Shell" && target != null && rel != "Shell/ModuleCatalog.cs")
+            rule = "moduły zna tylko Shell/ModuleCatalog.cs";
+        if (rule == null) continue;
+
+        var line = 1;
+        for (var i = 0; i < m.Index; i++) if (text[i] == '\n') line++;
+        Log.LogError("Architektura", "PZLARCH", null, full, line, 0, 0, 0, rule + ": " + m.Value);
+    }
+}
+]]></Code>
+    </Task>
+  </UsingTask>
+
+  <!-- Na początku budowy (przed kompilacją XAML i C#), raz – nie w tymczasowym projekcie XAML WPF. -->
+  <Target Name="PzlEvCheckModuleBoundaries" BeforeTargets="BeforeBuild"
+          Condition="'$(DesignTimeBuild)' != 'true' and '$(MSBuildProjectName.EndsWith(`_wpftmp`))' != 'true'">
+    <PzlEvCheckModuleBoundaries ProjectDir="$(MSBuildProjectDirectory)"
+                                Files="@(Compile);@(Page);@(ApplicationDefinition)" />
+  </Target>
+</Project>
