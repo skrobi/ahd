@@ -5,34 +5,22 @@ using System.Text.RegularExpressions;
 namespace PzlEv.Shared.Utils.Config;
 
 /// <summary>
-/// Wczytuje pzl-ev.json. Układ: "Env" (TEST / PROD) i "Environments": { "TEST": { NetworkRoot, DataMode,
-/// InMemoryStatePath, Sql: { Server, Database, Schema, TablePrefix, TrustServerCertificate } }, "PROD": {…} }.
-/// Wcześniejszy układ płaski (Environment, NetworkRoot, DataMode, InMemoryStatePath) nadal działa.
-/// Każde pole opcjonalne – brakujące dostają wartości domyślne; DataMode = Sql wymaga sekcji Sql.
+/// Wczytuje pzl-ev.json obok PZL-EV.exe (wzór z opisem każdego ustawienia – app/pzl-ev.json, kopiowany przy budowie).
+/// Układ: "Env" (TEST / PROD) i "Environments": { "TEST": { NetworkRoot, Sql: { Server, Database, Schema,
+/// TablePrefix, TrustServerCertificate } }, "PROD": {…} }. Plik jest wymagany; brak pliku albo pola = błąd
+/// z opisem przy starcie (bez cichych wartości domyślnych). Ścieżki mogą zawierać zmienne, np. %LOCALAPPDATA%.
 /// </summary>
 public static partial class AppConfigLoader
 {
     public const string FileName = "pzl-ev.json";
     public const string DefaultTablePrefix = "PZLEV_";
 
-    public static AppConfig Defaults()
-    {
-        var local = Path.Combine(System.Environment.GetFolderPath(System.Environment.SpecialFolder.LocalApplicationData), "PZL-EV");
-        return new AppConfig(
-            Environment: "TEST",
-            NetworkRoot: Path.Combine(local, "TEST-root"),
-            DataMode: DataMode.InMemory,
-            InMemoryStatePath: Path.Combine(local, "inmemory-state.json"),
-            Sql: null);
-    }
-
     /// <summary>Wczytuje konfigurację z folderu aplikacji; błąd pliku = wyjątek z czytelnym opisem.</summary>
     public static AppConfig Load(string directory)
     {
         var path = Path.Combine(directory, FileName);
-        var config = Defaults();
         if (!File.Exists(path))
-            return config;
+            throw new InvalidOperationException($"Brak pliku konfiguracji {path}. Skopiuj wzór app\\{FileName} (z opisem ustawień) obok PZL-EV.exe i uzupełnij.");
 
         JsonDocument doc;
         try
@@ -41,55 +29,39 @@ public static partial class AppConfigLoader
         }
         catch (JsonException ex)
         {
-            throw new InvalidOperationException($"{FileName}: niepoprawny JSON – {ex.Message}", ex);
+            throw new InvalidOperationException($"{path}: niepoprawny JSON – {ex.Message}", ex);
         }
 
         using (doc)
         {
             var root = doc.RootElement;
-            var env = (Text(root, "Env") ?? Text(root, "Environment") ?? config.Environment).ToUpperInvariant();
-            var section = root;
-            if (root.TryGetProperty("Environments", out var environments))
-            {
-                if (!environments.TryGetProperty(env, out section))
-                    throw new InvalidOperationException($"{FileName}: Env = '{env}', brak sekcji Environments.{env}");
-            }
+            var env = Text(root, "Env")?.ToUpperInvariant() ?? throw new InvalidOperationException($"{path}: brak pola Env (TEST albo PROD)");
+            if (!root.TryGetProperty("Environments", out var environments) || !environments.TryGetProperty(env, out var section))
+                throw new InvalidOperationException($"{path}: Env = '{env}', brak sekcji Environments.{env}");
 
-            var modeText = Text(section, "DataMode");
-            var mode = config.DataMode;
-            if (modeText is not null && !Enum.TryParse(modeText, ignoreCase: true, out mode))
-                throw new InvalidOperationException($"{FileName}: DataMode = '{modeText}' – dozwolone: InMemory, Sql");
+            var at = $"Environments.{env}";
+            var networkRoot = Text(section, "NetworkRoot") ?? throw new InvalidOperationException($"{path}: {at}.NetworkRoot – pole wymagane");
+            if (!section.TryGetProperty("Sql", out var sql))
+                throw new InvalidOperationException($"{path}: {at}.Sql – sekcja wymagana (Server, Database, Schema)");
 
-            var sql = section.TryGetProperty("Sql", out var sqlSection) ? ReadSql(sqlSection, env) : null;
-            if (mode == DataMode.Sql && sql is null)
-                throw new InvalidOperationException($"{FileName}: DataMode = Sql wymaga sekcji Sql (Server, Database, Schema) w Environments.{env}");
-
-            return config with
-            {
-                Environment = env,
-                NetworkRoot = Text(section, "NetworkRoot") ?? config.NetworkRoot,
-                DataMode = mode,
-                InMemoryStatePath = Text(section, "InMemoryStatePath") ?? config.InMemoryStatePath,
-                Sql = sql,
-            };
+            return new AppConfig(env, System.Environment.ExpandEnvironmentVariables(networkRoot), ReadSql(sql, $"{path}: {at}.Sql"));
         }
     }
 
-    private static SqlSettings ReadSql(JsonElement section, string env)
+    private static SqlSettings ReadSql(JsonElement section, string at)
     {
-        var at = $"Environments.{env}.Sql";
         var connectionString = Text(section, "ConnectionString");
         var server = Text(section, "Server");
         var database = Text(section, "Database");
         if (connectionString is null && (server is null || database is null))
-            throw new InvalidOperationException($"{FileName}: {at} – wymagane Server i Database (albo ConnectionString)");
-        var schema = Text(section, "Schema") ?? throw new InvalidOperationException($"{FileName}: {at}.Schema – pole wymagane (np. FINOP)");
+            throw new InvalidOperationException($"{at} – wymagane Server i Database");
+        var schema = Text(section, "Schema") ?? throw new InvalidOperationException($"{at}.Schema – pole wymagane (np. FINOP)");
         var prefix = Text(section, "TablePrefix") ?? DefaultTablePrefix;
         // Schemat i sygnatura trafiają do nazw obiektów SQL – tylko litery, cyfry i _.
         if (!Identifier().IsMatch(schema))
-            throw new InvalidOperationException($"{FileName}: {at}.Schema = '{schema}' – dozwolone litery, cyfry i _");
+            throw new InvalidOperationException($"{at}.Schema = '{schema}' – dozwolone litery, cyfry i _");
         if (!Identifier().IsMatch(prefix))
-            throw new InvalidOperationException($"{FileName}: {at}.TablePrefix = '{prefix}' – dozwolone litery, cyfry i _");
+            throw new InvalidOperationException($"{at}.TablePrefix = '{prefix}' – dozwolone litery, cyfry i _");
         var trust = section.TryGetProperty("TrustServerCertificate", out var t) && t.ValueKind == JsonValueKind.True;
         return new SqlSettings(server ?? "", database ?? "", schema, prefix, trust, connectionString);
     }

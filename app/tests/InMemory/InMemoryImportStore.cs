@@ -1,9 +1,10 @@
+using PzlEv.Modules.Import.Data;
 using PzlEv.Shared.Models.Db;
 using PzlEv.Shared.Utils.Data;
 
-namespace PzlEv.Modules.Import.Data;
+namespace PzlEv.Tests.InMemory;
 
-/// <summary>Import w pamięci. Stan zapisywany do pliku na końcu importu (FinishBatch).</summary>
+/// <summary>Magazyn importu w pamięci – do testów (aplikacja: SqlImportStore).</summary>
 public sealed class InMemoryImportStore(InMemoryDatabase db) : IImportStore
 {
     public IReadOnlyList<SourceDefinitionRow> ActiveDefinitions() =>

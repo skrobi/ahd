@@ -134,12 +134,12 @@ Modules/<Moduł>/
   <Moduł>Module.cs                 plik wejścia: klucz, menu, dokumentacja, etapy, dane startowe, utworzenie ekranu
   Views/ ViewModels/               ekran i jego logika prezentacji (WPF)
   Models/                          modele modułu
-  Data/                            magazyn danych modułu: I<Moduł>Store (kontrakt) + InMemory<Moduł>Store; dane startowe
+  Data/                            magazyn danych modułu: I<Moduł>Store (kontrakt) + Sql<Moduł>Store; dane startowe
   Services/ Stages/                przypadki użycia, walidacja, parsery, implementacje etapów (IStage)
 Shared/
   Utils/Ui/                        MVVM, konwertery, okna wyboru pliku, kontrakt modułu i nawigacji (WPF)
   Utils/Config/                    konfiguracja pzl-ev.json
-  Utils/Data/                      warstwa danych w pamięci, czas, użytkownik, dziennik, problemy, blokady operacji, usługi wspólne
+  Utils/Data/                      baza MS SQL (Sql/: połączenie, migracje, dziennik, problemy), czas, użytkownik, blokady operacji, usługi wspólne
   Utils/Files/                     Excel, CSV/TXT, liczby polskie, daty, sygnatura kolumn, SHA-256
   Models/                          modele wspólne, klucze modułów, wynik kontroli (Issue), kontrakt etapu (Pipeline)
   Models/Db/                       wiersze tabel schematu (meta, stg, can, dict) – wspólne jak schemat bazy
@@ -161,21 +161,20 @@ modułu i `Shared/Models`; Excel, File Connectors, SQL Access – `Shared/Utils`
   (`INavigator`, `ModuleKeys`) albo kontrakt w `Shared`,
 - silnik EVM zależy wyłącznie od modeli (rozdz. 5.1).
 
-**Warstwa danych przejściowa.** Do czasu bazy TEST (`tasks/F10`) moduły pracują na danych w pamięci
-(`DataMode=InMemory` w `pzl-ev.json`): `InMemoryDatabase` trzyma tabele o kształcie schematu MS SQL (typy wierszy
-w `Shared/Models/Db`), a stan zapisuje do pliku (`InMemoryStatePath`). Moduł korzysta z danych wyłącznie przez
-swój magazyn `Data/I<Moduł>Store` – kontrakt odpowiadający przyszłym procedurom i widokom; implementacja
-`InMemory<Moduł>Store` zostanie zastąpiona przez `Sql<Moduł>Store` bez zmian w ekranach, serwisach i testach.
-Moduły wymieniają dane przez wspólne tabele (jak przez bazę), nie przez swoje typy.
+**Warstwa danych.** Aplikacja pracuje wyłącznie na bazie MS SQL środowiska (`pzl-ev.json`, rozdz. 8). Moduł korzysta
+z danych przez swój magazyn `Data/I<Moduł>Store` (kontrakt odpowiadający procedurom i widokom) w implementacji
+`Data/Sql<Moduł>Store`; wiersze tabel – `Shared/Models/Db`. Moduły wymieniają dane przez wspólne tabele, nie przez
+swoje typy. Tryb danych w pamięci został usunięty z aplikacji (2026-10-02) – magazyny w pamięci są tylko atrapami
+w testach (`app/tests/InMemory`).
 
 **Testy** (`app/tests`, xUnit, `net10.0`): projekt kompiluje pliki logiki aplikacji – wszystko poza `Views`,
 `ViewModels`, `Shell`, `Shared/Utils/Ui` i plikami `*Module.cs` – więc logika nie może używać typów WPF i testy
-działają także poza Windows. Magazyny mają **testy kontraktu** (klasa abstrakcyjna `…StoreContract`), uruchamiane
-dla wersji w pamięci, a w F10 także dla wersji SQL. Dane wzorcowe z oczekiwanymi sumami – `app/testdata`.
+działają także poza Windows. Testy magazynów i serwisów wykonują te same scenariusze na atrapach w pamięci
+i – gdy ustawiono `PZLEV_TEST_SQL` – na bazie SQL (`TestStores`). Dane wzorcowe z oczekiwanymi sumami – `app/testdata`.
 `build.cmd` uruchamia testy przed publikacją.
 
 **Konwencje:** jeden typ w pliku, nazwa pliku = nazwa typu; sufiksy `…Module`, `…View`, `…ViewModel`,
-`I…Store`, `InMemory…Store`, `…Service`, `…Seed`; kolory i style wyłącznie z `Shared/Views/Templates`; fragment trafia do
+`I…Store`, `Sql…Store`, `…Service`, `…Seed`; kolory i style wyłącznie z `Shared/Views/Templates`; fragment trafia do
 `Shared/Views/Partials`, gdy używa go drugi moduł; log z kontekstem modułu (`Log.ForContext("Module", …)`).
 
 **Kontrakt etapu** (`Shared/Models/Pipeline`): `StageDescriptor` (kod, nazwa, krok, zakres, czy wymaga
@@ -190,7 +189,8 @@ decyzji (P4, P6, Z) albo z wynikiem ERROR.
 2. Klucz w `Shared/Models/ModuleKeys.cs`.
 3. `Modules/<Moduł>/<Moduł>Module.cs` implementujący `IModule`; do czasu implementacji ekran zastępczy
    (`PlaceholderView.Create`).
-4. Dane: `Data/I<Moduł>Store` + `Data/InMemory<Moduł>Store` (tabele w `Shared/Models/Db`), test kontraktu magazynu;
+4. Dane: tabele w nowej migracji `sql/mssql/NNN_*.sql`, `Data/I<Moduł>Store` + `Data/Sql<Moduł>Store` (wiersze w
+   `Shared/Models/Db`), atrapa w `app/tests/InMemory` i testy na obu;
    ekran: `Views/<Moduł>View.xaml`, `ViewModels/<Moduł>ViewModel.cs`.
 5. Jedna linia w `Shell/ModuleCatalog.cs`.
 6. Budowa (`build.cmd`) – reguły zależności i przestrzeni nazw oraz testy muszą przejść.
@@ -221,7 +221,7 @@ decyzji (P4, P6, Z) albo z wynikiem ERROR.
 ```text
 \\serwer\udział\PZL-EV\                 korzeń środowiska (osobny dla TEST i PROD)
 ├── 00_Global\RABIT\Do_importu\         pliki RABIT pobrane ręcznie (powyżej limitu WebDAV)
-├── 00_Global\RABIT\import.lock         blokada importu (tryb w pamięci; w MS SQL – sp_getapplock)
+├── 00_Global\RABIT\import.lock         blokada importu (docelowo sp_getapplock – F10.2)
 └── Projekty\<Projekt>\
     ├── Finanse\<RRRR-MM>\              pliki dla finansów (P4)
     ├── CAM\<RRRR-MM>\Wyslane\          pliki dla CAM (P6, przebieg zamykający)
@@ -239,9 +239,9 @@ decyzji (P4, P6, Z) albo z wynikiem ERROR.
 ## 8. Środowiska i wdrożenia
 
 - **Konfiguracja środowiska:** plik `pzl-ev.json` obok `PZL-EV.exe` – przełącznik `Env` (`TEST` / `PROD`) i sekcja
-  `Environments.<Env>`: `NetworkRoot` (korzeń folderów środowiska, rozdz. 7), `DataMode` (`Sql` albo `InMemory`),
-  `Sql` (serwer, baza, schemat, sygnatura tabel – logowanie kontem AD); brak pliku = wartości domyślne
-  (`app/README.md`). TEST: `pzltestdb.intl.lmco.com`, baza `PZLTEST`, schemat `FINOP`, sygnatura `PZLEV_`.
+  `Environments.<Env>`: `NetworkRoot` (korzeń folderów środowiska, rozdz. 7) i `Sql` (serwer, baza, schemat,
+  sygnatura tabel – logowanie kontem AD). Plik jest wymagany – wzór z opisem ustawień `app/pzl-ev.json` kopiowany
+  obok exe przy budowie; brak pliku albo pola = komunikat przy starcie (`app/README.md`). TEST: `pzltestdb.intl.lmco.com`, baza `PZLTEST`, schemat `FINOP`, sygnatura `PZLEV_`.
 - **TEST** – developer; osobna baza i osobny korzeń folderów.
 - **PROD** – wdraża administrator (IT).
 - Zmiany bazy jako numerowane, idempotentne skrypty migracyjne w repozytorium (`sql/mssql/NNN_*.sql`, zmienne

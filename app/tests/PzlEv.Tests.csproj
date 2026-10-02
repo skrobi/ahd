@@ -31,6 +31,8 @@
   <ItemGroup>
     <!-- Dane wzorcowe (app/testdata) w katalogu wyjściowym testów. -->
     <None Include="..\testdata\**\*" LinkBase="testdata" CopyToOutputDirectory="PreserveNewest" />
+    <!-- Wzór konfiguracji aplikacji – test poprawności. -->
+    <None Include="..\pzl-ev.json" Link="pzl-ev.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>

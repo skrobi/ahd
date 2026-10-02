@@ -1,0 +1,39 @@
+// PZL-EV – konfiguracja aplikacji. Plik leży obok PZL-EV.exe (build.cmd kopiuje go do app\publish przy pierwszej
+// budowie; zmiany zrobione w app\publish nie są nadpisywane, dopóki ten wzór się nie zmieni).
+// Bez tego pliku aplikacja nie startuje. Opis ustawień: app\README.md, docs\architektura.md rozdz. 8.
+{
+  // Środowisko: TEST albo PROD – wybiera sekcję z "Environments".
+  "Env": "TEST",
+
+  "Environments": {
+    "TEST": {
+      // Korzeń folderów środowiska (00_Global\RABIT\Do_importu, blokada importu, foldery projektów).
+      // Docelowo wspólny folder sieciowy, np. "\\\\serwer\\udzial\\PZL-EV-TEST" (w JSON podwójne \\).
+      // Zmienne środowiskowe, np. %LOCALAPPDATA%, są rozwijane.
+      "NetworkRoot": "%LOCALAPPDATA%\\PZL-EV\\TEST-root",
+
+      // Baza MS SQL – logowanie kontem AD użytkownika (bez hasła w pliku).
+      "Sql": {
+        "Server": "pzltestdb.intl.lmco.com",
+        "Database": "PZLTEST",
+        // Schemat i sygnatura tabel: [FINOP].[PZLEV_META_ImportBatch] itd. – tylko litery, cyfry i _.
+        "Schema": "FINOP",
+        "TablePrefix": "PZLEV_",
+        // true tylko gdy połączenie zgłasza niezaufany certyfikat serwera.
+        "TrustServerCertificate": false
+      }
+    },
+
+    "PROD": {
+      // Do uzupełnienia przy uruchomieniu PROD (osobny folder i baza).
+      "NetworkRoot": "\\\\serwer\\udzial\\PZL-EV",
+      "Sql": {
+        "Server": "DO-UZUPELNIENIA",
+        "Database": "DO-UZUPELNIENIA",
+        "Schema": "FINOP",
+        "TablePrefix": "PZLEV_",
+        "TrustServerCertificate": false
+      }
+    }
+  }
+}

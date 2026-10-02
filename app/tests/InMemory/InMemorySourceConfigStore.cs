@@ -1,10 +1,11 @@
+using PzlEv.Modules.Administration.Data;
 using PzlEv.Modules.Administration.Models;
 using PzlEv.Shared.Models.Db;
 using PzlEv.Shared.Utils.Data;
 
-namespace PzlEv.Modules.Administration.Data;
+namespace PzlEv.Tests.InMemory;
 
-/// <summary>Konfiguracja importu w pamięci (tabele meta.SourceDefinition, meta.SourceLocation).</summary>
+/// <summary>Konfiguracja importu w pamięci – do testów (aplikacja: SqlSourceConfigStore).</summary>
 public sealed class InMemorySourceConfigStore(InMemoryDatabase db, IClock clock, ICurrentUser user) : ISourceConfigStore
 {
     public IReadOnlyList<SourceDefinitionRow> Definitions() =>

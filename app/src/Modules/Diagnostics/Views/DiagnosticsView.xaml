@@ -30,7 +30,7 @@
                     <TextBlock Grid.Row="5" Text="Środowisko" Foreground="{StaticResource Muted}" />
                     <TextBlock Grid.Row="5" Grid.Column="1" Text="{Binding Environment}" Style="{StaticResource MonoText}" />
                     <TextBlock Grid.Row="6" Text="Dane" Foreground="{StaticResource Muted}" />
-                    <TextBlock Grid.Row="6" Grid.Column="1" Text="{Binding DataMode}" Style="{StaticResource MonoText}" TextWrapping="Wrap" />
+                    <TextBlock Grid.Row="6" Grid.Column="1" Text="{Binding Database}" Style="{StaticResource MonoText}" TextWrapping="Wrap" />
                     <TextBlock Grid.Row="7" Text="Korzeń folderów" Foreground="{StaticResource Muted}" />
                     <TextBlock Grid.Row="7" Grid.Column="1" Text="{Binding NetworkRoot}" Style="{StaticResource MonoText}" TextWrapping="Wrap" />
                     <TextBlock Grid.Row="8" Text="Folder Do_importu" Foreground="{StaticResource Muted}" />

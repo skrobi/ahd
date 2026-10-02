@@ -27,12 +27,10 @@ public sealed class MasterDataModule : IModule
         new("G3", "Utrzymanie słowników", "Faza globalna", StageScope.Global, CanAutoRun: false),
     ];
 
-    // Magazyn danych: w trybie w pamięci InMemoryDictionaryStore; po F10 – magazyn SQL wybierany tutaj.
+    // Magazyn danych: baza MS SQL środowiska (Sql*Store).
     public void Initialize(AppServices services)
     {
-        _store = services.Sql is { } sql
-            ? new SqlDictionaryStore(sql, services.Clock, services.User)
-            : new InMemoryDictionaryStore(services.Database, services.Clock, services.User);
+        _store = new SqlDictionaryStore(services.Sql, services.Clock, services.User);
         var added = MasterDataSeed.EnsureSeeded(_store, services.Clock.Now.Year);
         if (added > 0)
             services.Journal.Add("Słowniki", $"Dane startowe słowników globalnych: {added} wierszy (kalendarz okresów, Cost Category)");

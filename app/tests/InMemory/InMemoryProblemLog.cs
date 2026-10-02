@@ -1,7 +1,8 @@
+using PzlEv.Shared.Utils.Data;
 using PzlEv.Shared.Models;
 using PzlEv.Shared.Models.Db;
 
-namespace PzlEv.Shared.Utils.Data;
+namespace PzlEv.Tests.InMemory;
 
 public sealed class InMemoryProblemLog(InMemoryDatabase db, IClock clock) : IProblemLog
 {

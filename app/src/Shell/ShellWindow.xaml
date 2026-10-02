@@ -39,7 +39,7 @@
                 <DockPanel>
                     <StackPanel DockPanel.Dock="Bottom" Margin="12,8">
                         <TextBlock Text="{Binding Footer}" FontSize="11" Foreground="{StaticResource Muted}" />
-                        <TextBlock Text="{Binding DataModeText}" FontSize="11" Foreground="{StaticResource Muted}" />
+                        <TextBlock Text="{Binding DatabaseText}" FontSize="11" Foreground="{StaticResource Muted}" />
                     </StackPanel>
                     <ItemsControl ItemsSource="{Binding Nav}">
                         <ItemsControl.ItemTemplate>

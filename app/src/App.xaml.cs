@@ -41,15 +41,14 @@ public partial class App : Application
         {
             // Konfiguracja (pzl-ev.json) → usługi wspólne → moduły (Shell/ModuleCatalog.cs) → powłoka.
             var config = AppConfigLoader.Load(AppContext.BaseDirectory);
-            Log.Information("Środowisko {Environment}, dane {DataMode}, korzeń {NetworkRoot}", config.Environment, config.DataMode, config.NetworkRoot);
+            Log.Information("Środowisko {Environment}, baza {Database}, korzeń {NetworkRoot}", config.Environment, config.Sql.Describe, config.NetworkRoot);
             _services = AppServices.Create(config, version);
-            if (_services.Sql is { } sql && !EnsureSchema(sql))
+            if (!EnsureSchema(_services.Sql))
             {
                 Shutdown(1);
                 return;
             }
             var modules = ModuleCatalog.Create(_services);
-            _services.Database.Commit();
             var window = new ShellWindow { DataContext = new ShellViewModel(modules, _services) };
             window.Show();
         }
@@ -99,14 +98,6 @@ public partial class App : Application
 
     protected override void OnExit(ExitEventArgs e)
     {
-        try
-        {
-            _services?.Database.Commit();
-        }
-        catch (IOException ex)
-        {
-            Log.Error(ex, "Nie zapisano stanu danych w pamięci");
-        }
         Log.Information("PZL-EV stop.");
         Log.CloseAndFlush();
         base.OnExit(e);

@@ -5,41 +5,25 @@ i nadal służy do sprawdzenia uruchomienia jednego `PZL-EV.exe` z dysku sieciow
 
 Stan: **Słowniki** (słowniki globalne – F1), **Import RABIT** i **Administracja** (import plików, definicje
 źródeł, lokalizacje – F2), **Pulpit** (dane przykładowe) i **Diagnostyka**. Pozostałe pozycje menu pokazują ekran
-zastępczy modułu (dokumentacja i etapy, które moduł przejmie). Do czasu bazy TEST dane są **w pamięci**
-(tryb przejściowy – sekcja „Konfiguracja i dane”).
+zastępczy modułu (dokumentacja i etapy, które moduł przejmie). Dane są w bazie MS SQL środowiska
+(sekcja „Konfiguracja i dane”).
 
 Kod ma strukturę modułową (`docs/architektura.md`, rozdz. 5.3).
 
 ## Konfiguracja i dane
 
-Plik `pzl-ev.json` obok `PZL-EV.exe` (opcjonalny – brak pliku = wartości domyślne). `Env` wybiera środowisko
-(`TEST` / `PROD`), a sekcja `Environments.<Env>` – jego ustawienia:
+**Plik `pzl-ev.json` jest wymagany** – leży obok `PZL-EV.exe`. Wzór z opisem każdego ustawienia to `app\pzl-ev.json`;
+`build.cmd` kopiuje go do `app\publish` (zmiany zrobione w `app\publish` nie są nadpisywane, dopóki wzór się nie
+zmieni). Brak pliku albo błąd w nim = komunikat przy starcie z nazwą pola – bez cichych wartości domyślnych.
+`Env` wybiera środowisko (`TEST` / `PROD`), a sekcja `Environments.<Env>` – jego ustawienia:
 
-```json
-{
-  "Env": "TEST",
-  "Environments": {
-    "TEST": {
-      "NetworkRoot": "\\\\serwer\\udzial\\PZL-EV-TEST",
-      "DataMode": "Sql",
-      "Sql": { "Server": "pzltestdb.intl.lmco.com", "Database": "PZLTEST", "Schema": "FINOP", "TablePrefix": "PZLEV_" }
-    },
-    "PROD": { "...": "przy uruchomieniu PROD" }
-  }
-}
-```
-
-| Ustawienie | Domyślnie | Znaczenie |
-|---|---|---|
-| `Env` | `TEST` | wybór sekcji `Environments`; nazwa środowiska w nagłówku |
-| `NetworkRoot` | `%LOCALAPPDATA%\PZL-EV\TEST-root` | korzeń folderów środowiska (`docs/architektura.md`, rozdz. 7); import czyta `00_Global\RABIT\Do_importu` |
-| `DataMode` | `InMemory` | `Sql` – baza MS SQL środowiska; `InMemory` – dane w pamięci (tryb zapasowy, lokalny dla stanowiska) |
-| `Sql.Server`, `Sql.Database` | – | serwer i baza; logowanie kontem AD użytkownika (bez hasła w pliku) |
-| `Sql.Schema`, `Sql.TablePrefix` | –, `PZLEV_` | schemat i sygnatura tabel: `[FINOP].[PZLEV_META_ImportBatch]` (`docs/model-danych.md`, rozdz. 2); tylko litery, cyfry i `_` |
-| `Sql.TrustServerCertificate` | `false` | `true` tylko gdy certyfikat serwera nie jest zaufany na stanowisku |
-| `InMemoryStatePath` | `%LOCALAPPDATA%\PZL-EV\inmemory-state.json` | plik stanu trybu `InMemory` |
-
-Wcześniejszy układ płaski (`Environment`, `NetworkRoot`, `DataMode`, `InMemoryStatePath`) nadal działa.
+| Ustawienie | Znaczenie |
+|---|---|
+| `Env` | `TEST` albo `PROD`; nazwa środowiska w nagłówku |
+| `NetworkRoot` | korzeń folderów środowiska (`docs/architektura.md`, rozdz. 7): `00_Global\RABIT\Do_importu`, blokada importu; docelowo wspólny folder sieciowy; zmienne (np. `%LOCALAPPDATA%`) są rozwijane |
+| `Sql.Server`, `Sql.Database` | serwer i baza (TEST: `pzltestdb.intl.lmco.com`, `PZLTEST`); logowanie kontem AD użytkownika, bez hasła w pliku |
+| `Sql.Schema`, `Sql.TablePrefix` | schemat i sygnatura tabel: `[FINOP].[PZLEV_META_ImportBatch]` (`docs/model-danych.md`, rozdz. 2); tylko litery, cyfry i `_`; sygnatura domyślnie `PZLEV_` |
+| `Sql.TrustServerCertificate` | `true` tylko gdy połączenie zgłasza niezaufany certyfikat serwera |
 
 **Baza danych:** przy starcie aplikacja sprawdza wersję schematu (`META_SchemaVersion`). Gdy brakuje tabel albo
 migracji, pyta o zgodę i wykonuje skrypty `sql/mssql/NNN_*.sql` (wbudowane w exe) – konto AD musi mieć prawo
@@ -48,8 +32,7 @@ tworzenia tabel w schemacie. Te same skrypty można uruchomić ręcznie:
 Przy pierwszym starcie na pustej bazie moduły zapisują dane startowe (kalendarz, Cost Category, definicje
 `ACTUALS_*`, lokalizacja E456659).
 
-Ustawienia, baza i ścieżki widać na ekranie **Diagnostyka** i w stopce okna. Tryb w pamięci jest lokalny dla
-stanowiska (bez współdzielenia danych) i przeznaczony do testów na mniejszych plikach.
+Ustawienia, baza i ścieżki widać na ekranie **Diagnostyka** i w stopce okna.
 
 **Ręczny test F1 / F2:**
 
@@ -222,7 +205,7 @@ app/
     │   └── Mapping/ Runs/ …     pozostałe moduły: plik wejścia + etapy, ekran zastępczy
     └── Shared/
         ├── Utils/Ui/            MVVM, konwertery, okna wyboru pliku, kontrakt modułu (WPF)
-        ├── Utils/Config|Data|Files/  konfiguracja, dane w pamięci, dziennik, problemy, Excel/CSV
+        ├── Utils/Config|Data|Files/  konfiguracja, baza MS SQL (Data/Sql), dziennik, problemy, Excel/CSV
         ├── Models/              modele wspólne; Db/ – tabele schematu; Sources/ – układy źródeł; Pipeline/ – kontrakt etapu
         └── Views/
             ├── Templates/       Theme.xaml – paleta z prototypu, style, tabele, układ strony

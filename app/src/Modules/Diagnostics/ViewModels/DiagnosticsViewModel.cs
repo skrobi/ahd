@@ -14,7 +14,7 @@ public sealed class DiagnosticsViewModel
     public DiagnosticsViewModel(AppServices services)
     {
         Environment = services.Config.Environment;
-        DataMode = services.Sql is null ? $"{services.Config.DataMode} (stan: {services.Config.InMemoryStatePath})" : $"{services.Config.DataMode} – {services.DataDescription}";
+        Database = services.DataDescription;
         NetworkRoot = services.Config.NetworkRoot;
         ImportFolder = services.Config.ImportFolder;
         AppVersion = services.AppVersion;
@@ -36,7 +36,7 @@ public sealed class DiagnosticsViewModel
     public IReadOnlyList<PackageInfo> Packages { get; }
 
     public string Environment { get; }
-    public string DataMode { get; }
+    public string Database { get; }
     public string NetworkRoot { get; }
     public string ImportFolder { get; }
     public string AppVersion { get; }

@@ -156,7 +156,7 @@ istniejących wierszy w tych źródłach nie jest wykrywana (`docs/architektura.
 | `meta.SourceDefinition` | definicja źródła (`docs/zrodla-danych.md`, rozdz. 2) |
 | `stg.RawRow` | surowe wiersze: wersja pliku, numer wiersza, wartości |
 | `can.<Źródło>` | dane kanoniczne źródła: wersja pliku, wersja parsera, kolumny typowane; dla kosztów rzeczywistych – `can.Actuals` (wspólna dla źródeł `ACTUALS_*`, odróżnianych wersją pliku) |
-| `dict.*` | słowniki (`docs/slowniki.md`) i korekty mapowania (`docs/mapowanie-ces-p1s.md`, rozdz. 8). Wiersz słownika ma identyfikator wiersza logicznego i kolejne wersje (kto i kiedy zapisał, kto i kiedy zastąpił); w MS SQL – osobna tabela z typowanymi kolumnami na słownik (rozdz. 5.1), w warstwie danych w pamięci – jedna tabela `dict.Entry` |
+| `dict.*` | słowniki (`docs/slowniki.md`) i korekty mapowania (`docs/mapowanie-ces-p1s.md`, rozdz. 8). Wiersz słownika ma identyfikator wiersza logicznego i kolejne wersje (kto i kiedy zapisał, kto i kiedy zastąpił); w MS SQL – osobna tabela z typowanymi kolumnami na słownik (rozdz. 5.1) |
 | `meta.Projekt` | kod, nazwa, typ (SAC / CAS / wewnętrzny) |
 | `meta.PerformanceObjective` | węzły nakładki kontraktu projektu: element WBS CES, poziom, rodzic, wirtualny węzeł, atrybuty, historia (`docs/performance-objectives.md`) – wyznacza zakres projektu |
 | `meta.Przebieg` | projekt, tydzień, okres, czy zamykający, znacznik stanu, status, zamrożenie |
