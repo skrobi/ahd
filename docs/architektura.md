@@ -139,7 +139,7 @@ Modules/<Moduł>/
 Shared/
   Utils/Ui/                        MVVM, konwertery, okna wyboru pliku, kontrakt modułu i nawigacji (WPF)
   Utils/Config/                    konfiguracja pzl-ev.json
-  Utils/Data/                      warstwa danych w pamięci, czas, użytkownik, dziennik, problemy, usługi wspólne
+  Utils/Data/                      warstwa danych w pamięci, czas, użytkownik, dziennik, problemy, blokady operacji, usługi wspólne
   Utils/Files/                     Excel, CSV/TXT, liczby polskie, daty, sygnatura kolumn, SHA-256
   Models/                          modele wspólne, klucze modułów, wynik kontroli (Issue), kontrakt etapu (Pipeline)
   Models/Db/                       wiersze tabel schematu (meta, stg, can, dict) – wspólne jak schemat bazy
@@ -221,6 +221,7 @@ decyzji (P4, P6, Z) albo z wynikiem ERROR.
 ```text
 \\serwer\udział\PZL-EV\                 korzeń środowiska (osobny dla TEST i PROD)
 ├── 00_Global\RABIT\Do_importu\         pliki RABIT pobrane ręcznie (powyżej limitu WebDAV)
+├── 00_Global\RABIT\import.lock         blokada importu (tryb w pamięci; w MS SQL – sp_getapplock)
 └── Projekty\<Projekt>\
     ├── Finanse\<RRRR-MM>\              pliki dla finansów (P4)
     ├── CAM\<RRRR-MM>\Wyslane\          pliki dla CAM (P6, przebieg zamykający)

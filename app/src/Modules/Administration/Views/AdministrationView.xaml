@@ -44,11 +44,8 @@
                 </DataGrid>
 
                 <TextBlock Text="{Binding DefinitionFormTitle}" FontWeight="SemiBold" Margin="0,14,0,4" />
-                <Grid>
+                <Grid MaxWidth="720" HorizontalAlignment="Left">
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="150" />
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="24" />
                         <ColumnDefinition Width="150" />
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
@@ -68,23 +65,17 @@
                     <TextBlock Grid.Row="4" Text="Aktywna" Style="{StaticResource Label}" />
                     <CheckBox Grid.Row="4" Grid.Column="1" VerticalAlignment="Center" IsChecked="{Binding DefActive}" />
 
-                    <TextBlock Grid.Row="0" Grid.Column="3" Text="Ziarno" Style="{StaticResource Label}" />
-                    <TextBox Grid.Row="0" Grid.Column="4" Style="{StaticResource Field}" Text="{Binding DefGrain, UpdateSourceTrigger=PropertyChanged}" />
-                    <TextBlock Grid.Row="1" Grid.Column="3" Text="Kolumny klucza" Style="{StaticResource Label}" />
-                    <TextBox Grid.Row="1" Grid.Column="4" Style="{StaticResource Field}" Text="{Binding DefKeyColumns, UpdateSourceTrigger=PropertyChanged}"
-                             ToolTip="Nazwy kolumn rozdzielone przecinkiem; puste = bez kontroli duplikatów" />
-                    <TextBlock Grid.Row="2" Grid.Column="3" Text="Znaczenie okresu" Style="{StaticResource Label}" />
-                    <TextBox Grid.Row="2" Grid.Column="4" Style="{StaticResource Field}" Text="{Binding DefPeriodMeaning, UpdateSourceTrigger=PropertyChanged}" />
-                    <TextBlock Grid.Row="3" Grid.Column="3" Text="Waluta i jednostki" Style="{StaticResource Label}" />
-                    <TextBox Grid.Row="3" Grid.Column="4" Style="{StaticResource Field}" Text="{Binding DefCurrency, UpdateSourceTrigger=PropertyChanged}" />
-                    <TextBlock Grid.Row="4" Grid.Column="3" Text="Format liczb" Style="{StaticResource Label}" />
-                    <TextBox Grid.Row="4" Grid.Column="4" Style="{StaticResource Field}" Text="{Binding DefNumberFormat, UpdateSourceTrigger=PropertyChanged}" />
                 </Grid>
                 <TextBlock Text="Oczekiwane kolumny (jedna w wierszu, w kolejności z pliku – wyznaczają sygnaturę układu)" Style="{StaticResource Label}" />
                 <TextBox Style="{StaticResource Field}" Text="{Binding DefColumns, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True"
                          Height="120" VerticalScrollBarVisibility="Auto" FontFamily="{StaticResource FMono}" />
-                <Button Content="Zapisz definicję" Style="{StaticResource BtnPrimary}" HorizontalAlignment="Left" Margin="0,8,0,0"
-                        Command="{Binding SaveDefinition}" />
+                <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                    <Button Content="Zapisz definicję" Style="{StaticResource BtnPrimary}" Margin="0,0,8,0" Command="{Binding SaveDefinition}" />
+                    <Button Content="Usuń definicję" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding DeleteDefinition}"
+                            ToolTip="Usuwa wybraną definicję – historia i zaimportowane dane zostają" />
+                    <Button Content="Potwierdź usunięcie" Style="{StaticResource Btn}" Command="{Binding ConfirmDeleteDefinition}"
+                            Visibility="{Binding DeletePending, Converter={StaticResource BoolToVisibility}}" />
+                </StackPanel>
 
                 <TextBlock Text="Historia definicji" FontWeight="SemiBold" Margin="0,14,0,4" />
                 <DataGrid Style="{StaticResource DataTable}" ItemsSource="{Binding DefinitionHistory}" IsReadOnly="True" MaxHeight="160">
@@ -92,6 +83,7 @@
                         <DataGridTextColumn Header="Wersja" Binding="{Binding Version}" />
                         <DataGridTextColumn Header="Zapisano" Binding="{Binding RecordedAt, StringFormat=yyyy-MM-dd HH:mm}" />
                         <DataGridTextColumn Header="Kto" Binding="{Binding RecordedBy}" />
+                        <DataGridTextColumn Header="Zamknięta" Binding="{Binding SupersededAt, StringFormat=yyyy-MM-dd HH:mm}" />
                         <DataGridTextColumn Header="Prefiks" Binding="{Binding Prefix}" />
                         <DataGridTextColumn Header="Sygnatura" Binding="{Binding Signature}" />
                         <DataGridCheckBoxColumn Header="Aktywna" Binding="{Binding Active, Mode=OneWay}" />

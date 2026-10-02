@@ -16,8 +16,19 @@ public sealed class InMemoryImportStore(InMemoryDatabase db) : IImportStore
         db.Write(() =>
         {
             var id = db.NextId(DbTables.ImportBatch);
-            db.Table<ImportBatchRow>(DbTables.ImportBatch).Add(new ImportBatchRow(id, at, null, user, machine, appVersion, 0, 0, 0, 0, 0, 0, "w toku"));
+            db.Table<ImportBatchRow>(DbTables.ImportBatch).Add(new ImportBatchRow(id, at, null, user, machine, appVersion, 0, 0, 0, 0, 0, 0, ImportBatchStatus.Running));
             return id;
+        });
+
+    public void AbandonRunning(DateTimeOffset at) =>
+        db.Write(() =>
+        {
+            var batches = db.Table<ImportBatchRow>(DbTables.ImportBatch);
+            for (var i = 0; i < batches.Count; i++)
+            {
+                if (batches[i].Status == ImportBatchStatus.Running)
+                    batches[i] = batches[i] with { FinishedAt = at, Status = ImportBatchStatus.Abandoned };
+            }
         });
 
     public SourceFileSeenRow? LastSettled(string location, string fileName) =>

@@ -18,8 +18,7 @@ public class SourceConfigServiceTests
     }
 
     private static DefinitionInput Definition(string code, string prefix, long? id = null, int? version = null, string parser = SourceParsers.Actuals) =>
-        new(id, version, code, prefix, "test", parser == SourceParsers.Actuals ? SourceParsers.ActualsColumns : ["A", "B"],
-            "", [], "", "", "", parser, Active: true);
+        new(id, version, code, prefix, "test", parser == SourceParsers.Actuals ? SourceParsers.ActualsColumns : ["A", "B"], parser, Active: true);
 
     [Fact]
     public void Seed_creates_actuals_definitions_and_inactive_rabit_location()
@@ -97,5 +96,25 @@ public class SourceConfigServiceTests
         var result = _service.SaveLocation(new LocationInput(null, null, " ", "", true));
         Assert.False(result.Success);
         Assert.Equal(2, result.Issues.Count);
+    }
+
+    [Fact]
+    public void Deleted_definition_disappears_keeps_history_and_frees_prefix()
+    {
+        Assert.True(_service.SaveDefinition(Definition("ACTUALS_PAF", "ACTUALS_PAF")).Success);
+        var v1 = _service.Definitions().Single();
+
+        var stale = _service.DeleteDefinition(v1.DefinitionId, 7);
+        var deleted = _service.DeleteDefinition(v1.DefinitionId, v1.Version);
+
+        Assert.False(stale.Success);
+        Assert.Contains("odśwież", stale.Message);
+        Assert.True(deleted.Success);
+        Assert.Empty(_service.Definitions());
+        var history = Assert.Single(_service.DefinitionHistory(v1.DefinitionId));
+        Assert.Equal(_services.User.Account, history.SupersededBy);
+        Assert.Contains(_services.Journal.Recent(5), e => e.Message == "Definicja źródła ACTUALS_PAF (prefiks ACTUALS_PAF) usunięta");
+        Assert.True(_service.SaveDefinition(Definition("ACTUALS_PAF", "ACTUALS_PAF")).Success);   // kod i prefiks wolne
+        Assert.False(_service.DeleteDefinition(v1.DefinitionId, v1.Version).Success);              // już usunięta
     }
 }

@@ -8,10 +8,5 @@ public sealed record DefinitionInput(
     string Prefix,
     string ReportType,
     IReadOnlyList<string> Columns,
-    string Grain,
-    IReadOnlyList<string> KeyColumns,
-    string PeriodMeaning,
-    string Currency,
-    string NumberFormat,
     string Parser,
     bool Active);

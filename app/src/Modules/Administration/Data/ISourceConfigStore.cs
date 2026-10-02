@@ -16,6 +16,9 @@ public interface ISourceConfigStore
     /// <summary>Zapisuje definicję (signature – sygnatura kolumn); null = sukces, tekst = konflikt.</summary>
     string? SaveDefinition(DefinitionInput input, string signature, int parserVersion);
 
+    /// <summary>Usuwa definicję – zamyka bieżącą wersję bez następnej (historia zostaje); null = sukces, tekst = konflikt.</summary>
+    string? DeleteDefinition(long definitionId, int version);
+
     IReadOnlyList<SourceLocationRow> Locations();
 
     string? SaveLocation(LocationInput input);

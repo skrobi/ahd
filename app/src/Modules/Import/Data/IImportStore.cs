@@ -14,6 +14,9 @@ public interface IImportStore
 
     long BeginBatch(DateTimeOffset at, string user, string machine, string appVersion);
 
+    /// <summary>Importy „w toku” bez zakończenia (np. po awarii aplikacji) → „przerwany”; wywoływane po założeniu blokady.</summary>
+    void AbandonRunning(DateTimeOffset at);
+
     /// <summary>Ostatnia rozstrzygnięta decyzja dla pliku (lokalizacja + nazwa) – do pominięcia po metadanych.</summary>
     SourceFileSeenRow? LastSettled(string location, string fileName);
 

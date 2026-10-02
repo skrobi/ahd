@@ -33,7 +33,6 @@ public sealed partial class SourceConfigService(ISourceConfigStore store, IJourn
             Code = input.Code.Trim().ToUpperInvariant(),
             Prefix = input.Prefix.Trim().TrimEnd('*').Trim(),
             Columns = input.Columns.Select(c => c.Trim()).Where(c => c.Length > 0).ToList(),
-            KeyColumns = input.KeyColumns.Select(c => c.Trim()).Where(c => c.Length > 0).ToList(),
         };
         var issues = ValidateDefinition(input);
         if (issues.Count > 0)
@@ -47,6 +46,20 @@ public sealed partial class SourceConfigService(ISourceConfigStore store, IJourn
 
         journal.Add(Area, $"Definicja źródła {input.Code} (prefiks {input.Prefix}) {(input.DefinitionId is null ? "dodana" : "zmieniona")}{(input.Active ? "" : " – nieaktywna")}");
         return new ConfigSaveResult(true, [], $"Zapisano definicję {input.Code}.");
+    }
+
+    /// <summary>
+    /// Usuwa definicję: bieżąca wersja zostaje zamknięta (historia i zaimportowane dane zostają); pliki o tym
+    /// prefiksie przy kolejnym imporcie są nierozpoznane, prefiks i kod można użyć ponownie.
+    /// </summary>
+    public ConfigSaveResult DeleteDefinition(long definitionId, int version)
+    {
+        var definition = store.Definitions().FirstOrDefault(d => d.DefinitionId == definitionId);
+        var conflict = store.DeleteDefinition(definitionId, version);
+        if (conflict is not null)
+            return new ConfigSaveResult(false, [], conflict);
+        journal.Add(Area, $"Definicja źródła {definition?.Code} (prefiks {definition?.Prefix}) usunięta");
+        return new ConfigSaveResult(true, [], $"Usunięto definicję {definition?.Code}.");
     }
 
     public ConfigSaveResult SaveLocation(LocationInput input)
@@ -96,9 +109,6 @@ public sealed partial class SourceConfigService(ISourceConfigStore store, IJourn
             if (missing.Count > 0)
                 issues.Add(Issue.Error($"Parser {SourceParsers.Actuals} wymaga kolumn: {string.Join(", ", missing)}", at));
         }
-        var unknownKeys = input.KeyColumns.Where(k => !input.Columns.Contains(k, StringComparer.OrdinalIgnoreCase)).ToList();
-        if (unknownKeys.Count > 0)
-            issues.Add(Issue.Error($"Kolumny klucza spoza układu: {string.Join(", ", unknownKeys)}", at));
         return issues;
     }
 

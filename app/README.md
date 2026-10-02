@@ -44,20 +44,15 @@ wydłużają zapis stanu.
    ta sama treść pod inną nazwą – „duplikat”; plik o nieznanym prefiksie – „nierozpoznany”.
 3. **Administracja** – definicje `ACTUALS_PAF`, `ACTUALS_CES`; lokalizacja RABIT E456659 jest nieaktywna – włącz ją
    na stanowisku z dostępem do SharePoint (WebDAV) i uruchom import.
-4. **Import nie widzi plików** – na ekranie Import **Sprawdź źródła** (nic nie importuje): dla każdej lokalizacji
-   ścieżka zapisana i faktycznie czytana (WebDAV), dostęp albo pełny błąd, liczba plików, podfoldery (import czyta
-   tylko główny folder lokalizacji), a dla każdego pliku – jak zostałby rozpoznany. To samo, wraz z decyzją dla
-   każdego pliku importu i pełną treścią wyjątków, trafia do `logs\pzl-ev-RRRRMMDD.log` obok `.exe`.
-5. **Logowanie do SharePoint (brama F5)** – **Zaloguj do SharePoint** na ekranie Import otwiera okno logowania jak
-   w Office (MS-OFBA); po zalogowaniu aplikacja od razu pokazuje pliki pasujące do definicji z datami modyfikacji
-   (**Pokaż wszystkie pliki** – także nierozpoznane). Gdy import nie dotrze do lokalizacji SharePoint – przycisk
-   **Zaloguj do SharePoint i ponów import**.
-6. **Lokalizacja SharePoint niedostępna** – na ekranie Import rozwiń **Test dostępu do SharePoint** i **Uruchom test**
-   (jak `test_dostepu_rabit.py` w narzędziu w Pythonie). Sprawdza drogi A–H: A `owssvr.dll`, B OLEDB (Excel),
-   C WebDAV `\\…\DavWWWRoot` (Eksplorator), D pobranie pliku, E WebDAV przez HTTPS z aplikacji (bez usługi
-   WebClient), F REST API, G `Lists.asmx`, H mapowanie (`net use`), I logowanie jak Office (MS-OFBA), oraz środowisko: konto, strefę zabezpieczeń
-   adresu, proxy, stan usługi WebClient, `AuthForwardServerList`. Raport bez zawartości plików:
-   `logs\test-dostepu-rabit-*.txt`.
+4. **Import z SharePoint (brama F5)** – **Importuj**: okno logowania do SharePoint jak w Office (przy ważnej sesji
+   zamyka się samo) → lista plików pasujących do definicji z datami, „zostanie zaimportowany” → import, status
+   każdego pliku zmienia się na bieżąco; w historii od razu wpis „w toku”. Druga osoba w tym czasie widzi „Trwa
+   import: kto, od kiedy” i nie uruchomi importu. **Sprawdź źródła** – to samo bez importu (**Pokaż wszystkie
+   pliki** – także nierozpoznane). Import zapisuje dane w bazie, nie kopiuje plików do `Do_importu`.
+5. **Import nie widzi plików** – **Sprawdź źródła** pokazuje dla każdej lokalizacji czytaną ścieżkę (WebDAV), dostęp
+   albo pełny błąd, liczbę plików i podfoldery (import czyta tylko główny folder lokalizacji). Szczegóły, decyzja dla
+   każdego pliku importu i pełna treść wyjątków – `logs\pzl-ev-RRRRMMDD.log` obok `.exe`.
+6. **Administracja** – definicję źródła można usunąć (**Usuń definicję** → **Potwierdź usunięcie**); historia zostaje.
 
 ## Test stosu – co aplikacja sprawdza
 

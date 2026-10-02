@@ -20,14 +20,7 @@ public static class SourceConfigSeed
             foreach (var (code, description) in new[] { ("ACTUALS_PAF", "Koszty rzeczywiste CES – PAF"), ("ACTUALS_CES", "Koszty rzeczywiste CES") })
             {
                 var result = service.SaveDefinition(new DefinitionInput(
-                    null, null, code, code, description, SourceParsers.ActualsColumns,
-                    Grain: "pozycja kosztowa elementu WBS i elementu kosztowego w okresie",
-                    KeyColumns: [], // klucz ACTUALS_* do ustalenia (O27) – bez kontroli duplikatów
-                    PeriodMeaning: "koszt okresu – kolumny Fiscal Year i Period",
-                    Currency: "Value TranCurr – waluta transakcji; Value in Obj. Crcy – PLN; Val.in rep.cur. – USD",
-                    NumberFormat: "polski (spacja tysięcy, przecinek dziesiętny) albo liczba z Excela",
-                    Parser: SourceParsers.Actuals,
-                    Active: true));
+                    null, null, code, code, description, SourceParsers.ActualsColumns, SourceParsers.Actuals, Active: true));
                 if (result.Success)
                     added++;
             }

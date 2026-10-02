@@ -34,12 +34,27 @@ public sealed class InMemorySourceConfigStore(InMemoryDatabase db, IClock clock,
                 db.NextId(DbTables.SourceDefinition),
                 existing?.DefinitionId ?? db.NextId(DbTables.SourceDefinition + ".DefinitionId"),
                 (existing?.Version ?? 0) + 1,
-                input.Code, input.Prefix, input.ReportType, input.Columns.ToList(), signature, input.Grain, input.KeyColumns.ToList(),
-                input.PeriodMeaning, input.Currency, input.NumberFormat, input.Parser, parserVersion, input.Active,
+                input.Code, input.Prefix, input.ReportType, input.Columns.ToList(), signature, input.Parser, parserVersion, input.Active,
                 now, user.Account, null, null);
             if (existing is not null)
                 rows[rows.IndexOf(existing)] = existing with { SupersededAt = now, SupersededBy = user.Account };
             rows.Add(row);
+            return null;
+        });
+        if (conflict is null)
+            db.Commit();
+        return conflict;
+    }
+
+    public string? DeleteDefinition(long definitionId, int version)
+    {
+        var conflict = db.Write(() =>
+        {
+            var rows = db.Table<SourceDefinitionRow>(DbTables.SourceDefinition);
+            var existing = rows.FirstOrDefault(d => d.DefinitionId == definitionId && d.IsCurrent);
+            if (existing is null || existing.Version != version)
+                return "Definicję zmieniono albo usunięto w międzyczasie – odśwież dane.";
+            rows[rows.IndexOf(existing)] = existing with { SupersededAt = clock.Now, SupersededBy = user.Account };
             return null;
         });
         if (conflict is null)
