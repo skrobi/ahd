@@ -1,3 +1,4 @@
+using PzlEv.Shared.Utils.Config;
 using PzlEv.Shared.Utils.Data;
 
 namespace PzlEv.Tests.TestSupport;
@@ -14,4 +15,12 @@ public sealed class TestServices
     public InMemoryJournal Journal => new(Database, Clock, User);
 
     public InMemoryProblemLog Problems => new(Database, Clock);
+
+    /// <summary>Usługi aplikacji z korzeniem folderów w katalogu tymczasowym testu.</summary>
+    public AppServices App(string networkRoot) =>
+        new(AppConfigLoader.Defaults() with { NetworkRoot = networkRoot, InMemoryStatePath = Path.Combine(networkRoot, "state.json") },
+            Clock, User, Database, Journal, Problems, "test");
+
+    /// <summary>Plik danych wzorcowych (app/testdata) skopiowany do katalogu testów.</summary>
+    public static string TestData(params string[] parts) => Path.Combine([AppContext.BaseDirectory, "testdata", .. parts]);
 }
