@@ -27,7 +27,8 @@ public sealed class FileOperationLockTests : IDisposable
             Assert.Null(second.TryAcquire("import", out var holder));
             Assert.Equal(@"PZL\anna", holder!.User);
             Assert.Equal(@"PZL\anna", second.Holder("import")!.User);
-            Assert.NotNull(second.TryAcquire("eksport", out _));   // inna operacja – osobna blokada
+            using var export = second.TryAcquire("eksport", out _);   // inna operacja – osobna blokada
+            Assert.NotNull(export);
         }
 
         Assert.Null(second.Holder("import"));
