@@ -24,7 +24,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <LangVersion>latest</LangVersion>
     <RootNamespace>PzlEv</RootNamespace>
-    <Version>0.8.0</Version>
+    <Version>0.9.0</Version>
     <AssemblyName>PZL-EV</AssemblyName>
 
     <!-- Model uruchomienia: jeden plik, self-contained, bez instalacji .NET. -->
@@ -44,6 +44,9 @@
   <ItemGroup>
     <!-- Migracje schematu MS SQL (sql/mssql/NNN_*.sql) wbudowane w exe – SqlMigrations. -->
     <EmbeddedResource Include="..\..\sql\mssql\*.sql" LogicalName="PzlEv.Sql.%(Filename)%(Extension)" />
+    <!-- Konfiguracja (app/pzl-ev.json) obok exe – osobny plik do edycji, nie w pojedynczym pliku exe;
+         kopiowana tylko gdy wzór jest nowszy (zmiany w publish nie są nadpisywane). -->
+    <None Include="..\pzl-ev.json" Link="pzl-ev.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
   </ItemGroup>
 
   <ItemGroup>

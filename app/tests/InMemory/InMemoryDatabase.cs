@@ -3,12 +3,12 @@ using System.IO;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
-namespace PzlEv.Shared.Utils.Data;
+namespace PzlEv.Tests.InMemory;
 
 /// <summary>
-/// Warstwa danych przejściowa – „baza w pamięci” o kształcie docelowego schematu MS SQL (tabele meta.*, stg.*,
-/// can.*, dict.* z typami wierszy w Shared/Models/Db). Moduły korzystają z niej wyłącznie przez swoje
-/// magazyny InMemory&lt;Moduł&gt;Store, które zastąpią magazyny SQL (F10) bez zmian w modułach.
+/// Baza w pamięci do testów (aplikacja pracuje wyłącznie na MS SQL): tabele o kształcie schematu (meta.*, stg.*,
+/// can.*, dict.* z typami wierszy w Shared/Models/Db) dla magazynów InMemory*Store – szybkie testy logiki bez bazy;
+/// te same scenariusze testy uruchamiają też na SQL (TestStores).
 ///
 /// Zasady: odczyt w Read, zapis w Write (jedna blokada); operacja zapisu najpierw sprawdza dane, a dopiero potem
 /// je zmienia (brak zmian częściowych). Commit zapisuje stan do pliku JSON, jeśli coś się zmieniło.

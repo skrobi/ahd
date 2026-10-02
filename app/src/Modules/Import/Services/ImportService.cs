@@ -129,7 +129,6 @@ public sealed class ImportService(IImportStore store, AppServices services)
         var definitions = store.ActiveDefinitions();
         var batchId = store.BeginBatch(services.Clock.Now, services.User.Account, Environment.MachineName, services.AppVersion);
         services.Journal.Add(Area, $"Import #{batchId} rozpoczęty ({services.User.Account}, {Environment.MachineName})");
-        services.Database.Commit();
         Logger.Information("Import #{Batch} start – {User} na {Machine}, wersja {Version}", batchId, services.User.Account, Environment.MachineName, services.AppVersion);
         progress?.Report(new ImportProgress($"Import #{batchId} rozpoczęty…", BatchId: batchId));
         LogDefinitions(definitions);
@@ -201,7 +200,6 @@ public sealed class ImportService(IImportStore store, AppServices services)
         var run = new ImportRunResult(batchId, results, issues, cancelled);
         services.Journal.Add(Area, $"Import #{batchId}: {run.Summary}");
         Logger.Information("Import #{Batch} koniec: {Summary}", batchId, run.Summary);
-        services.Database.Commit();
         return run;
     }
 

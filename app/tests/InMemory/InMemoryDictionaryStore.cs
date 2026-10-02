@@ -1,10 +1,11 @@
+using PzlEv.Modules.MasterData.Data;
 using PzlEv.Modules.MasterData.Models;
 using PzlEv.Shared.Models.Db;
 using PzlEv.Shared.Utils.Data;
 
-namespace PzlEv.Modules.MasterData.Data;
+namespace PzlEv.Tests.InMemory;
 
-/// <summary>Magazyn słowników w pamięci (tabela dict.Entry).</summary>
+/// <summary>Magazyn słowników w pamięci (tabela dict.Entry) – do testów (aplikacja: SqlDictionaryStore).</summary>
 public sealed class InMemoryDictionaryStore(InMemoryDatabase db, IClock clock, ICurrentUser user) : IDictionaryStore
 {
     public const string Table = "dict.Entry";

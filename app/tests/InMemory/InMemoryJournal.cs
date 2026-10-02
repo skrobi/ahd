@@ -1,6 +1,7 @@
+using PzlEv.Shared.Utils.Data;
 using PzlEv.Shared.Models.Db;
 
-namespace PzlEv.Shared.Utils.Data;
+namespace PzlEv.Tests.InMemory;
 
 /// <summary>Wpis trafia do pliku stanu przy najbliższym Commit (operacja modułu albo zamknięcie aplikacji).</summary>
 public sealed class InMemoryJournal(InMemoryDatabase db, IClock clock, ICurrentUser user) : IJournal

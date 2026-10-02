@@ -20,13 +20,10 @@ public sealed class AdministrationModule : IModule
 
     public string Doc => "docs/funkcjonalnosc.md (F08), docs/zrodla-danych.md (rozdz. 2–3), docs/uprawnienia.md";
 
-    // Magazyn danych: w trybie w pamięci InMemorySourceConfigStore; po F10 – magazyn SQL wybierany tutaj.
+    // Magazyn danych: baza MS SQL środowiska (Sql*Store).
     public void Initialize(AppServices services)
     {
-        ISourceConfigStore store = services.Sql is { } sql
-            ? new SqlSourceConfigStore(sql, services.Clock, services.User)
-            : new InMemorySourceConfigStore(services.Database, services.Clock, services.User);
-        _service = new SourceConfigService(store, services.Journal);
+        _service = new SourceConfigService(new SqlSourceConfigStore(services.Sql, services.Clock, services.User), services.Journal);
         SourceConfigSeed.EnsureSeeded(_service);
     }
 

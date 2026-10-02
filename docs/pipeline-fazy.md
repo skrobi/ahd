@@ -66,7 +66,7 @@ tabeli problemów (`meta.Problem`).
 
 - Jeden przebieg na projekt i tydzień (`docs/model-danych.md`, rozdz. 4.1).
 - Operacja w toku (np. import, łączenie) zakłada krótką blokadę (`sp_getapplock`); druga osoba widzi komunikat.
-  Do czasu bazy MS SQL (tryb w pamięci) – plik blokady na dysku sieciowym (`00_Global\RABIT\import.lock`, opis kto
+  Do czasu procedur bazy (F10.2) – plik blokady na dysku sieciowym (`00_Global\RABIT\import.lock`, opis kto
   i od kiedy w `import.lock.json`); system zwalnia go także po awarii aplikacji. Import zaczyna się wpisem „w toku”
   w historii importów; import bez zakończenia (np. awaria) dostaje przy następnym imporcie status „przerwany”.
 - Import jest idempotentny: ten sam hash pliku nie tworzy nowej wersji ani duplikatu danych.
