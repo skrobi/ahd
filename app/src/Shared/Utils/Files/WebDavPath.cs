@@ -15,7 +15,9 @@ public static class WebDavPath
 
     public const string AccessHint =
         "Dla SharePoint (WebDAV): usługa WebClient musi działać, a folder trzeba raz otworzyć w Eksploratorze Windows " +
-        "(logowanie kontem użytkownika); ścieżka w postaci \\\\host@SSL\\DavWWWRoot\\sites\\…";
+        "(logowanie kontem użytkownika); ścieżka w postaci \\\\host@SSL\\DavWWWRoot\\sites\\…. SharePoint RABIT jest za bramą " +
+        "logowania F5 (BIG-IP): WebDAV działa dopiero po zalogowaniu przez Office – w bibliotece „Eksport do Excela” albo " +
+        "otwarcie pliku w Excelu; po wygaśnięciu sesji trzeba to powtórzyć.";
 
     /// <summary>
     /// Link do folderu SharePoint skopiowany z przeglądarki (adres folderu albo widok listy z RootFolder / id)

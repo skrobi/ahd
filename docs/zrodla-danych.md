@@ -82,6 +82,13 @@ i utrzymywaną na ekranie Administracja (`docs/funkcjonalnosc.md`, F08).
   przeglądarce: adres z kropkami to dla Windows strefa Internet – usługa WebClient nie wysyła logowania Windows,
   dopóki adres nie jest w strefie Intranet lokalny albo w `AuthForwardServerList`
   (`HKLM\SYSTEM\CurrentControlSet\Services\WebClient\Parameters`); za proxy – adres musi być na liście wyjątków.
+- **Ustalenia testu dostępu (stanowisko analityka, 2026-10-02):** SharePoint RABIT jest za bramą logowania F5 (BIG-IP).
+  Działa tylko WebDAV przez usługę WebClient (C, H) i dopiero po zalogowaniu przez Office („Eksport do Excela”
+  z biblioteki albo otwarcie pliku w Excelu); po wygaśnięciu sesji logowanie trzeba powtórzyć. Drogi HTTP z aplikacji
+  (`owssvr.dll`, pobranie pliku, PROPFIND, REST, `Lists.asmx`) kończą się na stronie logowania bramy albo HTTP 403;
+  provider OLEDB listy niedostępny dla procesu 64-bit.
+- .NET zwraca na ścieżkach WebDAV nazwy plików z końcowym znakiem `\0` oraz wpisy „.” i „..”
+  (dotnet/runtime#62429) – import czyści nazwy (`FolderEntries`); narzędzie w Pythonie tego problemu nie miało.
 - Import czyta tylko główny folder lokalizacji (bez podfolderów – jak domyślnie narzędzie w Pythonie). Gdy folder
   nie ma plików, a ma podfoldery – WARNING z ich nazwami. **Sprawdź źródła** (ekran Import) pokazuje bez importu
   dostęp, czytaną ścieżkę, pliki i ich rozpoznanie; szczegóły – log aplikacji (`app/README.md`).

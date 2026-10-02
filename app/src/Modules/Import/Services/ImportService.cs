@@ -91,8 +91,7 @@ public sealed class ImportService(IImportStore store, AppServices services)
         var dir = new DirectoryInfo(location.Path);
         if (!dir.Exists)
             throw new DirectoryNotFoundException("folder nie istnieje albo brak dostępu (Directory.Exists = false)");
-        var all = dir.EnumerateFiles().OrderBy(f => f.Name, StringComparer.OrdinalIgnoreCase).ToList();
-        var subfolders = dir.EnumerateDirectories().Select(d => d.Name).OrderBy(n => n, StringComparer.OrdinalIgnoreCase).ToList();
+        var (all, subfolders) = FolderEntries.List(dir.FullName);
         var ignored = all.Where(f => SourceMatcher.IsIgnored(f.Name)).Select(f => f.Name).ToList();
         var files = all.Where(f => !SourceMatcher.IsIgnored(f.Name)).ToList();
         Logger.Information("Lokalizacja {Location}: plików {Count} ({Files}); pominięte tymczasowe: {Ignored}; podfoldery: {Subfolders}",

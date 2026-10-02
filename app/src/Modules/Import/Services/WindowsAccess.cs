@@ -5,6 +5,7 @@ using System.IO;
 using System.Runtime.InteropServices;
 using System.Text;
 using Microsoft.Win32;
+using PzlEv.Shared.Utils.Files;
 
 namespace PzlEv.Modules.Import.Services;
 
@@ -57,10 +58,8 @@ internal static class WindowsAccess
     /// <summary>Pliki i podfoldery folderu (UNC).</summary>
     public static (List<string> Files, List<string> Folders) ListFolder(string path)
     {
-        var dir = new DirectoryInfo(path);
-        var files = dir.EnumerateFiles().Select(f => f.Name).OrderBy(n => n, StringComparer.OrdinalIgnoreCase).ToList();
-        var folders = dir.EnumerateDirectories().Select(d => d.Name).OrderBy(n => n, StringComparer.OrdinalIgnoreCase).ToList();
-        return (files, folders);
+        var (files, folders) = FolderEntries.List(path);
+        return (files.Select(f => f.Name).ToList(), folders);
     }
 
     /// <summary>Połączenie sieciowe bieżącym kontem (jak „net use” bez litery dysku), lista plików, rozłączenie.</summary>
