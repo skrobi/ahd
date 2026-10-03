@@ -47,6 +47,7 @@
                         <TextBox Width="180" Style="{StaticResource Input}" Text="{Binding Filter, UpdateSourceTrigger=PropertyChanged}" />
                     </StackPanel>
                 </DockPanel>
+                <partials:BusyBar DataContext="{Binding Busy}" />
                 <TextBlock Text="{Binding Status}" TextWrapping="Wrap" Margin="0,0,0,8" />
 
                 <!-- Wiersze słownika: kolumny budowane według opisu słownika (MasterDataView.xaml.cs) -->
