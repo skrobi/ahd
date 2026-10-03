@@ -1,37 +1,23 @@
 using System.Globalization;
 using Dapper;
 using Microsoft.Data.SqlClient;
-using PzlEv.Modules.MasterData.Models;
-using PzlEv.Modules.MasterData.Services;
+using PzlEv.Shared.Models.Dictionaries;
 using PzlEv.Shared.Models.Db;
 using PzlEv.Shared.Utils.Data;
 using PzlEv.Shared.Utils.Data.Sql;
 using PzlEv.Shared.Utils.Files;
 
-namespace PzlEv.Modules.MasterData.Data;
+namespace PzlEv.Shared.Utils.Dictionaries;
 
 /// <summary>
-/// Słowniki w bazie: osobna tabela z typowanymi kolumnami na każdy słownik (DICT_Calendar, DICT_FxRate…), wspólne
+/// Słowniki w bazie (tabele przekazane przez moduł – DictionaryTable): osobna tabela z typowanymi kolumnami na każdy słownik (DICT_Calendar, DICT_FxRate…), wspólne
 /// kolumny historii (RowId, Version, kto / kiedy zapisał i zastąpił). Ten sam kontrakt co wersja w pamięci:
 /// zapis jest jedną transakcją; zmieniony w międzyczasie wiersz albo zajęty klucz = konflikt, nic nie zapisano.
 /// Wartości słownika (zapis kanoniczny, ValueFormat) ↔ typy kolumn według opisu słownika.
 /// </summary>
-public sealed class SqlDictionaryStore(SqlDatabase db, IClock clock, ICurrentUser user) : IDictionaryStore
+public sealed class SqlDictionaryStore(SqlDatabase db, IClock clock, ICurrentUser user, IReadOnlyList<DictionaryTable> tables) : IDictionaryStore
 {
-    /// <summary>Tabela i kolumny słownika: nazwa kolumny w opisie słownika → kolumna tabeli.</summary>
-    private sealed record Map(string Table, IReadOnlyList<(string Spec, string Column)> Columns);
-
-    private static readonly Dictionary<string, Map> Maps = new()
-    {
-        [GlobalDictionaries.Calendar] = new("dict.Calendar",
-            [("Rok", "Year"), ("Tydzień", "Week"), ("Okres", "Period"), ("Od", "DateFrom"), ("Do", "DateTo"), ("Zamykający", "IsClosing")]),
-        [GlobalDictionaries.DepartmentRates] = new("dict.DepartmentRate",
-            [("Department", "Department"), ("Year", "Year"), ("Labor Rate", "LaborRate"), ("Overhead", "Overhead")]),
-        [GlobalDictionaries.FxRates] = new("dict.FxRate", [("Waluta", "Currency"), ("Okres", "Period"), ("Kurs", "Rate")]),
-        [GlobalDictionaries.CostCategory] = new("dict.CostCategory",
-            [("Numer elementu kosztowego", "CostElement"), ("Opis", "Description"), ("Obszar", "Area"), ("Cost Category", "CostCategory")]),
-        [GlobalDictionaries.Persons] = new("dict.Person", [("Konto AD", "AdAccount"), ("Imię i nazwisko", "FullName")]),
-    };
+    private readonly Dictionary<string, DictionaryTable> _maps = tables.ToDictionary(t => t.Spec.Code);
 
     private const string ProjectFilter = "(Project = @project OR (Project IS NULL AND @project IS NULL))";
 
@@ -52,7 +38,7 @@ public sealed class SqlDictionaryStore(SqlDatabase db, IClock clock, ICurrentUse
     {
         // RowId pochodzi z jednej sekwencji dla wszystkich słowników – wiersz jest w dokładnie jednej tabeli.
         using var connection = db.Open();
-        foreach (var dictionary in Maps.Keys)
+        foreach (var dictionary in _maps.Keys)
         {
             var rows = Read(connection, null, dictionary, "WHERE RowId = @rowId ORDER BY Version", new { rowId });
             if (rows.Count > 0)
@@ -64,7 +50,7 @@ public sealed class SqlDictionaryStore(SqlDatabase db, IClock clock, ICurrentUse
     public StoreResult Save(string dictionary, string? project, IReadOnlyList<RowChange> changes)
     {
         var map = MapOf(dictionary);
-        var spec = GlobalDictionaries.Get(dictionary);
+        var spec = map.Spec;
         var table = db.Table(map.Table);
         try
         {
@@ -128,7 +114,7 @@ public sealed class SqlDictionaryStore(SqlDatabase db, IClock clock, ICurrentUse
     private List<DictionaryEntryRow> Read(SqlConnection connection, SqlTransaction? transaction, string dictionary, string where, object parameters)
     {
         var map = MapOf(dictionary);
-        var spec = GlobalDictionaries.Get(dictionary);
+        var spec = map.Spec;
         var columns = string.Join(", ", map.Columns.Select(c => c.Column));
         var sql = $"SELECT Id, RowId, Version, Project, RecordedAt, RecordedBy, SupersededAt, SupersededBy, {columns} FROM {db.Table(map.Table)} {where}";
         var result = new List<DictionaryEntryRow>();
@@ -149,8 +135,8 @@ public sealed class SqlDictionaryStore(SqlDatabase db, IClock clock, ICurrentUse
         return result;
     }
 
-    private static Map MapOf(string dictionary) =>
-        Maps.TryGetValue(dictionary, out var map) ? map : throw new NotSupportedException($"Słownik {dictionary} nie ma tabeli w bazie");
+    private DictionaryTable MapOf(string dictionary) =>
+        _maps.TryGetValue(dictionary, out var map) ? map : throw new NotSupportedException($"Słownik {dictionary} nie ma tabeli w bazie");
 
     /// <summary>Wartość kanoniczna (ValueFormat) → typ kolumny bazy.</summary>
     private static object? ToDb(DictColumn column, string? canonical) =>

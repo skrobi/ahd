@@ -1,13 +1,12 @@
 using System.IO;
-using PzlEv.Modules.MasterData.Data;
-using PzlEv.Modules.MasterData.Models;
+using PzlEv.Shared.Models.Dictionaries;
 using PzlEv.Shared.Models;
 using PzlEv.Shared.Models.Db;
 using PzlEv.Shared.Models.Pipeline;
 using PzlEv.Shared.Utils.Data;
 using PzlEv.Shared.Utils.Files;
 
-namespace PzlEv.Modules.MasterData.Services;
+namespace PzlEv.Shared.Utils.Dictionaries;
 
 /// <summary>
 /// Zapis słownika z walidacją (ERROR blokuje, WARNING wymaga potwierdzenia), dziennikiem i wymianą przez Excel

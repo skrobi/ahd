@@ -1,6 +1,6 @@
 using PzlEv.Shared.Models;
 
-namespace PzlEv.Modules.MasterData.Models;
+namespace PzlEv.Shared.Models.Dictionaries;
 
 /// <summary>
 /// Opis słownika: kolumny i reguły szczegółowe (docs/slowniki.md, rozdz. 5). Ten sam opis obsługuje zapis,

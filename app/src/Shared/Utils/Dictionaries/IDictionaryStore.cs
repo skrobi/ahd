@@ -1,7 +1,7 @@
-using PzlEv.Modules.MasterData.Models;
+using PzlEv.Shared.Models.Dictionaries;
 using PzlEv.Shared.Models.Db;
 
-namespace PzlEv.Modules.MasterData.Data;
+namespace PzlEv.Shared.Utils.Dictionaries;
 
 /// <summary>
 /// Magazyn słowników – kontrakt przyszłych procedur i widoków dict.* (F10). Zapis jest jedną operacją:
