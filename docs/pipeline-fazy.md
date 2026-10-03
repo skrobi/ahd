@@ -119,10 +119,10 @@ flowchart TD
 |---|---|
 | **Cel** | Zapisać w bazie każdą nową wersję raportu RABIT, zanim RABIT ją nadpisze. |
 | **Wejście** | Wszystkie aktywne lokalizacje RABIT na SharePoint (WebDAV) oraz folder `00_Global\RABIT\Do_importu` z plikami pobranymi ręcznie (`docs/zrodla-danych.md`, rozdz. 3); definicje źródeł. |
-| **Działanie** | 1) Plik o tych samych metadanych (lokalizacja, nazwa, rozmiar, data modyfikacji) co przy poprzednim imporcie jest pomijany bez czytania. 2) Rozpoznanie źródła po prefiksie nazwy. 3) Hash SHA-256 – ten sam hash oznacza duplikat. 4) Nowa treść: plik pobierany na dysk lokalny, potem jeden przebieg przez parser źródła – nowa wersja pliku z danymi kanonicznymi ładowanymi wsadowo do `can.Row` i treścią pliku, z kontrolą liczby wierszy i sum w bazie; błąd wycofuje zapis. Status pliku na ekranie pokazuje etap (pobieranie, sprawdzanie, odczyt i zapis wierszy, kontrola w bazie) z postępem (`docs/zrodla-danych.md`, rozdz. 2). Każdy plik osobno; błąd jednego pliku albo jednej lokalizacji nie zatrzymuje pozostałych. |
+| **Działanie** | 1) Plik o tych samych metadanych (lokalizacja, nazwa, rozmiar, data modyfikacji) co przy poprzednim imporcie jest pomijany bez czytania. 2) Rozpoznanie źródła po prefiksie nazwy. 3) Hash SHA-256 – ten sam hash oznacza duplikat. 4) Nowa treść: plik pobierany na dysk lokalny, potem jeden przebieg przez parser źródła – nowa wersja pliku z danymi kanonicznymi ładowanymi wsadowo do `can.Row`, z kontrolą liczby wierszy i sum w bazie; błąd wycofuje zapis. Status pliku na ekranie pokazuje etap (pobieranie, sprawdzanie, odczyt i zapis wierszy, kontrola w bazie) z postępem (`docs/zrodla-danych.md`, rozdz. 2). Każdy plik osobno; błąd jednego pliku albo jednej lokalizacji nie zatrzymuje pozostałych. |
 | **Pochodzenie** | Każda wersja pliku i każdy wiersz: import (kto, kiedy), lokalizacja, hash, kod źródła, data raportu (data modyfikacji w RABIT). |
 | **Kontrole** | `docs/zrodla-danych.md`, rozdz. 8. |
-| **Efekt** | `meta.ImportBatch`, `meta.SourceFile`, `meta.SourceFileContent`, `meta.SourceFileSeen`, `can.Row`; problemy importu. Historia importów widoczna dla wszystkich. |
+| **Efekt** | `meta.ImportBatch`, `meta.SourceFile`, `meta.SourceFileSeen`, `can.Row` (sam plik nie jest przechowywany); problemy importu. Historia importów widoczna dla wszystkich. |
 | **Przekazanie** | G2 (nowe elementy CES), P1 (dane projektu). |
 
 Decyzja dla pliku:

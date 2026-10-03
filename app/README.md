@@ -42,10 +42,12 @@ zmieni). Brak pliku albo błąd w nim = komunikat przy starcie z nazwą pola –
 - `006_problemy_rozwiazywanie.sql` – rozwiązywanie problemów (kto, kiedy, jak); problemy importów wcześniejszych
   niż ostatni zakończony – rozwiązane;
 - `007_sloty_danych_kanonicznych.sql` – dane kanoniczne wszystkich parserów w jednej stałej tabeli `CAN_Row`
-  (sloty typowane, indeks kolumnowy) i treść plików skompresowana GZip (`META_SourceFileContent`); przenosi dane
+  (sloty typowane, indeks kolumnowy) i treść plików (`META_SourceFileContent`, usunięta w 008); przenosi dane
   z `CAN_Actuals`, `CAN_MappingReport`, `STG_RawRow` i usuwa te tabele. Wymaga SQL Server 2016+ i poziomu zgodności
   bazy co najmniej 130 (Diagnostyka → **Serwer SQL**); po niej aplikacja nie zmienia tabel – nowy parser i nowe
-  pole to tylko zapis parsera (`docs/model-danych.md`, rozdz. 5.1).
+  pole to tylko zapis parsera (`docs/model-danych.md`, rozdz. 5.1);
+- `008_bez_tresci_plikow.sql` – usuwa przechowywaną treść plików (`META_SourceFileContent`): w bazie zostają wersje
+  plików i dane kanoniczne, sam plik nie jest przechowywany.
 
 Migracje wykonuje przycisk **Diagnostyka → Migracja** – uruchamia po kolei skrypty, których numeru nie ma
 w `META_SchemaVersion`, a wykonane pomija. Lista na tym ekranie pokazuje, które skrypty są wykonane (kiedy, kto)
@@ -67,7 +69,7 @@ na ekranie **Diagnostyka** i w stopce okna.
    podgląd różnic (+/~/−), **Zatwierdź wczytanie**. Błędna wartość (np. tekst w liczbie) – wynik walidacji, brak zapisu.
 2. **Import RABIT** – skopiuj `testdata/RABIT/ACTUALS_PAF_01.csv` do folderu `Do_importu` (ścieżka na ekranie),
    **Importuj** – w trakcie status pliku pokazuje etap (1/4 pobieranie na dysk, 2/4 sprawdzanie, 3/4 odczyt i zapis
-   wierszy, 4/4 kontrola w bazie i treść pliku) z postępem i czasem; potem „zaimportowany”, 6 wierszy, sumy jak
+   wierszy, 4/4 kontrola w bazie) z postępem i czasem; potem „zaimportowany”, 6 wierszy, sumy jak
    w `testdata/README.md`; ponowny import – „pominięty”;
    ta sama treść pod inną nazwą – „duplikat”; plik o nieznanym prefiksie – „nierozpoznany”.
 3. **Administracja** – definicje `ACTUALS_PAF`, `ACTUALS_CES` (kod, prefiks, typ raportu, parser ACTUALS, aktywna);

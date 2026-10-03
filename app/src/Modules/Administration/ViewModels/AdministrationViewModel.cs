@@ -161,7 +161,7 @@ public sealed class AdministrationViewModel : ObservableObject
         try
         {
             ParserOptions.Clear();
-            ParserOptions.Add(new ParserOption(SourceParsers.None, "brak – tylko treść pliku"));
+            ParserOptions.Add(new ParserOption(SourceParsers.None, "brak – tylko wersja pliku (bez danych)"));
             foreach (var p in _service.Parsers())
                 ParserOptions.Add(new ParserOption(p.Code, $"{p.Code} – {p.Name}{(p.Active ? "" : " (nieaktywny)")}"));
         }

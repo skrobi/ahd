@@ -232,7 +232,7 @@ decyzji (P4, P6, Z) albo z wynikiem ERROR.
 - Ścieżki UNC (nie litery dysków); w bazie zapisywane są ścieżki **względne** od korzenia środowiska.
 - Aplikacja sprawdza strukturę folderów przy otwarciu projektu.
 - Uprawnienia do folderów – `docs/uprawnienia.md`, rozdz. 5.
-- Oryginalne pliki RABIT nie są archiwizowane – ich treść i hash są w bazie (`docs/model-danych.md`, rozdz. 1).
+- Oryginalne pliki RABIT nie są archiwizowane ani przechowywane w bazie – w bazie są ich wersje (SHA-256, kolumny, liczba wierszy) i dane kanoniczne (`docs/model-danych.md`, rozdz. 5.1).
 
 ---
 
@@ -298,7 +298,7 @@ decyzji (P4, P6, Z) albo z wynikiem ERROR.
 | 11 | Reguły procesu omijane przez bezpośrednie połączenie z bazą | reguły w procedurach, brak praw do tabel |
 | 12 | Różne litery dysków | ścieżki UNC, w bazie ścieżki względne |
 | 13 | Etykiety poufności / szyfrowanie plików | do weryfikacji z IT |
-| 14 | Przyrost danych w bazie (wiersze importów co tydzień – wszystko zostaje, O32) | kompresja: treść pliku GZip, `CAN_Row` z indeksem kolumnowym (`docs/model-danych.md`, rozdz. 5.1) |
+| 14 | Przyrost danych w bazie (wiersze importów co tydzień – wszystko zostaje, O32) | kompresja kolumnowa `CAN_Row`; sam plik nie jest przechowywany (`docs/model-danych.md`, rozdz. 5.1) |
 | 15 | Wsparcie .NET 10 LTS kończy się w listopadzie 2028 | przejście na kolejną wersję LTS przed tym terminem |
 
 ---
