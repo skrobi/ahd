@@ -20,7 +20,4 @@ public sealed record DictionaryEntryRow(
     string? SupersededBy)
 {
     public bool IsCurrent => SupersededAt is null;
-
-    /// <summary>Czy wersja obowiązywała w danym momencie (oś techniczna – odczyt przebiegu na znacznik stanu).</summary>
-    public bool ValidAt(DateTimeOffset moment) => RecordedAt <= moment && (SupersededAt is null || SupersededAt > moment);
 }

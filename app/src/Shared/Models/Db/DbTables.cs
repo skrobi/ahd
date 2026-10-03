@@ -8,6 +8,7 @@ public static class DbTables
     public const string ImportBatch = "meta.ImportBatch";
     public const string SourceFile = "meta.SourceFile";
     public const string SourceFileSeen = "meta.SourceFileSeen";
-    public const string RawRow = "stg.RawRow";
-    public const string Actuals = "can.Actuals";
+    public const string Parser = "meta.Parser";
+    public const string CanonicalRow = "can.Row";
+    public const string MappingCorrection = "dict.MappingCorrection";
 }

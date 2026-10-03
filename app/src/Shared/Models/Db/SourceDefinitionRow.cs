@@ -2,8 +2,8 @@ namespace PzlEv.Shared.Models.Db;
 
 /// <summary>
 /// Wersja definicji źródła – meta.SourceDefinition (docs/zrodla-danych.md, rozdz. 2). DefinitionId – definicja
-/// logiczna (stała między wersjami); zmiana tworzy nową wersję. Parser – sposób utworzenia danych kanonicznych
-/// (SourceParsers), pusty = tylko wiersze surowe.
+/// logiczna (stała między wersjami); zmiana tworzy nową wersję. Definicja rozpoznaje plik po prefiksie i wskazuje
+/// parser (meta.Parser) – układ kolumn, typy i pola wymagane pilnuje parser; pusty parser = tylko wersja pliku (bez danych).
 /// </summary>
 public sealed record SourceDefinitionRow(
     long Id,
@@ -12,10 +12,7 @@ public sealed record SourceDefinitionRow(
     string Code,
     string Prefix,
     string ReportType,
-    IReadOnlyList<string> Columns,
-    string Signature,
     string Parser,
-    int ParserVersion,
     bool Active,
     DateTimeOffset RecordedAt,
     string RecordedBy,

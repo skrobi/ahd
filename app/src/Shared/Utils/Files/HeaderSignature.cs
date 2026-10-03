@@ -4,8 +4,8 @@ using System.Text;
 namespace PzlEv.Shared.Utils.Files;
 
 /// <summary>
-/// Sygnatura kolumn – odcisk układu nagłówków (docs/zrodla-danych.md, rozdz. 2). Ten sam algorytm co narzędzie
-/// w Pythonie (header_signature): SHA-1 nazw kolumn (przycięte, małe litery) złączonych „|”, pierwsze 16 znaków.
+/// Sygnatura kolumn – odcisk układu nagłówków zapisywany przy wersji pliku (meta.SourceFile): SHA-1 nazw kolumn
+/// (przycięte, małe litery) złączonych „|”, pierwsze 16 znaków. Algorytmu nie zmieniać – sygnatury są w bazie.
 /// </summary>
 public static class HeaderSignature
 {

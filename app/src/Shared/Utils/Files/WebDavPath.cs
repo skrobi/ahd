@@ -4,8 +4,7 @@ namespace PzlEv.Shared.Utils.Files;
 
 /// <summary>
 /// Lokalizacje RABIT na SharePoint czytane przez WebDAV (usługa WebClient Windows, konto użytkownika):
-/// biblioteka widoczna jako ścieżka UNC \\host@SSL\DavWWWRoot\sites\…\folder. Ta sama reguła co narzędzie
-/// w Pythonie (pzl_ev/zrodla/webdav.py, unc_from_url).
+/// biblioteka widoczna jako ścieżka UNC \\host@SSL\DavWWWRoot\sites\…\folder.
 /// </summary>
 public static class WebDavPath
 {

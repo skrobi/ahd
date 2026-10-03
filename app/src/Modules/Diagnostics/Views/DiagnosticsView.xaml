@@ -15,7 +15,7 @@
                     </Grid.ColumnDefinitions>
                     <Grid.RowDefinitions>
                         <RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition />
-                        <RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition />
+                        <RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition />
                     </Grid.RowDefinitions>
                     <TextBlock Grid.Row="0" Text="Runtime" Foreground="{StaticResource Muted}" />
                     <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding Runtime}" Style="{StaticResource MonoText}" />
@@ -35,6 +35,8 @@
                     <TextBlock Grid.Row="7" Grid.Column="1" Text="{Binding NetworkRoot}" Style="{StaticResource MonoText}" TextWrapping="Wrap" />
                     <TextBlock Grid.Row="8" Text="Folder Do_importu" Foreground="{StaticResource Muted}" />
                     <TextBlock Grid.Row="8" Grid.Column="1" Text="{Binding ImportFolder}" Style="{StaticResource MonoText}" TextWrapping="Wrap" />
+                    <TextBlock Grid.Row="9" Text="Serwer SQL" Foreground="{StaticResource Muted}" />
+                    <TextBlock Grid.Row="9" Grid.Column="1" Text="{Binding SqlServer, Mode=OneWay}" Style="{StaticResource MonoText}" TextWrapping="Wrap" />
                 </Grid>
                 <ItemsControl ItemsSource="{Binding Packages}">
                     <ItemsControl.ItemTemplate>
@@ -82,6 +84,37 @@
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
                 <TextBlock Text="{Binding MigrationStatus}" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,8,0,0" />
+            </StackPanel>
+        </Border>
+
+        <!-- PZLPROD: struktura P1S (LOG.WBS, LOG.WBS_DIC) – tylko odczyt -->
+        <Border Style="{StaticResource Panel}" Margin="0,12,0,0">
+            <StackPanel>
+                <DockPanel Margin="0,0,0,8">
+                    <Button DockPanel.Dock="Right" Content="Sprawdź PZLPROD" Style="{StaticResource Btn}" Command="{Binding CheckPzlProd}"
+                            ToolTip="Łączy się z PZLPROD kontem AD i liczy wiersze LOG.WBS i LOG.WBS_DIC" />
+                    <StackPanel>
+                        <TextBlock Text="PZLPROD" Style="{StaticResource H2}" FontSize="15" />
+                        <TextBlock Text="{Binding PzlProd, Mode=OneWay}" Style="{StaticResource MonoText}" TextWrapping="Wrap" />
+                    </StackPanel>
+                </DockPanel>
+                <ItemsControl ItemsSource="{Binding PzlProdFlags}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Grid Margin="0,2">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="120" />
+                                    <ColumnDefinition Width="120" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="{Binding Column, Mode=OneWay}" Style="{StaticResource MonoText}" />
+                                <TextBlock Grid.Column="1" Text="{Binding Display, Mode=OneWay}" Style="{StaticResource MonoText}" />
+                                <TextBlock Grid.Column="2" Text="{Binding Rows, Mode=OneWay, StringFormat='{}{0} wierszy'}" Foreground="{StaticResource Muted}" />
+                            </Grid>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <TextBlock Text="{Binding PzlProdStatus}" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,8,0,0" />
             </StackPanel>
         </Border>
     </StackPanel>

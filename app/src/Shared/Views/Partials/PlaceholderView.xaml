@@ -3,8 +3,8 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:local="clr-namespace:PzlEv.Shared.Views.Partials">
     <StackPanel>
-        <local:PageHeader Eyebrow="Moduł poza zakresem aplikacji testowej" Title="{Binding Title}"
-                          Subtitle="Test obejmuje Pulpit i Diagnostykę. Pozostałe moduły mają w kodzie miejsce i kontrakt – ekran powstanie przy implementacji." />
+        <local:PageHeader Eyebrow="Moduł w przygotowaniu" Title="{Binding Title}"
+                          Subtitle="Moduł ma w kodzie miejsce i kontrakt – ekran powstanie przy jego implementacji (tasks/README.md). Poniżej dokumentacja i etapy, które przejmie." />
 
         <Border Style="{StaticResource Panel}" Margin="0,0,0,16">
             <StackPanel>

@@ -13,8 +13,8 @@ Powiązane: `docs/pipeline-fazy.md` (G1 – przebieg importu, P5–P6 – pobran
 | Źródło | System | Dane | Pozyskanie |
 |---|---|---|---|
 | Raporty CES (CJI3, ZRD_KKAJ, Net Inv) | SAP CES przez RABIT | koszty rzeczywiste, zobowiązania | import plików z lokalizacji RABIT na SharePoint przez WebDAV (rozdz. 3) |
-| Struktura P1S i kategoryzacja | `PZLPROD.LOG.WBS`, `LOG.WBS_DIC` (`splmcd03`) | drzewo elementów P1S, kategorie | odczyt bezpośredni, źródło przyrostowe (rozdz. 5) |
-| Raport mapowań SAP↔CES | `PZLPROD` | przypisania elementów CES do P1S | odczyt bezpośredni, źródło przyrostowe (`docs/mapowanie-ces-p1s.md`, rozdz. 2) |
+| Struktura P1S i kategoryzacja | `PZLPROD.LOG.WBS`, `LOG.WBS_DIC` (`splmcd03`) | drzewo elementów P1S, kategorie | odczyt bezpośredni kontem AD (`pzl-ev.json`, sekcja `PzlProd`), źródło przyrostowe (rozdz. 5) |
+| Raport mapowań SAP↔CES | eksport z `PZLPROD` do Excela | przypisania elementów CES do P1S | import pliku (parser `MAPOWANIA`, `docs/mapowanie-ces-p1s.md`, rozdz. 2) |
 | Zaawansowanie z produkcji | `PZLPROD.LOG.vAHDD` (O10) | zaawansowanie godzin i materiałów | odczyt w etapie P5 (rozdz. 6) |
 | Pliki CAM | Excel na dysku sieciowym | zaawansowanie od CAM w przebiegu zamykającym | import w etapie P6 (rozdz. 7) |
 | Cobra | Sikorsky (projekty SAC) | budżet i harmonogram SAC | do ustalenia (O28) |
@@ -33,7 +33,7 @@ i utrzymywaną na ekranie Administracja (`docs/funkcjonalnosc.md`, F08).
 | Kod źródła | identyfikator, np. `ACTUALS_CES` |
 | Rozpoznanie pliku | prefiks nazwy pliku (początek nazwy, np. `ACTUALS_` obejmuje wszystkie pliki `ACTUALS_…`; zapis `ACTUALS_*` znaczy to samo); wygrywa najdłuższy pasujący prefiks, bez rozróżniania wielkości liter |
 | Typ raportu | np. koszty rzeczywiste, zobowiązania, prognoza |
-| Oczekiwany schemat | kolumny i ich typy; sygnatura kolumn (odcisk układu nagłówków) |
+| Układ kolumn | kolumny pliku, ich typy i pola wymagane – w parserze wskazanym w definicji |
 | Ziarno | co oznacza jeden wiersz (np. pozycja kosztowa elementu WBS i elementu kosztowego w okresie) |
 | Klucz | kolumny jednoznacznie identyfikujące wiersz |
 | Znaczenie kolumn | która kolumna to element WBS, element kosztowy, kwota, ilość, okres |
@@ -41,24 +41,55 @@ i utrzymywaną na ekranie Administracja (`docs/funkcjonalnosc.md`, F08).
 | Waluta i jednostki | waluta każdej kwoty, jednostki ilości |
 | Interpretacja wartości | format liczb (np. polski: spacja tysięcy, przecinek dziesiętny), znak, puste wartości |
 | Reguły walidacji | kontrole wiersza i pliku z poziomem ERROR / WARNING (rozdz. 8) |
-| Wersja parsera | wersja przekształcenia wierszy surowych do postaci kanonicznej |
+| Parser | przekształcenie wierszy pliku do postaci kanonicznej (z wersją) – pilnuje układu kolumn |
 
 - Prefiks służy wyłącznie do rozpoznania pliku. Znaczenie danych wynika z definicji, nie z nazwy pliku.
 - Każdy prefiks to **osobne źródło** z własnym kodem i definicją, nawet gdy kilka źródeł ma identyczny układ
   kolumn (np. wszystkie `ACTUALS_*` – rozdz. 4). Układy nie są łączone w jedno źródło.
 - Plik bez pasującego prefiksu nie jest importowany; po dodaniu definicji zostanie zaimportowany przy kolejnym
   imporcie.
-- **Etap 1 (aplikacja):** definicja na ekranie Administracja to kod, prefiks, typ raportu, oczekiwane kolumny
-  (sygnatura), parser i aktywność. Ziarno, klucz, znaczenie okresu, waluta i format liczb wynikają z parsera (rozdz. 4)
-  – nie są polami definicji. Definicję można usunąć: bieżąca wersja zostaje zamknięta (historia i zaimportowane dane
-  zostają), pliki o tym prefiksie są odtąd nierozpoznane, a kod i prefiks można użyć ponownie.
-- Oczekiwane kolumny: jedna w wierszu albo wiersz nagłówków wklejony z Excela (kolumny rozdzielone tabulatorem);
-  przycisk „Kolumny z pliku…” wczytuje wiersz nagłówków z pliku źródła tak samo jak import. Pod polem widać sygnaturę
-  wpisanego układu – do porównania z sygnaturą pliku z komunikatu importu. Zapis tworzy nową wersję definicji.
-- Źródło z parserem (ACTUALS): plik jest zapisywany w bazie (wersja pliku, wiersze surowe, dane kanoniczne) tylko
-  wtedy, gdy przejdzie walidację – sygnatura kolumn zgodna z definicją i wartości zgodne z typami. Plik, który jej
-  nie przejdzie, ma decyzję „błąd” i nie zostawia danych w bazie; przy kolejnym imporcie jest pobierany ponownie
-  (pomijane są tylko pliki, których treść jest w bazie). Źródło bez parsera – zapisywane są wiersze surowe.
+- **Etap 1 (aplikacja):** definicja na ekranie Administracja to kod, prefiks, typ raportu, parser i aktywność.
+  Układ kolumn, typy i pola wymagane trzyma **parser** – definicja tylko go wskazuje, więc kilka prefiksów o tym samym
+  układzie korzysta z jednego parsera (np. `ACTUALS_*` – rozdz. 4); ziarno, klucz i znaczenie okresu nie są polami
+  definicji. Zapis tworzy nową wersję definicji. Definicję można usunąć: bieżąca wersja zostaje zamknięta (historia
+  i zaimportowane dane zostają), pliki o tym prefiksie są odtąd nierozpoznane, a kod i prefiks można użyć ponownie.
+- **Parser** (`meta.Parser`, Administracja → Parsery, z historią) to pola danych kanonicznych: kolumna w pliku (pusta – pole nie jest czytane z pliku), nazwa kolumny w bazie, typ (tekst z długością,
+  kwota / liczba, liczba całkowita, data), opcjonalnie dopełnianie zerami tekstu z cyfr i znacznik **wymagane**
+  (wartość w każdym wierszu). „Kolumny z pliku…” wczytuje wiersz nagłówków z pliku źródła tak samo jak import:
+  dokłada pola dla nowych kolumn (tekst, nazwa w bazie z nazwy kolumny), oznacza kolumny, których w pliku brak,
+  i pokazuje przykładowe wartości. Dane wszystkich parserów są w jednej stałej tabeli `CAN_Row` (migracja 007,
+  `docs/model-danych.md`, rozdz. 5.1): zapis parsera przydziela nowemu polu wolny **slot** jego rodzaju (tekst do
+  400 znaków, dłuższy tekst, kwota / liczba, liczba całkowita, data) i nie zmienia tabel. Pole zachowuje slot we
+  wszystkich wersjach parsera; zmiana rodzaju pola (np. kwota → tekst, tekst ponad 400 znaków) jest odrzucana –
+  dodaje się nowe pole; slot pola usuniętego z parsera zostaje przy jego danych i nie jest przydzielany innemu polu
+  (pole dodane ponownie pod tą samą nazwą wraca do swojego slotu). Ekran pokazuje zajęte sloty (np. „T 19/40 · N 4/20”).
+- Źródło z parserem: plik jest zapisywany w bazie (wersja pliku i dane kanoniczne) tylko wtedy, gdy przejdzie
+  walidację – parser aktywny, w pliku są wszystkie kolumny parsera, pola wymagane wypełnione i wartości zgodne
+  z typami. Kolumny pliku spoza parsera nie są zapisywane (opis decyzji podaje ich nazwy – żeby je zachować, dodaje
+  się pola parsera). Plik, który walidacji nie przejdzie, ma decyzję „błąd” i nie zostawia danych w bazie; przy
+  kolejnym imporcie jest pobierany ponownie (pomijane są tylko pliki, których wersja jest w bazie). Źródło bez
+  parsera – zapisywana jest tylko wersja pliku (SHA-256, kolumny, liczba wierszy), bez danych.
+- **Sam plik nie jest przechowywany** (decyzja 2026-10-03, migracja 008): każdy raport RABIT to pełne dane
+  (ten sam układ, dane narastająco), a po udanym imporcie są one w `CAN_Row` – kopia pliku w bazie nic nie wnosi,
+  a wydłużała zapis.
+- **Import dużych plików** – cztery etapy, widoczne w statusie pliku na ekranie Import (z postępem i czasem etapu):
+  1. *pobieranie na dysk* – plik trafia do folderu tymczasowego na dysku lokalnym użytkownika (`%TEMP%\PZL-EV\import`,
+     usuwany po pliku), SHA-256 liczony w trakcie; dalsze odczyty idą z dysku, nie z sieci. SharePoint: najpierw
+     bezpośrednio przez HTTPS (konto Windows i ciasteczka bramy F5 z logowania w aplikacji – bez limitu rozmiaru usługi
+     WebClient), a gdy brama tego nie przepuści – przez WebDAV (ścieżka UNC; kolejne pliki tej witryny w tym imporcie od
+     razu przez WebDAV). Folder `Do_importu` – kopia pliku. Pliki nie są kopiowane do `Do_importu` (to folder wejściowy –
+     import widziałby je ponownie jako nowe pliki);
+  2. *sprawdzanie pliku* – duplikat (ten sam SHA-256), nagłówek, kolumny parsera;
+  3. *odczyt i zapis wierszy* – jeden przebieg pliku (CSV albo Excel – odczyt strumieniowy, wiersz po wierszu):
+     wiersze są parsowane w osobnym wątku i jednocześnie zapisywane wsadowo do `CAN_Row` w jednej transakcji. Błąd
+     wartości, puste pole wymagane albo niezgodne sumy kwot (z kolumn pliku i z wartości pól) wycofują zapis;
+  4. *kontrola w bazie* – liczba wierszy i sumy kwot po zapisie = odczytane z pliku (niezgodność wycofuje cały zapis),
+     zatwierdzenie; plik lokalny jest potem usuwany.
+
+  Liczby są zaokrąglane do 8 miejsc po przecinku. „Przerwij” działa także w trakcie pliku – jego zapis jest wycofany.
+  Czasy etapów każdego pliku i sposób pobrania (HTTPS / WebDAV, MB/s) są w logu. Dane każdej wersji pliku zostają w bazie –
+  najnowsza jest danymi bieżącymi, starsze służą do porównań. Arkusz Excela ma najwyżej 1 048 576 wierszy – większe
+  raporty tylko jako CSV.
 - Definicje powstają dla źródeł w miarę ustalania ich zawartości (O27).
 
 ---
@@ -103,8 +134,8 @@ i utrzymywaną na ekranie Administracja (`docs/funkcjonalnosc.md`, F08).
   ciasteczka z usługą WebClient – przy ważnej sesji zamyka się samo. Bez MS-OFBA okno otwiera stronę folderu.
   Czy sesja z okna aplikacji wystarcza usłudze WebClient – do potwierdzenia na stanowisku.
 - .NET zwraca na ścieżkach WebDAV nazwy plików z końcowym znakiem `\0` oraz wpisy „.” i „..”
-  (dotnet/runtime#62429) – import czyści nazwy (`FolderEntries`); narzędzie w Pythonie tego problemu nie miało.
-- Import czyta tylko główny folder lokalizacji (bez podfolderów – jak domyślnie narzędzie w Pythonie). Gdy folder
+  (dotnet/runtime#62429) – import czyści nazwy (`FolderEntries`).
+- Import czyta tylko główny folder lokalizacji (bez podfolderów). Gdy folder
   nie ma plików, a ma podfoldery – WARNING z ich nazwami. **Sprawdź źródła** (ekran Import) pokazuje bez importu
   dostęp, czytaną ścieżkę, pliki i ich rozpoznanie; szczegóły – log aplikacji (`app/README.md`).
 - Format: jeśli RABIT pozwala – CSV/TXT (brak limitu wierszy i konwersji typów przez Excel; O7).
@@ -115,15 +146,15 @@ i utrzymywaną na ekranie Administracja (`docs/funkcjonalnosc.md`, F08).
 
 Pliki z prefiksem `ACTUALS_` to zrzuty kosztów rzeczywistych pobierane z SAP CES przez RABIT, w formacie Excel
 (`.xlsx`). Każdy taki prefiks (np. `ACTUALS_PAF`, `ACTUALS_CES`) to **osobne źródło** (rozdz. 2); wszystkie mają
-wspólny układ kolumn:
+wspólny układ kolumn (od 2026-10):
 
-`Project Definition | WBS Element | Cost Element | Cost element descr. | Cost element name | CO object name |
-Transaction Currency | Value TranCurr | Object Currency | Value in Obj. Crcy | Report currency | Val.in rep.cur. |
-Total Quantity | Partner-CCtr | Source object name | Partner Object Class | Partner object | Original material |
-Original material description | Fiscal Year | Created on | Period`
+`Project Definition | WBS Element | Cost Element | Cost element name | CO object name | Transaction Currency |
+Value TranCurr | Object Currency | Value in Obj. Crcy | Report currency | Val.in rep.cur. | Total Quantity |
+Partner Object Class | Partner object | Original material | Original material description | Original Order Number |
+Item | Purchase order number | Fiscal Year | Created on | Period | Invoice Number`
 
-Przykład: `2DI473 | 2DI473001001 | 51105550 | PZL Material Consumption | … | PAF2 - materiały pod RTS batch 6 |
-USD | 261,54 | PLN | 1 254,51 | USD | 261,54 | 0,000 | … | 2026 | 2026-03-29 | 3`.
+Przykład: `2DI473 | 2DI473001001 | 51105550 | PZL Mat Consump | PAF2 - materiały pod RTS batch 6 | USD | 261,54 |
+PLN | 1 254,51 | USD | 261,54 | 0,000 | … | 8000123401 | 10 | 4500012301 | 2026 | 2026-03-29 | 3 | FV/2026/03/011`.
 
 | Kolumna | Znaczenie |
 |---|---|
@@ -137,10 +168,14 @@ USD | 261,54 | PLN | 1 254,51 | USD | 261,54 | 0,000 | … | 2026 | 2026-03-29 |
 
 - Liczby w formacie polskim (spacja tysięcy, przecinek dziesiętny).
 - Struktura CES jest **płaska**: projekt → lista elementów WBS (numeracja ciągła z lukami).
-- Dane kanoniczne (parser `ACTUALS`): wymagane `WBS Element`, `Fiscal Year`, `Period`; numer elementu kosztowego
-  złożony z cyfr uzupełniany zerami do 10 znaków; minus na końcu liczby (zapis SAP, np. `48,00-`) oznacza wartość
-  ujemną. Klucz wiersza nie jest ustalony (O27) – bez kontroli duplikatów. Kontrola przepływu przy imporcie:
-  liczba wierszy i sumy `Value in Obj. Crcy` i `Val.in rep.cur.` danych kanonicznych zgodne z wierszami surowymi.
+- Dane kanoniczne – parser `ACTUALS` (migracja 004; dane w `CAN_Row` – migracja 007): pola wszystkich kolumn powyżej; numer
+  elementu kosztowego złożony z cyfr uzupełniany zerami do 10 znaków; minus na końcu liczby (zapis SAP, np. `48,00-`) oznacza wartość ujemną.
+  Pola wymagane wskazuje parser (`WBS Element`, `Fiscal Year`, `Period`). Pola `Cost element descr.`,
+  `Partner-CCtr`, `Source object name` (wcześniejszy układ) zostają w parserze ze swoimi slotami, ale nie są czytane z pliku. Układ
+  raportu może się zmieniać – zmienia się wtedy pola parsera ACTUALS (Administracja → Parsery), nie kod ani
+  definicje. Klucz wiersza nie jest ustalony (O27) – bez kontroli duplikatów. Kontrola przepływu przy imporcie:
+  liczba wierszy i sumy wszystkich pól liczbowych (kwot) parsera w danych kanonicznych zgodne z kolumnami pliku –
+  przed zapisem i ponownie w bazie po zapisie (rozdz. 2).
 
 ---
 
@@ -162,7 +197,7 @@ Wszystkie elementy WBS P1S (nadrzędne i szczegółowe), czytane bez zmian.
 | `PRCTR` | profit center |
 | `Z_KAT_ZBIORCZA`, `Z_KATEGORIA` | kategorie – poziomy drzewa (rozdz. 5.3) |
 | `Z_MODEL`, `MATNR_LO`, `SERNR_LO`, `KDAUF`/`KDPOS`, `KUNNR`, `BSTNK`, `MATNR`, `MAKTX`, `AUFNR`, `TECHS` | atrybuty opisowe: model, materiał i numer seryjny, zlecenie sprzedaży, klient, zamówienie klienta, materiał, zlecenie |
-| `Z_ACTIVE`, `LOEKZ` | aktywność i znacznik usunięcia |
+| `Z_ACTIVE`, `LOEKZ` | aktywność i znacznik usunięcia: `LOEKZ` niepuste = usunięty; `Z_ACTIVE` puste, `0` albo `N` = nieaktywny (do potwierdzenia – Diagnostyka → Sprawdź PZLPROD pokazuje faktyczne wartości) |
 | `ERDAT`, `AEDAT` | daty utworzenia i zmiany – wykrywanie nowych elementów |
 
 ### 5.2 `PZLPROD.LOG.WBS_DIC`
@@ -243,8 +278,10 @@ Poziomy ERROR / WARNING – `docs/pipeline-fazy.md`, rozdz. 1.3.
 | plik bez pasującego prefiksu | WARNING (plik nierozpoznany, nieimportowany) | import |
 | brak aktywnej lokalizacji RABIT | WARNING – import czyta tylko folder `Do_importu` | import |
 | folder lokalizacji bez plików, z podfolderami | WARNING z nazwami podfolderów (import ich nie czyta) | import |
-| sygnatura kolumn niezgodna z definicją (zmiana układu raportu) | ERROR dla pliku – plik nie jest zapisywany w bazie; po poprawie „Oczekiwanych kolumn” kolejny import pobiera go ponownie | import |
-| wartość niezgodna z typem kolumny | ERROR dla pliku (wiersz i kolumna) – plik nie jest zapisywany w bazie | import |
+| brak w pliku kolumny parsera (zmiana układu raportu) | ERROR dla pliku – plik nie jest zapisywany w bazie; po poprawie pól parsera kolejny import pobiera go ponownie | import |
+| kolumna pliku spoza parsera | bez problemu – kolumna tylko w wierszach surowych (opis decyzji importu) | import |
+| wartość niezgodna z typem pola, tekst dłuższy niż pole, puste pole wymagane | ERROR dla pliku (wiersz i kolumna) – plik nie jest zapisywany w bazie | import |
+| parser definicji nieaktywny albo usunięty | ERROR dla pliku – plik nie jest zapisywany w bazie | import |
 | duplikat klucza w pliku albo między częściami jednego źródła | ERROR | import / P2 |
 | reguły szczegółowe źródła | wg definicji | import |
 

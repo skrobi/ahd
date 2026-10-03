@@ -7,8 +7,9 @@ namespace PzlEv.Shared.Utils.Config;
 /// <summary>
 /// Wczytuje pzl-ev.json obok PZL-EV.exe (wzór z opisem każdego ustawienia – app/pzl-ev.json, kopiowany przy budowie).
 /// Układ: "Env" (TEST / PROD) i "Environments": { "TEST": { NetworkRoot, Sql: { Server, Database, Schema,
-/// TablePrefix, TrustServerCertificate } }, "PROD": {…} }. Plik jest wymagany; brak pliku albo pola = błąd
-/// z opisem przy starcie (bez cichych wartości domyślnych). Ścieżki mogą zawierać zmienne, np. %LOCALAPPDATA%.
+/// TablePrefix, TrustServerCertificate }, PzlProd: { Server, Database, Schema, TrustServerCertificate } }, "PROD": {…} }.
+/// Plik jest wymagany; brak pliku albo pola = błąd z opisem przy starcie (bez cichych wartości domyślnych). Sekcja
+/// PzlProd jest opcjonalna – bez niej ekran mapowania pokazuje, czego brakuje. Ścieżki mogą zawierać zmienne, np. %LOCALAPPDATA%.
 /// </summary>
 public static partial class AppConfigLoader
 {
@@ -44,11 +45,13 @@ public static partial class AppConfigLoader
             if (!section.TryGetProperty("Sql", out var sql))
                 throw new InvalidOperationException($"{path}: {at}.Sql – sekcja wymagana (Server, Database, Schema)");
 
-            return new AppConfig(env, System.Environment.ExpandEnvironmentVariables(networkRoot), ReadSql(sql, $"{path}: {at}.Sql"));
+            var pzlProd = section.TryGetProperty("PzlProd", out var prod) ? ReadSql(prod, $"{path}: {at}.PzlProd", tablePrefix: false) : null;
+            return new AppConfig(env, System.Environment.ExpandEnvironmentVariables(networkRoot), ReadSql(sql, $"{path}: {at}.Sql"), pzlProd);
         }
     }
 
-    private static SqlSettings ReadSql(JsonElement section, string at)
+    /// <summary>Sekcja połączenia; tablePrefix: false – tabele bez sygnatury (PZLPROD: [LOG].[WBS]).</summary>
+    private static SqlSettings ReadSql(JsonElement section, string at, bool tablePrefix = true)
     {
         var connectionString = Text(section, "ConnectionString");
         var server = Text(section, "Server");
@@ -56,11 +59,11 @@ public static partial class AppConfigLoader
         if (connectionString is null && (server is null || database is null))
             throw new InvalidOperationException($"{at} – wymagane Server i Database");
         var schema = Text(section, "Schema") ?? throw new InvalidOperationException($"{at}.Schema – pole wymagane (np. FINOP)");
-        var prefix = Text(section, "TablePrefix") ?? DefaultTablePrefix;
+        var prefix = tablePrefix ? Text(section, "TablePrefix") ?? DefaultTablePrefix : "";
         // Schemat i sygnatura trafiają do nazw obiektów SQL – tylko litery, cyfry i _.
         if (!Identifier().IsMatch(schema))
             throw new InvalidOperationException($"{at}.Schema = '{schema}' – dozwolone litery, cyfry i _");
-        if (!Identifier().IsMatch(prefix))
+        if (tablePrefix && !Identifier().IsMatch(prefix))
             throw new InvalidOperationException($"{at}.TablePrefix = '{prefix}' – dozwolone litery, cyfry i _");
         var trust = section.TryGetProperty("TrustServerCertificate", out var t) && t.ValueKind == JsonValueKind.True;
         return new SqlSettings(server ?? "", database ?? "", schema, prefix, trust, connectionString);

@@ -10,4 +10,8 @@ public static class SqlJson
     public static IReadOnlyList<string> Strings(string json) => JsonSerializer.Deserialize<List<string>>(json) ?? [];
 
     public static string?[] Values(string json) => JsonSerializer.Deserialize<string?[]>(json) ?? [];
+
+    /// <summary>Lista obiektów (pola parsera, mapowanie kolumn); pusta przy braku wartości.</summary>
+    public static IReadOnlyList<T> List<T>(string? json) =>
+        string.IsNullOrWhiteSpace(json) ? [] : JsonSerializer.Deserialize<List<T>>(json) ?? [];
 }

@@ -42,6 +42,9 @@ public sealed class ImportServiceTests : IDisposable
 
     private string ImportFolder => _app.Config.ImportFolder;
 
+    /// <summary>Dane kanoniczne pliku z tabeli parsera ACTUALS.</summary>
+    private IReadOnlyList<IReadOnlyDictionary<string, object?>> Canonical(long fileId) => _store.CanonicalRows(_store.ActiveParser(ActualsLayout.Parser)!, fileId);
+
     private string CopySample(string folder, string name)
     {
         Directory.CreateDirectory(folder);
@@ -73,14 +76,17 @@ public sealed class ImportServiceTests : IDisposable
         var seen = Assert.Single(_store.Seen(run.BatchId));
         var file = _store.FindByHash(seen.Sha256!)!;
         Assert.Equal("utworzone", file.CanonicalStatus);
-        Assert.Equal(6, _store.RawRows(file.Id).Count);
-        var actuals = _store.Actuals(file.Id);
+        Assert.Equal((6, 6), (file.RowCount, file.CanonicalRows));
+        var actuals = Canonical(file.Id);
         Assert.Equal(6, actuals.Count);
-        Assert.Equal(10574.11m, actuals.Sum(a => a.ValueObjCrcy));     // testdata/README.md
-        Assert.Equal(2203.12m, actuals.Sum(a => a.ValueRepCur));
-        Assert.Equal("0051105550", actuals[0].CostElement);
-        Assert.Equal(-230.40m, actuals[4].ValueObjCrcy);               // minus na końcu (zapis SAP)
-        Assert.Equal(new DateOnly(2026, 3, 29), actuals[0].CreatedOn);
+        Assert.Equal(10574.11m, actuals.Sum(a => (decimal)a["ValueObjCrcy"]!));     // testdata/README.md
+        Assert.Equal(2203.12m, actuals.Sum(a => (decimal)a["ValueRepCur"]!));
+        Assert.Equal("0051105550", actuals[0]["CostElement"]);
+        Assert.Equal(-230.40m, (decimal)actuals[4]["ValueObjCrcy"]!);               // minus na końcu (zapis SAP)
+        Assert.Equal(new DateTime(2026, 3, 29), actuals[0]["CreatedOn"]);
+        Assert.Equal(("8000123401", "10", "4500012301", "FV/2026/03/011"),
+            (actuals[0]["OriginalOrderNumber"], actuals[0]["Item"], actuals[0]["PurchaseOrderNumber"], actuals[0]["InvoiceNumber"]));
+        Assert.Null(actuals[0]["PartnerCctr"]);                                     // pole parsera bez kolumny w pliku
         Assert.Equal("zakończony", _store.Batches(1).Single().Status);
         Assert.Contains(_app.Journal.Recent(5), e => e.Message.StartsWith($"Import #{run.BatchId}"));
     }
@@ -184,9 +190,36 @@ public sealed class ImportServiceTests : IDisposable
 
         Assert.Equal(ImportBatchStatus.Running, statusAtStart);                   // wpis „w toku” od początku importu
         Assert.Contains(_app.Journal.Recent(5), e => e.Message == $"Import #{run.BatchId} rozpoczęty (PZL\\analityk, {Environment.MachineName})");
-        Assert.Equal(["importowanie…", "zaimportowany"],
-            progress.Items.Where(p => p.FileName == "ACTUALS_PAF_01.csv").Select(p => p.Status!.Split(" – ")[0]));
+        var statuses = progress.Items.Where(p => p.FileName == "ACTUALS_PAF_01.csv").Select(p => p.Status!).ToList();
+        Assert.Equal(   // etapy importu pliku na ekranie, potem decyzja
+        [
+            ImportService.StageDownload, ImportService.StageCheck, ImportService.StageRows, "4/4 kontrola w bazie (liczba wierszy i sumy)",
+            "4/4 zatwierdzanie zapisu", "zaimportowany",
+        ], statuses.Select(s => s.Split(" – ")[0].Split(" · ")[0]).Distinct());
+        Assert.Contains(statuses, s => s.StartsWith($"{ImportService.StageDownload} – ") && s.Contains(" MB, kopia pliku · "));
+        Assert.Contains(statuses, s => s.StartsWith($"{ImportService.StageRows} – 6 wierszy"));
         Assert.Equal("zakończony", _store.Batches(1).Single().Status);
+    }
+
+    [SqlFact]
+    public void Import_cancelled_while_rows_are_written_leaves_nothing_in_database()
+    {
+        Use();
+        var path = CopySample(ImportFolder, "ACTUALS_PAF_01.csv");
+        using var cancel = new CancellationTokenSource();
+        var progress = new Collect(p =>
+        {
+            if (p.Status?.StartsWith(ImportService.StageRows) == true)
+                cancel.Cancel();   // „Przerwij” w trakcie zapisu wierszy
+        });
+
+        var run = _import.Run(progress, cancel.Token);
+
+        Assert.True(run.Cancelled);
+        Assert.Empty(run.Files);
+        Assert.Null(_store.FindByHash(FileHash.Sha256(File.ReadAllBytes(path))));   // zapis wycofany – kolejny import pobierze plik
+        Assert.Equal("przerwany – plik nie zapisany", progress.Items.Last(p => p.FileName == "ACTUALS_PAF_01.csv").Status);
+        Assert.Equal("przerwany", _store.Batches(1).Single().Status);
     }
 
     [SqlFact]
@@ -229,7 +262,7 @@ public sealed class ImportServiceTests : IDisposable
         _config.SaveLocation(new LocationInput(null, null, "RABIT test", rabit, Active: true));
         CopySample(ImportFolder, "ACTUALS_PAF_01.csv");
         var other = CopySample(rabit, "ACTUALS_PAF_01.csv");
-        File.AppendAllText(other, "2DI473;2DI473001003;51105550;x;x;x;PLN;1,00;PLN;1,00;USD;0,25;0,000;;;;;;;2026;2026-03-31;3\r\n");
+        File.AppendAllText(other, "2DI473;2DI473001003;51105550;x;x;PLN;1,00;PLN;1,00;USD;0,25;0,000;;;;;;;;2026;2026-03-31;3;\r\n");
 
         var run = _import.Run();
 
@@ -240,7 +273,7 @@ public sealed class ImportServiceTests : IDisposable
     public void Longest_prefix_wins()
     {
         Use();
-        _config.SaveDefinition(new DefinitionInput(null, null, "ACTUALS", "ACTUALS", "ogólny", ["A"], SourceParsers.None, true));
+        _config.SaveDefinition(new DefinitionInput(null, null, "ACTUALS", "ACTUALS", "ogólny", SourceParsers.None, true));
         CopySample(ImportFolder, "ACTUALS_PAF_01.csv");
 
         Assert.Equal("ACTUALS_PAF", Assert.Single(_import.Run().Files).SourceCode);
@@ -252,9 +285,8 @@ public sealed class ImportServiceTests : IDisposable
         Use();
         // Wszystkie ACTUALS_… jako jedno źródło: istniejące definicje wyłączone, nowa z prefiksem „ACTUALS_*”.
         foreach (var d in _config.Definitions())
-            _config.SaveDefinition(new DefinitionInput(d.DefinitionId, d.Version, d.Code, d.Prefix, d.ReportType, d.Columns, d.Parser, Active: false));
-        _config.SaveDefinition(new DefinitionInput(null, null, "ACTUALS", "ACTUALS_*", "Koszty rzeczywiste CES", SourceParsers.ActualsColumns,
-            SourceParsers.Actuals, true));
+            Assert.True(_config.SaveDefinition(new DefinitionInput(d.DefinitionId, d.Version, d.Code, d.Prefix, d.ReportType, d.Parser, Active: false)).Success);
+        _config.SaveDefinition(new DefinitionInput(null, null, "ACTUALS", "ACTUALS_*", "Koszty rzeczywiste CES", ActualsLayout.Parser, true));
         CopySample(ImportFolder, "ACTUALS_PAF2_B6_AC1.csv");
 
         var result = Assert.Single(_import.Run().Files);
@@ -263,30 +295,81 @@ public sealed class ImportServiceTests : IDisposable
         Assert.Equal("ACTUALS", result.SourceCode);
     }
 
+    /// <summary>Zapisuje nową wersję parsera ACTUALS ze zmienionymi polami.</summary>
+    private void ChangeActualsParser(Func<ParserField, ParserField> change)
+    {
+        var parser = _config.Parsers().Single(p => p.Code == ActualsLayout.Parser);
+        var saved = _config.SaveParser(new ParserInput(parser.ParserId, parser.Version, parser.Code, parser.Name, parser.Fields.Select(change).ToList(), parser.Active));
+        Assert.True(saved.Success, saved.Message + string.Join("; ", saved.Issues.Select(i => i.Message)));
+    }
+
     [SqlFact]
-    public void Changed_column_layout_is_an_error_file_is_not_stored_and_is_imported_after_definition_fix()
+    public void Missing_parser_column_is_an_error_file_is_not_stored_and_is_imported_after_parser_fix()
     {
         Use();
         Directory.CreateDirectory(ImportFolder);
         var lines = File.ReadAllLines(TestServices.TestData("RABIT", "ACTUALS_PAF_01.csv"));
-        File.WriteAllLines(Path.Combine(ImportFolder, "ACTUALS_PAF_01.csv"), lines.Select((l, i) => (i == 0 ? "Dodatkowa;" : "x;") + l)); // dodatkowa kolumna
+        File.WriteAllLines(Path.Combine(ImportFolder, "ACTUALS_PAF_01.csv"), lines.Select(l => l[..l.LastIndexOf(';')]));   // bez Invoice Number
 
         var first = _import.Run();
 
         Assert.Equal(FileDecisions.Error, Assert.Single(first.Files).Decision);
-        Assert.Contains(first.Issues, i => i.Level == CheckLevel.Error && i.Message.Contains("układ kolumn niezgodny") && i.Message.Contains("nie zapisany w bazie"));
+        Assert.Contains(first.Issues, i => i.Level == CheckLevel.Error && i.Message.Contains("brak kolumn parsera ACTUALS: Invoice Number") && i.Message.Contains("nie zapisany w bazie"));
         Assert.Null(_store.FindByHash(Assert.Single(_store.Seen(first.BatchId)).Sha256!));   // ani plik, ani wiersze surowe
         Assert.Equal(ImportService.WillImport, Assert.Single(_import.Check().Files).Note);   // nie jest „bez zmian”
 
-        var paf = _config.Definitions().Single(d => d.Code == "ACTUALS_PAF");
-        Assert.True(_config.SaveDefinition(new DefinitionInput(paf.DefinitionId, paf.Version, paf.Code, paf.Prefix, paf.ReportType,
-            ["Dodatkowa", .. SourceParsers.ActualsColumns], paf.Parser, paf.Active)).Success);
+        ChangeActualsParser(f => f.Field == "InvoiceNumber" ? f with { Column = "" } : f);   // pole przestaje być czytane z pliku
         var second = _import.Run();   // ten sam plik, te same metadane – pobrany ponownie
 
         Assert.Equal(FileDecisions.Imported, Assert.Single(second.Files).Decision);
         var file = _store.FindByHash(Assert.Single(_store.Seen(second.BatchId)).Sha256!)!;
         Assert.Equal("utworzone", file.CanonicalStatus);
-        Assert.Equal(6, _store.Actuals(file.Id).Count);
+        Assert.Equal(6, Canonical(file.Id).Count);
+        Assert.All(Canonical(file.Id), r => Assert.Null(r["InvoiceNumber"]));
+    }
+
+    [SqlFact]
+    public void Completed_import_resolves_problems_of_earlier_imports_and_cancelled_import_does_not()
+    {
+        Use();
+        Directory.CreateDirectory(ImportFolder);
+        var lines = File.ReadAllLines(TestServices.TestData("RABIT", "ACTUALS_PAF_01.csv"));
+        File.WriteAllLines(Path.Combine(ImportFolder, "ACTUALS_PAF_01.csv"), lines.Select(l => l[..l.LastIndexOf(';')]));   // bez Invoice Number
+        var first = _import.Run();
+        var firstProblems = _app.Problems.ByReference(ImportBatchRow.ProblemReference(first.BatchId));
+        Assert.Contains(firstProblems, p => p.Level == CheckLevel.Error && p.Message.Contains("brak kolumn parsera"));
+
+        using (var cts = new CancellationTokenSource())
+        {
+            cts.Cancel();
+            Assert.True(_import.Run(cancellation: cts.Token).Cancelled);
+        }
+        Assert.All(_app.Problems.ByReference(ImportBatchRow.ProblemReference(first.BatchId)), p => Assert.False(p.Resolved));   // przerwany – bez zmian
+
+        File.Copy(TestServices.TestData("RABIT", "ACTUALS_PAF_01.csv"), Path.Combine(ImportFolder, "ACTUALS_PAF_01.csv"), overwrite: true);   // poprawiony plik
+        var fixedRun = _import.Run();
+
+        Assert.Equal(FileDecisions.Imported, Assert.Single(fixedRun.Files).Decision);
+        Assert.All(_app.Problems.ByReference(ImportBatchRow.ProblemReference(first.BatchId)), p =>
+        {
+            Assert.True(p.Resolved);
+            Assert.Equal((_services.User.Account, $"nieaktualny – stan z importu #{fixedRun.BatchId}"), (p.ResolvedBy, p.Resolution));
+        });
+        Assert.All(_app.Problems.Open(), p => Assert.Equal(ImportBatchRow.ProblemReference(fixedRun.BatchId), p.Reference));   // tylko bieżący stan
+    }
+
+    [SqlFact]
+    public void Extra_column_in_file_is_imported_raw_only()
+    {
+        Use();
+        Directory.CreateDirectory(ImportFolder);
+        var lines = File.ReadAllLines(TestServices.TestData("RABIT", "ACTUALS_PAF_01.csv"));
+        File.WriteAllLines(Path.Combine(ImportFolder, "ACTUALS_PAF_01.csv"), lines.Select((l, i) => (i == 0 ? "Dodatkowa;" : "x;") + l));
+
+        var result = Assert.Single(_import.Run().Files);
+
+        Assert.Equal(FileDecisions.Imported, result.Decision);
+        Assert.EndsWith("kolumny spoza parsera (niezapisane): Dodatkowa", result.Description);
     }
 
     [SqlFact]
@@ -308,20 +391,106 @@ public sealed class ImportServiceTests : IDisposable
     }
 
     [SqlFact]
+    public void Source_with_parser_created_in_application_is_imported_without_table_changes()
+    {
+        Use();
+        var parserSaved = _config.SaveParser(new ParserInput(null, null, "KOSZTY", "Koszty – skrót",
+        [
+            new("Wbs", "WBS Element", FieldTypes.Text, 50, Required: true), new("Pln", "Value in Obj. Crcy", FieldTypes.Decimal),
+            new("Rok", "Fiscal Year", FieldTypes.Integer),
+        ], true));
+        Assert.True(parserSaved.Success, parserSaved.Message);
+        Assert.True(_config.SaveDefinition(new DefinitionInput(null, null, "SKROT", "SKROT_", "test", "KOSZTY", true)).Success);
+        CopySample(ImportFolder, "SKROT_01.csv");
+
+        var run = _import.Run();
+
+        Assert.Equal(FileDecisions.Imported, Assert.Single(run.Files).Decision);
+        var rows = _store.CanonicalRows(_store.ActiveParser("KOSZTY")!, _store.FindByHash(Assert.Single(_store.Seen(run.BatchId)).Sha256!)!.Id);
+        Assert.Equal(6, rows.Count);
+        Assert.Equal(["FileId", "RowNumber", "ParserVersion", "Wbs", "Pln", "Rok"], rows[0].Keys);
+        Assert.Equal(10574.11m, rows.Sum(r => (decimal)r["Pln"]!));
+    }
+
+    [SqlFact]
+    public void Canonical_data_not_matching_file_in_database_rolls_back_whole_file()
+    {
+        Use();
+        var parser = _store.ActiveParser(ActualsLayout.Parser)!;
+        var fields = parser.Fields.Where(f => f.Field is "WbsElement" or "ValueObjCrcy").ToList();
+        var batch = _store.BeginBatch(_services.Clock.Now, @"PZL\test", "PC-1", "0.16.0");
+        SourceFileRow FileRow(char hash) => new(0, new string(hash, 64), "RABIT", $"ACTUALS_PAF_{hash}.csv", "ACTUALS_PAF", 10, _services.Clock.Now, "csv", null,
+            "utf-8", ";", ["WBS Element", "Value in Obj. Crcy"], "sygnatura", 2, batch, _services.Clock.Now, @"PZL\test", "", 0, null);
+        CanonicalRow[] rows = [new(1, ["A.1", 10.5m]), new(2, ["A.2", 5m])];
+        int Count(string table)
+        {
+            using var connection = _database!.Sql.Open();
+            return Dapper.SqlMapper.ExecuteScalar<int>(connection, $"SELECT COUNT(*) FROM {_database.Sql.Table(table)}");
+        }
+
+        var stages = new List<string>();
+
+        var error = Assert.Throws<CanonicalFlowException>(() => _store.StoreFile(FileRow('a'),
+            new CanonicalData(parser, fields, rows, () => new CanonicalTotals(2, new Dictionary<string, decimal> { ["ValueObjCrcy"] = 16m }))));
+        Assert.Throws<ContentRejectedException>(() => _store.StoreFile(FileRow('c'),
+            new CanonicalData(parser, fields, rows, () => throw new ContentRejectedException("błędy wartości"))));
+        var stored = _store.StoreFile(FileRow('b'),
+            new CanonicalData(parser, fields, rows, () => new CanonicalTotals(2, new Dictionary<string, decimal> { ["ValueObjCrcy"] = 15.5m })), stages.Add)!;
+
+        Assert.StartsWith("dane kanoniczne w bazie niezgodne z plikiem (wiersze 2/2, suma Value in Obj. Crcy 16/15", error.Message);
+        Assert.Null(_store.FindByHash(new string('a', 64)));   // plik, treść i wiersze wycofane razem
+        Assert.Null(_store.FindByHash(new string('c', 64)));   // błędy treści wykryte po przesłaniu wierszy – też wycofane
+        Assert.Equal(["kontrola w bazie (liczba wierszy i sumy)", "zatwierdzanie zapisu"], stages);
+        Assert.Equal((2, 2), (_store.File(stored.FileId)!.RowCount, _store.File(stored.FileId)!.CanonicalRows));
+        Assert.Equal((2, 15.5m), (stored.CanonicalRows, stored.Sums["ValueObjCrcy"]));
+        Assert.Equal(2, Count("can.Row"));
+        Assert.Equal(["A.1", "A.2"], _store.CanonicalRows(parser, stored.FileId).Select(r => r["WbsElement"]));
+    }
+
+    [SqlFact]
+    public void Required_field_empty_in_a_row_is_an_error_and_file_is_not_stored()
+    {
+        Use();
+        ChangeActualsParser(f => f.Field == "PartnerObject" ? f with { Required = true } : f);
+        CopySample(ImportFolder, "ACTUALS_PAF_01.csv");   // Partner object pusty w części wierszy
+
+        var run = _import.Run();
+
+        Assert.Equal(FileDecisions.Error, Assert.Single(run.Files).Decision);
+        Assert.Contains(run.Issues, i => i.Message == "Partner object: pole wymagane");
+        Assert.Null(_store.FindByHash(Assert.Single(_store.Seen(run.BatchId)).Sha256!));
+    }
+
+    [SqlFact]
+    public void Inactive_parser_is_an_error_and_file_is_not_stored()
+    {
+        Use();
+        var parser = _config.Parsers().Single(p => p.Code == ActualsLayout.Parser);
+        Assert.True(_config.SaveParser(new ParserInput(parser.ParserId, parser.Version, parser.Code, parser.Name, parser.Fields, Active: false)).Success);
+        CopySample(ImportFolder, "ACTUALS_PAF_01.csv");
+
+        var run = _import.Run();
+
+        Assert.Equal(FileDecisions.Error, Assert.Single(run.Files).Decision);
+        Assert.Contains(run.Issues, i => i.Message.Contains("parser ACTUALS definicji ACTUALS_PAF nie istnieje albo jest nieaktywny"));
+        Assert.Null(_store.FindByHash(Assert.Single(_store.Seen(run.BatchId)).Sha256!));
+    }
+
+    [SqlFact]
     public void Excel_file_with_numeric_cells_is_imported()
     {
         Use();
         Directory.CreateDirectory(ImportFolder);
         var sample = TabularFileReader.Read(TestServices.TestData("RABIT", "ACTUALS_PAF_01.csv"));
         var rows = sample.Rows.Select(r => (IReadOnlyList<object?>)r.Select((v, i) =>
-            i is 7 or 9 or 11 or 12 && PolishNumber.TryParse(v, out var d) ? d : (object?)v).ToList());
+            i is 6 or 8 or 10 or 11 && PolishNumber.TryParse(v, out var d) ? d : (object?)v).ToList());
         ExcelTableWriter.Write(Path.Combine(ImportFolder, "ACTUALS_PAF_01.xlsx"), "Sheet1", sample.Headers, rows);
 
         var run = _import.Run();
 
         var file = _store.FindByHash(Assert.Single(_store.Seen(run.BatchId)).Sha256!)!;
         Assert.DoesNotContain(run.Issues, i => i.Message != ImportService.NoRabitLocation);
-        Assert.Equal(2203.12m, _store.Actuals(file.Id).Sum(a => a.ValueRepCur));
+        Assert.Equal(2203.12m, Canonical(file.Id).Sum(a => (decimal)a["ValueRepCur"]!));
     }
 
     [SqlFact]

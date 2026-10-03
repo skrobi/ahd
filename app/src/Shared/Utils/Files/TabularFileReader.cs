@@ -1,14 +1,13 @@
 using System.IO;
 using System.Globalization;
 using System.Text;
-using ClosedXML.Excel;
 
 namespace PzlEv.Shared.Utils.Files;
 
 /// <summary>
-/// Odczyt plików tabelarycznych według reguł narzędzia testowego (pzl_ev/etap1/inspekcja.py):
-/// Excel – pierwszy arkusz, nagłówek w pierwszym używanym wierszu; CSV/TXT – kodowanie UTF-8 (z BOM) albo CP1250,
-/// separator wykrywany spośród ; , TAB |. Puste wiersze są pomijane.
+/// Odczyt plików tabelarycznych (strumieniowo z dysku albo pamięci – miliony wierszy bez gromadzenia w pamięci):
+/// Excel – pierwszy arkusz, nagłówek w pierwszym używanym wierszu (XlsxStreamReader); CSV/TXT – kodowanie UTF-8 (z BOM)
+/// albo CP1250, separator wykrywany spośród ; , TAB |. Puste wiersze są pomijane.
 /// </summary>
 public static class TabularFileReader
 {
@@ -31,111 +30,102 @@ public static class TabularFileReader
     {
         if (!ExcelExtensions.Contains(Path.GetExtension(path)))
             return [];
-        using var workbook = new XLWorkbook(path);
-        return workbook.Worksheets.Select(w => w.Name).ToList();
+        using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
+        return XlsxStreamReader.SheetNames(stream);
     }
 
-    public static TabularData Read(string path, string? sheet = null) => Read(File.ReadAllBytes(path), Path.GetFileName(path), sheet);
+    public static TabularData Read(string path, string? sheet = null) => OpenFile(path, sheet).ToData();
 
-    /// <summary>Odczyt z treści pliku – import liczy hash i czyta wiersze z tych samych bajtów.</summary>
-    public static TabularData Read(byte[] content, string fileName, string? sheet = null)
+    /// <summary>Wszystkie wiersze w pamięci – małe pliki (słowniki, podgląd). Import czyta strumieniowo (OpenFile).</summary>
+    public static TabularData Read(byte[] content, string fileName, string? sheet = null) => Open(content, fileName, sheet).ToData();
+
+    /// <summary>Otwarcie treści w pamięci do odczytu strumieniowego (treść pliku z bazy, testy).</summary>
+    public static TabularSource Open(byte[] content, string fileName, string? sheet = null) =>
+        Open(() => new MemoryStream(content, writable: false), fileName, sheet);
+
+    /// <summary>Otwarcie pliku z dysku do odczytu strumieniowego – każde czytanie wierszy otwiera plik od nowa (import).</summary>
+    public static TabularSource OpenFile(string path, string? sheet = null) =>
+        Open(() => new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 1 << 16, FileOptions.SequentialScan), Path.GetFileName(path), sheet);
+
+    /// <summary>open – nowy strumień treści przy każdym odczycie.</summary>
+    public static TabularSource Open(Func<Stream> open, string fileName, string? sheet = null)
     {
         var ext = Path.GetExtension(fileName);
+        var type = ext.TrimStart('.').ToLowerInvariant();
         if (ExcelExtensions.Contains(ext))
-            return ReadExcel(content, ext, sheet);
+            return XlsxStreamReader.Open(open, type, sheet);
         if (TextExtensions.Contains(ext))
-            return ReadText(content, ext);
+            return OpenText(open, type);
         throw new NotSupportedException($"Nieobsługiwany format pliku: {fileName}");
     }
 
-    private static TabularData ReadExcel(byte[] content, string ext, string? sheetName)
+    private static TabularSource OpenText(Func<Stream> open, string type)
     {
-        using var workbook = new XLWorkbook(new MemoryStream(content));
-        var ws = sheetName is null ? workbook.Worksheets.First() : workbook.Worksheet(sheetName);
-        var used = ws.RangeUsed();
-        var type = ext.TrimStart('.').ToLowerInvariant();
-        if (used is null)
-            return new TabularData([], [], type, ws.Name, null, null);
-
-        var firstRow = used.FirstRow().RowNumber();
-        var lastRow = used.LastRow().RowNumber();
-        var lastCol = used.LastColumn().ColumnNumber();
-
-        var headers = new List<string>(lastCol);
-        for (var c = 1; c <= lastCol; c++)
-            headers.Add((CellText(ws.Cell(firstRow, c)) ?? "").Trim());
-
-        var rows = new List<string?[]>(Math.Max(0, lastRow - firstRow));
-        for (var r = firstRow + 1; r <= lastRow; r++)
+        bool bom, utf8;
+        using (var stream = open())
+            (bom, utf8) = DetectUtf8(stream);
+        var encoding = utf8 ? new UTF8Encoding(encoderShouldEmitUTF8Identifier: false) : Encoding.GetEncoding(1250);
+        StreamReader Reader()
         {
-            var values = new string?[lastCol];
-            var any = false;
-            for (var c = 1; c <= lastCol; c++)
-            {
-                var text = CellText(ws.Cell(r, c));
-                values[c - 1] = text;
-                any |= !string.IsNullOrWhiteSpace(text);
-            }
-            if (any)
-                rows.Add(values);
+            var stream = open();
+            if (bom)
+                stream.ReadExactly(new byte[3]);
+            return new StreamReader(stream, encoding, detectEncodingFromByteOrderMarks: false, bufferSize: 1 << 16);
         }
-        return new TabularData(headers, rows, type, ws.Name, null, null);
-    }
 
-    private static string? CellText(IXLCell cell)
-    {
-        var v = cell.Value;
-        if (v.IsBlank)
-            return null;
-        if (v.IsText)
-            return v.GetText();
-        if (v.IsNumber)
-            return v.GetNumber().ToString("R", CultureInfo.InvariantCulture);
-        if (v.IsDateTime)
-        {
-            var d = v.GetDateTime();
-            return d.TimeOfDay == TimeSpan.Zero
-                ? d.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)
-                : d.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
-        }
-        if (v.IsBoolean)
-            return v.GetBoolean() ? "TRUE" : "FALSE";
-        if (v.IsTimeSpan)
-            return v.GetTimeSpan().ToString("c", CultureInfo.InvariantCulture);
-        return "#" + v.GetError();
-    }
-
-    private static TabularData ReadText(byte[] content, string ext)
-    {
-        var (text, encoding) = Decode(content);
-        var firstLine = text.Split('\n', 2)[0].TrimEnd('\r');
+        string firstLine;
+        using (var reader = Reader())
+            firstLine = reader.ReadLine() ?? "";
         var delimiter = DetectDelimiter(firstLine);
-        var records = CsvParser.Parse(text, delimiter);
-        var type = ext.TrimStart('.').ToLowerInvariant();
-        if (records.Count == 0)
-            return new TabularData([], [], type, null, encoding, DelimiterName(delimiter));
+        var name = DelimiterName(delimiter);
+        var encodingName = utf8 ? "utf-8" : "cp1250";
 
-        var headers = records[0].Select(h => h.Trim()).ToList();
-        var rows = new List<string?[]>(records.Count - 1);
-        foreach (var record in records.Skip(1))
+        string[]? header;
+        using (var reader = Reader())
+            header = CsvParser.Read(reader, delimiter).FirstOrDefault();
+        if (header is null)
+            return new TabularSource([], type, null, encodingName, name, () => []);
+
+        IEnumerable<string?[]> Rows()
         {
-            if (record.All(string.IsNullOrWhiteSpace))
-                continue;
-            rows.Add(record.Select(v => string.IsNullOrEmpty(v) ? null : v).ToArray());
+            using var reader = Reader();
+            foreach (var record in CsvParser.Read(reader, delimiter).Skip(1))
+            {
+                if (record.All(string.IsNullOrWhiteSpace))
+                    continue;
+                yield return record.Select(v => string.IsNullOrEmpty(v) ? null : v).ToArray();
+            }
         }
-        return new TabularData(headers, rows, type, null, encoding, DelimiterName(delimiter));
+        return new TabularSource(header.Select(h => h.Trim()).ToList(), type, null, encodingName, name, Rows);
     }
 
-    private static (string Text, string Encoding) Decode(byte[] content)
+    /// <summary>BOM UTF-8 i czy cała treść jest poprawnym UTF-8 (odczyt strumieniowy, bez treści w pamięci).</summary>
+    private static (bool Bom, bool Utf8) DetectUtf8(Stream stream)
     {
+        var bytes = new byte[1 << 16];
+        var chars = new char[bytes.Length + 4];
+        var count = stream.ReadAtLeast(bytes, 3, throwOnEndOfStream: false);
+        var bom = count >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF;
+        var decoder = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true).GetDecoder();
         try
         {
-            var text = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true).GetString(content);
-            return (text.TrimStart('﻿'), "utf-8");
+            var offset = bom ? 3 : 0;
+            while (count > 0)
+            {
+                while (offset < count)
+                {
+                    decoder.Convert(bytes, offset, count - offset, chars, 0, chars.Length, false, out var used, out _, out _);
+                    offset += Math.Max(used, 1);
+                }
+                count = stream.Read(bytes);
+                offset = 0;
+            }
+            decoder.Convert(bytes, 0, 0, chars, 0, chars.Length, true, out _, out _, out _);
+            return (bom, true);
         }
         catch (DecoderFallbackException)
         {
-            return (Encoding.GetEncoding(1250).GetString(content), "cp1250");
+            return (bom, false);
         }
     }
 
