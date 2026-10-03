@@ -23,6 +23,8 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
     private const string Area = "Projekty";
 
     private readonly DictionaryService _dictionaries = new(dictionaries, journal);
+    private readonly object _mappingLock = new();
+    private MappingInputs? _mapping;
 
     public ProjectFolders Folders => folders;
 
@@ -36,6 +38,9 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
         ProjectRules.ValidateBasics(code, name, type, store.Projects().Select(p => p.Code));
 
     public List<Issue> ValidateObjectives(string code, PoTree tree) => ObjectivesValidator.Validate(tree, store.WbsOwners(code));
+
+    /// <summary>Elementy CES nakładek innych projektów (O46) – do kontroli w pamięci podczas edycji nakładki.</summary>
+    public IReadOnlyDictionary<string, string> WbsOwners(string exceptCode) => store.WbsOwners(exceptCode);
 
     public PoImportResult ReadObjectives(string path) => PerformanceObjectivesReader.Read(path);
 
@@ -97,8 +102,22 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
 
     // ---------- mapowanie CES ↔ P1S (strona P1S nakładki) ----------
 
-    /// <summary>Dane mapowania z bazy PZL-EV i PZLPROD (PZLPROD niedostępny – bez struktury P1S, powód w P1sError).</summary>
-    public MappingInputs Mapping()
+    /// <summary>
+    /// Dane mapowania z bazy PZL-EV i PZLPROD (PZLPROD niedostępny – bez struktury P1S, powód w P1sError). Czytane raz
+    /// na sesję (raport mapowań i LOG.WBS są duże, a zmieniają się rzadko); refresh – ponowny odczyt („Odśwież mapowanie”).
+    /// Elementy CES z kosztów nie są potrzebne: projekt CES elementu pochodzi z nakładki (ObjectivesMapping).
+    /// </summary>
+    public MappingInputs Mapping(bool refresh = false)
+    {
+        lock (_mappingLock)
+        {
+            if (refresh || _mapping is null)
+                _mapping = LoadMapping();
+            return _mapping;
+        }
+    }
+
+    private MappingInputs LoadMapping()
     {
         IReadOnlyList<P1sElement>? p1s = null;
         string? error = pzlProd is null ? "Brak połączenia z PZLPROD (pzl-ev.json, PzlProd)" : null;
@@ -113,7 +132,7 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
                 error = $"Odczyt PZLPROD (LOG.WBS) nieudany: {ex.Message}";
             }
         }
-        return new MappingInputs(mapping.LatestReport(), mapping.ActiveCorrections(), mapping.CesElements(), p1s, error);
+        return new MappingInputs(mapping.LatestReport(), mapping.ActiveCorrections(), p1s, error);
     }
 
     public static IReadOnlyDictionary<long, MappingResult> Resolve(PoTree tree, MappingInputs inputs) => ObjectivesMapping.Resolve(tree, inputs);

@@ -17,6 +17,7 @@
         <partials:PageHeader Eyebrow="Konfiguracja importu" Title="Administracja"
                              Subtitle="Definicje źródeł (rozpoznanie pliku po prefiksie i parser), parsery (układ kolumn pliku, typy, pola wymagane – tabela danych kanonicznych) i lokalizacje RABIT. Zmiany mają historię." />
 
+        <partials:BusyBar DataContext="{Binding Busy}" />
         <TextBlock Text="{Binding Status}" TextWrapping="Wrap" Margin="0,0,0,8" />
         <Border Style="{StaticResource Panel}" Margin="0,0,0,12"
                 Visibility="{Binding HasIssues, Converter={StaticResource BoolToVisibility}}">
@@ -74,6 +75,7 @@
                             Visibility="{Binding DeletePending, Converter={StaticResource BoolToVisibility}}" />
                 </StackPanel>
                 <TextBlock Text="{Binding DefinitionMessage}" TextWrapping="Wrap" FontWeight="SemiBold" Margin="0,6,0,0" MaxWidth="720" HorizontalAlignment="Left" />
+                <partials:BusyBar DataContext="{Binding Busy}" Margin="0,6,0,0" />
 
                 <TextBlock Text="Historia definicji" FontWeight="SemiBold" Margin="0,14,0,4" />
                 <DataGrid Style="{StaticResource DataTable}" ItemsSource="{Binding DefinitionHistory}" IsReadOnly="True" MaxHeight="160">
@@ -205,6 +207,7 @@
                 </DataGrid>
                 <Button Content="Zapisz parser" Style="{StaticResource BtnPrimary}" HorizontalAlignment="Left" Margin="0,8,0,0" Command="{Binding Save}" />
                 <TextBlock Text="{Binding Message}" TextWrapping="Wrap" FontWeight="SemiBold" Margin="0,6,0,0" MaxWidth="720" HorizontalAlignment="Left" />
+                <partials:BusyBar DataContext="{Binding Busy}" Margin="0,6,0,0" />
 
                 <TextBlock Text="Historia parsera" FontWeight="SemiBold" Margin="0,14,0,4" />
                 <DataGrid Style="{StaticResource DataTable}" ItemsSource="{Binding History}" IsReadOnly="True" MaxHeight="140">
