@@ -46,9 +46,9 @@ Definicje źródeł i ich prefiksy są konfiguracją importu – `docs/zrodla-da
 
 | Słownik | Zawartość | Klucz |
 |---|---|---|
-| WP i CAM | element P1S projektu → WP, CAM, Cost Category (Labor / Material / Subcontract – O24); powiązanie z nakładką Performance Objectives – O44 | element P1S |
+| WP i CAM | element P1S projektu → WP, CAM, Cost Category (Labor / Material / Subcontract – O24); powiązanie z nakładką przez `Legacy WBS` (`docs/performance-objectives.md`, rozdz. 4.1) | element P1S |
 | Harmonogram i budżet | WP → `BAC HOURS` (godziny), `BAC MATERIAL` (koszt materiałów), Planowany Start, Planowany Koniec – baseline projektu | WP |
-| Stawki CAS | stawki CAS projektu (zawartość – O37) | do ustalenia |
+| Stawki CAS | stawki CAS projektu (zawartość – O37); do ustalenia słownik nie jest wczytywany, a projekt CAS jest niegotowy (ERROR) | do ustalenia |
 | Cost Category – zmiany w projekcie | zmiany i uzupełnienia słownika globalnego Cost Category dla projektu (rozdz. 6) | numer elementu kosztowego |
 | Wykluczenia | elementy pomijane na późniejszym etapie analizy: kombinacja `Cost Element`, `WBS Element`, `Partner object` (co najmniej jedno z trzech) + wymagany opis (rozdz. 7) – **opcjonalny** | kombinacja trzech pól |
 
@@ -92,7 +92,7 @@ Kontekst biznesowy typów – `readme.md`.
 
 | Reguła | Poziom |
 |---|---|
-| element P1S należy do projektu i nie należy do innego projektu | ERROR |
+| element P1S należy do projektu (równy `Legacy WBS` elementu nakładki albo pod nim) i nie należy do innego projektu | ERROR |
 | jeden WP na element P1S | ERROR |
 | WP wymaga CAM | ERROR |
 | CAM wybierany z listy osób; przy wczytaniu z Excela CAM spoza listy osób | – / WARNING |

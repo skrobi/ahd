@@ -38,7 +38,7 @@ public static class DictionaryValidator
 
         for (var i = 0; i < rows.Count; i++)
         {
-            foreach (var column in spec.Columns.Where(c => (c.Required || c.Key) && rows[i][c.Name] is null))
+            foreach (var column in spec.Columns.Where(c => (c.Required || (c.Key && !spec.EmptyKeyPartsAllowed)) && rows[i][c.Name] is null))
                 issues.Add(Issue.Error($"{column.Name}: pole wymagane", RowElement(i)));
         }
 

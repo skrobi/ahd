@@ -72,11 +72,11 @@ public sealed class DictionaryService(IDictionaryStore store, IJournal journal)
         journal.Add(Area, $"{spec.Name}: pobrano do Excela ({rows.Count} wierszy)", spec.Code);
     }
 
-    /// <summary>Wczytuje plik i porównuje z bieżącym stanem – bez zapisu.</summary>
-    public ImportPreview PreviewImport(DictionarySpec spec, string path, string? project = null)
+    /// <summary>Wczytuje plik (Excel: wskazany arkusz albo pierwszy) i porównuje z bieżącym stanem – bez zapisu.</summary>
+    public ImportPreview PreviewImport(DictionarySpec spec, string path, string? project = null, string? sheet = null)
     {
-        var fileName = Path.GetFileName(path);
-        var data = TabularFileReader.Read(path);
+        var fileName = sheet is null ? Path.GetFileName(path) : $"{Path.GetFileName(path)} [{sheet}]";
+        var data = TabularFileReader.Read(path, sheet);
         var issues = new List<Issue>();
 
         var columnIndex = new Dictionary<string, int>();

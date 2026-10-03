@@ -4,7 +4,8 @@ Aplikacja PZL-EV rozwijana według planu w `tasks/` (`tasks/README.md`). Powsta�
 i nadal służy do sprawdzenia uruchomienia jednego `PZL-EV.exe` z dysku sieciowego (O6, sekcja „Test stosu”).
 
 Stan: **Słowniki** (słowniki globalne – F1), **Import RABIT** i **Administracja** (import plików, definicje
-źródeł, lokalizacje – F2), **Pulpit** (dane przykładowe) i **Diagnostyka**. Pozostałe pozycje menu pokazują ekran
+źródeł, lokalizacje – F2), **Projekty** (kreator, Performance Objectives, słowniki projektu, gotowość, foldery – F4),
+**Pulpit** (dane przykładowe) i **Diagnostyka**. Pozostałe pozycje menu pokazują ekran
 zastępczy modułu (dokumentacja i etapy, które moduł przejmie). Dane są w bazie MS SQL środowiska
 (sekcja „Konfiguracja i dane”).
 
@@ -61,7 +62,14 @@ Ustawienia, baza i ścieżki widać na ekranie **Diagnostyka** i w stopce okna.
 5. **Import nie widzi plików** – **Sprawdź źródła** pokazuje dla każdej lokalizacji czytaną ścieżkę (WebDAV), dostęp
    albo pełny błąd, liczbę plików i podfoldery (import czyta tylko główny folder lokalizacji). Szczegóły, decyzja dla
    każdego pliku importu i pełna treść wyjątków – `logs\pzl-ev-RRRRMMDD.log` obok `.exe`.
-6. **Administracja** – definicję źródła można usunąć (**Usuń definicję** → **Potwierdź usunięcie**); historia zostaje.
+6. **Projekty** – **+ Nowy projekt**: kod `M28`, nazwa, typ → **Performance Objectives**: **Wczytaj Excel**
+   `testdata/Projekty/PO_M28.xlsx` (8 elementów), dodaj węzeł wirtualny i przeciągnij do niego elementy →
+   **Słowniki projektu**: **Pobierz szablon Excel** (arkusz „WP i CAM” z elementami P1S z zakresu) albo
+   **Wczytaj skoroszyt** `testdata/Projekty/Slowniki_M28.xlsx` → **Foldery** → **Podsumowanie**: baza analityczna
+   (3 WP, 2 250 h, 75 000,50 materiałów) → **Utwórz projekt**. Bez słowników projekt powstaje, ale jest niegotowy
+   (ERROR „WP i CAM”); po wczytaniu słowników na ekranie projektu – gotowy. Drugi projekt z tym samym kodem albo z tym
+   samym elementem CES – odrzucony.
+7. **Administracja** – definicję źródła można usunąć (**Usuń definicję** → **Potwierdź usunięcie**); historia zostaje.
 
 ## Test stosu – co aplikacja sprawdza
 

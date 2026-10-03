@@ -26,6 +26,15 @@ public static class TabularFileReader
         return ExcelExtensions.Contains(ext) || TextExtensions.Contains(ext);
     }
 
+    /// <summary>Nazwy arkuszy skoroszytu Excel; plik CSV / TXT – brak arkuszy.</summary>
+    public static IReadOnlyList<string> SheetNames(string path)
+    {
+        if (!ExcelExtensions.Contains(Path.GetExtension(path)))
+            return [];
+        using var workbook = new XLWorkbook(path);
+        return workbook.Worksheets.Select(w => w.Name).ToList();
+    }
+
     public static TabularData Read(string path, string? sheet = null) => Read(File.ReadAllBytes(path), Path.GetFileName(path), sheet);
 
     /// <summary>Odczyt z treści pliku – import liczy hash i czyta wiersze z tych samych bajtów.</summary>

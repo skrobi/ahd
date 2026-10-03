@@ -1,0 +1,192 @@
+<UserControl x:Class="PzlEv.Modules.Projects.Views.WizardView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:partials="clr-namespace:PzlEv.Shared.Views.Partials"
+             xmlns:views="clr-namespace:PzlEv.Modules.Projects.Views">
+    <!-- Kreator projektu (DataContext: WizardViewModel) – docs/funkcjonalnosc.md, F01. -->
+    <StackPanel>
+        <partials:PageHeader Eyebrow="Projekty / nowy" Title="Nowy projekt"
+                             Subtitle="Kreator rejestruje projekt, buduje strukturę Performance Objectives (CES), wczytuje słowniki projektu z Excela i tworzy foldery." />
+
+        <!-- Kroki -->
+        <ItemsControl ItemsSource="{Binding Steps}" Margin="0,0,0,12">
+            <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                    <WrapPanel />
+                </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                    <Border x:Name="Chip" CornerRadius="12" Padding="10,3" Margin="0,0,6,4" Background="{StaticResource Surface2}">
+                        <TextBlock x:Name="ChipText" Text="{Binding Title}" FontSize="12" Foreground="{StaticResource Muted}" />
+                    </Border>
+                    <DataTemplate.Triggers>
+                        <DataTrigger Binding="{Binding IsPast}" Value="True">
+                            <Setter TargetName="Chip" Property="Background" Value="{StaticResource AccentSoft}" />
+                            <Setter TargetName="ChipText" Property="Foreground" Value="{StaticResource Ink}" />
+                        </DataTrigger>
+                        <DataTrigger Binding="{Binding IsCurrent}" Value="True">
+                            <Setter TargetName="Chip" Property="Background" Value="{StaticResource Accent}" />
+                            <Setter TargetName="ChipText" Property="Foreground" Value="{StaticResource AccentInk}" />
+                        </DataTrigger>
+                    </DataTemplate.Triggers>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+
+        <Border Style="{StaticResource Panel}">
+            <StackPanel>
+                <!-- 1. Podstawowe -->
+                <StackPanel Visibility="{Binding IsStep1, Converter={StaticResource BoolToVisibility}}">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="220" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Margin="0,0,12,0">
+                            <TextBlock Text="Kod projektu" Style="{StaticResource MutedText}" />
+                            <TextBox Style="{StaticResource Input}" FontFamily="{StaticResource FMono}" CharacterCasing="Upper"
+                                     Text="{Binding Code, UpdateSourceTrigger=PropertyChanged}" MaxLength="20" />
+                            <TextBlock Text="Unikalny; używany w nazwach folderów, plików i przebiegów." Style="{StaticResource MutedText}" FontSize="11" TextWrapping="Wrap" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="1">
+                            <TextBlock Text="Nazwa" Style="{StaticResource MutedText}" />
+                            <TextBox Style="{StaticResource Input}" Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}" MaxLength="200" />
+                        </StackPanel>
+                    </Grid>
+                    <TextBlock Text="Typ projektu EV" Style="{StaticResource MutedText}" Margin="0,12,0,4" />
+                    <ListBox ItemsSource="{Binding Types}" SelectedItem="{Binding Type}" BorderThickness="0" Background="Transparent">
+                        <ListBox.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <WrapPanel />
+                            </ItemsPanelTemplate>
+                        </ListBox.ItemsPanel>
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <StackPanel Width="250" Margin="4">
+                                    <TextBlock Text="{Binding Label}" FontWeight="SemiBold" />
+                                    <TextBlock Text="{Binding Description}" Style="{StaticResource MutedText}" TextWrapping="Wrap" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                    <TextBlock Text="{Binding Type.Required}" Margin="0,8,0,0" TextWrapping="Wrap" />
+                    <ItemsControl ItemsSource="{Binding BasicIssues}" Margin="0,8,0,0" />
+                </StackPanel>
+
+                <!-- 2. Performance Objectives -->
+                <StackPanel Visibility="{Binding IsStep2, Converter={StaticResource BoolToVisibility}}">
+                    <TextBlock TextWrapping="Wrap" Margin="0,0,0,10"
+                               Text="Performance Objectives – nadrzędna struktura kontraktu po stronie CES, po której raportuje się wykonanie. Wyznacza zakres projektu. Kotwicą jest CES (WBS element); strona P1S wchodzi do drzewa przez kolumnę Legacy WBS. Strukturę można zmieniać i grupować elementy we własnych, wirtualnych węzłach. Wczytaj eksport struktury WBS z SAP (.xlsx) albo zbuduj ją ręcznie." />
+                    <views:PoEditorView DataContext="{Binding Objectives}" />
+                </StackPanel>
+
+                <!-- 3. Słowniki projektu -->
+                <StackPanel Visibility="{Binding IsStep3, Converter={StaticResource BoolToVisibility}}">
+                    <TextBlock TextWrapping="Wrap" Margin="0,0,0,8"
+                               Text="Słowniki projektu wczytujesz z Excela: jeden skoroszyt z arkuszami jak w szablonie albo osobne pliki / CSV. Szablon ma w arkuszu „WP i CAM” elementy P1S z zakresu (Legacy WBS nakładki) – uzupełnij WP, CAM, budżet i daty. Słownik z błędem ERROR nie zostanie zapisany. Po utworzeniu projektu słowniki zmieniasz na ekranie projektu – każda zmiana zostaje w historii." />
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                        <Button Content="Pobierz szablon Excel" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding DownloadTemplate}" />
+                        <Button Content="Wczytaj skoroszyt (wszystkie arkusze)" Style="{StaticResource BtnPrimary}" Command="{Binding LoadWorkbook}" />
+                    </StackPanel>
+                    <ItemsControl ItemsSource="{Binding Dictionaries}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <views:DictionaryPanelView />
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <TextBlock Text="Słowniki globalne" Style="{StaticResource H2}" FontSize="15" Margin="0,8,0,2" />
+                    <TextBlock Text="Przypinane razem ze słownikami projektu w każdym przebiegu; zmiana na ekranie Słowniki." Style="{StaticResource MutedText}" Margin="0,0,0,6" />
+                    <DataGrid Style="{StaticResource DataTable}" ItemsSource="{Binding GlobalDictionaries}" IsReadOnly="True">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Słownik" Binding="{Binding Name}" Width="*" />
+                            <DataGridTextColumn Header="Wiersze" Binding="{Binding Rows}" />
+                            <DataGridTextColumn Header="Ostatnia zmiana" Binding="{Binding LastChange}" />
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </StackPanel>
+
+                <!-- 4. Foldery -->
+                <StackPanel Visibility="{Binding IsStep4, Converter={StaticResource BoolToVisibility}}">
+                    <Border Background="{StaticResource Surface2}" Padding="10" Margin="0,0,0,10">
+                        <TextBlock Text="{Binding FolderPreview}" FontFamily="{StaticResource FMono}" />
+                    </Border>
+                    <ItemsControl ItemsSource="{Binding FolderChecks}" />
+                    <TextBlock Text="Zgłoszenie do IT (dostęp CAM)" Style="{StaticResource H2}" FontSize="15" Margin="0,10,0,4" />
+                    <TextBox Style="{StaticResource Input}" Text="{Binding ItRequest, Mode=OneWay}" IsReadOnly="True" TextWrapping="Wrap" />
+                </StackPanel>
+
+                <!-- 5. Podsumowanie (baza analityczna) -->
+                <StackPanel Visibility="{Binding IsStep5, Converter={StaticResource BoolToVisibility}}">
+                    <TextBlock Text="{Binding SummaryText}" FontWeight="SemiBold" Margin="0,0,0,8" />
+                    <ItemsControl ItemsSource="{Binding SummaryChecks}" Margin="0,0,0,10" />
+                    <DockPanel Margin="0,0,0,4">
+                        <Button DockPanel.Dock="Right" Content="Pobierz (xlsx)" Style="{StaticResource Btn}" Command="{Binding ExportAnalytic}" />
+                        <TextBlock Text="Baza analityczna · nakładka ↔ WP ↔ CAM ↔ budżet ↔ harmonogram" Style="{StaticResource H2}" FontSize="15" />
+                    </DockPanel>
+                    <TextBlock Text="{Binding Totals}" Style="{StaticResource MutedText}" Margin="0,0,0,6" />
+                    <DataGrid Style="{StaticResource DataTable}" ItemsSource="{Binding AnalyticRows}" IsReadOnly="True">
+                        <DataGrid.Columns>
+                            <DataGridTemplateColumn Header="Węzeł nakładki" Width="*">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding Name}" Margin="{Binding Indent}" />
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                            <DataGridTextColumn Header="Element CES" Binding="{Binding WbsElement}" FontFamily="{StaticResource FMono}" />
+                            <DataGridTextColumn Header="P1S" Binding="{Binding LegacyWbs}" FontFamily="{StaticResource FMono}" />
+                            <DataGridTextColumn Header="WP" Binding="{Binding Wps}" />
+                            <DataGridTextColumn Header="CAM" Binding="{Binding Cams}" />
+                            <DataGridTextColumn Header="BAC HOURS" Binding="{Binding BacHours, StringFormat=N2}" />
+                            <DataGridTextColumn Header="BAC MATERIAL" Binding="{Binding BacMaterial, StringFormat=N2}" />
+                            <DataGridTextColumn Header="Start" Binding="{Binding Start}" />
+                            <DataGridTextColumn Header="Koniec" Binding="{Binding Finish}" />
+                            <DataGridTextColumn Header="Braki" Binding="{Binding Gap}" Foreground="{StaticResource Warn}" />
+                        </DataGrid.Columns>
+                    </DataGrid>
+                    <TextBlock Text="Wg CAM" Style="{StaticResource H2}" FontSize="15" Margin="0,10,0,4" />
+                    <DataGrid Style="{StaticResource DataTable}" ItemsSource="{Binding ByCam}" IsReadOnly="True">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="CAM" Binding="{Binding Cam}" Width="*" />
+                            <DataGridTextColumn Header="WP" Binding="{Binding Wps}" />
+                            <DataGridTextColumn Header="BAC HOURS" Binding="{Binding BacHours, StringFormat=N2}" />
+                            <DataGridTextColumn Header="BAC MATERIAL" Binding="{Binding BacMaterial, StringFormat=N2}" />
+                            <DataGridTextColumn Header="Start" Binding="{Binding Start}" />
+                            <DataGridTextColumn Header="Koniec" Binding="{Binding Finish}" />
+                        </DataGrid.Columns>
+                    </DataGrid>
+
+                    <Border Style="{StaticResource Panel}" Margin="0,12,0,0" BorderBrush="{StaticResource Accent}"
+                            Visibility="{Binding IsCreated, Converter={StaticResource BoolToVisibility}}">
+                        <ItemsControl ItemsSource="{Binding CreatedSteps}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding StringFormat=✓ {0}}" Margin="0,2" TextWrapping="Wrap" />
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </Border>
+                    <ItemsControl ItemsSource="{Binding CreateIssues}" Margin="0,8,0,0" />
+                </StackPanel>
+
+                <TextBlock Text="{Binding Status}" TextWrapping="Wrap" Margin="0,10,0,0" />
+                <DockPanel Margin="0,12,0,0">
+                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                        <Button Content="Dalej" Style="{StaticResource BtnPrimary}" Command="{Binding Next}"
+                                Visibility="{Binding IsNotLastStep, Converter={StaticResource BoolToVisibility}}" />
+                        <Button Content="Utwórz projekt" Style="{StaticResource BtnPrimary}" Command="{Binding Create}"
+                                Visibility="{Binding IsLastStep, Converter={StaticResource BoolToVisibility}}" />
+                        <Button Content="Przejdź do projektu" Style="{StaticResource BtnPrimary}" Margin="8,0,0,0" Command="{Binding OpenProject}"
+                                Visibility="{Binding IsCreated, Converter={StaticResource BoolToVisibility}}" />
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal">
+                        <Button Content="Wstecz" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding Back}" />
+                        <Button Content="Anuluj" Style="{StaticResource Btn}" Command="{Binding Cancel}" />
+                    </StackPanel>
+                </DockPanel>
+            </StackPanel>
+        </Border>
+    </StackPanel>
+</UserControl>
