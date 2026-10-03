@@ -1,0 +1,170 @@
+<UserControl x:Class="PzlEv.Modules.Mapping.Views.MappingView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:partials="clr-namespace:PzlEv.Shared.Views.Partials"
+             xmlns:vm="clr-namespace:PzlEv.Modules.Mapping.ViewModels">
+    <UserControl.Resources>
+        <!-- Status elementu CES jako pigułka (kolor z MappingResult.StatusColor) -->
+        <DataTemplate x:Key="StatusPill">
+            <Border Background="{Binding StatusColor, Mode=OneWay, Converter={StaticResource LevelBrush}, ConverterParameter=bg}"
+                    CornerRadius="10" Padding="8,1" HorizontalAlignment="Left">
+                <TextBlock Text="{Binding Status, Mode=OneWay}" FontSize="11" FontWeight="Medium"
+                           Foreground="{Binding StatusColor, Mode=OneWay, Converter={StaticResource LevelBrush}, ConverterParameter=fg}" />
+            </Border>
+        </DataTemplate>
+
+        <HierarchicalDataTemplate DataType="{x:Type vm:P1sTreeItem}" ItemsSource="{Binding Children, Mode=OneWay}">
+            <StackPanel Orientation="Horizontal">
+                <TextBlock x:Name="Title" Text="{Binding Title, Mode=OneWay}" />
+                <TextBlock Text="{Binding CesCountText, Mode=OneWay}" Margin="8,0,0,0" FontSize="11" Foreground="{StaticResource Accent}" />
+            </StackPanel>
+            <HierarchicalDataTemplate.Triggers>
+                <DataTrigger Binding="{Binding IsGreyed, Mode=OneWay}" Value="True">
+                    <Setter TargetName="Title" Property="Foreground" Value="{StaticResource Muted}" />
+                    <Setter TargetName="Title" Property="FontStyle" Value="Italic" />
+                </DataTrigger>
+            </HierarchicalDataTemplate.Triggers>
+        </HierarchicalDataTemplate>
+
+        <DataTemplate DataType="{x:Type vm:CesTreeItem}">
+            <StackPanel Orientation="Horizontal">
+                <Ellipse Width="8" Height="8" Margin="0,0,6,0" VerticalAlignment="Center"
+                         Fill="{Binding Result.StatusColor, Mode=OneWay, Converter={StaticResource LevelBrush}, ConverterParameter=fg}" />
+                <TextBlock Text="{Binding Title, Mode=OneWay}" FontFamily="{StaticResource FMono}" FontSize="12" />
+            </StackPanel>
+        </DataTemplate>
+    </UserControl.Resources>
+
+    <StackPanel>
+        <partials:PageHeader Eyebrow="Faza globalna G2" Title="Mapowanie CES ↔ P1S"
+                             Subtitle="Przypisanie elementów WBS z SAP CES (ACTUALS) do elementów P1S: raport mapowań SAP↔CES z importu, struktura P1S z PZLPROD, korekty elementu i projektu CES z uzasadnieniem. Statusy są wyliczane; bez kwot.">
+            <partials:PageHeader.Actions>
+                <Button Content="Odśwież" Style="{StaticResource Btn}" Command="{Binding Refresh}" />
+            </partials:PageHeader.Actions>
+        </partials:PageHeader>
+
+        <Border Style="{StaticResource Panel}">
+            <StackPanel>
+                <TextBlock Text="{Binding Status, Mode=OneWay}" FontWeight="SemiBold" TextWrapping="Wrap" />
+                <TextBlock Text="{Binding Source, Mode=OneWay}" Style="{StaticResource MutedText}" FontSize="12" TextWrapping="Wrap" Margin="0,2,0,0" />
+                <TextBlock Text="{Binding P1sError, Mode=OneWay}" Foreground="{StaticResource Crit}" TextWrapping="Wrap" Margin="0,4,0,0"
+                           Visibility="{Binding HasP1sError, Mode=OneWay, Converter={StaticResource BoolToVisibility}}" />
+                <Expander Margin="0,8,0,0" Header="{Binding Checks.Count, Mode=OneWay}" HeaderStringFormat="Kontrole: {0}">
+                    <ScrollViewer MaxHeight="200" VerticalScrollBarVisibility="Auto">
+                        <ItemsControl ItemsSource="{Binding Checks, Mode=OneWay}" Margin="0,6,0,0" />
+                    </ScrollViewer>
+                </Expander>
+            </StackPanel>
+        </Border>
+
+        <Grid Margin="0,12,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="12" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <!-- Elementy CES: status, cel, skąd wynika -->
+            <Border Grid.Column="0" Style="{StaticResource Panel}">
+                <StackPanel>
+                    <TextBlock Text="Elementy CES" Style="{StaticResource H2}" FontSize="15" />
+                    <DockPanel Margin="0,6,0,6">
+                        <ComboBox DockPanel.Dock="Right" Width="190" Margin="8,0,0,0" ItemsSource="{Binding StatusFilters, Mode=OneWay}"
+                                  SelectedItem="{Binding StatusFilter}" ToolTip="Status elementu CES" />
+                        <TextBox Style="{StaticResource Input}" Text="{Binding Search, UpdateSourceTrigger=PropertyChanged}"
+                                 ToolTip="Szukaj: element CES, projekt CES, cel P1S" />
+                    </DockPanel>
+                    <DataGrid Style="{StaticResource DataTable}" ItemsSource="{Binding Results, Mode=OneWay}" SelectedItem="{Binding Selected}"
+                              IsReadOnly="True" Height="460" EnableRowVirtualization="True">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Element CES" Binding="{Binding CesElement, Mode=OneWay}" />
+                            <DataGridTextColumn Header="Projekt CES" Binding="{Binding CesProject, Mode=OneWay}" />
+                            <DataGridTemplateColumn Header="Status" CellTemplate="{StaticResource StatusPill}" SortMemberPath="Status" />
+                            <DataGridTextColumn Header="Cel P1S" Binding="{Binding Target, Mode=OneWay}" />
+                            <DataGridTextColumn Header="Skąd" Binding="{Binding Origin, Mode=OneWay}" Width="*" />
+                            <DataGridTextColumn Header="Propozycja" Binding="{Binding Proposal, Mode=OneWay}" />
+                            <DataGridCheckBoxColumn Header="Nowy" Binding="{Binding IsNew, Mode=OneWay}" />
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </StackPanel>
+            </Border>
+
+            <!-- Struktura P1S z elementami CES pod celami -->
+            <Border Grid.Column="2" Style="{StaticResource Panel}">
+                <StackPanel>
+                    <TextBlock Text="Struktura P1S" Style="{StaticResource H2}" FontSize="15" />
+                    <TextBlock Text="Z_KAT_ZBIORCZA → Z_KATEGORIA → Z_OPIS → PROJORG → elementy. Elementy nieaktywne i usunięte – kursywą. Wybór elementu P1S ustawia cel korekty, wybór elementu CES – element do korekty."
+                               Style="{StaticResource MutedText}" FontSize="12" TextWrapping="Wrap" Margin="0,2,0,6" />
+                    <TreeView ItemsSource="{Binding Tree, Mode=OneWay}" Height="460" SelectedItemChanged="OnTreeSelection"
+                              VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling">
+                        <TreeView.ItemContainerStyle>
+                            <Style TargetType="TreeViewItem">
+                                <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
+                            </Style>
+                        </TreeView.ItemContainerStyle>
+                    </TreeView>
+                </StackPanel>
+            </Border>
+        </Grid>
+
+        <!-- Korekta: element albo projekt CES → element P1S, uzasadnienie, historia -->
+        <Border Style="{StaticResource Panel}" Margin="0,12,0,0">
+            <StackPanel>
+                <TextBlock Text="Korekta mapowania" Style="{StaticResource H2}" FontSize="15" />
+                <TextBlock Text="{Binding CorrectionKey, Mode=OneWay}" Style="{StaticResource MonoText}" Margin="0,4,0,0" />
+                <CheckBox Content="Korekta projektu CES – nowy cel dla wszystkich WBS projektu spoza raportu mapowań" Margin="0,6,0,0"
+                          IsChecked="{Binding ProjectCorrection}" />
+
+                <Grid Margin="0,8,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="130" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <TextBlock Grid.Row="0" Text="Cel P1S" Foreground="{StaticResource Muted}" VerticalAlignment="Center" />
+                    <DockPanel Grid.Row="0" Grid.Column="1">
+                        <Button DockPanel.Dock="Right" Content="Użyj propozycji" Style="{StaticResource Btn}" Command="{Binding UseProposal}" />
+                        <TextBlock Text="{Binding TargetText, Mode=OneWay}" FontWeight="SemiBold" VerticalAlignment="Center" TextWrapping="Wrap" />
+                    </DockPanel>
+                    <TextBlock Grid.Row="1" Text="Szukaj w P1S" Foreground="{StaticResource Muted}" Margin="0,8,0,0" />
+                    <StackPanel Grid.Row="1" Grid.Column="1" Margin="0,6,0,0">
+                        <TextBox Style="{StaticResource Input}" Text="{Binding P1sSearch, UpdateSourceTrigger=PropertyChanged}"
+                                 ToolTip="Kod WBS, opis albo PSPNR (od 2 znaków)" />
+                        <ListBox ItemsSource="{Binding P1sMatches, Mode=OneWay}" SelectedItem="{Binding SelectedMatch, Mode=OneWayToSource}" DisplayMemberPath="Label" MaxHeight="130" />
+                    </StackPanel>
+                    <TextBlock Grid.Row="2" Text="Uzasadnienie" Foreground="{StaticResource Muted}" Margin="0,8,0,0" />
+                    <TextBox Grid.Row="2" Grid.Column="1" Style="{StaticResource Input}" Margin="0,6,0,0" Height="54" TextWrapping="Wrap" AcceptsReturn="True"
+                             Text="{Binding Justification, UpdateSourceTrigger=PropertyChanged}"
+                             ToolTip="Wymagane, gdy korekta zmienia przypisanie z raportu mapowań" />
+                    <StackPanel Grid.Row="3" Grid.Column="1" Orientation="Horizontal" Margin="0,8,0,0">
+                        <Button Content="Zapisz korektę" Style="{StaticResource BtnPrimary}" Margin="0,0,8,0" Command="{Binding SaveCorrection}" />
+                        <Button Content="Usuń korektę" Style="{StaticResource Btn}" Command="{Binding DeleteCorrection}"
+                                ToolTip="Zamyka korektę – wraca przypisanie z raportu albo dziedziczenie" />
+                    </StackPanel>
+                </Grid>
+
+                <TextBlock Text="{Binding SaveMessage, Mode=OneWay}" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,8,0,0" />
+                <ItemsControl ItemsSource="{Binding SaveIssues, Mode=OneWay}" />
+
+                <TextBlock Text="Historia korekty" FontWeight="SemiBold" Margin="0,12,0,4" />
+                <DataGrid Style="{StaticResource DataTable}" ItemsSource="{Binding History, Mode=OneWay}" IsReadOnly="True" MaxHeight="180">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="Wersja" Binding="{Binding Version, Mode=OneWay}" />
+                        <DataGridTextColumn Header="Zmiana" Binding="{Binding Change, Mode=OneWay}" />
+                        <DataGridTextColumn Header="Cel" Binding="{Binding TargetWbs, Mode=OneWay}" />
+                        <DataGridTextColumn Header="Było" Binding="{Binding PreviousTarget, Mode=OneWay}" />
+                        <DataGridTextColumn Header="Uzasadnienie" Binding="{Binding Justification, Mode=OneWay}" Width="*" />
+                        <DataGridTextColumn Header="Od" Binding="{Binding ValidFrom, Mode=OneWay, StringFormat=yyyy-MM-dd}" />
+                        <DataGridTextColumn Header="Zapisano" Binding="{Binding RecordedAt, Mode=OneWay, StringFormat=yyyy-MM-dd HH:mm}" />
+                        <DataGridTextColumn Header="Kto" Binding="{Binding RecordedBy, Mode=OneWay}" />
+                    </DataGrid.Columns>
+                </DataGrid>
+            </StackPanel>
+        </Border>
+    </StackPanel>
+</UserControl>

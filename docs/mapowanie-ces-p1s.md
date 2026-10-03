@@ -26,9 +26,11 @@ SAP CES → projekt CES / WBS CES → mapowanie PZL-EV (globalne) → element P1
 
 ## 2. Źródło prawdy – raport mapowań SAP↔CES
 
-Powiązanie CES ↔ P1S pochodzi z **raportu mapowań SAP↔CES**, czytanego bezpośrednio z bazy `PZLPROD` (tylko
-odczyt, źródło przyrostowe – `docs/model-danych.md`, rozdz. 3.4). Do czasu udostępnienia raportu w `PZLPROD`
-źródłem pierwszego zasilenia jest jego ekstrakt CSV.
+Powiązanie CES ↔ P1S pochodzi z **raportu mapowań SAP↔CES**, eksportowanego z `PZLPROD` do Excela
+i **importowanego** jak raporty RABIT (`docs/zrodla-danych.md`, rozdz. 2): parser `MAPOWANIA` (migracja 005, tabela
+`can.MappingReport`), definicja źródła z prefiksem nazwy pliku – dodawana w Administracji. Każda wersja pliku zostaje
+w bazie; mapowanie czyta **najnowszy** zaimportowany plik. Strukturę P1S (`LOG.WBS`) aplikacja czyta bezpośrednio
+z `PZLPROD` (`docs/zrodla-danych.md`, rozdz. 5).
 
 Kolumny:
 
@@ -48,13 +50,22 @@ sales_order, sales_order_pos, matnr, network`
   poziom, ani opis nie są kluczem.
 - Raport wskazuje element P1S dokładnie (nie zawsze `PROJORG`).
 - Połączenie z drzewem P1S: `LOG.WBS.PSPNR` = `pspnr_sap` (`docs/zrodla-danych.md`, rozdz. 5).
+- Parser `MAPOWANIA` czyta kolumny potrzebne do rozstrzygania: `src`, `pspnr`, `pspnr_sap`, `pspnr_ces`,
+  `pspnr_parent`, `project`, `project_sap`, `project_ces`, `wbs`, `wbs_sap`, `wbs_ces` (wymagane `src`); pozostałe
+  kolumny pliku trafiają do wierszy surowych.
+- Odczyt wiersza: element CES = `wbs_ces`, a w wierszu `src` = CES bez `wbs_ces` – `wbs`; cel P1S = `pspnr_sap`,
+  a w wierszu `src` = SAP bez `pspnr_sap` – `pspnr` (kod WBS celu: `wbs_sap`, w wierszu SAP – `wbs`); odpowiednik
+  projektu CES: `project_ces` → `project_sap`. Element CES z raportu łączy się z elementem kosztów po kodzie WBS
+  (`WBS Element` raportu ACTUALS).
+- Porównania bez rozróżniania wielkości liter i spacji; numer złożony z cyfr (PSPNR) bez zer wiodących – `00012345`
+  z `PZLPROD` = `12345` z Excela.
 
 ---
 
 ## 3. WBS CES spoza raportu – dziedziczenie
 
 WBS CES, którego nie ma w raporcie (np. nowy element z importu RABIT), **dziedziczy** odpowiednik swojego
-projektu CES (`project_sap`). Dziedziczenie jest logiczne – nie powstają rekordy dla poszczególnych WBS.
+projektu CES (`project_sap` – element `LOG.WBS` o tym kodzie WBS). Dziedziczenie jest logiczne – nie powstają rekordy dla poszczególnych WBS.
 Projekt CES elementu wynika z kolumny `Project Definition` raportu kosztów (`docs/zrodla-danych.md`, rozdz. 4).
 
 ---
@@ -92,7 +103,8 @@ element CES → 1. korekta elementu                                  → OVERRID
 | `INHERITED` | WBS spoza raportu – cel projektu CES (z korekty projektu CES albo z raportu) |
 | `UNMAPPED` | brak celu |
 
-Statusy są **wyliczane**, nie zapisywane.
+Statusy są **wyliczane**, nie zapisywane. Element `UNMAPPED` dostaje **propozycję celu**: najczęstszy cel
+przypisanych elementów tego samego projektu CES.
 
 ---
 
@@ -116,18 +128,23 @@ Statusy są **wyliczane**, nie zapisywane.
 
 ## 8. Model danych
 
-Przypisania z raportu mapowań nie są kopiowane – czytane są z `PZLPROD`. W bazie PZL-EV (`dict`) zapisywane
-są tylko **korekty**:
+Przypisania z raportu mapowań są w bazie jako zaimportowane wersje pliku (`can.MappingReport`, rozdz. 2) –
+aplikacja ich nie zmienia. Wyniki rozstrzygania nie są zapisywane. W bazie PZL-EV (`dict.MappingCorrection`,
+migracja 005) zapisywane są **korekty**:
 
 | Pole | Opis |
 |---|---|
-| `id` | identyfikator korekty |
-| `typ` | `ELEMENT` (korekta elementu CES) / `PROJEKT` (korekta projektu CES) |
-| `ces_pspnr` / `ces_project` | korygowany element CES albo projekt CES |
-| `p1s_pspnr` | nowy cel P1S |
-| `uzasadnienie` | obowiązkowe przy zmianie względem raportu |
-| `valid_from`, `valid_to` | okres obowiązywania |
-| `created_at/by`, `updated_at/by` | audyt |
+| `RowId`, `Version` | identyfikator korekty i jej wersja (zmiana celu albo usunięcie = nowa wersja) |
+| `Kind` | `ELEMENT` (korekta elementu CES) / `PROJEKT` (korekta projektu CES) |
+| `CesKey` | korygowany element CES (`WBS Element`) albo projekt CES (`Project Definition`) |
+| `TargetPspnr`, `TargetWbs` | nowy cel P1S (`LOG.WBS.PSPNR`) i jego kod WBS w chwili zapisu |
+| `PreviousTarget` | przypisanie przed korektą (status i cel) w chwili zapisu |
+| `Justification` | obowiązkowe przy zmianie względem raportu |
+| `ValidFrom`, `ValidTo` | okres obowiązywania; usunięcie korekty zamyka `ValidTo` |
+| `RecordedAt/By`, `SupersededAt/By` | audyt – historia wersji |
+
+Jeden element (projekt) CES ma co najwyżej jedną obowiązującą korektę – unikalny indeks na wersjach bez
+`SupersededAt` i `ValidTo`. Zapis na nieaktualnej wersji (zmiana innej osoby w międzyczasie) jest odrzucany.
 
 Przebieg czyta korekty w stanie na swój znacznik stanu (`docs/model-danych.md`, rozdz. 4.2).
 
@@ -147,6 +164,12 @@ Jedno przypisanie projektu CES (w raporcie albo korektą projektu CES) obsługuj
 WBS tego projektu spoza raportu. Ręczna interwencja jest potrzebna tylko przy braku celu albo potrzebie zmiany
 przypisania.
 
+- „Nowy” element CES – pojawił się pierwszy raz w ostatnim imporcie z danymi ACTUALS (elementy CES pochodzą
+  z danych kanonicznych ACTUALS: `WBS Element`, `Project Definition`).
+- Dopóki silnik etapów (F0.6) nie uruchamia G2 po imporcie, rozstrzyganie wykonuje ekran Mapowanie (otwarcie,
+  Odśwież): nowy element `UNMAPPED` z kosztem trafia do rejestru problemów jako WARNING – raz na import
+  (odwołanie `g2:<partia importu>`).
+
 ---
 
 ## 10. Reguły walidacji
@@ -159,17 +182,25 @@ Poziomy ERROR / WARNING – `docs/pipeline-fazy.md`, rozdz. 1.3.
 | korekta zmieniająca przypisanie z raportu ma uzasadnienie | ERROR |
 | przypisania z raportu nie można usunąć – tylko skorygować | ERROR |
 | cel korekty to element P1S nieaktywny albo usunięty (`Z_ACTIVE`, `LOEKZ`) | WARNING |
+| raport przypisuje elementowi CES kilka celów albo projektowi CES kilka `project_sap` (przyjmowany pierwszy wiersz) | ERROR |
+| cel z raportu albo korekty nie istnieje w `LOG.WBS` | WARNING |
+| element CES `UNMAPPED` z kosztem – koszt nie trafi do EV żadnego projektu (rozdz. 7) | WARNING |
+| cel korekty spoza `LOG.WBS` (PZLPROD niedostępny albo zły PSPNR) | ERROR – korekta nie jest zapisywana |
 
 ---
 
 ## 11. Widok (ekran Mapowanie CES ↔ P1S)
 
-- **Dwa drzewa** CES | P1S w strukturze drzewa P1S (`docs/zrodla-danych.md`, rozdz. 5.3).
-- Element CES jest umieszczony według elementu P1S, do którego jest przypisany – kategorię dostaje przez
-  przypisanie (w mapowaniu kategorii się nie przypisuje).
-- Elementy bez celu są w węźle **„Nieprzypisane”**; dla projektów CES spoza raportu – z propozycją celu.
-- Statusy przy elementach; wyszukiwanie.
-- Akcje: korekta elementu CES, korekta projektu CES (z uzasadnieniem), usunięcie korekty, historia.
+- **Elementy CES** – lista ze statusem, celem P1S, źródłem przypisania (wiersz raportu, korekta – kto i kiedy),
+  propozycją i znacznikiem „nowy”; filtr statusu („nowe z ostatniego importu”) i wyszukiwanie.
+- **Struktura P1S** – drzewo P1S (`docs/zrodla-danych.md`, rozdz. 5.3) z elementami CES pod elementem P1S, do
+  którego są przypisane – kategorię dostają przez przypisanie (w mapowaniu kategorii się nie przypisuje). Elementy
+  nieaktywne i usunięte – kursywą. Elementy bez celu są w węźle **„Nieprzypisane”** (według projektu CES,
+  z propozycją celu); cele spoza `LOG.WBS` – w węźle „Cel spoza LOG.WBS”.
+- Nagłówek: liczba elementów według statusu, plik raportu mapowań i stan PZLPROD; **Kontrole** – reguły rozdz. 10.
+- **Korekta**: element CES wybrany na liście albo w drzewie; cel – element P1S wybrany w drzewie, w wyszukiwaniu
+  (kod WBS, opis, PSPNR) albo „Użyj propozycji”; „Korekta projektu CES” – cel dla WBS projektu spoza raportu;
+  uzasadnienie; „Zapisz korektę”, „Usuń korektę” i historia wersji. Zapis i usunięcie – wpis w dzienniku.
 - Bez kwot i drzewa kosztów.
 
 ---

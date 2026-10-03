@@ -13,8 +13,8 @@ Powiązane: `docs/pipeline-fazy.md` (G1 – przebieg importu, P5–P6 – pobran
 | Źródło | System | Dane | Pozyskanie |
 |---|---|---|---|
 | Raporty CES (CJI3, ZRD_KKAJ, Net Inv) | SAP CES przez RABIT | koszty rzeczywiste, zobowiązania | import plików z lokalizacji RABIT na SharePoint przez WebDAV (rozdz. 3) |
-| Struktura P1S i kategoryzacja | `PZLPROD.LOG.WBS`, `LOG.WBS_DIC` (`splmcd03`) | drzewo elementów P1S, kategorie | odczyt bezpośredni, źródło przyrostowe (rozdz. 5) |
-| Raport mapowań SAP↔CES | `PZLPROD` | przypisania elementów CES do P1S | odczyt bezpośredni, źródło przyrostowe (`docs/mapowanie-ces-p1s.md`, rozdz. 2) |
+| Struktura P1S i kategoryzacja | `PZLPROD.LOG.WBS`, `LOG.WBS_DIC` (`splmcd03`) | drzewo elementów P1S, kategorie | odczyt bezpośredni kontem AD (`pzl-ev.json`, sekcja `PzlProd`), źródło przyrostowe (rozdz. 5) |
+| Raport mapowań SAP↔CES | eksport z `PZLPROD` do Excela | przypisania elementów CES do P1S | import pliku (parser `MAPOWANIA`, `docs/mapowanie-ces-p1s.md`, rozdz. 2) |
 | Zaawansowanie z produkcji | `PZLPROD.LOG.vAHDD` (O10) | zaawansowanie godzin i materiałów | odczyt w etapie P5 (rozdz. 6) |
 | Pliki CAM | Excel na dysku sieciowym | zaawansowanie od CAM w przebiegu zamykającym | import w etapie P6 (rozdz. 7) |
 | Cobra | Sikorsky (projekty SAC) | budżet i harmonogram SAC | do ustalenia (O28) |
@@ -173,7 +173,7 @@ Wszystkie elementy WBS P1S (nadrzędne i szczegółowe), czytane bez zmian.
 | `PRCTR` | profit center |
 | `Z_KAT_ZBIORCZA`, `Z_KATEGORIA` | kategorie – poziomy drzewa (rozdz. 5.3) |
 | `Z_MODEL`, `MATNR_LO`, `SERNR_LO`, `KDAUF`/`KDPOS`, `KUNNR`, `BSTNK`, `MATNR`, `MAKTX`, `AUFNR`, `TECHS` | atrybuty opisowe: model, materiał i numer seryjny, zlecenie sprzedaży, klient, zamówienie klienta, materiał, zlecenie |
-| `Z_ACTIVE`, `LOEKZ` | aktywność i znacznik usunięcia |
+| `Z_ACTIVE`, `LOEKZ` | aktywność i znacznik usunięcia: `LOEKZ` niepuste = usunięty; `Z_ACTIVE` puste, `0` albo `N` = nieaktywny (do potwierdzenia – Diagnostyka → Sprawdź PZLPROD pokazuje faktyczne wartości) |
 | `ERDAT`, `AEDAT` | daty utworzenia i zmiany – wykrywanie nowych elementów |
 
 ### 5.2 `PZLPROD.LOG.WBS_DIC`

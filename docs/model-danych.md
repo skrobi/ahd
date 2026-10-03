@@ -43,8 +43,9 @@ ZAMROŻENIE – przebieg zamykający okres
 | `dict` | słowniki globalne i projektu, korekty mapowania CES ↔ P1S – z historią |
 | `ev` | koszt per WP, zaawansowanie, wyniki EV |
 
-Struktura P1S i raport mapowań nie są kopiowane do bazy PZL-EV – procedury czytają je z `PZLPROD`
-(rozdz. 3.4).
+Struktura P1S nie jest kopiowana do bazy PZL-EV – aplikacja (docelowo procedury) czyta ją z `PZLPROD` (rozdz. 3.4).
+Raport mapowań SAP↔CES trafia do bazy importem pliku Excel (parser `MAPOWANIA`, tabela `can.MappingReport`) – każda
+wersja pliku zostaje (`docs/mapowanie-ces-p1s.md`, rozdz. 2).
 
 **Nazwy w bazie:** warstwy z tabeli wyżej są częścią nazwy tabeli, a nie osobnymi schematami. Wszystkie obiekty są w
 jednym schemacie z konfiguracji, z sygnaturą przed nazwą: `[<Schema>].[<Sygnatura><WARSTWA>_<Nazwa>]`, np.
@@ -88,8 +89,8 @@ w historii z informacją, kto i kiedy go zastąpił.
 
 ### 3.4 Źródła zewnętrzne
 
-- `PZLPROD.LOG.WBS` i raport mapowań SAP↔CES są **przyrostowe** (wiersze tylko dochodzą). Są czytane
-  bezpośrednio, bez kopiowania.
+- `PZLPROD.LOG.WBS` jest **przyrostowy** (wiersze tylko dochodzą) – czytany bezpośrednio, bez kopiowania. Raport
+  mapowań SAP↔CES jest importowany jako wersje pliku (historia w bazie, mapowanie czyta najnowszą).
 - Zaawansowanie z produkcji jest pobierane w etapie P5 i zapisywane w przebiegu (`ev.Zaawansowanie`) –
   tylko dla WP projektu. Od tego momentu jest danymi przebiegu.
 
@@ -140,8 +141,8 @@ Rewizja to jedno obliczenie EV przebiegu (etap P8). Zapisuje:
 
 ### 4.4 Założenie o źródłach zewnętrznych
 
-Odtwarzalność opiera się na przyrostowości `PZLPROD.LOG.WBS` i raportu mapowań (rozdz. 3.4). Zmiana
-istniejących wierszy w tych źródłach nie jest wykrywana (`docs/architektura.md`, rozdz. 10).
+Odtwarzalność opiera się na przyrostowości `PZLPROD.LOG.WBS` (rozdz. 3.4) i wersjach plików raportu mapowań.
+Zmiana istniejących wierszy w `LOG.WBS` nie jest wykrywana (`docs/architektura.md`, rozdz. 10).
 
 ---
 
@@ -180,6 +181,8 @@ Bez metodologii EV; kolejne tabele dochodzą kolejnymi migracjami.
 | `META_SchemaVersion`, sekwencja `META_LogicalId` | wersja schematu i minimalna wersja aplikacji; identyfikatory wierszy logicznych |
 | `META_SourceDefinition`, `META_SourceLocation` | definicje źródeł (kod, prefiks, typ raportu, parser, aktywna) i lokalizacje RABIT z historią |
 | `META_Parser` (004) | parsery: tabela danych kanonicznych `CAN_<Tabela>` i jej pola (kolumna w pliku, typ, długość, wymagane) z historią |
+| `CAN_MappingReport` (005) | tabela parsera MAPOWANIA – wiersze raportu mapowań SAP↔CES z importu Excela |
+| `DICT_MappingCorrection` (005) | korekty mapowania CES ↔ P1S (elementu i projektu CES): cel P1S, poprzednie przypisanie, uzasadnienie, `ValidFrom` / `ValidTo`, historia wersji (`docs/mapowanie-ces-p1s.md`, rozdz. 8) |
 | `META_ImportBatch`, `META_SourceFile`, `META_SourceFileSeen` | importy, wersje plików (SHA-256), decyzje dla plików |
 | `STG_RawRow` | wiersze surowe (JSON wartości), kompresja PAGE |
 | `CAN_Actuals` | tabela parsera ACTUALS – koszty rzeczywiste `ACTUALS_*` (kolumny typowane, NULL dozwolony – wymagane wskazuje parser), kompresja PAGE; kolejne parsery mają własne tabele `CAN_<Tabela>` zakładane z aplikacji |
@@ -206,7 +209,12 @@ NULL i nie są już używane – definicja wskazuje tylko parser. Zapis parsera
 w aplikacji zakłada albo rozszerza tabelę `CAN_<Tabela>` (`SqlCanonical`) – poza migracjami, w jednej transakcji
 z wersją parsera.
 
-Aplikacja zapisuje dziś do tabel importu, konfiguracji importu, słowników globalnych, dziennika i problemów;
+**Migracja `sql/mssql/005_mapowanie_ces_p1s.sql`:** parser `MAPOWANIA` z tabelą `CAN_MappingReport` (raport
+mapowań importowany z Excela; definicję źródła z prefiksem nazwy pliku dodaje się w Administracji) i tabela korekt
+`DICT_MappingCorrection` (bieżąca korekta elementu albo projektu CES – unikalna wśród wersji bez `SupersededAt`
+i `ValidTo`; usunięcie korekty to nowa wersja z `ValidTo`).
+
+Aplikacja zapisuje dziś do tabel importu, konfiguracji importu, słowników globalnych, korekt mapowania, dziennika i problemów;
 tabele projektów i słowników projektu czekają na moduły F4. Blokada importu – plik na dysku sieciowym
 (`docs/pipeline-fazy.md`, rozdz. 1.3), `sp_getapplock` razem z procedurami (F10.2).
 

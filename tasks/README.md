@@ -62,10 +62,10 @@ zmiana zakresu zadania w trakcie realizacji wymaga uzgodnienia.
 
 | Zadanie | Moduł | Zależy od | Otwarte kwestie | Status |
 |---|---|---|---|---|
-| [F3.1 Źródło PZLPROD (LOG.WBS, WBS_DIC, raport mapowań)](F3.1-zrodlo-pzlprod-log-wbs-wbs-dic-raport-mapowan.md) | Mapping | F0.4 | O5 | do zrobienia |
-| [F3.2 Rozstrzyganie mapowania i korekty (G2)](F3.2-rozstrzyganie-mapowania-i-korekty-g2.md) | Mapping | F3.1, F2.3 | O20 | do zrobienia |
-| [F3.3 Drzewo P1S](F3.3-drzewo-p1s.md) | Mapping | F3.1 | O21 | do zrobienia |
-| [F3.4 Ekran Mapowanie CES ↔ P1S](F3.4-ekran-mapowanie-ces-p1s.md) | Mapping | F3.2, F3.3 | – | do zrobienia |
+| [F3.1 Źródło PZLPROD (LOG.WBS, WBS_DIC, raport mapowań)](F3.1-zrodlo-pzlprod-log-wbs-wbs-dic-raport-mapowan.md) | Mapping | F0.4 | – | zrobione |
+| [F3.2 Rozstrzyganie mapowania i korekty (G2)](F3.2-rozstrzyganie-mapowania-i-korekty-g2.md) | Mapping | F3.1, F2.3 | O20 | zrobione |
+| [F3.3 Drzewo P1S](F3.3-drzewo-p1s.md) | Mapping | F3.1 | O21 | zrobione |
+| [F3.4 Ekran Mapowanie CES ↔ P1S](F3.4-ekran-mapowanie-ces-p1s.md) | Mapping | F3.2, F3.3 | – | zrobione – ekran do sprawdzenia na stanowisku |
 
 ## F4. Projekty (F01, F02)
 
