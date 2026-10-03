@@ -19,13 +19,6 @@ public sealed partial record SharePointAddress(string Scheme, string Host, strin
     /// <summary>Adres folderu zakończony „/” (WebDAV PROPFIND).</summary>
     public string FolderUrl => Origin + Escape(Folder) + "/";
 
-    public string Unc => WebDavPath.ToUnc(Origin + Escape(Folder));
-
-    /// <summary>Folder względem witryny, np. „Shared Documents/E456659”.</summary>
-    public string FolderInSite => Folder[SitePath.Length..].Trim('/');
-
-    public string FileUrl(string serverRelativePath) => Origin + Escape("/" + serverRelativePath.TrimStart('/'));
-
     /// <summary>Koduje segmenty ścieżki URL (spacja → %20), zachowując „/”.</summary>
     public static string Escape(string path) => string.Join('/', path.Split('/').Select(Uri.EscapeDataString));
 

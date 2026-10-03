@@ -186,7 +186,7 @@ Bez metodologii EV; kolejne tabele dochodzą kolejnymi migracjami.
 | `META_ImportBatch`, `META_SourceFile`, `META_SourceFileSeen` | importy, wersje plików (SHA-256), decyzje dla plików |
 | `STG_RawRow` | wiersze surowe (JSON wartości), kompresja PAGE |
 | `CAN_Actuals` | tabela parsera ACTUALS – koszty rzeczywiste `ACTUALS_*` (kolumny typowane, NULL dozwolony – wymagane wskazuje parser), kompresja PAGE; kolejne parsery mają własne tabele `CAN_<Tabela>` zakładane z aplikacji |
-| `META_Journal`, `META_Problem` | dziennik zdarzeń (`meta.Zdarzenie`) i problemy |
+| `META_Journal`, `META_Problem` | dziennik zdarzeń (`meta.Zdarzenie`) i problemy (otwarte / rozwiązane: `ResolvedAt`, `ResolvedBy`, `Resolution` – migracja 006) |
 | `META_Project`, `META_PerformanceObjective` | projekty (kod, nazwa, typ SAC / CAS / WEWNETRZNY) i nakładka Performance Objectives z historią |
 | `DICT_Calendar`, `DICT_DepartmentRate`, `DICT_FxRate`, `DICT_CostCategory`, `DICT_Person` | słowniki globalne – tabela z typowanymi kolumnami na słownik; `Project` NULL = globalny (w Cost Category `Project` = zmiany w projekcie) |
 | `DICT_WpCam`, `DICT_ScheduleBudget`, `DICT_Exclusion` | słowniki projektu (F4.3); Stawki CAS – po ustaleniu zawartości (O37) |
@@ -213,6 +213,10 @@ z wersją parsera.
 mapowań importowany z Excela; definicję źródła z prefiksem nazwy pliku dodaje się w Administracji) i tabela korekt
 `DICT_MappingCorrection` (bieżąca korekta elementu albo projektu CES – unikalna wśród wersji bez `SupersededAt`
 i `ValidTo`; usunięcie korekty to nowa wersja z `ValidTo`).
+
+**Migracja `sql/mssql/006_problemy_rozwiazywanie.sql`:** kto, kiedy i jak rozwiązał problem (automatycznie – kolejny
+import, przypisanie elementu CES; ręcznie – Pulpit), indeks otwartych problemów; problemy importów wcześniejszych niż
+ostatni zakończony import – rozwiązane (`docs/pipeline-fazy.md`, rozdz. 1.3).
 
 Aplikacja zapisuje dziś do tabel importu, konfiguracji importu, słowników globalnych, korekt mapowania, dziennika i problemów;
 tabele projektów i słowników projektu czekają na moduły F4. Blokada importu – plik na dysku sieciowym

@@ -120,7 +120,8 @@ Ekran opisany w `docs/mapowanie-ces-p1s.md`, rozdz. 11; reguły – tamże.
 
 - **„Wymaga uwagi”** – otwarte problemy (`docs/pipeline-fazy.md`, rozdz. 1.3) i etapy wymagające akcji, m.in.:
   brak przebiegu w bieżącym tygodniu, etapy z błędem, pliki czekające na potwierdzenie, zmiany po przypięciu,
-  projekty niegotowe, elementy `UNMAPPED` z kosztem, pliki nierozpoznane.
+  projekty niegotowe, elementy `UNMAPPED` z kosztem, pliki nierozpoznane. Przy problemie – „Rozwiązane”
+  (ręczne zamknięcie z wpisem w dzienniku); problem znika też sam, gdy przyczyna zniknie.
 - **„Ostatnie zdarzenia”** – przekrój dzienników wszystkich przebiegów.
 - Dziennik przebiegu: czas, użytkownik, opis – od najnowszego.
 

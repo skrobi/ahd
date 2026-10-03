@@ -94,28 +94,48 @@ public sealed class MappingService(IMappingStore store, IPzlProdSource? prod, IJ
         return new CorrectionSaveResult(true, [], $"Usunięto korektę {correction.CesKey}.");
     }
 
+    public const string ProblemReferencePrefix = "g2:";
+
     /// <summary>
-    /// G2 po imporcie: elementy CES, które pojawiły się w ostatnim imporcie, bez przypisania i z kosztem – WARNING
-    /// w rejestrze problemów (raz na import). Zwraca liczbę dopisanych problemów.
+    /// G2 po imporcie: nowe elementy CES (pierwszy raz w ostatnim imporcie) bez przypisania i z kosztem – WARNING
+    /// w rejestrze problemów (raz na import, odwołanie g2:&lt;partia&gt;). Otwarte problemy G2 elementów, które mają już
+    /// przypisanie albo nie mają kosztu, są rozwiązywane automatycznie. Zwraca liczbę dopisanych i rozwiązanych.
     /// </summary>
-    public int RecordNewElementProblems(MappingState state)
+    public (int Added, int Resolved) SyncProblems(MappingState state)
     {
+        var open = problems.Open().Where(p => p.Area == Area && p.Reference is { } r && r.StartsWith(ProblemReferencePrefix, StringComparison.Ordinal)).ToList();
+        var results = state.Results.GroupBy(r => Key(r.CesElement)).ToDictionary(g => g.Key, g => g.First());
+        var resolved = 0;
+        foreach (var problem in open)
+        {
+            var result = results.GetValueOrDefault(Key(problem.Element));
+            var resolution = result switch
+            {
+                null => "elementu CES nie ma już w danych ACTUALS",
+                { IsMapped: true } => $"element przypisany: {result.Status} → {result.Target}",
+                { HasCost: false } => "element bez kosztu",
+                _ => null,
+            };
+            if (resolution is not null)
+                resolved += problems.Resolve([problem.Id], resolution);
+        }
+
         if (state.LatestBatchId is not { } batch)
-            return 0;
-        var reference = $"g2:{batch}";
-        var recorded = problems.ByReference(reference).Select(p => p.Element).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            return (0, resolved);
+        var reference = $"{ProblemReferencePrefix}{batch}";
+        var recorded = open.Where(p => p.Reference == reference).Select(p => Key(p.Element)).ToHashSet();
         var added = 0;
         foreach (var result in state.Results.Where(r => r is { IsNew: true, Status: MappingStatuses.Unmapped, HasCost: true }))
         {
-            if (recorded.Contains(result.CesElement))
+            if (recorded.Contains(Key(result.CesElement)))
                 continue;
             problems.Add(Area, "element bez przypisania",
-                Issue.Warning($"Nowy element CES {result.CesElement} (projekt {result.CesProject}) bez przypisania do P1S – koszt nie trafi do EV" +
+                Issue.Warning($"Nowy element CES (projekt {result.CesProject}) bez przypisania do P1S – koszt nie trafi do EV" +
                               (result.Proposal.Length > 0 ? $"; propozycja: {result.Proposal}" : ""), result.CesElement),
                 reference);
             added++;
         }
-        return added;
+        return (added, resolved);
     }
 
     /// <summary>Przypisanie przed korektą: elementu CES – jego wynik; projektu CES – wynik dowolnego jego elementu spoza raportu.</summary>

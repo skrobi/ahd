@@ -6,14 +6,12 @@ using PzlEv.Shared.Views.Partials;
 
 namespace PzlEv.Modules.Runs;
 
-/// <summary>Przebiegi (F06): lista przebiegów, ekran przebiegu z krokami i etapami, przypięcie stanu, walidacja, zamknięcie okresu. W PoC: ekran zastępczy.</summary>
+/// <summary>Przebiegi (F06): lista przebiegów, ekran przebiegu z krokami i etapami, przypięcie stanu, walidacja, zamknięcie okresu. Ekran zastępczy do czasu implementacji (F5).</summary>
 public sealed class RunsModule : IModule
 {
     public string Key => ModuleKeys.Runs;
 
     public string? NavLabel => "Przebiegi";
-
-    public string? NavBadge => "2 aktywne"; // dane przykładowe
 
     public string Doc => "docs/pipeline-fazy.md (rozdz. 4), docs/funkcjonalnosc.md (F06)";
 
