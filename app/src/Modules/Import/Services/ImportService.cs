@@ -14,11 +14,17 @@ namespace PzlEv.Modules.Import.Services;
 /// <summary>
 /// Import źródeł G1 (docs/pipeline-fazy.md): wszystkie aktywne lokalizacje RABIT i folder Do_importu. Dla każdego
 /// pliku decyzja: nierozpoznany (brak prefiksu – WARNING), pominięty (te same metadane), duplikat (ten sam
-/// SHA-256), zaimportowany (wiersze surowe + dane kanoniczne) albo błąd. Błąd pliku lub niedostępna lokalizacja
-/// nie zatrzymuje pozostałych. Kontrola przepływu: wiersze i sumy kwot kanonicznych = wiersze surowe.
+/// SHA-256), zaimportowany (wersja pliku + dane kanoniczne) albo błąd. Błąd pliku lub niedostępna lokalizacja
+/// nie zatrzymuje pozostałych. Kontrola przepływu: wiersze i sumy kwot kanonicznych = kolumny pliku (także w bazie po zapisie).
 /// </summary>
-public sealed class ImportService(IImportStore store, AppServices services)
+public sealed class ImportService(IImportStore store, AppServices services, Func<FileDownloader>? downloader = null)
 {
+    public const string StageDownload = "1/4 pobieranie na dysk";
+    public const string StageCheck = "2/4 sprawdzanie pliku (duplikat, nagłówek, parser)";
+    public const string StageRows = "3/4 odczyt i zapis wierszy do bazy";
+    public const string StageCount = "3/4 liczenie wierszy";
+    public const string StageFinish = "4/4";
+
     public const string Area = "Import";
     public const string LockName = "import";
     public const string WillImport = "zostanie zaimportowany";
@@ -29,6 +35,9 @@ public sealed class ImportService(IImportStore store, AppServices services)
 
     /// <summary>Log importu (plik logs\pzl-ev-*.log obok exe): ścieżki, dostęp, decyzje, pełne błędy.</summary>
     private static readonly ILogger Logger = Log.ForContext("Module", "import");
+
+    /// <summary>Pobieranie plików bieżącego importu (Run).</summary>
+    private FileDownloader _downloader = null!;
 
     /// <summary>Kto teraz importuje (blokada wspólna dla wszystkich użytkowników); null – nikt.</summary>
     public LockHolder? RunningImport() => services.Locks.Holder(LockName);
@@ -109,12 +118,28 @@ public sealed class ImportService(IImportStore store, AppServices services)
 
     private static void LogDefinitions(IReadOnlyList<SourceDefinitionRow> definitions) =>
         Logger.Information("Aktywne definicje źródeł: {Definitions}",
-            definitions.Count == 0 ? "BRAK" : string.Join("; ", definitions.Select(d => $"{d.Code}: prefiks '{d.Prefix}', parser {(d.Parser.Length == 0 ? "brak" : d.Parser)}, kolumn {d.Columns.Count}")));
+            definitions.Count == 0 ? "BRAK" : string.Join("; ", definitions.Select(d => $"{d.Code}: prefiks '{d.Prefix}', parser {(d.Parser.Length == 0 ? "brak" : d.Parser)}")));
 
     /// <summary>
     /// Import ze wszystkich lokalizacji. Tylko jedna osoba naraz (blokada operacji): gdy import trwa u kogoś
     /// innego – wynik z NotStarted. Wpis „w toku” w historii od początku importu.
     /// </summary>
+    /// <summary>
+    /// Zakończony import ocenia wszystkie pliki od nowa (plik z błędem nie trafia do bazy, więc jest czytany ponownie),
+    /// więc problemy wcześniejszych importów są nieaktualne – rozwiązane automatycznie; to, co nadal jest błędne, ma
+    /// problem w bieżącym imporcie. Przerwany import niczego nie rozwiązuje.
+    /// </summary>
+    private void ResolveEarlierProblems(long batchId, string reference)
+    {
+        var stale = services.Problems.Open()
+            .Where(p => p.Area == Area && p.Reference is { } r && r.StartsWith(ImportBatchRow.ProblemReferencePrefix, StringComparison.Ordinal) && r != reference)
+            .Select(p => p.Id)
+            .ToList();
+        var resolved = services.Problems.Resolve(stale, $"nieaktualny – stan z importu #{batchId}");
+        if (resolved > 0)
+            Logger.Information("Import #{Batch}: rozwiązane problemy wcześniejszych importów: {Count}", batchId, resolved);
+    }
+
     public ImportRunResult Run(IProgress<ImportProgress>? progress = null, CancellationToken cancellation = default)
     {
         using var lease = services.Locks.TryAcquire(LockName, out var holder);
@@ -132,6 +157,9 @@ public sealed class ImportService(IImportStore store, AppServices services)
         Logger.Information("Import #{Batch} start – {User} na {Machine}, wersja {Version}", batchId, services.User.Account, Environment.MachineName, services.AppVersion);
         progress?.Report(new ImportProgress($"Import #{batchId} rozpoczęty…", BatchId: batchId));
         LogDefinitions(definitions);
+        using var fetch = downloader?.Invoke() ?? new FileDownloader();
+        fetch.CleanStale();
+        _downloader = fetch;
         var reference = ImportBatchRow.ProblemReference(batchId);
         var results = new List<FileResult>();
         var issues = new List<Issue>();
@@ -182,8 +210,24 @@ public sealed class ImportService(IImportStore store, AppServices services)
                     cancelled = true;
                     break;
                 }
-                progress?.Report(new ImportProgress($"[{results.Count + 1}] {location.Name} / {file.Name}: importowanie…", null, location.Name, file.Name, "importowanie…"));
-                var result = ImportFile(batchId, location, file, definitions, Problem);
+                var label = $"[{results.Count + 1}] {location.Name} / {file.Name}";
+                FileResult result;
+                using (var stage = new StageReporter(text => progress?.Report(new ImportProgress($"{label}: {text}", null, location.Name, file.Name, text))))
+                {
+                    try
+                    {
+                        result = ImportFile(batchId, location, file, definitions, Problem, stage, cancellation);
+                    }
+                    catch (Exception ex) when (cancellation.IsCancellationRequested && ex is not OutOfMemoryException)
+                    {
+                        Logger.Warning("Plik {Location} / {File}: import przerwany przez użytkownika ({Stages})", location.Name, file.Name, stage.Summary);
+                        stage.Dispose();
+                        progress?.Report(new ImportProgress($"{label}: przerwany", null, location.Name, file.Name, "przerwany – plik nie zapisany"));
+                        cancelled = true;
+                        break;
+                    }
+                    Logger.Information("Plik {Location} / {File}: etapy – {Stages}", location.Name, file.Name, stage.Summary);
+                }
                 results.Add(result);
                 progress?.Report(new ImportProgress($"[{results.Count}] {location.Name} / {file.Name}: {result.Decision}", null, location.Name, file.Name,
                     $"{result.Decision} – {result.Description}"));
@@ -199,11 +243,14 @@ public sealed class ImportService(IImportStore store, AppServices services)
 
         var run = new ImportRunResult(batchId, results, issues, cancelled);
         services.Journal.Add(Area, $"Import #{batchId}: {run.Summary}");
+        if (!cancelled)
+            ResolveEarlierProblems(batchId, reference);
         Logger.Information("Import #{Batch} koniec: {Summary}", batchId, run.Summary);
         return run;
     }
 
-    private FileResult ImportFile(long batchId, ImportLocation location, FileInfo file, IReadOnlyList<SourceDefinitionRow> definitions, Action<string, Issue> problem)
+    private FileResult ImportFile(long batchId, ImportLocation location, FileInfo file, IReadOnlyList<SourceDefinitionRow> definitions,
+        Action<string, Issue> problem, StageReporter stage, CancellationToken cancellation)
     {
         var modified = new DateTimeOffset(file.LastWriteTimeUtc, TimeSpan.Zero);
         string? sha = null;
@@ -232,10 +279,10 @@ public sealed class ImportService(IImportStore store, AppServices services)
             else
             {
                 sourceCode = definition.Code;
-                (decision, description, sha, rows) = ImportContent(batchId, location, file, modified, definition, problem);
+                (decision, description, sha, rows) = ImportContent(batchId, location, file, modified, definition, problem, stage, cancellation);
             }
         }
-        catch (Exception ex) when (ex is not OperationCanceledException and not OutOfMemoryException)
+        catch (Exception ex) when (ex is not OperationCanceledException and not OutOfMemoryException && !cancellation.IsCancellationRequested)
         {
             // Błąd jednego pliku (uszkodzony Excel, brak dostępu, format) nie zatrzymuje importu pozostałych.
             Logger.Error(ex, "Plik {Location} / {File}: błąd", location.Name, file.Name);
@@ -252,93 +299,230 @@ public sealed class ImportService(IImportStore store, AppServices services)
     }
 
     /// <summary>
-    /// Treść pliku. Źródło z parserem przechodzi walidację przed zapisem (sygnatura kolumn zgodna z definicją, wartości
-    /// zgodne z typami) – plik, który jej nie przejdzie, nie trafia do bazy (decyzja „błąd”, problem w rejestrze);
-    /// przy kolejnym imporcie jest pobierany ponownie, więc po poprawie definicji wystarczy zaimportować jeszcze raz.
+    /// Nowa treść pliku, etapami widocznymi na ekranie:
+    /// 1) pobranie na dysk lokalny (HTTPS albo WebDAV, SHA-256 w trakcie) – dalsze odczyty z dysku, nie z sieci;
+    /// 2) duplikat (ten sam SHA-256), nagłówek i parser – kolumny parsera obecne w pliku;
+    /// 3) jeden przebieg pliku: wiersze czytane i parsowane w osobnym wątku i jednocześnie zapisywane wsadowo do CAN_Row
+    ///    w jednej transakcji; błąd wartości, puste pole wymagane albo niezgodne sumy kwot (z kolumn pliku i z wartości pól)
+    ///    wycofują zapis – plik nie trafia do bazy (decyzja „błąd”, problem w rejestrze) i przy kolejnym imporcie jest
+    ///    pobierany ponownie;
+    /// 4) kontrola w bazie (liczba wierszy i sumy po zapisie) i zatwierdzenie; niezgodność wycofuje cały zapis.
+    /// Treść pliku nie jest przechowywana – po imporcie plik lokalny jest usuwany, dane są w CAN_Row.
     /// </summary>
-    private (string Decision, string Description, string? Sha, int? Rows) ImportContent(
-        long batchId, ImportLocation location, FileInfo file, DateTimeOffset modified, SourceDefinitionRow definition, Action<string, Issue> problem)
+    private (string Decision, string Description, string? Sha, int? Rows) ImportContent(long batchId, ImportLocation location, FileInfo file,
+        DateTimeOffset modified, SourceDefinitionRow definition, Action<string, Issue> problem, StageReporter stage, CancellationToken cancellation)
     {
-        var content = File.ReadAllBytes(file.FullName);
-        var sha = FileHash.Sha256(content);
-        if (store.FindByHash(sha) is { } existing)
-            return (FileDecisions.Duplicate, DuplicateText(existing), sha, null);
-
         if (!TabularFileReader.IsSupported(file.Name))
             throw new NotSupportedException($"format {file.Extension} nieobsługiwany (dozwolone: xlsx, xlsm, csv, txt)");
 
-        var data = TabularFileReader.Read(content, file.Name);
-        var signature = HeaderSignature.Compute(data.Headers);
-        ParseResult? parsed = null;
-        if (definition.Parser == SourceParsers.Actuals)
+        stage.Start(StageDownload);
+        using var local = _downloader.Download(location, file, stage.Detail, cancellation);
+        Logger.Information("Plik {Location} / {File}: pobrany na dysk ({Method}) – {Megabytes} MB w {Elapsed} ({Speed} MB/s)", location.Name, file.Name,
+            local.Method, StageReporter.Megabytes(local.Size), StageReporter.Seconds(local.Elapsed),
+            StageReporter.Megabytes((long)(local.Size / Math.Max(local.Elapsed.TotalSeconds, 0.001))));
+        var sha = local.Sha256;
+
+        cancellation.ThrowIfCancellationRequested();
+        stage.Start(StageCheck);
+        if (store.FindByHash(sha) is { } existing)
+            return (FileDecisions.Duplicate, DuplicateText(existing), sha, null);
+        var source = TabularFileReader.OpenFile(local.Path);
+        var signature = HeaderSignature.Compute(source.Headers);
+        RowMapper? mapper = null;
+        if (definition.Parser != SourceParsers.None)
         {
-            if (signature != definition.Signature)
+            var parser = store.ActiveParser(definition.Parser);
+            if (parser is null)
             {
-                var layout = $"układ kolumn niezgodny z definicją {definition.Code} (sygnatura pliku {signature}, oczekiwana {definition.Signature})";
-                problem("sygnatura kolumn", Issue.Error(
-                    $"{file.Name}: {layout} – plik nie zapisany w bazie; popraw „Oczekiwane kolumny” w Administracji i zaimportuj ponownie",
-                    location.Name));
-                return (FileDecisions.Error, $"{layout} – nie zapisany", sha, data.Rows.Count);
+                var notReady = $"parser {definition.Parser} definicji {definition.Code} nie istnieje albo jest nieaktywny";
+                problem("parser", Issue.Error($"{file.Name}: {notReady} – plik nie zapisany w bazie; popraw w Administracji i zaimportuj ponownie", location.Name));
+                return (FileDecisions.Error, $"{notReady} – nie zapisany", sha, null);
             }
-            parsed = ActualsParser.Parse(0, data.Headers, data.Rows);
-            if (parsed.ErrorCount > 0)
+            mapper = MappedParser.Prepare(parser, source.Headers);
+            if (mapper.MissingColumns.Count > 0)
             {
-                foreach (var issue in parsed.Issues)
-                    problem("wartość niezgodna z typem", issue with { Element = $"{file.Name}, {issue.Element}" });
-                return (FileDecisions.Error, $"{parsed.ErrorCount} błędów wartości – nie zapisany", sha, data.Rows.Count);
+                var layout = $"brak kolumn parsera {parser.Code}: {string.Join(", ", mapper.MissingColumns)}";
+                problem("układ kolumn", Issue.Error(
+                    $"{file.Name}: {layout} – plik nie zapisany w bazie; popraw kolumny parsera w Administracji (Parsery) i zaimportuj ponownie",
+                    location.Name));
+                return (FileDecisions.Error, $"{layout} – nie zapisany", sha, null);
             }
         }
 
-        var now = services.Clock.Now;
-        var fileId = store.RegisterFile(new SourceFileRow(
-            0, sha, location.Path, file.Name, definition.Code, file.Length, modified, data.FileType, data.Sheet, data.Encoding,
-            data.Delimiter, data.Headers, signature, data.Rows.Count, batchId, now, services.User.Account,
-            "w toku", 0, null), data.Rows);
-        if (fileId is null)
+        var fileRow = new SourceFileRow(
+            0, sha, location.Path, file.Name, definition.Code, file.Length, modified, source.FileType, source.Sheet, source.Encoding,
+            source.Delimiter, source.Headers, signature, 0, batchId, services.Clock.Now, services.User.Account,
+            "brak – źródło bez parsera (tylko wersja pliku)", 0, null);
+        void Finish(string name) => stage.Start($"{StageFinish} {name}");
+        StoredFile? stored;
+        int rows;
+        if (mapper is null)
+        {
+            stage.Start(StageCount);
+            rows = CountRows(source, stage, cancellation);
+            stored = store.StoreFile(fileRow with { RowCount = rows }, null, Finish);
+        }
+        else
+        {
+            stage.Start(StageRows);
+            var check = new ContentCheck(mapper);
+            try
+            {
+                stored = store.StoreFile(fileRow,
+                    new CanonicalData(mapper.Parser, mapper.Fields, ReadAhead(check.Read(source, stage, cancellation)), check.Totals), Finish);
+            }
+            catch (ContentRejectedException)
+            {
+                if (check.Issues.Errors > 0)
+                {
+                    foreach (var issue in check.Issues.Issues)
+                        problem("wartość niezgodna z typem", issue with { Element = $"{file.Name}, {issue.Element}" });
+                    return (FileDecisions.Error, $"{check.Issues.Errors} błędów wartości – nie zapisany", sha, check.Rows);
+                }
+                var differences = check.Differences();
+                problem("kontrola przepływu", Issue.Error($"{file.Name}: dane kanoniczne niezgodne z plikiem ({differences}) – plik nie zapisany w bazie", location.Name));
+                return (FileDecisions.Error, $"BŁĄD kontroli przepływu ({differences}) – nie zapisany", sha, check.Rows);
+            }
+            catch (CanonicalFlowException ex)
+            {
+                problem("kontrola przepływu", Issue.Error($"{file.Name}: {ex.Message} – zapis wycofany", location.Name));
+                return (FileDecisions.Error, $"BŁĄD kontroli przepływu w bazie – zapis wycofany ({ex.Message})", sha, check.Rows);
+            }
+            rows = check.Rows;
+        }
+        if (stored is null)
             return (FileDecisions.Duplicate, DuplicateText(store.FindByHash(sha)!), sha, null);
 
-        var canonical = CreateCanonical(fileId.Value, file.Name, location.Name, data, parsed, problem);
-        var rowsText = data.Rows.Count.ToString("#,0", CultureInfo.GetCultureInfo("pl-PL"));
-        return (FileDecisions.Imported, $"{definition.Code}, {rowsText} wierszy; {canonical}", sha, data.Rows.Count);
+        var pl = CultureInfo.GetCultureInfo("pl-PL");
+        var canonical = mapper is null
+            ? "tylko wersja pliku (źródło bez parsera – bez danych)"
+            : $"dane kanoniczne ({mapper.Parser.Code}): {stored.CanonicalRows.ToString("#,0", pl)} wierszy" +
+              string.Concat(mapper.Fields.Where(f => f.Type == FieldTypes.Decimal).Select(f => $", suma {f.Column} {PolishNumber.ToDisplay(stored.Sums[f.Field])}"));
+        var extra = mapper is { ExtraColumns.Count: > 0 } ? $"; kolumny spoza parsera (niezapisane): {string.Join(", ", mapper.ExtraColumns)}" : "";
+        return (FileDecisions.Imported, $"{definition.Code}, {rows.ToString("#,0", pl)} wierszy; {canonical}{extra}", sha, rows);
     }
 
-    /// <summary>Dane kanoniczne (wiersze sprawdzone przed zapisem pliku); zwraca opis wyniku do decyzji pliku.</summary>
-    private string CreateCanonical(long fileId, string fileName, string locationName, TabularData data, ParseResult? parsed, Action<string, Issue> problem)
+    /// <summary>Liczba wierszy danych źródła bez parsera (postęp na ekranie).</summary>
+    private static int CountRows(TabularSource source, StageReporter stage, CancellationToken cancellation)
     {
-        if (parsed is null)
+        var rows = 0;
+        foreach (var _ in source.Rows())
         {
-            store.CompleteCanonical(fileId, "brak – źródło bez parsera (tylko wiersze surowe)", [], null);
-            return "tylko wiersze surowe (źródło bez parsera)";
+            if ((++rows & 0x3FFF) == 0)
+            {
+                cancellation.ThrowIfCancellationRequested();
+                stage.Detail($"{StageReporter.Count(rows)} wierszy");
+            }
         }
-        var rows = parsed.Rows.Select(r => r with { FileId = fileId }).ToList();
-        store.CompleteCanonical(fileId, "utworzone", rows, ActualsParser.Version);
-        return VerifyFlow(fileName, locationName, data, rows, problem);
+        stage.Detail($"{StageReporter.Count(rows)} wierszy", final: true);
+        return rows;
     }
 
     /// <summary>
-    /// Kontrola przepływu: liczba wierszy i sumy kwot danych kanonicznych zgodne z wierszami surowymi
-    /// (sumy z wierszy surowych liczone niezależnie od parsera).
+    /// Przebieg pliku przez parser: liczba wierszy, błędy wartości (do 20 opisów), sumy kwot liczone niezależnie od
+    /// parsera z tekstu kolumn pliku (format polski) i z wartości pól po parsowaniu. Wiersze do zapisu – do pierwszego
+    /// błędu (dalej plik jest tylko sprawdzany, a zapis zostanie wycofany).
     /// </summary>
-    private static string VerifyFlow(string fileName, string locationName, TabularData raw, IReadOnlyList<ActualsRow> canonical, Action<string, Issue> problem)
+    private sealed class ContentCheck(RowMapper mapper)
     {
-        decimal RawSum(string column)
+        private readonly List<(ParserField Field, int Position)> _decimals =
+            mapper.Fields.Select((f, i) => (Field: f, Position: i)).Where(x => x.Field.Type == FieldTypes.Decimal).ToList();
+        private readonly Dictionary<string, decimal> _raw = mapper.Fields.Where(f => f.Type == FieldTypes.Decimal).ToDictionary(f => f.Field, _ => 0m);
+        private readonly Dictionary<string, decimal> _canonical = mapper.Fields.Where(f => f.Type == FieldTypes.Decimal).ToDictionary(f => f.Field, _ => 0m);
+
+        public int Rows { get; private set; }
+
+        public IssueCollector Issues { get; } = new();
+
+        public IEnumerable<CanonicalRow> Read(TabularSource source, StageReporter stage, CancellationToken cancellation)
         {
-            var index = raw.Headers.ToList().FindIndex(h => string.Equals(h.Trim(), column, StringComparison.OrdinalIgnoreCase));
-            return raw.Rows.Sum(r => index < r.Length && PolishNumber.TryParse(r[index], out var v) ? v : 0m);
+            var watch = System.Diagnostics.Stopwatch.StartNew();
+            foreach (var cells in source.Rows())
+            {
+                Rows++;
+                if ((Rows & 0x3FF) == 0)
+                {
+                    cancellation.ThrowIfCancellationRequested();
+                    stage.Detail(Progress(watch.Elapsed));
+                }
+                var values = mapper.Map(cells, Rows, Issues);
+                foreach (var (field, position) in _decimals)
+                {
+                    var index = mapper.Indexes[position];
+                    if (index < cells.Length && PolishNumber.TryParse(MappedParser.Clean(cells[index]), out var value))
+                        _raw[field.Field] += Math.Round(value, MappedParser.DecimalPlaces, MidpointRounding.AwayFromZero);
+                    if (values?[position] is decimal parsed)
+                        _canonical[field.Field] += parsed;
+                }
+                if (values is not null && Issues.Errors == 0)
+                    yield return new CanonicalRow(Rows, values);
+            }
+            cancellation.ThrowIfCancellationRequested();   // przerwanie przed zatwierdzeniem zapisu
+            stage.Detail(Progress(watch.Elapsed) + (Issues.Errors > 0 ? $", błędów wartości: {Issues.Errors}" : ""), final: true);
         }
 
-        var rawObj = RawSum("Value in Obj. Crcy");
-        var rawRep = RawSum("Val.in rep.cur.");
-        var canObj = canonical.Sum(r => r.ValueObjCrcy ?? 0m);
-        var canRep = canonical.Sum(r => r.ValueRepCur ?? 0m);
-        if (raw.Rows.Count != canonical.Count || rawObj != canObj || rawRep != canRep)
+        /// <summary>Kwoty niezgodne między kolumnami pliku a wartościami pól; pusty – zgodne.</summary>
+        public string Differences() =>
+            string.Join(", ", _decimals.Where(d => _raw[d.Field.Field] != _canonical[d.Field.Field])
+                .Select(d => $"suma {mapper.Columns[d.Position]} {_raw[d.Field.Field]}/{_canonical[d.Field.Field]}"));
+
+        /// <summary>Po przesłaniu wierszy: oczekiwane w bazie albo ContentRejectedException (zapis wycofany).</summary>
+        public CanonicalTotals Totals()
         {
-            problem("kontrola przepływu", Issue.Error(
-                $"{fileName}: dane kanoniczne niezgodne z surowymi (wiersze {raw.Rows.Count}/{canonical.Count}, suma PLN {rawObj}/{canObj}, suma USD {rawRep}/{canRep})",
-                locationName));
-            return "BŁĄD kontroli przepływu – patrz problemy";
+            if (Issues.Errors > 0)
+                throw new ContentRejectedException($"{Issues.Errors} błędów wartości");
+            if (Differences() is { Length: > 0 } differences)
+                throw new ContentRejectedException($"kontrola przepływu: {differences}");
+            return new CanonicalTotals(Rows, _canonical);
         }
-        return $"dane kanoniczne: {canonical.Count} wierszy, suma Value in Obj. Crcy {PolishNumber.ToDisplay(canObj)}, suma Val.in rep.cur. {PolishNumber.ToDisplay(canRep)}";
+
+        private string Progress(TimeSpan elapsed) =>
+            $"{StageReporter.Count(Rows)} wierszy" + (elapsed.TotalSeconds >= 1 ? $" ({StageReporter.Count((long)(Rows / elapsed.TotalSeconds))} wierszy/s)" : "");
+    }
+
+    /// <summary>
+    /// Odczyt z wyprzedzeniem: wiersze czytane i parsowane w osobnym wątku (bufor 20 000 wierszy), a zapis do bazy w tym
+    /// samym czasie pobiera je z bufora – czas pliku to dłuższy z obu, nie ich suma. Błąd odczytu przechodzi do zapisu;
+    /// przerwany zapis zatrzymuje odczyt.
+    /// </summary>
+    private static IEnumerable<T> ReadAhead<T>(IEnumerable<T> source, int capacity = 20_000)
+    {
+        using var buffer = new System.Collections.Concurrent.BlockingCollection<T>(capacity);
+        using var stop = new CancellationTokenSource();
+        Exception? error = null;
+        var reader = Task.Run(() =>
+        {
+            try
+            {
+                foreach (var item in source)
+                    buffer.Add(item, stop.Token);
+            }
+            catch (OperationCanceledException) when (stop.IsCancellationRequested)
+            {
+                // zapis przerwany – odczyt niepotrzebny
+            }
+            catch (Exception ex)
+            {
+                error = ex;
+            }
+            finally
+            {
+                buffer.CompleteAdding();
+            }
+        });
+        try
+        {
+            foreach (var item in buffer.GetConsumingEnumerable())
+                yield return item;
+            reader.Wait();
+            if (error is not null)
+                System.Runtime.ExceptionServices.ExceptionDispatchInfo.Throw(error);
+        }
+        finally
+        {
+            stop.Cancel();
+            reader.Wait();
+        }
     }
 
     private static string DuplicateText(SourceFileRow existing) =>

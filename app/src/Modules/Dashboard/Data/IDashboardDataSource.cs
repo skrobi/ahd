@@ -13,7 +13,11 @@ public interface IDashboardDataSource
 
     IReadOnlyList<ZakresCard> ZakresCards();
 
+    /// <summary>Otwarte problemy (ERROR i WARNING) ze wszystkich obszarów – błędy najpierw, potem najnowsze.</summary>
     IReadOnlyList<AttentionItem> Attention();
+
+    /// <summary>Ręczne oznaczenie problemu jako rozwiązanego (z wpisem w dzienniku).</summary>
+    void Resolve(long problemId);
 
     IReadOnlyList<EventItem> Events();
 }

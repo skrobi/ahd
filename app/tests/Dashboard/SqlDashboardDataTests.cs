@@ -44,7 +44,7 @@ public sealed class SqlDashboardDataTests : IDisposable
         Assert.All(cards[2].Pills, p => Assert.EndsWith(": 0", p.Text));
         Assert.Empty(_data.ZakresCards());
         Assert.Empty(_data.Attention());
-        Assert.Empty(_data.Events());
+        Assert.All(_data.Events(), e => Assert.StartsWith("Migracja", e.Message));   // tylko wpisy migracji (np. parser ACTUALS z 004)
     }
 
     [SqlFact]
@@ -73,5 +73,25 @@ public sealed class SqlDashboardDataTests : IDisposable
         Assert.Equal(new Pill("warn", $"Import #{batch}"), attention.Tag);
         Assert.Equal("RABIT: Brak aktywnej lokalizacji RABIT", attention.Text);
         Assert.Contains(_data.Events(), e => e.Message.StartsWith("Migracja 002 – dane startowe"));
+    }
+
+    [SqlFact]
+    public void Attention_lists_open_problems_of_all_areas_errors_first_and_resolve_closes_with_journal_entry()
+    {
+        Use();
+        _app.Problems.Add("Import", "plik", Issue.Warning("ACTUALS_PAF_01.xlsx: plik nierozpoznany", "RABIT"), ImportBatchRow.ProblemReference(7));
+        _app.Problems.Add("Mapowanie", "element bez przypisania", Issue.Error("Nowy element CES bez przypisania", "4D03GZ000001"), "g2:7");
+
+        var attention = _data.Attention();
+
+        Assert.Equal([new Pill("crit", "Mapowanie"), new Pill("warn", "Import #7")], attention.Select(a => a.Tag));
+        Assert.Equal("4D03GZ000001: Nowy element CES bez przypisania", attention[0].Text);
+
+        _data.Resolve(attention[0].ProblemId);
+
+        Assert.Equal("Import #7", Assert.Single(_data.Attention()).Tag.Text);
+        var closed = _app.Problems.ByReference("g2:7").Single();
+        Assert.Equal((true, _services.User.Account, "oznaczony jako rozwiązany na Pulpicie"), (closed.Resolved, closed.ResolvedBy, closed.Resolution));
+        Assert.Contains(_app.Journal.Recent(5), e => e.Message == $"Problem #{closed.Id} (Mapowanie) oznaczony jako rozwiązany: Nowy element CES bez przypisania");
     }
 }

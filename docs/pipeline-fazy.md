@@ -56,9 +56,12 @@ tabeli problemów (`meta.Problem`).
 | ERROR | błąd blokujący | blokuje bramkę etapu do czasu poprawy |
 
 - Problem zawiera: poziom, kontrolę, obszar (import, mapowanie, słownik, etap przebiegu), element, opis,
-  akcję naprawczą (przejście do właściwego ekranu z filtrem na problem) i stan (otwarty / rozwiązany).
-- Pulpit „Wymaga uwagi” pokazuje otwarte problemy i etapy wymagające akcji – użytkownik widzi, co wymaga
-  działania, a nie techniczny stan etapów.
+  akcję naprawczą (przejście do właściwego ekranu z filtrem na problem) i stan (otwarty / rozwiązany – kto, kiedy, jak).
+- **Rozwiązanie problemu:** automatycznie, gdy przyczyna zniknęła – zakończony import zamyka problemy wcześniejszych
+  importów (ocenia wszystkie pliki od nowa; przerwany niczego nie zamyka), G2 zamyka problem elementu CES, który ma
+  przypisanie albo nie ma kosztu – albo ręcznie: „Rozwiązane” na Pulpicie (wpis w dzienniku).
+- Pulpit „Wymaga uwagi” pokazuje otwarte problemy wszystkich obszarów (błędy najpierw) i etapy wymagające akcji –
+  użytkownik widzi, co wymaga działania, a nie techniczny stan etapów.
 - Walidacja przy zapisie słowników używa tych samych poziomów, ale błędny zapis jest od razu odrzucany
   (`docs/slowniki.md`, rozdz. 1).
 
@@ -116,10 +119,10 @@ flowchart TD
 |---|---|
 | **Cel** | Zapisać w bazie każdą nową wersję raportu RABIT, zanim RABIT ją nadpisze. |
 | **Wejście** | Wszystkie aktywne lokalizacje RABIT na SharePoint (WebDAV) oraz folder `00_Global\RABIT\Do_importu` z plikami pobranymi ręcznie (`docs/zrodla-danych.md`, rozdz. 3); definicje źródeł. |
-| **Działanie** | 1) Plik o tych samych metadanych (lokalizacja, nazwa, rozmiar, data modyfikacji) co przy poprzednim imporcie jest pomijany bez czytania. 2) Rozpoznanie źródła po prefiksie nazwy. 3) Hash SHA-256 – ten sam hash oznacza duplikat. 4) Nowa treść: wiersze surowe ładowane wsadowo do bazy jako nowa wersja pliku. 5) Parser źródła tworzy dane kanoniczne (`docs/zrodla-danych.md`, rozdz. 2). Każdy plik osobno; błąd jednego pliku albo jednej lokalizacji nie zatrzymuje pozostałych. |
+| **Działanie** | 1) Plik o tych samych metadanych (lokalizacja, nazwa, rozmiar, data modyfikacji) co przy poprzednim imporcie jest pomijany bez czytania. 2) Rozpoznanie źródła po prefiksie nazwy. 3) Hash SHA-256 – ten sam hash oznacza duplikat. 4) Nowa treść: plik pobierany na dysk lokalny, potem jeden przebieg przez parser źródła – nowa wersja pliku z danymi kanonicznymi ładowanymi wsadowo do `can.Row`, z kontrolą liczby wierszy i sum w bazie; błąd wycofuje zapis. Status pliku na ekranie pokazuje etap (pobieranie, sprawdzanie, odczyt i zapis wierszy, kontrola w bazie) z postępem (`docs/zrodla-danych.md`, rozdz. 2). Każdy plik osobno; błąd jednego pliku albo jednej lokalizacji nie zatrzymuje pozostałych. |
 | **Pochodzenie** | Każda wersja pliku i każdy wiersz: import (kto, kiedy), lokalizacja, hash, kod źródła, data raportu (data modyfikacji w RABIT). |
 | **Kontrole** | `docs/zrodla-danych.md`, rozdz. 8. |
-| **Efekt** | `meta.ImportBatch`, `meta.SourceFile`, `meta.SourceFileSeen`, `stg.RawRow`, `can.*`; problemy importu. Historia importów widoczna dla wszystkich. |
+| **Efekt** | `meta.ImportBatch`, `meta.SourceFile`, `meta.SourceFileSeen`, `can.Row` (sam plik nie jest przechowywany); problemy importu. Historia importów widoczna dla wszystkich. |
 | **Przekazanie** | G2 (nowe elementy CES), P1 (dane projektu). |
 
 Decyzja dla pliku:
@@ -137,9 +140,9 @@ Decyzja dla pliku:
 | | |
 |---|---|
 | **Cel** | Dla każdego elementu WBS CES z danych znać jego element P1S (globalnie) i wychwycić elementy bez przypisania. |
-| **Wejście** | Elementy CES z nowych wersji plików (G1); raport mapowań; korekty; drzewo P1S. |
-| **Działanie** | Automatycznie po imporcie – kolejność rozstrzygania według `docs/mapowanie-ces-p1s.md`, rozdz. 5. Lista nowych elementów z wynikiem (`INHERITED`, `UNMAPPED`). |
-| **Kontrole** | Element `UNMAPPED` z kosztem → WARNING na pulpicie. |
+| **Wejście** | Elementy CES z nowych wersji plików (G1); raport mapowań (najnowszy zaimportowany plik); korekty; drzewo P1S (PZLPROD). |
+| **Działanie** | Automatycznie po imporcie – kolejność rozstrzygania według `docs/mapowanie-ces-p1s.md`, rozdz. 5. Lista nowych elementów z wynikiem (`INHERITED`, `UNMAPPED`). Do czasu silnika etapów (F0.6) – przy otwarciu ekranu Mapowanie i „Odśwież” (`docs/mapowanie-ces-p1s.md`, rozdz. 9). |
+| **Kontrole** | Element `UNMAPPED` z kosztem → WARNING w rejestrze problemów (raz na import). |
 | **Akcje** | Korekta na ekranie Mapowanie CES ↔ P1S. |
 | **Efekt** | Stan mapowania (wyliczany z raportu i korekt, nie zapisywany). |
 | **Przekazanie** | P1 i P3 czytają mapowanie w stanie na znacznik stanu przebiegu. |

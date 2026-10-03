@@ -6,7 +6,7 @@ using PzlEv.Shared.Views.Partials;
 
 namespace PzlEv.Modules.Export;
 
-/// <summary>Publikacja: pliki wynikowe i plik dla Cobra. Bez własnego ekranu – panel etapu w ekranie przebiegu. W PoC: ekran zastępczy.</summary>
+/// <summary>Publikacja: pliki wynikowe i plik dla Cobra. Bez własnego ekranu – panel etapu w ekranie przebiegu. Ekran zastępczy do czasu implementacji (F9).</summary>
 public sealed class ExportModule : IModule
 {
     public string Key => ModuleKeys.Export;
