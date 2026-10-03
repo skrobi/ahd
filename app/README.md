@@ -4,8 +4,9 @@ Aplikacja PZL-EV rozwijana według planu w `tasks/` (`tasks/README.md`). Powsta�
 i nadal służy do sprawdzenia uruchomienia jednego `PZL-EV.exe` z dysku sieciowego (O6, sekcja „Test stosu”).
 
 Stan: **Słowniki** (słowniki globalne – F1), **Import RABIT** i **Administracja** (import plików, definicje
-źródeł, lokalizacje – F2), **Projekty** (kreator, Performance Objectives, słowniki projektu, gotowość, foldery – F4),
-**Pulpit** (dane przykładowe) i **Diagnostyka**. Pozostałe pozycje menu pokazują ekran
+źródeł, parsery, lokalizacje – F2), **Mapowanie** (F3), **Projekty** (kreator, Performance Objectives, słowniki
+projektu, gotowość, foldery – F4), **Pulpit** (stan z bazy, otwarte problemy) i **Diagnostyka**.
+Pozostałe pozycje menu pokazują ekran
 zastępczy modułu (dokumentacja i etapy, które moduł przejmie). Dane są w bazie MS SQL środowiska
 (sekcja „Konfiguracja i dane”).
 
@@ -25,24 +26,42 @@ zmieni). Brak pliku albo błąd w nim = komunikat przy starcie z nazwą pola –
 | `Sql.Server`, `Sql.Database` | serwer i baza (TEST: `pzltestdb.intl.lmco.com`, `PZLTEST`); logowanie kontem AD użytkownika, bez hasła w pliku |
 | `Sql.Schema`, `Sql.TablePrefix` | schemat i sygnatura tabel: `[FINOP].[PZLEV_META_ImportBatch]` (`docs/model-danych.md`, rozdz. 2); tylko litery, cyfry i `_`; sygnatura domyślnie `PZLEV_` |
 | `Sql.TrustServerCertificate` | `true` tylko gdy połączenie zgłasza niezaufany certyfikat serwera |
+| `PzlProd.Server`, `PzlProd.Database`, `PzlProd.Schema` | baza ze strukturą P1S (`splmcd03`, `PZLPROD`, schemat `LOG`: tabele `WBS`, `WBS_DIC`) – tylko odczyt kontem AD; sekcja opcjonalna – bez niej ekran Mapowanie pokazuje, czego brakuje; **Diagnostyka → Sprawdź PZLPROD** testuje połączenie |
 
 **Baza danych – migracje:** skrypty `sql/mssql/NNN_*.sql` są wbudowane w exe:
 - `001_etap1_import_slowniki_projekty.sql` – tabele etapu 1;
 - `002_dane_startowe.sql` – presety: definicje źródeł `ACTUALS_PAF` i `ACTUALS_CES`, aktywna lokalizacja RABIT
   E456659, kalendarz okresów 2026–2027, Cost Category (załącznik A);
 - `003_usuniecie_plikow_niezgodnych.sql` – usuwa pliki zapisane do wersji 0.11 mimo niezgodności z definicją
-  (układ kolumn, typy wartości) wraz z wierszami surowymi; kolejny import pobierze je ponownie.
+  (układ kolumn, typy wartości) wraz z wierszami surowymi (albo treścią i danymi kanonicznymi); kolejny import
+  pobierze je ponownie;
+- `004_parsery.sql` – parsery w bazie (Administracja → Parsery): parser pilnuje układu pliku (kolumna w pliku → pole,
+  typ, wymagane), definicja źródła tylko go wskazuje; parser ACTUALS w układzie raportu z 2026-10 (nowe pola
+  `Original Order Number`, `Item`, `Purchase order number`, `Invoice Number`);
+- `005_mapowanie_ces_p1s.sql` – parser `MAPOWANIA` (raport mapowań SAP↔CES z Excela)
+  i korekty mapowania (`DICT_MappingCorrection`);
+- `006_problemy_rozwiazywanie.sql` – rozwiązywanie problemów (kto, kiedy, jak); problemy importów wcześniejszych
+  niż ostatni zakończony – rozwiązane;
+- `007_sloty_danych_kanonicznych.sql` – dane kanoniczne wszystkich parserów w jednej stałej tabeli `CAN_Row`
+  (sloty typowane, indeks kolumnowy) i treść plików (`META_SourceFileContent`, usunięta w 008); przenosi dane
+  z `CAN_Actuals`, `CAN_MappingReport`, `STG_RawRow` i usuwa te tabele. Wymaga SQL Server 2016+ i poziomu zgodności
+  bazy co najmniej 130 (Diagnostyka → **Serwer SQL**); po niej aplikacja nie zmienia tabel – nowy parser i nowe
+  pole to tylko zapis parsera (`docs/model-danych.md`, rozdz. 5.1);
+- `008_bez_tresci_plikow.sql` – usuwa przechowywaną treść plików (`META_SourceFileContent`): w bazie zostają wersje
+  plików i dane kanoniczne, sam plik nie jest przechowywany.
 
 Migracje wykonuje przycisk **Diagnostyka → Migracja** – uruchamia po kolei skrypty, których numeru nie ma
 w `META_SchemaVersion`, a wykonane pomija. Lista na tym ekranie pokazuje, które skrypty są wykonane (kiedy, kto)
 i które czekają. Przy starcie aplikacja pyta o brakujące migracje: **Tak** – wykonuje je od razu, **Nie** – startuje
-bez nich. Konto AD musi mieć prawo tworzenia tabel w schemacie. Dwie osoby uruchamiające migrację jednocześnie nie
+bez nich. Migracje uruchamia konto AD z prawem tworzenia i zmiany tabel w schemacie; pozostali użytkownicy
+takiego prawa nie potrzebują. Dwie osoby uruchamiające migrację jednocześnie nie
 wykonają skryptu dwa razy (`sp_getapplock`). Skrypty można też uruchomić ręcznie, po kolei:
 `sqlcmd -S pzltestdb.intl.lmco.com -d PZLTEST -E -f 65001 -v Schema=FINOP Prefix=PZLEV_ -i sql\mssql\001_etap1_import_slowniki_projekty.sql`
 (i tak samo kolejne; `-f 65001` – skrypty są w UTF-8). Dane startowe są tylko w migracji – aplikacja sama nic nie dopisuje;
 usunięta definicja nie wraca.
 
-Ustawienia, baza i ścieżki widać na ekranie **Diagnostyka** i w stopce okna.
+Ustawienia, baza (także wersja SQL Server, edycja i poziom zgodności bazy – wiersz **Serwer SQL**) i ścieżki widać
+na ekranie **Diagnostyka** i w stopce okna.
 
 **Ręczny test F1 / F2:**
 
@@ -50,10 +69,17 @@ Ustawienia, baza i ścieżki widać na ekranie **Diagnostyka** i w stopce okna.
    historia pokazuje poprzednią wersję. **Pobierz do Excela** → zmień / dodaj / usuń wiersz → **Wczytaj z Excela** –
    podgląd różnic (+/~/−), **Zatwierdź wczytanie**. Błędna wartość (np. tekst w liczbie) – wynik walidacji, brak zapisu.
 2. **Import RABIT** – skopiuj `testdata/RABIT/ACTUALS_PAF_01.csv` do folderu `Do_importu` (ścieżka na ekranie),
-   **Importuj** – plik „zaimportowany”, 6 wierszy, sumy jak w `testdata/README.md`; ponowny import – „pominięty”;
+   **Importuj** – w trakcie status pliku pokazuje etap (1/4 pobieranie na dysk, 2/4 sprawdzanie, 3/4 odczyt i zapis
+   wierszy, 4/4 kontrola w bazie) z postępem i czasem; potem „zaimportowany”, 6 wierszy, sumy jak
+   w `testdata/README.md`; ponowny import – „pominięty”;
    ta sama treść pod inną nazwą – „duplikat”; plik o nieznanym prefiksie – „nierozpoznany”.
-3. **Administracja** – definicje `ACTUALS_PAF`, `ACTUALS_CES`; lokalizacja RABIT E456659 jest nieaktywna – włącz ją
-   na stanowisku z dostępem do SharePoint (WebDAV) i uruchom import.
+3. **Administracja** – definicje `ACTUALS_PAF`, `ACTUALS_CES` (kod, prefiks, typ raportu, parser ACTUALS, aktywna);
+   lokalizacja RABIT E456659 (migracja 002 – aktywna). Nowe źródło o znanym układzie: **Nowa definicja** → kod,
+   prefiks, parser → **Zapisz definicję**. Nowy układ raportu: **Parsery** → wybierz parser → **Kolumny z pliku…**
+   (nowe kolumny dochodzą jako pola tekstowe, brakujące są oznaczone, siatka pokazuje przykładowe wartości) →
+   popraw pole w bazie, typ, **Wymagane** → **Zapisz parser** (nowe pola dostają sloty w `CAN_Row` – kolumna **Slot**;
+   bez zmian tabel); import utworzy dane kanoniczne według parsera. Zmiana typu istniejącego pola (np. kwota → tekst)
+   jest odrzucana – dodaj nowe pole.
 4. **Import z SharePoint (brama F5)** – **Importuj**: okno logowania do SharePoint jak w Office (przy ważnej sesji
    zamyka się samo) → lista plików pasujących do definicji z datami, „zostanie zaimportowany” → import, status
    każdego pliku zmienia się na bieżąco; w historii od razu wpis „w toku”. Druga osoba w tym czasie widzi „Trwa
@@ -62,14 +88,26 @@ Ustawienia, baza i ścieżki widać na ekranie **Diagnostyka** i w stopce okna.
 5. **Import nie widzi plików** – **Sprawdź źródła** pokazuje dla każdej lokalizacji czytaną ścieżkę (WebDAV), dostęp
    albo pełny błąd, liczbę plików i podfoldery (import czyta tylko główny folder lokalizacji). Szczegóły, decyzja dla
    każdego pliku importu i pełna treść wyjątków – `logs\pzl-ev-RRRRMMDD.log` obok `.exe`.
-6. **Projekty** – **+ Nowy projekt**: kod `M28`, nazwa, typ → **Performance Objectives**: **Wczytaj Excel**
+6. **Administracja** – definicję źródła można usunąć (**Usuń definicję** → **Potwierdź usunięcie**); historia zostaje.
+7. **Mapowanie CES ↔ P1S** – **Diagnostyka → Sprawdź PZLPROD**: liczba elementów `LOG.WBS`, grup `WBS_DIC`
+   i faktyczne wartości `Z_ACTIVE` / `LOEKZ` (aplikacja przyjmuje: `LOEKZ` niepuste = usunięty; `Z_ACTIVE` puste,
+   `0` albo `N` = nieaktywny). **Administracja** → **Nowa definicja**: kod `MAPOWANIA`, prefiks – początek nazwy
+   pliku raportu mapowań, parser `MAPOWANIA` → **Zapisz definicję**; plik do `Do_importu` → **Importuj**.
+   **Mapowanie**: statusy elementów CES z raportów ACTUALS (REPORT, INHERITED, OVERRIDE, UNMAPPED), drzewo P1S
+   z elementami CES pod celami i węzłem „Nieprzypisane” (z propozycją). Korekta: wybierz element CES → cel w drzewie
+   albo w wyszukiwaniu → uzasadnienie (wymagane przy zmianie przypisania z raportu) → **Zapisz korektę**; status
+   OVERRIDE, historia; **Usuń korektę** – wraca przypisanie z raportu.
+8. **Pulpit → Wymaga uwagi** – otwarte problemy wszystkich obszarów (import, mapowanie), błędy najpierw. Plik z błędem
+   → import (problem) → poprawiony plik → import: problem poprzedniego importu znika sam. Korekta elementu CES
+   z problemem G2 → **Mapowanie → Odśwież**: problem znika. **Rozwiązane** przy problemie – zamknięcie ręczne
+   (wpis w dzienniku).
+9. **Projekty** – **+ Nowy projekt**: kod `M28`, nazwa, typ → **Performance Objectives**: **Wczytaj Excel**
    `testdata/Projekty/PO_M28.xlsx` (8 elementów), dodaj węzeł wirtualny i przeciągnij do niego elementy →
    **Słowniki projektu**: **Pobierz szablon Excel** (arkusz „WP i CAM” z elementami P1S z zakresu) albo
    **Wczytaj skoroszyt** `testdata/Projekty/Slowniki_M28.xlsx` → **Foldery** → **Podsumowanie**: baza analityczna
    (3 WP, 2 250 h, 75 000,50 materiałów) → **Utwórz projekt**. Bez słowników projekt powstaje, ale jest niegotowy
    (ERROR „WP i CAM”); po wczytaniu słowników na ekranie projektu – gotowy. Drugi projekt z tym samym kodem albo z tym
    samym elementem CES – odrzucony.
-7. **Administracja** – definicję źródła można usunąć (**Usuń definicję** → **Potwierdź usunięcie**); historia zostaje.
 
 ## Test stosu – co aplikacja sprawdza
 
@@ -172,6 +210,12 @@ wersji w pamięci. Wymagają zmiennej środowiskowej `PZLEV_TEST_SQL` z ciągiem
 `Server=pzltestdb.intl.lmco.com;Database=PZLTEST;Integrated Security=True;Encrypt=True`); bez niej są pomijane
 (`build.cmd` wypisuje ostrzeżenie). Każdy test zakłada w schemacie `FINOP` tabele z losową sygnaturą (`T…_`)
 i usuwa je po sobie – nie dotyka tabel aplikacji (`PZLEV_*`).
+Test wydajności importu (`ImportPerformanceTests`, plik ACTUALS z powtórzonych wierszy wzorcowych) działa tylko ze
+zmienną `PZLEV_PERF_ROWS` (liczba wierszy, np. `1000000`; `PZLEV_PERF_FORMAT=xlsx` – plik Excel, domyślnie CSV):
+`dotnet test tests\PzlEv.Tests.csproj --filter ImportPerformanceTests --logger "console;verbosity=detailed"` – wypisuje
+czas i pamięć procesu w czasie importu. Plik jest generowany raz (`%TEMP%\pzl-ev-perf`) – pamięć mierzy dopiero kolejne
+uruchomienie. Pomiar (SQL Server 2022 lokalnie): CSV 87 MB / 560 tys. wierszy – 10 s; Excel 67 MB / 1 mln wierszy – 21 s;
+pamięć ok. 0,3 GB.
 Pakiety testowe (xUnit) przy pierwszym pobraniu z eFOSS trafiają do zatwierdzenia – do tego czasu `build.cmd`
 pomija testy z ostrzeżeniem.
 
@@ -221,9 +265,10 @@ app/
     │   ├── MasterData/          Słowniki globalne (F1)
     │   ├── Import/              Import RABIT (F2)
     │   ├── Administration/      definicje źródeł, lokalizacje RABIT (F2)
-    │   ├── Dashboard/           Pulpit (dane przykładowe)
-    │   ├── Diagnostics/         test stosu i konfiguracja środowiska
-    │   └── Mapping/ Runs/ …     pozostałe moduły: plik wejścia + etapy, ekran zastępczy
+    │   ├── Dashboard/           Pulpit: import, źródła, słowniki, otwarte problemy, dziennik (z bazy)
+    │   ├── Diagnostics/         test stosu, konfiguracja środowiska, migracje, sprawdzenie PZLPROD
+    │   ├── Mapping/             Mapowanie CES ↔ P1S (F3): raport mapowań, drzewo P1S, korekty
+    │   └── Runs/ Projects/ …    pozostałe moduły: plik wejścia + etapy, ekran zastępczy
     └── Shared/
         ├── Utils/Ui/            MVVM, konwertery, okna wyboru pliku, kontrakt modułu (WPF)
         ├── Utils/Config|Data|Files/  konfiguracja, baza MS SQL (Data/Sql), dziennik, problemy, Excel/CSV

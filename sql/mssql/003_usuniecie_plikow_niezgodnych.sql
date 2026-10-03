@@ -1,7 +1,8 @@
 /* PZL-EV – migracja 003: usunięcie plików zapisanych mimo niezgodności z definicją źródła.
    Do wersji 0.11 import zapisywał plik i jego wiersze surowe także wtedy, gdy układ kolumn był niezgodny z definicją
    albo wartości nie pasowały do typów (dane kanoniczne nie powstawały). Od wersji 0.12 taki plik nie trafia do bazy;
-   ten skrypt usuwa zapisane wcześniej: wiersz pliku (META_SourceFile) i jego wiersze surowe (STG_RawRow).
+   ten skrypt usuwa zapisane wcześniej: wiersz pliku (META_SourceFile) i jego wiersze surowe (STG_RawRow; po migracji 007
+   – treść pliku META_SourceFileContent).
    Historia decyzji (META_SourceFileSeen) zostaje. Przy kolejnym imporcie te pliki zostaną pobrane ponownie
    (pomijane są tylko pliki, których treść jest w bazie).
 
@@ -19,9 +20,22 @@ SELECT FileId FROM [$(Schema)].[$(Prefix)META_SourceFile]
 WHERE CanonicalStatus = N'brak – sygnatura kolumn niezgodna z definicją'
    OR CanonicalStatus LIKE N'brak – % błędów wartości';
 
-DELETE c FROM [$(Schema)].[$(Prefix)CAN_Actuals] c JOIN @files f ON f.FileId = c.FileId;
-DELETE r FROM [$(Schema)].[$(Prefix)STG_RawRow] r JOIN @files f ON f.FileId = r.FileId;
-DECLARE @rawRows INT = @@ROWCOUNT;
+-- Tabele sprzed migracji 007 (CAN_Actuals, STG_RawRow) albo po niej (CAN_Row, META_SourceFileContent) – skrypt działa w obu stanach.
+DECLARE @rawRows INT = 0;
+IF OBJECT_ID(N'[$(Schema)].[$(Prefix)CAN_Actuals]') IS NOT NULL
+    DELETE c FROM [$(Schema)].[$(Prefix)CAN_Actuals] c JOIN @files f ON f.FileId = c.FileId;
+IF OBJECT_ID(N'[$(Schema)].[$(Prefix)STG_RawRow]') IS NOT NULL
+BEGIN
+    DELETE r FROM [$(Schema)].[$(Prefix)STG_RawRow] r JOIN @files f ON f.FileId = r.FileId;
+    SET @rawRows = @@ROWCOUNT;
+END
+IF OBJECT_ID(N'[$(Schema)].[$(Prefix)CAN_Row]') IS NOT NULL
+    DELETE c FROM [$(Schema)].[$(Prefix)CAN_Row] c JOIN @files f ON f.FileId = c.FileId;
+IF OBJECT_ID(N'[$(Schema)].[$(Prefix)META_SourceFileContent]') IS NOT NULL
+BEGIN
+    DELETE c FROM [$(Schema)].[$(Prefix)META_SourceFileContent] c JOIN @files f ON f.FileId = c.FileId;
+    SET @rawRows += @@ROWCOUNT;
+END
 DELETE s FROM [$(Schema)].[$(Prefix)META_SourceFile] s JOIN @files f ON f.FileId = s.FileId;
 DECLARE @removed INT = @@ROWCOUNT;
 

@@ -6,7 +6,7 @@ using PzlEv.Shared.Views.Partials;
 
 namespace PzlEv.Modules.Reconciliation;
 
-/// <summary>Uzgodnienie: łączenie źródeł i pliki dla finansów. Bez własnego ekranu – panele etapów w ekranie przebiegu. W PoC: ekran zastępczy.</summary>
+/// <summary>Uzgodnienie: łączenie źródeł i pliki dla finansów. Bez własnego ekranu – panele etapów w ekranie przebiegu. Ekran zastępczy do czasu implementacji (F6).</summary>
 public sealed class ReconciliationModule : IModule
 {
     public string Key => ModuleKeys.Reconciliation;

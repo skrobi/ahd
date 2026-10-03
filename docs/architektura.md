@@ -91,7 +91,7 @@ ani osobnych aplikacji.
 | UI (WPF) | ekrany i widoki według roli; bez logiki biznesowej |
 | Application | przypadki użycia: uruchamianie etapów, sprawdzanie bramek i roli, obsługa długich operacji |
 | Domain | pojęcia i reguły: projekt, przebieg, rewizja, słowniki, walidacja przy zapisie |
-| Processing | parsery źródeł (wersjonowane) – przekształcenie wierszy surowych do postaci kanonicznej |
+| Processing | parsery źródeł (wersjonowane) – przekształcenie wierszy pliku do postaci kanonicznej |
 | EVM | silnik obliczeń EV (`docs/ev-obliczenia.md`) – bez zależności od pozostałych warstw poza Domain |
 | Authorization | rola użytkownika z grup AD, dostęp do funkcji (`docs/uprawnienia.md`) |
 | Excel | odczyt i generowanie plików: słowniki, pliki dla finansów i CAM, wyniki |
@@ -233,15 +233,16 @@ decyzji (P4, P6, Z) albo z wynikiem ERROR.
 - Ścieżki UNC (nie litery dysków); w bazie zapisywane są ścieżki **względne** od korzenia środowiska.
 - Aplikacja sprawdza strukturę folderów przy otwarciu projektu.
 - Uprawnienia do folderów – `docs/uprawnienia.md`, rozdz. 5.
-- Oryginalne pliki RABIT nie są archiwizowane – ich treść i hash są w bazie (`docs/model-danych.md`, rozdz. 1).
+- Oryginalne pliki RABIT nie są archiwizowane ani przechowywane w bazie – w bazie są ich wersje (SHA-256, kolumny, liczba wierszy) i dane kanoniczne (`docs/model-danych.md`, rozdz. 5.1).
 
 ---
 
 ## 8. Środowiska i wdrożenia
 
 - **Konfiguracja środowiska:** plik `pzl-ev.json` obok `PZL-EV.exe` – przełącznik `Env` (`TEST` / `PROD`) i sekcja
-  `Environments.<Env>`: `NetworkRoot` (korzeń folderów środowiska, rozdz. 7) i `Sql` (serwer, baza, schemat,
-  sygnatura tabel – logowanie kontem AD). Plik jest wymagany – wzór z opisem ustawień `app/pzl-ev.json` kopiowany
+  `Environments.<Env>`: `NetworkRoot` (korzeń folderów środowiska, rozdz. 7), `Sql` (serwer, baza, schemat,
+  sygnatura tabel – logowanie kontem AD) i `PzlProd` (struktura P1S: serwer `splmcd03`, baza `PZLPROD`, schemat
+  `LOG` – tylko odczyt kontem AD; sekcja opcjonalna – bez niej ekran Mapowanie pokazuje, czego brakuje). Plik jest wymagany – wzór z opisem ustawień `app/pzl-ev.json` kopiowany
   obok exe przy budowie; brak pliku albo pola = komunikat przy starcie (`app/README.md`). TEST: `pzltestdb.intl.lmco.com`, baza `PZLTEST`, schemat `FINOP`, sygnatura `PZLEV_`.
 - **TEST** – developer; osobna baza i osobny korzeń folderów.
 - **PROD** – wdraża administrator (IT).
@@ -250,6 +251,12 @@ decyzji (P4, P6, Z) albo z wynikiem ERROR.
   (`META_SchemaVersion`). Skrypty są wbudowane w exe; brakujące wykonuje przycisk Diagnostyka → Migracja (wykonane
   pomija, `sp_getapplock` chroni przed równoczesnym uruchomieniem) albo pytanie przy starcie. Dane startowe (presety)
   – osobne migracje `NNN_dane_*.sql` (`002_dane_startowe.sql`); aplikacja nie dopisuje danych z kodu.
+  Aplikacja nie zmienia schematu poza migracjami (w PROD użytkownicy nie mają prawa tworzenia i zmiany tabel):
+  dane kanoniczne wszystkich parserów są w jednej stałej tabeli `CAN_Row` ze slotami typowanymi (migracja 007,
+  `docs/model-danych.md`, rozdz. 5.1) – nowy parser albo nowe pole to tylko zapis parsera. Migracje uruchamia osoba
+  z prawem zmiany schematu (Diagnostyka → Migracja albo sqlcmd).
+- **Serwer SQL:** SQL Server 2016 lub nowszy, poziom zgodności bazy co najmniej 130 (indeks kolumnowy, `OPENJSON`,
+  `COMPRESS`); Diagnostyka pokazuje wersję serwera, edycję i poziom zgodności bazy.
 - Paczka wdrożeniowa: skrypty bazy, plik `PZL-EV.exe`, instrukcja dla administratora.
 - **Pakiety (NuGet):** zależności (Dapper, Microsoft.Data.SqlClient, ClosedXML/OpenXML, Serilog) przywracane
   są z firmowego proxy **eFOSS (Nexus)** – `https://nexus.global.lmco.com/repository/nuget-proxy-v3/index.json`,
@@ -266,7 +273,7 @@ decyzji (P4, P6, Z) albo z wynikiem ERROR.
 
 | Obszar | Wymaganie |
 |---|---|
-| Wydajność | import 700 000+ wierszy (plik ok. 85 MB) w czasie akceptowalnym dla przebiegu tygodniowego – ładowanie wsadowe, bez podglądu danych |
+| Wydajność | import plików ACTUALS z milionami wierszy w czasie akceptowalnym dla przebiegu tygodniowego – plik pobierany na dysk lokalny, odczyt strumieniowy (wiersz po wierszu, także Excel – bez modelu dokumentu), jeden przebieg z parsowaniem równolegle z ładowaniem wsadowym do `CAN_Row` (indeks kolumnowy), bez podglądu danych; pamięć stała (ok. 0,3 GB niezależnie od rozmiaru pliku). Pomiar bez pobierania (SQL Server 2022 lokalnie): CSV 87 MB / 560 tys. wierszy – 10 s; Excel 67 MB / 1 mln wierszy – 21 s (wcześniejszy odczyt ClosedXML: 102 s i 5,9 GB pamięci samego odczytu) |
 | Odtwarzalność | każdy wynik EV odtwarzalny ze znacznika stanu i wersji silnika (`docs/model-danych.md`, rozdz. 4) |
 | Audyt | każda akcja z użytkownikiem AD i czasem; historia słowników i korekt |
 | Spójność | ta sama wersja silnika EV u wszystkich (kontrola minimalnej wersji aplikacji) |
@@ -283,7 +290,7 @@ decyzji (P4, P6, Z) albo z wynikiem ERROR.
 | 2 | Uruchamianie pliku exe zablokowane (AppLocker, antywirus) | test przed decyzją o formie dystrybucji (O6); podpis kodu; alternatywnie instalacja zarządzana przez IT |
 | 3 | Przebiegi trwające dni | trwały stan w bazie, kontynuacja przez inną osobę, unieważnianie etapów |
 | 4 | Zmiana słowników lub nowe importy w trakcie przebiegu | znacznik stanu, decyzja „kontynuuj / przypnij ponownie” w dzienniku |
-| 5 | Zmiana istniejących wierszy w `PZLPROD` (założenie przyrostowości) | odczyt bez kopiowania; zmiana raportu mapowań lub `LOG.WBS` nie jest wykrywana i może zmienić wynik odtworzenia rewizji |
+| 5 | Zmiana istniejących wierszy w `PZLPROD` (założenie przyrostowości) | odczyt bez kopiowania; zmiana `LOG.WBS` nie jest wykrywana i może zmienić wynik odtworzenia rewizji; raport mapowań jest importowany jako wersje pliku |
 | 6 | Nieaktualne dane produkcyjne (`vAHDD`) | kontrola świeżości w P0 |
 | 7 | Mieszanie źródeł zaawansowania | zapis pochodzenia; w przebiegu zamykającym wyłącznie CAM |
 | 8 | Nowe elementy SAP bez przypisania | wykrywanie po imporcie i w P3; blokada w przebiegu zamykającym |
@@ -292,7 +299,7 @@ decyzji (P4, P6, Z) albo z wynikiem ERROR.
 | 11 | Reguły procesu omijane przez bezpośrednie połączenie z bazą | reguły w procedurach, brak praw do tabel |
 | 12 | Różne litery dysków | ścieżki UNC, w bazie ścieżki względne |
 | 13 | Etykiety poufności / szyfrowanie plików | do weryfikacji z IT |
-| 14 | Przyrost danych w bazie (wiersze importów co tydzień) | retencja (`docs/model-danych.md`, O32) |
+| 14 | Przyrost danych w bazie (wiersze importów co tydzień – wszystko zostaje, O32) | kompresja kolumnowa `CAN_Row`; sam plik nie jest przechowywany (`docs/model-danych.md`, rozdz. 5.1) |
 | 15 | Wsparcie .NET 10 LTS kończy się w listopadzie 2028 | przejście na kolejną wersję LTS przed tym terminem |
 
 ---

@@ -20,6 +20,7 @@ public class AppConfigLoaderTests
 
         Assert.Equal("TEST", config.Environment);
         Assert.Equal(new SqlSettings("pzltestdb.intl.lmco.com", "PZLTEST", "FINOP", "PZLEV_"), config.Sql);
+        Assert.Equal(new SqlSettings("splmcd03", "PZLPROD", "LOG", ""), config.PzlProd);   // struktura P1S – tylko odczyt
         if (OperatingSystem.IsWindows())
             Assert.DoesNotContain("%", config.NetworkRoot);   // %LOCALAPPDATA% rozwinięte
         Assert.EndsWith(Path.Combine("00_Global", "RABIT", "Do_importu"), config.ImportFolder);
@@ -54,6 +55,20 @@ public class AppConfigLoaderTests
         Assert.Equal("PROD", config.Environment);
         Assert.Equal(@"\\serwer\udzial\PZL-EV", config.NetworkRoot);
         Assert.Equal(new SqlSettings("prod", "PZLPROD", "EV", "PZLEV_", TrustServerCertificate: true), config.Sql);
+        Assert.Null(config.PzlProd);   // sekcja PzlProd opcjonalna – ekran Mapowanie pokazuje, czego brakuje
+    }
+
+    [Fact]
+    public void PzlProd_section_is_read_without_table_prefix()
+    {
+        var config = LoadJson(
+            """
+            { "Env": "TEST", "Environments": { "TEST": { "NetworkRoot": "C:\\x", "Sql": { "Server": "s", "Database": "d", "Schema": "FINOP" },
+              "PzlProd": { "Server": "splmcd03", "Database": "PZLPROD", "Schema": "LOG" } } } }
+            """);
+
+        Assert.Equal(new SqlSettings("splmcd03", "PZLPROD", "LOG", ""), config.PzlProd);
+        Assert.Equal("[LOG].[WBS]", new PzlEv.Shared.Utils.Data.Sql.SqlDatabase(config.PzlProd!, "test").Table("WBS"));
     }
 
     [Theory]

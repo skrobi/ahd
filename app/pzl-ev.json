@@ -21,6 +21,15 @@
         "TablePrefix": "PZLEV_",
         // true tylko gdy połączenie zgłasza niezaufany certyfikat serwera.
         "TrustServerCertificate": false
+      },
+
+      // Baza PZLPROD (struktura P1S: [LOG].[WBS], [LOG].[WBS_DIC]) – tylko odczyt, kontem AD użytkownika.
+      // Bez tej sekcji ekran Mapowanie pokazuje, czego brakuje.
+      "PzlProd": {
+        "Server": "splmcd03",
+        "Database": "PZLPROD",
+        "Schema": "LOG",
+        "TrustServerCertificate": false
       }
     },
 
@@ -32,6 +41,12 @@
         "Database": "DO-UZUPELNIENIA",
         "Schema": "FINOP",
         "TablePrefix": "PZLEV_",
+        "TrustServerCertificate": false
+      },
+      "PzlProd": {
+        "Server": "splmcd03",
+        "Database": "PZLPROD",
+        "Schema": "LOG",
         "TrustServerCertificate": false
       }
     }

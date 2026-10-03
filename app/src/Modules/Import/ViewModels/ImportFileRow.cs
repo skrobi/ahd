@@ -5,7 +5,7 @@ namespace PzlEv.Modules.Import.ViewModels;
 
 /// <summary>
 /// Plik na liście ekranu Import: po sprawdzeniu źródeł – jak zostanie potraktowany („zostanie zaimportowany”),
-/// w trakcie importu – „importowanie…”, potem decyzja z opisem.
+/// w trakcie importu – etap (np. „3/4 odczyt i zapis wierszy do bazy – 350 000 wierszy · 12 s”), potem decyzja z opisem.
 /// </summary>
 public sealed class ImportFileRow(string location, string fileName, long? size, DateTime? modifiedLocal, string recognition, bool matches, string status)
     : ObservableObject

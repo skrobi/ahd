@@ -27,6 +27,7 @@ public sealed class DashboardViewModel : ObservableObject
         OpenImport = new RelayCommand(_ => navigator.NavigateTo(ModuleKeys.Import));
         NewProject = new RelayCommand(_ => navigator.NavigateTo(ModuleKeys.Projects));
         Refresh = new RelayCommand(_ => Load());
+        ResolveProblem = new RelayCommand(p => Resolve(p as AttentionItem));
         Load();
     }
 
@@ -93,6 +94,26 @@ public sealed class DashboardViewModel : ObservableObject
     public ICommand NewProject { get; }
 
     public ICommand Refresh { get; }
+
+    /// <summary>„Rozwiązane” przy problemie z listy „Wymaga uwagi”.</summary>
+    public ICommand ResolveProblem { get; }
+
+    private void Resolve(AttentionItem? item)
+    {
+        if (item is null)
+            return;
+        try
+        {
+            _data.Resolve(item.ProblemId);
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            Logger.Error(ex, "Pulpit – oznaczenie problemu nieudane");
+            Error = $"Nie udało się oznaczyć problemu jako rozwiązanego: {ex.Message}";
+            return;
+        }
+        Load();
+    }
 
     private void Load()
     {

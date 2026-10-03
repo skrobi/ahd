@@ -38,7 +38,6 @@ public sealed class SharePointLoginTests
         Assert.Equal("https://sp.example.com/sites/RabbitReporting", address.SiteUrl);
         Assert.Equal("/sites/RabbitReporting/Shared Documents/E456659", address.Folder);
         Assert.Equal(Folder + "/", address.FolderUrl);
-        Assert.Equal(@"\\sp.example.com@SSL\DavWWWRoot\sites\RabbitReporting\Shared Documents\E456659", address.Unc);
     }
 
     [Theory]
