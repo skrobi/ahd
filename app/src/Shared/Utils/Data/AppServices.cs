@@ -27,7 +27,7 @@ public sealed record AppServices(
         clock ??= new SystemClock();
         user ??= new WindowsUser();
         var sql = new SqlDatabase(config.Sql, appVersion);
-        return new AppServices(config, clock, user, sql, new SqlJournal(sql, clock, user), new SqlProblemLog(sql, clock), appVersion,
+        return new AppServices(config, clock, user, sql, new SqlJournal(sql, clock, user), new SqlProblemLog(sql, clock, user), appVersion,
             new FileOperationLock(config.RabitFolder, clock, user), config.PzlProd is { } prod ? new SqlDatabase(prod, appVersion) : null);
     }
 }

@@ -302,6 +302,36 @@ public sealed class ImportServiceTests : IDisposable
     }
 
     [SqlFact]
+    public void Completed_import_resolves_problems_of_earlier_imports_and_cancelled_import_does_not()
+    {
+        Use();
+        Directory.CreateDirectory(ImportFolder);
+        var lines = File.ReadAllLines(TestServices.TestData("RABIT", "ACTUALS_PAF_01.csv"));
+        File.WriteAllLines(Path.Combine(ImportFolder, "ACTUALS_PAF_01.csv"), lines.Select(l => l[..l.LastIndexOf(';')]));   // bez Invoice Number
+        var first = _import.Run();
+        var firstProblems = _app.Problems.ByReference(ImportBatchRow.ProblemReference(first.BatchId));
+        Assert.Contains(firstProblems, p => p.Level == CheckLevel.Error && p.Message.Contains("brak kolumn parsera"));
+
+        using (var cts = new CancellationTokenSource())
+        {
+            cts.Cancel();
+            Assert.True(_import.Run(cancellation: cts.Token).Cancelled);
+        }
+        Assert.All(_app.Problems.ByReference(ImportBatchRow.ProblemReference(first.BatchId)), p => Assert.False(p.Resolved));   // przerwany – bez zmian
+
+        File.Copy(TestServices.TestData("RABIT", "ACTUALS_PAF_01.csv"), Path.Combine(ImportFolder, "ACTUALS_PAF_01.csv"), overwrite: true);   // poprawiony plik
+        var fixedRun = _import.Run();
+
+        Assert.Equal(FileDecisions.Imported, Assert.Single(fixedRun.Files).Decision);
+        Assert.All(_app.Problems.ByReference(ImportBatchRow.ProblemReference(first.BatchId)), p =>
+        {
+            Assert.True(p.Resolved);
+            Assert.Equal((_services.User.Account, $"nieaktualny – stan z importu #{fixedRun.BatchId}"), (p.ResolvedBy, p.Resolution));
+        });
+        Assert.All(_app.Problems.Open(), p => Assert.Equal(ImportBatchRow.ProblemReference(fixedRun.BatchId), p.Reference));   // tylko bieżący stan
+    }
+
+    [SqlFact]
     public void Extra_column_in_file_is_imported_raw_only()
     {
         Use();

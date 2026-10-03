@@ -176,18 +176,26 @@ public sealed class MappingServiceTests : IDisposable
     }
 
     [SqlFact]
-    public void New_unmapped_elements_with_cost_are_recorded_as_problems_once_per_import()
+    public void New_unmapped_elements_with_cost_are_recorded_once_per_import_and_resolved_when_mapped()
     {
         Use();
         ImportSamples();
         var state = _mapping.Load();
 
-        Assert.Equal(2, _mapping.RecordNewElementProblems(state));
-        Assert.Equal(0, _mapping.RecordNewElementProblems(_mapping.Load()));
+        Assert.Equal((2, 0), _mapping.SyncProblems(state));
+        Assert.Equal((0, 0), _mapping.SyncProblems(_mapping.Load()));
 
         var problems = _app.Problems.ByReference($"g2:{state.LatestBatchId}");
         Assert.Equal(["4D03GZ000001", "4D03GZ000041"], problems.Select(p => p.Element).Order());
         Assert.All(problems, p => Assert.Equal((CheckLevel.Warning, MappingService.Area), (p.Level, p.Area)));
+
+        // przypisanie elementu (korekta) zamyka jego problem; drugi zostaje otwarty
+        Assert.True(_mapping.SaveCorrection(new CorrectionInput(CorrectionKinds.Element, "4D03GZ000001", "00001003", null), state).Success);
+        Assert.Equal((0, 1), _mapping.SyncProblems(_mapping.Load()));
+        var resolved = _app.Problems.ByReference($"g2:{state.LatestBatchId}").Single(p => p.Element == "4D03GZ000001");
+        Assert.True(resolved.Resolved);
+        Assert.Equal("element przypisany: OVERRIDE → AC-I39.1.01.01", resolved.Resolution);
+        Assert.Equal("4D03GZ000041", Assert.Single(_app.Problems.Open(), p => p.Area == MappingService.Area).Element);
     }
 
     [SqlFact]

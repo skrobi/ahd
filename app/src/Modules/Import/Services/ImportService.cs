@@ -115,6 +115,22 @@ public sealed class ImportService(IImportStore store, AppServices services)
     /// Import ze wszystkich lokalizacji. Tylko jedna osoba naraz (blokada operacji): gdy import trwa u kogoś
     /// innego – wynik z NotStarted. Wpis „w toku” w historii od początku importu.
     /// </summary>
+    /// <summary>
+    /// Zakończony import ocenia wszystkie pliki od nowa (plik z błędem nie trafia do bazy, więc jest czytany ponownie),
+    /// więc problemy wcześniejszych importów są nieaktualne – rozwiązane automatycznie; to, co nadal jest błędne, ma
+    /// problem w bieżącym imporcie. Przerwany import niczego nie rozwiązuje.
+    /// </summary>
+    private void ResolveEarlierProblems(long batchId, string reference)
+    {
+        var stale = services.Problems.Open()
+            .Where(p => p.Area == Area && p.Reference is { } r && r.StartsWith(ImportBatchRow.ProblemReferencePrefix, StringComparison.Ordinal) && r != reference)
+            .Select(p => p.Id)
+            .ToList();
+        var resolved = services.Problems.Resolve(stale, $"nieaktualny – stan z importu #{batchId}");
+        if (resolved > 0)
+            Logger.Information("Import #{Batch}: rozwiązane problemy wcześniejszych importów: {Count}", batchId, resolved);
+    }
+
     public ImportRunResult Run(IProgress<ImportProgress>? progress = null, CancellationToken cancellation = default)
     {
         using var lease = services.Locks.TryAcquire(LockName, out var holder);
@@ -199,6 +215,8 @@ public sealed class ImportService(IImportStore store, AppServices services)
 
         var run = new ImportRunResult(batchId, results, issues, cancelled);
         services.Journal.Add(Area, $"Import #{batchId}: {run.Summary}");
+        if (!cancelled)
+            ResolveEarlierProblems(batchId, reference);
         Logger.Information("Import #{Batch} koniec: {Summary}", batchId, run.Summary);
         return run;
     }

@@ -11,7 +11,6 @@ namespace PzlEv.Modules.Mapping.ViewModels;
 public sealed class P1sTreeItem(string title, P1sElement? element = null, bool isGreyed = false) : ObservableObject
 {
     private bool _isExpanded;
-    private bool _isSelected;
 
     public string Title { get; } = title;
 
@@ -27,8 +26,6 @@ public sealed class P1sTreeItem(string title, P1sElement? element = null, bool i
     public string CesCountText => CesCount == 0 ? "" : $"CES {CesCount}";
 
     public bool IsExpanded { get => _isExpanded; set => SetProperty(ref _isExpanded, value); }
-
-    public bool IsSelected { get => _isSelected; set => SetProperty(ref _isSelected, value); }
 }
 
 /// <summary>Element CES w drzewie – pod elementem P1S, do którego jest przypisany, albo w „Nieprzypisane”.</summary>

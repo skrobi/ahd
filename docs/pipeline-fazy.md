@@ -56,9 +56,12 @@ tabeli problemów (`meta.Problem`).
 | ERROR | błąd blokujący | blokuje bramkę etapu do czasu poprawy |
 
 - Problem zawiera: poziom, kontrolę, obszar (import, mapowanie, słownik, etap przebiegu), element, opis,
-  akcję naprawczą (przejście do właściwego ekranu z filtrem na problem) i stan (otwarty / rozwiązany).
-- Pulpit „Wymaga uwagi” pokazuje otwarte problemy i etapy wymagające akcji – użytkownik widzi, co wymaga
-  działania, a nie techniczny stan etapów.
+  akcję naprawczą (przejście do właściwego ekranu z filtrem na problem) i stan (otwarty / rozwiązany – kto, kiedy, jak).
+- **Rozwiązanie problemu:** automatycznie, gdy przyczyna zniknęła – zakończony import zamyka problemy wcześniejszych
+  importów (ocenia wszystkie pliki od nowa; przerwany niczego nie zamyka), G2 zamyka problem elementu CES, który ma
+  przypisanie albo nie ma kosztu – albo ręcznie: „Rozwiązane” na Pulpicie (wpis w dzienniku).
+- Pulpit „Wymaga uwagi” pokazuje otwarte problemy wszystkich obszarów (błędy najpierw) i etapy wymagające akcji –
+  użytkownik widzi, co wymaga działania, a nie techniczny stan etapów.
 - Walidacja przy zapisie słowników używa tych samych poziomów, ale błędny zapis jest od razu odrzucany
   (`docs/slowniki.md`, rozdz. 1).
 

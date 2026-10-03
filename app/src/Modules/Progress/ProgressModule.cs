@@ -6,7 +6,7 @@ using PzlEv.Shared.Views.Partials;
 
 namespace PzlEv.Modules.Progress;
 
-/// <summary>Zaawansowanie: produkcja, uzupełnienia, pliki CAM. Bez własnego ekranu – panele etapów w ekranie przebiegu. W PoC: ekran zastępczy.</summary>
+/// <summary>Zaawansowanie: produkcja, uzupełnienia, pliki CAM. Bez własnego ekranu – panele etapów w ekranie przebiegu. Ekran zastępczy do czasu implementacji (F7).</summary>
 public sealed class ProgressModule : IModule
 {
     public string Key => ModuleKeys.Progress;

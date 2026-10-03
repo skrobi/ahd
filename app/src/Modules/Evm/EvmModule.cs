@@ -6,7 +6,7 @@ using PzlEv.Shared.Views.Partials;
 
 namespace PzlEv.Modules.Evm;
 
-/// <summary>Silnik EVM i obliczenie EV. Silnik zależy wyłącznie od modeli wspólnych (docs/architektura.md, rozdz. 5.1). W PoC: ekran zastępczy.</summary>
+/// <summary>Silnik EVM i obliczenie EV. Silnik zależy wyłącznie od modeli wspólnych (docs/architektura.md, rozdz. 5.1). Ekran zastępczy do czasu implementacji (F8).</summary>
 public sealed class EvmModule : IModule
 {
     public string Key => ModuleKeys.Evm;

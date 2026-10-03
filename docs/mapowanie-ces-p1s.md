@@ -168,7 +168,8 @@ przypisania.
   z danych kanonicznych ACTUALS: `WBS Element`, `Project Definition`).
 - Dopóki silnik etapów (F0.6) nie uruchamia G2 po imporcie, rozstrzyganie wykonuje ekran Mapowanie (otwarcie,
   Odśwież): nowy element `UNMAPPED` z kosztem trafia do rejestru problemów jako WARNING – raz na import
-  (odwołanie `g2:<partia importu>`).
+  (odwołanie `g2:<partia importu>`); problem zamyka się sam, gdy element dostanie przypisanie (korekta, raport)
+  albo nie ma już kosztu.
 
 ---
 

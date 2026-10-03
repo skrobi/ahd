@@ -202,7 +202,7 @@ public sealed class MappingViewModel : ObservableObject
             var (state, problems) = await Task.Run(() =>
             {
                 var loaded = _service.Load();
-                return (loaded, _service.RecordNewElementProblems(loaded));
+                return (loaded, _service.SyncProblems(loaded));
             });
             _state = state;
             P1sError = state.P1sError;
@@ -215,7 +215,8 @@ public sealed class MappingViewModel : ObservableObject
             Status = $"Elementy CES: {state.Results.Count} · REPORT {counts.GetValueOrDefault(MappingStatuses.Report)} · " +
                      $"INHERITED {counts.GetValueOrDefault(MappingStatuses.Inherited)} · OVERRIDE {counts.GetValueOrDefault(MappingStatuses.Override)} · " +
                      $"UNMAPPED {counts.GetValueOrDefault(MappingStatuses.Unmapped)} · nowe {state.Results.Count(r => r.IsNew)}" +
-                     (problems > 0 ? $" · dopisano {problems} problemów (G2)" : "");
+                     (problems.Added > 0 ? $" · nowe problemy (G2): {problems.Added}" : "") +
+                     (problems.Resolved > 0 ? $" · rozwiązane problemy (G2): {problems.Resolved}" : "");
             LoadCorrection();
         }
         catch (SqlException ex) when (ex.Number == 208)

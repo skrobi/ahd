@@ -4,7 +4,8 @@ Aplikacja PZL-EV rozwijana według planu w `tasks/` (`tasks/README.md`). Powsta�
 i nadal służy do sprawdzenia uruchomienia jednego `PZL-EV.exe` z dysku sieciowego (O6, sekcja „Test stosu”).
 
 Stan: **Słowniki** (słowniki globalne – F1), **Import RABIT** i **Administracja** (import plików, definicje
-źródeł, lokalizacje – F2), **Pulpit** (dane przykładowe) i **Diagnostyka**. Pozostałe pozycje menu pokazują ekran
+źródeł, parsery, lokalizacje – F2), **Mapowanie** (F3), **Pulpit** (stan z bazy, otwarte problemy) i **Diagnostyka**.
+Pozostałe pozycje menu pokazują ekran
 zastępczy modułu (dokumentacja i etapy, które moduł przejmie). Dane są w bazie MS SQL środowiska
 (sekcja „Konfiguracja i dane”).
 
@@ -36,7 +37,9 @@ zmieni). Brak pliku albo błąd w nim = komunikat przy starcie z nazwą pola –
   typ, wymagane), definicja źródła tylko go wskazuje; parser ACTUALS w układzie raportu z 2026-10 (nowe pola
   `Original Order Number`, `Item`, `Purchase order number`, `Invoice Number`);
 - `005_mapowanie_ces_p1s.sql` – parser `MAPOWANIA` (raport mapowań SAP↔CES z Excela, tabela `CAN_MappingReport`)
-  i korekty mapowania (`DICT_MappingCorrection`).
+  i korekty mapowania (`DICT_MappingCorrection`);
+- `006_problemy_rozwiazywanie.sql` – rozwiązywanie problemów (kto, kiedy, jak); problemy importów wcześniejszych
+  niż ostatni zakończony – rozwiązane.
 
 Migracje wykonuje przycisk **Diagnostyka → Migracja** – uruchamia po kolei skrypty, których numeru nie ma
 w `META_SchemaVersion`, a wykonane pomija. Lista na tym ekranie pokazuje, które skrypty są wykonane (kiedy, kto)
@@ -80,6 +83,10 @@ Ustawienia, baza i ścieżki widać na ekranie **Diagnostyka** i w stopce okna.
    z elementami CES pod celami i węzłem „Nieprzypisane” (z propozycją). Korekta: wybierz element CES → cel w drzewie
    albo w wyszukiwaniu → uzasadnienie (wymagane przy zmianie przypisania z raportu) → **Zapisz korektę**; status
    OVERRIDE, historia; **Usuń korektę** – wraca przypisanie z raportu.
+8. **Pulpit → Wymaga uwagi** – otwarte problemy wszystkich obszarów (import, mapowanie), błędy najpierw. Plik z błędem
+   → import (problem) → poprawiony plik → import: problem poprzedniego importu znika sam. Korekta elementu CES
+   z problemem G2 → **Mapowanie → Odśwież**: problem znika. **Rozwiązane** przy problemie – zamknięcie ręczne
+   (wpis w dzienniku).
 
 ## Test stosu – co aplikacja sprawdza
 
@@ -231,7 +238,7 @@ app/
     │   ├── MasterData/          Słowniki globalne (F1)
     │   ├── Import/              Import RABIT (F2)
     │   ├── Administration/      definicje źródeł, lokalizacje RABIT (F2)
-    │   ├── Dashboard/           Pulpit (dane przykładowe)
+    │   ├── Dashboard/           Pulpit: import, źródła, słowniki, otwarte problemy, dziennik (z bazy)
     │   ├── Diagnostics/         test stosu, konfiguracja środowiska, migracje, sprawdzenie PZLPROD
     │   ├── Mapping/             Mapowanie CES ↔ P1S (F3): raport mapowań, drzewo P1S, korekty
     │   └── Runs/ Projects/ …    pozostałe moduły: plik wejścia + etapy, ekran zastępczy
