@@ -31,9 +31,6 @@ public static class ObjectivesValidator
                      .GroupBy(n => n.WbsElement!, StringComparer.OrdinalIgnoreCase).Where(g => g.Count() > 1))
             issues.Add(Issue.Error($"Element CES występuje w nakładce {group.Count()} razy", group.Key));
 
-        var withoutLegacy = tree.Nodes.Count(n => !n.IsVirtual && n.LegacyWbs is null);
-        if (tree.ElementCount > 0 && withoutLegacy == tree.ElementCount)
-            issues.Add(Issue.Warning("Żaden element nie ma Legacy WBS – słownika „WP i CAM” nie da się powiązać z nakładką", "Legacy WBS"));
         return issues;
     }
 }

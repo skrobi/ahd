@@ -12,7 +12,7 @@ namespace PzlEv.Tests.Projects;
 public sealed class ProjectDictionariesTests
 {
     private static readonly ProjectDictionaryContext Context = new(
-        ["AC-CAB.6.38", "AC-CAB.6.38.03"],
+        new P1sScope(["AC-CAB.6.38", "AC-CAB.6.38.03"], []),
         new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["AC-CAB.6.38.09"] = "S70I" },
         new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Anna Nowak", "PZL\\anowak" },
         new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "WP-1", "WP-2" });

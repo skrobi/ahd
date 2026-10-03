@@ -5,13 +5,19 @@ using PzlEv.Shared.Models.Dictionaries;
 namespace PzlEv.Modules.Projects.Services;
 
 /// <summary>
-/// Baza analityczna (docs/funkcjonalnosc.md, F01, krok 5): węzeł nakładki → WP (słownik „WP i CAM” przez Legacy WBS:
-/// element P1S trafia do węzła z najdłuższym pasującym Legacy WBS, a przy równych – do najgłębszego) → budżet i daty
+/// Baza analityczna (docs/funkcjonalnosc.md, F01, krok 5): węzeł nakładki → WP (słownik „WP i CAM” przez kody P1S
+/// węzła – Legacy WBS i cel mapowania: element P1S trafia do węzła, którego kod go obejmuje (P1sScope), a przy kilku
+/// takich węzłach – do najgłębszego) → budżet i daty
 /// („Harmonogram i budżet”). Sumy węzła obejmują poddrzewo; WP liczony raz.
 /// </summary>
 public static class AnalyticBaseBuilder
 {
-    public static AnalyticBase Build(PoTree tree, IReadOnlyList<DictRow> wpCam, IReadOnlyList<DictRow> schedule)
+    public static AnalyticBase Build(PoTree tree, IReadOnlyList<DictRow> wpCam, IReadOnlyList<DictRow> schedule) =>
+        Build(tree, wpCam, schedule, n => n.LegacyWbs is { } l ? [l] : [], new P1sScope(tree.Nodes.Where(n => !n.IsVirtual && n.LegacyWbs is not null).Select(n => n.LegacyWbs!), []));
+
+    /// <param name="codesOf">Kody P1S węzła (ObjectivesMapping.CodesOf).</param>
+    public static AnalyticBase Build(PoTree tree, IReadOnlyList<DictRow> wpCam, IReadOnlyList<DictRow> schedule,
+        Func<PoNode, IReadOnlyList<string>> codesOf, P1sScope scope)
     {
         var flat = tree.Flatten();
         var depth = flat.ToDictionary(x => x.Node.Key, x => x.Depth);
@@ -22,13 +28,13 @@ public static class AnalyticBaseBuilder
 
         // WP podpięte bezpośrednio do węzła (przez element P1S).
         var own = new Dictionary<long, HashSet<string>>();
-        var legacy = tree.Nodes.Where(n => n.LegacyWbs is not null).ToList();
+        var codes = tree.Nodes.Where(n => !n.IsVirtual).Select(n => (Node: n, Codes: codesOf(n))).Where(x => x.Codes.Count > 0).ToList();
         foreach (var row in wpCam)
         {
             if (row["Element P1S"] is not { } element || row["WP"] is not { } wp)
                 continue;
-            var scope = ProjectDictionaryContext.ScopeOf(legacy.Select(n => n.LegacyWbs!), element);
-            var node = scope is null ? null : legacy.Where(n => n.LegacyWbs!.Equals(scope, StringComparison.OrdinalIgnoreCase)).MaxBy(n => depth.GetValueOrDefault(n.Key));
+            var root = scope.RootOf(element);
+            var node = root is null ? null : codes.Where(x => x.Codes.Contains(root, StringComparer.OrdinalIgnoreCase)).Select(x => x.Node).MaxBy(n => depth.GetValueOrDefault(n.Key));
             if (node is null)
                 continue;   // element poza zakresem – błąd walidacji słownika „WP i CAM”
             (own.TryGetValue(node.Key, out var set) ? set : own[node.Key] = new HashSet<string>(StringComparer.OrdinalIgnoreCase)).Add(wp);
@@ -42,13 +48,13 @@ public static class AnalyticBaseBuilder
             string? gap = null;
             if (!node.IsVirtual && wps.Count == 0)
             {
-                gap = node.LegacyWbs is null ? "brak Legacy WBS – bez WP" : "element nakładki bez WP";
+                gap = codesOf(node).Count == 0 ? "brak kodu P1S (Legacy WBS ani mapowania) – bez WP" : "element nakładki bez WP";
                 withoutWp.Add(node.WbsElement ?? node.Name);
             }
             else if (wps.Any(w => !HasBudget(budgets.GetValueOrDefault(w))))
                 gap = "WP bez budżetu";
             var (hours, material, start, finish) = Totals(wps, budgets);
-            rows.Add(new AnalyticRow(d, node.Name, node.WbsElement, node.LegacyWbs, node.IsVirtual, wps,
+            rows.Add(new AnalyticRow(d, node.Name, node.WbsElement, string.Join(", ", codesOf(node)), node.IsVirtual, wps,
                 wps.Select(w => wpCams.GetValueOrDefault(w) ?? "").Where(c => c.Length > 0).Distinct().Order().ToList(),
                 hours, material, start, finish, gap));
         }

@@ -6,6 +6,7 @@ using PzlEv.Shared.Models.Pipeline;
 using PzlEv.Shared.Utils.Data;
 using PzlEv.Shared.Utils.Data.Sql;
 using PzlEv.Shared.Utils.Dictionaries;
+using PzlEv.Shared.Utils.Mapping;
 using PzlEv.Tests.TestSupport;
 using Xunit;
 
@@ -30,7 +31,7 @@ public sealed class ProjectStoreAndServiceTests : IDisposable
         _store = new SqlProjectStore(_database.Sql, _services.Clock, _services.User);
         _dictionaries = new SqlDictionaryStore(_database.Sql, _services.Clock, _services.User, [.. GlobalDictionaries.Tables, .. ProjectDictionaries.Tables]);
         _service = new ProjectService(_store, _dictionaries, new SqlJournal(_database.Sql, _services.Clock, _services.User),
-            new ProjectFolders(Path.Combine(_root, "Projekty")));
+            new ProjectFolders(Path.Combine(_root, "Projekty")), new SqlMappingStore(_database.Sql, _services.Clock, _services.User), null);
     }
 
     public void Dispose()
@@ -127,28 +128,28 @@ public sealed class ProjectStoreAndServiceTests : IDisposable
         Assert.True(Directory.Exists(Path.Combine(_root, "Projekty", "M28", "CAM")));
         var project = _service.Find("M28")!;
         var tree = _service.Objectives("M28");
-        var before = _service.Readiness(project, tree);
+        var before = _service.Readiness(project, tree, _service.Mapping());
         Assert.False(ProjectReadiness.IsReady(before));
         Assert.Contains(before, c => c.Level == CheckLevel.Error && c.Element == "WP i CAM");
 
         // Uzupełnienie słowników z Excela (skoroszyt z arkuszami jak w szablonie).
-        var context = _service.Context("M28", tree, null);
+        var context = _service.Context("M28", tree, null, _service.Mapping());
         var wpItem = ProjectDictionaries.Item(ProjectDictionaries.WpCam);
         var wp = _service.PreviewDictionary(wpItem.Code, context, Dictionaries, "M28", ProjectService.FindSheet(Dictionaries, wpItem));
         Assert.False(wp.HasErrors, string.Join("; ", wp.Issues.Select(i => i.Message)));
         Assert.Equal(4, wp.Added.Count);
         Assert.Equal(SaveStatus.Saved, _service.ApplyDictionary(wpItem.Code, context, wp, "M28").Status);
 
-        var withWp = _service.Context("M28", tree, _service.Rows(ProjectDictionaries.WpCam, "M28"));
+        var withWp = _service.Context("M28", tree, _service.Rows(ProjectDictionaries.WpCam, "M28"), _service.Mapping());
         var planItem = ProjectDictionaries.Item(ProjectDictionaries.ScheduleBudget);
         var plan = _service.PreviewDictionary(planItem.Code, withWp, Dictionaries, "M28", ProjectService.FindSheet(Dictionaries, planItem));
         Assert.False(plan.HasErrors, string.Join("; ", plan.Issues.Select(i => i.Message)));
         Assert.Equal(SaveStatus.Saved, _service.ApplyDictionary(planItem.Code, withWp, plan, "M28").Status);
 
-        var after = _service.Readiness(project, tree);
+        var after = _service.Readiness(project, tree, _service.Mapping());
         Assert.True(ProjectReadiness.IsReady(after), string.Join("; ", after.Select(c => c.Message)));
 
-        var analytic = ProjectService.Analytic(tree, _service.Rows(ProjectDictionaries.WpCam, "M28"), _service.Rows(ProjectDictionaries.ScheduleBudget, "M28"));
+        var analytic = ProjectService.Analytic(tree, _service.Rows(ProjectDictionaries.WpCam, "M28"), _service.Rows(ProjectDictionaries.ScheduleBudget, "M28"), _service.Mapping());
         Assert.Equal((3, 2250m, 75000.5m), (analytic.WpCount, analytic.BacHours, analytic.BacMaterial));
         Assert.Empty(analytic.ElementsWithoutWp);
     }
@@ -175,7 +176,7 @@ public sealed class ProjectStoreAndServiceTests : IDisposable
         var other = new PoTree();
         other.AddElement(null, "4D06WX", "inny", "AC-CAB.6.38");
         var item = ProjectDictionaries.Item(ProjectDictionaries.WpCam);
-        var preview = _service.PreviewDictionary(item.Code, _service.Context("S70I", other, null), Dictionaries, "S70I", ProjectService.FindSheet(Dictionaries, item));
+        var preview = _service.PreviewDictionary(item.Code, _service.Context("S70I", other, null, _service.Mapping()), Dictionaries, "S70I", ProjectService.FindSheet(Dictionaries, item));
         Assert.Contains(preview.Issues, i => i.Level == CheckLevel.Error && i.Message.Contains("należy do projektu M28"));
     }
 
@@ -199,7 +200,7 @@ public sealed class ProjectStoreAndServiceTests : IDisposable
     public void Template_contains_scope_elements_and_reads_back()
     {
         var path = Path.Combine(_root, "szablon.xlsx");
-        _service.ExportDictionaries(path, "", ProjectTypes.Internal, Objectives());
+        _service.ExportDictionaries(path, "", ProjectTypes.Internal, Objectives(), MappingInputs.None);
 
         var sheets = PzlEv.Shared.Utils.Files.TabularFileReader.SheetNames(path);
         Assert.Equal(["WP i CAM", "Harmonogram i budżet", "Cost Category projektu", "Wykluczenia"], sheets);

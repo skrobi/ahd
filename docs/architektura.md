@@ -108,7 +108,7 @@ Każdy moduł jest folderem `Modules/<Folder>/` i właścicielem swoich ekranów
 | Shell (powłoka, nie moduł) | `Shell/` | okno, nagłówek, menu, nawigacja, lista modułów | – | `docs/funkcjonalnosc.md`, rozdz. 2 |
 | Pulpit | `Dashboard` | pulpit, „Wymaga uwagi”, ostatnie zdarzenia (F07) | – | `docs/funkcjonalnosc.md` |
 | Import | `Import` | pobranie i załadowanie plików, parsery źródeł (F05) | G1 | `docs/zrodla-danych.md` |
-| Mapping | `Mapping` | mapowanie CES ↔ P1S (F04) | G2 | `docs/mapowanie-ces-p1s.md` |
+| Mapping | `Mapping` | ekran Mapowanie CES ↔ P1S, korekty, drzewo P1S (F04); rozstrzyganie mapowania jest wspólne (`Shared/Utils/Mapping`) | G2 | `docs/mapowanie-ces-p1s.md` |
 | Master Data | `MasterData` | ekran Słowniki – słowniki globalne (F03); mechanizm słowników jest wspólny (`Shared/Utils/Dictionaries`) | G3 | `docs/slowniki.md` |
 | Projects | `Projects` | projekty, kreator, Performance Objectives, słowniki projektu, gotowość, foldery projektu (F01, F02) | – | `docs/performance-objectives.md` |
 | Runs | `Runs` | przebiegi, ekran przebiegu, przypięcie stanu, walidacja, zamknięcie (F06) | P0, P1, P2, Z | `docs/pipeline-fazy.md`, `docs/model-danych.md` |
@@ -141,8 +141,9 @@ Shared/
   Utils/Config/                    konfiguracja pzl-ev.json
   Utils/Data/                      baza MS SQL (Sql/: połączenie, migracje, dziennik, problemy), czas, użytkownik, blokady operacji, usługi wspólne
   Utils/Files/                     Excel, CSV/TXT, liczby polskie, daty, sygnatura kolumn, SHA-256
+  Utils/Mapping/                   rozstrzyganie mapowania CES ↔ P1S (reguły, klucze, magazyn raportu i korekt) – używają go moduły Mapowanie i Projekty, później przebiegi (P1, P3)
   Utils/Dictionaries/              mechanizm słowników (walidacja, zapis z historią, wymiana przez Excel, magazyn SQL) i słowniki globalne – używają go moduły Słowniki i Projekty
-  Models/                          modele wspólne, klucze modułów, wynik kontroli (Issue), kontrakt etapu (Pipeline), opisy słowników (Dictionaries)
+  Models/                          modele wspólne, klucze modułów, wynik kontroli (Issue), kontrakt etapu (Pipeline), opisy słowników (Dictionaries), modele mapowania (Mapping)
   Models/Db/                       wiersze tabel schematu (meta, stg, can, dict) – wspólne jak schemat bazy
   Models/Sources/                  parsery i układy kolumn źródeł (kontrakt danych)
   Views/Templates/                 wygląd całej aplikacji: paleta, style, tabele, układ strony

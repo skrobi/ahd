@@ -33,6 +33,7 @@ public sealed class WizardViewModel : ObservableObject
     private string _status = "";
     private CreateOutcome? _outcome;
     private AnalyticBase? _analytic;
+    private MappingInputs _mapping = MappingInputs.None;
 
     public WizardViewModel(ProjectService service, IFileDialogs dialogs, Action cancel, Action<string> openProject)
     {
@@ -42,6 +43,7 @@ public sealed class WizardViewModel : ObservableObject
         Types = ProjectTypes.All.Select(t => new TypeOption(t)).ToList();
         _type = Types[0];
         Objectives = new PoEditorViewModel(dialogs, service.ReadObjectives, tree => service.ValidateObjectives(Code, tree), (_, imported) => imported);
+        Objectives.ResolveMapping = tree => ProjectService.Resolve(tree, _mapping);
         Objectives.Changed += RefreshDictionaries;   // zmiana zakresu – ponowna walidacja wczytanych słowników
         Back = new RelayCommand(_ => GoTo(_step - 1), _ => _step > 0 && _outcome is not { Created: true });
         Next = new RelayCommand(_ => DoNext(), _ => _step < StepTitles.Count - 1);
@@ -51,6 +53,8 @@ public sealed class WizardViewModel : ObservableObject
         ExportAnalytic = new RelayCommand(_ => DoExportAnalytic(), _ => _analytic is not null);
         Create = new RelayCommand(_ => DoCreate(), _ => _outcome is not { Created: true });
         OpenProject = new RelayCommand(_ => _openProject(Code), _ => _outcome is { Created: true });
+        Try(() => _mapping = service.Mapping());
+        Objectives.MappingInfo = _mapping.Describe;
         Objectives.Load(new PoTree());
         BuildPanels();
         GoTo(0);
@@ -238,7 +242,7 @@ public sealed class WizardViewModel : ObservableObject
             return;
         Try(() =>
         {
-            var previews = _files.Count == 0 ? [] : _service.PreviewAll(Code, Objectives.Tree, _files);
+            var previews = _files.Count == 0 ? [] : _service.PreviewAll(Code, Objectives.Tree, _files, _mapping);
             foreach (var panel in Dictionaries)
             {
                 var file = _files.TryGetValue(panel.Item.Code, out var f) ? $"{Path.GetFileName(f.Path)}{(f.Sheet is null ? "" : $" · arkusz „{f.Sheet}”")}" : "";
@@ -254,8 +258,8 @@ public sealed class WizardViewModel : ObservableObject
             return;
         Try(() =>
         {
-            _service.ExportDictionaries(path, "", Type.Code, Objectives.Tree);
-            Status = $"Zapisano szablon {path} – arkusz „WP i CAM” zawiera elementy P1S z zakresu (Legacy WBS nakładki).";
+            _service.ExportDictionaries(path, "", Type.Code, Objectives.Tree, _mapping);
+            Status = $"Zapisano szablon {path} – arkusz „WP i CAM” zawiera elementy P1S z zakresu (Legacy WBS i mapowanie nakładki).";
         });
     }
 
@@ -285,7 +289,8 @@ public sealed class WizardViewModel : ObservableObject
 
         var wp = Dictionaries.FirstOrDefault(p => p.Item.Code == ProjectDictionaries.WpCam)?.Preview;
         var plan = Dictionaries.FirstOrDefault(p => p.Item.Code == ProjectDictionaries.ScheduleBudget)?.Preview;
-        _analytic = ProjectService.Analytic(Objectives.Tree, wp is { HasErrors: false } ? wp.Working : [], plan is { HasErrors: false } ? plan.Working : []);
+        _analytic = ProjectService.Analytic(Objectives.Tree, wp is { HasErrors: false } ? wp.Working : [], plan is { HasErrors: false } ? plan.Working : [], _mapping);
+        checks.Add(ObjectivesMapping.Check(Objectives.Tree, ProjectService.Resolve(Objectives.Tree, _mapping), _mapping));
         if (_analytic.ElementsWithoutWp.Count > 0)
             checks.Add(Issue.Warning($"Elementy nakładki bez WP: {string.Join(", ", _analytic.ElementsWithoutWp.Take(15))}{(_analytic.ElementsWithoutWp.Count > 15 ? "…" : "")}", "baza analityczna"));
         if (_analytic.WpsWithoutBudget.Count > 0)

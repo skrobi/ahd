@@ -12,7 +12,7 @@ public sealed class AnalyticRowViewModel(AnalyticRow row)
 
     public string? WbsElement => row.WbsElement;
 
-    public string? LegacyWbs => row.LegacyWbs;
+    public string P1s => row.P1s;
 
     public string Wps => string.Join(", ", row.Wps);
 

@@ -11,8 +11,9 @@
             </StackPanel>
         </DockPanel>
         <TextBlock Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="0,0,0,8"
-                   Text="Tabela kontraktu: Nazwa · Element CES (WBS element – klucz) · P1S (Legacy WBS). Przeciągnij wiersz za uchwyt ⋮⋮ na inny wiersz, aby go tam przenieść, albo na pasek „korzeń”, aby odpiąć. Zaznacz wiersz, aby zmienić nazwę, przesunąć go albo dodać pod nim węzeł." />
+                   Text="Tabela kontraktu: Nazwa · Element CES (WBS element – klucz) · P1S z Excela (Legacy WBS) · P1S z globalnego mapowania CES ↔ P1S (tylko odczyt – zmiana na ekranie Mapowanie). Przeciągnij wiersz za uchwyt ⋮⋮ na inny wiersz, aby go tam przenieść, albo na pasek „korzeń”, aby odpiąć. Zaznacz wiersz, aby zmienić nazwę, przesunąć go albo dodać pod nim węzeł." />
 
+        <TextBlock Text="{Binding MappingInfo}" Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="0,0,0,8" />
         <Border x:Name="RootDrop" AllowDrop="True" Drop="OnDropRoot" DragOver="OnDragOver" Background="{StaticResource Surface2}"
                 BorderBrush="{StaticResource Line}" BorderThickness="1" Padding="8,4" Margin="0,0,0,2">
             <TextBlock Text="⤒ korzeń – upuść tutaj wiersz, aby przenieść go na najwyższy poziom" Style="{StaticResource MutedText}" />
@@ -37,6 +38,16 @@
                 </DataGridTemplateColumn>
                 <DataGridTextColumn Header="Element CES" Binding="{Binding WbsElement}" FontFamily="{StaticResource FMono}" />
                 <DataGridTextColumn Header="P1S (Legacy WBS)" Binding="{Binding LegacyWbs}" FontFamily="{StaticResource FMono}" />
+                <DataGridTemplateColumn Header="P1S z mapowania">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <StackPanel Orientation="Horizontal" ToolTip="{Binding MappingOrigin}">
+                                <ContentControl Content="{Binding MappingStatus}" />
+                                <TextBlock Text="{Binding MappingTarget}" FontFamily="{StaticResource FMono}" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
                 <DataGridTextColumn Header="Performance Obligation" Binding="{Binding PerformanceObligation}" />
             </DataGrid.Columns>
         </DataGrid>
