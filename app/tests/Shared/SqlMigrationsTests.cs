@@ -28,9 +28,9 @@ public sealed class SqlMigrationsTests
     public void Scripts_are_embedded_numbered_and_parameterised()
     {
         var scripts = SqlMigrations.All();
-        Assert.Equal([1, 2, 3, 4], scripts.Select(s => s.Number));
-        Assert.Equal([false, true, false, false], scripts.Select(s => s.IsPresets));   // 002_dane_startowe – dane startowe
-        Assert.Equal(4, SqlMigrations.Required);
+        Assert.Equal([1, 2, 3, 4, 5], scripts.Select(s => s.Number));
+        Assert.Equal([false, true, false, false, false], scripts.Select(s => s.IsPresets));   // 002_dane_startowe – dane startowe
+        Assert.Equal(5, SqlMigrations.Required);
 
         var batches = SqlMigrations.Batches(scripts[0].Text, "FINOP", "PZLEV_").ToList();
         Assert.True(batches.Count > 5);
@@ -51,17 +51,18 @@ public sealed class SqlMigrationsTests
         Assert.Empty(SqlMigrations.Pending(database.Sql));
         var status = SqlMigrations.Status(database.Sql);
         Assert.All(status, s => Assert.NotNull(s.AppliedAt));
-        Assert.Equal(4, SqlMigrations.CurrentVersion(database.Sql));
+        Assert.Equal(5, SqlMigrations.CurrentVersion(database.Sql));
         using var connection = database.Sql.Open();
         var tables = connection.Query<string>(
             "SELECT t.name FROM sys.tables t JOIN sys.schemas s ON s.schema_id = t.schema_id WHERE s.name = @schema AND LEFT(t.name, LEN(@prefix)) = @prefix",
             new { schema = TestDatabase.Schema, prefix = database.Sql.Settings.TablePrefix }).ToList();
-        Assert.Equal(21, tables.Count);   // 20 z migracji 001 + META_Parser (004)
+        Assert.Equal(23, tables.Count);   // 20 z migracji 001 + META_Parser (004) + CAN_MappingReport, DICT_MappingCorrection (005)
         Assert.Contains(database.Sql.Settings.TablePrefix + "META_PerformanceObjective", tables);
         Assert.Contains(database.Sql.Settings.TablePrefix + "DICT_ScheduleBudget", tables);
 
         // 004: parser ACTUALS w bazie (układ pliku z 2026-10), CAN_Actuals – tabela parsera (kolumny dopuszczają NULL, nowe pola)
-        var actuals = Assert.Single(new SqlSourceConfigStore(database.Sql, new TestServices().Clock, new TestUser()).Parsers());
+        var parsers = new SqlSourceConfigStore(database.Sql, new TestServices().Clock, new TestUser()).Parsers();
+        var actuals = parsers.Single(p => p.Code == "ACTUALS");
         Assert.Equal(("ACTUALS", "Actuals", 26), (actuals.Code, actuals.Table, actuals.Fields.Count));
         Assert.Equal(ActualsLayout.Columns, actuals.Fields.Where(f => f.Column.Length > 0).Select(f => f.Column));
         Assert.Equal(["CostElementDescr", "PartnerCctr", "SourceObjectName"], actuals.Fields.Where(f => f.Column.Length == 0).Select(f => f.Field));
@@ -73,6 +74,16 @@ public sealed class SqlMigrationsTests
         var definitionColumns = connection.Query<(string Name, bool Nullable)>(   // kolumny, sygnatura i wersja parsera definicji nieużywane
             "SELECT name, is_nullable FROM sys.columns WHERE object_id = OBJECT_ID(@table)", new { table = database.Sql.Table("meta.SourceDefinition") }).ToList();
         Assert.All(["Columns", "Signature", "ParserVersion"], n => Assert.Contains(definitionColumns, c => c.Name == n && c.Nullable));
+
+        // 005: parser MAPOWANIA (raport mapowań z Excela) z tabelą CAN_MappingReport w układzie zapisu parsera
+        var mapping = parsers.Single(p => p.Code == "MAPOWANIA");
+        Assert.Equal(("MappingReport", 11), (mapping.Table, mapping.Fields.Count));
+        Assert.Equal(["src", "pspnr", "pspnr_sap", "pspnr_ces", "pspnr_parent", "project", "project_sap", "project_ces", "wbs", "wbs_sap", "wbs_ces"],
+            mapping.Fields.Select(f => f.Column));
+        Assert.Equal(["Src"], mapping.Fields.Where(f => f.Required).Select(f => f.Field));
+        var reportColumns = connection.Query<string>(
+            "SELECT name FROM sys.columns WHERE object_id = OBJECT_ID(@table) ORDER BY column_id", new { table = database.Sql.Table(mapping.LogicalTable) }).ToList();
+        Assert.Equal(["FileId", "RowNumber", "ParserVersion", .. mapping.Fields.Select(f => f.Field)], reportColumns);
     }
 
     [SqlFact]

@@ -24,6 +24,7 @@ zmieni). Brak pliku albo błąd w nim = komunikat przy starcie z nazwą pola –
 | `Sql.Server`, `Sql.Database` | serwer i baza (TEST: `pzltestdb.intl.lmco.com`, `PZLTEST`); logowanie kontem AD użytkownika, bez hasła w pliku |
 | `Sql.Schema`, `Sql.TablePrefix` | schemat i sygnatura tabel: `[FINOP].[PZLEV_META_ImportBatch]` (`docs/model-danych.md`, rozdz. 2); tylko litery, cyfry i `_`; sygnatura domyślnie `PZLEV_` |
 | `Sql.TrustServerCertificate` | `true` tylko gdy połączenie zgłasza niezaufany certyfikat serwera |
+| `PzlProd.Server`, `PzlProd.Database`, `PzlProd.Schema` | baza ze strukturą P1S (`splmcd03`, `PZLPROD`, schemat `LOG`: tabele `WBS`, `WBS_DIC`) – tylko odczyt kontem AD; sekcja opcjonalna – bez niej ekran Mapowanie pokazuje, czego brakuje; **Diagnostyka → Sprawdź PZLPROD** testuje połączenie |
 
 **Baza danych – migracje:** skrypty `sql/mssql/NNN_*.sql` są wbudowane w exe:
 - `001_etap1_import_slowniki_projekty.sql` – tabele etapu 1;
@@ -33,7 +34,9 @@ zmieni). Brak pliku albo błąd w nim = komunikat przy starcie z nazwą pola –
   (układ kolumn, typy wartości) wraz z wierszami surowymi; kolejny import pobierze je ponownie;
 - `004_parsery.sql` – parsery w bazie (Administracja → Parsery): parser pilnuje układu pliku (kolumna w pliku → pole,
   typ, wymagane), definicja źródła tylko go wskazuje; parser ACTUALS w układzie raportu z 2026-10 (nowe pola
-  `Original Order Number`, `Item`, `Purchase order number`, `Invoice Number`).
+  `Original Order Number`, `Item`, `Purchase order number`, `Invoice Number`);
+- `005_mapowanie_ces_p1s.sql` – parser `MAPOWANIA` (raport mapowań SAP↔CES z Excela, tabela `CAN_MappingReport`)
+  i korekty mapowania (`DICT_MappingCorrection`).
 
 Migracje wykonuje przycisk **Diagnostyka → Migracja** – uruchamia po kolei skrypty, których numeru nie ma
 w `META_SchemaVersion`, a wykonane pomija. Lista na tym ekranie pokazuje, które skrypty są wykonane (kiedy, kto)
@@ -69,6 +72,14 @@ Ustawienia, baza i ścieżki widać na ekranie **Diagnostyka** i w stopce okna.
    albo pełny błąd, liczbę plików i podfoldery (import czyta tylko główny folder lokalizacji). Szczegóły, decyzja dla
    każdego pliku importu i pełna treść wyjątków – `logs\pzl-ev-RRRRMMDD.log` obok `.exe`.
 6. **Administracja** – definicję źródła można usunąć (**Usuń definicję** → **Potwierdź usunięcie**); historia zostaje.
+7. **Mapowanie CES ↔ P1S** – **Diagnostyka → Sprawdź PZLPROD**: liczba elementów `LOG.WBS`, grup `WBS_DIC`
+   i faktyczne wartości `Z_ACTIVE` / `LOEKZ` (aplikacja przyjmuje: `LOEKZ` niepuste = usunięty; `Z_ACTIVE` puste,
+   `0` albo `N` = nieaktywny). **Administracja** → **Nowa definicja**: kod `MAPOWANIA`, prefiks – początek nazwy
+   pliku raportu mapowań, parser `MAPOWANIA` → **Zapisz definicję**; plik do `Do_importu` → **Importuj**.
+   **Mapowanie**: statusy elementów CES z raportów ACTUALS (REPORT, INHERITED, OVERRIDE, UNMAPPED), drzewo P1S
+   z elementami CES pod celami i węzłem „Nieprzypisane” (z propozycją). Korekta: wybierz element CES → cel w drzewie
+   albo w wyszukiwaniu → uzasadnienie (wymagane przy zmianie przypisania z raportu) → **Zapisz korektę**; status
+   OVERRIDE, historia; **Usuń korektę** – wraca przypisanie z raportu.
 
 ## Test stosu – co aplikacja sprawdza
 
@@ -221,8 +232,9 @@ app/
     │   ├── Import/              Import RABIT (F2)
     │   ├── Administration/      definicje źródeł, lokalizacje RABIT (F2)
     │   ├── Dashboard/           Pulpit (dane przykładowe)
-    │   ├── Diagnostics/         test stosu i konfiguracja środowiska
-    │   └── Mapping/ Runs/ …     pozostałe moduły: plik wejścia + etapy, ekran zastępczy
+    │   ├── Diagnostics/         test stosu, konfiguracja środowiska, migracje, sprawdzenie PZLPROD
+    │   ├── Mapping/             Mapowanie CES ↔ P1S (F3): raport mapowań, drzewo P1S, korekty
+    │   └── Runs/ Projects/ …    pozostałe moduły: plik wejścia + etapy, ekran zastępczy
     └── Shared/
         ├── Utils/Ui/            MVVM, konwertery, okna wyboru pliku, kontrakt modułu (WPF)
         ├── Utils/Config|Data|Files/  konfiguracja, baza MS SQL (Data/Sql), dziennik, problemy, Excel/CSV

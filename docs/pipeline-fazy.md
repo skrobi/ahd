@@ -137,9 +137,9 @@ Decyzja dla pliku:
 | | |
 |---|---|
 | **Cel** | Dla każdego elementu WBS CES z danych znać jego element P1S (globalnie) i wychwycić elementy bez przypisania. |
-| **Wejście** | Elementy CES z nowych wersji plików (G1); raport mapowań; korekty; drzewo P1S. |
-| **Działanie** | Automatycznie po imporcie – kolejność rozstrzygania według `docs/mapowanie-ces-p1s.md`, rozdz. 5. Lista nowych elementów z wynikiem (`INHERITED`, `UNMAPPED`). |
-| **Kontrole** | Element `UNMAPPED` z kosztem → WARNING na pulpicie. |
+| **Wejście** | Elementy CES z nowych wersji plików (G1); raport mapowań (najnowszy zaimportowany plik); korekty; drzewo P1S (PZLPROD). |
+| **Działanie** | Automatycznie po imporcie – kolejność rozstrzygania według `docs/mapowanie-ces-p1s.md`, rozdz. 5. Lista nowych elementów z wynikiem (`INHERITED`, `UNMAPPED`). Do czasu silnika etapów (F0.6) – przy otwarciu ekranu Mapowanie i „Odśwież” (`docs/mapowanie-ces-p1s.md`, rozdz. 9). |
+| **Kontrole** | Element `UNMAPPED` z kosztem → WARNING w rejestrze problemów (raz na import). |
 | **Akcje** | Korekta na ekranie Mapowanie CES ↔ P1S. |
 | **Efekt** | Stan mapowania (wyliczany z raportu i korekt, nie zapisywany). |
 | **Przekazanie** | P1 i P3 czytają mapowanie w stanie na znacznik stanu przebiegu. |
