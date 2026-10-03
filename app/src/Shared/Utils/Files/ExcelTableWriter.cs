@@ -9,9 +9,20 @@ namespace PzlEv.Shared.Utils.Files;
 /// </summary>
 public static class ExcelTableWriter
 {
-    public static void Write(string path, string sheetName, IReadOnlyList<string> headers, IEnumerable<IReadOnlyList<object?>> rows)
+    public static void Write(string path, string sheetName, IReadOnlyList<string> headers, IEnumerable<IReadOnlyList<object?>> rows) =>
+        WriteSheets(path, [(sheetName, headers, rows)]);
+
+    /// <summary>Kilka tabel w jednym skoroszycie – arkusz na tabelę (np. szablon słowników projektu).</summary>
+    public static void WriteSheets(string path, IEnumerable<(string Sheet, IReadOnlyList<string> Headers, IEnumerable<IReadOnlyList<object?>> Rows)> sheets)
     {
         using var workbook = new XLWorkbook();
+        foreach (var (sheetName, headers, rows) in sheets)
+            AddSheet(workbook, sheetName, headers, rows);
+        workbook.SaveAs(path);
+    }
+
+    private static void AddSheet(XLWorkbook workbook, string sheetName, IReadOnlyList<string> headers, IEnumerable<IReadOnlyList<object?>> rows)
+    {
         var ws = workbook.Worksheets.Add(SafeSheetName(sheetName));
         for (var c = 0; c < headers.Count; c++)
         {
@@ -59,7 +70,6 @@ public static class ExcelTableWriter
             r++;
         }
         ws.SheetView.FreezeRows(1);
-        workbook.SaveAs(path);
     }
 
     private static string SafeSheetName(string name)

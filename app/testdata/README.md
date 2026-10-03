@@ -10,7 +10,14 @@ służą do sprawdzenia przepływu danych (liczba wierszy i sumy kontrolne na ka
 |---|---|---|---|---|
 | `RABIT/ACTUALS_PAF_01.csv` | `ACTUALS_PAF` | 6 | 10 574,11 | 2 203,12 |
 
-Format: CSV, separator `;`, UTF-8, liczby w formacie polskim (spacja tysięcy, przecinek dziesiętny, minus na
+## Projekty
+
+| Plik | Zawartość | Oczekiwane |
+|---|---|---|
+| `Projekty/PO_M28.xlsx` | eksport struktury WBS z SAP (układ `docs/performance-objectives.md`, rozdz. 5), projekt CES `4D06WP` | 8 elementów, 4 poziomy: `4D06WP` → `4D06WP.RA` → `4D06WP.01` (`…000001`, `…000002`), `4D06WP.02` (`…000003`, `…000004`) |
+| `Projekty/Slowniki_M28.xlsx` | słowniki projektu M28: arkusze „WP i CAM”, „Harmonogram i budżet”, „Wykluczenia”, „Cost Category projektu” | 4 elementy P1S, 3 WP, 2 CAM; BAC HOURS 2 250, BAC MATERIAL 75 000,50; 2 wykluczenia; 1 zmiana Cost Category (`0057100000`) |
+
+Format plików RABIT: CSV, separator `;`, UTF-8, liczby w formacie polskim (spacja tysięcy, przecinek dziesiętny, minus na
 końcu dla korekty – zapis SAP). Układ kolumn `ACTUALS_*` z 2026-10 (23 kolumny, m.in. `Original Order Number`, `Item`,
 `Purchase order number`, `Invoice Number`) – parser ACTUALS (migracja 004), `docs/zrodla-danych.md`, rozdz. 4.
 

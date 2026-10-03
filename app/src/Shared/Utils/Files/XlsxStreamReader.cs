@@ -26,6 +26,15 @@ public static class XlsxStreamReader
         CloseInput = true,
     };
 
+    /// <summary>Nazwy arkuszy skoroszytu w kolejności z pliku.</summary>
+    public static IReadOnlyList<string> SheetNames(Stream content)
+    {
+        using var zip = new ZipArchive(content, ZipArchiveMode.Read);
+        var workbookPath = Relationships(zip, "_rels/.rels").Where(r => r.Type.EndsWith("/officeDocument", StringComparison.Ordinal))
+            .Select(r => r.Target).FirstOrDefault() is { } root ? Resolve("", root) : "xl/workbook.xml";
+        return Workbook(zip, workbookPath).Sheets.Select(s => s.Name).ToList();
+    }
+
     /// <summary>open – nowy strumień pliku przy każdym odczycie (nagłówek, każde wywołanie Rows()).</summary>
     public static TabularSource Open(Func<Stream> open, string fileType, string? sheetName)
     {

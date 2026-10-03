@@ -1,6 +1,5 @@
-using PzlEv.Modules.MasterData.Data;
-using PzlEv.Modules.MasterData.Models;
-using PzlEv.Modules.MasterData.Services;
+using PzlEv.Shared.Utils.Dictionaries;
+using PzlEv.Shared.Models.Dictionaries;
 using PzlEv.Tests.TestSupport;
 using Xunit;
 
@@ -20,7 +19,7 @@ public sealed class DictionaryStoreContract : IDisposable
         var services = new TestServices();
         var database = new TestDatabase(presets);
         _databases.Add(database);
-        return (new SqlDictionaryStore(database.Sql, services.Clock, services.User), services.Clock, services.User);
+        return (new SqlDictionaryStore(database.Sql, services.Clock, services.User, GlobalDictionaries.Tables), services.Clock, services.User);
     }
 
     private static Dictionary<string, string?> Rate(string dept, string rate) =>

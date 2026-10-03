@@ -1,5 +1,5 @@
-using PzlEv.Modules.MasterData.Models;
-using PzlEv.Modules.MasterData.Services;
+using PzlEv.Shared.Models.Dictionaries;
+using PzlEv.Shared.Utils.Dictionaries;
 using PzlEv.Shared.Models;
 using PzlEv.Shared.Models.Pipeline;
 using Xunit;

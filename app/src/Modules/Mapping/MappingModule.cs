@@ -1,5 +1,5 @@
 using System.Windows;
-using PzlEv.Modules.Mapping.Data;
+using PzlEv.Shared.Utils.Mapping;
 using PzlEv.Modules.Mapping.Services;
 using PzlEv.Modules.Mapping.ViewModels;
 using PzlEv.Modules.Mapping.Views;
