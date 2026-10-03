@@ -14,9 +14,9 @@ using Serilog;
 namespace PzlEv.Modules.Administration.ViewModels;
 
 /// <summary>
-/// Administracja → Parsery: parser = tabela danych kanonicznych i jej pola – pole w bazie, kolumna w pliku, typ, długość,
+/// Administracja → Parsery: parser = pola danych kanonicznych – pole w bazie, kolumna w pliku, typ, długość,
 /// dopełnianie zerami, wymagane. Parser pilnuje układu pliku. „Kolumny z pliku…” porównuje parser z wierszem nagłówków
-/// pliku (nowe kolumny → propozycje pól, przykłady wartości). Zapis tworzy nową wersję i zakłada / rozszerza tabelę.
+/// pliku (nowe kolumny → propozycje pól, przykłady wartości). Zapis tworzy nową wersję; nowe pola dostają sloty w CAN_Row (bez zmian tabel).
 /// </summary>
 public sealed class ParserEditorViewModel : ObservableObject
 {
@@ -105,7 +105,9 @@ public sealed class ParserEditorViewModel : ObservableObject
 
     public string FormTitle => IsNew ? "Nowy parser" : $"Zmiana parsera {_code} (wersja {_version})";
 
-    public string TableText => $"Tabela danych kanonicznych: CAN_{(IsNew ? _code.Trim().ToUpperInvariant() : _table)}";
+    public string TableText => IsNew
+        ? "Dane w stałej tabeli CAN_Row – pola dostaną sloty przy zapisie"
+        : $"Dane w stałej tabeli CAN_Row – zajęte sloty: {CanonicalSlots.Usage(Fields.Select(f => f.ToField()))}";
 
     /// <summary>Lista parserów od nowa (po zapisie albo zmianie z innego ekranu).</summary>
     public void Reload()
@@ -154,7 +156,8 @@ public sealed class ParserEditorViewModel : ObservableObject
             return;
         try
         {
-            var data = TabularFileReader.Read(File.ReadAllBytes(path), Path.GetFileName(path));
+            var source = TabularFileReader.Open(File.ReadAllBytes(path), Path.GetFileName(path));
+            var data = new TabularData(source.Headers, source.Rows().Take(200).ToList(), source.FileType, source.Sheet, source.Encoding, source.Delimiter);   // przykłady z początku pliku
             var (added, missing) = SourceConfigService.CompareWithFile(Fields.Select(f => f.ToField()).ToList(), data.Headers);
             foreach (var field in added)
                 Fields.Add(ParserFieldRowViewModel.From(field));

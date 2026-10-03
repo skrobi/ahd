@@ -61,7 +61,7 @@
                     <TextBlock Grid.Row="3" Text="Parser" Style="{StaticResource Label}" />
                     <ComboBox Grid.Row="3" Grid.Column="1" Margin="0,3" ItemsSource="{Binding ParserOptions}" DisplayMemberPath="Label"
                               SelectedValuePath="Value" SelectedValue="{Binding DefParser}"
-                              ToolTip="Parser pilnuje układu kolumn pliku, typów i pól wymaganych (sekcja Parsery); „brak” – tylko wiersze surowe" />
+                              ToolTip="Parser pilnuje układu kolumn pliku, typów i pól wymaganych (sekcja Parsery); „brak” – tylko treść pliku" />
                     <TextBlock Grid.Row="4" Text="Aktywna" Style="{StaticResource Label}" />
                     <CheckBox Grid.Row="4" Grid.Column="1" VerticalAlignment="Center" IsChecked="{Binding DefActive}" />
 
@@ -98,13 +98,13 @@
                     <TextBlock Text="Parsery" Style="{StaticResource H2}" />
                 </DockPanel>
                 <TextBlock Style="{StaticResource MutedText}" Margin="0,0,0,8" TextWrapping="Wrap"
-                           Text="Parser opisuje układ pliku: każde pole to kolumna w pliku (typ, wymagane) i kolumna tabeli danych kanonicznych CAN_…. Brak kolumny parsera w pliku = błąd importu; kolumny pliku spoza parsera trafiają tylko do wierszy surowych. Nowe pole dokłada kolumnę w tabeli; pola usuniętego z parsera kolumna zostaje (dane zapisane). Zapis zmienia tabele – wymaga prawa tworzenia i zmiany tabel w bazie." />
+                           Text="Parser opisuje układ pliku: każde pole to kolumna w pliku (typ, wymagane) i slot w stałej tabeli danych kanonicznych CAN_Row. Brak kolumny parsera w pliku = błąd importu; kolumny pliku spoza parsera zostają tylko w treści pliku. Nowe pole dostaje wolny slot; slot pola usuniętego z parsera zostaje zajęty (dane zapisanych plików). Zapis nie zmienia tabel w bazie." />
                 <DataGrid Style="{StaticResource DataTable}" ItemsSource="{Binding Parsers}" SelectedItem="{Binding Selected}"
                           IsReadOnly="True" MaxHeight="160">
                     <DataGrid.Columns>
                         <DataGridTextColumn Header="Kod" Binding="{Binding Code}" />
                         <DataGridTextColumn Header="Nazwa" Binding="{Binding Name}" Width="*" />
-                        <DataGridTextColumn Header="Tabela" Binding="{Binding Table, Mode=OneWay, StringFormat='CAN_{0}'}" />
+                        <DataGridTextColumn Header="Sloty" Binding="{Binding SlotUsage, Mode=OneWay}" />
                         <DataGridTextColumn Header="Pól" Binding="{Binding Fields.Count, Mode=OneWay}" />
                         <DataGridCheckBoxColumn Header="Aktywny" Binding="{Binding Active, Mode=OneWay}" />
                         <DataGridTextColumn Header="Wersja" Binding="{Binding Version}" />
@@ -122,7 +122,7 @@
                     </Grid.RowDefinitions>
                     <TextBlock Grid.Row="0" Text="Kod parsera" Style="{StaticResource Label}" />
                     <TextBox Grid.Row="0" Grid.Column="1" Style="{StaticResource Field}" Text="{Binding Code, UpdateSourceTrigger=PropertyChanged}"
-                             IsEnabled="{Binding IsNew}" ToolTip="Wielkie litery, cyfry i _ (np. FORECAST); po zapisie nie zmienia się – wyznacza tabelę CAN_…" />
+                             IsEnabled="{Binding IsNew}" ToolTip="Wielkie litery, cyfry i _ (np. FORECAST); po zapisie nie zmienia się" />
                     <TextBlock Grid.Row="1" Text="Nazwa" Style="{StaticResource Label}" />
                     <TextBox Grid.Row="1" Grid.Column="1" Style="{StaticResource Field}" Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}" />
                     <TextBlock Grid.Row="2" Text="Aktywny" Style="{StaticResource Label}" />
@@ -149,11 +149,12 @@
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
                         <DataGridTextColumn Header="Przykład z pliku" Binding="{Binding Sample, Mode=OneWay}" IsReadOnly="True" MaxWidth="200" />
+                        <DataGridTextColumn Header="Slot" Binding="{Binding Slot, Mode=OneWay}" IsReadOnly="True" FontFamily="{StaticResource FMono}" />
                         <DataGridTemplateColumn Header="Pole w bazie" Width="190">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
                                     <TextBox Text="{Binding Field, UpdateSourceTrigger=PropertyChanged}" BorderThickness="0" FontFamily="{StaticResource FMono}"
-                                             ToolTip="Nazwa kolumny w bazie: litera, potem litery, cyfry i _ (np. InvoiceNumber)" />
+                                             ToolTip="Nazwa pola (w zapytaniach i widokach): litera, potem litery, cyfry i _ (np. InvoiceNumber)" />
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>

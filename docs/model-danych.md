@@ -37,14 +37,13 @@ ZAMROŻENIE – przebieg zamykający okres
 
 | Schemat | Zawartość |
 |---|---|
-| `meta` | importy i wersje plików, definicje źródeł, projekty, przebiegi, etapy, rewizje, problemy, dziennik zdarzeń, role, wersja aplikacji i schematu |
-| `stg` | surowe wiersze plików źródłowych |
-| `can` | dane kanoniczne – osobna tabela typowana na każde źródło |
+| `meta` | importy, wersje plików i ich treść, definicje źródeł, parsery, projekty, przebiegi, etapy, rewizje, problemy, dziennik zdarzeń, role, wersja aplikacji i schematu |
+| `can` | dane kanoniczne – jedna stała tabela `can.Row` ze slotami typowanymi dla wszystkich parserów (migracja 007) |
 | `dict` | słowniki globalne i projektu, korekty mapowania CES ↔ P1S – z historią |
 | `ev` | koszt per WP, zaawansowanie, wyniki EV |
 
 Struktura P1S nie jest kopiowana do bazy PZL-EV – aplikacja (docelowo procedury) czyta ją z `PZLPROD` (rozdz. 3.4).
-Raport mapowań SAP↔CES trafia do bazy importem pliku Excel (parser `MAPOWANIA`, tabela `can.MappingReport`) – każda
+Raport mapowań SAP↔CES trafia do bazy importem pliku Excel (parser `MAPOWANIA`, dane w `can.Row`) – każda
 wersja pliku zostaje (`docs/mapowanie-ces-p1s.md`, rozdz. 2).
 
 **Nazwy w bazie:** warstwy z tabeli wyżej są częścią nazwy tabeli, a nie osobnymi schematami. Wszystkie obiekty są w
@@ -155,8 +154,8 @@ Zmiana istniejących wierszy w `LOG.WBS` nie jest wykrywana (`docs/architektura.
 | `meta.SourceFile` | wersja pliku (klucz SHA-256): lokalizacja, nazwa, kod źródła, data raportu (modyfikacja w RABIT), kolumny, sygnatura kolumn, liczba wierszy, import, stan danych kanonicznych (utworzone albo powód braku) |
 | `meta.SourceFileSeen` | decyzja dla każdego pliku w każdym imporcie (`docs/pipeline-fazy.md`, G1) |
 | `meta.SourceDefinition` | definicja źródła (`docs/zrodla-danych.md`, rozdz. 2) |
-| `stg.RawRow` | surowe wiersze: wersja pliku, numer wiersza, wartości |
-| `can.<Źródło>` | dane kanoniczne źródła: wersja pliku, wersja parsera, kolumny typowane; dla kosztów rzeczywistych – `can.Actuals` (wspólna dla źródeł `ACTUALS_*`, odróżnianych wersją pliku) |
+| `meta.SourceFileContent` | treść wersji pliku – oryginalny plik skompresowany GZip (porównania, ponowne przetworzenie) |
+| `can.Row` | dane kanoniczne wszystkich parserów: wersja pliku, numer wiersza, parser i jego wersja, sloty typowane; pole parsera ma stały slot (`meta.Parser`). Koszty rzeczywiste – parser `ACTUALS` (wspólny dla źródeł `ACTUALS_*`, odróżnianych wersją pliku). Wszystkie wersje plików zostają: najnowsza – dane bieżące dla użytkowników, starsze – do porównań |
 | `dict.*` | słowniki (`docs/slowniki.md`) i korekty mapowania (`docs/mapowanie-ces-p1s.md`, rozdz. 8). Wiersz słownika ma identyfikator wiersza logicznego i kolejne wersje (kto i kiedy zapisał, kto i kiedy zastąpił); w MS SQL – osobna tabela z typowanymi kolumnami na słownik (rozdz. 5.1) |
 | `meta.Projekt` | kod, nazwa, typ (SAC / CAS / wewnętrzny) |
 | `meta.PerformanceObjective` | węzły nakładki kontraktu projektu: element WBS CES, poziom, rodzic, wirtualny węzeł, atrybuty, historia (`docs/performance-objectives.md`) – wyznacza zakres projektu |
@@ -180,12 +179,11 @@ Bez metodologii EV; kolejne tabele dochodzą kolejnymi migracjami.
 |---|---|
 | `META_SchemaVersion`, sekwencja `META_LogicalId` | wersja schematu i minimalna wersja aplikacji; identyfikatory wierszy logicznych |
 | `META_SourceDefinition`, `META_SourceLocation` | definicje źródeł (kod, prefiks, typ raportu, parser, aktywna) i lokalizacje RABIT z historią |
-| `META_Parser` (004) | parsery: tabela danych kanonicznych `CAN_<Tabela>` i jej pola (kolumna w pliku, typ, długość, wymagane) z historią |
-| `CAN_MappingReport` (005) | tabela parsera MAPOWANIA – wiersze raportu mapowań SAP↔CES z importu Excela |
+| `META_Parser` (004) | parsery i ich pola (kolumna w pliku, typ, długość, wymagane, slot w `CAN_Row` – 007) z historią |
 | `DICT_MappingCorrection` (005) | korekty mapowania CES ↔ P1S (elementu i projektu CES): cel P1S, poprzednie przypisanie, uzasadnienie, `ValidFrom` / `ValidTo`, historia wersji (`docs/mapowanie-ces-p1s.md`, rozdz. 8) |
 | `META_ImportBatch`, `META_SourceFile`, `META_SourceFileSeen` | importy, wersje plików (SHA-256), decyzje dla plików |
-| `STG_RawRow` | wiersze surowe (JSON wartości), kompresja PAGE |
-| `CAN_Actuals` | tabela parsera ACTUALS – koszty rzeczywiste `ACTUALS_*` (kolumny typowane, NULL dozwolony – wymagane wskazuje parser), kompresja PAGE; kolejne parsery mają własne tabele `CAN_<Tabela>` zakładane z aplikacji |
+| `META_SourceFileContent` (007) | treść wersji pliku: format (`gzip` – oryginalny plik; `jsonl-utf16-gzip` – wiersze przeniesione ze `STG_RawRow`), rozmiar, treść `VARBINARY(MAX)` |
+| `CAN_Row` (007) | dane kanoniczne wszystkich parserów: `FileId`, `RowNumber`, `ParserId`, `ParserVersion` i sloty T01–T40 (`NVARCHAR(400)`), L01–L05 (`NVARCHAR(4000)`), N01–N20 (`DECIMAL(28,8)`), I01–I10 (`INT`), D01–D10 (`DATE`); indeks klastrowy kolumnowy (clustered columnstore) – kompresja i szybkie grupowanie milionów wierszy |
 | `META_Journal`, `META_Problem` | dziennik zdarzeń (`meta.Zdarzenie`) i problemy (otwarte / rozwiązane: `ResolvedAt`, `ResolvedBy`, `Resolution` – migracja 006) |
 | `META_Project`, `META_PerformanceObjective` | projekty (kod, nazwa, typ SAC / CAS / WEWNETRZNY) i nakładka Performance Objectives z historią |
 | `DICT_Calendar`, `DICT_DepartmentRate`, `DICT_FxRate`, `DICT_CostCategory`, `DICT_Person` | słowniki globalne – tabela z typowanymi kolumnami na słownik; `Project` NULL = globalny (w Cost Category `Project` = zmiany w projekcie) |
@@ -198,18 +196,17 @@ okresów 2026–2027 (tygodnie ISO, okres według czwartku, ostatni tydzień okr
 
 **Migracja `sql/mssql/003_usuniecie_plikow_niezgodnych.sql`:** usuwa wersje plików (`META_SourceFile`) zapisane do
 wersji aplikacji 0.11 mimo niezgodności z definicją źródła (układ kolumn, typy wartości) wraz z ich wierszami
-surowymi; historia decyzji (`META_SourceFileSeen`) zostaje. Od wersji 0.12 taki plik nie trafia do bazy
+surowymi albo treścią i danymi kanonicznymi (gdy baza jest już po migracji 007); historia decyzji (`META_SourceFileSeen`) zostaje. Od wersji 0.12 taki plik nie trafia do bazy
 (`docs/zrodla-danych.md`, rozdz. 2).
 
 **Migracja `sql/mssql/004_parsery.sql`:** tabela `META_Parser` (parser pilnuje układu pliku: kolumna w pliku, pole,
 typ, wymagane), `CAN_Actuals` jako tabela parsera ACTUALS (kolumny pól dopuszczają NULL; nowe pola
 `OriginalOrderNumber`, `Item`, `PurchaseOrderNumber`, `InvoiceNumber`) i parser ACTUALS w układzie raportu z 2026-10
 (`docs/zrodla-danych.md`, rozdz. 4). Kolumny `Columns`, `Signature`, `ParserVersion` definicji źródła dopuszczają
-NULL i nie są już używane – definicja wskazuje tylko parser. Zapis parsera
-w aplikacji zakłada albo rozszerza tabelę `CAN_<Tabela>` (`SqlCanonical`) – poza migracjami, w jednej transakcji
-z wersją parsera.
+NULL i nie są już używane – definicja wskazuje tylko parser. Od migracji 007 tabela `CAN_Actuals` nie istnieje
+(dane w `CAN_Row`).
 
-**Migracja `sql/mssql/005_mapowanie_ces_p1s.sql`:** parser `MAPOWANIA` z tabelą `CAN_MappingReport` (raport
+**Migracja `sql/mssql/005_mapowanie_ces_p1s.sql`:** parser `MAPOWANIA` z tabelą `CAN_MappingReport` (od 007 – `CAN_Row`; raport
 mapowań importowany z Excela; definicję źródła z prefiksem nazwy pliku dodaje się w Administracji) i tabela korekt
 `DICT_MappingCorrection` (bieżąca korekta elementu albo projektu CES – unikalna wśród wersji bez `SupersededAt`
 i `ValidTo`; usunięcie korekty to nowa wersja z `ValidTo`).
@@ -217,6 +214,18 @@ i `ValidTo`; usunięcie korekty to nowa wersja z `ValidTo`).
 **Migracja `sql/mssql/006_problemy_rozwiazywanie.sql`:** kto, kiedy i jak rozwiązał problem (automatycznie – kolejny
 import, przypisanie elementu CES; ręcznie – Pulpit), indeks otwartych problemów; problemy importów wcześniejszych niż
 ostatni zakończony import – rozwiązane (`docs/pipeline-fazy.md`, rozdz. 1.3).
+
+**Migracja `sql/mssql/007_sloty_danych_kanonicznych.sql`:** dane kanoniczne w jednej stałej tabeli `CAN_Row`, bo
+w PROD aplikacja nie może zakładać ani zmieniać tabel (nowy parser albo nowe pole to tylko zapis parsera). Pole
+parsera dostaje slot swojego rodzaju (tekst do 400 znaków – T, dłuższy tekst – L, kwota / liczba – N, liczba
+całkowita – I, data – D) przy zapisie parsera i zachowuje go we wszystkich wersjach; slot użyty przez jakąkolwiek
+wersję parsera nie jest przydzielany innemu polu (zapisane dane nie zmieniają znaczenia), zmiana rodzaju pola jest
+błędem (dodaje się nowe pole). Limity na parser: 40 / 5 / 20 / 10 / 10 pól. Migracja przydziela sloty polom
+istniejących parserów (kolejność pól, osobno dla rodzaju), przenosi dane `CAN_<Tabela>` do `CAN_Row` (kontrola
+liczby wierszy) i usuwa stare tabele; wiersze `STG_RawRow` zapisuje jako treść pliku (JSON-lines, GZip) i usuwa
+tabelę. Wymaga SQL Server 2016+ i poziomu zgodności bazy co najmniej 130 – skrypt sprawdza go na początku
+(Diagnostyka pokazuje wersję serwera i poziom zgodności). Zapytania raportów i grupowania czytają `CAN_Row` przez
+sloty parsera (`SqlCanonical`; docelowo widoki – F10.2).
 
 Aplikacja zapisuje dziś do tabel importu, konfiguracji importu, słowników globalnych, korekt mapowania, dziennika i problemów;
 tabele projektów i słowników projektu czekają na moduły F4. Blokada importu – plik na dysku sieciowym
@@ -228,4 +237,4 @@ tabele projektów i słowników projektu czekają na moduły F4. Blokada importu
 
 | # | Kwestia |
 |---|---|
-| O32 | Retencja wierszy surowych i kanonicznych (wolumen: setki tysięcy wierszy × raporty × tygodnie) |
+| ~~O32~~ | Retencja – **rozstrzygnięte (2026-10-03):** wszystkie wersje plików zostają w bazie (treść GZip w `META_SourceFileContent`, dane kanoniczne w `CAN_Row` z kompresją kolumnową); użytkownicy pracują na najnowszej wersji, starsze służą do porównań |

@@ -91,7 +91,7 @@ ani osobnych aplikacji.
 | UI (WPF) | ekrany i widoki według roli; bez logiki biznesowej |
 | Application | przypadki użycia: uruchamianie etapów, sprawdzanie bramek i roli, obsługa długich operacji |
 | Domain | pojęcia i reguły: projekt, przebieg, rewizja, słowniki, walidacja przy zapisie |
-| Processing | parsery źródeł (wersjonowane) – przekształcenie wierszy surowych do postaci kanonicznej |
+| Processing | parsery źródeł (wersjonowane) – przekształcenie wierszy pliku do postaci kanonicznej |
 | EVM | silnik obliczeń EV (`docs/ev-obliczenia.md`) – bez zależności od pozostałych warstw poza Domain |
 | Authorization | rola użytkownika z grup AD, dostęp do funkcji (`docs/uprawnienia.md`) |
 | Excel | odczyt i generowanie plików: słowniki, pliki dla finansów i CAM, wyniki |
@@ -250,9 +250,12 @@ decyzji (P4, P6, Z) albo z wynikiem ERROR.
   (`META_SchemaVersion`). Skrypty są wbudowane w exe; brakujące wykonuje przycisk Diagnostyka → Migracja (wykonane
   pomija, `sp_getapplock` chroni przed równoczesnym uruchomieniem) albo pytanie przy starcie. Dane startowe (presety)
   – osobne migracje `NNN_dane_*.sql` (`002_dane_startowe.sql`); aplikacja nie dopisuje danych z kodu.
-  Wyjątek od zasady „schemat = migracje”: tabele danych kanonicznych parserów `CAN_<Tabela>` zakłada i rozszerza
-  zapis parsera w Administracji (tylko dodanie tabeli, kolumny albo wydłużenie tekstu; bez usuwania i zmiany typu) –
-  wymaga prawa tworzenia i zmiany tabel; w PROD wykonuje to administrator.
+  Aplikacja nie zmienia schematu poza migracjami (w PROD użytkownicy nie mają prawa tworzenia i zmiany tabel):
+  dane kanoniczne wszystkich parserów są w jednej stałej tabeli `CAN_Row` ze slotami typowanymi (migracja 007,
+  `docs/model-danych.md`, rozdz. 5.1) – nowy parser albo nowe pole to tylko zapis parsera. Migracje uruchamia osoba
+  z prawem zmiany schematu (Diagnostyka → Migracja albo sqlcmd).
+- **Serwer SQL:** SQL Server 2016 lub nowszy, poziom zgodności bazy co najmniej 130 (indeks kolumnowy, `OPENJSON`,
+  `COMPRESS`); Diagnostyka pokazuje wersję serwera, edycję i poziom zgodności bazy.
 - Paczka wdrożeniowa: skrypty bazy, plik `PZL-EV.exe`, instrukcja dla administratora.
 - **Pakiety (NuGet):** zależności (Dapper, Microsoft.Data.SqlClient, ClosedXML/OpenXML, Serilog) przywracane
   są z firmowego proxy **eFOSS (Nexus)** – `https://nexus.global.lmco.com/repository/nuget-proxy-v3/index.json`,
@@ -269,7 +272,7 @@ decyzji (P4, P6, Z) albo z wynikiem ERROR.
 
 | Obszar | Wymaganie |
 |---|---|
-| Wydajność | import 700 000+ wierszy (plik ok. 85 MB) w czasie akceptowalnym dla przebiegu tygodniowego – ładowanie wsadowe, bez podglądu danych |
+| Wydajność | import plików ACTUALS z milionami wierszy w czasie akceptowalnym dla przebiegu tygodniowego – odczyt strumieniowy (wiersz po wierszu, także Excel), ładowanie wsadowe do `CAN_Row` (indeks kolumnowy), bez podglądu danych; pomiar: 2 mln wierszy (CSV 312 MB) ok. 47 s, pamięć procesu ok. 0,6 GB (rośnie z rozmiarem pliku – plik jest czytany do pamięci) |
 | Odtwarzalność | każdy wynik EV odtwarzalny ze znacznika stanu i wersji silnika (`docs/model-danych.md`, rozdz. 4) |
 | Audyt | każda akcja z użytkownikiem AD i czasem; historia słowników i korekt |
 | Spójność | ta sama wersja silnika EV u wszystkich (kontrola minimalnej wersji aplikacji) |
@@ -295,7 +298,7 @@ decyzji (P4, P6, Z) albo z wynikiem ERROR.
 | 11 | Reguły procesu omijane przez bezpośrednie połączenie z bazą | reguły w procedurach, brak praw do tabel |
 | 12 | Różne litery dysków | ścieżki UNC, w bazie ścieżki względne |
 | 13 | Etykiety poufności / szyfrowanie plików | do weryfikacji z IT |
-| 14 | Przyrost danych w bazie (wiersze importów co tydzień) | retencja (`docs/model-danych.md`, O32) |
+| 14 | Przyrost danych w bazie (wiersze importów co tydzień – wszystko zostaje, O32) | kompresja: treść pliku GZip, `CAN_Row` z indeksem kolumnowym (`docs/model-danych.md`, rozdz. 5.1) |
 | 15 | Wsparcie .NET 10 LTS kończy się w listopadzie 2028 | przejście na kolejną wersję LTS przed tym terminem |
 
 ---

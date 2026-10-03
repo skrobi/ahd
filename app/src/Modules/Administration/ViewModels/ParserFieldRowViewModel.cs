@@ -59,9 +59,13 @@ public sealed class ParserFieldRowViewModel : ObservableObject
         Length = field.Length?.ToString(CultureInfo.InvariantCulture) ?? "",
         PadDigits = field.PadDigits?.ToString(CultureInfo.InvariantCulture) ?? "",
         Required = field.Required,
+        Slot = field.Slot ?? "",
     };
 
-    public ParserField ToField() => new(Field, Column, Type, Number(Length), Number(PadDigits), Required);
+    /// <summary>Slot w CAN_Row (przydziela zapis parsera; nowe pole – puste do zapisu).</summary>
+    public string Slot { get; private init; } = "";
+
+    public ParserField ToField() => new(Field, Column, Type, Number(Length), Number(PadDigits), Required, Slot.Length > 0 ? Slot : null);
 
     private static int? Number(string text) =>
         text.Trim().Length == 0 ? null : int.TryParse(text.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var value) ? value : -1;

@@ -342,7 +342,7 @@ public sealed class ImportServiceTests : IDisposable
         var result = Assert.Single(_import.Run().Files);
 
         Assert.Equal(FileDecisions.Imported, result.Decision);
-        Assert.EndsWith("kolumny spoza parsera (tylko wiersze surowe): Dodatkowa", result.Description);
+        Assert.EndsWith("kolumny spoza parsera (tylko w treści pliku): Dodatkowa", result.Description);
     }
 
     [SqlFact]
@@ -364,7 +364,7 @@ public sealed class ImportServiceTests : IDisposable
     }
 
     [SqlFact]
-    public void Source_with_parser_created_in_application_is_imported_to_its_own_table()
+    public void Source_with_parser_created_in_application_is_imported_without_table_changes()
     {
         Use();
         var parserSaved = _config.SaveParser(new ParserInput(null, null, "KOSZTY", "Koszty – skrót",
@@ -383,6 +383,34 @@ public sealed class ImportServiceTests : IDisposable
         Assert.Equal(6, rows.Count);
         Assert.Equal(["FileId", "RowNumber", "ParserVersion", "Wbs", "Pln", "Rok"], rows[0].Keys);
         Assert.Equal(10574.11m, rows.Sum(r => (decimal)r["Pln"]!));
+    }
+
+    [SqlFact]
+    public void Canonical_data_not_matching_file_in_database_rolls_back_whole_file()
+    {
+        Use();
+        var parser = _store.ActiveParser(ActualsLayout.Parser)!;
+        var fields = parser.Fields.Where(f => f.Field is "WbsElement" or "ValueObjCrcy").ToList();
+        var batch = _store.BeginBatch(_services.Clock.Now, @"PZL\test", "PC-1", "0.16.0");
+        SourceFileRow FileRow(char hash) => new(0, new string(hash, 64), "RABIT", $"ACTUALS_PAF_{hash}.csv", "ACTUALS_PAF", 10, _services.Clock.Now, "csv", null,
+            "utf-8", ";", ["WBS Element", "Value in Obj. Crcy"], "sygnatura", 2, batch, _services.Clock.Now, @"PZL\test", "", 0, null);
+        CanonicalRow[] rows = [new(1, ["A.1", 10.5m]), new(2, ["A.2", 5m])];
+        int Count(string table)
+        {
+            using var connection = _database!.Sql.Open();
+            return Dapper.SqlMapper.ExecuteScalar<int>(connection, $"SELECT COUNT(*) FROM {_database.Sql.Table(table)}");
+        }
+
+        var error = Assert.Throws<CanonicalFlowException>(() => _store.StoreFile(FileRow('a'), "plik"u8.ToArray(),
+            new CanonicalData(parser, fields, rows, 2, new Dictionary<string, decimal> { ["ValueObjCrcy"] = 16m })));
+        var stored = _store.StoreFile(FileRow('b'), "plik"u8.ToArray(),
+            new CanonicalData(parser, fields, rows, 2, new Dictionary<string, decimal> { ["ValueObjCrcy"] = 15.5m }))!;
+
+        Assert.StartsWith("dane kanoniczne w bazie niezgodne z plikiem (wiersze 2/2, suma Value in Obj. Crcy 16/15", error.Message);
+        Assert.Null(_store.FindByHash(new string('a', 64)));   // plik, treść i wiersze wycofane razem
+        Assert.Equal((2, 15.5m), (stored.CanonicalRows, stored.Sums["ValueObjCrcy"]));
+        Assert.Equal((1, 2), (Count("meta.SourceFileContent"), Count("can.Row")));
+        Assert.Equal(["A.1", "A.2"], _store.CanonicalRows(parser, stored.FileId).Select(r => r["WbsElement"]));
     }
 
     [SqlFact]

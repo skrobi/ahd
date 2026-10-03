@@ -78,7 +78,7 @@ public sealed class SqlSourceConfigStore(SqlDatabase db, IClock clock, ICurrentU
     public IReadOnlyList<ParserRow> ParserHistory(long parserId) =>
         QueryParsers($"SELECT {SqlParserRow.Columns} FROM {_parsers} WHERE ParserId = @parserId ORDER BY Version", new { parserId });
 
-    public ParserSaveOutcome SaveParser(ParserInput input, string table)
+    public string? SaveParser(ParserInput input, string table)
     {
         try
         {
@@ -92,35 +92,28 @@ public sealed class SqlSourceConfigStore(SqlDatabase db, IClock clock, ICurrentU
                         $"SELECT Version FROM {_parsers} WITH (UPDLOCK, HOLDLOCK) WHERE ParserId = @id AND SupersededAt IS NULL",
                         new { id }, transaction);
                     if (current is null || current != input.Version)
-                        return new ParserSaveOutcome($"Parser {input.Code} zmieniono w międzyczasie – odśwież dane.", []);
+                        return $"Parser {input.Code} zmieniono w międzyczasie – odśwież dane.";
                     connection.Execute($"UPDATE {_parsers} SET SupersededAt = @now, SupersededBy = @user WHERE ParserId = @id AND SupersededAt IS NULL",
                         new { now, user = user.Account, id }, transaction);
                     version = current.Value + 1;
                 }
-                var parserId = input.ParserId ?? db.NextLogicalId(connection, transaction);
                 connection.Execute(
                     $"""
                     INSERT INTO {_parsers} (ParserId, Version, Code, Name, TableName, Fields, Active, RecordedAt, RecordedBy)
                     VALUES (@ParserId, @Version, @Code, @Name, @Table, @Fields, @Active, @At, @User)
                     """,
-                    new { ParserId = parserId, Version = version, input.Code, input.Name, Table = table, Fields = SqlJson.Write(input.Fields), input.Active, At = now, User = user.Account },
+                    new
+                    {
+                        ParserId = input.ParserId ?? db.NextLogicalId(connection, transaction), Version = version, input.Code, input.Name, Table = table,
+                        Fields = SqlJson.Write(input.Fields), input.Active, At = now, User = user.Account,
+                    },
                     transaction);
-                var parser = new ParserRow(0, parserId, version, input.Code, input.Name, table, input.Fields, input.Active, now, user.Account, null, null);
-                var changes = SqlCanonical.EnsureTable(db, connection, transaction, parser);
-                return new ParserSaveOutcome(null, changes);
+                return (string?)null;
             });
-        }
-        catch (InvalidOperationException ex)
-        {
-            return new ParserSaveOutcome(ex.Message, []);   // niezgodny typ kolumny, niedozwolona nazwa – transakcja wycofana
         }
         catch (SqlException ex) when (SqlDatabase.IsDuplicateKey(ex))
         {
-            return new ParserSaveOutcome($"Kod {input.Code} albo tabela CAN_{table} jest już używana – odśwież dane.", []);
-        }
-        catch (SqlException ex) when (ex.Number is 229 or 262 or 1088 or 4902)
-        {
-            return new ParserSaveOutcome($"Brak uprawnień do zmiany tabel w bazie ({ex.Message}) – zmianę parsera wykona osoba z prawem tworzenia i zmiany tabel.", []);
+            return $"Kod {input.Code} jest już używany – odśwież dane.";
         }
     }
 
