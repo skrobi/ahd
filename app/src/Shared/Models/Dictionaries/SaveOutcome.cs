@@ -1,6 +1,6 @@
 using PzlEv.Shared.Models;
 
-namespace PzlEv.Modules.MasterData.Models;
+namespace PzlEv.Shared.Models.Dictionaries;
 
 public enum SaveStatus
 {

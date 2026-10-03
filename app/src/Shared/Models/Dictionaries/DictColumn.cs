@@ -1,4 +1,4 @@
-namespace PzlEv.Modules.MasterData.Models;
+namespace PzlEv.Shared.Models.Dictionaries;
 
 /// <summary>
 /// Kolumna słownika. Key – część klucza; PadNumericTo – numer złożony z cyfr uzupełniany zerami do tej długości

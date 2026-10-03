@@ -1,4 +1,4 @@
-namespace PzlEv.Modules.MasterData.Models;
+namespace PzlEv.Shared.Models.Dictionaries;
 
 public enum RowChangeKind
 {

@@ -1,9 +1,9 @@
 using System.Globalization;
 using System.Text.RegularExpressions;
-using PzlEv.Modules.MasterData.Models;
+using PzlEv.Shared.Models.Dictionaries;
 using PzlEv.Shared.Models;
 
-namespace PzlEv.Modules.MasterData.Services;
+namespace PzlEv.Shared.Utils.Dictionaries;
 
 /// <summary>Słowniki globalne (docs/slowniki.md, rozdz. 2) z regułami rozdz. 5.4–5.5.</summary>
 public static partial class GlobalDictionaries
@@ -88,6 +88,19 @@ public static partial class GlobalDictionaries
     ];
 
     public static DictionarySpec Get(string code) => All.First(s => s.Code == code);
+
+    /// <summary>Tabele słowników globalnych w bazie (SqlDictionaryStore).</summary>
+    public static IReadOnlyList<DictionaryTable> Tables { get; } =
+    [
+        new(Get(Calendar), "dict.Calendar",
+            [("Rok", "Year"), ("Tydzień", "Week"), ("Okres", "Period"), ("Od", "DateFrom"), ("Do", "DateTo"), ("Zamykający", "IsClosing")]),
+        new(Get(DepartmentRates), "dict.DepartmentRate",
+            [("Department", "Department"), ("Year", "Year"), ("Labor Rate", "LaborRate"), ("Overhead", "Overhead")]),
+        new(Get(FxRates), "dict.FxRate", [("Waluta", "Currency"), ("Okres", "Period"), ("Kurs", "Rate")]),
+        new(Get(CostCategory), "dict.CostCategory",
+            [("Numer elementu kosztowego", "CostElement"), ("Opis", "Description"), ("Obszar", "Area"), ("Cost Category", "CostCategory")]),
+        new(Get(Persons), "dict.Person", [("Konto AD", "AdAccount"), ("Imię i nazwisko", "FullName")]),
+    ];
 
     private static IEnumerable<Issue> CalendarRules(IReadOnlyList<DictRow> rows)
     {

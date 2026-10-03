@@ -1,4 +1,4 @@
-namespace PzlEv.Modules.MasterData.Models;
+namespace PzlEv.Shared.Models.Dictionaries;
 
 /// <summary>
 /// Wiersz słownika w edycji: wartości po nazwie kolumny; RowId i Version wskazują wersję, na której pracuje

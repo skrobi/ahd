@@ -1,8 +1,8 @@
 using System.Globalization;
-using PzlEv.Modules.MasterData.Models;
+using PzlEv.Shared.Models.Dictionaries;
 using PzlEv.Shared.Models;
 
-namespace PzlEv.Modules.MasterData.Services;
+namespace PzlEv.Shared.Utils.Dictionaries;
 
 /// <summary>
 /// Walidacja przy zapisie (docs/slowniki.md, rozdz. 5.1) – wspólna dla edycji w aplikacji i wczytania z Excela:

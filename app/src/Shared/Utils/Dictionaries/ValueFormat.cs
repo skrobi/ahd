@@ -1,7 +1,7 @@
-using PzlEv.Modules.MasterData.Models;
+using PzlEv.Shared.Models.Dictionaries;
 using PzlEv.Shared.Utils.Files;
 
-namespace PzlEv.Modules.MasterData.Services;
+namespace PzlEv.Shared.Utils.Dictionaries;
 
 /// <summary>
 /// Zapis kanoniczny wartości słownika i ich wyświetlanie. Kanonicznie: tekst przycięty (spacje niełamliwe
