@@ -7,27 +7,36 @@ namespace PzlEv.Modules.Projects.Services;
 
 /// <summary>
 /// Strona P1S nakładki z globalnego mapowania (docs/performance-objectives.md, rozdz. 2): element CES nakładki
-/// rozstrzygany tymi samymi regułami co ekran Mapowanie (korekta elementu, raport, dziedziczenie z projektu CES –
-/// kolumna Project definition, gdy elementu nie ma w kosztach). Nakładka tylko czyta mapowanie.
+/// rozstrzygany tymi samymi regułami co ekran Mapowanie (korekta elementu, raport, dziedziczenie z projektu CES).
+/// Projekt CES elementu – kolumna Project definition, a gdy jej brak (element dodany ręcznie) – najbliższego elementu
+/// nad nim w nakładce. Nakładka tylko czyta mapowanie.
 /// </summary>
 public static class ObjectivesMapping
 {
     /// <summary>Wynik mapowania elementów CES nakładki: klucz węzła → wynik.</summary>
     public static IReadOnlyDictionary<long, MappingResult> Resolve(PoTree tree, MappingInputs inputs)
     {
-        var costs = inputs.CostElements.GroupBy(e => MappingKeys.Key(e.WbsElement)).ToDictionary(g => g.Key, g => g.First());
         var nodes = tree.Nodes.Where(n => !n.IsVirtual && !string.IsNullOrWhiteSpace(n.WbsElement)).ToList();
         var elements = nodes
             .GroupBy(n => MappingKeys.Key(n.WbsElement))
-            .Select(g => costs.TryGetValue(g.Key, out var cost)
-                ? cost with { Project = cost.Project.Length > 0 ? cost.Project : g.First().ProjectDefinition ?? "" }
-                : new CesElement(g.First().WbsElement!, g.First().ProjectDefinition ?? "", false, 0, 0))
+            .Select(g => new CesElement(g.First().WbsElement!, ProjectOf(tree, g.First()), false, 0, 0))
             .ToList();
         var results = MappingResolver.Resolve(elements, inputs.Report, inputs.Corrections, inputs.P1s, null).Results
             .GroupBy(r => MappingKeys.Key(r.CesElement)).ToDictionary(g => g.Key, g => g.First());
         return nodes
             .Where(n => results.ContainsKey(MappingKeys.Key(n.WbsElement)))
             .ToDictionary(n => n.Key, n => results[MappingKeys.Key(n.WbsElement)]);
+    }
+
+    /// <summary>Projekt CES elementu: Project definition, a bez niej – najbliższego elementu nad nim.</summary>
+    private static string ProjectOf(PoTree tree, PoNode node)
+    {
+        for (PoNode? n = node; n is not null; n = n.ParentKey is { } p ? tree.Find(p) : null)
+        {
+            if (!string.IsNullOrWhiteSpace(n.ProjectDefinition))
+                return n.ProjectDefinition;
+        }
+        return "";
     }
 
     /// <summary>Kody P1S węzła: Legacy WBS z Excela i cel z mapowania.</summary>

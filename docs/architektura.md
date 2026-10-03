@@ -137,7 +137,7 @@ Modules/<Moduł>/
   Data/                            magazyn danych modułu: I<Moduł>Store (kontrakt) + Sql<Moduł>Store
   Services/ Stages/                przypadki użycia, walidacja, parsery, implementacje etapów (IStage)
 Shared/
-  Utils/Ui/                        MVVM, konwertery, okna wyboru pliku, kontrakt modułu i nawigacji (WPF)
+  Utils/Ui/                        MVVM (w tym BusyState – operacja w tle), konwertery, okna wyboru pliku, kontrakt modułu i nawigacji (WPF)
   Utils/Config/                    konfiguracja pzl-ev.json
   Utils/Data/                      baza MS SQL (Sql/: połączenie, migracje, dziennik, problemy), czas, użytkownik, blokady operacji, usługi wspólne
   Utils/Files/                     Excel, CSV/TXT, liczby polskie, daty, sygnatura kolumn, SHA-256
@@ -147,7 +147,7 @@ Shared/
   Models/Db/                       wiersze tabel schematu (meta, stg, can, dict) – wspólne jak schemat bazy
   Models/Sources/                  parsery i układy kolumn źródeł (kontrakt danych)
   Views/Templates/                 wygląd całej aplikacji: paleta, style, tabele, układ strony
-  Views/Partials/                  fragmenty wielokrotnego użytku: pigułka statusu, wynik kontroli, nagłówek ekranu, ekran zastępczy
+  Views/Partials/                  fragmenty wielokrotnego użytku: pigułka statusu, wynik kontroli, nagłówek ekranu, pasek „Trwa: …” (BusyBar), ekran zastępczy
 ```
 
 Podfolder modułu powstaje dopiero, gdy ma zawartość. Warstwy z rozdz. 5.1 mieszczą się w tym układzie:
@@ -178,6 +178,12 @@ bez zmiennej `PZLEV_TEST_SQL` są pomijane. Dane wzorcowe z oczekiwanymi sumami 
 **Konwencje:** jeden typ w pliku, nazwa pliku = nazwa typu; sufiksy `…Module`, `…View`, `…ViewModel`,
 `I…Store`, `Sql…Store`, `…Service`; kolory i style wyłącznie z `Shared/Views/Templates`; fragment trafia do
 `Shared/Views/Partials`, gdy używa go drugi moduł; log z kontekstem modułu (`Log.ForContext("Module", …)`).
+
+**Responsywność:** odczyt i zapis w bazie, PZLPROD, pliki Excel i dysk sieciowy nie wykonują się w wątku okna.
+Ekran uruchamia je przez `BusyState` (`Shared/Utils/Ui/Mvvm`) – praca w tle, pasek „Trwa: … (n s)” (`BusyBar`),
+kursor „praca w tle”, polecenia ekranu nieaktywne do końca operacji; wynik wraca do wątku okna. Dane duże i rzadko
+zmieniane (raport mapowań, LOG.WBS) są czytane raz na sesję, z przyciskiem odświeżenia; kontrole wywoływane przy
+każdej edycji działają na danych w pamięci (zapis sprawdza je ponownie w bazie).
 
 **Kontrakt etapu** (`Shared/Models/Pipeline`): `StageDescriptor` (kod, nazwa, krok, zakres, czy wymaga
 decyzji człowieka) deklarowany przez moduł-właściciela i `IStage` (bramka wejścia, akcja z bramką wyjścia,

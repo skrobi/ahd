@@ -7,6 +7,7 @@
     <StackPanel>
         <partials:PageHeader Eyebrow="Projekty / nowy" Title="Nowy projekt"
                              Subtitle="Kreator rejestruje projekt, buduje strukturę Performance Objectives (CES), wczytuje słowniki projektu z Excela i tworzy foldery." />
+        <partials:BusyBar DataContext="{Binding Busy}" />
 
         <!-- Kroki -->
         <ItemsControl ItemsSource="{Binding Steps}" Margin="0,0,0,12">
@@ -172,6 +173,7 @@
                 </StackPanel>
 
                 <TextBlock Text="{Binding Status}" TextWrapping="Wrap" Margin="0,10,0,0" />
+                <partials:BusyBar DataContext="{Binding Busy}" Margin="0,10,0,0" />
                 <DockPanel Margin="0,12,0,0">
                     <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
                         <Button Content="Dalej" Style="{StaticResource BtnPrimary}" Command="{Binding Next}"
