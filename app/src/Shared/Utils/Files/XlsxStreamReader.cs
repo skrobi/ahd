@@ -1,65 +1,102 @@
 using System.Globalization;
 using System.IO;
-using DocumentFormat.OpenXml;
-using DocumentFormat.OpenXml.Packaging;
-using DocumentFormat.OpenXml.Spreadsheet;
+using System.IO.Compression;
+using System.Text;
+using System.Xml;
 
 namespace PzlEv.Shared.Utils.Files;
 
 /// <summary>
-/// Odczyt arkusza Excel (.xlsx, .xlsm) strumieniowo (OpenXML, wiersz po wierszu) – bez ładowania całego skoroszytu, więc
-/// także arkusze z milionem wierszy. Wartości jak przy odczycie komórek: tekst bez zmian, liczba w formacie niezmiennym
-/// („R”), data RRRR-MM-DD (z godziną, gdy jest), czas trwania ([h]:mm) jako TimeSpan, wartość logiczna TRUE / FALSE.
-/// Nagłówek – pierwszy wiersz z treścią; puste wiersze pominięte.
+/// Odczyt arkusza Excel (.xlsx, .xlsm) strumieniowo: XmlReader bezpośrednio na części arkusza w archiwum ZIP, wiersz
+/// po wierszu, bez budowania modelu dokumentu – szybko i w stałej pamięci także przy milionie wierszy. Wartości jak przy
+/// odczycie komórek: tekst bez zmian, liczba w formacie niezmiennym („R”), data RRRR-MM-DD (z godziną, gdy jest), czas
+/// trwania ([h]:mm) jako TimeSpan, wartość logiczna TRUE / FALSE. Nagłówek – pierwszy wiersz z treścią; puste wiersze pominięte.
 /// </summary>
 public static class XlsxStreamReader
 {
     private const byte NoDate = 0, IsDate = 1, IsDuration = 2;
 
-    public static TabularSource Open(byte[] content, string fileType, string? sheetName)
+    private static readonly XmlReaderSettings Settings = new()
     {
-        string partId, name;
+        DtdProcessing = DtdProcessing.Prohibit,
+        IgnoreComments = true,
+        IgnoreProcessingInstructions = true,
+        IgnoreWhitespace = true,   // odstępy między elementami; tekst w <t xml:space="preserve"> zostaje
+        CheckCharacters = false,
+        CloseInput = true,
+    };
+
+    /// <summary>open – nowy strumień pliku przy każdym odczycie (nagłówek, każde wywołanie Rows()).</summary>
+    public static TabularSource Open(Func<Stream> open, string fileType, string? sheetName)
+    {
+        string sheetPath, name;
         string[] strings;
         byte[] dateStyles;
         bool date1904;
-        using (var document = SpreadsheetDocument.Open(new MemoryStream(content), false))
+        using (var zip = new ZipArchive(open(), ZipArchiveMode.Read))
         {
-            var workbook = document.WorkbookPart ?? throw new InvalidDataException("Plik Excel bez skoroszytu");
-            var sheets = workbook.Workbook.Sheets?.Elements<Sheet>().ToList() ?? [];
-            var sheet = (sheetName is null ? sheets.FirstOrDefault() : sheets.FirstOrDefault(s => string.Equals(s.Name?.Value, sheetName, StringComparison.OrdinalIgnoreCase)))
-                        ?? throw new InvalidDataException(sheetName is null ? "Plik Excel bez arkuszy" : $"Brak arkusza {sheetName}");
-            partId = sheet.Id!.Value!;
-            name = sheet.Name?.Value ?? "";
-            strings = SharedStrings(workbook.SharedStringTablePart);
-            dateStyles = DateStyles(workbook.WorkbookStylesPart);
-            date1904 = workbook.Workbook.WorkbookProperties?.Date1904?.Value ?? false;
+            string? Target(IEnumerable<(string Id, string Type, string Target)> relations, Func<(string Id, string Type, string Target), bool> match) =>
+                relations.Where(match).Select(r => r.Target).FirstOrDefault();
+            var workbookPath = Target(Relationships(zip, "_rels/.rels"), r => r.Type.EndsWith("/officeDocument", StringComparison.Ordinal)) is { } root
+                ? Resolve("", root)
+                : "xl/workbook.xml";
+            var (sheets, is1904) = Workbook(zip, workbookPath);
+            var relations = Relationships(zip, RelationshipsPath(workbookPath)).ToList();
+            var index = sheetName is null ? sheets.Count > 0 ? 0 : -1 : sheets.FindIndex(s => string.Equals(s.Name, sheetName, StringComparison.OrdinalIgnoreCase));
+            if (index < 0)
+                throw new InvalidDataException(sheetName is null ? "Plik Excel bez arkuszy" : $"Brak arkusza {sheetName}");
+            var sheet = sheets[index];
+            sheetPath = Resolve(workbookPath, Target(relations, r => r.Id == sheet.RelationId)
+                                              ?? throw new InvalidDataException($"Plik Excel: brak części arkusza {sheet.Name}"));
+            name = sheet.Name;
+            strings = Target(relations, r => r.Type.EndsWith("/sharedStrings", StringComparison.Ordinal)) is { } stringsPath
+                ? SharedStrings(zip, Resolve(workbookPath, stringsPath))
+                : [];
+            dateStyles = Target(relations, r => r.Type.EndsWith("/styles", StringComparison.Ordinal)) is { } stylesPath
+                ? DateStyles(zip, Resolve(workbookPath, stylesPath))
+                : [];
+            date1904 = is1904;
         }
 
         IEnumerable<(int Row, string?[] Cells)> Cells()
         {
-            using var document = SpreadsheetDocument.Open(new MemoryStream(content), false);
-            var part = (WorksheetPart)document.WorkbookPart!.GetPartById(partId);
-            using var reader = OpenXmlReader.Create(part);
+            using var zip = new ZipArchive(open(), ZipArchiveMode.Read);
+            using var xml = XmlReader.Create(Entry(zip, sheetPath)?.Open() ?? throw new InvalidDataException($"Plik Excel: brak części {sheetPath}"), Settings);
             var rowNumber = 0;
-            reader.Read();
-            while (!reader.EOF)
+            var cells = new List<string?>(64);
+            xml.Read();
+            while (!xml.EOF)
             {
-                if (reader.ElementType != typeof(Row) || !reader.IsStartElement)
+                if (xml.NodeType != XmlNodeType.Element || xml.LocalName != "row")
                 {
-                    reader.Read();
+                    xml.Read();
                     continue;
                 }
-                var row = (Row)reader.LoadCurrentElement()!;   // czytnik stoi już na następnym elemencie
-                rowNumber = row.RowIndex?.Value is { } index ? (int)index : rowNumber + 1;
-                var cells = new List<string?>();
-                var column = 0;
-                foreach (var cell in row.Elements<Cell>())
+                rowNumber = int.TryParse(xml.GetAttribute("r"), NumberStyles.None, CultureInfo.InvariantCulture, out var index) ? index : rowNumber + 1;
+                cells.Clear();
+                if (xml.IsEmptyElement)
                 {
-                    column = cell.CellReference?.Value is { } reference ? ColumnNumber(reference) : column + 1;
+                    xml.Read();
+                    yield return (rowNumber, []);
+                    continue;
+                }
+                var depth = xml.Depth;
+                var column = 0;
+                xml.Read();
+                while (!xml.EOF && !(xml.NodeType == XmlNodeType.EndElement && xml.Depth == depth))
+                {
+                    if (xml.NodeType != XmlNodeType.Element || xml.LocalName != "c")
+                    {
+                        xml.Read();
+                        continue;
+                    }
+                    column = xml.GetAttribute("r") is { } reference ? ColumnNumber(reference) : column + 1;
+                    var value = Cell(xml, strings, dateStyles, date1904);
                     while (cells.Count < column - 1)
                         cells.Add(null);
-                    cells.Add(Text(cell, strings, dateStyles, date1904));
+                    cells.Add(value);
                 }
+                xml.Read();   // koniec wiersza
                 yield return (rowNumber, cells.ToArray());
             }
         }
@@ -74,27 +111,53 @@ public static class XlsxStreamReader
                 .Select(r => r.Cells.Length >= headers.Count ? r.Cells : [.. r.Cells, .. new string?[headers.Count - r.Cells.Length]]));
     }
 
-    private static string? Text(Cell cell, string[] strings, byte[] dateStyles, bool date1904)
+    /// <summary>Komórka &lt;c&gt; (czytnik stoi na jej początku) → tekst; czytnik przechodzi za koniec komórki.</summary>
+    private static string? Cell(XmlReader xml, string[] strings, byte[] dateStyles, bool date1904)
     {
-        var raw = cell.CellValue?.Text;
-        var type = cell.DataType?.Value;
-        if (type == CellValues.InlineString)
-            return cell.InlineString is { } inline ? InlineText(inline) : null;
+        var type = xml.GetAttribute("t");
+        var style = int.TryParse(xml.GetAttribute("s"), NumberStyles.None, CultureInfo.InvariantCulture, out var s) && s < dateStyles.Length ? dateStyles[s] : NoDate;
+        if (xml.IsEmptyElement)
+        {
+            xml.Read();
+            return null;
+        }
+        string? raw = null, inline = null;
+        var depth = xml.Depth;
+        xml.Read();
+        while (!xml.EOF && !(xml.NodeType == XmlNodeType.EndElement && xml.Depth == depth))
+        {
+            if (xml.NodeType != XmlNodeType.Element)
+                xml.Read();
+            else if (xml.LocalName == "v")
+                raw = xml.ReadElementContentAsString();
+            else if (xml.LocalName == "is")
+                inline = RichText(xml);
+            else
+                xml.Skip();   // formuła i inne
+        }
+        xml.Read();
+        return Text(type, raw, inline, style, strings, date1904);
+    }
+
+    private static string? Text(string? type, string? raw, string? inline, byte style, string[] strings, bool date1904)
+    {
+        if (type == "inlineStr")
+            return inline;
         if (raw is null || raw.Length == 0)
             return null;
-        if (type == CellValues.SharedString)
-            return int.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out var i) && i >= 0 && i < strings.Length ? strings[i] : raw;
-        if (type == CellValues.String)
-            return raw;
-        if (type == CellValues.Boolean)
-            return raw == "1" ? "TRUE" : "FALSE";
-        if (type == CellValues.Error)
-            return raw;
-        if (type == CellValues.Date)
-            return DateTime.TryParse(raw, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var iso) ? DateText(iso) : raw;
+        switch (type)
+        {
+            case "s":
+                return int.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out var i) && i >= 0 && i < strings.Length ? strings[i] : raw;
+            case "str" or "e":
+                return raw;
+            case "b":
+                return raw == "1" ? "TRUE" : "FALSE";
+            case "d":
+                return DateTime.TryParse(raw, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var iso) ? DateText(iso) : raw;
+        }
         if (!double.TryParse(raw, NumberStyles.Float, CultureInfo.InvariantCulture, out var number))
             return raw;
-        var style = cell.StyleIndex?.Value is { } s && s < dateStyles.Length ? dateStyles[s] : NoDate;
         if (style == IsDuration)
             return TimeSpan.FromDays(number).ToString("c", CultureInfo.InvariantCulture);
         if (style == IsDate && number is >= -657435 and < 2958466)
@@ -105,8 +168,38 @@ public static class XlsxStreamReader
     private static string DateText(DateTime d) =>
         d.TimeOfDay == TimeSpan.Zero ? d.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) : d.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
 
-    private static string InlineText(InlineString inline) =>
-        inline.Text?.Text ?? string.Concat(inline.Elements<Run>().Select(r => r.Text?.Text));
+    /// <summary>Tekst elementu &lt;si&gt; / &lt;is&gt; (czytnik stoi na jego początku): wszystkie &lt;t&gt; bez wymowy (rPh).</summary>
+    private static string RichText(XmlReader xml)
+    {
+        if (xml.IsEmptyElement)
+        {
+            xml.Read();
+            return "";
+        }
+        string? single = null;
+        StringBuilder? text = null;
+        var depth = xml.Depth;
+        xml.Read();
+        while (!xml.EOF && !(xml.NodeType == XmlNodeType.EndElement && xml.Depth == depth))
+        {
+            if (xml.NodeType != XmlNodeType.Element)
+                xml.Read();
+            else if (xml.LocalName == "rPh")
+                xml.Skip();
+            else if (xml.LocalName == "t")
+            {
+                var part = xml.ReadElementContentAsString();
+                if (single is null && text is null)
+                    single = part;
+                else
+                    (text ??= new StringBuilder(single)).Append(part);
+            }
+            else
+                xml.Read();
+        }
+        xml.Read();
+        return text?.ToString() ?? single ?? "";
+    }
 
     /// <summary>Kolumna z adresu komórki, np. „AB12” → 28.</summary>
     private static int ColumnNumber(string reference)
@@ -121,39 +214,117 @@ public static class XlsxStreamReader
         return column;
     }
 
-    private static string[] SharedStrings(SharedStringTablePart? part)
+    private static ZipArchiveEntry? Entry(ZipArchive zip, string path) =>
+        zip.GetEntry(path) ?? zip.Entries.FirstOrDefault(e => string.Equals(e.FullName, path, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>Relacje części pakietu (plik .rels): identyfikator, typ, cel.</summary>
+    private static IEnumerable<(string Id, string Type, string Target)> Relationships(ZipArchive zip, string path)
     {
-        if (part is null)
+        if (Entry(zip, path) is not { } entry)
+            yield break;
+        using var xml = XmlReader.Create(entry.Open(), Settings);
+        while (xml.Read())
+        {
+            if (xml.NodeType == XmlNodeType.Element && xml.LocalName == "Relationship")
+                yield return (xml.GetAttribute("Id") ?? "", xml.GetAttribute("Type") ?? "", xml.GetAttribute("Target") ?? "");
+        }
+    }
+
+    /// <summary>„xl/workbook.xml” → „xl/_rels/workbook.xml.rels”.</summary>
+    private static string RelationshipsPath(string partPath)
+    {
+        var slash = partPath.LastIndexOf('/');
+        return $"{partPath[..(slash + 1)]}_rels/{partPath[(slash + 1)..]}.rels";
+    }
+
+    /// <summary>Cel relacji względem części źródłowej (albo bezwzględny „/xl/…”) → ścieżka w archiwum.</summary>
+    private static string Resolve(string sourcePath, string target)
+    {
+        if (target.StartsWith('/'))
+            return target.TrimStart('/');
+        var parts = sourcePath.Split('/')[..^1].ToList();
+        foreach (var segment in target.Split('/'))
+        {
+            if (segment == "..")
+            {
+                if (parts.Count > 0)
+                    parts.RemoveAt(parts.Count - 1);
+            }
+            else if (segment is not ("." or ""))
+                parts.Add(segment);
+        }
+        return string.Join('/', parts);
+    }
+
+    private static (List<(string Name, string RelationId)> Sheets, bool Date1904) Workbook(ZipArchive zip, string path)
+    {
+        var sheets = new List<(string, string)>();
+        var date1904 = false;
+        using var xml = XmlReader.Create(Entry(zip, path)?.Open() ?? throw new InvalidDataException("Plik Excel bez skoroszytu"), Settings);
+        while (xml.Read())
+        {
+            if (xml.NodeType != XmlNodeType.Element)
+                continue;
+            if (xml.LocalName == "workbookPr")
+                date1904 = xml.GetAttribute("date1904") is "1" or "true";
+            else if (xml.LocalName == "sheet")
+            {
+                string? relationId = null;
+                for (var i = 0; i < xml.AttributeCount; i++)
+                {
+                    xml.MoveToAttribute(i);
+                    if (xml.LocalName == "id" && xml.NamespaceURI.EndsWith("relationships", StringComparison.Ordinal))
+                        relationId = xml.Value;
+                }
+                xml.MoveToElement();
+                sheets.Add((xml.GetAttribute("name") ?? "", relationId ?? ""));
+            }
+        }
+        return (sheets, date1904);
+    }
+
+    private static string[] SharedStrings(ZipArchive zip, string path)
+    {
+        if (Entry(zip, path) is not { } entry)
             return [];
         var strings = new List<string>();
-        using var reader = OpenXmlReader.Create(part);
-        reader.Read();
-        while (!reader.EOF)
+        using var xml = XmlReader.Create(entry.Open(), Settings);
+        xml.Read();
+        while (!xml.EOF)
         {
-            if (reader.ElementType != typeof(SharedStringItem) || !reader.IsStartElement)
-            {
-                reader.Read();
-                continue;
-            }
-            var item = (SharedStringItem)reader.LoadCurrentElement()!;
-            strings.Add(item.Text?.Text ?? string.Concat(item.Elements<Run>().Select(r => r.Text?.Text)));
+            if (xml.NodeType == XmlNodeType.Element && xml.LocalName == "si")
+                strings.Add(RichText(xml));
+            else
+                xml.Read();
         }
         return strings.ToArray();
     }
 
     /// <summary>Rodzaj liczby dla każdego stylu komórki (cellXfs): data, czas trwania albo zwykła liczba.</summary>
-    private static byte[] DateStyles(WorkbookStylesPart? part)
+    private static byte[] DateStyles(ZipArchive zip, string path)
     {
-        var stylesheet = part?.Stylesheet;
-        if (stylesheet?.CellFormats is null)
+        if (Entry(zip, path) is not { } entry)
             return [];
-        var custom = stylesheet.NumberingFormats?.Elements<NumberingFormat>()
-                         .Where(f => f.NumberFormatId?.Value is not null)
-                         .ToDictionary(f => f.NumberFormatId!.Value, f => f.FormatCode?.Value ?? "")
-                     ?? [];
-        return stylesheet.CellFormats.Elements<CellFormat>()
-            .Select(f => f.NumberFormatId?.Value is { } id ? Kind(id, custom.GetValueOrDefault(id)) : NoDate)
-            .ToArray();
+        var custom = new Dictionary<uint, string>();
+        var styles = new List<byte>();
+        var inCellFormats = false;
+        using var xml = XmlReader.Create(entry.Open(), Settings);
+        while (xml.Read())
+        {
+            if (xml.NodeType == XmlNodeType.EndElement && xml.LocalName == "cellXfs")
+                inCellFormats = false;
+            if (xml.NodeType != XmlNodeType.Element)
+                continue;
+            if (xml.LocalName == "numFmt" && uint.TryParse(xml.GetAttribute("numFmtId"), NumberStyles.None, CultureInfo.InvariantCulture, out var id))
+                custom[id] = xml.GetAttribute("formatCode") ?? "";
+            else if (xml.LocalName == "cellXfs")
+                inCellFormats = !xml.IsEmptyElement;
+            else if (inCellFormats && xml.LocalName == "xf")
+                styles.Add(uint.TryParse(xml.GetAttribute("numFmtId"), NumberStyles.None, CultureInfo.InvariantCulture, out var format)
+                    ? Kind(format, custom.GetValueOrDefault(format))
+                    : NoDate);
+        }
+        return styles.ToArray();
     }
 
     private static byte Kind(uint id, string? code)
@@ -165,7 +336,7 @@ public static class XlsxStreamReader
                 >= 14 and <= 22 or >= 27 and <= 36 or 45 or 47 or >= 50 and <= 58 => IsDate,
                 _ => NoDate,
             };
-        var plain = new System.Text.StringBuilder();
+        var plain = new StringBuilder();
         var duration = false;
         for (var i = 0; i < code.Length; i++)
         {

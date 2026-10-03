@@ -5,7 +5,7 @@ using System.Text;
 namespace PzlEv.Shared.Utils.Files;
 
 /// <summary>
-/// Odczyt plików tabelarycznych (strumieniowo – miliony wierszy bez gromadzenia w pamięci):
+/// Odczyt plików tabelarycznych (strumieniowo z dysku albo pamięci – miliony wierszy bez gromadzenia w pamięci):
 /// Excel – pierwszy arkusz, nagłówek w pierwszym używanym wierszu (XlsxStreamReader); CSV/TXT – kodowanie UTF-8 (z BOM)
 /// albo CP1250, separator wykrywany spośród ; , TAB |. Puste wiersze są pomijane.
 /// </summary>
@@ -25,29 +25,44 @@ public static class TabularFileReader
         return ExcelExtensions.Contains(ext) || TextExtensions.Contains(ext);
     }
 
-    public static TabularData Read(string path, string? sheet = null) => Read(File.ReadAllBytes(path), Path.GetFileName(path), sheet);
+    public static TabularData Read(string path, string? sheet = null) => OpenFile(path, sheet).ToData();
 
-    /// <summary>Wszystkie wiersze w pamięci – małe pliki (słowniki, podgląd). Import czyta strumieniowo (Open).</summary>
+    /// <summary>Wszystkie wiersze w pamięci – małe pliki (słowniki, podgląd). Import czyta strumieniowo (OpenFile).</summary>
     public static TabularData Read(byte[] content, string fileName, string? sheet = null) => Open(content, fileName, sheet).ToData();
 
-    /// <summary>Otwarcie do odczytu strumieniowego – import liczy hash i czyta wiersze z tych samych bajtów.</summary>
-    public static TabularSource Open(byte[] content, string fileName, string? sheet = null)
+    /// <summary>Otwarcie treści w pamięci do odczytu strumieniowego (treść pliku z bazy, testy).</summary>
+    public static TabularSource Open(byte[] content, string fileName, string? sheet = null) =>
+        Open(() => new MemoryStream(content, writable: false), fileName, sheet);
+
+    /// <summary>Otwarcie pliku z dysku do odczytu strumieniowego – każde czytanie wierszy otwiera plik od nowa (import).</summary>
+    public static TabularSource OpenFile(string path, string? sheet = null) =>
+        Open(() => new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 1 << 16, FileOptions.SequentialScan), Path.GetFileName(path), sheet);
+
+    /// <summary>open – nowy strumień treści przy każdym odczycie.</summary>
+    public static TabularSource Open(Func<Stream> open, string fileName, string? sheet = null)
     {
         var ext = Path.GetExtension(fileName);
         var type = ext.TrimStart('.').ToLowerInvariant();
         if (ExcelExtensions.Contains(ext))
-            return XlsxStreamReader.Open(content, type, sheet);
+            return XlsxStreamReader.Open(open, type, sheet);
         if (TextExtensions.Contains(ext))
-            return OpenText(content, type);
+            return OpenText(open, type);
         throw new NotSupportedException($"Nieobsługiwany format pliku: {fileName}");
     }
 
-    private static TabularSource OpenText(byte[] content, string type)
+    private static TabularSource OpenText(Func<Stream> open, string type)
     {
-        var bom = content.Length >= 3 && content[0] == 0xEF && content[1] == 0xBB && content[2] == 0xBF ? 3 : 0;
-        var utf8 = System.Text.Unicode.Utf8.IsValid(content.AsSpan(bom));
+        bool bom, utf8;
+        using (var stream = open())
+            (bom, utf8) = DetectUtf8(stream);
         var encoding = utf8 ? new UTF8Encoding(encoderShouldEmitUTF8Identifier: false) : Encoding.GetEncoding(1250);
-        StreamReader Reader() => new(new MemoryStream(content, bom, content.Length - bom, writable: false), encoding, detectEncodingFromByteOrderMarks: false);
+        StreamReader Reader()
+        {
+            var stream = open();
+            if (bom)
+                stream.ReadExactly(new byte[3]);
+            return new StreamReader(stream, encoding, detectEncodingFromByteOrderMarks: false, bufferSize: 1 << 16);
+        }
 
         string firstLine;
         using (var reader = Reader())
@@ -73,6 +88,36 @@ public static class TabularFileReader
             }
         }
         return new TabularSource(header.Select(h => h.Trim()).ToList(), type, null, encodingName, name, Rows);
+    }
+
+    /// <summary>BOM UTF-8 i czy cała treść jest poprawnym UTF-8 (odczyt strumieniowy, bez treści w pamięci).</summary>
+    private static (bool Bom, bool Utf8) DetectUtf8(Stream stream)
+    {
+        var bytes = new byte[1 << 16];
+        var chars = new char[bytes.Length + 4];
+        var count = stream.ReadAtLeast(bytes, 3, throwOnEndOfStream: false);
+        var bom = count >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF;
+        var decoder = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true).GetDecoder();
+        try
+        {
+            var offset = bom ? 3 : 0;
+            while (count > 0)
+            {
+                while (offset < count)
+                {
+                    decoder.Convert(bytes, offset, count - offset, chars, 0, chars.Length, false, out var used, out _, out _);
+                    offset += Math.Max(used, 1);
+                }
+                count = stream.Read(bytes);
+                offset = 0;
+            }
+            decoder.Convert(bytes, 0, 0, chars, 0, chars.Length, true, out _, out _, out _);
+            return (bom, true);
+        }
+        catch (DecoderFallbackException)
+        {
+            return (bom, false);
+        }
     }
 
     private static char DetectDelimiter(string line)

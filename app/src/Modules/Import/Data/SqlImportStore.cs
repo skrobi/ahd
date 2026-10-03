@@ -10,9 +10,9 @@ using PzlEv.Shared.Utils.Files;
 namespace PzlEv.Modules.Import.Data;
 
 /// <summary>
-/// Import w bazie: META_ImportBatch, META_SourceFile, META_SourceFileSeen, treść pliku (META_SourceFileContent, GZip)
-/// i dane kanoniczne (CAN_Row – sloty pól parsera). Wersja pliku zapisywana w jednej transakcji, dane kanoniczne
-/// strumieniowo (SqlBulkCopy) z kontrolą przepływu w bazie.
+/// Import w bazie: META_ImportBatch, META_SourceFile, META_SourceFileSeen, treść pliku (META_SourceFileContent)
+/// i dane kanoniczne (CAN_Row – sloty pól parsera). Wersja pliku zapisywana w jednej transakcji: dane kanoniczne
+/// strumieniowo (SqlBulkCopy) z kontrolą przepływu w bazie, treść pliku strumieniowo z dysku.
 /// </summary>
 public sealed class SqlImportStore(SqlDatabase db) : IImportStore
 {
@@ -91,7 +91,7 @@ public sealed class SqlImportStore(SqlDatabase db) : IImportStore
         return connection.QuerySingleOrDefault<FileRow>($"SELECT {FileColumns} FROM {_files} WHERE Sha256 = @sha256", new { sha256 })?.ToRow();
     }
 
-    public StoredFile? StoreFile(SourceFileRow file, byte[] content, CanonicalData? canonical)
+    public StoredFile? StoreFile(SourceFileRow file, string contentPath, CanonicalData? canonical, Action<string>? stage = null)
     {
         try
         {
@@ -110,22 +110,29 @@ public sealed class SqlImportStore(SqlDatabase db) : IImportStore
                         file.Sha256, file.Location, file.FileName, file.SourceCode, file.Size, file.ModifiedAt, file.FileType, file.Sheet, file.Encoding,
                         file.Delimiter, Columns = SqlJson.Write(file.Columns), file.Signature, file.RowCount, file.BatchId, file.ImportedAt, file.ImportedBy,
                         CanonicalStatus = canonical is null ? file.CanonicalStatus : "utworzone",
-                        CanonicalRows = canonical?.ExpectedRows ?? file.CanonicalRows,
+                        CanonicalRows = canonical is null ? file.CanonicalRows : 0,
                         ParserVersion = canonical?.Parser.Version ?? file.ParserVersion,
                     },
                     transaction);
-                connection.Execute(
-                    $"INSERT INTO {_content} (FileId, Format, Size, Content) VALUES (@id, 'gzip', @size, @content)",
-                    new { id, size = (long)content.Length, content = FileCompression.GZip(content) }, transaction, LongTimeout);
-                if (canonical is null)
-                    return new StoredFile(id, 0, new Dictionary<string, decimal>());
 
-                var parserId = canonical.Parser.ParserId;
-                var version = canonical.Parser.Version;
-                SqlBulk.Insert(connection, transaction, _canonical, SqlCanonical.BulkColumns(canonical.Fields),
-                    canonical.Rows.Select(r => (object?[])[id, r.RowNumber, parserId, version, .. r.Values]));
-                var stored = Verify(connection, transaction, id, canonical);
-                return new StoredFile(id, stored.Rows, stored.Sums);
+                var stored = new StoredFile(id, 0, new Dictionary<string, decimal>());
+                if (canonical is not null)
+                {
+                    var parserId = canonical.Parser.ParserId;
+                    var version = canonical.Parser.Version;
+                    SqlBulk.Insert(connection, transaction, _canonical, SqlCanonical.BulkColumns(canonical.Fields),
+                        canonical.Rows.Select(r => (object?[])[id, r.RowNumber, parserId, version, .. r.Values]));
+                    var totals = canonical.Totals();   // błędy treści pliku – wyjątek, transakcja wycofana
+                    stage?.Invoke("kontrola w bazie (liczba wierszy i sumy)");
+                    stored = Verify(connection, transaction, id, canonical, totals);
+                    connection.Execute($"UPDATE {_files} SET DataRows = @rows, CanonicalRows = @rows WHERE FileId = @id",
+                        new { id, rows = totals.Rows }, transaction);
+                }
+
+                stage?.Invoke("zapis treści pliku");
+                InsertContent(connection, transaction, id, contentPath, file.FileName);
+                stage?.Invoke("zatwierdzanie zapisu");
+                return stored;
             });
         }
         catch (SqlException ex) when (SqlDatabase.IsDuplicateKey(ex))
@@ -134,8 +141,28 @@ public sealed class SqlImportStore(SqlDatabase db) : IImportStore
         }
     }
 
+    /// <summary>
+    /// Treść pliku strumieniowo z dysku (bez kopii w pamięci): Excel (.xlsx, .xlsm – już skompresowany ZIP) bez zmian
+    /// (format raw), tekst (CSV, TXT) skompresowany GZip w locie (format gzip).
+    /// </summary>
+    private void InsertContent(SqlConnection connection, SqlTransaction transaction, long id, string path, string fileName)
+    {
+        var raw = TabularFileReader.ExcelExtensions.Contains(System.IO.Path.GetExtension(fileName));
+        var file = new System.IO.FileStream(path, System.IO.FileMode.Open, System.IO.FileAccess.Read, System.IO.FileShare.Read, 1 << 16,
+            System.IO.FileOptions.SequentialScan);
+        var size = file.Length;
+        using var content = raw ? file : FileCompression.GZipReading(file);
+        using var command = new SqlCommand($"INSERT INTO {_content} (FileId, Format, Size, Content) VALUES (@id, @format, @size, @content)",
+            connection, transaction) { CommandTimeout = LongTimeout };
+        command.Parameters.Add("@id", System.Data.SqlDbType.BigInt).Value = id;
+        command.Parameters.Add("@format", System.Data.SqlDbType.VarChar, 20).Value = raw ? ContentFormats.Raw : ContentFormats.GZip;
+        command.Parameters.Add("@size", System.Data.SqlDbType.BigInt).Value = size;
+        command.Parameters.Add("@content", System.Data.SqlDbType.VarBinary, -1).Value = content;
+        command.ExecuteNonQuery();
+    }
+
     /// <summary>Kontrola przepływu w bazie: liczba wierszy i sumy pól liczbowych pliku w CAN_Row = odczytane z pliku.</summary>
-    private (int Rows, IReadOnlyDictionary<string, decimal> Sums) Verify(SqlConnection connection, SqlTransaction transaction, long fileId, CanonicalData canonical)
+    private StoredFile Verify(SqlConnection connection, SqlTransaction transaction, long fileId, CanonicalData canonical, CanonicalTotals totals)
     {
         var decimals = canonical.Fields.Where(f => f.Type == FieldTypes.Decimal).ToList();
         var sums = string.Concat(decimals.Select((f, i) => $", ISNULL(SUM({SqlCanonical.Slot(f)}), 0) AS S{i}"));
@@ -146,12 +173,12 @@ public sealed class SqlImportStore(SqlDatabase db) : IImportStore
         var stored = decimals.Select((f, i) => (f.Field, Sum: Convert.ToDecimal(row[$"S{i}"], CultureInfo.InvariantCulture)))
             .ToDictionary(s => s.Field, s => s.Sum);
         var differences = decimals
-            .Where(f => stored[f.Field] != canonical.ExpectedSums.GetValueOrDefault(f.Field))
-            .Select(f => $", suma {f.Column} {canonical.ExpectedSums.GetValueOrDefault(f.Field)}/{stored[f.Field]}")
+            .Where(f => stored[f.Field] != totals.Sums.GetValueOrDefault(f.Field))
+            .Select(f => $", suma {f.Column} {totals.Sums.GetValueOrDefault(f.Field)}/{stored[f.Field]}")
             .ToList();
-        if (count != canonical.ExpectedRows || differences.Count > 0)
-            throw new CanonicalFlowException($"dane kanoniczne w bazie niezgodne z plikiem (wiersze {canonical.ExpectedRows}/{count}{string.Concat(differences)})");
-        return (count, stored);
+        if (count != totals.Rows || differences.Count > 0)
+            throw new CanonicalFlowException($"dane kanoniczne w bazie niezgodne z plikiem (wiersze {totals.Rows}/{count}{string.Concat(differences)})");
+        return new StoredFile(fileId, count, stored);
     }
 
     public void RecordSeen(SourceFileSeenRow seen)
@@ -203,8 +230,8 @@ public sealed class SqlImportStore(SqlDatabase db) : IImportStore
             new { fileId }, commandTimeout: LongTimeout);
         if (stored.Content is null)
             return [];
-        var content = FileCompression.GUnzip(stored.Content);
-        if (stored.Format == "jsonl-utf16-gzip")   // dawne wiersze surowe (migracja 007): JSON na wiersz
+        var content = stored.Format == ContentFormats.Raw ? stored.Content : FileCompression.GUnzip(stored.Content);
+        if (stored.Format == ContentFormats.LegacyRawRows)   // dawne wiersze surowe (migracja 007): JSON na wiersz
             return System.Text.Encoding.Unicode.GetString(content).Split('\n', StringSplitOptions.RemoveEmptyEntries)
                 .Select((line, i) => new RawRowRecord(fileId, i + 1, SqlJson.Values(line)))
                 .ToList();

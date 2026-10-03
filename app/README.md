@@ -66,7 +66,9 @@ na ekranie **Diagnostyka** i w stopce okna.
    historia pokazuje poprzednią wersję. **Pobierz do Excela** → zmień / dodaj / usuń wiersz → **Wczytaj z Excela** –
    podgląd różnic (+/~/−), **Zatwierdź wczytanie**. Błędna wartość (np. tekst w liczbie) – wynik walidacji, brak zapisu.
 2. **Import RABIT** – skopiuj `testdata/RABIT/ACTUALS_PAF_01.csv` do folderu `Do_importu` (ścieżka na ekranie),
-   **Importuj** – plik „zaimportowany”, 6 wierszy, sumy jak w `testdata/README.md`; ponowny import – „pominięty”;
+   **Importuj** – w trakcie status pliku pokazuje etap (1/4 pobieranie na dysk, 2/4 sprawdzanie, 3/4 odczyt i zapis
+   wierszy, 4/4 kontrola w bazie i treść pliku) z postępem i czasem; potem „zaimportowany”, 6 wierszy, sumy jak
+   w `testdata/README.md`; ponowny import – „pominięty”;
    ta sama treść pod inną nazwą – „duplikat”; plik o nieznanym prefiksie – „nierozpoznany”.
 3. **Administracja** – definicje `ACTUALS_PAF`, `ACTUALS_CES` (kod, prefiks, typ raportu, parser ACTUALS, aktywna);
    lokalizacja RABIT E456659 (migracja 002 – aktywna). Nowe źródło o znanym układzie: **Nowa definicja** → kod,
@@ -199,9 +201,11 @@ wersji w pamięci. Wymagają zmiennej środowiskowej `PZLEV_TEST_SQL` z ciągiem
 (`build.cmd` wypisuje ostrzeżenie). Każdy test zakłada w schemacie `FINOP` tabele z losową sygnaturą (`T…_`)
 i usuwa je po sobie – nie dotyka tabel aplikacji (`PZLEV_*`).
 Test wydajności importu (`ImportPerformanceTests`, plik ACTUALS z powtórzonych wierszy wzorcowych) działa tylko ze
-zmienną `PZLEV_PERF_ROWS` (liczba wierszy, np. `2000000`): `dotnet test tests\PzlEv.Tests.csproj --filter ImportPerformanceTests
---logger "console;verbosity=detailed"` – wypisuje czas i szczytową pamięć procesu (pomiar: 2 mln wierszy, CSV 312 MB –
-ok. 47 s, ok. 0,6 GB pamięci).
+zmienną `PZLEV_PERF_ROWS` (liczba wierszy, np. `1000000`; `PZLEV_PERF_FORMAT=xlsx` – plik Excel, domyślnie CSV):
+`dotnet test tests\PzlEv.Tests.csproj --filter ImportPerformanceTests --logger "console;verbosity=detailed"` – wypisuje
+czas i pamięć procesu w czasie importu. Plik jest generowany raz (`%TEMP%\pzl-ev-perf`) – pamięć mierzy dopiero kolejne
+uruchomienie. Pomiar (SQL Server 2022 lokalnie): CSV 87 MB / 560 tys. wierszy – 10 s; Excel 67 MB / 1 mln wierszy – 21 s;
+pamięć ok. 0,3 GB.
 Pakiety testowe (xUnit) przy pierwszym pobraniu z eFOSS trafiają do zatwierdzenia – do tego czasu `build.cmd`
 pomija testy z ostrzeżeniem.
 

@@ -182,7 +182,7 @@ Bez metodologii EV; kolejne tabele dochodzą kolejnymi migracjami.
 | `META_Parser` (004) | parsery i ich pola (kolumna w pliku, typ, długość, wymagane, slot w `CAN_Row` – 007) z historią |
 | `DICT_MappingCorrection` (005) | korekty mapowania CES ↔ P1S (elementu i projektu CES): cel P1S, poprzednie przypisanie, uzasadnienie, `ValidFrom` / `ValidTo`, historia wersji (`docs/mapowanie-ces-p1s.md`, rozdz. 8) |
 | `META_ImportBatch`, `META_SourceFile`, `META_SourceFileSeen` | importy, wersje plików (SHA-256), decyzje dla plików |
-| `META_SourceFileContent` (007) | treść wersji pliku: format (`gzip` – oryginalny plik; `jsonl-utf16-gzip` – wiersze przeniesione ze `STG_RawRow`), rozmiar, treść `VARBINARY(MAX)` |
+| `META_SourceFileContent` (007) | treść wersji pliku: format (`gzip` – plik CSV / TXT skompresowany GZip; `raw` – plik Excel bez zmian, już skompresowany; `jsonl-utf16-gzip` – wiersze przeniesione ze `STG_RawRow`), rozmiar oryginału, treść `VARBINARY(MAX)` |
 | `CAN_Row` (007) | dane kanoniczne wszystkich parserów: `FileId`, `RowNumber`, `ParserId`, `ParserVersion` i sloty T01–T40 (`NVARCHAR(400)`), L01–L05 (`NVARCHAR(4000)`), N01–N20 (`DECIMAL(28,8)`), I01–I10 (`INT`), D01–D10 (`DATE`); indeks klastrowy kolumnowy (clustered columnstore) – kompresja i szybkie grupowanie milionów wierszy |
 | `META_Journal`, `META_Problem` | dziennik zdarzeń (`meta.Zdarzenie`) i problemy (otwarte / rozwiązane: `ResolvedAt`, `ResolvedBy`, `Resolution` – migracja 006) |
 | `META_Project`, `META_PerformanceObjective` | projekty (kod, nazwa, typ SAC / CAS / WEWNETRZNY) i nakładka Performance Objectives z historią |

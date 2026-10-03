@@ -133,14 +133,61 @@ public class FileUtilsTests
             Assert.Equal(5000, rows.Count);
             Assert.Equal(Enumerable.Range(0, 5000).Select(i => $"{i:00000}"), rows.Select(r => r[1]));
             Assert.All(rows, r => Assert.True(r.Length >= source.Headers.Count));   // puste komórki na końcu wiersza – null
-            Assert.Equal([null, "00000", "opis 0", "2026-03-29", "1.06:00:00"], rows[0]);
-            Assert.Equal([null, "00001", null, null, null], rows[1]);
+            Assert.Equal(new string?[] { null, "00000", "opis 0", "2026-03-29", "1.06:00:00" }, rows[0]);
+            Assert.Equal(new string?[] { null, "00001", null, null, null }, rows[1]);
             Assert.Equal(5000, source.Rows().Count());   // każde wywołanie czyta plik od początku
         }
         finally
         {
             File.Delete(path);
         }
+    }
+
+    [Fact]
+    public void Excel_parts_are_read_by_relationships_with_rich_text_inline_text_booleans_and_1904_dates()
+    {
+        // Skoroszyt zapisany „ręcznie”: niestandardowe nazwy części, tekst sformatowany z wymową (rPh), tekst w komórce,
+        // wartość logiczna, wynik formuły, data w systemie 1904, drugi arkusz wybrany po nazwie.
+        using var content = new MemoryStream();
+        using (var zip = new System.IO.Compression.ZipArchive(content, System.IO.Compression.ZipArchiveMode.Create, leaveOpen: true))
+        {
+            void Part(string path, string xml)
+            {
+                using var writer = new StreamWriter(zip.CreateEntry(path).Open(), new UTF8Encoding(false));
+                writer.Write(xml);
+            }
+            const string main = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            const string rel = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+            Part("_rels/.rels", $"""<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="r1" Type="{rel}/officeDocument" Target="/excel/book.xml"/></Relationships>""");
+            Part("excel/_rels/book.xml.rels", $"""
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="a" Type="{rel}/worksheet" Target="sheets/one.xml"/>
+                  <Relationship Id="b" Type="{rel}/worksheet" Target="sheets/two.xml"/>
+                  <Relationship Id="s" Type="{rel}/sharedStrings" Target="text.xml"/>
+                  <Relationship Id="t" Type="{rel}/styles" Target="/excel/style.xml"/>
+                </Relationships>
+                """);
+            Part("excel/book.xml", $"""<workbook xmlns="{main}" xmlns:r="{rel}"><workbookPr date1904="1"/><sheets><sheet name="Pierwszy" sheetId="1" r:id="a"/><sheet name="Dane" sheetId="2" r:id="b"/></sheets></workbook>""");
+            Part("excel/text.xml", $"""<sst xmlns="{main}"><si><t>Kod</t></si><si><r><t>Zażółć </t></r><r><rPr><b/></rPr><t>gęślą</t></r><rPh sb="0" eb="1"><t>X</t></rPh></si></sst>""");
+            Part("excel/style.xml", $"""<styleSheet xmlns="{main}"><numFmts><numFmt numFmtId="164" formatCode="yyyy\-mm\-dd"/></numFmts><cellStyleXfs><xf numFmtId="164"/></cellStyleXfs><cellXfs><xf numFmtId="0"/><xf numFmtId="164"/></cellXfs></styleSheet>""");
+            Part("excel/sheets/one.xml", $"""<worksheet xmlns="{main}"><sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>inny</t></is></c></row></sheetData></worksheet>""");
+            Part("excel/sheets/two.xml", $"""
+                <worksheet xmlns="{main}"><sheetData>
+                  <row r="2"><c r="B2" t="s"><v>0</v></c><c r="C2" t="inlineStr"><is><t>Opis</t></is></c><c r="D2" t="s"><v>0</v></c><c r="E2" t="inlineStr"><is><t>Data</t></is></c></row>
+                  <row r="3"><c r="B3"><v>7</v></c><c r="C3" t="s"><v>1</v></c><c r="D3" t="b"><v>1</v></c><c r="E3" s="1"><v>45379</v></c></row>
+                  <row r="4"><c r="B4" t="str"><f>A1&amp;"x"</f><v>wynik</v></c><c r="C4" t="inlineStr"><is><r><t xml:space="preserve"> a </t></r><r><t>b</t></r></is></c><c r="D4" t="e"><v>#N/A</v></c></row>
+                </sheetData></worksheet>
+                """);
+        }
+
+        var data = TabularFileReader.Read(content.ToArray(), "plik.xlsx", "dane");
+
+        Assert.Equal("Dane", data.Sheet);
+        Assert.Equal(["", "Kod", "Opis", "Kod", "Data"], data.Headers);
+        Assert.Equal(new string?[] { null, "7", "Zażółć gęślą", "TRUE", "2028-03-29" }, data.Rows[0]);   // 45379 w systemie 1904 = 2028-03-29
+        Assert.Equal(new string?[] { null, "wynik", " a b", "#N/A", null }, data.Rows[1]);
+        Assert.Equal("inny", TabularFileReader.Read(content.ToArray(), "plik.xlsx").Headers.Single());
+        Assert.Throws<InvalidDataException>(() => TabularFileReader.Read(content.ToArray(), "plik.xlsx", "Brak"));
     }
 
     [Fact]
@@ -155,8 +202,8 @@ public class FileUtilsTests
 
         Assert.Equal(["Kod", "Opis", "Kwota"], source.Headers);
         Assert.Equal(20000, rows.Count);
-        Assert.Equal(["0", "opis\n0", "0,5"], rows[0]);
-        Assert.Equal(["1", null, null], rows[1]);
+        Assert.Equal(new string?[] { "0", "opis\n0", "0,5" }, rows[0]);
+        Assert.Equal(new string?[] { "1", null, null }, rows[1]);
         Assert.Equal(20000, source.Rows().Count());
     }
 
