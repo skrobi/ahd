@@ -111,8 +111,8 @@ i utrzymywaną na ekranie Administracja (`docs/funkcjonalnosc.md`, F08).
   ciasteczka z usługą WebClient – przy ważnej sesji zamyka się samo. Bez MS-OFBA okno otwiera stronę folderu.
   Czy sesja z okna aplikacji wystarcza usłudze WebClient – do potwierdzenia na stanowisku.
 - .NET zwraca na ścieżkach WebDAV nazwy plików z końcowym znakiem `\0` oraz wpisy „.” i „..”
-  (dotnet/runtime#62429) – import czyści nazwy (`FolderEntries`); narzędzie w Pythonie tego problemu nie miało.
-- Import czyta tylko główny folder lokalizacji (bez podfolderów – jak domyślnie narzędzie w Pythonie). Gdy folder
+  (dotnet/runtime#62429) – import czyści nazwy (`FolderEntries`).
+- Import czyta tylko główny folder lokalizacji (bez podfolderów). Gdy folder
   nie ma plików, a ma podfoldery – WARNING z ich nazwami. **Sprawdź źródła** (ekran Import) pokazuje bez importu
   dostęp, czytaną ścieżkę, pliki i ich rozpoznanie; szczegóły – log aplikacji (`app/README.md`).
 - Format: jeśli RABIT pozwala – CSV/TXT (brak limitu wierszy i konwersji typów przez Excel; O7).
