@@ -1,6 +1,5 @@
 using System.Windows;
-using PzlEv.Modules.MasterData.Data;
-using PzlEv.Modules.MasterData.Services;
+using PzlEv.Shared.Utils.Dictionaries;
 using PzlEv.Modules.MasterData.ViewModels;
 using PzlEv.Modules.MasterData.Views;
 using PzlEv.Shared.Models;
@@ -28,7 +27,7 @@ public sealed class MasterDataModule : IModule
     ];
 
     // Magazyn danych: baza MS SQL środowiska (Sql*Store); dane startowe – migracja sql/mssql/002_dane_startowe.sql.
-    public void Initialize(AppServices services) => _store = new SqlDictionaryStore(services.Sql, services.Clock, services.User);
+    public void Initialize(AppServices services) => _store = new SqlDictionaryStore(services.Sql, services.Clock, services.User, GlobalDictionaries.Tables);
 
     public FrameworkElement CreateView(ModuleContext context) =>
         new MasterDataView { DataContext = new MasterDataViewModel(new DictionaryService(_store!, context.Services.Journal), new FileDialogs()) };

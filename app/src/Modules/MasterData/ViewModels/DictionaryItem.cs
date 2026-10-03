@@ -1,4 +1,4 @@
-using PzlEv.Modules.MasterData.Models;
+using PzlEv.Shared.Models.Dictionaries;
 using PzlEv.Shared.Utils.Ui.Mvvm;
 
 namespace PzlEv.Modules.MasterData.ViewModels;

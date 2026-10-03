@@ -1,9 +1,8 @@
 using PzlEv.Modules.Administration.Data;
 using PzlEv.Modules.Administration.Models;
 using PzlEv.Modules.Administration.Services;
-using PzlEv.Modules.MasterData.Data;
-using PzlEv.Modules.MasterData.Models;
-using PzlEv.Modules.MasterData.Services;
+using PzlEv.Shared.Utils.Dictionaries;
+using PzlEv.Shared.Models.Dictionaries;
 using PzlEv.Shared.Models.Sources;
 using PzlEv.Shared.Utils.Data.Sql;
 using PzlEv.Shared.Utils.Files;
@@ -28,7 +27,7 @@ public sealed class SqlPresetsTests : IDisposable
         _database = new TestDatabase(presets);
         _journal = new SqlJournal(_database.Sql, _services.Clock, _services.User);
         _sources = new SourceConfigService(new SqlSourceConfigStore(_database.Sql, _services.Clock, _services.User), _journal);
-        _dictionaries = new SqlDictionaryStore(_database.Sql, _services.Clock, _services.User);
+        _dictionaries = new SqlDictionaryStore(_database.Sql, _services.Clock, _services.User, GlobalDictionaries.Tables);
     }
 
     public void Dispose() => _database?.Dispose();

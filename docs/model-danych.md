@@ -185,7 +185,7 @@ Bez metodologii EV; kolejne tabele dochodzą kolejnymi migracjami.
 | `META_Journal`, `META_Problem` | dziennik zdarzeń (`meta.Zdarzenie`) i problemy (otwarte / rozwiązane: `ResolvedAt`, `ResolvedBy`, `Resolution` – migracja 006) |
 | `META_Project`, `META_PerformanceObjective` | projekty (kod, nazwa, typ SAC / CAS / WEWNETRZNY) i nakładka Performance Objectives z historią |
 | `DICT_Calendar`, `DICT_DepartmentRate`, `DICT_FxRate`, `DICT_CostCategory`, `DICT_Person` | słowniki globalne – tabela z typowanymi kolumnami na słownik; `Project` NULL = globalny (w Cost Category `Project` = zmiany w projekcie) |
-| `DICT_WpCam`, `DICT_ScheduleBudget`, `DICT_Exclusion` | słowniki projektu (F4.3); Stawki CAS – po ustaleniu zawartości (O37) |
+| `DICT_WpCam`, `DICT_ScheduleBudget`, `DICT_Exclusion` | słowniki projektu (F4.3); „Cost Category – zmiany w projekcie” – `DICT_CostCategory` z kodem projektu; Stawki CAS – po ustaleniu zawartości (O37) |
 
 **Dane startowe – migracja `sql/mssql/002_dane_startowe.sql`:** definicje źródeł `ACTUALS_PAF` i `ACTUALS_CES`
 (parser ACTUALS, układ kolumn – `docs/zrodla-danych.md`, rozdz. 4), aktywna lokalizacja RABIT E456659, kalendarz

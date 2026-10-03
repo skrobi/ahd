@@ -1,5 +1,7 @@
 using PzlEv.Modules.Mapping.Models;
+using PzlEv.Shared.Models.Mapping;
 using PzlEv.Modules.Mapping.Services;
+using PzlEv.Shared.Utils.Mapping;
 using PzlEv.Shared.Models.Pipeline;
 using PzlEv.Tests.TestSupport;
 using Xunit;

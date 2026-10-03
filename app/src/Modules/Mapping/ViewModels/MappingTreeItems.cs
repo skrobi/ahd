@@ -1,4 +1,5 @@
 using PzlEv.Modules.Mapping.Models;
+using PzlEv.Shared.Models.Mapping;
 using PzlEv.Shared.Models.PzlProd;
 using PzlEv.Shared.Utils.Ui.Mvvm;
 

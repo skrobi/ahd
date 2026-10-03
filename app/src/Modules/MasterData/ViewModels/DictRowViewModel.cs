@@ -1,5 +1,5 @@
 using System.ComponentModel;
-using PzlEv.Modules.MasterData.Models;
+using PzlEv.Shared.Models.Dictionaries;
 
 namespace PzlEv.Modules.MasterData.ViewModels;
 

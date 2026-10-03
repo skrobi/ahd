@@ -1,0 +1,110 @@
+<UserControl x:Class="PzlEv.Modules.Projects.Views.PoEditorView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <!-- Edytor nakładki Performance Objectives (DataContext: PoEditorViewModel). Przeciąganie – PoEditorView.xaml.cs. -->
+    <StackPanel>
+        <DockPanel Margin="0,0,0,8">
+            <TextBlock DockPanel.Dock="Right" Text="{Binding Summary}" Style="{StaticResource MutedText}" VerticalAlignment="Center" />
+            <StackPanel Orientation="Horizontal">
+                <Button Content="Wczytaj Excel (eksport SAP)" Style="{StaticResource BtnPrimary}" Margin="0,0,8,0" Command="{Binding ImportExcel}" />
+                <Button Content="Wyczyść" Style="{StaticResource Btn}" Command="{Binding Clear}" />
+            </StackPanel>
+        </DockPanel>
+        <TextBlock Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="0,0,0,8"
+                   Text="Tabela kontraktu: Nazwa · Element CES (WBS element – klucz) · P1S z Excela (Legacy WBS) · P1S z globalnego mapowania CES ↔ P1S (tylko odczyt – zmiana na ekranie Mapowanie). Przeciągnij wiersz za uchwyt ⋮⋮ na inny wiersz, aby go tam przenieść, albo na pasek „korzeń”, aby odpiąć. Zaznacz wiersz, aby zmienić nazwę, przesunąć go albo dodać pod nim węzeł." />
+
+        <TextBlock Text="{Binding MappingInfo}" Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="0,0,0,8" />
+        <Border x:Name="RootDrop" AllowDrop="True" Drop="OnDropRoot" DragOver="OnDragOver" Background="{StaticResource Surface2}"
+                BorderBrush="{StaticResource Line}" BorderThickness="1" Padding="8,4" Margin="0,0,0,2">
+            <TextBlock Text="⤒ korzeń – upuść tutaj wiersz, aby przenieść go na najwyższy poziom" Style="{StaticResource MutedText}" />
+        </Border>
+        <DataGrid x:Name="NodesGrid" Style="{StaticResource DataTable}" ItemsSource="{Binding Rows}" SelectedItem="{Binding Selected}"
+                  IsReadOnly="True" AllowDrop="True" Drop="OnDropRow" DragOver="OnDragOver">
+            <DataGrid.Columns>
+                <DataGridTemplateColumn Header="Nazwa" Width="*">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <StackPanel Orientation="Horizontal" Margin="{Binding Indent}">
+                                <TextBlock Text="⋮⋮" Cursor="SizeAll" Foreground="{StaticResource Muted}" Margin="2,0,6,0"
+                                           ToolTip="Przeciągnij, aby przenieść" PreviewMouseLeftButtonDown="OnGripDown" PreviewMouseMove="OnGripMove" />
+                                <Border Style="{StaticResource Tag}" Margin="0,0,6,0"
+                                        Visibility="{Binding IsVirtual, Converter={StaticResource BoolToVisibility}}">
+                                    <TextBlock Text="węzeł" FontSize="11" />
+                                </Border>
+                                <TextBlock Text="{Binding Name}" />
+                            </StackPanel>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+                <DataGridTextColumn Header="Element CES" Binding="{Binding WbsElement}" FontFamily="{StaticResource FMono}" />
+                <DataGridTextColumn Header="P1S (Legacy WBS)" Binding="{Binding LegacyWbs}" FontFamily="{StaticResource FMono}" />
+                <DataGridTemplateColumn Header="P1S z mapowania">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <StackPanel Orientation="Horizontal" ToolTip="{Binding MappingOrigin}">
+                                <ContentControl Content="{Binding MappingStatus}" />
+                                <TextBlock Text="{Binding MappingTarget}" FontFamily="{StaticResource FMono}" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+                <DataGridTextColumn Header="Performance Obligation" Binding="{Binding PerformanceObligation}" />
+            </DataGrid.Columns>
+        </DataGrid>
+
+        <!-- Zaznaczony węzeł: edycja i dodawanie -->
+        <Border Style="{StaticResource Panel}" Margin="0,8,0,0">
+            <StackPanel>
+                <DockPanel>
+                    <Button DockPanel.Dock="Right" Content="Odznacz" Style="{StaticResource Btn}" Padding="8,2" Command="{Binding Unselect}" />
+                    <TextBlock Text="{Binding SelectionText}" Style="{StaticResource MutedText}" TextWrapping="Wrap" VerticalAlignment="Center" />
+                </DockPanel>
+                <Grid Margin="0,8,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="200" />
+                        <ColumnDefinition Width="200" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Margin="0,0,8,0">
+                        <TextBlock Text="Nazwa" Style="{StaticResource MutedText}" />
+                        <TextBox Style="{StaticResource Input}" Text="{Binding EditName, UpdateSourceTrigger=PropertyChanged}" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="1" Margin="0,0,8,0">
+                        <TextBlock Text="Element CES (WBS element)" Style="{StaticResource MutedText}" />
+                        <TextBox Style="{StaticResource Input}" FontFamily="{StaticResource FMono}" Text="{Binding EditWbs, UpdateSourceTrigger=PropertyChanged}" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="2">
+                        <TextBlock Text="P1S (Legacy WBS)" Style="{StaticResource MutedText}" />
+                        <TextBox Style="{StaticResource Input}" FontFamily="{StaticResource FMono}" Text="{Binding EditLegacy, UpdateSourceTrigger=PropertyChanged}" />
+                    </StackPanel>
+                </Grid>
+                <WrapPanel Margin="0,8,0,0">
+                    <Button Content="Zmień zaznaczony" Style="{StaticResource Btn}" Margin="0,0,8,4" Command="{Binding ApplyEdit}" />
+                    <Button Content="+ węzeł wirtualny" Style="{StaticResource Btn}" Margin="0,0,8,4" Command="{Binding AddVirtual}"
+                            ToolTip="Węzeł raportowy bez odpowiednika w SAP – grupuje elementy" />
+                    <Button Content="+ element CES" Style="{StaticResource Btn}" Margin="0,0,16,4" Command="{Binding AddElement}"
+                            ToolTip="Element CES dodany ręcznie (wymaga WBS element)" />
+                    <Button Content="↑" Style="{StaticResource Btn}" Margin="0,0,4,4" Command="{Binding Up}" ToolTip="Wyżej wśród rodzeństwa" />
+                    <Button Content="↓" Style="{StaticResource Btn}" Margin="0,0,4,4" Command="{Binding Down}" ToolTip="Niżej wśród rodzeństwa" />
+                    <Button Content="⇤ poziom wyżej" Style="{StaticResource Btn}" Margin="0,0,16,4" Command="{Binding Outdent}" />
+                    <Button Content="Usuń" Style="{StaticResource Btn}" Margin="0,0,8,4" Command="{Binding Remove}"
+                            ToolTip="Usuwa węzeł; jego elementy przechodzą poziom wyżej" />
+                </WrapPanel>
+            </StackPanel>
+        </Border>
+        <TextBlock Text="{Binding Status}" TextWrapping="Wrap" Margin="0,6,0,0" />
+
+        <Border Style="{StaticResource Panel}" Margin="0,8,0,0" Visibility="{Binding HasImportIssues, Converter={StaticResource BoolToVisibility}}">
+            <StackPanel>
+                <TextBlock Text="Wynik wczytania pliku" Style="{StaticResource H2}" FontSize="15" Margin="0,0,0,6" />
+                <ItemsControl ItemsSource="{Binding ImportIssues}" />
+            </StackPanel>
+        </Border>
+        <Border Style="{StaticResource Panel}" Margin="0,8,0,0" Visibility="{Binding HasIssues, Converter={StaticResource BoolToVisibility}}">
+            <StackPanel>
+                <TextBlock Text="Kontrola nakładki" Style="{StaticResource H2}" FontSize="15" Margin="0,0,0,6" />
+                <ItemsControl ItemsSource="{Binding Issues}" />
+            </StackPanel>
+        </Border>
+    </StackPanel>
+</UserControl>

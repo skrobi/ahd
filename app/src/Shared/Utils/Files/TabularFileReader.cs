@@ -25,6 +25,15 @@ public static class TabularFileReader
         return ExcelExtensions.Contains(ext) || TextExtensions.Contains(ext);
     }
 
+    /// <summary>Nazwy arkuszy skoroszytu Excel; plik CSV / TXT – brak arkuszy.</summary>
+    public static IReadOnlyList<string> SheetNames(string path)
+    {
+        if (!ExcelExtensions.Contains(Path.GetExtension(path)))
+            return [];
+        using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
+        return XlsxStreamReader.SheetNames(stream);
+    }
+
     public static TabularData Read(string path, string? sheet = null) => OpenFile(path, sheet).ToData();
 
     /// <summary>Wszystkie wiersze w pamięci – małe pliki (słowniki, podgląd). Import czyta strumieniowo (OpenFile).</summary>

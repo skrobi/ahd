@@ -1,0 +1,85 @@
+<UserControl x:Class="PzlEv.Modules.Projects.Views.ProjectDetailView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:partials="clr-namespace:PzlEv.Shared.Views.Partials"
+             xmlns:views="clr-namespace:PzlEv.Modules.Projects.Views">
+    <!-- Ekran Projekt (DataContext: ProjectDetailViewModel) – docs/funkcjonalnosc.md, rozdz. 2 i F02. -->
+    <StackPanel>
+        <partials:PageHeader Eyebrow="Projekty / projekt" Title="{Binding Title}" Subtitle="{Binding Subtitle}">
+            <partials:PageHeader.Actions>
+                <Button Content="← Lista projektów" Style="{StaticResource Btn}" Command="{Binding Back}" />
+            </partials:PageHeader.Actions>
+        </partials:PageHeader>
+        <TextBlock Text="{Binding Status}" TextWrapping="Wrap" Margin="0,0,0,8" />
+
+        <!-- Gotowość (F02) -->
+        <Border Style="{StaticResource Panel}" Margin="0,0,0,12">
+            <StackPanel>
+                <DockPanel Margin="0,0,0,6">
+                    <ContentControl DockPanel.Dock="Right" Content="{Binding ReadinessPill}" />
+                    <TextBlock Text="Gotowość projektu" Style="{StaticResource H2}" />
+                </DockPanel>
+                <ItemsControl ItemsSource="{Binding Readiness}" />
+            </StackPanel>
+        </Border>
+
+        <!-- Performance Objectives -->
+        <Border Style="{StaticResource Panel}" Margin="0,0,0,12">
+            <StackPanel>
+                <DockPanel Margin="0,0,0,6">
+                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                        <Button Content="Odśwież mapowanie" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding RefreshMapping}" />
+                        <Button Content="Odrzuć zmiany" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding DiscardObjectives}" />
+                        <Button Content="Zapisz nakładkę" Style="{StaticResource BtnPrimary}" Command="{Binding SaveObjectives}" />
+                    </StackPanel>
+                    <TextBlock Text="Performance Objectives" Style="{StaticResource H2}" />
+                </DockPanel>
+                <TextBlock Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="0,0,0,8"
+                           Text="Zapis tworzy nowe wersje zmienionych węzłów (historia). Ponowne wczytanie eksportu SAP odświeża strukturę: elementy o tym samym WBS element zachowują historię; węzły wirtualne i ręczne zmiany trzeba odtworzyć (O47)." />
+                <views:PoEditorView DataContext="{Binding Objectives}" />
+            </StackPanel>
+        </Border>
+
+        <!-- Słowniki projektu -->
+        <Border Style="{StaticResource Panel}" Margin="0,0,0,12">
+            <StackPanel>
+                <DockPanel Margin="0,0,0,6">
+                    <Button DockPanel.Dock="Right" Content="Pobierz słowniki (Excel)" Style="{StaticResource Btn}" Command="{Binding ExportDictionaries}" />
+                    <TextBlock Text="Słowniki projektu" Style="{StaticResource H2}" />
+                </DockPanel>
+                <TextBlock Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="0,0,0,8"
+                           Text="Pobierz obecny stan, popraw w Excelu i wczytaj ponownie – przed zapisem zobaczysz różnice (+ nowe / ~ zmienione / − usunięte). Słownik z błędem ERROR nie zostanie zapisany; wiersze usunięte z pliku zostaną zamknięte (historia zostaje)." />
+                <ItemsControl ItemsSource="{Binding Dictionaries}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <views:DictionaryPanelView />
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+        </Border>
+
+        <!-- Przebiegi -->
+        <Border Style="{StaticResource Panel}" Margin="0,0,0,12">
+            <StackPanel>
+                <TextBlock Text="Historia przebiegów" Style="{StaticResource H2}" Margin="0,0,0,6" />
+                <TextBlock Text="{Binding Runs}" Style="{StaticResource MutedText}" TextWrapping="Wrap" />
+            </StackPanel>
+        </Border>
+
+        <!-- Foldery -->
+        <Border Style="{StaticResource Panel}">
+            <StackPanel>
+                <DockPanel Margin="0,0,0,6">
+                    <Button DockPanel.Dock="Right" Content="Utwórz brakujące foldery" Style="{StaticResource Btn}" Command="{Binding CreateFolders}" />
+                    <TextBlock Text="Struktura folderów" Style="{StaticResource H2}" />
+                </DockPanel>
+                <Border Background="{StaticResource Surface2}" Padding="10" Margin="0,0,0,8">
+                    <TextBlock Text="{Binding FolderPreview}" FontFamily="{StaticResource FMono}" />
+                </Border>
+                <TextBlock Text="Zgłoszenie do IT (dostęp CAM do folderu Zwrocone)" Style="{StaticResource MutedText}" Margin="0,0,0,4" />
+                <TextBox Style="{StaticResource Input}" Text="{Binding ItRequest, Mode=OneWay}" IsReadOnly="True" TextWrapping="Wrap" />
+            </StackPanel>
+        </Border>
+    </StackPanel>
+</UserControl>

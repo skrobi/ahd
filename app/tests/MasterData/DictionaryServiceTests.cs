@@ -1,6 +1,5 @@
-using PzlEv.Modules.MasterData.Data;
-using PzlEv.Modules.MasterData.Models;
-using PzlEv.Modules.MasterData.Services;
+using PzlEv.Shared.Utils.Dictionaries;
+using PzlEv.Shared.Models.Dictionaries;
 using PzlEv.Shared.Utils.Data;
 using PzlEv.Shared.Utils.Data.Sql;
 using PzlEv.Shared.Utils.Files;
@@ -29,7 +28,7 @@ public sealed class DictionaryServiceTests : IDisposable
     {
         _database?.Dispose();
         _database = new TestDatabase(presets);
-        _store = new SqlDictionaryStore(_database.Sql, _services.Clock, _services.User);
+        _store = new SqlDictionaryStore(_database.Sql, _services.Clock, _services.User, GlobalDictionaries.Tables);
         _journal = new SqlJournal(_database.Sql, _services.Clock, _services.User);
         _service = new DictionaryService(_store, _journal);
     }
