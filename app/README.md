@@ -244,6 +244,7 @@ pomija testy z ostrzeżeniem.
 | SmartScreen „Nieznany wydawca” | brak podpisu kodu | podpis certyfikatem firmowym |
 | długi pierwszy start | single-file rozpakowuje biblioteki natywne do `%TEMP%\.net` | normalne przy pierwszym uruchomieniu; kolejne szybsze |
 | brak pliku logu | brak prawa zapisu w folderze `.exe` | docelowo log w `%LOCALAPPDATA%` albo w osobnym folderze sieciowym |
+| import: „…was deadlocked on lock resources with another process…” | zapis pliku zakleszczył się z inną sesją bazy (np. ekran Mapowanie / Projekty innej osoby, testy na tej samej bazie, zadania serwera na indeksie kolumnowym) | od 0.18.1 import powtarza zapis pliku sam (do 3 prób, wpis w logu); gdy błąd zostaje – graf zakleszczenia z `system_health` (zapytanie w `docs/zrodla-danych.md`, rozdz. 2) pokaże drugą sesję |
 | błąd restore pakietu przy budowie | brak sieci LM / VPN, brak poświadczeń do eFOSS, zły/wygasły token albo pakiet niedostępny w feedzie | diagnostyka w sekcji „Pakiety NuGet… eFOSS”; jeśli pakietu nie ma w feedzie – lista do zatwierdzenia / lokalny cache |
 
 ## Struktura
