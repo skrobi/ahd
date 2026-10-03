@@ -76,7 +76,7 @@ public sealed class ImportServiceTests : IDisposable
         var seen = Assert.Single(_store.Seen(run.BatchId));
         var file = _store.FindByHash(seen.Sha256!)!;
         Assert.Equal("utworzone", file.CanonicalStatus);
-        Assert.Equal(6, _store.RawRows(file.Id).Count);
+        Assert.Equal((6, 6), (file.RowCount, file.CanonicalRows));
         var actuals = Canonical(file.Id);
         Assert.Equal(6, actuals.Count);
         Assert.Equal(10574.11m, actuals.Sum(a => (decimal)a["ValueObjCrcy"]!));     // testdata/README.md
@@ -194,7 +194,7 @@ public sealed class ImportServiceTests : IDisposable
         Assert.Equal(   // etapy importu pliku na ekranie, potem decyzja
         [
             ImportService.StageDownload, ImportService.StageCheck, ImportService.StageRows, "4/4 kontrola w bazie (liczba wierszy i sumy)",
-            "4/4 zapis treści pliku", "4/4 zatwierdzanie zapisu", "zaimportowany",
+            "4/4 zatwierdzanie zapisu", "zaimportowany",
         ], statuses.Select(s => s.Split(" – ")[0].Split(" · ")[0]).Distinct());
         Assert.Contains(statuses, s => s.StartsWith($"{ImportService.StageDownload} – ") && s.Contains(" MB, kopia pliku · "));
         Assert.Contains(statuses, s => s.StartsWith($"{ImportService.StageRows} – 6 wierszy"));
@@ -369,7 +369,7 @@ public sealed class ImportServiceTests : IDisposable
         var result = Assert.Single(_import.Run().Files);
 
         Assert.Equal(FileDecisions.Imported, result.Decision);
-        Assert.EndsWith("kolumny spoza parsera (tylko w treści pliku): Dodatkowa", result.Description);
+        Assert.EndsWith("kolumny spoza parsera (niezapisane): Dodatkowa", result.Description);
     }
 
     [SqlFact]
@@ -428,25 +428,22 @@ public sealed class ImportServiceTests : IDisposable
             return Dapper.SqlMapper.ExecuteScalar<int>(connection, $"SELECT COUNT(*) FROM {_database.Sql.Table(table)}");
         }
 
-        var content = Path.Combine(_root, "plik.csv");
-        File.WriteAllText(content, "WBS Element;Value in Obj. Crcy\nA.1;10,5\nA.2;5\n");
         var stages = new List<string>();
 
-        var error = Assert.Throws<CanonicalFlowException>(() => _store.StoreFile(FileRow('a'), content,
+        var error = Assert.Throws<CanonicalFlowException>(() => _store.StoreFile(FileRow('a'),
             new CanonicalData(parser, fields, rows, () => new CanonicalTotals(2, new Dictionary<string, decimal> { ["ValueObjCrcy"] = 16m }))));
-        Assert.Throws<ContentRejectedException>(() => _store.StoreFile(FileRow('c'), content,
+        Assert.Throws<ContentRejectedException>(() => _store.StoreFile(FileRow('c'),
             new CanonicalData(parser, fields, rows, () => throw new ContentRejectedException("błędy wartości"))));
-        var stored = _store.StoreFile(FileRow('b'), content,
+        var stored = _store.StoreFile(FileRow('b'),
             new CanonicalData(parser, fields, rows, () => new CanonicalTotals(2, new Dictionary<string, decimal> { ["ValueObjCrcy"] = 15.5m })), stages.Add)!;
 
         Assert.StartsWith("dane kanoniczne w bazie niezgodne z plikiem (wiersze 2/2, suma Value in Obj. Crcy 16/15", error.Message);
         Assert.Null(_store.FindByHash(new string('a', 64)));   // plik, treść i wiersze wycofane razem
         Assert.Null(_store.FindByHash(new string('c', 64)));   // błędy treści wykryte po przesłaniu wierszy – też wycofane
-        Assert.Equal(["kontrola w bazie (liczba wierszy i sumy)", "zapis treści pliku", "zatwierdzanie zapisu"], stages);
+        Assert.Equal(["kontrola w bazie (liczba wierszy i sumy)", "zatwierdzanie zapisu"], stages);
         Assert.Equal((2, 2), (_store.File(stored.FileId)!.RowCount, _store.File(stored.FileId)!.CanonicalRows));
-        Assert.Equal(new string?[] { "A.2", "5" }, _store.RawRows(stored.FileId)[1].Values);   // treść pliku (GZip) z bazy
         Assert.Equal((2, 15.5m), (stored.CanonicalRows, stored.Sums["ValueObjCrcy"]));
-        Assert.Equal((1, 2), (Count("meta.SourceFileContent"), Count("can.Row")));
+        Assert.Equal(2, Count("can.Row"));
         Assert.Equal(["A.1", "A.2"], _store.CanonicalRows(parser, stored.FileId).Select(r => r["WbsElement"]));
     }
 

@@ -63,12 +63,15 @@ i utrzymywaną na ekranie Administracja (`docs/funkcjonalnosc.md`, F08).
   wszystkich wersjach parsera; zmiana rodzaju pola (np. kwota → tekst, tekst ponad 400 znaków) jest odrzucana –
   dodaje się nowe pole; slot pola usuniętego z parsera zostaje przy jego danych i nie jest przydzielany innemu polu
   (pole dodane ponownie pod tą samą nazwą wraca do swojego slotu). Ekran pokazuje zajęte sloty (np. „T 19/40 · N 4/20”).
-- Źródło z parserem: plik jest zapisywany w bazie (wersja pliku, treść pliku, dane kanoniczne) tylko
-  wtedy, gdy przejdzie walidację – parser aktywny, w pliku są wszystkie kolumny parsera, pola wymagane wypełnione
-  i wartości zgodne z typami. Kolumny pliku spoza parsera są tylko w treści pliku (opis decyzji podaje
-  ich nazwy). Plik, który walidacji nie przejdzie, ma decyzję „błąd” i nie zostawia danych w bazie; przy kolejnym
-  imporcie jest pobierany ponownie (pomijane są tylko pliki, których treść jest w bazie). Źródło bez parsera –
-  zapisywana jest tylko treść pliku.
+- Źródło z parserem: plik jest zapisywany w bazie (wersja pliku i dane kanoniczne) tylko wtedy, gdy przejdzie
+  walidację – parser aktywny, w pliku są wszystkie kolumny parsera, pola wymagane wypełnione i wartości zgodne
+  z typami. Kolumny pliku spoza parsera nie są zapisywane (opis decyzji podaje ich nazwy – żeby je zachować, dodaje
+  się pola parsera). Plik, który walidacji nie przejdzie, ma decyzję „błąd” i nie zostawia danych w bazie; przy
+  kolejnym imporcie jest pobierany ponownie (pomijane są tylko pliki, których wersja jest w bazie). Źródło bez
+  parsera – zapisywana jest tylko wersja pliku (SHA-256, kolumny, liczba wierszy), bez danych.
+- **Sam plik nie jest przechowywany** (decyzja 2026-10-03, migracja 008): każdy raport RABIT to pełne dane
+  (ten sam układ, dane narastająco), a po udanym imporcie są one w `CAN_Row` – kopia pliku w bazie nic nie wnosi,
+  a wydłużała zapis.
 - **Import dużych plików** – cztery etapy, widoczne w statusie pliku na ekranie Import (z postępem i czasem etapu):
   1. *pobieranie na dysk* – plik trafia do folderu tymczasowego na dysku lokalnym użytkownika (`%TEMP%\PZL-EV\import`,
      usuwany po pliku), SHA-256 liczony w trakcie; dalsze odczyty idą z dysku, nie z sieci. SharePoint: najpierw
@@ -80,12 +83,11 @@ i utrzymywaną na ekranie Administracja (`docs/funkcjonalnosc.md`, F08).
   3. *odczyt i zapis wierszy* – jeden przebieg pliku (CSV albo Excel – odczyt strumieniowy, wiersz po wierszu):
      wiersze są parsowane w osobnym wątku i jednocześnie zapisywane wsadowo do `CAN_Row` w jednej transakcji. Błąd
      wartości, puste pole wymagane albo niezgodne sumy kwot (z kolumn pliku i z wartości pól) wycofują zapis;
-  4. *kontrola w bazie i treść pliku* – liczba wierszy i sumy kwot po zapisie = odczytane z pliku (niezgodność wycofuje
-     cały zapis), treść pliku zapisywana strumieniowo z dysku (Excel bez zmian – jest już skompresowany, CSV / TXT –
-     GZip), zatwierdzenie.
+  4. *kontrola w bazie* – liczba wierszy i sumy kwot po zapisie = odczytane z pliku (niezgodność wycofuje cały zapis),
+     zatwierdzenie; plik lokalny jest potem usuwany.
 
   Liczby są zaokrąglane do 8 miejsc po przecinku. „Przerwij” działa także w trakcie pliku – jego zapis jest wycofany.
-  Czasy etapów każdego pliku i sposób pobrania (HTTPS / WebDAV, MB/s) są w logu. Każda wersja pliku zostaje w bazie –
+  Czasy etapów każdego pliku i sposób pobrania (HTTPS / WebDAV, MB/s) są w logu. Dane każdej wersji pliku zostają w bazie –
   najnowsza jest danymi bieżącymi, starsze służą do porównań. Arkusz Excela ma najwyżej 1 048 576 wierszy – większe
   raporty tylko jako CSV.
 - Definicje powstają dla źródeł w miarę ustalania ich zawartości (O27).

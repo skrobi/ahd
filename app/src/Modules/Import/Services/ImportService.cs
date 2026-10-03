@@ -14,7 +14,7 @@ namespace PzlEv.Modules.Import.Services;
 /// <summary>
 /// Import źródeł G1 (docs/pipeline-fazy.md): wszystkie aktywne lokalizacje RABIT i folder Do_importu. Dla każdego
 /// pliku decyzja: nierozpoznany (brak prefiksu – WARNING), pominięty (te same metadane), duplikat (ten sam
-/// SHA-256), zaimportowany (treść pliku + dane kanoniczne) albo błąd. Błąd pliku lub niedostępna lokalizacja
+/// SHA-256), zaimportowany (wersja pliku + dane kanoniczne) albo błąd. Błąd pliku lub niedostępna lokalizacja
 /// nie zatrzymuje pozostałych. Kontrola przepływu: wiersze i sumy kwot kanonicznych = kolumny pliku (także w bazie po zapisie).
 /// </summary>
 public sealed class ImportService(IImportStore store, AppServices services, Func<FileDownloader>? downloader = null)
@@ -306,8 +306,8 @@ public sealed class ImportService(IImportStore store, AppServices services, Func
     ///    w jednej transakcji; błąd wartości, puste pole wymagane albo niezgodne sumy kwot (z kolumn pliku i z wartości pól)
     ///    wycofują zapis – plik nie trafia do bazy (decyzja „błąd”, problem w rejestrze) i przy kolejnym imporcie jest
     ///    pobierany ponownie;
-    /// 4) kontrola w bazie (liczba wierszy i sumy po zapisie), treść pliku z dysku (Excel bez zmian, tekst – GZip),
-    ///    zatwierdzenie; niezgodność wycofuje cały zapis.
+    /// 4) kontrola w bazie (liczba wierszy i sumy po zapisie) i zatwierdzenie; niezgodność wycofuje cały zapis.
+    /// Treść pliku nie jest przechowywana – po imporcie plik lokalny jest usuwany, dane są w CAN_Row.
     /// </summary>
     private (string Decision, string Description, string? Sha, int? Rows) ImportContent(long batchId, ImportLocation location, FileInfo file,
         DateTimeOffset modified, SourceDefinitionRow definition, Action<string, Issue> problem, StageReporter stage, CancellationToken cancellation)
@@ -352,7 +352,7 @@ public sealed class ImportService(IImportStore store, AppServices services, Func
         var fileRow = new SourceFileRow(
             0, sha, location.Path, file.Name, definition.Code, file.Length, modified, source.FileType, source.Sheet, source.Encoding,
             source.Delimiter, source.Headers, signature, 0, batchId, services.Clock.Now, services.User.Account,
-            "brak – źródło bez parsera (tylko treść pliku)", 0, null);
+            "brak – źródło bez parsera (tylko wersja pliku)", 0, null);
         void Finish(string name) => stage.Start($"{StageFinish} {name}");
         StoredFile? stored;
         int rows;
@@ -360,7 +360,7 @@ public sealed class ImportService(IImportStore store, AppServices services, Func
         {
             stage.Start(StageCount);
             rows = CountRows(source, stage, cancellation);
-            stored = store.StoreFile(fileRow with { RowCount = rows }, local.Path, null, Finish);
+            stored = store.StoreFile(fileRow with { RowCount = rows }, null, Finish);
         }
         else
         {
@@ -368,7 +368,7 @@ public sealed class ImportService(IImportStore store, AppServices services, Func
             var check = new ContentCheck(mapper);
             try
             {
-                stored = store.StoreFile(fileRow, local.Path,
+                stored = store.StoreFile(fileRow,
                     new CanonicalData(mapper.Parser, mapper.Fields, ReadAhead(check.Read(source, stage, cancellation)), check.Totals), Finish);
             }
             catch (ContentRejectedException)
@@ -395,10 +395,10 @@ public sealed class ImportService(IImportStore store, AppServices services, Func
 
         var pl = CultureInfo.GetCultureInfo("pl-PL");
         var canonical = mapper is null
-            ? "tylko treść pliku (źródło bez parsera)"
+            ? "tylko wersja pliku (źródło bez parsera – bez danych)"
             : $"dane kanoniczne ({mapper.Parser.Code}): {stored.CanonicalRows.ToString("#,0", pl)} wierszy" +
               string.Concat(mapper.Fields.Where(f => f.Type == FieldTypes.Decimal).Select(f => $", suma {f.Column} {PolishNumber.ToDisplay(stored.Sums[f.Field])}"));
-        var extra = mapper is { ExtraColumns.Count: > 0 } ? $"; kolumny spoza parsera (tylko w treści pliku): {string.Join(", ", mapper.ExtraColumns)}" : "";
+        var extra = mapper is { ExtraColumns.Count: > 0 } ? $"; kolumny spoza parsera (niezapisane): {string.Join(", ", mapper.ExtraColumns)}" : "";
         return (FileDecisions.Imported, $"{definition.Code}, {rows.ToString("#,0", pl)} wierszy; {canonical}{extra}", sha, rows);
     }
 

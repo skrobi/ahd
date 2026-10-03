@@ -9,7 +9,7 @@ using PzlEv.Shared.Utils.Ui.Modularity;
 
 namespace PzlEv.Modules.Import;
 
-/// <summary>Import źródeł (F05, G1): lokalizacje RABIT i folder Do_importu → treść pliku i dane kanoniczne.</summary>
+/// <summary>Import źródeł (F05, G1): lokalizacje RABIT i folder Do_importu → wersje plików i dane kanoniczne.</summary>
 public sealed class ImportModule : IModule
 {
     public string Key => ModuleKeys.Import;

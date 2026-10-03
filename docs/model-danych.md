@@ -154,7 +154,6 @@ Zmiana istniejących wierszy w `LOG.WBS` nie jest wykrywana (`docs/architektura.
 | `meta.SourceFile` | wersja pliku (klucz SHA-256): lokalizacja, nazwa, kod źródła, data raportu (modyfikacja w RABIT), kolumny, sygnatura kolumn, liczba wierszy, import, stan danych kanonicznych (utworzone albo powód braku) |
 | `meta.SourceFileSeen` | decyzja dla każdego pliku w każdym imporcie (`docs/pipeline-fazy.md`, G1) |
 | `meta.SourceDefinition` | definicja źródła (`docs/zrodla-danych.md`, rozdz. 2) |
-| `meta.SourceFileContent` | treść wersji pliku – oryginalny plik skompresowany GZip (porównania, ponowne przetworzenie) |
 | `can.Row` | dane kanoniczne wszystkich parserów: wersja pliku, numer wiersza, parser i jego wersja, sloty typowane; pole parsera ma stały slot (`meta.Parser`). Koszty rzeczywiste – parser `ACTUALS` (wspólny dla źródeł `ACTUALS_*`, odróżnianych wersją pliku). Wszystkie wersje plików zostają: najnowsza – dane bieżące dla użytkowników, starsze – do porównań |
 | `dict.*` | słowniki (`docs/slowniki.md`) i korekty mapowania (`docs/mapowanie-ces-p1s.md`, rozdz. 8). Wiersz słownika ma identyfikator wiersza logicznego i kolejne wersje (kto i kiedy zapisał, kto i kiedy zastąpił); w MS SQL – osobna tabela z typowanymi kolumnami na słownik (rozdz. 5.1) |
 | `meta.Projekt` | kod, nazwa, typ (SAC / CAS / wewnętrzny) |
@@ -182,7 +181,6 @@ Bez metodologii EV; kolejne tabele dochodzą kolejnymi migracjami.
 | `META_Parser` (004) | parsery i ich pola (kolumna w pliku, typ, długość, wymagane, slot w `CAN_Row` – 007) z historią |
 | `DICT_MappingCorrection` (005) | korekty mapowania CES ↔ P1S (elementu i projektu CES): cel P1S, poprzednie przypisanie, uzasadnienie, `ValidFrom` / `ValidTo`, historia wersji (`docs/mapowanie-ces-p1s.md`, rozdz. 8) |
 | `META_ImportBatch`, `META_SourceFile`, `META_SourceFileSeen` | importy, wersje plików (SHA-256), decyzje dla plików |
-| `META_SourceFileContent` (007) | treść wersji pliku: format (`gzip` – plik CSV / TXT skompresowany GZip; `raw` – plik Excel bez zmian, już skompresowany; `jsonl-utf16-gzip` – wiersze przeniesione ze `STG_RawRow`), rozmiar oryginału, treść `VARBINARY(MAX)` |
 | `CAN_Row` (007) | dane kanoniczne wszystkich parserów: `FileId`, `RowNumber`, `ParserId`, `ParserVersion` i sloty T01–T40 (`NVARCHAR(400)`), L01–L05 (`NVARCHAR(4000)`), N01–N20 (`DECIMAL(28,8)`), I01–I10 (`INT`), D01–D10 (`DATE`); indeks klastrowy kolumnowy (clustered columnstore) – kompresja i szybkie grupowanie milionów wierszy |
 | `META_Journal`, `META_Problem` | dziennik zdarzeń (`meta.Zdarzenie`) i problemy (otwarte / rozwiązane: `ResolvedAt`, `ResolvedBy`, `Resolution` – migracja 006) |
 | `META_Project`, `META_PerformanceObjective` | projekty (kod, nazwa, typ SAC / CAS / WEWNETRZNY) i nakładka Performance Objectives z historią |
@@ -222,10 +220,15 @@ całkowita – I, data – D) przy zapisie parsera i zachowuje go we wszystkich 
 wersję parsera nie jest przydzielany innemu polu (zapisane dane nie zmieniają znaczenia), zmiana rodzaju pola jest
 błędem (dodaje się nowe pole). Limity na parser: 40 / 5 / 20 / 10 / 10 pól. Migracja przydziela sloty polom
 istniejących parserów (kolejność pól, osobno dla rodzaju), przenosi dane `CAN_<Tabela>` do `CAN_Row` (kontrola
-liczby wierszy) i usuwa stare tabele; wiersze `STG_RawRow` zapisuje jako treść pliku (JSON-lines, GZip) i usuwa
-tabelę. Wymaga SQL Server 2016+ i poziomu zgodności bazy co najmniej 130 – skrypt sprawdza go na początku
+liczby wierszy) i usuwa stare tabele; wiersze `STG_RawRow` przenosi do tabeli treści plików `META_SourceFileContent`
+(usuniętej migracją 008) i usuwa tabelę. Wymaga SQL Server 2016+ i poziomu zgodności bazy co najmniej 130 – skrypt sprawdza go na początku
 (Diagnostyka pokazuje wersję serwera i poziom zgodności). Zapytania raportów i grupowania czytają `CAN_Row` przez
 sloty parsera (`SqlCanonical`; docelowo widoki – F10.2).
+
+**Migracja `sql/mssql/008_bez_tresci_plikow.sql`:** usuwa tabelę `META_SourceFileContent` z treścią plików (decyzja
+2026-10-03). Raport RABIT to zawsze pełne dane, a po udanym imporcie są one w `CAN_Row` – kopia pliku nie jest
+potrzebna. Wersje plików (`META_SourceFile`) i dane kanoniczne zostają; wpis w dzienniku podaje liczbę i rozmiar
+usuniętych treści.
 
 Aplikacja zapisuje dziś do tabel importu, konfiguracji importu, słowników globalnych, korekt mapowania, dziennika i problemów;
 tabele projektów i słowników projektu czekają na moduły F4. Blokada importu – plik na dysku sieciowym
@@ -237,4 +240,4 @@ tabele projektów i słowników projektu czekają na moduły F4. Blokada importu
 
 | # | Kwestia |
 |---|---|
-| ~~O32~~ | Retencja – **rozstrzygnięte (2026-10-03):** wszystkie wersje plików zostają w bazie (treść GZip w `META_SourceFileContent`, dane kanoniczne w `CAN_Row` z kompresją kolumnową); użytkownicy pracują na najnowszej wersji, starsze służą do porównań |
+| ~~O32~~ | Retencja – **rozstrzygnięte (2026-10-03):** dane wszystkich wersji plików zostają w bazie (`CAN_Row` z kompresją kolumnową; sam plik nie jest przechowywany – migracja 008); użytkownicy pracują na najnowszej wersji, starsze służą do porównań |

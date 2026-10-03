@@ -9,7 +9,7 @@ namespace PzlEv.Modules.Import.Services;
 /// <summary>
 /// Parser według definicji parsera (docs/zrodla-danych.md, rozdz. 2): kolumna pliku (po nazwie nagłówka, bez rozróżniania
 /// wielkości liter) → pole z typem. Parser pilnuje układu: brak kolumny, którą czyta = ERROR; kolumny, których nie czyta,
-/// zostają tylko w treści pliku. Tekst przycięty (dopełnianie zerami, długość pola); liczby w formacie polskim albo
+/// nie są zapisywane. Tekst przycięty (dopełnianie zerami, długość pola); liczby w formacie polskim albo
 /// z Excela (minus na końcu – zapis SAP), zaokrąglone do 8 miejsc (jak w bazie); daty. Pole wymagane musi być wypełnione.
 /// Wartość niezgodna z typem albo brak wymaganej = ERROR z numerem wiersza; plik z błędami nie tworzy danych kanonicznych.
 /// Import czyta wiersz po wierszu (Prepare → RowMapper.Map); Parse – cały plik w pamięci (małe pliki, testy).

@@ -61,7 +61,7 @@
                     <TextBlock Grid.Row="3" Text="Parser" Style="{StaticResource Label}" />
                     <ComboBox Grid.Row="3" Grid.Column="1" Margin="0,3" ItemsSource="{Binding ParserOptions}" DisplayMemberPath="Label"
                               SelectedValuePath="Value" SelectedValue="{Binding DefParser}"
-                              ToolTip="Parser pilnuje układu kolumn pliku, typów i pól wymaganych (sekcja Parsery); „brak” – tylko treść pliku" />
+                              ToolTip="Parser pilnuje układu kolumn pliku, typów i pól wymaganych (sekcja Parsery); „brak” – tylko wersja pliku, bez danych" />
                     <TextBlock Grid.Row="4" Text="Aktywna" Style="{StaticResource Label}" />
                     <CheckBox Grid.Row="4" Grid.Column="1" VerticalAlignment="Center" IsChecked="{Binding DefActive}" />
 

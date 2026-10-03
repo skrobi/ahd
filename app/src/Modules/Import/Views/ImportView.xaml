@@ -4,7 +4,7 @@
              xmlns:partials="clr-namespace:PzlEv.Shared.Views.Partials">
     <StackPanel>
         <partials:PageHeader Eyebrow="Faza globalna G1" Title="Import RABIT"
-                             Subtitle="Importuj: logowanie do SharePoint, lista plików pasujących do definicji, import. Każda nowa wersja raportu trafia do bazy (treść pliku z pochodzeniem; dla źródeł z parserem – dane kanoniczne), wcześniejsze wersje zostają do porównań. Błąd jednego pliku nie zatrzymuje pozostałych.">
+                             Subtitle="Importuj: logowanie do SharePoint, lista plików pasujących do definicji, import. Każda nowa wersja raportu trafia do bazy jako dane kanoniczne z pochodzeniem (sam plik nie jest przechowywany); dane wcześniejszych wersji zostają do porównań. Błąd jednego pliku nie zatrzymuje pozostałych.">
             <partials:PageHeader.Actions>
                 <StackPanel Orientation="Horizontal">
                     <Button Content="Odśwież" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding Refresh}" />

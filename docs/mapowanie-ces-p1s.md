@@ -52,7 +52,7 @@ sales_order, sales_order_pos, matnr, network`
 - Połączenie z drzewem P1S: `LOG.WBS.PSPNR` = `pspnr_sap` (`docs/zrodla-danych.md`, rozdz. 5).
 - Parser `MAPOWANIA` czyta kolumny potrzebne do rozstrzygania: `src`, `pspnr`, `pspnr_sap`, `pspnr_ces`,
   `pspnr_parent`, `project`, `project_sap`, `project_ces`, `wbs`, `wbs_sap`, `wbs_ces` (wymagane `src`; dane w `can.Row`,
-  sloty T01–T11); pozostałe kolumny pliku są tylko w treści pliku.
+  sloty T01–T11); pozostałe kolumny pliku nie są zapisywane.
 - Odczyt wiersza: element CES = `wbs_ces`, a w wierszu `src` = CES bez `wbs_ces` – `wbs`; cel P1S = `pspnr_sap`,
   a w wierszu `src` = SAP bez `pspnr_sap` – `pspnr` (kod WBS celu: `wbs_sap`, w wierszu SAP – `wbs`); odpowiednik
   projektu CES: `project_ces` → `project_sap`. Element CES z raportu łączy się z elementem kosztów po kodzie WBS

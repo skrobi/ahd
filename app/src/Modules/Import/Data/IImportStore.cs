@@ -21,18 +21,18 @@ public interface IImportStore
     /// <summary>Importy „w toku” bez zakończenia (np. po awarii aplikacji) → „przerwany”; wywoływane po założeniu blokady.</summary>
     void AbandonRunning(DateTimeOffset at);
 
-    /// <summary>Ostatnia rozstrzygnięta decyzja dla pliku (lokalizacja + nazwa), którego treść jest w bazie – do pominięcia po metadanych.</summary>
+    /// <summary>Ostatnia rozstrzygnięta decyzja dla pliku (lokalizacja + nazwa), którego wersja (SHA-256) jest w bazie – do pominięcia po metadanych.</summary>
     SourceFileSeenRow? LastSettled(string location, string fileName);
 
     SourceFileRow? FindByHash(string sha256);
 
     /// <summary>
-    /// Zapis wersji pliku w jednej transakcji: META_SourceFile, dane kanoniczne (strumieniowo do CAN_Row, wiersze czytane
-    /// w trakcie zapisu) i treść pliku z dysku (contentPath). Błędy treści (canonical.Totals) albo niezgodność wierszy i sum
+    /// Zapis wersji pliku w jednej transakcji: META_SourceFile i dane kanoniczne (strumieniowo do CAN_Row, wiersze czytane
+    /// w trakcie zapisu); treść pliku nie jest przechowywana. Błędy treści (canonical.Totals) albo niezgodność wierszy i sum
     /// w bazie (CanonicalFlowException) – wyjątek i nic nie zostaje zapisane. stage – etap zapisu dla ekranu.
     /// Null – treść (hash) zapisana w międzyczasie (np. przez inną osobę).
     /// </summary>
-    StoredFile? StoreFile(SourceFileRow file, string contentPath, CanonicalData? canonical, Action<string>? stage = null);
+    StoredFile? StoreFile(SourceFileRow file, CanonicalData? canonical, Action<string>? stage = null);
 
     void RecordSeen(SourceFileSeenRow seen);
 
@@ -43,9 +43,6 @@ public interface IImportStore
     IReadOnlyList<SourceFileSeenRow> Seen(long batchId);
 
     SourceFileRow? File(long fileId);
-
-    /// <summary>Wiersze pliku odczytane z zapisanej treści (oryginalny plik albo dawne wiersze surowe).</summary>
-    IReadOnlyList<RawRowRecord> RawRows(long fileId);
 
     /// <summary>Dane kanoniczne pliku z CAN_Row (pole → wartość).</summary>
     IReadOnlyList<IReadOnlyDictionary<string, object?>> CanonicalRows(ParserRow parser, long fileId);

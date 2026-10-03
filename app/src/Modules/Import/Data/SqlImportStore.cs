@@ -10,9 +10,9 @@ using PzlEv.Shared.Utils.Files;
 namespace PzlEv.Modules.Import.Data;
 
 /// <summary>
-/// Import w bazie: META_ImportBatch, META_SourceFile, META_SourceFileSeen, treść pliku (META_SourceFileContent)
-/// i dane kanoniczne (CAN_Row – sloty pól parsera). Wersja pliku zapisywana w jednej transakcji: dane kanoniczne
-/// strumieniowo (SqlBulkCopy) z kontrolą przepływu w bazie, treść pliku strumieniowo z dysku.
+/// Import w bazie: META_ImportBatch, META_SourceFile, META_SourceFileSeen i dane kanoniczne (CAN_Row – sloty pól
+/// parsera). Wersja pliku zapisywana w jednej transakcji: dane kanoniczne strumieniowo (SqlBulkCopy) z kontrolą
+/// przepływu w bazie. Treść pliku nie jest przechowywana – dane są w CAN_Row (migracja 008).
 /// </summary>
 public sealed class SqlImportStore(SqlDatabase db) : IImportStore
 {
@@ -21,7 +21,6 @@ public sealed class SqlImportStore(SqlDatabase db) : IImportStore
     private readonly string _batches = db.Table(DbTables.ImportBatch);
     private readonly string _files = db.Table(DbTables.SourceFile);
     private readonly string _seen = db.Table(DbTables.SourceFileSeen);
-    private readonly string _content = db.Table(DbTables.SourceFileContent);
     private readonly string _canonical = db.Table(DbTables.CanonicalRow);
     private readonly string _parsers = db.Table(DbTables.Parser);
 
@@ -91,7 +90,7 @@ public sealed class SqlImportStore(SqlDatabase db) : IImportStore
         return connection.QuerySingleOrDefault<FileRow>($"SELECT {FileColumns} FROM {_files} WHERE Sha256 = @sha256", new { sha256 })?.ToRow();
     }
 
-    public StoredFile? StoreFile(SourceFileRow file, string contentPath, CanonicalData? canonical, Action<string>? stage = null)
+    public StoredFile? StoreFile(SourceFileRow file, CanonicalData? canonical, Action<string>? stage = null)
     {
         try
         {
@@ -129,8 +128,6 @@ public sealed class SqlImportStore(SqlDatabase db) : IImportStore
                         new { id, rows = totals.Rows }, transaction);
                 }
 
-                stage?.Invoke("zapis treści pliku");
-                InsertContent(connection, transaction, id, contentPath, file.FileName);
                 stage?.Invoke("zatwierdzanie zapisu");
                 return stored;
             });
@@ -139,26 +136,6 @@ public sealed class SqlImportStore(SqlDatabase db) : IImportStore
         {
             return null;   // ta sama treść zapisana w międzyczasie (np. przez inną osobę)
         }
-    }
-
-    /// <summary>
-    /// Treść pliku strumieniowo z dysku (bez kopii w pamięci): Excel (.xlsx, .xlsm – już skompresowany ZIP) bez zmian
-    /// (format raw), tekst (CSV, TXT) skompresowany GZip w locie (format gzip).
-    /// </summary>
-    private void InsertContent(SqlConnection connection, SqlTransaction transaction, long id, string path, string fileName)
-    {
-        var raw = TabularFileReader.ExcelExtensions.Contains(System.IO.Path.GetExtension(fileName));
-        var file = new System.IO.FileStream(path, System.IO.FileMode.Open, System.IO.FileAccess.Read, System.IO.FileShare.Read, 1 << 16,
-            System.IO.FileOptions.SequentialScan);
-        var size = file.Length;
-        using var content = raw ? file : FileCompression.GZipReading(file);
-        using var command = new SqlCommand($"INSERT INTO {_content} (FileId, Format, Size, Content) VALUES (@id, @format, @size, @content)",
-            connection, transaction) { CommandTimeout = LongTimeout };
-        command.Parameters.Add("@id", System.Data.SqlDbType.BigInt).Value = id;
-        command.Parameters.Add("@format", System.Data.SqlDbType.VarChar, 20).Value = raw ? ContentFormats.Raw : ContentFormats.GZip;
-        command.Parameters.Add("@size", System.Data.SqlDbType.BigInt).Value = size;
-        command.Parameters.Add("@content", System.Data.SqlDbType.VarBinary, -1).Value = content;
-        command.ExecuteNonQuery();
     }
 
     /// <summary>Kontrola przepływu w bazie: liczba wierszy i sumy pól liczbowych pliku w CAN_Row = odczytane z pliku.</summary>
@@ -220,24 +197,6 @@ public sealed class SqlImportStore(SqlDatabase db) : IImportStore
     {
         using var connection = db.Open();
         return connection.QuerySingleOrDefault<FileRow>($"SELECT {FileColumns} FROM {_files} WHERE FileId = @fileId", new { fileId })?.ToRow();
-    }
-
-    public IReadOnlyList<RawRowRecord> RawRows(long fileId)
-    {
-        using var connection = db.Open();
-        var stored = connection.QuerySingleOrDefault<(string Format, byte[] Content, string FileName)>(
-            $"SELECT c.Format, c.Content, f.FileName FROM {_content} c JOIN {_files} f ON f.FileId = c.FileId WHERE c.FileId = @fileId",
-            new { fileId }, commandTimeout: LongTimeout);
-        if (stored.Content is null)
-            return [];
-        var content = stored.Format == ContentFormats.Raw ? stored.Content : FileCompression.GUnzip(stored.Content);
-        if (stored.Format == ContentFormats.LegacyRawRows)   // dawne wiersze surowe (migracja 007): JSON na wiersz
-            return System.Text.Encoding.Unicode.GetString(content).Split('\n', StringSplitOptions.RemoveEmptyEntries)
-                .Select((line, i) => new RawRowRecord(fileId, i + 1, SqlJson.Values(line)))
-                .ToList();
-        return TabularFileReader.Open(content, stored.FileName).Rows()
-            .Select((cells, i) => new RawRowRecord(fileId, i + 1, cells))
-            .ToList();
     }
 
     public IReadOnlyList<IReadOnlyDictionary<string, object?>> CanonicalRows(ParserRow parser, long fileId) =>

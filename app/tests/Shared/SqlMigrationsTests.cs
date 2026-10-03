@@ -28,9 +28,9 @@ public sealed class SqlMigrationsTests
     public void Scripts_are_embedded_numbered_and_parameterised()
     {
         var scripts = SqlMigrations.All();
-        Assert.Equal([1, 2, 3, 4, 5, 6, 7], scripts.Select(s => s.Number));
-        Assert.Equal([false, true, false, false, false, false, false], scripts.Select(s => s.IsPresets));   // 002_dane_startowe – dane startowe
-        Assert.Equal(7, SqlMigrations.Required);
+        Assert.Equal([1, 2, 3, 4, 5, 6, 7, 8], scripts.Select(s => s.Number));
+        Assert.Equal([false, true, false, false, false, false, false, false], scripts.Select(s => s.IsPresets));   // 002_dane_startowe – dane startowe
+        Assert.Equal(8, SqlMigrations.Required);
 
         var batches = SqlMigrations.Batches(scripts[0].Text, "FINOP", "PZLEV_").ToList();
         Assert.True(batches.Count > 5);
@@ -51,15 +51,15 @@ public sealed class SqlMigrationsTests
         Assert.Empty(SqlMigrations.Pending(database.Sql));
         var status = SqlMigrations.Status(database.Sql);
         Assert.All(status, s => Assert.NotNull(s.AppliedAt));
-        Assert.Equal(7, SqlMigrations.CurrentVersion(database.Sql));
+        Assert.Equal(8, SqlMigrations.CurrentVersion(database.Sql));
         using var connection = database.Sql.Open();
         var tables = connection.Query<string>(
             "SELECT t.name FROM sys.tables t JOIN sys.schemas s ON s.schema_id = t.schema_id WHERE s.name = @schema AND LEFT(t.name, LEN(@prefix)) = @prefix",
             new { schema = TestDatabase.Schema, prefix = database.Sql.Settings.TablePrefix }).ToList();
         // 20 z migracji 001 + META_Parser (004) + CAN_MappingReport, DICT_MappingCorrection (005)
-        // + CAN_Row, META_SourceFileContent – CAN_Actuals, CAN_MappingReport, STG_RawRow (007)
-        Assert.Equal(22, tables.Count);
-        Assert.DoesNotContain(tables, t => t.EndsWith("CAN_Actuals") || t.EndsWith("CAN_MappingReport") || t.EndsWith("STG_RawRow"));
+        // + CAN_Row, META_SourceFileContent – CAN_Actuals, CAN_MappingReport, STG_RawRow (007) – META_SourceFileContent (008)
+        Assert.Equal(21, tables.Count);
+        Assert.DoesNotContain(tables, t => t.EndsWith("CAN_Actuals") || t.EndsWith("CAN_MappingReport") || t.EndsWith("STG_RawRow") || t.EndsWith("SourceFileContent"));
         Assert.Contains(database.Sql.Settings.TablePrefix + "META_PerformanceObjective", tables);
         Assert.Contains(database.Sql.Settings.TablePrefix + "DICT_ScheduleBudget", tables);
 
@@ -120,20 +120,17 @@ public sealed class SqlMigrationsTests
         var clock = new TestServices().Clock;
         var store = new SqlImportStore(database.Sql);
         var batch = store.BeginBatch(clock.Now, @"PZL\test", "PC-1", "0.11.0");
-        var content = Path.Combine(Path.GetTempPath(), $"pzl-ev-{Guid.NewGuid():N}.csv");
-        File.WriteAllText(content, "A\n1\n");
         long Register(char hash, string name, string canonicalStatus)
         {
             var sha = new string(hash, 64);
             var id = store.StoreFile(new SourceFileRow(0, sha, "RABIT", name, "ACTUALS_PAF", 10, clock.Now, "csv", null, "utf-8", ";",
-                ["A"], "sygnatura", 1, batch, clock.Now, @"PZL\test", canonicalStatus, 0, null), content, null)!.FileId;
+                ["A"], "sygnatura", 1, batch, clock.Now, @"PZL\test", canonicalStatus, 0, null), null)!.FileId;
             store.RecordSeen(new SourceFileSeenRow(0, batch, "RABIT", name, 10, clock.Now, sha, FileDecisions.Imported, "ACTUALS_PAF", 1, "zapis wersji 0.11"));
             return id;
         }
         var layout = Register('a', "ACTUALS_PAF2_B6_AC1.csv", "brak – sygnatura kolumn niezgodna z definicją");
         var values = Register('b', "ACTUALS_PAF2_B6_AC2.csv", "brak – 3 błędów wartości");
         var rawOnly = Register('c', "FORECAST_PAF.csv", "brak – źródło bez parsera (tylko wiersze surowe)");
-        File.Delete(content);
         Assert.NotNull(store.LastSettled("RABIT", "ACTUALS_PAF2_B6_AC1.csv"));
         using (var connection = database.Sql.Open())   // baza sprzed migracji 003
             connection.Execute($"DELETE FROM {database.Sql.Table("meta.SchemaVersion")} WHERE Version = 3");
@@ -142,13 +139,11 @@ public sealed class SqlMigrationsTests
 
         Assert.Null(store.File(layout));
         Assert.Null(store.File(values));
-        Assert.Empty(store.RawRows(layout));
         Assert.NotNull(store.File(rawOnly));
-        Assert.Single(store.RawRows(rawOnly));
         Assert.Null(store.LastSettled("RABIT", "ACTUALS_PAF2_B6_AC1.csv"));    // kolejny import pobierze plik ponownie
         Assert.NotNull(store.LastSettled("RABIT", "FORECAST_PAF.csv"));
         Assert.Equal(3, store.Seen(batch).Count);                              // historia decyzji zostaje
         Assert.Contains(new SqlJournal(database.Sql, clock, new TestUser()).Recent(3), e => e.Message ==
-            "Migracja 003 – usunięte pliki niezgodne z definicją źródła: 2 (wiersze surowe: 2); kolejny import pobierze je ponownie");
+            "Migracja 003 – usunięte pliki niezgodne z definicją źródła: 2 (wiersze surowe: 0); kolejny import pobierze je ponownie");   // treść plików usunięta (008)
     }
 }
