@@ -29,7 +29,7 @@ DECLARE @actualsColumns NVARCHAR(MAX) =
 INSERT INTO [$(Schema)].[$(Prefix)META_SourceDefinition]
     (DefinitionId, Version, Code, Prefix, ReportType, Columns, Signature, Parser, ParserVersion, Active, RecordedAt, RecordedBy)
 SELECT NEXT VALUE FOR [$(Schema)].[$(Prefix)META_LogicalId], 1, d.Code, d.Prefix, d.ReportType, @actualsColumns,
-       '7c59f446fe9c3d5e',   -- sygnatura układu kolumn ACTUALS (HeaderSignature, zgodna z narzędziem w Pythonie)
+       '7c59f446fe9c3d5e',   -- sygnatura układu kolumn ACTUALS (HeaderSignature)
        'ACTUALS', 1, 1, @at, @by
 FROM (VALUES ('ACTUALS_PAF', N'ACTUALS_PAF', N'Koszty rzeczywiste CES – PAF'),
              ('ACTUALS_CES', N'ACTUALS_CES', N'Koszty rzeczywiste CES')) AS d (Code, Prefix, ReportType)

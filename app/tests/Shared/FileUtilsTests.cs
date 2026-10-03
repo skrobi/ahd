@@ -28,9 +28,9 @@ public class FileUtilsTests
     public void Invalid_numbers_are_rejected(string text) => Assert.False(PolishNumber.TryParse(text, out _));
 
     [Fact]
-    public void Header_signature_matches_python_tool()
+    public void Header_signature_is_stable()
     {
-        // Wartości oczekiwane policzone funkcją header_signature z pzl_ev/etap1/inspekcja.py.
+        // Wartości wzorcowe – sygnatury zapisane już w bazie (meta.SourceFile) muszą zostać porównywalne.
         string[] actuals =
         [
             "Project Definition", "WBS Element", "Cost Element", "Cost element descr.", "Cost element name", "CO object name",

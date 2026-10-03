@@ -56,7 +56,7 @@ zmiana zakresu zadania w trakcie realizacji wymaga uzgodnienia.
 | [F2.2 Import plików (G1)](F2.2-import-plikow-g1.md) | Import | F2.1, F0.7 | O29, O31 | zrobione |
 | [F2.3 Parser ACTUALS_* → dane kanoniczne](F2.3-parser-actuals-dane-kanoniczne.md) | Import | F2.2 | O27, O7 | zrobione |
 | [F2.4 Ekran Import](F2.4-ekran-import.md) | Import | F2.2, F2.3, F0.8 | – | zrobione |
-| [F2.5 Narzędzie testowe w Pythonie](F2.5-narzedzie-testowe-w-pythonie.md) | Import | F2.4 | – | czeka na decyzję |
+| [F2.5 Narzędzie testowe w Pythonie](F2.5-narzedzie-testowe-w-pythonie.md) | Import | F2.4 | – | zrobione – usunięte |
 
 ## F3. Mapowanie CES ↔ P1S (G2)
 

@@ -6,7 +6,7 @@ using ClosedXML.Excel;
 namespace PzlEv.Shared.Utils.Files;
 
 /// <summary>
-/// Odczyt plików tabelarycznych według reguł narzędzia testowego (pzl_ev/etap1/inspekcja.py):
+/// Odczyt plików tabelarycznych:
 /// Excel – pierwszy arkusz, nagłówek w pierwszym używanym wierszu; CSV/TXT – kodowanie UTF-8 (z BOM) albo CP1250,
 /// separator wykrywany spośród ; , TAB |. Puste wiersze są pomijane.
 /// </summary>

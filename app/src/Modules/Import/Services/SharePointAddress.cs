@@ -7,7 +7,7 @@ namespace PzlEv.Modules.Import.Services;
 /// <summary>
 /// Folder SharePoint z linku skopiowanego z przeglądarki (adres folderu, widok AllItems.aspx?RootFolder=… / ?id=…)
 /// albo ze ścieżki WebDAV \\host@SSL\DavWWWRoot\…: witryna (/sites/… albo /teams/…), folder (ścieżka względna
-/// serwera, bez kodowania), adres https folderu i ścieżka WebDAV. Te same reguły co narzędzie w Pythonie.
+/// serwera, bez kodowania) i adres https folderu.
 /// </summary>
 public sealed partial record SharePointAddress(string Scheme, string Host, string SitePath, string Folder)
 {
