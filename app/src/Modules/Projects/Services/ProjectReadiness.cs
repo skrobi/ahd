@@ -12,8 +12,9 @@ public static class ProjectReadiness
 {
     /// <param name="dictionaryRows">Liczba bieżących wierszy słowników projektu (kod słownika → liczba).</param>
     /// <param name="camsOutsidePersons">CAM ze słownika „WP i CAM” spoza słownika Osoby.</param>
+    /// <param name="p1sSide">Strona P1S nakładki z mapowania CES ↔ P1S (ObjectivesMapping.Check).</param>
     public static List<Issue> Check(string type, PoTree objectives, IReadOnlyDictionary<string, int> dictionaryRows,
-        IReadOnlyCollection<string> camsOutsidePersons, Issue folderStructure, Issue camAccess)
+        IReadOnlyCollection<string> camsOutsidePersons, Issue p1sSide, Issue folderStructure, Issue camAccess)
     {
         var checks = new List<Issue>
         {
@@ -21,6 +22,9 @@ public static class ProjectReadiness
                 ? Pass($"Nakładka Performance Objectives: {objectives.ElementCount} elementów CES, {objectives.VirtualCount} węzłów wirtualnych")
                 : Issue.Error("Nakładka Performance Objectives nie zawiera żadnego elementu", "Performance Objectives"),
         };
+
+        if (objectives.ElementCount > 0)
+            checks.Add(p1sSide);
 
         foreach (var item in ProjectDictionaries.ForType(type).Where(i => i.IsRequired(type)))
         {

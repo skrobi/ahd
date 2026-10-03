@@ -26,8 +26,12 @@ czytane przy budowie nakładki), `docs/zrodla-danych.md` (struktura CES, drzewo 
 - Kotwicą jest **CES**. Kluczem elementu jest kolumna **`WBS element`** (element PSP CES, np. `4D06WP`,
   `4D06WP.RA`, `4D06WP000001`); `Project definition` to projekt CES (np. `4D06WP`).
 - Wskazanie elementu CES **pociąga całe jego poddrzewo z globalnego mapowania** (`docs/mapowanie-ces-p1s.md`).
-  Strona **P1S wchodzi do drzewa jako dodatkowe zadania / informacja** (kolumna `Legacy WBS`, np. `AC-CAB.6.38`),
-  nie jako osobny zakres.
+  Strona **P1S wchodzi do drzewa jako dodatkowe zadania / informacja**, nie jako osobny zakres:
+  - cel P1S z mapowania – element CES nakładki rozstrzygany tymi samymi regułami co ekran Mapowanie (korekta
+    elementu → raport → dziedziczenie z projektu CES; projekt CES elementu z kolumny `Project definition`, gdy
+    elementu nie ma w kosztach) – status (`REPORT`, `OVERRIDE`, `INHERITED`, `UNMAPPED`) i cel przy elemencie,
+  - poddrzewo celu z `LOG.WBS` (PZLPROD, po `PARENT`) – element należy do najbliższego celu nad nim,
+  - kolumna `Legacy WBS` z Excela (np. `AC-CAB.6.38`).
 - Mapowanie CES ↔ P1S jest **globalne i administracyjne** – budowa nakładki tylko je **czyta**; nakładka nie
   zmienia mapowania, a mapowanie nie zależy od projektu.
 
@@ -63,11 +67,15 @@ czytane przy budowie nakładki), `docs/zrodla-danych.md` (struktura CES, drzewo 
 
 ### 4.1 Powiązanie nakładki z WP
 
-- Zakres projektu po stronie P1S to `Legacy WBS` elementów nakładki. Element P1S należy do projektu, gdy jest
-  równy `Legacy WBS` elementu nakładki albo leży pod nim (np. `AC-CAB.6.38.01` pod `AC-CAB.6.38`).
-- WP ze słownika „WP i CAM” podpina się pod węzeł nakładki z najdłuższym pasującym `Legacy WBS` (przy równych –
-  pod najgłębszy). Węzeł wirtualny ma WP swoich elementów; sumy węzła obejmują jego poddrzewo, każdy WP liczony raz.
+- Kody P1S węzła nakładki: `Legacy WBS` i cel z mapowania (rozdz. 2). Zakres projektu po stronie P1S to kody
+  P1S elementów nakładki i elementy `LOG.WBS` pod celami mapowania. Element P1S należy do projektu, gdy jest jednym
+  z tych kodów, leży pod celem w `LOG.WBS` albo jego kod zaczyna się od kodu z kropką (np. `AC-CAB.6.38.01` pod
+  `AC-CAB.6.38`).
+- WP ze słownika „WP i CAM” podpina się pod węzeł nakładki, którego kod P1S obejmuje element (najdłuższy pasujący
+  kod; przy kilku węzłach z tym kodem – pod najgłębszy). Węzeł wirtualny ma WP swoich elementów; sumy węzła obejmują jego poddrzewo, każdy WP liczony raz.
 - Element nakładki, pod którym nie ma żadnego WP, jest brakiem w bazie analitycznej (kreator, krok 5).
+- Element CES bez celu mapowania (`UNMAPPED`) i bez `Legacy WBS` nie ma kodu P1S – WARNING w gotowości projektu
+  (`docs/funkcjonalnosc.md`, F02); brak raportu mapowań albo PZLPROD – WARNING z powodem.
 
 ---
 

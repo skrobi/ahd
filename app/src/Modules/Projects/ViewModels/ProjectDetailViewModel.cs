@@ -24,6 +24,7 @@ public sealed class ProjectDetailViewModel : ObservableObject
     private readonly IFileDialogs _dialogs;
     private string _status = "";
     private Pill _readiness = new("muted", "");
+    private MappingInputs _mapping = MappingInputs.None;
 
     public ProjectDetailViewModel(ProjectService service, IFileDialogs dialogs, ProjectInfo project, Action back)
     {
@@ -36,6 +37,10 @@ public sealed class ProjectDetailViewModel : ObservableObject
         DiscardObjectives = new RelayCommand(_ => { Objectives.Load(_service.Objectives(Code)); Status = "Zmiany nakładki odrzucone."; }, _ => Objectives.IsDirty);
         ExportDictionaries = new RelayCommand(_ => DoExportDictionaries());
         CreateFolders = new RelayCommand(_ => DoCreateFolders());
+        RefreshMapping = new RelayCommand(_ => { LoadMapping(); Objectives.Load(Objectives.IsDirty ? Objectives.Tree : _service.Objectives(Code)); Reload(); Status = "Odświeżono mapowanie CES ↔ P1S."; },
+            _ => !Objectives.IsDirty);
+        Objectives.ResolveMapping = tree => ProjectService.Resolve(tree, _mapping);
+        LoadMapping();
         foreach (var item in ProjectDictionaries.ForType(project.Type))
         {
             var panel = new DictionaryPanelViewModel(item, project.Type);
@@ -79,6 +84,13 @@ public sealed class ProjectDetailViewModel : ObservableObject
     public ICommand DiscardObjectives { get; }
     public ICommand ExportDictionaries { get; }
     public ICommand CreateFolders { get; }
+    public ICommand RefreshMapping { get; }
+
+    private void LoadMapping()
+    {
+        Try(() => _mapping = _service.Mapping());
+        Objectives.MappingInfo = _mapping.Describe;
+    }
 
     private void Reload()
     {
@@ -89,7 +101,7 @@ public sealed class ProjectDetailViewModel : ObservableObject
                 panel.Rows = _service.Rows(panel.Item.Code, Code).Count;
                 panel.LastChange = _service.LastChange(panel.Item.Code, Code);
             }
-            var checks = _service.Readiness(Project, _service.Objectives(Code));
+            var checks = _service.Readiness(Project, _service.Objectives(Code), _mapping);
             Readiness.Clear();
             foreach (var check in checks)
                 Readiness.Add(check);
@@ -125,7 +137,7 @@ public sealed class ProjectDetailViewModel : ObservableObject
         IEnumerable<DictRow> wpRows = dictionary != ProjectDictionaries.WpCam && wpPreview is { HasErrors: false }
             ? wpPreview.Working
             : _service.Rows(ProjectDictionaries.WpCam, Code);
-        return _service.Context(Code, _service.Objectives(Code), wpRows);
+        return _service.Context(Code, _service.Objectives(Code), wpRows, _mapping);
     }
 
     private void LoadDictionary(DictionaryPanelViewModel panel)
@@ -163,7 +175,7 @@ public sealed class ProjectDetailViewModel : ObservableObject
             return;
         Try(() =>
         {
-            _service.ExportDictionaries(path, Code, Project.Type, _service.Objectives(Code));
+            _service.ExportDictionaries(path, Code, Project.Type, _service.Objectives(Code), _mapping);
             Status = $"Zapisano {path} – popraw w Excelu i wczytaj ponownie (przed zapisem zobaczysz różnice).";
         });
     }

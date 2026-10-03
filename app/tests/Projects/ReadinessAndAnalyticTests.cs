@@ -13,6 +13,7 @@ public sealed class ReadinessAndAnalyticTests
 {
     private static readonly Issue FoldersOk = new(CheckLevel.Pass, "ok");
     private static readonly Issue CamAccess = Issue.Warning("IT");
+    private static readonly Issue P1sSide = new(CheckLevel.Pass, "P1S");
 
     private static PoTree Objectives() => PerformanceObjectivesReader.Read(TestServices.TestData("Projekty", "PO_M28.xlsx")).Tree;
 
@@ -22,7 +23,7 @@ public sealed class ReadinessAndAnalyticTests
     [Fact]
     public void Project_without_wp_is_not_ready()
     {
-        var checks = ProjectReadiness.Check(ProjectTypes.Internal, Objectives(), Rows(0, 0), [], FoldersOk, CamAccess);
+        var checks = ProjectReadiness.Check(ProjectTypes.Internal, Objectives(), Rows(0, 0), [], P1sSide, FoldersOk, CamAccess);
         Assert.False(ProjectReadiness.IsReady(checks));
         Assert.Contains(checks, c => c.Level == CheckLevel.Error && c.Element == "WP i CAM");
         Assert.Contains(checks, c => c.Level == CheckLevel.Error && c.Element == "Harmonogram i budżet");
@@ -31,7 +32,7 @@ public sealed class ReadinessAndAnalyticTests
     [Fact]
     public void Project_with_dictionaries_is_ready_with_warnings_only()
     {
-        var checks = ProjectReadiness.Check(ProjectTypes.Sac, Objectives(), Rows(4, 3), ["Jan Obcy"], FoldersOk, CamAccess);
+        var checks = ProjectReadiness.Check(ProjectTypes.Sac, Objectives(), Rows(4, 3), ["Jan Obcy"], P1sSide, FoldersOk, CamAccess);
         Assert.True(ProjectReadiness.IsReady(checks));
         Assert.Contains(checks, c => c.Level == CheckLevel.Warning && c.Message.Contains("Jan Obcy"));
     }
@@ -39,10 +40,10 @@ public sealed class ReadinessAndAnalyticTests
     [Fact]
     public void Empty_objectives_and_cas_rates_block()
     {
-        var empty = ProjectReadiness.Check(ProjectTypes.Internal, new PoTree(), Rows(4, 3), [], FoldersOk, CamAccess);
+        var empty = ProjectReadiness.Check(ProjectTypes.Internal, new PoTree(), Rows(4, 3), [], P1sSide, FoldersOk, CamAccess);
         Assert.Contains(empty, c => c.Level == CheckLevel.Error && c.Element == "Performance Objectives");
 
-        var cas = ProjectReadiness.Check(ProjectTypes.Cas, Objectives(), Rows(4, 3), [], FoldersOk, CamAccess);
+        var cas = ProjectReadiness.Check(ProjectTypes.Cas, Objectives(), Rows(4, 3), [], P1sSide, FoldersOk, CamAccess);
         Assert.Contains(cas, c => c.Level == CheckLevel.Error && c.Message.Contains("O37"));
     }
 

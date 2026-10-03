@@ -43,10 +43,11 @@ public sealed class ProjectListViewModel : ObservableObject
         Items.Clear();
         try
         {
+            var mapping = _service.Mapping();
             foreach (var project in _service.Projects())
             {
                 var tree = _service.Objectives(project.Code);
-                var ready = ProjectReadiness.IsReady(_service.Readiness(project, tree));
+                var ready = ProjectReadiness.IsReady(_service.Readiness(project, tree, mapping));
                 Items.Add(new ProjectListItem(project.Code, project.Name, ProjectTypes.Label(project.Type),
                     $"{tree.ElementCount} el. · {tree.VirtualCount} węzłów",
                     ready ? new Pill("ok", "gotowy") : new Pill("crit", "niegotowy"),

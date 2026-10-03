@@ -136,7 +136,7 @@
                                 </DataGridTemplateColumn.CellTemplate>
                             </DataGridTemplateColumn>
                             <DataGridTextColumn Header="Element CES" Binding="{Binding WbsElement}" FontFamily="{StaticResource FMono}" />
-                            <DataGridTextColumn Header="P1S" Binding="{Binding LegacyWbs}" FontFamily="{StaticResource FMono}" />
+                            <DataGridTextColumn Header="P1S" Binding="{Binding P1s}" FontFamily="{StaticResource FMono}" />
                             <DataGridTextColumn Header="WP" Binding="{Binding Wps}" />
                             <DataGridTextColumn Header="CAM" Binding="{Binding Cams}" />
                             <DataGridTextColumn Header="BAC HOURS" Binding="{Binding BacHours, StringFormat=N2}" />

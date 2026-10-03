@@ -72,7 +72,7 @@ zmiana zakresu zadania w trakcie realizacji wymaga uzgodnienia.
 | Zadanie | Moduł | Zależy od | Otwarte kwestie | Status |
 |---|---|---|---|---|
 | [F4.1 Projekt i foldery](F4.1-projekt-i-foldery.md) | Projects | F0.7 | – | zrobione |
-| [F4.2 Nakładka Performance Objectives](F4.2-nakladka-performance-objectives.md) | Projects | F4.1, F3.2 | O47 | zrobione – strona P1S z mapowania po F3.2 |
+| [F4.2 Nakładka Performance Objectives](F4.2-nakladka-performance-objectives.md) | Projects | F4.1, F3.2 | O47 | zrobione |
 | [F4.3 Słowniki projektu](F4.3-slowniki-projektu.md) | Projects / MasterData | F1.1, F4.2 | O24, O37 | zrobione – Stawki CAS po O37 |
 | [F4.4 Kreator projektu](F4.4-kreator-projektu.md) | Projects | F4.1–F4.3 | O23 | zrobione |
 | [F4.5 Gotowość projektu i ekrany Projekty / Projekt](F4.5-gotowosc-projektu-i-ekrany-projekty-projekt.md) | Projects | F4.4 | – | zrobione – historia przebiegów po F5 |

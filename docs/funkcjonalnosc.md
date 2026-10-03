@@ -81,6 +81,7 @@ Lista kontrolna na ekranie projektu:
 | Kontrola | Poziom |
 |---|---|
 | nakładka Performance Objectives zawiera co najmniej jeden element | ERROR |
+| elementy nakładki mają stronę P1S (cel z mapowania CES ↔ P1S albo `Legacy WBS`) | WARNING |
 | wymagane słowniki projektu dla typu są wypełnione | ERROR – blokuje uruchomienie przebiegu |
 | WP mają przypisanego CAM | WARNING – bez tego nie powstaną pliki CAM |
 | struktura folderów zgodna z konfiguracją | WARNING |

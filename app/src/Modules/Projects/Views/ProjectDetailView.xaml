@@ -28,6 +28,7 @@
             <StackPanel>
                 <DockPanel Margin="0,0,0,6">
                     <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                        <Button Content="Odśwież mapowanie" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding RefreshMapping}" />
                         <Button Content="Odrzuć zmiany" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding DiscardObjectives}" />
                         <Button Content="Zapisz nakładkę" Style="{StaticResource BtnPrimary}" Command="{Binding SaveObjectives}" />
                     </StackPanel>

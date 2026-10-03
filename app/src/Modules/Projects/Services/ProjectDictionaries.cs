@@ -25,7 +25,7 @@ public static class ProjectDictionaries
     {
         Code = WpCam,
         Name = "WP i CAM",
-        Description = "Element P1S projektu → WP, CAM, Cost Category. Element P1S należy do projektu, gdy jest równy Legacy WBS elementu nakładki albo leży pod nim.",
+        Description = "Element P1S projektu → WP, CAM, Cost Category. Element P1S należy do projektu, gdy jest kodem P1S elementu nakładki (Legacy WBS albo cel z mapowania) albo leży pod nim.",
         Columns =
         [
             new("Element P1S", ColumnType.Text, Key: true),
@@ -120,8 +120,8 @@ public static class ProjectDictionaries
             {
                 if (context.P1sOwners.TryGetValue(element, out var owner))
                     yield return Issue.Error($"Element P1S {element} należy do projektu {owner}", at);
-                else if (context.ScopeOf(element) is null)
-                    yield return Issue.Error($"Element P1S {element} jest poza zakresem projektu (nie ma go wśród Legacy WBS nakładki ani pod nimi)", at);
+                else if (context.Scope.RootOf(element) is null)
+                    yield return Issue.Error($"Element P1S {element} jest poza zakresem projektu (nie jest Legacy WBS ani celem mapowania elementu nakładki i nie leży pod nimi)", at);
             }
             if (rows[i]["CAM"] is { } cam && !context.Persons.Contains(cam))
                 yield return Issue.Warning($"CAM „{cam}” spoza listy osób (słownik Osoby) – sprawdź pisownię", at);

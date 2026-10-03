@@ -102,7 +102,8 @@ na ekranie **Diagnostyka** i w stopce okna.
    z problemem G2 → **Mapowanie → Odśwież**: problem znika. **Rozwiązane** przy problemie – zamknięcie ręczne
    (wpis w dzienniku).
 9. **Projekty** – **+ Nowy projekt**: kod `M28`, nazwa, typ → **Performance Objectives**: **Wczytaj Excel**
-   `testdata/Projekty/PO_M28.xlsx` (8 elementów), dodaj węzeł wirtualny i przeciągnij do niego elementy →
+   `testdata/Projekty/PO_M28.xlsx` (8 elementów; kolumna „P1S z mapowania” – status i cel z mapowania CES ↔ P1S,
+   gdy zaimportowano raport mapowań), dodaj węzeł wirtualny i przeciągnij do niego elementy →
    **Słowniki projektu**: **Pobierz szablon Excel** (arkusz „WP i CAM” z elementami P1S z zakresu) albo
    **Wczytaj skoroszyt** `testdata/Projekty/Slowniki_M28.xlsx` → **Foldery** → **Podsumowanie**: baza analityczna
    (3 WP, 2 250 h, 75 000,50 materiałów) → **Utwórz projekt**. Bez słowników projekt powstaje, ale jest niegotowy
