@@ -1,4 +1,4 @@
-namespace PzlEv.Modules.Mapping.Models;
+namespace PzlEv.Shared.Models.Mapping;
 
 /// <summary>
 /// Wiersz raportu mapowań SAP↔CES (docs/mapowanie-ces-p1s.md, rozdz. 2) sprowadzony do rozstrzygania: element CES

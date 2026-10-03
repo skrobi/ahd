@@ -1,3 +1,4 @@
+using PzlEv.Shared.Models.Mapping;
 using PzlEv.Shared.Models;
 using PzlEv.Shared.Models.PzlProd;
 
@@ -22,7 +23,7 @@ public sealed record MappingState(
     public IReadOnlyList<Issue> Issues => Resolution.Issues;
 
     public P1sElement? FindP1s(string pspnr) =>
-        P1s?.FirstOrDefault(e => Services.MappingKeys.Key(e.Pspnr) == Services.MappingKeys.Key(pspnr));
+        P1s?.FirstOrDefault(e => Shared.Utils.Mapping.MappingKeys.Key(e.Pspnr) == Shared.Utils.Mapping.MappingKeys.Key(pspnr));
 }
 
 /// <summary>Wynik zapisu korekty: błędy i ostrzeżenia walidacji albo komunikat.</summary>

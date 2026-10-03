@@ -1,7 +1,6 @@
-using PzlEv.Modules.Mapping.Data;
-using PzlEv.Modules.Mapping.Models;
+using PzlEv.Shared.Models.Mapping;
 
-namespace PzlEv.Modules.Mapping.Services;
+namespace PzlEv.Shared.Utils.Mapping;
 
 /// <summary>
 /// Klucze porównań mapowania: kody i PSPNR bez spacji i bez rozróżniania wielkości liter; numer złożony z cyfr bez zer

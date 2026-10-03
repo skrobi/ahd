@@ -1,12 +1,11 @@
 using Dapper;
 using Microsoft.Data.SqlClient;
-using PzlEv.Modules.Mapping.Models;
-using PzlEv.Modules.Mapping.Services;
+using PzlEv.Shared.Models.Mapping;
 using PzlEv.Shared.Models.Db;
 using PzlEv.Shared.Utils.Data;
 using PzlEv.Shared.Utils.Data.Sql;
 
-namespace PzlEv.Modules.Mapping.Data;
+namespace PzlEv.Shared.Utils.Mapping;
 
 /// <summary>
 /// Dane mapowania w MS SQL: raport mapowań i elementy CES z CAN_Row (pola parserów MAPOWANIA i ACTUALS według slotów),

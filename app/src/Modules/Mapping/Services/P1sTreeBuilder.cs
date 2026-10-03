@@ -1,4 +1,6 @@
+using PzlEv.Shared.Utils.Mapping;
 using PzlEv.Modules.Mapping.Models;
+using PzlEv.Shared.Models.Mapping;
 using PzlEv.Shared.Models.PzlProd;
 
 namespace PzlEv.Modules.Mapping.Services;

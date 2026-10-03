@@ -1,6 +1,6 @@
-using PzlEv.Modules.Mapping.Models;
+using PzlEv.Shared.Models.Mapping;
 
-namespace PzlEv.Modules.Mapping.Data;
+namespace PzlEv.Shared.Utils.Mapping;
 
 /// <summary>
 /// Dane mapowania w bazie PZL-EV: raport mapowań (najnowszy zaimportowany plik parsera MAPOWANIA), elementy CES

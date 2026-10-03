@@ -1,9 +1,10 @@
-using PzlEv.Modules.Mapping.Data;
+using PzlEv.Shared.Utils.Mapping;
 using PzlEv.Modules.Mapping.Models;
+using PzlEv.Shared.Models.Mapping;
 using PzlEv.Shared.Models;
 using PzlEv.Shared.Models.Pipeline;
 using PzlEv.Shared.Models.PzlProd;
-using static PzlEv.Modules.Mapping.Services.MappingKeys;
+using static PzlEv.Shared.Utils.Mapping.MappingKeys;
 using PzlEv.Shared.Utils.Data;
 
 namespace PzlEv.Modules.Mapping.Services;
