@@ -223,6 +223,41 @@ public sealed class ImportServiceTests : IDisposable
     }
 
     [SqlFact]
+    public void File_save_chosen_as_deadlock_victim_is_retried_and_imported_once()
+    {
+        Use();
+        var path = CopySample(ImportFolder, "ACTUALS_PAF_01.csv");
+        // Druga sesja: blokuje CAN_Row (import czeka przy zapisie wierszy), potem czyta META_SourceFile – czeka na nowy
+        // wiersz pliku importu; SQL Server wybiera import na ofiarę zakleszczenia (niższy priorytet).
+        using var other = _database!.Sql.Open();
+        using var transaction = other.BeginTransaction();
+        Task? reader = null;
+        var progress = new Collect(p =>
+        {
+            if (reader is not null || p.Status?.StartsWith(ImportService.StageCheck) != true)
+                return;
+            Dapper.SqlMapper.Execute(other, $"SET DEADLOCK_PRIORITY HIGH; SELECT TOP (0) FileId FROM {_database.Sql.Table("can.Row")} WITH (TABLOCKX, HOLDLOCK)",
+                transaction: transaction);
+            reader = Task.Run(() =>
+            {
+                Thread.Sleep(1000);   // import wstawił wiersz pliku i czeka na CAN_Row
+                Dapper.SqlMapper.ExecuteScalar<int>(other, $"SELECT COUNT(*) FROM {_database.Sql.Table("meta.SourceFile")}", transaction: transaction,
+                    commandTimeout: 60);
+                transaction.Commit();
+            });
+        });
+
+        var run = _import.Run(progress);
+
+        reader!.Wait();
+        var result = Assert.Single(run.Files);
+        Assert.Equal(FileDecisions.Imported, result.Decision);
+        Assert.Contains(progress.Items, p => p.Status?.StartsWith($"{ImportService.StageRows} (ponowienie 2/{ImportService.DeadlockAttempts} po zakleszczeniu w bazie)") == true);
+        var file = _store.FindByHash(FileHash.Sha256(File.ReadAllBytes(path)))!;
+        Assert.Equal(6, Canonical(file.Id).Count);   // wiersze zapisane raz – pierwsza próba wycofana
+    }
+
+    [SqlFact]
     public void Import_does_not_start_while_another_person_imports()
     {
         Use();
