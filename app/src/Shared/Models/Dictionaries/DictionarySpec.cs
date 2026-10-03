@@ -18,6 +18,12 @@ public sealed class DictionarySpec
 
     public (string From, string To)? Validity { get; init; }
 
+    /// <summary>
+    /// Kolumny klucza mogą być puste (klucz = kombinacja wypełnionych pól, np. Wykluczenia: wystarczy jedno z trzech).
+    /// Wymagalność pól sprawdzają wtedy reguły szczegółowe słownika.
+    /// </summary>
+    public bool EmptyKeyPartsAllowed { get; init; }
+
     /// <summary>Reguły szczegółowe na całym zestawie wierszy (po normalizacji wartości).</summary>
     public Func<IReadOnlyList<DictRow>, IEnumerable<Issue>>? Rules { get; init; }
 

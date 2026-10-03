@@ -109,8 +109,8 @@ Każdy moduł jest folderem `Modules/<Folder>/` i właścicielem swoich ekranów
 | Pulpit | `Dashboard` | pulpit, „Wymaga uwagi”, ostatnie zdarzenia (F07) | – | `docs/funkcjonalnosc.md` |
 | Import | `Import` | pobranie i załadowanie plików, parsery źródeł (F05) | G1 | `docs/zrodla-danych.md` |
 | Mapping | `Mapping` | mapowanie CES ↔ P1S (F04) | G2 | `docs/mapowanie-ces-p1s.md` |
-| Master Data | `MasterData` | słowniki globalne i projektu (F03) | G3 | `docs/slowniki.md` |
-| Projects | `Projects` | projekty, kreator, Performance Objectives, gotowość (F01, F02) | – | `docs/performance-objectives.md` |
+| Master Data | `MasterData` | ekran Słowniki – słowniki globalne (F03); mechanizm słowników jest wspólny (`Shared/Utils/Dictionaries`) | G3 | `docs/slowniki.md` |
+| Projects | `Projects` | projekty, kreator, Performance Objectives, słowniki projektu, gotowość, foldery projektu (F01, F02) | – | `docs/performance-objectives.md` |
 | Runs | `Runs` | przebiegi, ekran przebiegu, przypięcie stanu, walidacja, zamknięcie (F06) | P0, P1, P2, Z | `docs/pipeline-fazy.md`, `docs/model-danych.md` |
 | Reconciliation | `Reconciliation` | łączenie źródeł, pliki dla finansów | P3, P4 | `docs/pipeline-fazy.md` |
 | CAM / Progress | `Progress` | zaawansowanie: produkcja, uzupełnienia, pliki CAM | P5, P6, P7 | `docs/pipeline-fazy.md` |
@@ -125,7 +125,7 @@ z których korzysta każdy moduł; pokazują je Pulpit i ekran Przebiegu.
 
 Jeden projekt, moduły jako foldery; przestrzeń nazw odpowiada ścieżce folderu (`PzlEv.Modules.Dashboard.ViewModels`
 ↔ `Modules/Dashboard/ViewModels/`). Wzorzec pokazuje kod `app/src/` – moduły z pełnym ekranem
-(Pulpit, Słowniki, Import, Administracja) i ekrany zastępcze z przypisanymi etapami dla pozostałych.
+(Pulpit, Słowniki, Import, Projekty, Administracja) i ekrany zastępcze z przypisanymi etapami dla pozostałych.
 
 ```text
 App.xaml(.cs)                      start: konfiguracja → usługi wspólne → moduły → powłoka; logowanie
@@ -141,7 +141,8 @@ Shared/
   Utils/Config/                    konfiguracja pzl-ev.json
   Utils/Data/                      baza MS SQL (Sql/: połączenie, migracje, dziennik, problemy), czas, użytkownik, blokady operacji, usługi wspólne
   Utils/Files/                     Excel, CSV/TXT, liczby polskie, daty, sygnatura kolumn, SHA-256
-  Models/                          modele wspólne, klucze modułów, wynik kontroli (Issue), kontrakt etapu (Pipeline)
+  Utils/Dictionaries/              mechanizm słowników (walidacja, zapis z historią, wymiana przez Excel, magazyn SQL) i słowniki globalne – używają go moduły Słowniki i Projekty
+  Models/                          modele wspólne, klucze modułów, wynik kontroli (Issue), kontrakt etapu (Pipeline), opisy słowników (Dictionaries)
   Models/Db/                       wiersze tabel schematu (meta, stg, can, dict) – wspólne jak schemat bazy
   Models/Sources/                  parsery i układy kolumn źródeł (kontrakt danych)
   Views/Templates/                 wygląd całej aplikacji: paleta, style, tabele, układ strony

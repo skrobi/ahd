@@ -71,11 +71,11 @@ zmiana zakresu zadania w trakcie realizacji wymaga uzgodnienia.
 
 | Zadanie | Moduł | Zależy od | Otwarte kwestie | Status |
 |---|---|---|---|---|
-| [F4.1 Projekt i foldery](F4.1-projekt-i-foldery.md) | Projects | F0.7 | – | do zrobienia |
-| [F4.2 Nakładka Performance Objectives](F4.2-nakladka-performance-objectives.md) | Projects | F4.1, F3.2 | O46, O47 | do zrobienia |
-| [F4.3 Słowniki projektu](F4.3-slowniki-projektu.md) | Projects / MasterData | F1.1, F4.2 | O24, O37, O44 | do zrobienia |
-| [F4.4 Kreator projektu](F4.4-kreator-projektu.md) | Projects | F4.1–F4.3 | O23 | do zrobienia |
-| [F4.5 Gotowość projektu i ekrany Projekty / Projekt](F4.5-gotowosc-projektu-i-ekrany-projekty-projekt.md) | Projects | F4.4 | – | do zrobienia |
+| [F4.1 Projekt i foldery](F4.1-projekt-i-foldery.md) | Projects | F0.7 | – | zrobione |
+| [F4.2 Nakładka Performance Objectives](F4.2-nakladka-performance-objectives.md) | Projects | F4.1, F3.2 | O47 | zrobione – strona P1S z mapowania po F3.2 |
+| [F4.3 Słowniki projektu](F4.3-slowniki-projektu.md) | Projects / MasterData | F1.1, F4.2 | O24, O37 | zrobione – Stawki CAS po O37 |
+| [F4.4 Kreator projektu](F4.4-kreator-projektu.md) | Projects | F4.1–F4.3 | O23 | zrobione |
+| [F4.5 Gotowość projektu i ekrany Projekty / Projekt](F4.5-gotowosc-projektu-i-ekrany-projekty-projekt.md) | Projects | F4.4 | – | zrobione – historia przebiegów po F5 |
 
 ## F5. Przebieg – rdzeń (P0, P1, P2, Z)
 
@@ -137,7 +137,7 @@ zmiana zakresu zadania w trakcie realizacji wymaga uzgodnienia.
 | O35, O15, O30, O36 – metody EV, ETC, ACWP, data stanu | Finanse | F8.1 |
 | O16, O17 – układ plików dla finansów i CAM | Finanse, CAM | F6.2, F7.3 |
 | O10 – definicja vAHDD | właściciele PZLPROD | F7.1 |
-| O44, O45 – powiązanie nakładki z WP | zespół | F4.3, F5.2 |
+| O45 – przypisanie kosztów i zaawansowania do węzłów nakładki | zespół | F5.2 |
 | O11, O33, O34 | zespół | F7.2, F6.1, F7.3 |
 
 Poza planem (v2): rola CAM i PM w aplikacji, raporty Power BI.

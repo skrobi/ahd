@@ -1,0 +1,19 @@
+<UserControl x:Class="PzlEv.Modules.Projects.Views.ProjectsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:PzlEv.Modules.Projects.ViewModels"
+             xmlns:views="clr-namespace:PzlEv.Modules.Projects.Views">
+    <!-- Moduł Projekty: strona wybrana w ProjectsViewModel.Page (lista, kreator, projekt). -->
+    <UserControl.Resources>
+        <DataTemplate DataType="{x:Type vm:ProjectListViewModel}">
+            <views:ProjectListView />
+        </DataTemplate>
+        <DataTemplate DataType="{x:Type vm:WizardViewModel}">
+            <views:WizardView />
+        </DataTemplate>
+        <DataTemplate DataType="{x:Type vm:ProjectDetailViewModel}">
+            <views:ProjectDetailView />
+        </DataTemplate>
+    </UserControl.Resources>
+    <ContentControl Content="{Binding Page}" />
+</UserControl>

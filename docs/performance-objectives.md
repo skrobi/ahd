@@ -39,8 +39,13 @@ czytane przy budowie nakładki), `docs/zrodla-danych.md` (struktura CES, drzewo 
   wczytanie z **Excela** (układ w rozdz. 5) albo budowa ręczna.
 - **Edycja w aplikacji:** dodawanie i przenoszenie elementów, tworzenie wirtualnych węzłów grupujących,
   zmiana nazw.
-- **Odświeżenie na żądanie:** ponowny import Excela aktualizuje elementy pochodzące z SAP; zachowanie
-  wirtualnych węzłów i ręcznych zmian przy odświeżeniu – O47.
+- **Odświeżenie na żądanie:** ponowny import Excela na ekranie projektu zastępuje strukturę strukturą z pliku;
+  elementy o tym samym `WBS element` zachowują identyfikator i historię. Węzły wirtualne i ręczne zmiany nie są
+  przenoszone – trzeba je odtworzyć przed zapisem (rozwiązanie tymczasowe; docelowo – O47).
+- **Element CES należy do co najwyżej jednej nakładki** (jednego projektu) – element z nakładki innego projektu
+  jest odrzucany przy wczytaniu i zapisie (ERROR z kodem projektu, który go ma).
+- **Elementy w strukturze:** przenoszenie z poddrzewem (przeciągnięcie na inny węzeł albo na korzeń, zmiana kolejności,
+  poziom wyżej); usunięcie węzła przenosi jego elementy poziom wyżej. Level jest przeliczany z głębokości drzewa.
 - Nakładka należy do projektu i ma historię zmian (`docs/model-danych.md`, rozdz. 3). Przebieg czyta ją
   w stanie na swój znacznik stanu (`docs/model-danych.md`, rozdz. 4.2).
 - Nie jest to automatyczny import RABIT – to ręczny Excel eksportowany z SAP.
@@ -52,9 +57,17 @@ czytane przy budowie nakładki), `docs/zrodla-danych.md` (struktura CES, drzewo 
 | Pojęcie | Relacja |
 |---|---|
 | Mapowanie CES ↔ P1S | globalne; czytane przy budowie nakładki, bez wpływu na projekt (rozdz. 2) |
-| Słownik „WP i CAM” | **osobny** (`docs/slowniki.md`, rozdz. 3); powiązanie węzła nakładki z WP – O44 |
+| Słownik „WP i CAM” | **osobny** (`docs/slowniki.md`, rozdz. 3); powiązanie z węzłem nakładki przez `Legacy WBS` (rozdz. 4.1) |
 | Zakres projektu | wyznaczany przez nakładkę (zastępuje drzewo P1S jako mechanizm zakresu) |
 | Koszty i zaawansowanie | przypisywane do węzłów nakładki na późniejszym etapie, z plików (rozdz. 6) |
+
+### 4.1 Powiązanie nakładki z WP
+
+- Zakres projektu po stronie P1S to `Legacy WBS` elementów nakładki. Element P1S należy do projektu, gdy jest
+  równy `Legacy WBS` elementu nakładki albo leży pod nim (np. `AC-CAB.6.38.01` pod `AC-CAB.6.38`).
+- WP ze słownika „WP i CAM” podpina się pod węzeł nakładki z najdłuższym pasującym `Legacy WBS` (przy równych –
+  pod najgłębszy). Węzeł wirtualny ma WP swoich elementów; sumy węzła obejmują jego poddrzewo, każdy WP liczony raz.
+- Element nakładki, pod którym nie ma żadnego WP, jest brakiem w bazie analitycznej (kreator, krok 5).
 
 ---
 
@@ -98,7 +111,5 @@ tworzenia i utrzymania projektu.
 
 | # | Kwestia |
 |---|---|
-| O44 | Powiązanie węzła nakładki (w tym wirtualnego) z WP ze słownika „WP i CAM” |
 | O45 | Przypisywanie kosztów i zaawansowania do węzłów nakładki (z plików) – późniejszy etap |
-| O46 | Czy element CES należy do co najwyżej jednej nakładki (jednego projektu) i jak rozstrzygać konflikt |
-| O47 | Odświeżenie z SAP: aktualizacja elementów a zachowanie wirtualnych węzłów i ręcznych zmian |
+| O47 | Odświeżenie z SAP: zachowanie wirtualnych węzłów i ręcznych zmian (dziś – nie są przenoszone, rozdz. 3) |
