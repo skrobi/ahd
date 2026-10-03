@@ -1,4 +1,4 @@
-namespace PzlEv.Modules.Mapping.Models;
+namespace PzlEv.Shared.Models.Mapping;
 
 /// <summary>
 /// Element WBS CES z danych kanonicznych ACTUALS (WBS Element, Project Definition): czy ma koszt (kwota różna od zera)

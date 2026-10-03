@@ -1,4 +1,4 @@
-namespace PzlEv.Modules.Mapping.Models;
+namespace PzlEv.Shared.Models.Mapping;
 
 /// <summary>Wynik rozstrzygania mapowania elementu CES (docs/mapowanie-ces-p1s.md, rozdz. 5) – wyliczany, nie zapisywany.</summary>
 public static class MappingStatuses

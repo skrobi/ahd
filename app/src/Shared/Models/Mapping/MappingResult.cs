@@ -1,6 +1,6 @@
 using PzlEv.Shared.Models;
 
-namespace PzlEv.Modules.Mapping.Models;
+namespace PzlEv.Shared.Models.Mapping;
 
 /// <summary>
 /// Wynik rozstrzygania dla elementu CES: status, cel P1S (PSPNR i kod WBS; kod bez PSPNR – cel spoza LOG.WBS),

@@ -1,4 +1,4 @@
-namespace PzlEv.Modules.Mapping.Models;
+namespace PzlEv.Shared.Models.Mapping;
 
 /// <summary>
 /// Wersja korekty mapowania (dict.MappingCorrection, docs/mapowanie-ces-p1s.md, rozdz. 8): element albo projekt CES

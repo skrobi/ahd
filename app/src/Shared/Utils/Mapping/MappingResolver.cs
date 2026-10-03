@@ -1,8 +1,8 @@
-using PzlEv.Modules.Mapping.Models;
+using PzlEv.Shared.Models.Mapping;
 using PzlEv.Shared.Models;
 using PzlEv.Shared.Models.PzlProd;
 
-namespace PzlEv.Modules.Mapping.Services;
+namespace PzlEv.Shared.Utils.Mapping;
 
 /// <summary>
 /// Rozstrzyganie mapowania elementów CES (docs/mapowanie-ces-p1s.md, rozdz. 5): 1. korekta elementu → OVERRIDE,
