@@ -33,7 +33,7 @@ Role, zakres danych i egzekwowanie – `docs/uprawnienia.md`.
 | **Przebieg** | kroki i etapy (F06), panel wybranego etapu, znacznik stanu, problemy, rewizje, dziennik | akcje etapów |
 | **Słowniki** | słowniki globalne i projektu: tabela z filtrowaniem, historia zmian (F03) | dodaj / edytuj / zamknij ważność wiersza; pobierz / wczytaj Excel |
 | **Mapowanie CES ↔ P1S** | dwa drzewa, statusy, węzeł „Nieprzypisane” (F04) | korekta elementu / projektu CES, usunięcie korekty, historia |
-| **Administracja** | definicje źródeł, lokalizacje RABIT, role i grupy AD (F08) | dodaj / zmień |
+| **Administracja** | definicje źródeł, parsery, lokalizacje RABIT, role i grupy AD (F08) | dodaj / zmień |
 
 Nagłówek aplikacji – `docs/architektura.md`, rozdz. 3.
 
@@ -120,13 +120,16 @@ Ekran opisany w `docs/mapowanie-ces-p1s.md`, rozdz. 11; reguły – tamże.
 
 - **„Wymaga uwagi”** – otwarte problemy (`docs/pipeline-fazy.md`, rozdz. 1.3) i etapy wymagające akcji, m.in.:
   brak przebiegu w bieżącym tygodniu, etapy z błędem, pliki czekające na potwierdzenie, zmiany po przypięciu,
-  projekty niegotowe, elementy `UNMAPPED` z kosztem, pliki nierozpoznane.
+  projekty niegotowe, elementy `UNMAPPED` z kosztem, pliki nierozpoznane. Przy problemie – „Rozwiązane”
+  (ręczne zamknięcie z wpisem w dzienniku); problem znika też sam, gdy przyczyna zniknie.
 - **„Ostatnie zdarzenia”** – przekrój dzienników wszystkich przebiegów.
 - Dziennik przebiegu: czas, użytkownik, opis – od najnowszego.
 
 ### F08. Administracja
 
 - Definicje źródeł (`docs/zrodla-danych.md`, rozdz. 2) – z historią: dodanie, zmiana, dezaktywacja, usunięcie.
+- Parsery (`docs/zrodla-danych.md`, rozdz. 2) – układ kolumn pliku, typy i pola wymagane; definicja źródła wskazuje
+  parser. Z historią: dodanie, zmiana, dezaktywacja.
 - Lokalizacje RABIT (`docs/zrodla-danych.md`, rozdz. 3): dodanie, zmiana, dezaktywacja.
 - Role i przypisane grupy AD (`docs/uprawnienia.md`, rozdz. 3).
 

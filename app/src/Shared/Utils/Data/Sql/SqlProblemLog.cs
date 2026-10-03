@@ -5,9 +5,11 @@ using PzlEv.Shared.Models.Pipeline;
 
 namespace PzlEv.Shared.Utils.Data.Sql;
 
-/// <summary>Rejestr problemów w bazie (META_Problem).</summary>
-public sealed class SqlProblemLog(SqlDatabase db, IClock clock) : IProblemLog
+/// <summary>Rejestr problemów w bazie (META_Problem): dopisywanie, odczyt, rozwiązywanie (kto, kiedy, jak).</summary>
+public sealed class SqlProblemLog(SqlDatabase db, IClock clock, ICurrentUser user) : IProblemLog
 {
+    private const string Columns = "Id, At, Level, CheckName, Area, Element, Message, Reference, Resolved, ResolvedAt, ResolvedBy, Resolution";
+
     private readonly string _table = db.Table("meta.Problem");
 
     public void Add(string area, string check, Issue issue, string? reference = null)
@@ -22,11 +24,22 @@ public sealed class SqlProblemLog(SqlDatabase db, IClock clock) : IProblemLog
 
     public IReadOnlyList<ProblemRecord> Open() => Query("WHERE Resolved = 0 ORDER BY Id", null);
 
+    public int Resolve(IReadOnlyCollection<long> ids, string resolution)
+    {
+        if (ids.Count == 0)
+            return 0;
+        using var connection = db.Open();
+        return connection.Execute(
+            $"UPDATE {_table} SET Resolved = 1, ResolvedAt = @now, ResolvedBy = @user, Resolution = @resolution WHERE Resolved = 0 AND Id IN @ids",
+            new { now = clock.Now, user = user.Account, resolution, ids });
+    }
+
     private List<ProblemRecord> Query(string where, object? parameters)
     {
         using var connection = db.Open();
-        return connection.Query<ProblemRow>($"SELECT Id, At, Level, CheckName, Area, Element, Message, Reference, Resolved FROM {_table} {where}", parameters)
-            .Select(r => new ProblemRecord(r.Id, r.At, Enum.Parse<CheckLevel>(r.Level), r.CheckName, r.Area, r.Element, r.Message, r.Reference, r.Resolved))
+        return connection.Query<ProblemRow>($"SELECT {Columns} FROM {_table} {where}", parameters)
+            .Select(r => new ProblemRecord(r.Id, r.At, Enum.Parse<CheckLevel>(r.Level), r.CheckName, r.Area, r.Element, r.Message, r.Reference,
+                r.Resolved, r.ResolvedAt, r.ResolvedBy, r.Resolution))
             .ToList();
     }
 
@@ -41,5 +54,8 @@ public sealed class SqlProblemLog(SqlDatabase db, IClock clock) : IProblemLog
         public string Message { get; set; } = "";
         public string? Reference { get; set; }
         public bool Resolved { get; set; }
+        public DateTimeOffset? ResolvedAt { get; set; }
+        public string? ResolvedBy { get; set; }
+        public string? Resolution { get; set; }
     }
 }

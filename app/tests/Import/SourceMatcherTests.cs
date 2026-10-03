@@ -14,7 +14,7 @@ public class SourceMatcherTests
     public void Temporary_files_are_ignored(string name, bool ignored) => Assert.Equal(ignored, SourceMatcher.IsIgnored(name));
 
     private static SourceDefinitionRow Definition(string code, string prefix) =>
-        new(1, 1, 1, code, prefix, "", [], "", "", 0, true, DateTimeOffset.Now, "", null, null);
+        new(1, 1, 1, code, prefix, "", "", true, DateTimeOffset.Now, "", null, null);
 
     [Theory]
     [InlineData("ACTUALS_*")]

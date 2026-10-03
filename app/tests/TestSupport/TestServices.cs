@@ -16,7 +16,7 @@ public sealed class TestServices
     {
         var config = new AppConfig("TEST", networkRoot, sql.Settings);
         var locks = new FileOperationLock(Path.Combine(networkRoot, "00_Global", "RABIT"), Clock, User);
-        return new AppServices(config, Clock, User, sql, new SqlJournal(sql, Clock, User), new SqlProblemLog(sql, Clock), "test", locks);
+        return new AppServices(config, Clock, User, sql, new SqlJournal(sql, Clock, User), new SqlProblemLog(sql, Clock, User), "test", locks);
     }
 
     /// <summary>Plik danych wzorcowych (app/testdata) skopiowany do katalogu testów.</summary>

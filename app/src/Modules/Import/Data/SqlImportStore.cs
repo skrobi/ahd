@@ -1,13 +1,18 @@
+using System.Globalization;
 using Dapper;
 using Microsoft.Data.SqlClient;
+using PzlEv.Modules.Import.Models;
 using PzlEv.Shared.Models.Db;
+using PzlEv.Shared.Models.Sources;
 using PzlEv.Shared.Utils.Data.Sql;
+using PzlEv.Shared.Utils.Files;
 
 namespace PzlEv.Modules.Import.Data;
 
 /// <summary>
-/// Import w bazie: META_ImportBatch, META_SourceFile, META_SourceFileSeen, STG_RawRow, CAN_Actuals – ten sam kontrakt
-/// co wersja w pamięci. Wiersze surowe i kanoniczne zapisywane wsadowo (SqlBulkCopy) w transakcji z wersją pliku.
+/// Import w bazie: META_ImportBatch, META_SourceFile, META_SourceFileSeen i dane kanoniczne (CAN_Row – sloty pól
+/// parsera). Wersja pliku zapisywana w jednej transakcji: dane kanoniczne strumieniowo (SqlBulkCopy) z kontrolą
+/// przepływu w bazie. Treść pliku nie jest przechowywana – dane są w CAN_Row (migracja 008).
 /// </summary>
 public sealed class SqlImportStore(SqlDatabase db) : IImportStore
 {
@@ -16,8 +21,8 @@ public sealed class SqlImportStore(SqlDatabase db) : IImportStore
     private readonly string _batches = db.Table(DbTables.ImportBatch);
     private readonly string _files = db.Table(DbTables.SourceFile);
     private readonly string _seen = db.Table(DbTables.SourceFileSeen);
-    private readonly string _raw = db.Table(DbTables.RawRow);
-    private readonly string _actuals = db.Table(DbTables.Actuals);
+    private readonly string _canonical = db.Table(DbTables.CanonicalRow);
+    private readonly string _parsers = db.Table(DbTables.Parser);
 
     private const string BatchColumns = "BatchId AS Id, StartedAt, FinishedAt, UserName AS [User], Machine, AppVersion, Files, Imported, Skipped, Duplicates, Unrecognized, Errors, Status";
 
@@ -27,24 +32,21 @@ public sealed class SqlImportStore(SqlDatabase db) : IImportStore
 
     private const string SeenColumns = "Id, BatchId, Location, FileName, Size, ModifiedAt, Sha256, Decision, SourceCode, DataRows, Description";
 
-    private static readonly (string Name, Type Type)[] RawColumns = [("FileId", typeof(long)), ("RowNumber", typeof(int)), ("Data", typeof(string))];
-
-    private static readonly (string Name, Type Type)[] ActualsColumns =
-    [
-        ("FileId", typeof(long)), ("RowNumber", typeof(int)), ("ParserVersion", typeof(int)), ("ProjectDefinition", typeof(string)),
-        ("WbsElement", typeof(string)), ("CostElement", typeof(string)), ("CostElementDescr", typeof(string)), ("CostElementName", typeof(string)),
-        ("CoObjectName", typeof(string)), ("TransactionCurrency", typeof(string)), ("ValueTranCurr", typeof(decimal)), ("ObjectCurrency", typeof(string)),
-        ("ValueObjCrcy", typeof(decimal)), ("ReportCurrency", typeof(string)), ("ValueRepCur", typeof(decimal)), ("TotalQuantity", typeof(decimal)),
-        ("PartnerCctr", typeof(string)), ("SourceObjectName", typeof(string)), ("PartnerObjectClass", typeof(string)), ("PartnerObject", typeof(string)),
-        ("OriginalMaterial", typeof(string)), ("OriginalMaterialDescription", typeof(string)), ("FiscalYear", typeof(int)), ("CreatedOn", typeof(DateTime)),
-        ("Period", typeof(int)),
-    ];
+    /// <summary>Czas na zapis i kontrolę dużego pliku (miliony wierszy) w jednej transakcji.</summary>
+    private const int LongTimeout = 1800;
 
     public IReadOnlyList<SourceDefinitionRow> ActiveDefinitions()
     {
         using var connection = db.Open();
         return connection.Query<SqlDefinitionRow>($"SELECT {SqlDefinitionRow.Columns} FROM {_definitions} WHERE SupersededAt IS NULL AND Active = 1 ORDER BY Code")
             .Select(r => r.ToRow()).ToList();
+    }
+
+    public ParserRow? ActiveParser(string code)
+    {
+        using var connection = db.Open();
+        return connection.QuerySingleOrDefault<SqlParserRow>(
+            $"SELECT {SqlParserRow.Columns} FROM {_parsers} WHERE SupersededAt IS NULL AND Active = 1 AND Code = @code", new { code })?.ToRow();
     }
 
     public IReadOnlyList<SourceLocationRow> ActiveLocations()
@@ -88,11 +90,11 @@ public sealed class SqlImportStore(SqlDatabase db) : IImportStore
         return connection.QuerySingleOrDefault<FileRow>($"SELECT {FileColumns} FROM {_files} WHERE Sha256 = @sha256", new { sha256 })?.ToRow();
     }
 
-    public long? RegisterFile(SourceFileRow file, IReadOnlyList<string?[]> rows)
+    public StoredFile? StoreFile(SourceFileRow file, CanonicalData? canonical, Action<string>? stage = null)
     {
         try
         {
-            return db.InTransaction<long?>((connection, transaction) =>
+            return db.InTransaction<StoredFile?>((connection, transaction) =>
             {
                 var id = connection.ExecuteScalar<long>(
                     $"""
@@ -106,33 +108,55 @@ public sealed class SqlImportStore(SqlDatabase db) : IImportStore
                     {
                         file.Sha256, file.Location, file.FileName, file.SourceCode, file.Size, file.ModifiedAt, file.FileType, file.Sheet, file.Encoding,
                         file.Delimiter, Columns = SqlJson.Write(file.Columns), file.Signature, file.RowCount, file.BatchId, file.ImportedAt, file.ImportedBy,
-                        file.CanonicalStatus, file.CanonicalRows, file.ParserVersion,
+                        CanonicalStatus = canonical is null ? file.CanonicalStatus : "utworzone",
+                        CanonicalRows = canonical is null ? file.CanonicalRows : 0,
+                        ParserVersion = canonical?.Parser.Version ?? file.ParserVersion,
                     },
                     transaction);
-                SqlBulk.Insert(connection, transaction, _raw, RawColumns, rows.Select((r, i) => new object?[] { id, i + 1, SqlJson.Write(r) }));
-                return id;
+
+                var stored = new StoredFile(id, 0, new Dictionary<string, decimal>());
+                if (canonical is not null)
+                {
+                    var parserId = canonical.Parser.ParserId;
+                    var version = canonical.Parser.Version;
+                    SqlBulk.Insert(connection, transaction, _canonical, SqlCanonical.BulkColumns(canonical.Fields),
+                        canonical.Rows.Select(r => (object?[])[id, r.RowNumber, parserId, version, .. r.Values]));
+                    var totals = canonical.Totals();   // błędy treści pliku – wyjątek, transakcja wycofana
+                    stage?.Invoke("kontrola w bazie (liczba wierszy i sumy)");
+                    stored = Verify(connection, transaction, id, canonical, totals);
+                    connection.Execute($"UPDATE {_files} SET DataRows = @rows, CanonicalRows = @rows WHERE FileId = @id",
+                        new { id, rows = totals.Rows }, transaction);
+                }
+
+                stage?.Invoke("zatwierdzanie zapisu");
+                return stored;
             });
         }
         catch (SqlException ex) when (SqlDatabase.IsDuplicateKey(ex))
         {
-            return null;   // ta sama treść zarejestrowana w międzyczasie (np. przez inną osobę)
+            return null;   // ta sama treść zapisana w międzyczasie (np. przez inną osobę)
         }
     }
 
-    public void CompleteCanonical(long fileId, string status, IReadOnlyList<ActualsRow> rows, int? parserVersion) =>
-        db.InTransaction((connection, transaction) =>
-        {
-            SqlBulk.Insert(connection, transaction, _actuals, ActualsColumns, rows.Select(r => new object?[]
-            {
-                r.FileId, r.RowNumber, r.ParserVersion, r.ProjectDefinition, r.WbsElement, r.CostElement, r.CostElementDescr, r.CostElementName,
-                r.CoObjectName, r.TransactionCurrency, r.ValueTranCurr, r.ObjectCurrency, r.ValueObjCrcy, r.ReportCurrency, r.ValueRepCur,
-                r.TotalQuantity, r.PartnerCctr, r.SourceObjectName, r.PartnerObjectClass, r.PartnerObject, r.OriginalMaterial,
-                r.OriginalMaterialDescription, r.FiscalYear, r.CreatedOn?.ToDateTime(TimeOnly.MinValue), r.Period,
-            }));
-            return connection.Execute(
-                $"UPDATE {_files} SET CanonicalStatus = @status, CanonicalRows = @count, ParserVersion = @parserVersion WHERE FileId = @fileId",
-                new { status, count = rows.Count, parserVersion, fileId }, transaction);
-        });
+    /// <summary>Kontrola przepływu w bazie: liczba wierszy i sumy pól liczbowych pliku w CAN_Row = odczytane z pliku.</summary>
+    private StoredFile Verify(SqlConnection connection, SqlTransaction transaction, long fileId, CanonicalData canonical, CanonicalTotals totals)
+    {
+        var decimals = canonical.Fields.Where(f => f.Type == FieldTypes.Decimal).ToList();
+        var sums = string.Concat(decimals.Select((f, i) => $", ISNULL(SUM({SqlCanonical.Slot(f)}), 0) AS S{i}"));
+        var row = (IDictionary<string, object>)connection.QuerySingle(
+            $"SELECT COUNT_BIG(*) AS Rows{sums} FROM {_canonical} WHERE FileId = @fileId AND ParserId = @parserId",
+            new { fileId, parserId = canonical.Parser.ParserId }, transaction, LongTimeout);
+        var count = Convert.ToInt32(row["Rows"], CultureInfo.InvariantCulture);
+        var stored = decimals.Select((f, i) => (f.Field, Sum: Convert.ToDecimal(row[$"S{i}"], CultureInfo.InvariantCulture)))
+            .ToDictionary(s => s.Field, s => s.Sum);
+        var differences = decimals
+            .Where(f => stored[f.Field] != totals.Sums.GetValueOrDefault(f.Field))
+            .Select(f => $", suma {f.Column} {totals.Sums.GetValueOrDefault(f.Field)}/{stored[f.Field]}")
+            .ToList();
+        if (count != totals.Rows || differences.Count > 0)
+            throw new CanonicalFlowException($"dane kanoniczne w bazie niezgodne z plikiem (wiersze {totals.Rows}/{count}{string.Concat(differences)})");
+        return new StoredFile(fileId, count, stored);
+    }
 
     public void RecordSeen(SourceFileSeenRow seen)
     {
@@ -175,21 +199,8 @@ public sealed class SqlImportStore(SqlDatabase db) : IImportStore
         return connection.QuerySingleOrDefault<FileRow>($"SELECT {FileColumns} FROM {_files} WHERE FileId = @fileId", new { fileId })?.ToRow();
     }
 
-    public IReadOnlyList<RawRowRecord> RawRows(long fileId)
-    {
-        using var connection = db.Open();
-        return connection.Query<(long FileId, int RowNumber, string Data)>($"SELECT FileId, RowNumber, Data FROM {_raw} WHERE FileId = @fileId ORDER BY RowNumber", new { fileId })
-            .Select(r => new RawRowRecord(r.FileId, r.RowNumber, SqlJson.Values(r.Data)))
-            .ToList();
-    }
-
-    public IReadOnlyList<ActualsRow> Actuals(long fileId)
-    {
-        using var connection = db.Open();
-        return connection.Query<ActualsDbRow>($"SELECT * FROM {_actuals} WHERE FileId = @fileId ORDER BY RowNumber, ParserVersion", new { fileId })
-            .Select(r => r.ToRow())
-            .ToList();
-    }
+    public IReadOnlyList<IReadOnlyDictionary<string, object?>> CanonicalRows(ParserRow parser, long fileId) =>
+        SqlCanonical.Rows(db, parser, fileId);
 
     private sealed class BatchRow
     {
@@ -253,43 +264,5 @@ public sealed class SqlImportStore(SqlDatabase db) : IImportStore
         public string Description { get; set; } = "";
 
         public SourceFileSeenRow ToRow() => new(Id, BatchId, Location, FileName, Size, ModifiedAt, Sha256, Decision, SourceCode, DataRows, Description);
-    }
-
-    private sealed class ActualsDbRow
-    {
-        public long FileId { get; set; }
-        public int RowNumber { get; set; }
-        public int ParserVersion { get; set; }
-        public string? ProjectDefinition { get; set; }
-        public string WbsElement { get; set; } = "";
-        public string? CostElement { get; set; }
-        public string? CostElementDescr { get; set; }
-        public string? CostElementName { get; set; }
-        public string? CoObjectName { get; set; }
-        public string? TransactionCurrency { get; set; }
-        public decimal? ValueTranCurr { get; set; }
-        public string? ObjectCurrency { get; set; }
-        public decimal? ValueObjCrcy { get; set; }
-        public string? ReportCurrency { get; set; }
-        public decimal? ValueRepCur { get; set; }
-        public decimal? TotalQuantity { get; set; }
-        public string? PartnerCctr { get; set; }
-        public string? SourceObjectName { get; set; }
-        public string? PartnerObjectClass { get; set; }
-        public string? PartnerObject { get; set; }
-        public string? OriginalMaterial { get; set; }
-        public string? OriginalMaterialDescription { get; set; }
-        public int FiscalYear { get; set; }
-        public DateTime? CreatedOn { get; set; }
-        public int Period { get; set; }
-
-        public ActualsRow ToRow() =>
-            new(FileId, RowNumber, ParserVersion, ProjectDefinition, WbsElement, CostElement, CostElementDescr, CostElementName, CoObjectName,
-                TransactionCurrency, Norm(ValueTranCurr), ObjectCurrency, Norm(ValueObjCrcy), ReportCurrency, Norm(ValueRepCur), Norm(TotalQuantity),
-                PartnerCctr, SourceObjectName, PartnerObjectClass, PartnerObject, OriginalMaterial, OriginalMaterialDescription, FiscalYear,
-                CreatedOn is { } d ? DateOnly.FromDateTime(d) : null, Period);
-
-        /// <summary>DECIMAL(28,8) zwraca zera końcowe (10.50000000) – ta sama wartość co przy zapisie.</summary>
-        private static decimal? Norm(decimal? value) => value / 1.000000000000000000000000000000000m;
     }
 }

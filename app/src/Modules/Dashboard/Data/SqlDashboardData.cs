@@ -10,7 +10,7 @@ using PzlEv.Shared.Utils.Data;
 namespace PzlEv.Modules.Dashboard.Data;
 
 /// <summary>
-/// Dane Pulpitu z bazy środowiska: ostatni import (META_ImportBatch) i jego problemy (META_Problem), konfiguracja
+/// Dane Pulpitu z bazy środowiska: ostatni import (META_ImportBatch), otwarte problemy (META_Problem), konfiguracja
 /// importu (META_SourceDefinition, META_SourceLocation), słowniki globalne (DICT_*), projekty (META_Project),
 /// dziennik (META_Journal), tydzień i okres z kalendarza okresów (DICT_Calendar). Czego nie ma w bazie
 /// (np. przebiegi tygodniowe, mapowanie), Pulpit nie pokazuje.
@@ -60,19 +60,31 @@ public sealed class SqlDashboardData(AppServices services) : IDashboardDataSourc
             .ToList();
     }
 
-    /// <summary>Ostrzeżenia i błędy ostatniego importu.</summary>
-    public IReadOnlyList<AttentionItem> Attention()
-    {
-        using var connection = services.Sql.Open();
-        if (LastBatch(connection) is not { } last)
-            return [];
-        return services.Problems.ByReference(ImportBatchRow.ProblemReference(last.BatchId))
+    public IReadOnlyList<AttentionItem> Attention() =>
+        services.Problems.Open()
             .Where(p => p.Level != CheckLevel.Pass)
+            .OrderBy(p => p.Level == CheckLevel.Error ? 0 : 1)
+            .ThenByDescending(p => p.Id)
             .Select(p => new AttentionItem(
-                new Pill(p.Level == CheckLevel.Error ? "crit" : "warn", $"Import #{last.BatchId}"),
-                p.Element is { Length: > 0 } element ? $"{element}: {p.Message}" : p.Message))
+                p.Id,
+                new Pill(p.Level == CheckLevel.Error ? "crit" : "warn", Source(p)),
+                p.Element is { Length: > 0 } element ? $"{element}: {p.Message}" : p.Message,
+                p.At.ToLocalTime().ToString("dd.MM HH:mm", Pl)))
             .ToList();
+
+    public void Resolve(long problemId)
+    {
+        var problem = services.Problems.Open().FirstOrDefault(p => p.Id == problemId);
+        if (problem is null || services.Problems.Resolve([problemId], "oznaczony jako rozwiązany na Pulpicie") == 0)
+            return;
+        services.Journal.Add("Pulpit", $"Problem #{problemId} ({problem.Area}) oznaczony jako rozwiązany: {problem.Message}");
     }
+
+    /// <summary>Skąd problem: import (numer), mapowanie (G2) albo obszar.</summary>
+    private static string Source(ProblemRecord problem) =>
+        problem.Reference is { } reference && reference.StartsWith(ImportBatchRow.ProblemReferencePrefix, StringComparison.Ordinal)
+            ? $"Import #{reference[ImportBatchRow.ProblemReferencePrefix.Length..]}"
+            : problem.Area;
 
     public IReadOnlyList<EventItem> Events() =>
         services.Journal.Recent(15)

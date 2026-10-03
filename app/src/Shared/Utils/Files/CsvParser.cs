@@ -1,28 +1,31 @@
+using System.IO;
 using System.Text;
 
 namespace PzlEv.Shared.Utils.Files;
 
-/// <summary>Parser CSV (RFC 4180): pola w cudzysłowach, podwojony cudzysłów, nowa linia w polu.</summary>
+/// <summary>
+/// Rekordy CSV czytane strumieniowo: separator, pola w cudzysłowach (z "" jako cudzysłowem i znakami nowego wiersza
+/// w środku), wiersze zakończone LF albo CRLF. Rekordy nie są gromadzone w pamięci.
+/// </summary>
 public static class CsvParser
 {
-    public static List<string[]> Parse(string text, char delimiter)
+    public static IEnumerable<string[]> Read(TextReader reader, char delimiter)
     {
-        var records = new List<string[]>();
         var fields = new List<string>();
         var field = new StringBuilder();
         var quoted = false;
-
-        for (var i = 0; i < text.Length; i++)
+        int ch;
+        while ((ch = reader.Read()) >= 0)
         {
-            var ch = text[i];
+            var c = (char)ch;
             if (quoted)
             {
-                if (ch == '"')
+                if (c == '"')
                 {
-                    if (i + 1 < text.Length && text[i + 1] == '"')
+                    if (reader.Peek() == '"')
                     {
                         field.Append('"');
-                        i++;
+                        reader.Read();
                     }
                     else
                     {
@@ -31,40 +34,39 @@ public static class CsvParser
                 }
                 else
                 {
-                    field.Append(ch);
+                    field.Append(c);
                 }
                 continue;
             }
 
-            if (ch == '"' && field.Length == 0)
+            if (c == '"' && field.Length == 0)
             {
                 quoted = true;
             }
-            else if (ch == delimiter)
+            else if (c == delimiter)
             {
                 fields.Add(field.ToString());
                 field.Clear();
             }
-            else if (ch == '\n' || ch == '\r')
+            else if (c == '\n' || c == '\r')
             {
-                if (ch == '\r' && i + 1 < text.Length && text[i + 1] == '\n')
-                    i++;
+                if (c == '\r' && reader.Peek() == '\n')
+                    reader.Read();
                 fields.Add(field.ToString());
                 field.Clear();
-                records.Add(fields.ToArray());
+                yield return fields.ToArray();
                 fields.Clear();
             }
             else
             {
-                field.Append(ch);
+                field.Append(c);
             }
         }
 
         if (field.Length > 0 || fields.Count > 0)
         {
             fields.Add(field.ToString());
-            records.Add(fields.ToArray());
+            yield return fields.ToArray();
         }
-        return records;
     }
 }

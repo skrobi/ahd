@@ -102,23 +102,34 @@
                             <TextBlock Text="{Binding AttentionCount}" FontFamily="{StaticResource FMono}"
                                        Foreground="{StaticResource Muted}" />
                         </Border>
-                        <TextBlock Text="Wymaga uwagi – ostatni import" Style="{StaticResource H2}" />
+                        <TextBlock Text="Wymaga uwagi – otwarte problemy" Style="{StaticResource H2}" />
                     </DockPanel>
-                    <TextBlock Text="Brak ostrzeżeń i błędów." Style="{StaticResource MutedText}"
+                    <TextBlock Text="Brak otwartych ostrzeżeń i błędów. Problem znika sam, gdy przyczyna zniknie (kolejny import, przypisanie elementu), albo po „Rozwiązane”."
+                               Style="{StaticResource MutedText}" TextWrapping="Wrap"
                                Visibility="{Binding NoAttention, Converter={StaticResource BoolToVisibility}}" />
-                    <ItemsControl ItemsSource="{Binding Attention}">
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate>
-                                <Border BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1" Padding="0,6">
-                                    <DockPanel>
-                                        <ContentControl DockPanel.Dock="Left" Width="96" VerticalAlignment="Top"
-                                                        Content="{Binding Tag}" />
-                                        <TextBlock Text="{Binding Text}" TextWrapping="Wrap" VerticalAlignment="Center" />
-                                    </DockPanel>
-                                </Border>
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
+                    <ScrollViewer MaxHeight="420" VerticalScrollBarVisibility="Auto">
+                        <ItemsControl ItemsSource="{Binding Attention}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1" Padding="0,6">
+                                        <DockPanel>
+                                            <ContentControl DockPanel.Dock="Left" Width="110" VerticalAlignment="Top"
+                                                            Content="{Binding Tag, Mode=OneWay}" />
+                                            <Button DockPanel.Dock="Right" Content="Rozwiązane" Style="{StaticResource Btn}" Padding="6,1" Margin="8,0,0,0"
+                                                    VerticalAlignment="Top" CommandParameter="{Binding}"
+                                                    Command="{Binding DataContext.ResolveProblem, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                    ToolTip="Oznacza problem jako rozwiązany (wpis w dzienniku)" />
+                                            <StackPanel>
+                                                <TextBlock Text="{Binding Text, Mode=OneWay}" TextWrapping="Wrap" />
+                                                <TextBlock Text="{Binding When, Mode=OneWay}" FontSize="11" Foreground="{StaticResource Muted}"
+                                                           FontFamily="{StaticResource FMono}" />
+                                            </StackPanel>
+                                        </DockPanel>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
                 </StackPanel>
             </Border>
 
