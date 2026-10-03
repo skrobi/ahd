@@ -87,6 +87,16 @@ i utrzymywaną na ekranie Administracja (`docs/funkcjonalnosc.md`, F08).
      zatwierdzenie; plik lokalny jest potem usuwany.
 
   Liczby są zaokrąglane do 8 miejsc po przecinku. „Przerwij” działa także w trakcie pliku – jego zapis jest wycofany.
+  Gdy SQL Server wycofa zapis pliku jako ofiarę zakleszczenia z inną sesją (błąd 1205), import sam go powtarza (do
+  3 prób, plik czytany ponownie z dysku lokalnego; status: „ponowienie 2/3 po zakleszczeniu w bazie”, wpis w logu).
+  Drugą sesję zakleszczenia pokazuje graf z sesji `system_health` (uprawnienie VIEW SERVER STATE):
+
+  ```sql
+  SELECT CAST(event_data AS XML).value('(event/@timestamp)[1]', 'varchar(30)') AS Kiedy,
+         CAST(event_data AS XML).query('//deadlock') AS Graf
+  FROM sys.fn_xe_file_target_read_file('system_health*.xel', NULL, NULL, NULL)
+  WHERE object_name = 'xml_deadlock_report' ORDER BY Kiedy DESC;
+  ```
   Czasy etapów każdego pliku i sposób pobrania (HTTPS / WebDAV, MB/s) są w logu. Dane każdej wersji pliku zostają w bazie –
   najnowsza jest danymi bieżącymi, starsze służą do porównań. Arkusz Excela ma najwyżej 1 048 576 wierszy – większe
   raporty tylko jako CSV.
