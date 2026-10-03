@@ -27,11 +27,12 @@ public interface IImportStore
     SourceFileRow? FindByHash(string sha256);
 
     /// <summary>
-    /// Zapis wersji pliku w jednej transakcji: META_SourceFile, treść pliku (GZip) i dane kanoniczne (strumieniowo do CAN_Row);
-    /// po zapisie baza liczy wiersze i sumy – niezgodność z oczekiwanymi = CanonicalFlowException i nic nie zostaje zapisane.
+    /// Zapis wersji pliku w jednej transakcji: META_SourceFile, dane kanoniczne (strumieniowo do CAN_Row, wiersze czytane
+    /// w trakcie zapisu) i treść pliku z dysku (contentPath). Błędy treści (canonical.Totals) albo niezgodność wierszy i sum
+    /// w bazie (CanonicalFlowException) – wyjątek i nic nie zostaje zapisane. stage – etap zapisu dla ekranu.
     /// Null – treść (hash) zapisana w międzyczasie (np. przez inną osobę).
     /// </summary>
-    StoredFile? StoreFile(SourceFileRow file, byte[] content, CanonicalData? canonical);
+    StoredFile? StoreFile(SourceFileRow file, string contentPath, CanonicalData? canonical, Action<string>? stage = null);
 
     void RecordSeen(SourceFileSeenRow seen);
 

@@ -120,17 +120,20 @@ public sealed class SqlMigrationsTests
         var clock = new TestServices().Clock;
         var store = new SqlImportStore(database.Sql);
         var batch = store.BeginBatch(clock.Now, @"PZL\test", "PC-1", "0.11.0");
+        var content = Path.Combine(Path.GetTempPath(), $"pzl-ev-{Guid.NewGuid():N}.csv");
+        File.WriteAllText(content, "A\n1\n");
         long Register(char hash, string name, string canonicalStatus)
         {
             var sha = new string(hash, 64);
             var id = store.StoreFile(new SourceFileRow(0, sha, "RABIT", name, "ACTUALS_PAF", 10, clock.Now, "csv", null, "utf-8", ";",
-                ["A"], "sygnatura", 1, batch, clock.Now, @"PZL\test", canonicalStatus, 0, null), "A\n1\n"u8.ToArray(), null)!.FileId;
+                ["A"], "sygnatura", 1, batch, clock.Now, @"PZL\test", canonicalStatus, 0, null), content, null)!.FileId;
             store.RecordSeen(new SourceFileSeenRow(0, batch, "RABIT", name, 10, clock.Now, sha, FileDecisions.Imported, "ACTUALS_PAF", 1, "zapis wersji 0.11"));
             return id;
         }
         var layout = Register('a', "ACTUALS_PAF2_B6_AC1.csv", "brak – sygnatura kolumn niezgodna z definicją");
         var values = Register('b', "ACTUALS_PAF2_B6_AC2.csv", "brak – 3 błędów wartości");
         var rawOnly = Register('c', "FORECAST_PAF.csv", "brak – źródło bez parsera (tylko wiersze surowe)");
+        File.Delete(content);
         Assert.NotNull(store.LastSettled("RABIT", "ACTUALS_PAF2_B6_AC1.csv"));
         using (var connection = database.Sql.Open())   // baza sprzed migracji 003
             connection.Execute($"DELETE FROM {database.Sql.Table("meta.SchemaVersion")} WHERE Version = 3");

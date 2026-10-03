@@ -94,8 +94,9 @@ public sealed class ImportViewModel : ObservableObject
     public string DefinitionsText => $"Rozpoznawane źródła (aktywne definicje): {string.Join(", ", _store.ActiveDefinitions().Select(d => $"{d.Code} – pliki zaczynające się od {SourceMatcher.Prefix(d.Prefix)}"))}";
 
     public string ManualFolderText =>
-        "Do_importu – folder na pliki pobrane ręcznie (np. większe niż limit WebDAV); import czyta go razem z SharePoint. " +
-        "Import zapisuje dane w bazie – plików z SharePoint nie kopiuje do tego folderu.";
+        "Do_importu – folder na pliki pobrane ręcznie; import czyta go razem z SharePoint. Każdy plik do zaimportowania import " +
+        "najpierw pobiera na dysk lokalny (folder tymczasowy, usuwany po pliku), potem zapisuje dane w bazie – status pliku pokazuje " +
+        "etap (1/4 pobieranie, 2/4 sprawdzanie, 3/4 odczyt i zapis wierszy, 4/4 kontrola w bazie i treść pliku).";
 
     /// <summary>Katalog logu aplikacji (App.xaml.cs) – szczegóły importu i sprawdzenia źródeł.</summary>
     public string LogText => $"Szczegóły (ścieżki, dostęp, decyzje, pełne błędy) w logu: {Path.Combine(AppContext.BaseDirectory, "logs")}";

@@ -69,11 +69,25 @@ i utrzymywaną na ekranie Administracja (`docs/funkcjonalnosc.md`, F08).
   ich nazwy). Plik, który walidacji nie przejdzie, ma decyzję „błąd” i nie zostawia danych w bazie; przy kolejnym
   imporcie jest pobierany ponownie (pomijane są tylko pliki, których treść jest w bazie). Źródło bez parsera –
   zapisywana jest tylko treść pliku.
-- **Import dużych plików:** plik (CSV albo Excel) jest czytany strumieniowo, wiersz po wierszu, w dwóch przebiegach:
-  1) sprawdzenie bez zapisu (kolumny, pola wymagane, typy, sumy kwot); 2) zapis w jednej transakcji – wersja pliku,
-  treść (oryginalny plik, GZip), wsadowy zapis wierszy do `CAN_Row` i kontrola w bazie (liczba wierszy i sumy kwot
-  po zapisie = odczytane z pliku; niezgodność wycofuje cały zapis). Liczby są zaokrąglane do 8 miejsc po przecinku.
-  Każda wersja pliku zostaje w bazie – najnowsza jest danymi bieżącymi, starsze służą do porównań.
+- **Import dużych plików** – cztery etapy, widoczne w statusie pliku na ekranie Import (z postępem i czasem etapu):
+  1. *pobieranie na dysk* – plik trafia do folderu tymczasowego na dysku lokalnym użytkownika (`%TEMP%\PZL-EV\import`,
+     usuwany po pliku), SHA-256 liczony w trakcie; dalsze odczyty idą z dysku, nie z sieci. SharePoint: najpierw
+     bezpośrednio przez HTTPS (konto Windows i ciasteczka bramy F5 z logowania w aplikacji – bez limitu rozmiaru usługi
+     WebClient), a gdy brama tego nie przepuści – przez WebDAV (ścieżka UNC; kolejne pliki tej witryny w tym imporcie od
+     razu przez WebDAV). Folder `Do_importu` – kopia pliku. Pliki nie są kopiowane do `Do_importu` (to folder wejściowy –
+     import widziałby je ponownie jako nowe pliki);
+  2. *sprawdzanie pliku* – duplikat (ten sam SHA-256), nagłówek, kolumny parsera;
+  3. *odczyt i zapis wierszy* – jeden przebieg pliku (CSV albo Excel – odczyt strumieniowy, wiersz po wierszu):
+     wiersze są parsowane w osobnym wątku i jednocześnie zapisywane wsadowo do `CAN_Row` w jednej transakcji. Błąd
+     wartości, puste pole wymagane albo niezgodne sumy kwot (z kolumn pliku i z wartości pól) wycofują zapis;
+  4. *kontrola w bazie i treść pliku* – liczba wierszy i sumy kwot po zapisie = odczytane z pliku (niezgodność wycofuje
+     cały zapis), treść pliku zapisywana strumieniowo z dysku (Excel bez zmian – jest już skompresowany, CSV / TXT –
+     GZip), zatwierdzenie.
+
+  Liczby są zaokrąglane do 8 miejsc po przecinku. „Przerwij” działa także w trakcie pliku – jego zapis jest wycofany.
+  Czasy etapów każdego pliku i sposób pobrania (HTTPS / WebDAV, MB/s) są w logu. Każda wersja pliku zostaje w bazie –
+  najnowsza jest danymi bieżącymi, starsze służą do porównań. Arkusz Excela ma najwyżej 1 048 576 wierszy – większe
+  raporty tylko jako CSV.
 - Definicje powstają dla źródeł w miarę ustalania ich zawartości (O27).
 
 ---

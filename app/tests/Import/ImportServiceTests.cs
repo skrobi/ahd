@@ -190,9 +190,36 @@ public sealed class ImportServiceTests : IDisposable
 
         Assert.Equal(ImportBatchStatus.Running, statusAtStart);                   // wpis „w toku” od początku importu
         Assert.Contains(_app.Journal.Recent(5), e => e.Message == $"Import #{run.BatchId} rozpoczęty (PZL\\analityk, {Environment.MachineName})");
-        Assert.Equal(["importowanie…", "zaimportowany"],
-            progress.Items.Where(p => p.FileName == "ACTUALS_PAF_01.csv").Select(p => p.Status!.Split(" – ")[0]));
+        var statuses = progress.Items.Where(p => p.FileName == "ACTUALS_PAF_01.csv").Select(p => p.Status!).ToList();
+        Assert.Equal(   // etapy importu pliku na ekranie, potem decyzja
+        [
+            ImportService.StageDownload, ImportService.StageCheck, ImportService.StageRows, "4/4 kontrola w bazie (liczba wierszy i sumy)",
+            "4/4 zapis treści pliku", "4/4 zatwierdzanie zapisu", "zaimportowany",
+        ], statuses.Select(s => s.Split(" – ")[0].Split(" · ")[0]).Distinct());
+        Assert.Contains(statuses, s => s.StartsWith($"{ImportService.StageDownload} – ") && s.Contains(" MB, kopia pliku · "));
+        Assert.Contains(statuses, s => s.StartsWith($"{ImportService.StageRows} – 6 wierszy"));
         Assert.Equal("zakończony", _store.Batches(1).Single().Status);
+    }
+
+    [SqlFact]
+    public void Import_cancelled_while_rows_are_written_leaves_nothing_in_database()
+    {
+        Use();
+        var path = CopySample(ImportFolder, "ACTUALS_PAF_01.csv");
+        using var cancel = new CancellationTokenSource();
+        var progress = new Collect(p =>
+        {
+            if (p.Status?.StartsWith(ImportService.StageRows) == true)
+                cancel.Cancel();   // „Przerwij” w trakcie zapisu wierszy
+        });
+
+        var run = _import.Run(progress, cancel.Token);
+
+        Assert.True(run.Cancelled);
+        Assert.Empty(run.Files);
+        Assert.Null(_store.FindByHash(FileHash.Sha256(File.ReadAllBytes(path))));   // zapis wycofany – kolejny import pobierze plik
+        Assert.Equal("przerwany – plik nie zapisany", progress.Items.Last(p => p.FileName == "ACTUALS_PAF_01.csv").Status);
+        Assert.Equal("przerwany", _store.Batches(1).Single().Status);
     }
 
     [SqlFact]
@@ -401,13 +428,23 @@ public sealed class ImportServiceTests : IDisposable
             return Dapper.SqlMapper.ExecuteScalar<int>(connection, $"SELECT COUNT(*) FROM {_database.Sql.Table(table)}");
         }
 
-        var error = Assert.Throws<CanonicalFlowException>(() => _store.StoreFile(FileRow('a'), "plik"u8.ToArray(),
-            new CanonicalData(parser, fields, rows, 2, new Dictionary<string, decimal> { ["ValueObjCrcy"] = 16m })));
-        var stored = _store.StoreFile(FileRow('b'), "plik"u8.ToArray(),
-            new CanonicalData(parser, fields, rows, 2, new Dictionary<string, decimal> { ["ValueObjCrcy"] = 15.5m }))!;
+        var content = Path.Combine(_root, "plik.csv");
+        File.WriteAllText(content, "WBS Element;Value in Obj. Crcy\nA.1;10,5\nA.2;5\n");
+        var stages = new List<string>();
+
+        var error = Assert.Throws<CanonicalFlowException>(() => _store.StoreFile(FileRow('a'), content,
+            new CanonicalData(parser, fields, rows, () => new CanonicalTotals(2, new Dictionary<string, decimal> { ["ValueObjCrcy"] = 16m }))));
+        Assert.Throws<ContentRejectedException>(() => _store.StoreFile(FileRow('c'), content,
+            new CanonicalData(parser, fields, rows, () => throw new ContentRejectedException("błędy wartości"))));
+        var stored = _store.StoreFile(FileRow('b'), content,
+            new CanonicalData(parser, fields, rows, () => new CanonicalTotals(2, new Dictionary<string, decimal> { ["ValueObjCrcy"] = 15.5m })), stages.Add)!;
 
         Assert.StartsWith("dane kanoniczne w bazie niezgodne z plikiem (wiersze 2/2, suma Value in Obj. Crcy 16/15", error.Message);
         Assert.Null(_store.FindByHash(new string('a', 64)));   // plik, treść i wiersze wycofane razem
+        Assert.Null(_store.FindByHash(new string('c', 64)));   // błędy treści wykryte po przesłaniu wierszy – też wycofane
+        Assert.Equal(["kontrola w bazie (liczba wierszy i sumy)", "zapis treści pliku", "zatwierdzanie zapisu"], stages);
+        Assert.Equal((2, 2), (_store.File(stored.FileId)!.RowCount, _store.File(stored.FileId)!.CanonicalRows));
+        Assert.Equal(new string?[] { "A.2", "5" }, _store.RawRows(stored.FileId)[1].Values);   // treść pliku (GZip) z bazy
         Assert.Equal((2, 15.5m), (stored.CanonicalRows, stored.Sums["ValueObjCrcy"]));
         Assert.Equal((1, 2), (Count("meta.SourceFileContent"), Count("can.Row")));
         Assert.Equal(["A.1", "A.2"], _store.CanonicalRows(parser, stored.FileId).Select(r => r["WbsElement"]));

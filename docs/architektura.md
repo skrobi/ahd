@@ -272,7 +272,7 @@ decyzji (P4, P6, Z) albo z wynikiem ERROR.
 
 | Obszar | Wymaganie |
 |---|---|
-| Wydajność | import plików ACTUALS z milionami wierszy w czasie akceptowalnym dla przebiegu tygodniowego – odczyt strumieniowy (wiersz po wierszu, także Excel), ładowanie wsadowe do `CAN_Row` (indeks kolumnowy), bez podglądu danych; pomiar: 2 mln wierszy (CSV 312 MB) ok. 47 s, pamięć procesu ok. 0,6 GB (rośnie z rozmiarem pliku – plik jest czytany do pamięci) |
+| Wydajność | import plików ACTUALS z milionami wierszy w czasie akceptowalnym dla przebiegu tygodniowego – plik pobierany na dysk lokalny, odczyt strumieniowy (wiersz po wierszu, także Excel – bez modelu dokumentu), jeden przebieg z parsowaniem równolegle z ładowaniem wsadowym do `CAN_Row` (indeks kolumnowy), bez podglądu danych; pamięć stała (ok. 0,3 GB niezależnie od rozmiaru pliku). Pomiar bez pobierania (SQL Server 2022 lokalnie): CSV 87 MB / 560 tys. wierszy – 10 s; Excel 67 MB / 1 mln wierszy – 21 s (wcześniejszy odczyt ClosedXML: 102 s i 5,9 GB pamięci samego odczytu) |
 | Odtwarzalność | każdy wynik EV odtwarzalny ze znacznika stanu i wersji silnika (`docs/model-danych.md`, rozdz. 4) |
 | Audyt | każda akcja z użytkownikiem AD i czasem; historia słowników i korekt |
 | Spójność | ta sama wersja silnika EV u wszystkich (kontrola minimalnej wersji aplikacji) |
