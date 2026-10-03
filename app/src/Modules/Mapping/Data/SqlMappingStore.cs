@@ -8,7 +8,10 @@ using PzlEv.Shared.Utils.Data.Sql;
 
 namespace PzlEv.Modules.Mapping.Data;
 
-/// <summary>Dane mapowania w MS SQL: CAN_MappingReport i CAN_Actuals (odczyt), DICT_MappingCorrection (zapis z historią).</summary>
+/// <summary>
+/// Dane mapowania w MS SQL: raport mapowań i elementy CES z CAN_Row (pola parserów MAPOWANIA i ACTUALS według slotów),
+/// korekty – DICT_MappingCorrection (zapis z historią).
+/// </summary>
 public sealed class SqlMappingStore(SqlDatabase db, IClock clock, ICurrentUser user) : IMappingStore
 {
     private const string CorrectionColumns =
@@ -17,24 +20,36 @@ public sealed class SqlMappingStore(SqlDatabase db, IClock clock, ICurrentUser u
 
     private string Corrections => db.Table(DbTables.MappingCorrection);
 
+    private string Canonical => db.Table(DbTables.CanonicalRow);
+
+    /// <summary>Kod parsera raportu mapowań (migracja 005).</summary>
+    public const string ReportParser = "MAPOWANIA";
+
+    /// <summary>Kod parsera kosztów rzeczywistych – źródło elementów CES (pola WbsElement, ProjectDefinition, kwoty).</summary>
+    public const string ActualsParser = "ACTUALS";
+
     public ReportInfo? LatestReport()
     {
         using var connection = db.Open();
-        var report = db.Table(DbTables.MappingReport);
+        if (SqlCanonical.CurrentParser(connection, db, ReportParser) is not { } parser)
+            return null;
         var file = connection.QueryFirstOrDefault<FileInfoRow>(
             $"""
             SELECT TOP 1 f.FileId, f.FileName, f.ImportedAt FROM {db.Table(DbTables.SourceFile)} f
-            WHERE EXISTS (SELECT 1 FROM {report} r WHERE r.FileId = f.FileId)
+            WHERE EXISTS (SELECT 1 FROM {Canonical} r WHERE r.FileId = f.FileId AND r.ParserId = @parserId)
             ORDER BY f.ImportedAt DESC, f.FileId DESC
-            """);
+            """,
+            new { parserId = parser.ParserId });
         if (file is null)
             return null;
+        string S(string field) => SqlCanonical.SlotOrNull(parser, field);
         var entries = connection.Query<ReportRow>(
                 $"""
-                SELECT RowNumber, Src, Pspnr, PspnrSap, PspnrCes, ProjectSap, ProjectCes, Wbs, WbsSap, WbsCes
-                FROM {report} WHERE FileId = @fileId ORDER BY RowNumber
+                SELECT RowNumber, {S("Src")} AS Src, {S("Pspnr")} AS Pspnr, {S("PspnrSap")} AS PspnrSap, {S("PspnrCes")} AS PspnrCes,
+                       {S("ProjectSap")} AS ProjectSap, {S("ProjectCes")} AS ProjectCes, {S("Wbs")} AS Wbs, {S("WbsSap")} AS WbsSap, {S("WbsCes")} AS WbsCes
+                FROM {Canonical} WHERE FileId = @fileId AND ParserId = @parserId ORDER BY RowNumber
                 """,
-                new { file.FileId })
+                new { file.FileId, parserId = parser.ParserId }, commandTimeout: 300)
             .Select(MappingKeys.Entry)
             .ToList();
         return new ReportInfo(file.FileId, file.FileName, file.ImportedAt, entries);
@@ -43,17 +58,22 @@ public sealed class SqlMappingStore(SqlDatabase db, IClock clock, ICurrentUser u
     public IReadOnlyList<CesElement> CesElements()
     {
         using var connection = db.Open();
+        if (SqlCanonical.CurrentParser(connection, db, ActualsParser) is not { } parser)
+            return [];
+        var wbs = SqlCanonical.Slot(parser, "WbsElement");
+        var project = SqlCanonical.Slot(parser, "ProjectDefinition");
+        var cost = string.Join(" OR ", new[] { "ValueTranCurr", "ValueObjCrcy", "ValueRepCur" }
+            .Select(f => SqlCanonical.SlotOrNull(parser, f)).Where(s => s != "NULL").Select(s => $"ISNULL(a.{s}, 0) <> 0").DefaultIfEmpty("1 = 0"));
         return connection.Query<CesElement>(
                 $"""
-                SELECT a.WbsElement, ISNULL(MAX(a.ProjectDefinition), N'') AS Project,
-                       CAST(MAX(CASE WHEN ISNULL(a.ValueTranCurr, 0) <> 0 OR ISNULL(a.ValueObjCrcy, 0) <> 0 OR ISNULL(a.ValueRepCur, 0) <> 0
-                                     THEN 1 ELSE 0 END) AS BIT) AS HasCost,
+                SELECT a.{wbs} AS WbsElement, ISNULL(MAX(a.{project}), N'') AS Project,
+                       CAST(MAX(CASE WHEN {cost} THEN 1 ELSE 0 END) AS BIT) AS HasCost,
                        MIN(f.BatchId) AS FirstBatchId, MAX(f.BatchId) AS LastBatchId
-                FROM {db.Table(DbTables.Actuals)} a JOIN {db.Table(DbTables.SourceFile)} f ON f.FileId = a.FileId
-                WHERE a.WbsElement IS NOT NULL AND a.WbsElement <> N''
-                GROUP BY a.WbsElement
+                FROM {Canonical} a JOIN {db.Table(DbTables.SourceFile)} f ON f.FileId = a.FileId
+                WHERE a.ParserId = @parserId AND a.{wbs} IS NOT NULL AND a.{wbs} <> N''
+                GROUP BY a.{wbs}
                 """,
-                commandTimeout: 300)
+                new { parserId = parser.ParserId }, commandTimeout: 600)
             .ToList();
     }
 

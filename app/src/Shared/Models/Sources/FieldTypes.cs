@@ -1,6 +1,6 @@
 namespace PzlEv.Shared.Models.Sources;
 
-/// <summary>Typy pól parsera – typ kolumny tabeli parsera i sprawdzenie wartości przy imporcie.</summary>
+/// <summary>Typy pól parsera – rodzaj slotu w CAN_Row (CanonicalSlots) i sprawdzenie wartości przy imporcie.</summary>
 public static class FieldTypes
 {
     public const string Text = "text";

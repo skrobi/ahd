@@ -65,8 +65,9 @@ public sealed partial class SourceConfigService(ISourceConfigStore store, IJourn
     public IReadOnlyList<ParserRow> ParserHistory(long parserId) => store.ParserHistory(parserId);
 
     /// <summary>
-    /// Zapisuje parser (nowa wersja) i zakłada albo rozszerza jego tabelę danych kanonicznych. Pola usunięte z parsera
-    /// zostają w tabeli (dane zapisane), ale import ich już nie wypełnia.
+    /// Zapisuje parser (nowa wersja). Pola dostają sloty w stałej tabeli CAN_Row (CanonicalSlots) – pole znane z historii
+    /// parsera zachowuje slot, nowe dostaje wolny; tabele się nie zmieniają (na PROD bez prawa zmiany tabel). Pole usunięte
+    /// z parsera zachowuje slot w historii (dane zapisanych plików), import go już nie wypełnia.
     /// </summary>
     public ConfigSaveResult SaveParser(ParserInput input)
     {
@@ -91,11 +92,17 @@ public sealed partial class SourceConfigService(ISourceConfigStore store, IJourn
         if (issues.Count > 0)
             return new ConfigSaveResult(false, issues, "Parser ma błędy – nie zapisano.");
 
-        var outcome = store.SaveParser(input, table);
-        if (outcome.Conflict is not null)
-            return new ConfigSaveResult(false, [], outcome.Conflict);
+        IEnumerable<ParserField> history = current is null ? [] : store.ParserHistory(current.ParserId).OrderByDescending(p => p.Version).SelectMany(p => p.Fields);
+        var (fields, slotErrors, assigned) = CanonicalSlots.Assign(input.Fields, history);
+        if (slotErrors.Count > 0)
+            return new ConfigSaveResult(false, slotErrors.Select(e => Issue.Error(e, $"parser {input.Code}")).ToList(), "Parser ma błędy – nie zapisano.");
 
-        var changes = outcome.TableChanges.Count == 0 ? "tabela bez zmian" : string.Join("; ", outcome.TableChanges);
+        input = input with { Fields = fields };
+        var conflict = store.SaveParser(input, table);
+        if (conflict is not null)
+            return new ConfigSaveResult(false, [], conflict);
+
+        var changes = assigned.Count == 0 ? "bez nowych pól" : string.Join("; ", assigned);
         journal.Add(Area, $"Parser {input.Code} {(current is null ? "dodany" : "zmieniony")} ({input.Fields.Count} pól; {changes})");
         return new ConfigSaveResult(true, [], $"Zapisano parser {input.Code} – {changes}.");
     }

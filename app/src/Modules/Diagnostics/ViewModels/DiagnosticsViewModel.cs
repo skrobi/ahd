@@ -22,6 +22,7 @@ public sealed class DiagnosticsViewModel : ObservableObject
     private readonly AppServices _services;
     private IReadOnlyList<MigrationInfo> _migrations = [];
     private string _migrationStatus = "";
+    private string _sqlServer = "";
     private bool _migrating;
     private string _pzlProdStatus;
     private IReadOnlyList<PzlProdFlagValue> _pzlProdFlags = [];
@@ -56,6 +57,9 @@ public sealed class DiagnosticsViewModel : ObservableObject
     }
 
     public IReadOnlyList<MigrationInfo> Migrations { get => _migrations; private set => SetProperty(ref _migrations, value); }
+
+    /// <summary>Wersja SQL Server, edycja i poziom zgodności bazy.</summary>
+    public string SqlServer { get => _sqlServer; private set => SetProperty(ref _sqlServer, value); }
 
     /// <summary>Wynik ostatniej migracji albo stan (ile skryptów do wykonania).</summary>
     public string MigrationStatus { get => _migrationStatus; private set => SetProperty(ref _migrationStatus, value); }
@@ -100,6 +104,15 @@ public sealed class DiagnosticsViewModel : ObservableObject
 
     private void LoadMigrations()
     {
+        try
+        {
+            SqlServer = _services.Sql.ServerInfo();
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            Logger.Error(ex, "Odczyt wersji serwera SQL nieudany");
+            SqlServer = $"nie udało się odczytać: {ex.Message}";
+        }
         try
         {
             var status = SqlMigrations.Status(_services.Sql);

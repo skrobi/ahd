@@ -32,25 +32,33 @@ zmieni). Brak pliku albo błąd w nim = komunikat przy starcie z nazwą pola –
 - `002_dane_startowe.sql` – presety: definicje źródeł `ACTUALS_PAF` i `ACTUALS_CES`, aktywna lokalizacja RABIT
   E456659, kalendarz okresów 2026–2027, Cost Category (załącznik A);
 - `003_usuniecie_plikow_niezgodnych.sql` – usuwa pliki zapisane do wersji 0.11 mimo niezgodności z definicją
-  (układ kolumn, typy wartości) wraz z wierszami surowymi; kolejny import pobierze je ponownie;
+  (układ kolumn, typy wartości) wraz z wierszami surowymi (albo treścią i danymi kanonicznymi); kolejny import
+  pobierze je ponownie;
 - `004_parsery.sql` – parsery w bazie (Administracja → Parsery): parser pilnuje układu pliku (kolumna w pliku → pole,
   typ, wymagane), definicja źródła tylko go wskazuje; parser ACTUALS w układzie raportu z 2026-10 (nowe pola
   `Original Order Number`, `Item`, `Purchase order number`, `Invoice Number`);
-- `005_mapowanie_ces_p1s.sql` – parser `MAPOWANIA` (raport mapowań SAP↔CES z Excela, tabela `CAN_MappingReport`)
+- `005_mapowanie_ces_p1s.sql` – parser `MAPOWANIA` (raport mapowań SAP↔CES z Excela)
   i korekty mapowania (`DICT_MappingCorrection`);
 - `006_problemy_rozwiazywanie.sql` – rozwiązywanie problemów (kto, kiedy, jak); problemy importów wcześniejszych
-  niż ostatni zakończony – rozwiązane.
+  niż ostatni zakończony – rozwiązane;
+- `007_sloty_danych_kanonicznych.sql` – dane kanoniczne wszystkich parserów w jednej stałej tabeli `CAN_Row`
+  (sloty typowane, indeks kolumnowy) i treść plików skompresowana GZip (`META_SourceFileContent`); przenosi dane
+  z `CAN_Actuals`, `CAN_MappingReport`, `STG_RawRow` i usuwa te tabele. Wymaga SQL Server 2016+ i poziomu zgodności
+  bazy co najmniej 130 (Diagnostyka → **Serwer SQL**); po niej aplikacja nie zmienia tabel – nowy parser i nowe
+  pole to tylko zapis parsera (`docs/model-danych.md`, rozdz. 5.1).
 
 Migracje wykonuje przycisk **Diagnostyka → Migracja** – uruchamia po kolei skrypty, których numeru nie ma
 w `META_SchemaVersion`, a wykonane pomija. Lista na tym ekranie pokazuje, które skrypty są wykonane (kiedy, kto)
 i które czekają. Przy starcie aplikacja pyta o brakujące migracje: **Tak** – wykonuje je od razu, **Nie** – startuje
-bez nich. Konto AD musi mieć prawo tworzenia tabel w schemacie. Dwie osoby uruchamiające migrację jednocześnie nie
+bez nich. Migracje uruchamia konto AD z prawem tworzenia i zmiany tabel w schemacie; pozostali użytkownicy
+takiego prawa nie potrzebują. Dwie osoby uruchamiające migrację jednocześnie nie
 wykonają skryptu dwa razy (`sp_getapplock`). Skrypty można też uruchomić ręcznie, po kolei:
 `sqlcmd -S pzltestdb.intl.lmco.com -d PZLTEST -E -f 65001 -v Schema=FINOP Prefix=PZLEV_ -i sql\mssql\001_etap1_import_slowniki_projekty.sql`
 (i tak samo kolejne; `-f 65001` – skrypty są w UTF-8). Dane startowe są tylko w migracji – aplikacja sama nic nie dopisuje;
 usunięta definicja nie wraca.
 
-Ustawienia, baza i ścieżki widać na ekranie **Diagnostyka** i w stopce okna.
+Ustawienia, baza (także wersja SQL Server, edycja i poziom zgodności bazy – wiersz **Serwer SQL**) i ścieżki widać
+na ekranie **Diagnostyka** i w stopce okna.
 
 **Ręczny test F1 / F2:**
 
@@ -64,8 +72,9 @@ Ustawienia, baza i ścieżki widać na ekranie **Diagnostyka** i w stopce okna.
    lokalizacja RABIT E456659 (migracja 002 – aktywna). Nowe źródło o znanym układzie: **Nowa definicja** → kod,
    prefiks, parser → **Zapisz definicję**. Nowy układ raportu: **Parsery** → wybierz parser → **Kolumny z pliku…**
    (nowe kolumny dochodzą jako pola tekstowe, brakujące są oznaczone, siatka pokazuje przykładowe wartości) →
-   popraw pole w bazie, typ, **Wymagane** → **Zapisz parser** (dokłada kolumny w tabeli `CAN_…`; wymaga prawa zmiany
-   tabel); import utworzy dane kanoniczne według parsera. Nowy parser zakłada własną tabelę.
+   popraw pole w bazie, typ, **Wymagane** → **Zapisz parser** (nowe pola dostają sloty w `CAN_Row` – kolumna **Slot**;
+   bez zmian tabel); import utworzy dane kanoniczne według parsera. Zmiana typu istniejącego pola (np. kwota → tekst)
+   jest odrzucana – dodaj nowe pole.
 4. **Import z SharePoint (brama F5)** – **Importuj**: okno logowania do SharePoint jak w Office (przy ważnej sesji
    zamyka się samo) → lista plików pasujących do definicji z datami, „zostanie zaimportowany” → import, status
    każdego pliku zmienia się na bieżąco; w historii od razu wpis „w toku”. Druga osoba w tym czasie widzi „Trwa
@@ -189,6 +198,10 @@ wersji w pamięci. Wymagają zmiennej środowiskowej `PZLEV_TEST_SQL` z ciągiem
 `Server=pzltestdb.intl.lmco.com;Database=PZLTEST;Integrated Security=True;Encrypt=True`); bez niej są pomijane
 (`build.cmd` wypisuje ostrzeżenie). Każdy test zakłada w schemacie `FINOP` tabele z losową sygnaturą (`T…_`)
 i usuwa je po sobie – nie dotyka tabel aplikacji (`PZLEV_*`).
+Test wydajności importu (`ImportPerformanceTests`, plik ACTUALS z powtórzonych wierszy wzorcowych) działa tylko ze
+zmienną `PZLEV_PERF_ROWS` (liczba wierszy, np. `2000000`): `dotnet test tests\PzlEv.Tests.csproj --filter ImportPerformanceTests
+--logger "console;verbosity=detailed"` – wypisuje czas i szczytową pamięć procesu (pomiar: 2 mln wierszy, CSV 312 MB –
+ok. 47 s, ok. 0,6 GB pamięci).
 Pakiety testowe (xUnit) przy pierwszym pobraniu z eFOSS trafiają do zatwierdzenia – do tego czasu `build.cmd`
 pomija testy z ostrzeżeniem.
 

@@ -14,8 +14,8 @@ namespace PzlEv.Modules.Import.Services;
 /// <summary>
 /// Import źródeł G1 (docs/pipeline-fazy.md): wszystkie aktywne lokalizacje RABIT i folder Do_importu. Dla każdego
 /// pliku decyzja: nierozpoznany (brak prefiksu – WARNING), pominięty (te same metadane), duplikat (ten sam
-/// SHA-256), zaimportowany (wiersze surowe + dane kanoniczne) albo błąd. Błąd pliku lub niedostępna lokalizacja
-/// nie zatrzymuje pozostałych. Kontrola przepływu: wiersze i sumy kwot kanonicznych = wiersze surowe.
+/// SHA-256), zaimportowany (treść pliku + dane kanoniczne) albo błąd. Błąd pliku lub niedostępna lokalizacja
+/// nie zatrzymuje pozostałych. Kontrola przepływu: wiersze i sumy kwot kanonicznych = kolumny pliku (także w bazie po zapisie).
 /// </summary>
 public sealed class ImportService(IImportStore store, AppServices services)
 {
@@ -270,9 +270,12 @@ public sealed class ImportService(IImportStore store, AppServices services)
     }
 
     /// <summary>
-    /// Treść pliku. Źródło z parserem przechodzi walidację przed zapisem (kolumny parsera obecne w pliku, pola wymagane
-    /// wypełnione, wartości zgodne z typami) – plik, który jej nie przejdzie, nie trafia do bazy (decyzja „błąd”, problem
-    /// w rejestrze); przy kolejnym imporcie jest pobierany ponownie, więc po poprawie parsera wystarczy zaimportować jeszcze raz.
+    /// Treść pliku, czytana strumieniowo w dwóch przebiegach (miliony wierszy bez gromadzenia w pamięci):
+    /// 1) sprawdzenie – kolumny parsera obecne w pliku, pola wymagane wypełnione, wartości zgodne z typami, kontrola
+    ///    przepływu (sumy kwot z kolumn pliku = sumy wartości pól); plik, który go nie przejdzie, nie trafia do bazy
+    ///    (decyzja „błąd”, problem w rejestrze) i przy kolejnym imporcie jest pobierany ponownie;
+    /// 2) zapis w jednej transakcji – wersja pliku, treść (GZip), dane kanoniczne do CAN_Row i kontrola w bazie (liczba
+    ///    wierszy i sumy po zapisie); niezgodność wycofuje cały zapis.
     /// </summary>
     private (string Decision, string Description, string? Sha, int? Rows) ImportContent(
         long batchId, ImportLocation location, FileInfo file, DateTimeOffset modified, SourceDefinitionRow definition, Action<string, Issue> problem)
@@ -285,94 +288,118 @@ public sealed class ImportService(IImportStore store, AppServices services)
         if (!TabularFileReader.IsSupported(file.Name))
             throw new NotSupportedException($"format {file.Extension} nieobsługiwany (dozwolone: xlsx, xlsm, csv, txt)");
 
-        var data = TabularFileReader.Read(content, file.Name);
-        var signature = HeaderSignature.Compute(data.Headers);
-        ParseResult? parsed = null;
-        ParserRow? parser = null;
+        var source = TabularFileReader.Open(content, file.Name);
+        var signature = HeaderSignature.Compute(source.Headers);
+        RowMapper? mapper = null;
         if (definition.Parser != SourceParsers.None)
         {
-            parser = store.ActiveParser(definition.Parser);
+            var parser = store.ActiveParser(definition.Parser);
             if (parser is null)
             {
                 var notReady = $"parser {definition.Parser} definicji {definition.Code} nie istnieje albo jest nieaktywny";
                 problem("parser", Issue.Error($"{file.Name}: {notReady} – plik nie zapisany w bazie; popraw w Administracji i zaimportuj ponownie", location.Name));
-                return (FileDecisions.Error, $"{notReady} – nie zapisany", sha, data.Rows.Count);
+                return (FileDecisions.Error, $"{notReady} – nie zapisany", sha, null);
             }
-            parsed = MappedParser.Parse(parser, data.Headers, data.Rows);
-            if (parsed.MissingColumns.Count > 0)
+            mapper = MappedParser.Prepare(parser, source.Headers);
+            if (mapper.MissingColumns.Count > 0)
             {
-                var layout = $"brak kolumn parsera {parser.Code}: {string.Join(", ", parsed.MissingColumns)}";
+                var layout = $"brak kolumn parsera {parser.Code}: {string.Join(", ", mapper.MissingColumns)}";
                 problem("układ kolumn", Issue.Error(
                     $"{file.Name}: {layout} – plik nie zapisany w bazie; popraw kolumny parsera w Administracji (Parsery) i zaimportuj ponownie",
                     location.Name));
-                return (FileDecisions.Error, $"{layout} – nie zapisany", sha, data.Rows.Count);
-            }
-            if (parsed.ErrorCount > 0)
-            {
-                foreach (var issue in parsed.Issues)
-                    problem("wartość niezgodna z typem", issue with { Element = $"{file.Name}, {issue.Element}" });
-                return (FileDecisions.Error, $"{parsed.ErrorCount} błędów wartości – nie zapisany", sha, data.Rows.Count);
+                return (FileDecisions.Error, $"{layout} – nie zapisany", sha, null);
             }
         }
 
-        var now = services.Clock.Now;
-        var fileId = store.RegisterFile(new SourceFileRow(
-            0, sha, location.Path, file.Name, definition.Code, file.Length, modified, data.FileType, data.Sheet, data.Encoding,
-            data.Delimiter, data.Headers, signature, data.Rows.Count, batchId, now, services.User.Account,
-            "w toku", 0, null), data.Rows);
-        if (fileId is null)
+        // 1. Sprawdzenie (bez zapisu)
+        var check = CheckContent(source, mapper);
+        if (check.Issues.Errors > 0)
+        {
+            foreach (var issue in check.Issues.Issues)
+                problem("wartość niezgodna z typem", issue with { Element = $"{file.Name}, {issue.Element}" });
+            return (FileDecisions.Error, $"{check.Issues.Errors} błędów wartości – nie zapisany", sha, check.Rows);
+        }
+        if (mapper is not null && FlowDifferences(mapper, check) is { Length: > 0 } differences)
+        {
+            problem("kontrola przepływu", Issue.Error($"{file.Name}: dane kanoniczne niezgodne z plikiem ({differences}) – plik nie zapisany w bazie", location.Name));
+            return (FileDecisions.Error, $"BŁĄD kontroli przepływu ({differences}) – nie zapisany", sha, check.Rows);
+        }
+
+        // 2. Zapis w jednej transakcji z kontrolą w bazie
+        var fileRow = new SourceFileRow(
+            0, sha, location.Path, file.Name, definition.Code, file.Length, modified, source.FileType, source.Sheet, source.Encoding,
+            source.Delimiter, source.Headers, signature, check.Rows, batchId, services.Clock.Now, services.User.Account,
+            "brak – źródło bez parsera (tylko treść pliku)", 0, null);
+        StoredFile? stored;
+        try
+        {
+            stored = store.StoreFile(fileRow, content, mapper is null ? null : new CanonicalData(
+                mapper.Parser, mapper.Fields, CanonicalRows(source, mapper), check.Rows, check.CanonicalSums));
+        }
+        catch (CanonicalFlowException ex)
+        {
+            problem("kontrola przepływu", Issue.Error($"{file.Name}: {ex.Message} – zapis wycofany", location.Name));
+            return (FileDecisions.Error, $"BŁĄD kontroli przepływu w bazie – zapis wycofany ({ex.Message})", sha, check.Rows);
+        }
+        if (stored is null)
             return (FileDecisions.Duplicate, DuplicateText(store.FindByHash(sha)!), sha, null);
 
-        var canonical = CreateCanonical(fileId.Value, file.Name, location.Name, data, parser, parsed, problem);
-        var rowsText = data.Rows.Count.ToString("#,0", CultureInfo.GetCultureInfo("pl-PL"));
-        var extra = parsed is { ExtraColumns.Count: > 0 } ? $"; kolumny spoza parsera (tylko wiersze surowe): {string.Join(", ", parsed.ExtraColumns)}" : "";
-        return (FileDecisions.Imported, $"{definition.Code}, {rowsText} wierszy; {canonical}{extra}", sha, data.Rows.Count);
+        var pl = CultureInfo.GetCultureInfo("pl-PL");
+        var canonical = mapper is null
+            ? "tylko treść pliku (źródło bez parsera)"
+            : $"dane kanoniczne ({mapper.Parser.Code}): {stored.CanonicalRows.ToString("#,0", pl)} wierszy" +
+              string.Concat(mapper.Fields.Where(f => f.Type == FieldTypes.Decimal).Select(f => $", suma {f.Column} {PolishNumber.ToDisplay(stored.Sums[f.Field])}"));
+        var extra = mapper is { ExtraColumns.Count: > 0 } ? $"; kolumny spoza parsera (tylko w treści pliku): {string.Join(", ", mapper.ExtraColumns)}" : "";
+        return (FileDecisions.Imported, $"{definition.Code}, {check.Rows.ToString("#,0", pl)} wierszy; {canonical}{extra}", sha, check.Rows);
     }
 
-    /// <summary>Dane kanoniczne (wiersze sprawdzone przed zapisem pliku) w tabeli parsera; zwraca opis wyniku do decyzji pliku.</summary>
-    private string CreateCanonical(long fileId, string fileName, string locationName, TabularData data, ParserRow? parser,
-        ParseResult? parsed, Action<string, Issue> problem)
-    {
-        if (parser is null || parsed is null)
-        {
-            store.CompleteCanonical(fileId, "brak – źródło bez parsera (tylko wiersze surowe)", null, null);
-            return "tylko wiersze surowe (źródło bez parsera)";
-        }
-        store.CompleteCanonical(fileId, "utworzone", new CanonicalData(parser, parsed.Fields, parsed.Rows), parser.Version);
-        return VerifyFlow(fileName, locationName, data, parsed, parser, problem);
-    }
+    /// <summary>Wynik pierwszego przebiegu: liczba wierszy, błędy wartości, sumy kwot z kolumn pliku i z wartości pól.</summary>
+    private sealed record ContentCheck(int Rows, IssueCollector Issues, IReadOnlyDictionary<string, decimal> RawSums, IReadOnlyDictionary<string, decimal> CanonicalSums);
 
     /// <summary>
-    /// Kontrola przepływu: liczba wierszy i sumy pól liczbowych (kwoty) danych kanonicznych zgodne z wierszami surowymi
-    /// (sumy z wierszy surowych liczone niezależnie od parsera, z kolumn pliku wskazanych w parserze).
+    /// Pierwszy przebieg: każdy wiersz przez parser (bez zapisu). Kontrola przepływu – sumy kwot liczone niezależnie od
+    /// parsera z tekstu kolumn pliku (format polski) i z wartości pól po parsowaniu.
     /// </summary>
-    private static string VerifyFlow(string fileName, string locationName, TabularData raw, ParseResult parsed, ParserRow parser, Action<string, Issue> problem)
+    private static ContentCheck CheckContent(TabularSource source, RowMapper? mapper)
     {
-        var sums = new List<(string Column, decimal Raw, decimal Canonical)>();
-        for (var i = 0; i < parsed.Fields.Count; i++)
+        var issues = new IssueCollector();
+        var decimals = mapper is null ? [] : mapper.Fields.Select((f, i) => (Field: f, Position: i)).Where(x => x.Field.Type == FieldTypes.Decimal).ToList();
+        var raw = decimals.ToDictionary(d => d.Field.Field, _ => 0m);
+        var canonical = decimals.ToDictionary(d => d.Field.Field, _ => 0m);
+        var rows = 0;
+        foreach (var cells in source.Rows())
         {
-            var field = parsed.Fields[i];
-            if (field.Type != FieldTypes.Decimal)
+            rows++;
+            if (mapper is null)
                 continue;
-            var column = field.Column;
-            var index = raw.Headers.ToList().FindIndex(h => string.Equals(h.Trim(), column, StringComparison.OrdinalIgnoreCase));
-            var rawSum = raw.Rows.Sum(r => index < r.Length && PolishNumber.TryParse(r[index], out var v) ? v : 0m);
-            var position = i;
-            var canonicalSum = parsed.Rows.Sum(r => r.Values[position] as decimal? ?? 0m);
-            sums.Add((column, rawSum, canonicalSum));
+            var values = mapper.Map(cells, rows, issues);
+            foreach (var (field, position) in decimals)
+            {
+                var index = mapper.Indexes[position];
+                if (index < cells.Length && PolishNumber.TryParse(MappedParser.Clean(cells[index]), out var value))
+                    raw[field.Field] += Math.Round(value, MappedParser.DecimalPlaces, MidpointRounding.AwayFromZero);
+                if (values?[position] is decimal parsed)
+                    canonical[field.Field] += parsed;
+            }
         }
+        return new ContentCheck(rows, issues, raw, canonical);
+    }
 
-        var differences = sums.Where(s => s.Raw != s.Canonical).ToList();
-        if (raw.Rows.Count != parsed.Rows.Count || differences.Count > 0)
+    private static string FlowDifferences(RowMapper mapper, ContentCheck check) =>
+        string.Join(", ", mapper.Fields.Where(f => f.Type == FieldTypes.Decimal && check.RawSums[f.Field] != check.CanonicalSums[f.Field])
+            .Select(f => $"suma {mapper.Columns[mapper.Fields.ToList().IndexOf(f)]} {check.RawSums[f.Field]}/{check.CanonicalSums[f.Field]}"));
+
+    /// <summary>Drugi przebieg: wiersze danych kanonicznych do zapisu (plik czytany ponownie, bez gromadzenia w pamięci).</summary>
+    private static IEnumerable<CanonicalRow> CanonicalRows(TabularSource source, RowMapper mapper)
+    {
+        var issues = new IssueCollector();
+        var number = 0;
+        foreach (var cells in source.Rows())
         {
-            problem("kontrola przepływu", Issue.Error(
-                $"{fileName}: dane kanoniczne niezgodne z surowymi (wiersze {raw.Rows.Count}/{parsed.Rows.Count}" +
-                string.Concat(differences.Select(d => $", suma {d.Column} {d.Raw}/{d.Canonical}")) + ")",
-                locationName));
-            return "BŁĄD kontroli przepływu – patrz problemy";
+            number++;
+            var values = mapper.Map(cells, number, issues) ?? throw new InvalidDataException($"wiersz danych {number}: błąd wartości przy zapisie (plik zmienił się w trakcie importu?)");
+            yield return new CanonicalRow(number, values);
         }
-        return $"dane kanoniczne ({parser.Code}): {parsed.Rows.Count} wierszy" +
-               string.Concat(sums.Select(s => $", suma {s.Column} {PolishNumber.ToDisplay(s.Canonical)}"));
     }
 
     private static string DuplicateText(SourceFileRow existing) =>

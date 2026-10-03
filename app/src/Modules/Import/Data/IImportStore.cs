@@ -4,8 +4,8 @@ using PzlEv.Shared.Models.Db;
 namespace PzlEv.Modules.Import.Data;
 
 /// <summary>
-/// Magazyn importu – kontrakt przyszłych procedur meta.* / stg.* / can.* (F10; w SQL wiersze surowe ładowane
-/// wsadowo – SqlBulkCopy). Czyta definicje źródeł i lokalizacje zapisane przez Administrację (wspólne tabele).
+/// Magazyn importu – kontrakt przyszłych procedur meta.* / can.* (F10; w SQL dane kanoniczne ładowane
+/// wsadowo do CAN_Row – SqlBulkCopy). Czyta definicje źródeł i lokalizacje zapisane przez Administrację (wspólne tabele).
 /// </summary>
 public interface IImportStore
 {
@@ -26,11 +26,12 @@ public interface IImportStore
 
     SourceFileRow? FindByHash(string sha256);
 
-    /// <summary>Rejestruje wersję pliku z wierszami surowymi; null – treść (hash) zarejestrowana w międzyczasie.</summary>
-    long? RegisterFile(SourceFileRow file, IReadOnlyList<string?[]> rows);
-
-    /// <summary>Zapisuje dane kanoniczne w tabeli parsera (albo tylko status pliku, gdy data = null).</summary>
-    void CompleteCanonical(long fileId, string status, CanonicalData? data, int? parserVersion);
+    /// <summary>
+    /// Zapis wersji pliku w jednej transakcji: META_SourceFile, treść pliku (GZip) i dane kanoniczne (strumieniowo do CAN_Row);
+    /// po zapisie baza liczy wiersze i sumy – niezgodność z oczekiwanymi = CanonicalFlowException i nic nie zostaje zapisane.
+    /// Null – treść (hash) zapisana w międzyczasie (np. przez inną osobę).
+    /// </summary>
+    StoredFile? StoreFile(SourceFileRow file, byte[] content, CanonicalData? canonical);
 
     void RecordSeen(SourceFileSeenRow seen);
 
@@ -42,8 +43,9 @@ public interface IImportStore
 
     SourceFileRow? File(long fileId);
 
+    /// <summary>Wiersze pliku odczytane z zapisanej treści (oryginalny plik albo dawne wiersze surowe).</summary>
     IReadOnlyList<RawRowRecord> RawRows(long fileId);
 
-    /// <summary>Dane kanoniczne pliku z tabeli parsera (pole → wartość).</summary>
+    /// <summary>Dane kanoniczne pliku z CAN_Row (pole → wartość).</summary>
     IReadOnlyList<IReadOnlyDictionary<string, object?>> CanonicalRows(ParserRow parser, long fileId);
 }

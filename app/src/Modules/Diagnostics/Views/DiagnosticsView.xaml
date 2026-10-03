@@ -15,7 +15,7 @@
                     </Grid.ColumnDefinitions>
                     <Grid.RowDefinitions>
                         <RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition />
-                        <RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition />
+                        <RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition />
                     </Grid.RowDefinitions>
                     <TextBlock Grid.Row="0" Text="Runtime" Foreground="{StaticResource Muted}" />
                     <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding Runtime}" Style="{StaticResource MonoText}" />
@@ -35,6 +35,8 @@
                     <TextBlock Grid.Row="7" Grid.Column="1" Text="{Binding NetworkRoot}" Style="{StaticResource MonoText}" TextWrapping="Wrap" />
                     <TextBlock Grid.Row="8" Text="Folder Do_importu" Foreground="{StaticResource Muted}" />
                     <TextBlock Grid.Row="8" Grid.Column="1" Text="{Binding ImportFolder}" Style="{StaticResource MonoText}" TextWrapping="Wrap" />
+                    <TextBlock Grid.Row="9" Text="Serwer SQL" Foreground="{StaticResource Muted}" />
+                    <TextBlock Grid.Row="9" Grid.Column="1" Text="{Binding SqlServer, Mode=OneWay}" Style="{StaticResource MonoText}" TextWrapping="Wrap" />
                 </Grid>
                 <ItemsControl ItemsSource="{Binding Packages}">
                     <ItemsControl.ItemTemplate>

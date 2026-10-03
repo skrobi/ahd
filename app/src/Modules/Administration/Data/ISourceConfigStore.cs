@@ -24,11 +24,8 @@ public interface ISourceConfigStore
 
     IReadOnlyList<ParserRow> ParserHistory(long parserId);
 
-    /// <summary>
-    /// Zapisuje wersję parsera i w tej samej transakcji zakłada albo rozszerza jego tabelę (table – nazwa po CAN_).
-    /// Konflikt, niezgodny typ kolumny albo brak uprawnień do zmiany tabel – tekst w Conflict, nic nie zapisane.
-    /// </summary>
-    ParserSaveOutcome SaveParser(ParserInput input, string table);
+    /// <summary>Nowa wersja parsera (pola ze slotami); null – zapisano, inaczej powód odrzucenia (zmiana innej osoby, zajęty kod).</summary>
+    string? SaveParser(ParserInput input, string table);
 
     IReadOnlyList<SourceLocationRow> Locations();
 

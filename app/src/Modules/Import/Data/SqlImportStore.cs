@@ -1,14 +1,18 @@
+using System.Globalization;
 using Dapper;
 using Microsoft.Data.SqlClient;
 using PzlEv.Modules.Import.Models;
 using PzlEv.Shared.Models.Db;
+using PzlEv.Shared.Models.Sources;
 using PzlEv.Shared.Utils.Data.Sql;
+using PzlEv.Shared.Utils.Files;
 
 namespace PzlEv.Modules.Import.Data;
 
 /// <summary>
-/// Import w bazie: META_ImportBatch, META_SourceFile, META_SourceFileSeen, STG_RawRow i tabele parserów (CAN_*).
-/// Wiersze surowe i kanoniczne zapisywane wsadowo (SqlBulkCopy) w transakcji.
+/// Import w bazie: META_ImportBatch, META_SourceFile, META_SourceFileSeen, treść pliku (META_SourceFileContent, GZip)
+/// i dane kanoniczne (CAN_Row – sloty pól parsera). Wersja pliku zapisywana w jednej transakcji, dane kanoniczne
+/// strumieniowo (SqlBulkCopy) z kontrolą przepływu w bazie.
 /// </summary>
 public sealed class SqlImportStore(SqlDatabase db) : IImportStore
 {
@@ -17,7 +21,8 @@ public sealed class SqlImportStore(SqlDatabase db) : IImportStore
     private readonly string _batches = db.Table(DbTables.ImportBatch);
     private readonly string _files = db.Table(DbTables.SourceFile);
     private readonly string _seen = db.Table(DbTables.SourceFileSeen);
-    private readonly string _raw = db.Table(DbTables.RawRow);
+    private readonly string _content = db.Table(DbTables.SourceFileContent);
+    private readonly string _canonical = db.Table(DbTables.CanonicalRow);
     private readonly string _parsers = db.Table(DbTables.Parser);
 
     private const string BatchColumns = "BatchId AS Id, StartedAt, FinishedAt, UserName AS [User], Machine, AppVersion, Files, Imported, Skipped, Duplicates, Unrecognized, Errors, Status";
@@ -28,7 +33,8 @@ public sealed class SqlImportStore(SqlDatabase db) : IImportStore
 
     private const string SeenColumns = "Id, BatchId, Location, FileName, Size, ModifiedAt, Sha256, Decision, SourceCode, DataRows, Description";
 
-    private static readonly (string Name, Type Type)[] RawColumns = [("FileId", typeof(long)), ("RowNumber", typeof(int)), ("Data", typeof(string))];
+    /// <summary>Czas na zapis i kontrolę dużego pliku (miliony wierszy) w jednej transakcji.</summary>
+    private const int LongTimeout = 1800;
 
     public IReadOnlyList<SourceDefinitionRow> ActiveDefinitions()
     {
@@ -85,11 +91,11 @@ public sealed class SqlImportStore(SqlDatabase db) : IImportStore
         return connection.QuerySingleOrDefault<FileRow>($"SELECT {FileColumns} FROM {_files} WHERE Sha256 = @sha256", new { sha256 })?.ToRow();
     }
 
-    public long? RegisterFile(SourceFileRow file, IReadOnlyList<string?[]> rows)
+    public StoredFile? StoreFile(SourceFileRow file, byte[] content, CanonicalData? canonical)
     {
         try
         {
-            return db.InTransaction<long?>((connection, transaction) =>
+            return db.InTransaction<StoredFile?>((connection, transaction) =>
             {
                 var id = connection.ExecuteScalar<long>(
                     $"""
@@ -103,29 +109,50 @@ public sealed class SqlImportStore(SqlDatabase db) : IImportStore
                     {
                         file.Sha256, file.Location, file.FileName, file.SourceCode, file.Size, file.ModifiedAt, file.FileType, file.Sheet, file.Encoding,
                         file.Delimiter, Columns = SqlJson.Write(file.Columns), file.Signature, file.RowCount, file.BatchId, file.ImportedAt, file.ImportedBy,
-                        file.CanonicalStatus, file.CanonicalRows, file.ParserVersion,
+                        CanonicalStatus = canonical is null ? file.CanonicalStatus : "utworzone",
+                        CanonicalRows = canonical?.ExpectedRows ?? file.CanonicalRows,
+                        ParserVersion = canonical?.Parser.Version ?? file.ParserVersion,
                     },
                     transaction);
-                SqlBulk.Insert(connection, transaction, _raw, RawColumns, rows.Select((r, i) => new object?[] { id, i + 1, SqlJson.Write(r) }));
-                return id;
+                connection.Execute(
+                    $"INSERT INTO {_content} (FileId, Format, Size, Content) VALUES (@id, 'gzip', @size, @content)",
+                    new { id, size = (long)content.Length, content = FileCompression.GZip(content) }, transaction, LongTimeout);
+                if (canonical is null)
+                    return new StoredFile(id, 0, new Dictionary<string, decimal>());
+
+                var parserId = canonical.Parser.ParserId;
+                var version = canonical.Parser.Version;
+                SqlBulk.Insert(connection, transaction, _canonical, SqlCanonical.BulkColumns(canonical.Fields),
+                    canonical.Rows.Select(r => (object?[])[id, r.RowNumber, parserId, version, .. r.Values]));
+                var stored = Verify(connection, transaction, id, canonical);
+                return new StoredFile(id, stored.Rows, stored.Sums);
             });
         }
         catch (SqlException ex) when (SqlDatabase.IsDuplicateKey(ex))
         {
-            return null;   // ta sama treść zarejestrowana w międzyczasie (np. przez inną osobę)
+            return null;   // ta sama treść zapisana w międzyczasie (np. przez inną osobę)
         }
     }
 
-    public void CompleteCanonical(long fileId, string status, CanonicalData? data, int? parserVersion) =>
-        db.InTransaction((connection, transaction) =>
-        {
-            if (data is not null)
-                SqlBulk.Insert(connection, transaction, db.Table(data.Parser.LogicalTable), SqlCanonical.BulkColumns(data.Fields),
-                    data.Rows.Select(r => (object?[])[fileId, r.RowNumber, data.Parser.Version, .. r.Values]));
-            return connection.Execute(
-                $"UPDATE {_files} SET CanonicalStatus = @status, CanonicalRows = @count, ParserVersion = @parserVersion WHERE FileId = @fileId",
-                new { status, count = data?.Rows.Count ?? 0, parserVersion, fileId }, transaction);
-        });
+    /// <summary>Kontrola przepływu w bazie: liczba wierszy i sumy pól liczbowych pliku w CAN_Row = odczytane z pliku.</summary>
+    private (int Rows, IReadOnlyDictionary<string, decimal> Sums) Verify(SqlConnection connection, SqlTransaction transaction, long fileId, CanonicalData canonical)
+    {
+        var decimals = canonical.Fields.Where(f => f.Type == FieldTypes.Decimal).ToList();
+        var sums = string.Concat(decimals.Select((f, i) => $", ISNULL(SUM({SqlCanonical.Slot(f)}), 0) AS S{i}"));
+        var row = (IDictionary<string, object>)connection.QuerySingle(
+            $"SELECT COUNT_BIG(*) AS Rows{sums} FROM {_canonical} WHERE FileId = @fileId AND ParserId = @parserId",
+            new { fileId, parserId = canonical.Parser.ParserId }, transaction, LongTimeout);
+        var count = Convert.ToInt32(row["Rows"], CultureInfo.InvariantCulture);
+        var stored = decimals.Select((f, i) => (f.Field, Sum: Convert.ToDecimal(row[$"S{i}"], CultureInfo.InvariantCulture)))
+            .ToDictionary(s => s.Field, s => s.Sum);
+        var differences = decimals
+            .Where(f => stored[f.Field] != canonical.ExpectedSums.GetValueOrDefault(f.Field))
+            .Select(f => $", suma {f.Column} {canonical.ExpectedSums.GetValueOrDefault(f.Field)}/{stored[f.Field]}")
+            .ToList();
+        if (count != canonical.ExpectedRows || differences.Count > 0)
+            throw new CanonicalFlowException($"dane kanoniczne w bazie niezgodne z plikiem (wiersze {canonical.ExpectedRows}/{count}{string.Concat(differences)})");
+        return (count, stored);
+    }
 
     public void RecordSeen(SourceFileSeenRow seen)
     {
@@ -171,13 +198,23 @@ public sealed class SqlImportStore(SqlDatabase db) : IImportStore
     public IReadOnlyList<RawRowRecord> RawRows(long fileId)
     {
         using var connection = db.Open();
-        return connection.Query<(long FileId, int RowNumber, string Data)>($"SELECT FileId, RowNumber, Data FROM {_raw} WHERE FileId = @fileId ORDER BY RowNumber", new { fileId })
-            .Select(r => new RawRowRecord(r.FileId, r.RowNumber, SqlJson.Values(r.Data)))
+        var stored = connection.QuerySingleOrDefault<(string Format, byte[] Content, string FileName)>(
+            $"SELECT c.Format, c.Content, f.FileName FROM {_content} c JOIN {_files} f ON f.FileId = c.FileId WHERE c.FileId = @fileId",
+            new { fileId }, commandTimeout: LongTimeout);
+        if (stored.Content is null)
+            return [];
+        var content = FileCompression.GUnzip(stored.Content);
+        if (stored.Format == "jsonl-utf16-gzip")   // dawne wiersze surowe (migracja 007): JSON na wiersz
+            return System.Text.Encoding.Unicode.GetString(content).Split('\n', StringSplitOptions.RemoveEmptyEntries)
+                .Select((line, i) => new RawRowRecord(fileId, i + 1, SqlJson.Values(line)))
+                .ToList();
+        return TabularFileReader.Open(content, stored.FileName).Rows()
+            .Select((cells, i) => new RawRowRecord(fileId, i + 1, cells))
             .ToList();
     }
 
     public IReadOnlyList<IReadOnlyDictionary<string, object?>> CanonicalRows(ParserRow parser, long fileId) =>
-        SqlCanonical.Rows(db, parser.LogicalTable, fileId);
+        SqlCanonical.Rows(db, parser, fileId);
 
     private sealed class BatchRow
     {

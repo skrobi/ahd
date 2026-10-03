@@ -7,8 +7,9 @@ namespace PzlEv.Modules.Import.Models;
 public sealed record CanonicalRow(int RowNumber, object?[] Values);
 
 /// <summary>
-/// Wynik parsowania pliku: pola czytane z pliku, wiersze (puste przy błędach), problemy, liczba błędów, kolumny parsera,
-/// których nie ma w pliku (błąd układu), i kolumny pliku, których parser nie czyta (trafiają tylko do wierszy surowych).
+/// Wynik parsowania pliku w pamięci (małe pliki, testy): pola czytane z pliku, wiersze (puste przy błędach), problemy,
+/// liczba błędów, kolumny parsera, których nie ma w pliku (błąd układu), i kolumny pliku, których parser nie czyta
+/// (zostają tylko w treści pliku). Import czyta strumieniowo (RowMapper).
 /// </summary>
 public sealed record ParseResult(
     IReadOnlyList<ParserField> Fields,

@@ -41,7 +41,7 @@ i utrzymywaną na ekranie Administracja (`docs/funkcjonalnosc.md`, F08).
 | Waluta i jednostki | waluta każdej kwoty, jednostki ilości |
 | Interpretacja wartości | format liczb (np. polski: spacja tysięcy, przecinek dziesiętny), znak, puste wartości |
 | Reguły walidacji | kontrole wiersza i pliku z poziomem ERROR / WARNING (rozdz. 8) |
-| Parser | przekształcenie wierszy surowych do postaci kanonicznej (z wersją) – pilnuje układu kolumn |
+| Parser | przekształcenie wierszy pliku do postaci kanonicznej (z wersją) – pilnuje układu kolumn |
 
 - Prefiks służy wyłącznie do rozpoznania pliku. Znaczenie danych wynika z definicji, nie z nazwy pliku.
 - Każdy prefiks to **osobne źródło** z własnym kodem i definicją, nawet gdy kilka źródeł ma identyczny układ
@@ -53,20 +53,27 @@ i utrzymywaną na ekranie Administracja (`docs/funkcjonalnosc.md`, F08).
   układzie korzysta z jednego parsera (np. `ACTUALS_*` – rozdz. 4); ziarno, klucz i znaczenie okresu nie są polami
   definicji. Zapis tworzy nową wersję definicji. Definicję można usunąć: bieżąca wersja zostaje zamknięta (historia
   i zaimportowane dane zostają), pliki o tym prefiksie są odtąd nierozpoznane, a kod i prefiks można użyć ponownie.
-- **Parser** (`meta.Parser`, Administracja → Parsery, z historią) to tabela danych kanonicznych `CAN_<Tabela>` i jej
-  pola: kolumna w pliku (pusta – pole nie jest czytane z pliku), nazwa kolumny w bazie, typ (tekst z długością,
+- **Parser** (`meta.Parser`, Administracja → Parsery, z historią) to pola danych kanonicznych: kolumna w pliku (pusta – pole nie jest czytane z pliku), nazwa kolumny w bazie, typ (tekst z długością,
   kwota / liczba, liczba całkowita, data), opcjonalnie dopełnianie zerami tekstu z cyfr i znacznik **wymagane**
   (wartość w każdym wierszu). „Kolumny z pliku…” wczytuje wiersz nagłówków z pliku źródła tak samo jak import:
   dokłada pola dla nowych kolumn (tekst, nazwa w bazie z nazwy kolumny), oznacza kolumny, których w pliku brak,
-  i pokazuje przykładowe wartości. Zapis parsera zakłada tabelę albo dokłada w niej kolumny (i wydłuża tekst);
-  kolumn nie usuwa ani nie zmienia ich typu – pole usunięte z parsera zostaje w tabeli z danymi. Edycja parsera
-  wymaga prawa tworzenia i zmiany tabel (jak migracje).
-- Źródło z parserem: plik jest zapisywany w bazie (wersja pliku, wiersze surowe, dane kanoniczne) tylko
+  i pokazuje przykładowe wartości. Dane wszystkich parserów są w jednej stałej tabeli `CAN_Row` (migracja 007,
+  `docs/model-danych.md`, rozdz. 5.1): zapis parsera przydziela nowemu polu wolny **slot** jego rodzaju (tekst do
+  400 znaków, dłuższy tekst, kwota / liczba, liczba całkowita, data) i nie zmienia tabel. Pole zachowuje slot we
+  wszystkich wersjach parsera; zmiana rodzaju pola (np. kwota → tekst, tekst ponad 400 znaków) jest odrzucana –
+  dodaje się nowe pole; slot pola usuniętego z parsera zostaje przy jego danych i nie jest przydzielany innemu polu
+  (pole dodane ponownie pod tą samą nazwą wraca do swojego slotu). Ekran pokazuje zajęte sloty (np. „T 19/40 · N 4/20”).
+- Źródło z parserem: plik jest zapisywany w bazie (wersja pliku, treść pliku, dane kanoniczne) tylko
   wtedy, gdy przejdzie walidację – parser aktywny, w pliku są wszystkie kolumny parsera, pola wymagane wypełnione
-  i wartości zgodne z typami. Kolumny pliku spoza parsera trafiają tylko do wierszy surowych (opis decyzji podaje
+  i wartości zgodne z typami. Kolumny pliku spoza parsera są tylko w treści pliku (opis decyzji podaje
   ich nazwy). Plik, który walidacji nie przejdzie, ma decyzję „błąd” i nie zostawia danych w bazie; przy kolejnym
   imporcie jest pobierany ponownie (pomijane są tylko pliki, których treść jest w bazie). Źródło bez parsera –
-  zapisywane są wiersze surowe.
+  zapisywana jest tylko treść pliku.
+- **Import dużych plików:** plik (CSV albo Excel) jest czytany strumieniowo, wiersz po wierszu, w dwóch przebiegach:
+  1) sprawdzenie bez zapisu (kolumny, pola wymagane, typy, sumy kwot); 2) zapis w jednej transakcji – wersja pliku,
+  treść (oryginalny plik, GZip), wsadowy zapis wierszy do `CAN_Row` i kontrola w bazie (liczba wierszy i sumy kwot
+  po zapisie = odczytane z pliku; niezgodność wycofuje cały zapis). Liczby są zaokrąglane do 8 miejsc po przecinku.
+  Każda wersja pliku zostaje w bazie – najnowsza jest danymi bieżącymi, starsze służą do porównań.
 - Definicje powstają dla źródeł w miarę ustalania ich zawartości (O27).
 
 ---
@@ -145,13 +152,14 @@ PLN | 1 254,51 | USD | 261,54 | 0,000 | … | 8000123401 | 10 | 4500012301 | 202
 
 - Liczby w formacie polskim (spacja tysięcy, przecinek dziesiętny).
 - Struktura CES jest **płaska**: projekt → lista elementów WBS (numeracja ciągła z lukami).
-- Dane kanoniczne – parser `ACTUALS` (tabela `CAN_Actuals`, migracja 004): pola wszystkich kolumn powyżej; numer
+- Dane kanoniczne – parser `ACTUALS` (migracja 004; dane w `CAN_Row` – migracja 007): pola wszystkich kolumn powyżej; numer
   elementu kosztowego złożony z cyfr uzupełniany zerami do 10 znaków; minus na końcu liczby (zapis SAP, np. `48,00-`) oznacza wartość ujemną.
   Pola wymagane wskazuje parser (`WBS Element`, `Fiscal Year`, `Period`). Pola `Cost element descr.`,
-  `Partner-CCtr`, `Source object name` (wcześniejszy układ) zostają w tabeli, ale nie są czytane z pliku. Układ
+  `Partner-CCtr`, `Source object name` (wcześniejszy układ) zostają w parserze ze swoimi slotami, ale nie są czytane z pliku. Układ
   raportu może się zmieniać – zmienia się wtedy pola parsera ACTUALS (Administracja → Parsery), nie kod ani
   definicje. Klucz wiersza nie jest ustalony (O27) – bez kontroli duplikatów. Kontrola przepływu przy imporcie:
-  liczba wierszy i sumy wszystkich pól liczbowych (kwot) parsera w danych kanonicznych zgodne z wierszami surowymi.
+  liczba wierszy i sumy wszystkich pól liczbowych (kwot) parsera w danych kanonicznych zgodne z kolumnami pliku –
+  przed zapisem i ponownie w bazie po zapisie (rozdz. 2).
 
 ---
 
