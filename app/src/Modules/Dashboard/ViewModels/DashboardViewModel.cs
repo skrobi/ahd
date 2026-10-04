@@ -26,10 +26,13 @@ public sealed class DashboardViewModel : ObservableObject
         _data = data;
         OpenImport = new RelayCommand(_ => navigator.NavigateTo(ModuleKeys.Import));
         NewProject = new RelayCommand(_ => navigator.NavigateTo(ModuleKeys.Projects));
-        Refresh = new RelayCommand(_ => Load());
-        ResolveProblem = new RelayCommand(p => Resolve(p as AttentionItem));
-        Load();
+        Refresh = new AsyncRelayCommand(Load, () => !Busy.IsBusy);
+        ResolveProblem = new RelayCommand(p => _ = Resolve(p as AttentionItem), _ => !Busy.IsBusy);
+        _ = Load();
     }
+
+    /// <summary>Odczyt z bazy w tle (pasek „Trwa: …”) – okno nie zamarza przy starcie i odświeżaniu.</summary>
+    public BusyState Busy { get; } = new();
 
     public string Eyebrow { get => _eyebrow; private set => SetProperty(ref _eyebrow, value); }
 
@@ -98,13 +101,13 @@ public sealed class DashboardViewModel : ObservableObject
     /// <summary>„Rozwiązane” przy problemie z listy „Wymaga uwagi”.</summary>
     public ICommand ResolveProblem { get; }
 
-    private void Resolve(AttentionItem? item)
+    private async Task Resolve(AttentionItem? item)
     {
         if (item is null)
             return;
         try
         {
-            _data.Resolve(item.ProblemId);
+            await Busy.Run("Oznaczanie problemu jako rozwiązanego…", () => _data.Resolve(item.ProblemId));
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
@@ -112,18 +115,20 @@ public sealed class DashboardViewModel : ObservableObject
             Error = $"Nie udało się oznaczyć problemu jako rozwiązanego: {ex.Message}";
             return;
         }
-        Load();
+        await Load();
     }
 
-    private void Load()
+    private async Task Load()
     {
         try
         {
-            Eyebrow = _data.Eyebrow;
-            GlobalCards = _data.GlobalCards();
-            ZakresCards = _data.ZakresCards();
-            Attention = _data.Attention();
-            Events = _data.Events();
+            var (eyebrow, global, projects, attention, events) = await Busy.Run("Wczytywanie pulpitu…",
+                () => (_data.Eyebrow, _data.GlobalCards(), _data.ZakresCards(), _data.Attention(), _data.Events()));
+            Eyebrow = eyebrow;
+            GlobalCards = global;
+            ZakresCards = projects;
+            Attention = attention;
+            Events = events;
             Error = null;
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)

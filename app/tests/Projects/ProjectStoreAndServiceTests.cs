@@ -197,6 +197,16 @@ public sealed class ProjectStoreAndServiceTests : IDisposable
     }
 
     [SqlFact]
+    public void Mapping_inputs_are_read_once_per_session_until_refresh()
+    {
+        var first = _service.Mapping();
+
+        Assert.Same(first, _service.Mapping());              // kolejne ekrany nie czytają raportu i PZLPROD ponownie
+        Assert.NotSame(first, _service.Mapping(refresh: true));
+        Assert.Equal("Brak połączenia z PZLPROD (pzl-ev.json, PzlProd)", first.P1sError);
+    }
+
+    [SqlFact]
     public void Template_contains_scope_elements_and_reads_back()
     {
         var path = Path.Combine(_root, "szablon.xlsx");

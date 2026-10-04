@@ -25,33 +25,37 @@ public sealed class ProjectDetailViewModel : ObservableObject
     private string _status = "";
     private Pill _readiness = new("muted", "");
     private MappingInputs _mapping = MappingInputs.None;
+    private IReadOnlyDictionary<string, string> _owners = new Dictionary<string, string>();
+    private PoTree _saved = new();
 
-    public ProjectDetailViewModel(ProjectService service, IFileDialogs dialogs, ProjectInfo project, Action back)
+    public ProjectDetailViewModel(ProjectService service, IFileDialogs dialogs, BusyState busy, ProjectInfo project, Action back)
     {
         _service = service;
         _dialogs = dialogs;
+        Busy = busy;
         Project = project;
-        Objectives = new PoEditorViewModel(dialogs, service.ReadObjectives, tree => service.ValidateObjectives(project.Code, tree), ProjectService.Refresh);
-        Back = new RelayCommand(_ => back());
-        SaveObjectives = new RelayCommand(_ => DoSaveObjectives(), _ => Objectives.IsDirty);
-        DiscardObjectives = new RelayCommand(_ => { Objectives.Load(_service.Objectives(Code)); Status = "Zmiany nakładki odrzucone."; }, _ => Objectives.IsDirty);
-        ExportDictionaries = new RelayCommand(_ => DoExportDictionaries());
-        CreateFolders = new RelayCommand(_ => DoCreateFolders());
-        RefreshMapping = new RelayCommand(_ => { LoadMapping(); Objectives.Load(Objectives.IsDirty ? Objectives.Tree : _service.Objectives(Code)); Reload(); Status = "Odświeżono mapowanie CES ↔ P1S."; },
-            _ => !Objectives.IsDirty);
+        // Kontrola nakładki w pamięci (elementy CES innych projektów wczytane przy otwarciu); zapis sprawdza je w bazie.
+        Objectives = new PoEditorViewModel(dialogs, busy, service.ReadObjectives, tree => ObjectivesValidator.Validate(tree, _owners), ProjectService.Refresh);
         Objectives.ResolveMapping = tree => ProjectService.Resolve(tree, _mapping);
-        LoadMapping();
+        Objectives.MappingInfo = "Wczytywanie danych mapowania CES ↔ P1S…";
+        Back = new RelayCommand(_ => back(), _ => !Busy.IsBusy);
+        SaveObjectives = new AsyncRelayCommand(DoSaveObjectives, () => Objectives.IsDirty && !Busy.IsBusy);
+        DiscardObjectives = new RelayCommand(_ => { Objectives.Load(_saved.Copy()); Status = "Zmiany nakładki odrzucone."; }, _ => Objectives.IsDirty && !Busy.IsBusy);
+        ExportDictionaries = new AsyncRelayCommand(DoExportDictionaries, () => !Busy.IsBusy);
+        CreateFolders = new AsyncRelayCommand(DoCreateFolders, () => !Busy.IsBusy);
+        RefreshMapping = new AsyncRelayCommand(() => Reload(refreshMapping: true), () => !Objectives.IsDirty && !Busy.IsBusy);
         foreach (var item in ProjectDictionaries.ForType(project.Type))
         {
             var panel = new DictionaryPanelViewModel(item, project.Type);
-            panel.Load = new RelayCommand(_ => LoadDictionary(panel), _ => item.Stored && !Objectives.IsDirty);
-            panel.Apply = new RelayCommand(_ => ApplyDictionary(panel), _ => panel.Preview is { HasErrors: false, HasChanges: true });
-            panel.Remove = new RelayCommand(_ => { panel.SetPreview(null, ""); Status = "Wczytanie anulowane – słownik bez zmian."; }, _ => panel.HasPreview);
+            panel.Load = new AsyncRelayCommand(() => LoadDictionary(panel), () => item.Stored && !Objectives.IsDirty && !Busy.IsBusy);
+            panel.Apply = new AsyncRelayCommand(() => ApplyDictionary(panel), () => panel.Preview is { HasErrors: false, HasChanges: true } && !Busy.IsBusy);
+            panel.Remove = new RelayCommand(_ => { panel.SetPreview(null, ""); Status = "Wczytanie anulowane – słownik bez zmian."; }, _ => panel.HasPreview && !Busy.IsBusy);
             Dictionaries.Add(panel);
         }
-        Objectives.Load(_service.Objectives(Code));
-        Reload();
+        _ = Reload(refreshMapping: false);
     }
+
+    public BusyState Busy { get; }
 
     public ProjectInfo Project { get; }
 
@@ -86,34 +90,48 @@ public sealed class ProjectDetailViewModel : ObservableObject
     public ICommand CreateFolders { get; }
     public ICommand RefreshMapping { get; }
 
-    private void LoadMapping()
-    {
-        Try(() => _mapping = _service.Mapping());
-        Objectives.MappingInfo = _mapping.Describe;
-    }
+    /// <summary>Stan projektu z bazy w jednym odczycie w tle: nakładka, mapowanie, gotowość, słowniki.</summary>
+    private sealed record Snapshot(PoTree Tree, MappingInputs Mapping, IReadOnlyDictionary<string, string> Owners, List<Issue> Readiness,
+        IReadOnlyDictionary<string, (int Rows, string LastChange)> Dictionaries);
 
-    private void Reload()
+    /// <summary>Wczytuje stan projektu w tle; keepEdits – nakładka w edycji zostaje (odświeżane są gotowość i słowniki).</summary>
+    private async Task Reload(bool refreshMapping, bool keepEdits = false)
     {
-        Try(() =>
+        var codes = Dictionaries.Where(p => p.Item.Stored).Select(p => p.Item.Code).ToList();
+        await Try(async () =>
         {
-            foreach (var panel in Dictionaries.Where(p => p.Item.Stored))
+            var snapshot = await Busy.Run(refreshMapping ? "Odświeżanie mapowania CES ↔ P1S i gotowości projektu…" : "Wczytywanie projektu, mapowania i gotowości…", () =>
             {
-                panel.Rows = _service.Rows(panel.Item.Code, Code).Count;
-                panel.LastChange = _service.LastChange(panel.Item.Code, Code);
-            }
-            var checks = _service.Readiness(Project, _service.Objectives(Code), _mapping);
+                var tree = _service.Objectives(Code);
+                var mapping = _service.Mapping(refreshMapping);
+                return new Snapshot(tree, mapping, _service.WbsOwners(Code), _service.Readiness(Project, tree, mapping),
+                    codes.ToDictionary(c => c, c => (_service.Rows(c, Code).Count, _service.LastChange(c, Code))));
+            });
+            _saved = snapshot.Tree;
+            _mapping = snapshot.Mapping;
+            _owners = snapshot.Owners;
+            Objectives.MappingInfo = _mapping.Describe;
+            if (keepEdits && Objectives.IsDirty)
+                Objectives.Refresh();
+            else
+                Objectives.Load(_saved.Copy());
+            foreach (var panel in Dictionaries.Where(p => p.Item.Stored))
+                (panel.Rows, panel.LastChange) = snapshot.Dictionaries[panel.Item.Code];
             Readiness.Clear();
-            foreach (var check in checks)
+            foreach (var check in snapshot.Readiness)
                 Readiness.Add(check);
-            ReadinessPill = ProjectReadiness.IsReady(checks) ? new Pill("ok", "gotowy") : new Pill("crit", "niegotowy – przebieg zablokowany");
+            ReadinessPill = ProjectReadiness.IsReady(snapshot.Readiness) ? new Pill("ok", "gotowy") : new Pill("crit", "niegotowy – przebieg zablokowany");
+            if (refreshMapping)
+                Status = "Odświeżono mapowanie CES ↔ P1S.";
         });
     }
 
-    private void DoSaveObjectives()
+    private async Task DoSaveObjectives()
     {
-        Try(() =>
+        var tree = Objectives.Tree.Copy();
+        await Try(async () =>
         {
-            var (issues, result) = _service.SaveObjectives(Code, Objectives.Tree);
+            var (issues, result) = await Busy.Run("Zapisywanie nakładki Performance Objectives…", () => _service.SaveObjectives(Code, tree));
             if (result is null)
             {
                 Status = "Nakładka ma błędy (ERROR) – nic nie zapisano.";
@@ -124,31 +142,33 @@ public sealed class ProjectDetailViewModel : ObservableObject
                 Status = result.Conflict!;
                 return;
             }
-            Objectives.Load(_service.Objectives(Code));
+            await Reload(refreshMapping: false);
             Status = $"Zapisano nakładkę: +{result.Added} ~{result.Updated} −{result.Removed}{(issues.Count > 0 ? $" (ostrzeżenia: {issues.Count})" : "")}.";
-            Reload();
         });
     }
 
-    private ProjectDictionaryContext Context(string dictionary)
+    /// <summary>Kontekst walidacji (w tle): harmonogram względem WP z wczytanego „WP i CAM”, jeśli jest podgląd – inaczej z bazy.</summary>
+    private Func<ProjectDictionaryContext> Context(string dictionary)
     {
-        // Harmonogram sprawdzany względem WP z wczytanego (niezapisanego) „WP i CAM”, jeśli jest podgląd – inaczej z bazy.
         var wpPreview = Dictionaries.FirstOrDefault(p => p.Item.Code == ProjectDictionaries.WpCam)?.Preview;
-        IEnumerable<DictRow> wpRows = dictionary != ProjectDictionaries.WpCam && wpPreview is { HasErrors: false }
-            ? wpPreview.Working
-            : _service.Rows(ProjectDictionaries.WpCam, Code);
-        return _service.Context(Code, _service.Objectives(Code), wpRows, _mapping);
+        var fromPreview = dictionary != ProjectDictionaries.WpCam && wpPreview is { HasErrors: false } ? wpPreview.Working : null;
+        var (tree, mapping) = (_saved, _mapping);
+        return () => _service.Context(Code, tree, fromPreview ?? _service.Rows(ProjectDictionaries.WpCam, Code), mapping);
     }
 
-    private void LoadDictionary(DictionaryPanelViewModel panel)
+    private async Task LoadDictionary(DictionaryPanelViewModel panel)
     {
         var path = _dialogs.OpenExcel($"Wczytaj słownik „{panel.Name}” projektu {Code}");
         if (path is null)
             return;
-        Try(() =>
+        var context = Context(panel.Item.Code);
+        await Try(async () =>
         {
-            var sheet = ProjectService.FindSheet(path, panel.Item);
-            var preview = _service.PreviewDictionary(panel.Item.Code, Context(panel.Item.Code), path, Code, sheet);
+            var (sheet, preview) = await Busy.Run($"Wczytywanie i sprawdzanie słownika „{panel.Name}”…", () =>
+            {
+                var found = ProjectService.FindSheet(path, panel.Item);
+                return (found, _service.PreviewDictionary(panel.Item.Code, context(), path, Code, found));
+            });
             panel.SetPreview(preview, $"{Path.GetFileName(path)}{(sheet is null ? "" : $" · arkusz „{sheet}”")}");
             Status = preview.HasErrors
                 ? $"{panel.Name}: plik ma błędy (ERROR) – nie można go wczytać."
@@ -156,48 +176,49 @@ public sealed class ProjectDetailViewModel : ObservableObject
         });
     }
 
-    private void ApplyDictionary(DictionaryPanelViewModel panel)
+    private async Task ApplyDictionary(DictionaryPanelViewModel panel)
     {
-        Try(() =>
+        var (context, preview) = (Context(panel.Item.Code), panel.Preview!);
+        await Try(async () =>
         {
-            var outcome = _service.ApplyDictionary(panel.Item.Code, Context(panel.Item.Code), panel.Preview!, Code);
-            Status = $"{panel.Name}: {outcome.Message}";
+            var outcome = await Busy.Run($"Zapisywanie słownika „{panel.Name}”…", () => _service.ApplyDictionary(panel.Item.Code, context(), preview, Code));
             if (outcome.Status == SaveStatus.Saved)
                 panel.SetPreview(null, "");
-            Reload();
+            await Reload(refreshMapping: false, keepEdits: true);
+            Status = $"{panel.Name}: {outcome.Message}";
         });
     }
 
-    private void DoExportDictionaries()
+    private async Task DoExportDictionaries()
     {
         var path = _dialogs.SaveExcel("Pobierz słowniki projektu", $"{Code}_slowniki_projektu.xlsx");
         if (path is null)
             return;
-        Try(() =>
+        var (tree, mapping) = (_saved, _mapping);
+        await Try(async () =>
         {
-            _service.ExportDictionaries(path, Code, Project.Type, _service.Objectives(Code), _mapping);
+            await Busy.Run("Zapisywanie słowników projektu do Excela…", () => _service.ExportDictionaries(path, Code, Project.Type, tree, mapping));
             Status = $"Zapisano {path} – popraw w Excelu i wczytaj ponownie (przed zapisem zobaczysz różnice).";
         });
     }
 
-    private void DoCreateFolders()
+    private async Task DoCreateFolders()
     {
-        Try(() =>
+        await Try(async () =>
         {
-            var created = _service.Folders.Create(Code);
+            var created = await Busy.Run("Tworzenie folderów projektu…", () => _service.Folders.Create(Code));
+            await Reload(refreshMapping: false, keepEdits: true);
             Status = created.Count == 0 ? "Wszystkie foldery projektu istnieją." : $"Utworzono foldery: {string.Join(", ", created)}.";
-            Reload();
         });
     }
 
-    private void Try(Action action)
+    private async Task Try(Func<Task> action)
     {
         try
         {
-            action();
+            await action();
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or NotSupportedException or ArgumentException
-                                       or Microsoft.Data.SqlClient.SqlException)
+        catch (Exception ex) when (ex is not OutOfMemoryException)
         {
             Logger.Error(ex, "Projekt {Code}", Code);
             Status = $"Nie udało się: {ex.Message}";

@@ -34,30 +34,53 @@ public sealed class WizardViewModel : ObservableObject
     private CreateOutcome? _outcome;
     private AnalyticBase? _analytic;
     private MappingInputs _mapping = MappingInputs.None;
+    private IReadOnlyDictionary<string, string> _owners = new Dictionary<string, string>();
+    private IReadOnlyList<string> _codes = [];
 
-    public WizardViewModel(ProjectService service, IFileDialogs dialogs, Action cancel, Action<string> openProject)
+    public WizardViewModel(ProjectService service, IFileDialogs dialogs, BusyState busy, Action cancel, Action<string> openProject)
     {
         _service = service;
         _dialogs = dialogs;
         _openProject = openProject;
+        Busy = busy;
         Types = ProjectTypes.All.Select(t => new TypeOption(t)).ToList();
         _type = Types[0];
-        Objectives = new PoEditorViewModel(dialogs, service.ReadObjectives, tree => service.ValidateObjectives(Code, tree), (_, imported) => imported);
+        // Kontrola nakładki w pamięci: elementy CES innych projektów wczytane raz (InitAsync), zapis sprawdza je ponownie w bazie.
+        Objectives = new PoEditorViewModel(dialogs, busy, service.ReadObjectives, tree => ObjectivesValidator.Validate(tree, _owners), (_, imported) => imported);
         Objectives.ResolveMapping = tree => ProjectService.Resolve(tree, _mapping);
-        Objectives.Changed += RefreshDictionaries;   // zmiana zakresu – ponowna walidacja wczytanych słowników
-        Back = new RelayCommand(_ => GoTo(_step - 1), _ => _step > 0 && _outcome is not { Created: true });
-        Next = new RelayCommand(_ => DoNext(), _ => _step < StepTitles.Count - 1);
-        Cancel = new RelayCommand(_ => cancel());
-        DownloadTemplate = new RelayCommand(_ => DoDownloadTemplate());
-        LoadWorkbook = new RelayCommand(_ => DoLoadWorkbook());
-        ExportAnalytic = new RelayCommand(_ => DoExportAnalytic(), _ => _analytic is not null);
-        Create = new RelayCommand(_ => DoCreate(), _ => _outcome is not { Created: true });
-        OpenProject = new RelayCommand(_ => _openProject(Code), _ => _outcome is { Created: true });
-        Try(() => _mapping = service.Mapping());
-        Objectives.MappingInfo = _mapping.Describe;
+        Back = new RelayCommand(_ => GoTo(_step - 1), _ => _step > 0 && _outcome is not { Created: true } && !Busy.IsBusy);
+        Next = new RelayCommand(_ => DoNext(), _ => _step < StepTitles.Count - 1 && !Busy.IsBusy);
+        Cancel = new RelayCommand(_ => cancel(), _ => !Busy.IsBusy);
+        DownloadTemplate = new AsyncRelayCommand(DoDownloadTemplate, () => !Busy.IsBusy);
+        LoadWorkbook = new AsyncRelayCommand(DoLoadWorkbook, () => !Busy.IsBusy && !IsCreated);
+        ExportAnalytic = new AsyncRelayCommand(DoExportAnalytic, () => _analytic is not null && !Busy.IsBusy);
+        Create = new AsyncRelayCommand(DoCreate, () => _outcome is not { Created: true } && !Busy.IsBusy);
+        OpenProject = new RelayCommand(_ => _openProject(Code), _ => _outcome is { Created: true } && !Busy.IsBusy);
+        Objectives.MappingInfo = "Wczytywanie danych mapowania CES ↔ P1S…";
         Objectives.Load(new PoTree());
         BuildPanels();
         GoTo(0);
+        _ = InitAsync();
+    }
+
+    public BusyState Busy { get; }
+
+    /// <summary>Dane do kontroli w pamięci: kody projektów, elementy CES innych nakładek, mapowanie (raz na sesję).</summary>
+    private async Task InitAsync()
+    {
+        try
+        {
+            (_codes, _owners, _mapping) = await Busy.Run("Wczytywanie projektów i mapowania CES ↔ P1S…",
+                () => ((IReadOnlyList<string>)_service.Projects().Select(p => p.Code).ToList(), _service.WbsOwners(""), _service.Mapping()));
+            Objectives.MappingInfo = _mapping.Describe;
+            Objectives.Refresh();
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            Logger.Error(ex, "Kreator projektu – dane początkowe");
+            Status = $"Nie udało się wczytać danych z bazy: {ex.Message}";
+            Objectives.MappingInfo = "Mapowanie CES ↔ P1S niedostępne.";
+        }
     }
 
     public IReadOnlyList<TypeOption> Types { get; }
@@ -116,7 +139,7 @@ public sealed class WizardViewModel : ObservableObject
             if (value is null || !SetProperty(ref _type, value))
                 return;
             BuildPanels();
-            RefreshDictionaries();
+            _ = RefreshDictionaries();
         }
     }
 
@@ -146,7 +169,7 @@ public sealed class WizardViewModel : ObservableObject
     {
         if (_step == 0)
         {
-            SetAll(BasicIssues, _service.ValidateBasics(Code, Name, Type.Code));
+            SetAll(BasicIssues, ProjectRules.ValidateBasics(Code, Name, Type.Code, _codes));
             if (BasicIssues.Any(i => i.Level == CheckLevel.Error))
             {
                 Status = "Popraw dane podstawowe projektu.";
@@ -163,26 +186,47 @@ public sealed class WizardViewModel : ObservableObject
         for (var i = 0; i < StepTitles.Count; i++)
             Steps.Add(new StepChip($"{i + 1}. {StepTitles[i]}", i == _step, i < _step));
         Status = "";
+        foreach (var name in new[] { nameof(Step), nameof(IsStep1), nameof(IsStep2), nameof(IsStep3), nameof(IsStep4), nameof(IsStep5), nameof(IsLastStep), nameof(IsNotLastStep) })
+            OnPropertyChanged(name);
         switch (_step)
         {
             case 1:
                 Objectives.Validate();
                 break;
             case 2:
-                GlobalDictionaries = _service.GlobalState().Select(g => new GlobalDictionaryState(g.Name, g.Rows, g.LastChange)).ToList();
-                OnPropertyChanged(nameof(GlobalDictionaries));
-                RefreshDictionaries();
+                _ = EnterDictionariesAsync();
                 break;
             case 3:
-                SetAll(FolderChecks, Code.Length > 0 ? _service.Folders.CheckBeforeCreate(Code) : [Issue.Error("Podaj kod projektu w kroku 1", "Kod")]);
-                OnPropertyChanged(nameof(ItRequest));
+                _ = CheckFoldersAsync();
                 break;
             case 4:
-                BuildSummary();
+                _ = BuildSummaryAsync();
                 break;
         }
-        foreach (var name in new[] { nameof(Step), nameof(IsStep1), nameof(IsStep2), nameof(IsStep3), nameof(IsStep4), nameof(IsStep5), nameof(IsLastStep), nameof(IsNotLastStep) })
-            OnPropertyChanged(name);
+    }
+
+    private async Task EnterDictionariesAsync()
+    {
+        await Try(async () =>
+        {
+            var state = await Busy.Run("Wczytywanie słowników globalnych…", _service.GlobalState);
+            GlobalDictionaries = state.Select(g => new GlobalDictionaryState(g.Name, g.Rows, g.LastChange)).ToList();
+            OnPropertyChanged(nameof(GlobalDictionaries));
+        });
+        await RefreshDictionaries();
+    }
+
+    private async Task CheckFoldersAsync()
+    {
+        OnPropertyChanged(nameof(ItRequest));
+        if (Code.Length == 0)
+        {
+            SetAll(FolderChecks, [Issue.Error("Podaj kod projektu w kroku 1", "Kod")]);
+            return;
+        }
+        FolderChecks.Clear();
+        var code = Code;
+        await Try(async () => SetAll(FolderChecks, await Busy.Run("Sprawdzanie folderów na dysku sieciowym…", () => _service.Folders.CheckBeforeCreate(code))));
     }
 
     // ---------- krok 3: słowniki projektu ----------
@@ -193,87 +237,87 @@ public sealed class WizardViewModel : ObservableObject
         foreach (var item in ProjectDictionaries.ForType(Type.Code))
         {
             var panel = new DictionaryPanelViewModel(item, Type.Code);
-            panel.Load = new RelayCommand(_ => LoadDictionary(panel), _ => item.Stored && !IsCreated);
-            panel.Remove = new RelayCommand(_ => { _files.Remove(item.Code); RefreshDictionaries(); }, _ => _files.ContainsKey(item.Code) && !IsCreated);
+            panel.Load = new AsyncRelayCommand(() => LoadDictionary(panel), () => item.Stored && !IsCreated && !Busy.IsBusy);
+            panel.Remove = new AsyncRelayCommand(() => { _files.Remove(item.Code); return RefreshDictionaries(); }, () => _files.ContainsKey(item.Code) && !IsCreated && !Busy.IsBusy);
             Dictionaries.Add(panel);
         }
         foreach (var code in _files.Keys.Where(k => Dictionaries.All(p => p.Item.Code != k)).ToList())
             _files.Remove(code);
     }
 
-    private void LoadDictionary(DictionaryPanelViewModel panel)
+    private async Task LoadDictionary(DictionaryPanelViewModel panel)
     {
         var path = _dialogs.OpenExcel($"Wczytaj słownik „{panel.Name}” (Excel albo CSV)");
         if (path is null)
             return;
-        Try(() =>
+        await Try(async () =>
         {
-            _files[panel.Item.Code] = (path, ProjectService.FindSheet(path, panel.Item));
-            RefreshDictionaries();
+            var sheet = await Busy.Run("Odczyt arkuszy pliku…", () => ProjectService.FindSheet(path, panel.Item));
+            _files[panel.Item.Code] = (path, sheet);
+            await RefreshDictionaries();
         });
     }
 
-    private void DoLoadWorkbook()
+    private async Task DoLoadWorkbook()
     {
         var path = _dialogs.OpenExcel("Wczytaj słowniki projektu – skoroszyt z arkuszami jak w szablonie");
         if (path is null)
             return;
-        Try(() =>
+        await Try(async () =>
         {
-            var found = new List<string>();
-            foreach (var panel in Dictionaries.Where(p => p.Item.Stored))
-            {
-                if (ProjectService.FindSheet(path, panel.Item) is { } sheet)
-                {
-                    _files[panel.Item.Code] = (path, sheet);
-                    found.Add(panel.Name);
-                }
-            }
-            RefreshDictionaries();
+            var items = Dictionaries.Where(p => p.Item.Stored).Select(p => p.Item).ToList();
+            var sheets = await Busy.Run("Odczyt arkuszy skoroszytu…", () => items.Select(i => (Item: i, Sheet: ProjectService.FindSheet(path, i))).ToList());
+            foreach (var (item, sheet) in sheets.Where(x => x.Sheet is not null))
+                _files[item.Code] = (path, sheet);
+            await RefreshDictionaries();
+            var found = sheets.Where(x => x.Sheet is not null).Select(x => x.Item.Name).ToList();
             Status = found.Count > 0
                 ? $"Wczytano arkusze: {string.Join(", ", found)}."
                 : "Skoroszyt nie ma arkuszy o nazwach słowników (jak w szablonie) – wczytaj słowniki pojedynczo.";
         });
     }
 
-    private void RefreshDictionaries()
+    /// <summary>Podglądy wczytanych słowników na bieżącej nakładce (w tle: odczyt plików i kontekstu z bazy).</summary>
+    private async Task RefreshDictionaries()
     {
         if (Dictionaries.Count == 0)
             return;
-        Try(() =>
+        await Try(async () =>
         {
-            var previews = _files.Count == 0 ? [] : _service.PreviewAll(Code, Objectives.Tree, _files, _mapping);
+            var (code, tree, files, mapping) = (Code, Objectives.Tree.Copy(), new Dictionary<string, (string Path, string? Sheet)>(_files), _mapping);
+            var previews = files.Count == 0 ? [] : await Busy.Run("Sprawdzanie słowników projektu…", () => _service.PreviewAll(code, tree, files, mapping));
             foreach (var panel in Dictionaries)
             {
-                var file = _files.TryGetValue(panel.Item.Code, out var f) ? $"{Path.GetFileName(f.Path)}{(f.Sheet is null ? "" : $" · arkusz „{f.Sheet}”")}" : "";
+                var file = files.TryGetValue(panel.Item.Code, out var f) ? $"{Path.GetFileName(f.Path)}{(f.Sheet is null ? "" : $" · arkusz „{f.Sheet}”")}" : "";
                 panel.SetPreview(previews.GetValueOrDefault(panel.Item.Code), file);
             }
         });
     }
 
-    private void DoDownloadTemplate()
+    private async Task DoDownloadTemplate()
     {
         var path = _dialogs.SaveExcel("Pobierz szablon słowników projektu", $"{(Code.Length > 0 ? Code : "Projekt")}_slowniki_projektu.xlsx");
         if (path is null)
             return;
-        Try(() =>
+        var (type, tree, mapping) = (Type.Code, Objectives.Tree.Copy(), _mapping);
+        await Try(async () =>
         {
-            _service.ExportDictionaries(path, "", Type.Code, Objectives.Tree, _mapping);
+            await Busy.Run("Zapisywanie szablonu Excel…", () => _service.ExportDictionaries(path, "", type, tree, mapping));
             Status = $"Zapisano szablon {path} – arkusz „WP i CAM” zawiera elementy P1S z zakresu (Legacy WBS i mapowanie nakładki).";
         });
     }
 
     // ---------- krok 5: podsumowanie i utworzenie ----------
 
-    private void BuildSummary()
+    private async Task BuildSummaryAsync()
     {
         var checks = new List<Issue>();
-        checks.AddRange(_service.ValidateBasics(Code, Name, Type.Code).Where(i => i.Level == CheckLevel.Error));
+        checks.AddRange(ProjectRules.ValidateBasics(Code, Name, Type.Code, _codes).Where(i => i.Level == CheckLevel.Error));
         checks.AddRange(Objectives.Tree.ElementCount > 0
             ? [new Issue(CheckLevel.Pass, $"Performance Objectives: {Objectives.Summary}")]
             : []);
-        checks.AddRange(_service.ValidateObjectives(Code, Objectives.Tree).Where(i => i.Level == CheckLevel.Error));
-        RefreshDictionaries();
+        checks.AddRange(ObjectivesValidator.Validate(Objectives.Tree, _owners).Where(i => i.Level == CheckLevel.Error));
+        await RefreshDictionaries();
         foreach (var panel in Dictionaries)
         {
             if (!panel.Item.Stored)
@@ -285,11 +329,23 @@ public sealed class WizardViewModel : ObservableObject
             else if (panel.Item.IsRequired(Type.Code))
                 checks.Add(Issue.Warning($"{panel.Name}: nie wczytano – słownik pusty, pierwszy przebieg zablokowany (projekt niegotowy)", panel.Name));
         }
-        checks.AddRange(Code.Length > 0 ? _service.Folders.CheckBeforeCreate(Code).Where(i => i.Level == CheckLevel.Error) : []);
-
         var wp = Dictionaries.FirstOrDefault(p => p.Item.Code == ProjectDictionaries.WpCam)?.Preview;
         var plan = Dictionaries.FirstOrDefault(p => p.Item.Code == ProjectDictionaries.ScheduleBudget)?.Preview;
-        _analytic = ProjectService.Analytic(Objectives.Tree, wp is { HasErrors: false } ? wp.Working : [], plan is { HasErrors: false } ? plan.Working : [], _mapping);
+        var (code, tree, mapping) = (Code, Objectives.Tree.Copy(), _mapping);
+        try
+        {
+            var (folders, analytic) = await Busy.Run("Przygotowanie podsumowania i bazy analitycznej…", () =>
+                (code.Length > 0 ? _service.Folders.CheckBeforeCreate(code).Where(i => i.Level == CheckLevel.Error).ToList() : [],
+                 ProjectService.Analytic(tree, wp is { HasErrors: false } ? wp.Working : [], plan is { HasErrors: false } ? plan.Working : [], mapping)));
+            checks.AddRange(folders);
+            _analytic = analytic;
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            Logger.Error(ex, "Kreator projektu – podsumowanie");
+            Status = $"Nie udało się przygotować podsumowania: {ex.Message}";
+            return;
+        }
         checks.Add(ObjectivesMapping.Check(Objectives.Tree, ProjectService.Resolve(Objectives.Tree, _mapping), _mapping));
         if (_analytic.ElementsWithoutWp.Count > 0)
             checks.Add(Issue.Warning($"Elementy nakładki bez WP: {string.Join(", ", _analytic.ElementsWithoutWp.Take(15))}{(_analytic.ElementsWithoutWp.Count > 15 ? "…" : "")}", "baza analityczna"));
@@ -302,23 +358,25 @@ public sealed class WizardViewModel : ObservableObject
         OnPropertyChanged(nameof(SummaryText));
     }
 
-    private void DoExportAnalytic()
+    private async Task DoExportAnalytic()
     {
         var path = _dialogs.SaveExcel("Pobierz bazę analityczną", $"{(Code.Length > 0 ? Code : "Projekt")}_baza_analityczna.xlsx");
         if (path is null)
             return;
-        Try(() =>
+        var analytic = _analytic!;
+        await Try(async () =>
         {
-            _service.ExportAnalytic(path, "", _analytic!);
+            await Busy.Run("Zapisywanie bazy analitycznej do Excela…", () => _service.ExportAnalytic(path, "", analytic));
             Status = $"Zapisano {path}.";
         });
     }
 
-    private void DoCreate()
+    private async Task DoCreate()
     {
-        Try(() =>
+        var (code, name, type, tree, files) = (Code, Name, Type.Code, Objectives.Tree.Copy(), new Dictionary<string, (string Path, string? Sheet)>(_files));
+        await Try(async () =>
         {
-            _outcome = _service.Create(Code, Name, Type.Code, Objectives.Tree, _files);
+            _outcome = await Busy.Run($"Tworzenie projektu {code}: zapis w bazie, słowniki, foldery…", () => _service.Create(code, name, type, tree, files));
             SetAll(CreateIssues, _outcome.Issues);
             CreatedSteps.Clear();
             foreach (var step in _outcome.Steps)
@@ -340,13 +398,13 @@ public sealed class WizardViewModel : ObservableObject
         OnPropertyChanged(nameof(HasCreateIssues));
     }
 
-    private void Try(Action action)
+    private async Task Try(Func<Task> action)
     {
         try
         {
-            action();
+            await action();
         }
-        catch (Exception ex) when (ex is IOException or InvalidOperationException or NotSupportedException or ArgumentException or Microsoft.Data.SqlClient.SqlException)
+        catch (Exception ex) when (ex is not OutOfMemoryException)
         {
             Logger.Error(ex, "Kreator projektu");
             Status = $"Nie udało się: {ex.Message}";

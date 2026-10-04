@@ -28,8 +28,8 @@ czytane przy budowie nakładki), `docs/zrodla-danych.md` (struktura CES, drzewo 
 - Wskazanie elementu CES **pociąga całe jego poddrzewo z globalnego mapowania** (`docs/mapowanie-ces-p1s.md`).
   Strona **P1S wchodzi do drzewa jako dodatkowe zadania / informacja**, nie jako osobny zakres:
   - cel P1S z mapowania – element CES nakładki rozstrzygany tymi samymi regułami co ekran Mapowanie (korekta
-    elementu → raport → dziedziczenie z projektu CES; projekt CES elementu z kolumny `Project definition`, gdy
-    elementu nie ma w kosztach) – status (`REPORT`, `OVERRIDE`, `INHERITED`, `UNMAPPED`) i cel przy elemencie,
+    elementu → raport → dziedziczenie z projektu CES; projekt CES elementu z kolumny `Project definition`, a dla
+    elementu dodanego ręcznie – najbliższego elementu nad nim) – status (`REPORT`, `OVERRIDE`, `INHERITED`, `UNMAPPED`) i cel przy elemencie,
   - poddrzewo celu z `LOG.WBS` (PZLPROD, po `PARENT`) – element należy do najbliższego celu nad nim,
   - kolumna `Legacy WBS` z Excela (np. `AC-CAB.6.38`).
 - Mapowanie CES ↔ P1S jest **globalne i administracyjne** – budowa nakładki tylko je **czyta**; nakładka nie

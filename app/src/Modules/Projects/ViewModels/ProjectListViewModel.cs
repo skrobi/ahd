@@ -16,15 +16,19 @@ public sealed class ProjectListViewModel : ObservableObject
     private readonly ProjectService _service;
     private ProjectListItem? _selected;
     private string _status = "";
+    private bool _loaded;
 
-    public ProjectListViewModel(ProjectService service, Action newProject, Action<string> open)
+    public ProjectListViewModel(ProjectService service, BusyState busy, Action newProject, Action<string> open)
     {
         _service = service;
-        NewProject = new RelayCommand(_ => newProject());
-        Open = new RelayCommand(p => open(((ProjectListItem)p!).Code), p => p is ProjectListItem);
-        Refresh = new RelayCommand(_ => Reload());
-        Reload();
+        Busy = busy;
+        NewProject = new RelayCommand(_ => newProject(), _ => !Busy.IsBusy);
+        Open = new RelayCommand(p => open(((ProjectListItem)p!).Code), p => p is ProjectListItem && !Busy.IsBusy);
+        Refresh = new AsyncRelayCommand(Reload, () => !Busy.IsBusy);
+        _ = Reload();
     }
+
+    public BusyState Busy { get; }
 
     public ObservableCollection<ProjectListItem> Items { get; } = [];
 
@@ -32,34 +36,40 @@ public sealed class ProjectListViewModel : ObservableObject
 
     public string Status { get => _status; private set => SetProperty(ref _status, value); }
 
-    public bool IsEmpty => Items.Count == 0;
+    public bool IsEmpty => _loaded && Items.Count == 0;
 
     public ICommand NewProject { get; }
     public ICommand Open { get; }
     public ICommand Refresh { get; }
 
-    public void Reload()
+    public async Task Reload()
     {
-        Items.Clear();
         try
         {
-            var mapping = _service.Mapping();
-            foreach (var project in _service.Projects())
+            var items = await Busy.Run("Wczytywanie projektów i ich gotowości…", () =>
             {
-                var tree = _service.Objectives(project.Code);
-                var ready = ProjectReadiness.IsReady(_service.Readiness(project, tree, mapping));
-                Items.Add(new ProjectListItem(project.Code, project.Name, ProjectTypes.Label(project.Type),
-                    $"{tree.ElementCount} el. · {tree.VirtualCount} węzłów",
-                    ready ? new Pill("ok", "gotowy") : new Pill("crit", "niegotowy"),
-                    "brak przebiegów", _service.Folders.PathOf(project.Code)));
-            }
+                var mapping = _service.Mapping();
+                return _service.Projects().Select(project =>
+                {
+                    var tree = _service.Objectives(project.Code);
+                    var ready = ProjectReadiness.IsReady(_service.Readiness(project, tree, mapping));
+                    return new ProjectListItem(project.Code, project.Name, ProjectTypes.Label(project.Type),
+                        $"{tree.ElementCount} el. · {tree.VirtualCount} węzłów",
+                        ready ? new Pill("ok", "gotowy") : new Pill("crit", "niegotowy"),
+                        "brak przebiegów", _service.Folders.PathOf(project.Code));
+                }).ToList();
+            });
+            Items.Clear();
+            foreach (var item in items)
+                Items.Add(item);
             Status = "";
         }
-        catch (Exception ex) when (ex is Microsoft.Data.SqlClient.SqlException or InvalidOperationException)
+        catch (Exception ex) when (ex is not OutOfMemoryException)
         {
             Logger.Error(ex, "Lista projektów");
             Status = $"Nie udało się wczytać projektów: {ex.Message}";
         }
+        _loaded = true;
         OnPropertyChanged(nameof(IsEmpty));
     }
 }

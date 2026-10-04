@@ -10,6 +10,7 @@
                 <Button Content="← Lista projektów" Style="{StaticResource Btn}" Command="{Binding Back}" />
             </partials:PageHeader.Actions>
         </partials:PageHeader>
+        <partials:BusyBar DataContext="{Binding Busy}" />
         <TextBlock Text="{Binding Status}" TextWrapping="Wrap" Margin="0,0,0,8" />
 
         <!-- Gotowość (F02) -->
@@ -36,6 +37,7 @@
                 </DockPanel>
                 <TextBlock Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="0,0,0,8"
                            Text="Zapis tworzy nowe wersje zmienionych węzłów (historia). Ponowne wczytanie eksportu SAP odświeża strukturę: elementy o tym samym WBS element zachowują historię; węzły wirtualne i ręczne zmiany trzeba odtworzyć (O47)." />
+                <partials:BusyBar DataContext="{Binding Busy}" />
                 <views:PoEditorView DataContext="{Binding Objectives}" />
             </StackPanel>
         </Border>
@@ -49,6 +51,7 @@
                 </DockPanel>
                 <TextBlock Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="0,0,0,8"
                            Text="Pobierz obecny stan, popraw w Excelu i wczytaj ponownie – przed zapisem zobaczysz różnice (+ nowe / ~ zmienione / − usunięte). Słownik z błędem ERROR nie zostanie zapisany; wiersze usunięte z pliku zostaną zamknięte (historia zostaje)." />
+                <partials:BusyBar DataContext="{Binding Busy}" />
                 <ItemsControl ItemsSource="{Binding Dictionaries}">
                     <ItemsControl.ItemTemplate>
                         <DataTemplate>

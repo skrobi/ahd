@@ -1,0 +1,13 @@
+<UserControl x:Class="PzlEv.Shared.Views.Partials.BusyBar"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <!-- Operacja w tle (DataContext: BusyState): pasek postępu i „Trwa: … (n s)”; ukryty, gdy nic nie trwa. -->
+    <Border Background="{StaticResource InfoSoft}" BorderBrush="{StaticResource Info}" BorderThickness="1" CornerRadius="4"
+            Padding="10,6" Margin="0,0,0,10" Visibility="{Binding IsBusy, Converter={StaticResource BoolToVisibility}}">
+        <StackPanel>
+            <TextBlock Text="{Binding Display}" Foreground="{StaticResource Info}" FontWeight="SemiBold" TextWrapping="Wrap" />
+            <ProgressBar IsIndeterminate="True" Height="4" Margin="0,6,0,0" BorderThickness="0"
+                         Foreground="{StaticResource Info}" Background="{StaticResource Surface}" />
+        </StackPanel>
+    </Border>
+</UserControl>

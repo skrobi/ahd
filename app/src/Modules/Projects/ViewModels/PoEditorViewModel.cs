@@ -19,6 +19,7 @@ public sealed class PoEditorViewModel : ObservableObject
     private static readonly ILogger Logger = Log.ForContext("Module", "projects");
 
     private readonly IFileDialogs _dialogs;
+    private readonly BusyState _busy;
     private readonly Func<string, PoImportResult> _read;
     private readonly Func<PoTree, List<Issue>> _validate;
     private readonly Func<PoTree, PoTree, PoTree> _fromImport;
@@ -31,24 +32,26 @@ public sealed class PoEditorViewModel : ObservableObject
     private bool _isDirty;
     private string _mappingInfo = "";
 
+    /// <param name="validate">Kontrola nakładki w pamięci (bez bazy – wywoływana po każdej zmianie).</param>
     /// <param name="fromImport">Nakładka po wczytaniu pliku: (bieżąca, wczytana) → wynik (kreator – wczytana; projekt – odświeżenie).</param>
-    public PoEditorViewModel(IFileDialogs dialogs, Func<string, PoImportResult> read, Func<PoTree, List<Issue>> validate, Func<PoTree, PoTree, PoTree> fromImport)
+    public PoEditorViewModel(IFileDialogs dialogs, BusyState busy, Func<string, PoImportResult> read, Func<PoTree, List<Issue>> validate, Func<PoTree, PoTree, PoTree> fromImport)
     {
         _dialogs = dialogs;
+        _busy = busy;
         _read = read;
         _validate = validate;
         _fromImport = fromImport;
-        ImportExcel = new RelayCommand(_ => DoImport());
-        AddVirtual = new RelayCommand(_ => AddNode(_tree.AddVirtual(_selected?.Key, "Nowy węzeł"), "Dodano węzeł wirtualny – wpisz nazwę i kliknij „Zmień zaznaczony”."));
+        ImportExcel = new AsyncRelayCommand(DoImport, () => !_busy.IsBusy);
+        AddVirtual = new RelayCommand(_ => AddNode(_tree.AddVirtual(_selected?.Key, "Nowy węzeł"), "Dodano węzeł wirtualny – wpisz nazwę i kliknij „Zmień zaznaczony”."), _ => !_busy.IsBusy);
         AddElement = new RelayCommand(_ => AddNode(_tree.AddElement(_selected?.Key, "", "Nowy element", null),
-            "Dodano element CES – wpisz WBS element, nazwę i Legacy WBS, potem „Zmień zaznaczony”."));
-        ApplyEdit = new RelayCommand(_ => DoApplyEdit(), _ => _selected is not null);
-        Up = new RelayCommand(_ => Change(() => _tree.Shift(_selected!.Key, -1), null), _ => _selected is not null);
-        Down = new RelayCommand(_ => Change(() => _tree.Shift(_selected!.Key, 1), null), _ => _selected is not null);
-        Outdent = new RelayCommand(_ => Change(() => _tree.Outdent(_selected!.Key), null), _ => _selected?.Node.ParentKey is not null);
-        Remove = new RelayCommand(_ => Change(() => _tree.Remove(_selected!.Key), "Usunięto węzeł – jego elementy przeszły poziom wyżej."), _ => _selected is not null);
-        Clear = new RelayCommand(_ => Change(_tree.Clear, "Wyczyszczono nakładkę."), _ => _tree.Nodes.Count > 0);
-        Unselect = new RelayCommand(_ => Selected = null, _ => _selected is not null);
+            "Dodano element CES – wpisz WBS element, nazwę i Legacy WBS, potem „Zmień zaznaczony”."), _ => !_busy.IsBusy);
+        ApplyEdit = new RelayCommand(_ => DoApplyEdit(), _ => (_selected is not null) && !_busy.IsBusy);
+        Up = new RelayCommand(_ => Change(() => _tree.Shift(_selected!.Key, -1), null), _ => (_selected is not null) && !_busy.IsBusy);
+        Down = new RelayCommand(_ => Change(() => _tree.Shift(_selected!.Key, 1), null), _ => (_selected is not null) && !_busy.IsBusy);
+        Outdent = new RelayCommand(_ => Change(() => _tree.Outdent(_selected!.Key), null), _ => (_selected?.Node.ParentKey is not null) && !_busy.IsBusy);
+        Remove = new RelayCommand(_ => Change(() => _tree.Remove(_selected!.Key), "Usunięto węzeł – jego elementy przeszły poziom wyżej."), _ => (_selected is not null) && !_busy.IsBusy);
+        Clear = new RelayCommand(_ => Change(_tree.Clear, "Wyczyszczono nakładkę."), _ => (_tree.Nodes.Count > 0) && !_busy.IsBusy);
+        Unselect = new RelayCommand(_ => Selected = null, _ => (_selected is not null) && !_busy.IsBusy);
     }
 
     /// <summary>Zmiana drzewa (zapis, odświeżenie kontekstu słowników).</summary>
@@ -129,6 +132,8 @@ public sealed class PoEditorViewModel : ObservableObject
     /// <summary>Przeniesienie przeciągnięciem: węzeł na inny węzeł (staje się jego dzieckiem) albo na korzeń (null).</summary>
     public void Move(long key, long? newParentKey)
     {
+        if (_busy.IsBusy)
+            return;
         if (!_tree.CanMove(key, newParentKey))
         {
             Status = "Nie można przenieść węzła pod samego siebie ani pod jego element.";
@@ -137,14 +142,17 @@ public sealed class PoEditorViewModel : ObservableObject
         Change(() => _tree.Move(key, newParentKey), null);
     }
 
-    private void DoImport()
+    /// <summary>Ponowne wyliczenie wierszy (np. po wczytaniu danych mapowania albo listy elementów innych projektów).</summary>
+    public void Refresh() => Rebuild(_selected?.Key);
+
+    private async Task DoImport()
     {
         var path = _dialogs.OpenExcel("Wczytaj Performance Objectives – eksport struktury WBS z SAP");
         if (path is null)
             return;
         try
         {
-            var result = _read(path);
+            var result = await _busy.Run($"Wczytywanie pliku {Path.GetFileName(path)}…", () => _read(path));
             ImportIssues.Clear();
             foreach (var issue in result.Issues.Take(50))
                 ImportIssues.Add(issue);
@@ -160,7 +168,7 @@ public sealed class PoEditorViewModel : ObservableObject
             Status = $"Wczytano {result.FileName}: {_tree.ElementCount} elementów CES.";
             Changed?.Invoke();
         }
-        catch (Exception ex) when (ex is IOException or InvalidOperationException or NotSupportedException or ArgumentException)
+        catch (Exception ex) when (ex is IOException or InvalidOperationException or NotSupportedException or ArgumentException or InvalidDataException)
         {
             Logger.Error(ex, "Wczytanie Performance Objectives");
             Status = $"Nie udało się wczytać pliku: {ex.Message}";

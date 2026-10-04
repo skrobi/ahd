@@ -33,7 +33,6 @@ public sealed class ObjectivesMappingTests
             new CorrectionRow(1, 10, 1, CorrectionKinds.Element, "4D06WP000004", "200", "AC-CAB.9.01", null, "zmiana", DateTime.Today, null,
                 DateTimeOffset.Now, "PZL\\anowak", null, null),
         ],
-        [],
         withPzlProd ? [P1s("1", "", "AC-CAB"), P1s("100", "1", "AC-CAB.6.38"), P1s("101", "100", "AC-CAB.6.38.07"), P1s("102", "101", "XYZ-1"), P1s("200", "1", "AC-CAB.9.01")] : null,
         withPzlProd ? null : "Brak połączenia z PZLPROD");
 
@@ -51,6 +50,11 @@ public sealed class ObjectivesMappingTests
         // Elementu nie ma w raporcie – dziedziczy odpowiednik projektu CES z kolumny Project definition.
         Assert.Equal((MappingStatuses.Inherited, "AC-CAB"), (Of(tree, mapping, "4D06WP000002").Status, Of(tree, mapping, "4D06WP000002").Target));
         Assert.Equal(8, mapping.Count);
+
+        // Element dodany ręcznie bez Project definition – projekt CES najbliższego elementu nad nim.
+        var manual = tree.AddElement(tree.Nodes.Single(n => n.WbsElement == "4D06WP.02").Key, "4D06WP000099", "ręczny", null);
+        var withManual = ProjectService.Resolve(tree, Inputs());
+        Assert.Equal((MappingStatuses.Inherited, "AC-CAB"), (withManual[manual.Key].Status, withManual[manual.Key].Target));
 
         var none = ProjectService.Resolve(tree, MappingInputs.None);
         Assert.All(none.Values, r => Assert.Equal(MappingStatuses.Unmapped, r.Status));
