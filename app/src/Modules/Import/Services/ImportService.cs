@@ -6,6 +6,7 @@ using PzlEv.Shared.Models;
 using PzlEv.Shared.Models.Db;
 using PzlEv.Shared.Models.Sources;
 using PzlEv.Shared.Utils.Data;
+using PzlEv.Shared.Utils.Data.Sql;
 using PzlEv.Shared.Utils.Files;
 using Serilog;
 
@@ -24,6 +25,9 @@ public sealed class ImportService(IImportStore store, AppServices services, Func
     public const string StageRows = "3/4 odczyt i zapis wierszy do bazy";
     public const string StageCount = "3/4 liczenie wierszy";
     public const string StageFinish = "4/4";
+
+    /// <summary>Próby zapisu pliku, gdy SQL Server wycofa transakcję po zakleszczeniu z inną sesją (błąd 1205).</summary>
+    public const int DeadlockAttempts = 3;
 
     public const string Area = "Import";
     public const string LockName = "import";
@@ -286,7 +290,9 @@ public sealed class ImportService(IImportStore store, AppServices services, Func
         {
             // Błąd jednego pliku (uszkodzony Excel, brak dostępu, format) nie zatrzymuje importu pozostałych.
             Logger.Error(ex, "Plik {Location} / {File}: błąd", location.Name, file.Name);
-            var hint = ex is IOException && WebDavPath.IsWebDav(location.Path) ? $" {WebDavPath.SizeLimitHint}" : "";
+            var hint = ex is IOException && WebDavPath.IsWebDav(location.Path) ? $" {WebDavPath.SizeLimitHint}"
+                : SqlDatabase.IsDeadlock(ex) ? $" (zakleszczenie w bazie z inną sesją powtórzyło się {DeadlockAttempts} razy – zapis wycofany; zaimportuj plik ponownie)"
+                : "";
             decision = FileDecisions.Error;
             description = $"{ex.GetType().Name}: {ex.Message}{hint}";
             problem("błąd pliku", Issue.Error($"{file.Name}: {ex.Message}{hint}", location.Name));
@@ -360,16 +366,20 @@ public sealed class ImportService(IImportStore store, AppServices services, Func
         {
             stage.Start(StageCount);
             rows = CountRows(source, stage, cancellation);
-            stored = store.StoreFile(fileRow with { RowCount = rows }, null, Finish);
+            stored = RetryOnDeadlock(_ => store.StoreFile(fileRow with { RowCount = rows }, null, Finish), file.Name, cancellation);
         }
         else
         {
-            stage.Start(StageRows);
-            var check = new ContentCheck(mapper);
+            ContentCheck check = null!;
             try
             {
-                stored = store.StoreFile(fileRow,
-                    new CanonicalData(mapper.Parser, mapper.Fields, ReadAhead(check.Read(source, stage, cancellation)), check.Totals), Finish);
+                stored = RetryOnDeadlock(attempt =>
+                {
+                    stage.Start(attempt == 1 ? StageRows : $"{StageRows} (ponowienie {attempt}/{DeadlockAttempts} po zakleszczeniu w bazie)");
+                    check = new ContentCheck(mapper);
+                    return store.StoreFile(fileRow,
+                        new CanonicalData(mapper.Parser, mapper.Fields, ReadAhead(check.Read(source, stage, cancellation)), check.Totals), Finish);
+                }, file.Name, cancellation);
             }
             catch (ContentRejectedException)
             {
@@ -400,6 +410,28 @@ public sealed class ImportService(IImportStore store, AppServices services, Func
               string.Concat(mapper.Fields.Where(f => f.Type == FieldTypes.Decimal).Select(f => $", suma {f.Column} {PolishNumber.ToDisplay(stored.Sums[f.Field])}"));
         var extra = mapper is { ExtraColumns.Count: > 0 } ? $"; kolumny spoza parsera (niezapisane): {string.Join(", ", mapper.ExtraColumns)}" : "";
         return (FileDecisions.Imported, $"{definition.Code}, {rows.ToString("#,0", pl)} wierszy; {canonical}{extra}", sha, rows);
+    }
+
+    /// <summary>
+    /// Zapis pliku (jedna transakcja) z ponowieniem po zakleszczeniu w bazie: SQL Server wycofuje wtedy transakcję jako
+    /// ofiarę (błąd 1205) i zaleca jej powtórzenie – do DeadlockAttempts prób z przerwą 2, 4 s; plik jest czytany ponownie
+    /// z dysku lokalnego. Inne błędy i ostatnia nieudana próba – bez zmian (decyzja „błąd”).
+    /// </summary>
+    private static T RetryOnDeadlock<T>(Func<int, T> save, string fileName, CancellationToken cancellation)
+    {
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                return save(attempt);
+            }
+            catch (Exception ex) when (attempt < DeadlockAttempts && SqlDatabase.IsDeadlock(ex) && !cancellation.IsCancellationRequested)
+            {
+                Logger.Warning("Plik {File}: zakleszczenie w bazie przy zapisie (próba {Attempt} z {Attempts}) – zapis wycofany, ponowienie: {Error}",
+                    fileName, attempt, DeadlockAttempts, ex.Message);
+                cancellation.WaitHandle.WaitOne(TimeSpan.FromSeconds(2 * attempt));
+            }
+        }
     }
 
     /// <summary>Liczba wierszy danych źródła bez parsera (postęp na ekranie).</summary>

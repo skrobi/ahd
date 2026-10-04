@@ -82,4 +82,18 @@ public sealed class SqlDatabase
 
     /// <summary>Naruszenie unikalności (2601, 2627) – zapis w międzyczasie przez inną osobę.</summary>
     public static bool IsDuplicateKey(SqlException ex) => ex.Number is 2601 or 2627;
+
+    /// <summary>
+    /// Zakleszczenie (1205): SQL Server wycofał transakcję jako ofiarę zakleszczenia z inną sesją – można ją powtórzyć.
+    /// Sprawdza też wyjątki wewnętrzne (SqlBulkCopy może opakować błąd serwera).
+    /// </summary>
+    public static bool IsDeadlock(Exception? ex)
+    {
+        for (; ex is not null; ex = ex.InnerException)
+        {
+            if (ex is SqlException { Number: 1205 })
+                return true;
+        }
+        return false;
+    }
 }
