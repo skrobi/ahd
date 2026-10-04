@@ -39,15 +39,18 @@ public sealed class AdministrationViewModel : ObservableObject
     public AdministrationViewModel(SourceConfigService service, IFileDialogs dialogs)
     {
         _service = service;
-        NewDefinition = new RelayCommand(_ => ClearDefinitionForm());
-        SaveDefinition = new RelayCommand(_ => DoSaveDefinition());
-        DeleteDefinition = new RelayCommand(_ => AskDeleteDefinition(), _ => _defId is not null);
-        ConfirmDeleteDefinition = new RelayCommand(_ => DoDeleteDefinition(), _ => _deletePending);
-        NewLocation = new RelayCommand(_ => ClearLocationForm());
-        SaveLocation = new RelayCommand(_ => DoSaveLocation());
-        ParserEditor = new ParserEditorViewModel(service, dialogs, ReloadParsers);
-        Reload();
+        NewDefinition = new RelayCommand(_ => ClearDefinitionForm(), _ => !Busy.IsBusy);
+        SaveDefinition = new AsyncRelayCommand(DoSaveDefinition, () => !Busy.IsBusy);
+        DeleteDefinition = new RelayCommand(_ => AskDeleteDefinition(), _ => _defId is not null && !Busy.IsBusy);
+        ConfirmDeleteDefinition = new AsyncRelayCommand(DoDeleteDefinition, () => _deletePending && !Busy.IsBusy);
+        NewLocation = new RelayCommand(_ => ClearLocationForm(), _ => !Busy.IsBusy);
+        SaveLocation = new AsyncRelayCommand(DoSaveLocation, () => !Busy.IsBusy);
+        ParserEditor = new ParserEditorViewModel(service, dialogs, Busy, () => _ = ReloadParsers());
+        _ = Reload();
     }
+
+    /// <summary>Operacja w tle (pasek „Trwa: …”) – wspólna z sekcją Parsery.</summary>
+    public BusyState Busy { get; } = new();
 
     /// <summary>Administracja → Parsery.</summary>
     public ParserEditorViewModel ParserEditor { get; }
@@ -101,9 +104,24 @@ public sealed class AdministrationViewModel : ObservableObject
             DeletePending = false;
             DefinitionMessage = "";
             OnPropertyChanged(nameof(DefinitionFormTitle));
-            DefinitionHistory.Clear();
-            foreach (var version in _service.DefinitionHistory(value.DefinitionId).Reverse())
+            _ = LoadDefinitionHistory(value.DefinitionId);
+        }
+    }
+
+    private async Task LoadDefinitionHistory(long definitionId)
+    {
+        DefinitionHistory.Clear();
+        try
+        {
+            var versions = await Task.Run(() => _service.DefinitionHistory(definitionId));   // krótki odczyt – nie blokuje okna
+            if (_selectedDefinition?.DefinitionId != definitionId)
+                return;
+            foreach (var version in versions.Reverse())
                 DefinitionHistory.Add(version);
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            Status = $"Nie udało się wczytać historii definicji: {ex.Message}";
         }
     }
 
@@ -143,26 +161,44 @@ public sealed class AdministrationViewModel : ObservableObject
     public string LocPath { get => _locPath; set => SetProperty(ref _locPath, value); }
     public bool LocActive { get => _locActive; set => SetProperty(ref _locActive, value); }
 
-    private void Reload()
+    private async Task Reload()
     {
-        Definitions.Clear();
-        foreach (var d in _service.Definitions())
-            Definitions.Add(d);
-        Locations.Clear();
-        foreach (var l in _service.Locations())
-            Locations.Add(l);
-        ReloadParsers();
+        try
+        {
+            var (definitions, locations) = await Busy.Run("Wczytywanie definicji źródeł i lokalizacji…", () => (_service.Definitions(), _service.Locations()));
+            Definitions.Clear();
+            foreach (var d in definitions)
+                Definitions.Add(d);
+            Locations.Clear();
+            foreach (var l in locations)
+                Locations.Add(l);
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            Status = $"Nie udało się wczytać konfiguracji: {ex.Message}";
+        }
+        await ReloadParsers();
     }
 
     /// <summary>Parsery z bazy (także po zapisie parsera w sekcji Parsery).</summary>
-    private void ReloadParsers()
+    private async Task ReloadParsers()
     {
+        IReadOnlyList<Shared.Models.Db.ParserRow> parsers;
+        try
+        {
+            parsers = await Busy.Run("Wczytywanie parserów…", () => _service.Parsers());
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            Status = $"Nie udało się wczytać parserów: {ex.Message}";
+            return;
+        }
         _reloadingParsers = true;
         try
         {
             ParserOptions.Clear();
             ParserOptions.Add(new ParserOption(SourceParsers.None, "brak – tylko wersja pliku (bez danych)"));
-            foreach (var p in _service.Parsers())
+            foreach (var p in parsers)
                 ParserOptions.Add(new ParserOption(p.Code, $"{p.Code} – {p.Name}{(p.Active ? "" : " (nieaktywny)")}"));
         }
         finally
@@ -197,11 +233,12 @@ public sealed class AdministrationViewModel : ObservableObject
         OnPropertyChanged(nameof(LocationFormTitle));
     }
 
-    private void DoSaveDefinition()
+    private async Task DoSaveDefinition()
     {
         var input = new DefinitionInput(_defId, _defVersion, DefCode, DefPrefix, DefReportType, DefParser, DefActive);
-        var result = _service.SaveDefinition(input);
-        Show(result);
+        if (await Run("Zapisywanie definicji źródła…", () => _service.SaveDefinition(input)) is not { } result)
+            return;
+        await Show(result);
         if (result.Success)   // formularz zostaje na zapisanej definicji
             SelectedDefinition = Definitions.FirstOrDefault(d => d.Code == input.Code.Trim().ToUpperInvariant());
         DefinitionMessage = string.Join(Environment.NewLine, new[] { result.Message }.Concat(result.Issues.Select(i => "• " + i.Message)));
@@ -214,20 +251,39 @@ public sealed class AdministrationViewModel : ObservableObject
                  "Kliknij „Potwierdź usunięcie”.";
     }
 
-    private void DoDeleteDefinition()
+    private async Task DoDeleteDefinition()
     {
         if (_defId is not { } id || _defVersion is not { } version)
             return;
         DeletePending = false;
-        var result = _service.DeleteDefinition(id, version);
-        Show(result);
+        if (await Run("Usuwanie definicji źródła…", () => _service.DeleteDefinition(id, version)) is not { } result)
+            return;
+        await Show(result);
         DefinitionMessage = result.Message;
     }
 
-    private void DoSaveLocation() =>
-        Show(_service.SaveLocation(new LocationInput(_locId, _locVersion, LocName, LocPath, LocActive)));
+    private async Task DoSaveLocation()
+    {
+        var input = new LocationInput(_locId, _locVersion, LocName, LocPath, LocActive);
+        if (await Run("Zapisywanie lokalizacji RABIT…", () => _service.SaveLocation(input)) is { } result)
+            await Show(result);
+    }
 
-    private void Show(ConfigSaveResult result)
+    /// <summary>Zapis w tle; null – błąd (komunikat w Status).</summary>
+    private async Task<ConfigSaveResult?> Run(string text, Func<ConfigSaveResult> work)
+    {
+        try
+        {
+            return await Busy.Run(text, work);
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            Status = $"Zapis nieudany: {ex.Message}";
+            return null;
+        }
+    }
+
+    private async Task Show(ConfigSaveResult result)
     {
         Issues.Clear();
         foreach (var issue in result.Issues)
@@ -236,7 +292,7 @@ public sealed class AdministrationViewModel : ObservableObject
         Status = result.Message;
         if (result.Success)
         {
-            Reload();
+            await Reload();
             ClearLocationForm();
             ClearDefinitionForm();
             Status = result.Message;

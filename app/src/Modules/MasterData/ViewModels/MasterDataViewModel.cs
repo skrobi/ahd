@@ -31,21 +31,39 @@ public sealed class MasterDataViewModel : ObservableObject
     {
         _service = service;
         _dialogs = dialogs;
-        Dictionaries = GlobalDictionaries.All.Select(spec => new DictionaryItem(spec, _service.Load(spec).Count)).ToList();
+        Dictionaries = GlobalDictionaries.All.Select(spec => new DictionaryItem(spec, 0)).ToList();
         RowsView = CollectionViewSource.GetDefaultView(Rows);
         RowsView.Filter = o => _filter.Length == 0 || o is DictRowViewModel row && row.Matches(_filter);
 
-        AddRow = new RelayCommand(_ => DoAddRow(), _ => Spec is not null && _preview is null);
-        RemoveRow = new RelayCommand(_ => DoRemoveRow(), _ => _selectedRow is not null && _preview is null);
-        Save = new RelayCommand(_ => DoSave(confirmWarnings: false), _ => Spec is not null && _preview is null);
-        SaveWithWarnings = new RelayCommand(_ => DoSave(confirmWarnings: true), _ => _needsConfirmation);
-        Discard = new RelayCommand(_ => Reload("Zmiany odrzucone."), _ => Spec is not null && _preview is null);
-        Export = new RelayCommand(_ => DoExport(), _ => Spec is not null);
-        Import = new RelayCommand(_ => DoImport(), _ => Spec is not null && _preview is null);
-        ApplyImport = new RelayCommand(_ => DoApplyImport(), _ => _preview is { HasErrors: false, HasChanges: true });
-        CancelImport = new RelayCommand(_ => ClosePreview("Wczytanie anulowane – słownik bez zmian."), _ => _preview is not null);
+        AddRow = new RelayCommand(_ => DoAddRow(), _ => Spec is not null && _preview is null && !Busy.IsBusy);
+        RemoveRow = new RelayCommand(_ => DoRemoveRow(), _ => _selectedRow is not null && _preview is null && !Busy.IsBusy);
+        Save = new AsyncRelayCommand(() => DoSave(confirmWarnings: false), () => Spec is not null && _preview is null && !Busy.IsBusy);
+        SaveWithWarnings = new AsyncRelayCommand(() => DoSave(confirmWarnings: true), () => _needsConfirmation && !Busy.IsBusy);
+        Discard = new AsyncRelayCommand(() => Reload("Zmiany odrzucone."), () => Spec is not null && _preview is null && !Busy.IsBusy);
+        Export = new AsyncRelayCommand(DoExport, () => Spec is not null && !Busy.IsBusy);
+        Import = new AsyncRelayCommand(DoImport, () => Spec is not null && _preview is null && !Busy.IsBusy);
+        ApplyImport = new AsyncRelayCommand(DoApplyImport, () => _preview is { HasErrors: false, HasChanges: true } && !Busy.IsBusy);
+        CancelImport = new RelayCommand(_ => ClosePreview("Wczytanie anulowane – słownik bez zmian."), _ => _preview is not null && !Busy.IsBusy);
 
         SelectedDictionary = Dictionaries.FirstOrDefault();
+        _ = LoadCounts();
+    }
+
+    /// <summary>Operacja w tle (pasek „Trwa: …”): odczyt i zapis w bazie, pliki Excel.</summary>
+    public BusyState Busy { get; } = new();
+
+    private async Task LoadCounts()
+    {
+        try
+        {
+            var counts = await Busy.Run("Wczytywanie liczby wierszy słowników…", () => Dictionaries.Select(d => _service.Load(d.Spec).Count).ToList());
+            for (var i = 0; i < counts.Count; i++)
+                Dictionaries[i].Count = counts[i];
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            Logger.Error(ex, "Liczba wierszy słowników");
+        }
     }
 
     /// <summary>Widok przebudowuje kolumny tabeli po zmianie słownika.</summary>
@@ -74,9 +92,9 @@ public sealed class MasterDataViewModel : ObservableObject
         {
             if (value is null || ReferenceEquals(value, _selectedDictionary))
                 return;
-            if (HasPendingChanges)
+            if (HasPendingChanges || Busy.IsBusy)
             {
-                Status = "Masz niezapisane zmiany – zapisz albo odrzuć je przed zmianą słownika.";
+                Status = Busy.IsBusy ? "Poczekaj na zakończenie bieżącej operacji." : "Masz niezapisane zmiany – zapisz albo odrzuć je przed zmianą słownika.";
                 OnPropertyChanged();
                 return;
             }
@@ -85,7 +103,7 @@ public sealed class MasterDataViewModel : ObservableObject
             OnPropertyChanged(nameof(Spec));
             ColumnsChanged?.Invoke();
             ClosePreview(null);
-            Reload("");
+            _ = Reload("");
         }
     }
 
@@ -95,7 +113,7 @@ public sealed class MasterDataViewModel : ObservableObject
         set
         {
             if (SetProperty(ref _selectedRow, value))
-                LoadHistory();
+                _ = LoadHistory();
         }
     }
 
@@ -149,19 +167,32 @@ public sealed class MasterDataViewModel : ObservableObject
     public ICommand ApplyImport { get; }
     public ICommand CancelImport { get; }
 
-    private void Reload(string status)
+    private async Task Reload(string status)
     {
         Rows.Clear();
         _removed.Clear();
         SelectedRow = null;
-        if (Spec is { } spec)
-        {
-            foreach (var row in _service.Load(spec))
-                Rows.Add(ToViewModel(spec, row));
-            _selectedDictionary!.Count = Rows.Count;
-        }
         SetIssues([]);
         NeedsConfirmation = false;
+        if (Spec is { } spec)
+        {
+            var item = _selectedDictionary!;
+            try
+            {
+                var rows = await Busy.Run($"Wczytywanie słownika „{spec.Name}”…", () => _service.Load(spec));
+                if (!ReferenceEquals(item, _selectedDictionary))
+                    return;   // w międzyczasie wybrano inny słownik
+                foreach (var row in rows)
+                    Rows.Add(ToViewModel(spec, row));
+                item.Count = Rows.Count;
+            }
+            catch (Exception ex) when (ex is not OutOfMemoryException)
+            {
+                Logger.Error(ex, "Odczyt słownika {Dictionary}", spec.Code);
+                Status = $"Nie udało się wczytać słownika: {ex.Message}";
+                return;
+            }
+        }
         Status = status;
     }
 
@@ -185,15 +216,26 @@ public sealed class MasterDataViewModel : ObservableObject
         Status = "Wiersz usunięty z tabeli – zapisz, aby zamknąć jego obowiązywanie (historia zostaje).";
     }
 
-    private void DoSave(bool confirmWarnings)
+    private async Task DoSave(bool confirmWarnings)
     {
         var spec = Spec!;
-        var outcome = _service.Save(spec, Rows.Select(r => r.ToDictRow(spec)).ToList(), _removed, confirmWarnings);
+        var (working, removed) = (Rows.Select(r => r.ToDictRow(spec)).ToList(), _removed.ToList());
+        SaveOutcome outcome;
+        try
+        {
+            outcome = await Busy.Run($"Zapisywanie słownika „{spec.Name}”…", () => _service.Save(spec, working, removed, confirmWarnings));
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            Logger.Error(ex, "Zapis słownika {Dictionary}", spec.Code);
+            Status = $"Zapis nieudany: {ex.Message}";
+            return;
+        }
         switch (outcome.Status)
         {
             case SaveStatus.Saved:
             case SaveStatus.NoChanges:
-                Reload(outcome.Message);
+                await Reload(outcome.Message);
                 SetIssues(outcome.Issues);
                 break;
             case SaveStatus.NeedsConfirmation:
@@ -210,20 +252,20 @@ public sealed class MasterDataViewModel : ObservableObject
         Logger.Information("Zapis słownika {Dictionary}: {Status}", spec.Code, outcome.Status);
     }
 
-    private void DoExport()
+    private async Task DoExport()
     {
         var spec = Spec!;
         var path = _dialogs.SaveExcel("Pobierz słownik do Excela", $"{spec.Name}.xlsx");
         if (path is null)
             return;
-        Try(() =>
+        await Try(async () =>
         {
-            _service.Export(spec, path);
+            await Busy.Run($"Zapisywanie słownika „{spec.Name}” do Excela…", () => _service.Export(spec, path));
             Status = $"Zapisano plik {path}.";
         });
     }
 
-    private void DoImport()
+    private async Task DoImport()
     {
         if (HasPendingChanges)
         {
@@ -234,9 +276,9 @@ public sealed class MasterDataViewModel : ObservableObject
         var path = _dialogs.OpenExcel($"Wczytaj słownik „{spec.Name}” z Excela");
         if (path is null)
             return;
-        Try(() =>
+        await Try(async () =>
         {
-            var preview = _service.PreviewImport(spec, path);
+            var preview = await Busy.Run("Wczytywanie i sprawdzanie pliku Excel…", () => _service.PreviewImport(spec, path));
             _preview = preview;
             PreviewLines.Clear();
             foreach (var key in preview.Added) PreviewLines.Add($"+ {key}");
@@ -252,16 +294,19 @@ public sealed class MasterDataViewModel : ObservableObject
         });
     }
 
-    private void DoApplyImport()
+    private async Task DoApplyImport()
     {
-        var spec = Spec!;
-        var outcome = _service.ApplyImport(spec, _preview!);
-        ClosePreview(null);
-        if (outcome.Status == SaveStatus.Saved)
-            Reload(outcome.Message);
-        else
-            Status = outcome.Message;
-        SetIssues(outcome.Issues);
+        var (spec, preview) = (Spec!, _preview!);
+        await Try(async () =>
+        {
+            var outcome = await Busy.Run($"Zapisywanie słownika „{spec.Name}” z Excela…", () => _service.ApplyImport(spec, preview));
+            ClosePreview(null);
+            if (outcome.Status == SaveStatus.Saved)
+                await Reload(outcome.Message);
+            else
+                Status = outcome.Message;
+            SetIssues(outcome.Issues);
+        });
     }
 
     private void ClosePreview(string? status)
@@ -275,12 +320,24 @@ public sealed class MasterDataViewModel : ObservableObject
             Status = status;
     }
 
-    private void LoadHistory()
+    private async Task LoadHistory()
     {
         History.Clear();
+        OnPropertyChanged(nameof(HasHistory));
         if (_selectedRow?.RowId is { } rowId && Spec is { } spec)
         {
-            var versions = _service.History(rowId);
+            IReadOnlyList<Shared.Models.Db.DictionaryEntryRow> versions;
+            try
+            {
+                versions = await Task.Run(() => _service.History(rowId));   // krótki odczyt – bez paska, nie blokuje okna
+            }
+            catch (Exception ex) when (ex is not OutOfMemoryException)
+            {
+                Logger.Error(ex, "Historia wiersza {RowId}", rowId);
+                return;
+            }
+            if (_selectedRow?.RowId != rowId)
+                return;   // w międzyczasie zaznaczono inny wiersz
             for (var i = versions.Count - 1; i >= 0; i--)
             {
                 var v = versions[i];
@@ -304,13 +361,13 @@ public sealed class MasterDataViewModel : ObservableObject
         OnPropertyChanged(nameof(HasIssues));
     }
 
-    private void Try(Action action)
+    private async Task Try(Func<Task> action)
     {
         try
         {
-            action();
+            await action();
         }
-        catch (Exception ex) when (ex is IOException or InvalidOperationException or NotSupportedException or ArgumentException)
+        catch (Exception ex) when (ex is not OutOfMemoryException)
         {
             Logger.Error(ex, "Operacja na pliku Excel");
             Status = $"Nie udało się: {ex.Message}";

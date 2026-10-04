@@ -31,12 +31,13 @@ public sealed class ParserEditorViewModel : ObservableObject
     private string _code = "", _name = "", _table = "", _message = "";
     private bool _active = true;
 
-    public ParserEditorViewModel(SourceConfigService service, IFileDialogs dialogs, Action saved)
+    public ParserEditorViewModel(SourceConfigService service, IFileDialogs dialogs, BusyState busy, Action saved)
     {
         _service = service;
         _dialogs = dialogs;
         _saved = saved;
-        ColumnsFromFile = new RelayCommand(_ => LoadColumnsFromFile());
+        Busy = busy;
+        ColumnsFromFile = new AsyncRelayCommand(LoadColumnsFromFile, () => !Busy.IsBusy);
         NewParser = new RelayCommand(_ => Clear());
         AddField = new RelayCommand(_ => Fields.Add(new ParserFieldRowViewModel { Length = FieldTypes.DefaultTextLength.ToString() }));
         RemoveField = new RelayCommand(p =>
@@ -44,10 +45,12 @@ public sealed class ParserEditorViewModel : ObservableObject
             if (p is ParserFieldRowViewModel row)
                 Fields.Remove(row);
         });
-        Save = new RelayCommand(_ => DoSave());
-        Reload();
+        Save = new AsyncRelayCommand(DoSave, () => !Busy.IsBusy);
+        _ = Reload();
         Clear();
     }
+
+    public BusyState Busy { get; }
 
     public ObservableCollection<ParserRow> Parsers { get; } = [];
 
@@ -79,9 +82,7 @@ public sealed class ParserEditorViewModel : ObservableObject
             Fields.Clear();
             foreach (var parserField in value.Fields)
                 Fields.Add(ParserFieldRowViewModel.From(parserField));
-            History.Clear();
-            foreach (var version in _service.ParserHistory(value.ParserId).Reverse())
-                History.Add(version);
+            _ = LoadHistory(value.ParserId);
             Message = "";
             Changed();
         }
@@ -109,12 +110,37 @@ public sealed class ParserEditorViewModel : ObservableObject
         ? "Dane w stałej tabeli CAN_Row – pola dostaną sloty przy zapisie"
         : $"Dane w stałej tabeli CAN_Row – zajęte sloty: {CanonicalSlots.Usage(Fields.Select(f => f.ToField()))}";
 
-    /// <summary>Lista parserów od nowa (po zapisie albo zmianie z innego ekranu).</summary>
-    public void Reload()
+    private async Task LoadHistory(long parserId)
     {
-        Parsers.Clear();
-        foreach (var parser in _service.Parsers())
-            Parsers.Add(parser);
+        History.Clear();
+        try
+        {
+            var versions = await Task.Run(() => _service.ParserHistory(parserId));   // krótki odczyt – nie blokuje okna
+            if (Selected?.ParserId != parserId)
+                return;
+            foreach (var version in versions.Reverse())
+                History.Add(version);
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            Message = $"Nie udało się wczytać historii parsera: {ex.Message}";
+        }
+    }
+
+    /// <summary>Lista parserów od nowa (po zapisie albo zmianie z innego ekranu).</summary>
+    public async Task Reload()
+    {
+        try
+        {
+            var parsers = await Busy.Run("Wczytywanie parserów…", () => _service.Parsers());
+            Parsers.Clear();
+            foreach (var parser in parsers)
+                Parsers.Add(parser);
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            Message = $"Nie udało się wczytać parserów: {ex.Message}";
+        }
     }
 
     private void Clear()
@@ -131,15 +157,24 @@ public sealed class ParserEditorViewModel : ObservableObject
         Changed();
     }
 
-    private void DoSave()
+    private async Task DoSave()
     {
         var input = new ParserInput(_parserId, _version, Code, Name, Fields.Select(f => f.ToField()).ToList(), Active);
-        var result = _service.SaveParser(input);
+        ConfigSaveResult result;
+        try
+        {
+            result = await Busy.Run("Zapisywanie parsera…", () => _service.SaveParser(input));
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            Message = $"Zapis nieudany: {ex.Message}";
+            return;
+        }
         Message = string.Join(Environment.NewLine, new[] { result.Message }.Concat(result.Issues.Select(i => "• " + i.Message)));
         if (!result.Success)
             return;
         var code = _parserId is null ? Code.Trim().ToUpperInvariant() : _code;
-        Reload();
+        await Reload();
         Selected = Parsers.FirstOrDefault(p => p.Code == code);
         Message = result.Message;
         _saved();
@@ -149,15 +184,19 @@ public sealed class ParserEditorViewModel : ObservableObject
     /// Wiersz nagłówków przykładowego pliku (ten sam odczyt co import): kolumny bez pola dochodzą jako nowe pola (tekst –
     /// sprawdź typ), pola z kolumną spoza pliku są oznaczone; przykłady wartości przy polach.
     /// </summary>
-    private void LoadColumnsFromFile()
+    private async Task LoadColumnsFromFile()
     {
         var path = _dialogs.OpenExcel("Przykładowy plik źródła – kolumny z wiersza nagłówków");
         if (path is null)
             return;
         try
         {
-            var source = TabularFileReader.Open(File.ReadAllBytes(path), Path.GetFileName(path));
-            var data = new TabularData(source.Headers, source.Rows().Take(200).ToList(), source.FileType, source.Sheet, source.Encoding, source.Delimiter);   // przykłady z początku pliku
+            // Odczyt strumieniowy z dysku w tle – tylko nagłówek i początek pliku (duże pliki ACTUALS nie trafiają w całości do pamięci).
+            var data = await Busy.Run($"Odczyt kolumn pliku {Path.GetFileName(path)}…", () =>
+            {
+                var source = TabularFileReader.OpenFile(path);
+                return new TabularData(source.Headers, source.Rows().Take(200).ToList(), source.FileType, source.Sheet, source.Encoding, source.Delimiter);   // przykłady z początku pliku
+            });
             var (added, missing) = SourceConfigService.CompareWithFile(Fields.Select(f => f.ToField()).ToList(), data.Headers);
             foreach (var field in added)
                 Fields.Add(ParserFieldRowViewModel.From(field));
