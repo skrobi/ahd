@@ -223,7 +223,7 @@ istniejących parserów (kolejność pól, osobno dla rodzaju), przenosi dane `C
 liczby wierszy) i usuwa stare tabele; wiersze `STG_RawRow` przenosi do tabeli treści plików `META_SourceFileContent`
 (usuniętej migracją 008) i usuwa tabelę. Wymaga SQL Server 2016+ i poziomu zgodności bazy co najmniej 130 – skrypt sprawdza go na początku
 (Diagnostyka pokazuje wersję serwera i poziom zgodności). Zapytania raportów i grupowania czytają `CAN_Row` przez
-sloty parsera (`SqlCanonical`; docelowo widoki – F10.2).
+sloty parsera (`SqlCanonical`; docelowo widoki – F10.2; z zewnątrz – procedura `CAN_LatestImport`, migracja 011).
 
 **Migracja `sql/mssql/008_bez_tresci_plikow.sql`:** usuwa tabelę `META_SourceFileContent` z treścią plików (decyzja
 2026-10-03). Raport RABIT to zawsze pełne dane, a po udanym imporcie są one w `CAN_Row` – kopia pliku nie jest
@@ -240,6 +240,21 @@ zaimportowanych plików zostają w `CAN_Row`, ale mapowanie ich nie czyta – ra
 `DICT_DepartmentRate` dostaje kolumnę `CostCenter` (MPK, wymagana), `Department` (opis MPK) i `Overhead` dopuszczają
 brak wartości, unikalny klucz bieżących wersji: `Project` + `CostCenter` + `Year`. Istniejące wiersze dostają MPK
 z dotychczasowego `Department` (był kluczem); wpis w dzienniku podaje ich liczbę. Wymaga aplikacji 0.20.0.
+
+**Migracja `sql/mssql/011_ostatni_import_parsera.sql`:** procedura `[<Schema>].[<Sygnatura>CAN_LatestImport]` – ostatni
+import parsera dla raportów i narzędzi spoza aplikacji (Excel, Power BI, SQL). Zwraca dane kanoniczne parsera
+z najnowszej wersji każdego pliku źródłowego (lokalizacja + nazwa; największa data raportu `ModifiedAt`, potem czas
+importu; tylko wersje z utworzonymi danymi kanonicznymi): kolumny pliku `SourceCode`, `Location`, `FileName`,
+`ModifiedAt`, `ImportedAt`, `BatchId`, `FileId`, `RowNumber`, `ParserVersion` i pola bieżącej wersji parsera pod
+własnymi nazwami (sloty według `META_Parser.Fields`). Zapytanie składane jest przy wywołaniu, więc ta sama procedura
+obsługuje każdy parser, także dodany później – bez zakładania widoków (aplikacja i użytkownicy nie wykonują DDL).
+Parametry: `@Parser` (kod, np. `ACTUALS` – wszystkie jego źródła, `ACTUALS_PAF` i `ACTUALS_CES`), opcjonalnie
+`@SourceCode` (jedno źródło) i `@AsOf` (stan na moment – pliki zaimportowane do tej chwili). Nocny import w kilku
+partiach daje komplet: każdy plik w wersji z ostatniej partii, która go przyniosła; plik, którego RABIT nie
+wygenerował ponownie, zostaje w poprzedniej wersji (O38); w trakcie importu wynik łączy pliki nowe i poprzednie
+(kolumny `ImportedAt`, `BatchId`). Procedura działa z prawami właściciela (`EXECUTE AS OWNER`) – rola `pzl_ev_user`
+potrzebuje tylko `EXECUTE` (nadawane przez migrację, gdy rola istnieje). Przykład:
+`EXEC [FINOP].[PZLEV_CAN_LatestImport] @Parser = 'ACTUALS', @SourceCode = 'ACTUALS_CES';`. Wymaga aplikacji 0.21.0.
 
 Aplikacja zapisuje dziś do tabel importu, konfiguracji importu, słowników globalnych, korekt mapowania, dziennika i problemów;
 tabele projektów i słowników projektu czekają na moduły F4. Blokada importu – plik na dysku sieciowym
