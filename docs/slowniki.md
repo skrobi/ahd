@@ -37,7 +37,7 @@ Słowniki, kreator projektu).
 | Słownik | Zawartość | Klucz | Użycie |
 |---|---|---|---|
 | Kalendarz okresów | okres (`RRRR-MM`); tygodnie okresu (numer, od – do); oznaczenie tygodnia zamykającego okres | tydzień | przebieg: okres i czy zamyka okres (P0); nazwy plików |
-| Stawki wydziałów | `Department`, `Year`, `Labor Rate`, `Overhead` | `Department` + `Year` | łączenie źródeł – godziny na koszt (P3) |
+| Stawki wydziałów | `MPK` (miejsce powstawania kosztów), `Department` (opis MPK, opcjonalny), `Year`, `Labor Rate`, `Overhead` (opcjonalny) | `MPK` + `Year` | łączenie źródeł – godziny na koszt (P3) |
 | Kursy walut | waluta, okres, kurs (USD / PLN) | waluta + okres | przeliczenia walut (P3, P8) |
 | Cost Category | numer elementu kosztowego → Opis, Obszar, Cost Category (rozdz. 6) | numer elementu kosztowego | walidacja (P2), łączenie źródeł (P3) |
 | Osoby | lista osób pełniących funkcję CAM (imię i nazwisko, konto AD) | osoba | wybór CAM w słowniku „WP i CAM” |
@@ -90,7 +90,7 @@ Kontekst biznesowy typów – `readme.md`.
 | Czystość | spacje na początku / końcu i niełamliwe usuwane automatycznie | automatycznie |
 | Czystość | zapis podobny do istniejącej wartości | WARNING |
 | Klucz | brak duplikatów klucza; brak nakładających się okresów `ValidFrom`–`ValidTo`; `ValidFrom` ≤ `ValidTo` | ERROR |
-| Odwołania | wskazany element (projekt, WP, CAM, wydział) istnieje | ERROR |
+| Odwołania | wskazany element (projekt, WP, CAM, MPK) istnieje | ERROR |
 | Historia | kto i kiedy – uzupełnia aplikacja; zmiana i usunięcie tylko przez zamknięcie okresu | automatycznie |
 
 ### 5.2 WP i CAM
@@ -117,8 +117,9 @@ Kontekst biznesowy typów – `readme.md`.
 
 | Reguła | Poziom |
 |---|---|
-| para `Department` + `Year` unikalna | ERROR |
-| `Labor Rate` > 0, `Overhead` ≥ 0 | ERROR |
+| para `MPK` + `Year` unikalna (`Department` to tylko opis MPK) | ERROR |
+| `MPK` i `Labor Rate` wymagane; `Labor Rate` > 0 | ERROR |
+| `Overhead` opcjonalny; wypełniony – ≥ 0 | ERROR |
 
 ### 5.5 Cost Category
 
@@ -146,7 +147,7 @@ Kontekst biznesowy typów – `readme.md`.
 Reguły rozstrzygania na zawartości raportu (kilka celów jednego elementu CES, cel spoza `LOG.WBS`) sprawdza ekran
 Mapowanie – `docs/mapowanie-ces-p1s.md`, rozdz. 10.
 
-Kontrole słowników względem danych przebiegu (np. wydział z kosztów bez stawki, numer elementu kosztowego bez
+Kontrole słowników względem danych przebiegu (np. MPK z kosztów bez stawki na dany rok, numer elementu kosztowego bez
 wpisu w Cost Category) – `docs/pipeline-fazy.md`, P2.
 
 ---

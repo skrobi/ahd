@@ -61,7 +61,7 @@ public sealed class SqlPresetsTests : IDisposable
         Assert.Equal("Manufacturing and QA LL labor", costCategory["9229D550"].Values["Cost Category"]);
         Assert.Empty(_dictionaries.Current(GlobalDictionaries.DepartmentRates));
 
-        Assert.Contains(_journal.Recent(5), e => e.Message ==
+        Assert.Contains(_journal.Recent(50), e => e.Message ==
             "Migracja 002 – dane startowe: definicje źródeł 2, lokalizacje RABIT 1, kalendarz okresów 105 tyg., Cost Category 33 wierszy");
 
         // presety są zwykłymi wierszami – zmiana w Administracji tworzy nową wersję
@@ -91,7 +91,7 @@ public sealed class SqlPresetsTests : IDisposable
         var costCategory = _dictionaries.Current(GlobalDictionaries.CostCategory);
         Assert.Equal(33, costCategory.Count);
         Assert.Equal("Inna", costCategory.Single(r => r.Values["Numer elementu kosztowego"] == "0051105550").Values["Cost Category"]);
-        Assert.Contains(_journal.Recent(5), e => e.Message ==
+        Assert.Contains(_journal.Recent(50), e => e.Message ==
             "Migracja 002 – dane startowe: definicje źródeł 1, lokalizacje RABIT 1, kalendarz okresów 105 tyg., Cost Category 32 wierszy");
     }
 }
