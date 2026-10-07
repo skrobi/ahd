@@ -5,7 +5,8 @@ Excel i reguły walidacji. Słowniki zawierają wiedzę biznesową potrzebną do
 w dane raportowe.
 
 Powiązane: `docs/model-danych.md` (historia i przypięcie przez przebieg), `docs/mapowanie-ces-p1s.md`
-(korekty mapowania CES ↔ P1S – osobny mechanizm), `docs/funkcjonalnosc.md` (ekran Słowniki, kreator projektu).
+(raport mapowań CES ↔ P1S – rozstrzyganie; korekty mapowania – osobny mechanizm), `docs/funkcjonalnosc.md` (ekran
+Słowniki, kreator projektu).
 
 ---
 
@@ -17,9 +18,12 @@ Powiązane: `docs/model-danych.md` (historia i przypięcie przez przebieg), `doc
   (`docs/model-danych.md`, rozdz. 3).
 - **Walidacja przy zapisie** (rozdz. 5): ERROR nie pozwala zapisać (komunikat przy polu), WARNING wymaga
   potwierdzenia. Błędna wersja słownika nie powstaje.
-- **Excel jako format wymiany:** słowniki projektu i Cost Category można pobrać do Excela i wczytać ponownie.
-  Kolumny rozpoznawane po nagłówkach; podgląd różnic (+nowe / ~zmienione / −usunięte); ta sama walidacja co
-  przy zapisie w aplikacji; słownik z błędem ERROR nie zostaje zapisany. Numer zapisany w Excelu jako liczba
+- **Excel jako format wymiany:** słowniki globalne i słowniki projektu można pobrać do Excela i wczytać ponownie
+  (także CSV).
+  Wczytanie zastępuje całą zawartość słownika zawartością pliku – wiersze spoza pliku są usuwane (zamknięcie okresu,
+  historia zostaje). Kolumny rozpoznawane po nagłówkach; podgląd różnic (+nowe / ~zmienione / −usunięte; przy
+  dużych zmianach pierwsze 200 pozycji każdego rodzaju i liczba pozostałych); ta sama walidacja co przy zapisie
+  w aplikacji; słownik z błędem ERROR nie zostaje zapisany. Numer zapisany w Excelu jako liczba
   jest uzupełniany zerami do długości klucza (np. `51105550` → `0051105550`).
 - **Równoczesna edycja:** zapis jest krótką transakcją; jeśli wiersz zmienił ktoś inny od chwili otwarcia,
   zapis jest odrzucany z komunikatem i trzeba go ponowić na aktualnych danych.
@@ -37,6 +41,7 @@ Powiązane: `docs/model-danych.md` (historia i przypięcie przez przebieg), `doc
 | Kursy walut | waluta, okres, kurs (USD / PLN) | waluta + okres | przeliczenia walut (P3, P8) |
 | Cost Category | numer elementu kosztowego → Opis, Obszar, Cost Category (rozdz. 6) | numer elementu kosztowego | walidacja (P2), łączenie źródeł (P3) |
 | Osoby | lista osób pełniących funkcję CAM (imię i nazwisko, konto AD) | osoba | wybór CAM w słowniku „WP i CAM” |
+| Raport mapowań CES ↔ P1S | raport mapowań SAP↔CES z `PZLPROD` – wszystkie kolumny pliku (`docs/mapowanie-ces-p1s.md`, rozdz. 2); wczytywany w całości nowym raportem | `src` + `pspnr` | mapowanie CES ↔ P1S (ekran Mapowanie, nakładka projektu, G2, P1, P3) |
 
 Definicje źródeł i ich prefiksy są konfiguracją importu – `docs/zrodla-danych.md`, rozdz. 2.
 
@@ -129,6 +134,17 @@ Kontekst biznesowy typów – `readme.md`.
 | co najmniej jedno z pól `Cost Element`, `WBS Element`, `Partner object` wypełnione | ERROR |
 | opis wypełniony | ERROR |
 | powtórzona kombinacja `Cost Element` + `WBS Element` + `Partner object` | ERROR |
+
+### 5.7 Raport mapowań CES ↔ P1S
+
+| Reguła | Poziom |
+|---|---|
+| `src` = `SAP` albo `CES`; `pspnr` wypełniony | ERROR |
+| para `src` + `pspnr` unikalna | ERROR |
+| wiersz `src` = CES bez przypisania: brak elementu CES (`wbs_ces`, `wbs`) albo celu P1S (`pspnr_sap`, `wbs_sap`) i brak pary `project_ces` → `project_sap` | WARNING |
+
+Reguły rozstrzygania na zawartości raportu (kilka celów jednego elementu CES, cel spoza `LOG.WBS`) sprawdza ekran
+Mapowanie – `docs/mapowanie-ces-p1s.md`, rozdz. 10.
 
 Kontrole słowników względem danych przebiegu (np. wydział z kosztów bez stawki, numer elementu kosztowego bez
 wpisu w Cost Category) – `docs/pipeline-fazy.md`, P2.

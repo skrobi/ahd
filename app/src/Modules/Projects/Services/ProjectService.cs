@@ -132,7 +132,7 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
                 error = $"Odczyt PZLPROD (LOG.WBS) nieudany: {ex.Message}";
             }
         }
-        return new MappingInputs(mapping.LatestReport(), mapping.ActiveCorrections(), p1s, error);
+        return new MappingInputs(mapping.Report(), mapping.ActiveCorrections(), p1s, error);
     }
 
     public static IReadOnlyDictionary<long, MappingResult> Resolve(PoTree tree, MappingInputs inputs) => ObjectivesMapping.Resolve(tree, inputs);

@@ -92,7 +92,7 @@ public static class ObjectivesMapping
         if (withoutCode.Count > 0)
             return Issue.Warning($"Elementy nakładki bez strony P1S (UNMAPPED i bez Legacy WBS) – nie podepnie się do nich WP: {string.Join(", ", withoutCode.Take(10))}{(withoutCode.Count > 10 ? "…" : "")}", "Mapowanie CES ↔ P1S");
         if (inputs.Report is null && inputs.Corrections.Count == 0)
-            return Issue.Warning("Raport mapowań nie został zaimportowany – strona P1S tylko z Legacy WBS", "Mapowanie CES ↔ P1S");
+            return Issue.Warning("Słownik „Raport mapowań CES ↔ P1S” jest pusty – strona P1S tylko z Legacy WBS", "Mapowanie CES ↔ P1S");
         if (inputs.P1sError is not null)
             return Issue.Warning($"{inputs.P1sError} – zakres P1S bez poddrzew LOG.WBS", "Mapowanie CES ↔ P1S");
         return new Issue(Shared.Models.Pipeline.CheckLevel.Pass, $"Strona P1S: {mapped} z {elements.Count} elementów z celem mapowania CES ↔ P1S");

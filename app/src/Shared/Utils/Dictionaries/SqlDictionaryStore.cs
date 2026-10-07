@@ -66,8 +66,9 @@ public sealed class SqlDictionaryStore(SqlDatabase db, IClock clock, ICurrentUse
                     if (existing.Version != change.ExpectedVersion)
                         return StoreResult.Rejected($"Wiersz {change.Key} zmienił {existing.RecordedBy} ({existing.RecordedAt:yyyy-MM-dd HH:mm}) – odśwież dane.");
                 }
+                var touched = changes.Where(c => c.Kind != RowChangeKind.Added).Select(c => c.RowId!.Value).ToHashSet();
                 var duplicate = current.Values
-                    .Where(r => !changes.Any(c => c.Kind != RowChangeKind.Added && c.RowId == r.RowId))
+                    .Where(r => !touched.Contains(r.RowId))
                     .Select(r => r.Key)
                     .Concat(changes.Where(c => c.Kind != RowChangeKind.Removed).Select(c => c.Key))
                     .GroupBy(k => k)

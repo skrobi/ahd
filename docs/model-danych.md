@@ -39,12 +39,12 @@ ZAMROŻENIE – przebieg zamykający okres
 |---|---|
 | `meta` | importy, wersje plików i ich treść, definicje źródeł, parsery, projekty, przebiegi, etapy, rewizje, problemy, dziennik zdarzeń, role, wersja aplikacji i schematu |
 | `can` | dane kanoniczne – jedna stała tabela `can.Row` ze slotami typowanymi dla wszystkich parserów (migracja 007) |
-| `dict` | słowniki globalne i projektu, korekty mapowania CES ↔ P1S – z historią |
+| `dict` | słowniki globalne (w tym raport mapowań CES ↔ P1S) i projektu, korekty mapowania CES ↔ P1S – z historią |
 | `ev` | koszt per WP, zaawansowanie, wyniki EV |
 
 Struktura P1S nie jest kopiowana do bazy PZL-EV – aplikacja (docelowo procedury) czyta ją z `PZLPROD` (rozdz. 3.4).
-Raport mapowań SAP↔CES trafia do bazy importem pliku Excel (parser `MAPOWANIA`, dane w `can.Row`) – każda
-wersja pliku zostaje (`docs/mapowanie-ces-p1s.md`, rozdz. 2).
+Raport mapowań SAP↔CES jest słownikiem globalnym `dict.MappingReport`, wczytywanym w całości z pliku Excel – każda
+zmiana zostaje w historii wierszy (`docs/mapowanie-ces-p1s.md`, rozdz. 2).
 
 **Nazwy w bazie:** warstwy z tabeli wyżej są częścią nazwy tabeli, a nie osobnymi schematami. Wszystkie obiekty są w
 jednym schemacie z konfiguracji, z sygnaturą przed nazwą: `[<Schema>].[<Sygnatura><WARSTWA>_<Nazwa>]`, np.
@@ -140,7 +140,7 @@ Rewizja to jedno obliczenie EV przebiegu (etap P8). Zapisuje:
 
 ### 4.4 Założenie o źródłach zewnętrznych
 
-Odtwarzalność opiera się na przyrostowości `PZLPROD.LOG.WBS` (rozdz. 3.4) i wersjach plików raportu mapowań.
+Odtwarzalność opiera się na przyrostowości `PZLPROD.LOG.WBS` (rozdz. 3.4) i historii słownika raportu mapowań.
 Zmiana istniejących wierszy w `LOG.WBS` nie jest wykrywana (`docs/architektura.md`, rozdz. 10).
 
 ---
@@ -229,6 +229,12 @@ sloty parsera (`SqlCanonical`; docelowo widoki – F10.2).
 2026-10-03). Raport RABIT to zawsze pełne dane, a po udanym imporcie są one w `CAN_Row` – kopia pliku nie jest
 potrzebna. Wersje plików (`META_SourceFile`) i dane kanoniczne zostają; wpis w dzienniku podaje liczbę i rozmiar
 usuniętych treści.
+
+**Migracja `sql/mssql/009_raport_mapowan_slownik.sql`:** raport mapowań SAP↔CES jako słownik globalny – tabela
+`DICT_MappingReport` (wszystkie kolumny raportu jako tekst; kolumna pliku `project` → `ProjectDef`, bo `Project` to
+kolumna słowników projektu; bieżący klucz `src` + `pspnr` unikalny). Raport nie jest już importowany: definicje źródeł
+z parserem `MAPOWANIA` i sam parser są usuwane (zamknięta bieżąca wersja, historia zostaje), dane wcześniej
+zaimportowanych plików zostają w `CAN_Row`, ale mapowanie ich nie czyta – raport trzeba raz wczytać do słownika.
 
 Aplikacja zapisuje dziś do tabel importu, konfiguracji importu, słowników globalnych, korekt mapowania, dziennika i problemów;
 tabele projektów i słowników projektu czekają na moduły F4. Blokada importu – plik na dysku sieciowym
