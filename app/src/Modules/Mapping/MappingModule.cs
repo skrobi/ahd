@@ -12,7 +12,7 @@ using PzlEv.Shared.Utils.Ui.Modularity;
 namespace PzlEv.Modules.Mapping;
 
 /// <summary>
-/// Mapowanie CES ↔ P1S (F04, G2): raport mapowań z importu (parser MAPOWANIA), struktura P1S z PZLPROD, rozstrzyganie,
+/// Mapowanie CES ↔ P1S (F04, G2): raport mapowań ze słownika globalnego, struktura P1S z PZLPROD, rozstrzyganie,
 /// korekty elementu i projektu CES z historią, elementy nieprzypisane z propozycją celu.
 /// </summary>
 public sealed class MappingModule : IModule

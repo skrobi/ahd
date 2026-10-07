@@ -10,6 +10,12 @@ służą do sprawdzenia przepływu danych (liczba wierszy i sumy kontrolne na ka
 |---|---|---|---|---|
 | `RABIT/ACTUALS_PAF_01.csv` | `ACTUALS_PAF` | 6 | 10 574,11 | 2 203,12 |
 
+## Mapowanie
+
+| Plik | Zawartość | Oczekiwane |
+|---|---|---|
+| `Mapowanie/Raport_mapowan.csv` | raport mapowań SAP↔CES w pełnym układzie (28 kolumn, `docs/mapowanie-ces-p1s.md`, rozdz. 2) – słownik „Raport mapowań CES ↔ P1S” | 27 wierszy (20 SAP, 7 CES), bez błędów i ostrzeżeń; projekty CES `4D02U8`, `4D02UH`, `4D02UR` → `AC-LH8.1.01`, `.1.02`, `.1.03`; np. `4D02U8000001` → PSPNR `14217226`, `4D02U8.RA` → `14217225` |
+
 ## Projekty
 
 | Plik | Zawartość | Oczekiwane |

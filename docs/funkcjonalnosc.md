@@ -92,6 +92,8 @@ Lista kontrolna na ekranie projektu:
 - Ekran Słowniki: słowniki globalne i słowniki projektu, edycja w tabeli / formularzu, historia zmian każdego
   wiersza.
 - Zapis, historia, walidacja, wymiana przez Excel i równoczesna edycja – `docs/slowniki.md`, rozdz. 1 i 5.
+- Tu jest też raport mapowań CES ↔ P1S (słownik globalny): nowy raport z `PZLPROD` wczytuje się w całości
+  (`docs/mapowanie-ces-p1s.md`, rozdz. 2); ekran Mapowanie tylko z niego czyta.
 - Przebiegi z wcześniejszym znacznikiem stanu pokazują zmianę (`docs/pipeline-fazy.md`, rozdz. 5).
 
 ### F04. Mapowanie CES ↔ P1S

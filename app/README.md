@@ -48,7 +48,9 @@ zmieni). Brak pliku albo błąd w nim = komunikat przy starcie z nazwą pola –
   bazy co najmniej 130 (Diagnostyka → **Serwer SQL**); po niej aplikacja nie zmienia tabel – nowy parser i nowe
   pole to tylko zapis parsera (`docs/model-danych.md`, rozdz. 5.1);
 - `008_bez_tresci_plikow.sql` – usuwa przechowywaną treść plików (`META_SourceFileContent`): w bazie zostają wersje
-  plików i dane kanoniczne, sam plik nie jest przechowywany.
+  plików i dane kanoniczne, sam plik nie jest przechowywany;
+- `009_raport_mapowan_slownik.sql` – raport mapowań SAP↔CES jako słownik globalny (`DICT_MappingReport`); usuwa
+  definicje źródeł z parserem `MAPOWANIA` i sam parser – raport wczytuje się raz do słownika (Słowniki).
 
 Migracje wykonuje przycisk **Diagnostyka → Migracja** – uruchamia po kolei skrypty, których numeru nie ma
 w `META_SchemaVersion`, a wykonane pomija. Lista na tym ekranie pokazuje, które skrypty są wykonane (kiedy, kto)
@@ -91,8 +93,9 @@ na ekranie **Diagnostyka** i w stopce okna.
 6. **Administracja** – definicję źródła można usunąć (**Usuń definicję** → **Potwierdź usunięcie**); historia zostaje.
 7. **Mapowanie CES ↔ P1S** – **Diagnostyka → Sprawdź PZLPROD**: liczba elementów `LOG.WBS`, grup `WBS_DIC`
    i faktyczne wartości `Z_ACTIVE` / `LOEKZ` (aplikacja przyjmuje: `LOEKZ` niepuste = usunięty; `Z_ACTIVE` puste,
-   `0` albo `N` = nieaktywny). **Administracja** → **Nowa definicja**: kod `MAPOWANIA`, prefiks – początek nazwy
-   pliku raportu mapowań, parser `MAPOWANIA` → **Zapisz definicję**; plik do `Do_importu` → **Importuj**.
+   `0` albo `N` = nieaktywny). **Słowniki** → „Raport mapowań CES ↔ P1S” → **Wczytaj z Excela** (np.
+   `testdata/Mapowanie/Raport_mapowan.csv` albo eksport z `PZLPROD`) → podgląd różnic → **Zatwierdź wczytanie**;
+   ponowne wczytanie innego pliku zastępuje cały raport (wiersze spoza pliku – „−”, historia zostaje).
    **Mapowanie**: statusy elementów CES z raportów ACTUALS (REPORT, INHERITED, OVERRIDE, UNMAPPED), drzewo P1S
    z elementami CES pod celami i węzłem „Nieprzypisane” (z propozycją). Korekta: wybierz element CES → cel w drzewie
    albo w wyszukiwaniu → uzasadnienie (wymagane przy zmianie przypisania z raportu) → **Zapisz korektę**; status
@@ -103,7 +106,7 @@ na ekranie **Diagnostyka** i w stopce okna.
    (wpis w dzienniku).
 9. **Projekty** – **+ Nowy projekt**: kod `M28`, nazwa, typ → **Performance Objectives**: **Wczytaj Excel**
    `testdata/Projekty/PO_M28.xlsx` (8 elementów; kolumna „P1S z mapowania” – status i cel z mapowania CES ↔ P1S,
-   gdy zaimportowano raport mapowań), dodaj węzeł wirtualny i przeciągnij do niego elementy →
+   gdy słownik raportu mapowań nie jest pusty), dodaj węzeł wirtualny i przeciągnij do niego elementy →
    **Słowniki projektu**: **Pobierz szablon Excel** (arkusz „WP i CAM” z elementami P1S z zakresu) albo
    **Wczytaj skoroszyt** `testdata/Projekty/Slowniki_M28.xlsx` → **Foldery** → **Podsumowanie**: baza analityczna
    (3 WP, 2 250 h, 75 000,50 materiałów) → **Utwórz projekt**. Bez słowników projekt powstaje, ale jest niegotowy
@@ -269,7 +272,7 @@ app/
     │   ├── Administration/      definicje źródeł, lokalizacje RABIT (F2)
     │   ├── Dashboard/           Pulpit: import, źródła, słowniki, otwarte problemy, dziennik (z bazy)
     │   ├── Diagnostics/         test stosu, konfiguracja środowiska, migracje, sprawdzenie PZLPROD
-    │   ├── Mapping/             Mapowanie CES ↔ P1S (F3): raport mapowań, drzewo P1S, korekty
+    │   ├── Mapping/             Mapowanie CES ↔ P1S (F3): rozstrzyganie, drzewo P1S, korekty
     │   └── Runs/ Projects/ …    pozostałe moduły: plik wejścia + etapy, ekran zastępczy
     └── Shared/
         ├── Utils/Ui/            MVVM, konwertery, okna wyboru pliku, kontrakt modułu (WPF)

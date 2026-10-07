@@ -17,6 +17,8 @@ public sealed class MasterDataViewModel : ObservableObject
 {
     private static readonly ILogger Logger = Log.ForContext("Module", "master-data");
 
+    private const int PreviewLimit = 200;
+
     private readonly DictionaryService _service;
     private readonly IFileDialogs _dialogs;
     private readonly List<DictRow> _removed = [];
@@ -281,9 +283,9 @@ public sealed class MasterDataViewModel : ObservableObject
             var preview = await Busy.Run("Wczytywanie i sprawdzanie pliku Excel…", () => _service.PreviewImport(spec, path));
             _preview = preview;
             PreviewLines.Clear();
-            foreach (var key in preview.Added) PreviewLines.Add($"+ {key}");
-            foreach (var line in preview.Changed) PreviewLines.Add($"~ {line}");
-            foreach (var key in preview.Removed) PreviewLines.Add($"− {key}");
+            AddPreviewLines("+", preview.Added);
+            AddPreviewLines("~", preview.Changed);
+            AddPreviewLines("−", preview.Removed);
             PreviewIssues.Clear();
             foreach (var issue in preview.Issues) PreviewIssues.Add(issue);
             Status = preview.HasErrors
@@ -307,6 +309,15 @@ public sealed class MasterDataViewModel : ObservableObject
                 Status = outcome.Message;
             SetIssues(outcome.Issues);
         });
+    }
+
+    /// <summary>Pierwsze linie zmian danego rodzaju – pełne wczytanie dużego słownika (raport mapowań) to tysiące wierszy.</summary>
+    private void AddPreviewLines(string sign, IReadOnlyList<string> lines)
+    {
+        foreach (var line in lines.Take(PreviewLimit))
+            PreviewLines.Add($"{sign} {line}");
+        if (lines.Count > PreviewLimit)
+            PreviewLines.Add($"{sign} … i {lines.Count - PreviewLimit} więcej");
     }
 
     private void ClosePreview(string? status)

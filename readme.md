@@ -48,7 +48,7 @@ Każda reguła jest opisana w jednym dokumencie; pozostałe dokumenty do niego o
 | RABIT | narzędzie SAP zrzucające wyniki raportów na SharePoint | `docs/zrodla-danych.md`, rozdz. 3 |
 | Definicja źródła | formalny opis raportu źródłowego: schemat, ziarno, klucz, znaczenie kolumn i okresu, waluta, walidacja, wersja parsera | `docs/zrodla-danych.md`, rozdz. 2 |
 | WP / CAM | Work Package / Cost Account Manager – osoba odpowiedzialna za WP | `docs/slowniki.md`, rozdz. 3 |
-| Raport mapowań, korekta | przypisania CES ↔ P1S (eksport z `PZLPROD`, import z Excela) / zmiana przypisania wprowadzona w PZL-EV | `docs/mapowanie-ces-p1s.md` |
+| Raport mapowań, korekta | przypisania CES ↔ P1S (eksport z `PZLPROD`, słownik globalny wczytywany z Excela) / zmiana przypisania wprowadzona w PZL-EV | `docs/mapowanie-ces-p1s.md` |
 | Przebieg | przetworzenie jednego projektu za jeden tydzień | `docs/pipeline-fazy.md`, rozdz. 4 |
 | Przebieg zamykający | przebieg w tygodniu oznaczonym w kalendarzu okresów jako zamknięcie okresu: zaawansowanie od CAM, zamrożenie | `docs/pipeline-fazy.md`, rozdz. 4 |
 | Znacznik stanu | moment, w którego stanie przebieg czyta dane i słowniki (przypięcie) | `docs/model-danych.md`, rozdz. 4.2 |

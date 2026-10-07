@@ -3,13 +3,13 @@ using PzlEv.Shared.Models.Mapping;
 namespace PzlEv.Shared.Utils.Mapping;
 
 /// <summary>
-/// Dane mapowania w bazie PZL-EV: raport mapowań (najnowszy zaimportowany plik parsera MAPOWANIA), elementy CES
+/// Dane mapowania w bazie PZL-EV: raport mapowań (słownik globalny „Raport mapowań CES ↔ P1S”), elementy CES
 /// z danych kanonicznych ACTUALS i korekty z historią (dict.MappingCorrection).
 /// </summary>
 public interface IMappingStore
 {
-    /// <summary>Najnowszy plik raportu mapowań z danymi kanonicznymi; null – raportu jeszcze nie zaimportowano.</summary>
-    ReportInfo? LatestReport();
+    /// <summary>Bieżąca zawartość słownika raportu mapowań; null – słownik jest pusty.</summary>
+    ReportInfo? Report();
 
     IReadOnlyList<CesElement> CesElements();
 
