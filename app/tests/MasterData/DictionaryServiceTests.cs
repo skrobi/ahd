@@ -39,7 +39,7 @@ public sealed class DictionaryServiceTests : IDisposable
     private static DictionarySpec CostCategory => GlobalDictionaries.Get(GlobalDictionaries.CostCategory);
 
     private static DictRow Rate(string dept, string rate, long? rowId = null, int? version = null) =>
-        new(rowId, version, new Dictionary<string, string?> { ["Department"] = dept, ["Year"] = "2026", ["Labor Rate"] = rate, ["Overhead"] = "0" });
+        new(rowId, version, new Dictionary<string, string?> { ["MPK"] = dept, ["Year"] = "2026", ["Labor Rate"] = rate, ["Overhead"] = "0" });
 
     [SqlFact]
     public void Errors_block_saving()
@@ -68,14 +68,14 @@ public sealed class DictionaryServiceTests : IDisposable
     {
         _service.Save(Rates, [Rate("W30", "100"), Rate("W40", "110")], [], false);
         var loaded = _service.Load(Rates);
-        var w30 = loaded.Single(r => r["Department"] == "W30");
-        var w40 = loaded.Single(r => r["Department"] == "W40");
+        var w30 = loaded.Single(r => r["MPK"] == "W30");
+        var w40 = loaded.Single(r => r["MPK"] == "W40");
 
         var outcome = _service.Save(Rates, [Rate("W30", "120", w30.RowId, w30.Version), Rate("W51", "90")], [w40], false);
 
         Assert.Equal(SaveStatus.Saved, outcome.Status);
         Assert.Contains("+1 ~1 −1", outcome.Message);
-        var current = _service.Load(Rates).ToDictionary(r => r["Department"]!);
+        var current = _service.Load(Rates).ToDictionary(r => r["MPK"]!);
         Assert.Equal(["W30", "W51"], current.Keys.Order());
         Assert.Equal("120", current["W30"]["Labor Rate"]);
         Assert.Contains(_journal.Recent(10), e => e.Message.Contains("Stawki wydziałów: +1 ~1 −1"));
@@ -115,7 +115,7 @@ public sealed class DictionaryServiceTests : IDisposable
         try
         {
             // Nagłówki inną wielkością liter; numer jako liczba w Excelu.
-            ExcelTableWriter.Write(path, "Stawki", ["department", "YEAR", "labor rate", "Overhead"],
+            ExcelTableWriter.Write(path, "Stawki", ["mpk", "YEAR", "labor rate", "Overhead"],
             [
                 ["W30", 2026L, 150m, 0m],
                 ["W52", 2026L, 95.5m, 3m],
@@ -130,7 +130,7 @@ public sealed class DictionaryServiceTests : IDisposable
 
             var outcome = _service.ApplyImport(Rates, preview);
             Assert.Equal(SaveStatus.Saved, outcome.Status);
-            var current = _service.Load(Rates).ToDictionary(r => r["Department"]!);
+            var current = _service.Load(Rates).ToDictionary(r => r["MPK"]!);
             Assert.Equal(["W30", "W52"], current.Keys.Order());
             Assert.Equal("95.5", current["W52"]["Labor Rate"]);
         }
@@ -147,7 +147,7 @@ public sealed class DictionaryServiceTests : IDisposable
         var path = TempXlsx();
         try
         {
-            ExcelTableWriter.Write(path, "Stawki", ["Department", "Year", "Labor Rate", "Overhead"], [["W30", 2026L, "sto", 0m]]);
+            ExcelTableWriter.Write(path, "Stawki", ["MPK", "Year", "Labor Rate", "Overhead"], [["W30", 2026L, "sto", 0m]]);
             var preview = _service.PreviewImport(Rates, path);
             Assert.True(preview.HasErrors);
             Assert.Equal(SaveStatus.Rejected, _service.ApplyImport(Rates, preview).Status);
@@ -167,7 +167,7 @@ public sealed class DictionaryServiceTests : IDisposable
         {
             ExcelTableWriter.Write(path, "Stawki", ["Year", "Labor Rate"], [[2026L, 1m]]);
             var preview = _service.PreviewImport(Rates, path);
-            Assert.Contains(preview.Issues, i => i.Message == "Brak kolumny 'Department'");
+            Assert.Contains(preview.Issues, i => i.Message == "Brak kolumny 'MPK'");
         }
         finally
         {

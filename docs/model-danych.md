@@ -236,6 +236,11 @@ kolumna słowników projektu; bieżący klucz `src` + `pspnr` unikalny). Raport 
 z parserem `MAPOWANIA` i sam parser są usuwane (zamknięta bieżąca wersja, historia zostaje), dane wcześniej
 zaimportowanych plików zostają w `CAN_Row`, ale mapowanie ich nie czyta – raport trzeba raz wczytać do słownika.
 
+**Migracja `sql/mssql/010_stawki_mpk.sql`:** stawki wydziałów według MPK (`docs/slowniki.md`, rozdz. 2, 5.4) –
+`DICT_DepartmentRate` dostaje kolumnę `CostCenter` (MPK, wymagana), `Department` (opis MPK) i `Overhead` dopuszczają
+brak wartości, unikalny klucz bieżących wersji: `Project` + `CostCenter` + `Year`. Istniejące wiersze dostają MPK
+z dotychczasowego `Department` (był kluczem); wpis w dzienniku podaje ich liczbę. Wymaga aplikacji 0.20.0.
+
 Aplikacja zapisuje dziś do tabel importu, konfiguracji importu, słowników globalnych, korekt mapowania, dziennika i problemów;
 tabele projektów i słowników projektu czekają na moduły F4. Blokada importu – plik na dysku sieciowym
 (`docs/pipeline-fazy.md`, rozdz. 1.3), `sp_getapplock` razem z procedurami (F10.2).

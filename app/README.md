@@ -50,7 +50,9 @@ zmieni). Brak pliku albo błąd w nim = komunikat przy starcie z nazwą pola –
 - `008_bez_tresci_plikow.sql` – usuwa przechowywaną treść plików (`META_SourceFileContent`): w bazie zostają wersje
   plików i dane kanoniczne, sam plik nie jest przechowywany;
 - `009_raport_mapowan_slownik.sql` – raport mapowań SAP↔CES jako słownik globalny (`DICT_MappingReport`); usuwa
-  definicje źródeł z parserem `MAPOWANIA` i sam parser – raport wczytuje się raz do słownika (Słowniki).
+  definicje źródeł z parserem `MAPOWANIA` i sam parser – raport wczytuje się raz do słownika (Słowniki);
+- `010_stawki_mpk.sql` – stawki wydziałów według MPK: klucz MPK + rok, `Department` (opis MPK) i `Overhead`
+  opcjonalne; istniejące stawki dostają MPK z dotychczasowego pola `Department`.
 
 Migracje wykonuje przycisk **Diagnostyka → Migracja** – uruchamia po kolei skrypty, których numeru nie ma
 w `META_SchemaVersion`, a wykonane pomija. Lista na tym ekranie pokazuje, które skrypty są wykonane (kiedy, kto)

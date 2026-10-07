@@ -25,15 +25,15 @@ public class DictionaryValidationTests
     public void Valid_rates_have_no_issues()
     {
         var issues = Check(Rates,
-            Row(("Department", " W30 "), ("Year", "2026"), ("Labor Rate", "125,50"), ("Overhead", "0")),
-            Row(("Department", "W40"), ("Year", "2026"), ("Labor Rate", "1 300,00"), ("Overhead", "12,5")));
+            Row(("MPK", " W30 "), ("Year", "2026"), ("Labor Rate", "125,50"), ("Overhead", "0")),
+            Row(("MPK", "W40"), ("Year", "2026"), ("Labor Rate", "1 300,00"), ("Overhead", "12,5")));
         Assert.Empty(issues);
     }
 
     [Fact]
     public void Type_errors_and_missing_values_are_errors()
     {
-        var issues = Check(Rates, Row(("Department", "W30"), ("Year", "dwa tysiące"), ("Labor Rate", null), ("Overhead", "abc")));
+        var issues = Check(Rates, Row(("MPK", "W30"), ("Year", "dwa tysiące"), ("Labor Rate", null), ("Overhead", "abc")));
         Assert.All(issues, i => Assert.Equal(CheckLevel.Error, i.Level));
         Assert.Contains(issues, i => i.Message.StartsWith("Year:"));
         Assert.Contains(issues, i => i.Message == "Labor Rate: pole wymagane");
@@ -43,18 +43,35 @@ public class DictionaryValidationTests
     [Fact]
     public void Rate_rules_are_enforced()
     {
-        var issues = Check(Rates, Row(("Department", "W30"), ("Year", "2026"), ("Labor Rate", "0"), ("Overhead", "-1")));
+        var issues = Check(Rates, Row(("MPK", "W30"), ("Year", "2026"), ("Labor Rate", "0"), ("Overhead", "-1")));
         Assert.Contains(issues, i => i.Message.Contains("Labor Rate musi być większa od 0"));
         Assert.Contains(issues, i => i.Message.Contains("Overhead nie może być ujemny"));
+    }
+
+    [Fact]
+    public void Rate_key_is_mpk_and_year_description_and_overhead_are_optional()
+    {
+        Assert.Equal(["MPK", "Year"], Rates.KeyColumns.Select(c => c.Name));
+
+        var valid = Check(Rates,
+            Row(("MPK", "4410"), ("Department", "Konstrukcja"), ("Year", "2026"), ("Labor Rate", "125,50"), ("Overhead", null)),
+            Row(("MPK", "4410"), ("Department", null), ("Year", "2027"), ("Labor Rate", "130"), ("Overhead", null)));
+        Assert.Empty(valid);
+
+        var missing = Check(Rates, Row(("MPK", null), ("Department", "Konstrukcja"), ("Year", "2026"), ("Labor Rate", "1"), ("Overhead", null)));
+        Assert.Contains(missing, i => i.Level == CheckLevel.Error && i.Message == "MPK: pole wymagane");
+
+        var tooLong = Check(Rates, Row(("MPK", new string('1', 41)), ("Year", "2026"), ("Labor Rate", "1")));
+        Assert.Contains(tooLong, i => i.Level == CheckLevel.Error && i.Message.Contains("dłuższy niż 40 znaków"));
     }
 
     [Fact]
     public void Duplicate_key_is_an_error_and_similar_key_a_warning()
     {
         var issues = Check(Rates,
-            Row(("Department", "W30"), ("Year", "2026"), ("Labor Rate", "1"), ("Overhead", "0")),
-            Row(("Department", "W30"), ("Year", "2026"), ("Labor Rate", "2"), ("Overhead", "0")),
-            Row(("Department", "w30 "), ("Year", "2027"), ("Labor Rate", "2"), ("Overhead", "0")));
+            Row(("MPK", "W30"), ("Year", "2026"), ("Labor Rate", "1"), ("Overhead", "0")),
+            Row(("MPK", "W30"), ("Year", "2026"), ("Labor Rate", "2"), ("Overhead", "0")),
+            Row(("MPK", "w30 "), ("Year", "2027"), ("Labor Rate", "2"), ("Overhead", "0")));
         Assert.Contains(issues, i => i.Level == CheckLevel.Error && i.Message.StartsWith("Duplikat klucza W30 | 2026"));
         Assert.Contains(issues, i => i.Level == CheckLevel.Warning && i.Message.Contains("'W30'") && i.Message.Contains("'w30'"));
     }

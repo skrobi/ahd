@@ -53,13 +53,14 @@ public static partial class GlobalDictionaries
         {
             Code = DepartmentRates,
             Name = "Stawki wydziałów",
-            Description = "Stawka i narzut wydziału na rok – przeliczenie godzin na koszt w łączeniu źródeł (P3).",
+            Description = "Stawka i narzut MPK (miejsca powstawania kosztów) na rok – przeliczenie godzin na koszt w łączeniu źródeł (P3). Department – opis MPK; Overhead opcjonalny.",
             Columns =
             [
-                new("Department", ColumnType.Text, Key: true),
+                new("MPK", ColumnType.Text, Key: true),
+                new("Department", ColumnType.Text, CheckSimilar: true),
                 new("Year", ColumnType.Integer, Key: true),
                 new("Labor Rate", ColumnType.Decimal, Required: true),
-                new("Overhead", ColumnType.Decimal, Required: true),
+                new("Overhead", ColumnType.Decimal),
             ],
             Rules = RateRules,
         },
@@ -126,7 +127,7 @@ public static partial class GlobalDictionaries
         new(Get(Calendar), "dict.Calendar",
             [("Rok", "Year"), ("Tydzień", "Week"), ("Okres", "Period"), ("Od", "DateFrom"), ("Do", "DateTo"), ("Zamykający", "IsClosing")]),
         new(Get(DepartmentRates), "dict.DepartmentRate",
-            [("Department", "Department"), ("Year", "Year"), ("Labor Rate", "LaborRate"), ("Overhead", "Overhead")]),
+            [("MPK", "CostCenter"), ("Department", "Department"), ("Year", "Year"), ("Labor Rate", "LaborRate"), ("Overhead", "Overhead")]),
         new(Get(FxRates), "dict.FxRate", [("Waluta", "Currency"), ("Okres", "Period"), ("Kurs", "Rate")]),
         new(Get(CostCategory), "dict.CostCategory",
             [("Numer elementu kosztowego", "CostElement"), ("Opis", "Description"), ("Obszar", "Area"), ("Cost Category", "CostCategory")]),
@@ -178,6 +179,10 @@ public static partial class GlobalDictionaries
         for (var i = 0; i < rows.Count; i++)
         {
             var at = DictionaryValidator.RowElement(i);
+            if (rows[i]["MPK"] is { Length: > 40 } mpk)
+                yield return Issue.Error($"MPK '{mpk}' dłuższy niż 40 znaków", at);
+            if (rows[i]["Department"] is { Length: > 100 })
+                yield return Issue.Error("Department (opis MPK) dłuższy niż 100 znaków", at);
             if (Int(rows[i]["Year"]) is { } year && (year < 2000 || year > 2100))
                 yield return Issue.Error("Year poza zakresem 2000–2100", at);
             if (Dec(rows[i]["Labor Rate"]) is { } rate && rate <= 0)
