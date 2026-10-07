@@ -52,7 +52,9 @@ zmieni). Brak pliku albo błąd w nim = komunikat przy starcie z nazwą pola –
 - `009_raport_mapowan_slownik.sql` – raport mapowań SAP↔CES jako słownik globalny (`DICT_MappingReport`); usuwa
   definicje źródeł z parserem `MAPOWANIA` i sam parser – raport wczytuje się raz do słownika (Słowniki);
 - `010_stawki_mpk.sql` – stawki wydziałów według MPK: klucz MPK + rok, `Department` (opis MPK) i `Overhead`
-  opcjonalne; istniejące stawki dostają MPK z dotychczasowego pola `Department`.
+  opcjonalne; istniejące stawki dostają MPK z dotychczasowego pola `Department`;
+- `011_ostatni_import_parsera.sql` – procedura `CAN_LatestImport`: dane kanoniczne parsera z najnowszej wersji każdego
+  pliku, pola parsera pod własnymi nazwami (`docs/model-danych.md`, rozdz. 5.1).
 
 Migracje wykonuje przycisk **Diagnostyka → Migracja** – uruchamia po kolei skrypty, których numeru nie ma
 w `META_SchemaVersion`, a wykonane pomija. Lista na tym ekranie pokazuje, które skrypty są wykonane (kiedy, kto)
