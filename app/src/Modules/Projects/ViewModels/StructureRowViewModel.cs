@@ -8,11 +8,14 @@ namespace PzlEv.Modules.Projects.ViewModels;
 
 /// <summary>
 /// Wiersz tabeli struktury projektu: komórki po kluczu kolumny (StructureEdits), wcięcie i rozwinięcie drzewa,
-/// zmiany wpisane w wierszu do chwili zapisu. IEditableObject – Esc w tabeli cofa zmiany wiersza.
+/// zmiany wpisane w wierszu do chwili zapisu (HasChanges – wiersz niezapisany albo z nieudanym zapisem), problem
+/// komórki sprawdzany od razu po wpisaniu (Problems / ProblemText – podświetlenie i podpowiedź). IEditableObject –
+/// Esc w tabeli cofa zmiany wiersza.
 /// </summary>
 public sealed class StructureRowViewModel(StructureRow row) : INotifyPropertyChanged, IEditableObject
 {
     private readonly Dictionary<string, string?> _changes = [];
+    private readonly Dictionary<string, Shared.Models.Issue> _problems = [];
     private Dictionary<string, string?>? _beforeEdit;
     private bool _isExpanded;
 
@@ -42,6 +45,23 @@ public sealed class StructureRowViewModel(StructureRow row) : INotifyPropertyCha
 
     public bool HasGap => row.Gap is not null;
 
+    public bool HasChanges => _changes.Count > 0;
+
+    /// <summary>Znacznik WP można zmienić w tym wierszu (wiersz z kodem P1S).</summary>
+    public bool CanEditWp => CanEdit(StructureEdits.Wp);
+
+    /// <summary>Poziom problemu komórki według klucza kolumny: crit, warn albo pusty (kolor tła komórki).</summary>
+    public CellTexts Problems => new(_problems.ToDictionary(p => p.Key, p => p.Value.Level == Shared.Models.Pipeline.CheckLevel.Error ? "crit" : "warn"));
+
+    /// <summary>Opis problemu komórki według klucza kolumny (podpowiedź); brak problemu – null.</summary>
+    public CellTexts ProblemText => new(_problems.ToDictionary(p => p.Key, p => $"{p.Value.LevelText}: {p.Value.Message}"), null);
+
+    /// <summary>Tekst komórki według klucza kolumny (wiązanie „Problems[BacHours]”); brak – wartość domyślna.</summary>
+    public sealed class CellTexts(IReadOnlyDictionary<string, string> texts, string? missing = "")
+    {
+        public string? this[string column] => texts.TryGetValue(column, out var text) ? text : missing;
+    }
+
     /// <summary>Zmiany wpisane w wierszu, jeszcze niezapisane (klucz kolumny → wartość).</summary>
     public IReadOnlyDictionary<string, string?> Changes => _changes;
 
@@ -70,8 +90,8 @@ public sealed class StructureRowViewModel(StructureRow row) : INotifyPropertyCha
                 _changes.Remove(column);
             else
                 _changes[column] = value;
-            Notify("Item[]");
-            Notify(nameof(IsWp));
+            Check(column);
+            Changed();
         }
     }
 
@@ -88,8 +108,8 @@ public sealed class StructureRowViewModel(StructureRow row) : INotifyPropertyCha
     public void Revert()
     {
         _changes.Clear();
-        Notify("Item[]");
-        Notify(nameof(IsWp));
+        _problems.Clear();
+        Changed();
     }
 
     public void BeginEdit() => _beforeEdit ??= new Dictionary<string, string?>(_changes);
@@ -102,8 +122,10 @@ public sealed class StructureRowViewModel(StructureRow row) : INotifyPropertyCha
         foreach (var (key, value) in _beforeEdit)
             _changes[key] = value;
         _beforeEdit = null;
-        Notify("Item[]");
-        Notify(nameof(IsWp));
+        _problems.Clear();
+        foreach (var key in _changes.Keys)
+            Check(key);
+        Changed();
     }
 
     public void EndEdit() => _beforeEdit = null;
@@ -123,6 +145,32 @@ public sealed class StructureRowViewModel(StructureRow row) : INotifyPropertyCha
         "WpCount" => row.Wps.Count == 0 ? null : row.Wps.Count.ToString(System.Globalization.CultureInfo.InvariantCulture),
         _ => null,
     };
+
+    /// <summary>Sprawdzenie wpisanej wartości jak w tabeli słownika (kolumny „Harmonogram i budżet”: liczba, data; nazwa – wymagana).</summary>
+    private void Check(string column)
+    {
+        var issue = column == StructureEdits.Name
+            ? string.IsNullOrWhiteSpace(this[column]) ? Shared.Models.Issue.Error("pole wymagane") : null
+            : StructureEdits.ScheduleColumns.Contains(column)
+                ? Shared.Utils.Dictionaries.DictionaryCells.Check(ScheduleSpec, ScheduleSpec.Column(StructureEdits.DictionaryColumn(column))!, this[column], null) is { } problem
+                  && problem.Message != "pole wymagane" ? problem : null
+                : null;
+        if (issue is null)
+            _problems.Remove(column);
+        else
+            _problems[column] = issue;
+    }
+
+    private static readonly Shared.Models.Dictionaries.DictionarySpec ScheduleSpec = ProjectDictionaries.Base(ProjectDictionaries.ScheduleBudget);
+
+    private void Changed()
+    {
+        Notify("Item[]");
+        Notify(nameof(IsWp));
+        Notify(nameof(HasChanges));
+        Notify(nameof(Problems));
+        Notify(nameof(ProblemText));
+    }
 
     private static string? Amount(decimal value) => value == 0 ? null : PolishNumber.ToDisplay(value);
 

@@ -32,15 +32,43 @@
                 <TextBox x:Name="NameBox" Text="{Binding [Name], UpdateSourceTrigger=PropertyChanged}" MinWidth="200" />
             </StackPanel>
         </DataTemplate>
+        <DataTemplate x:Key="WpCell">
+            <!-- Jedno kliknięcie zmienia znacznik i zapisuje wiersz (OnWpClick); w wierszu bez kodu P1S – brak pola. -->
+            <CheckBox IsChecked="{Binding IsWp, UpdateSourceTrigger=PropertyChanged}" HorizontalAlignment="Center" VerticalAlignment="Center"
+                      Click="OnWpClick" Focusable="False"
+                      Visibility="{Binding CanEditWp, Converter={StaticResource BoolToVisibility}}"
+                      ToolTip="WP – element P1S ma koszty i budżet (odznaczenie usuwa przypisanie i harmonogram WP)" />
+        </DataTemplate>
         <DataTemplate x:Key="GapCell">
             <TextBlock Text="⚠" Foreground="{StaticResource Warn}" HorizontalAlignment="Center" ToolTip="{Binding Gap}"
                        Visibility="{Binding HasGap, Converter={StaticResource BoolToVisibility}}" />
         </DataTemplate>
     </UserControl.Resources>
-    <DataGrid x:Name="RowsGrid" Style="{StaticResource DataTable}" ItemsSource="{Binding Rows}" SelectedItem="{Binding Selected}"
-              MaxHeight="640" FrozenColumnCount="1" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto"
-              CanUserSortColumns="False" CanUserReorderColumns="False" SelectionUnit="FullRow"
-              EnableRowVirtualization="True" EnableColumnVirtualization="True"
-              VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling"
-              BeginningEdit="OnBeginningEdit" RowEditEnding="OnRowEditEnding" />
+    <StackPanel>
+        <!-- Zaznaczanie komórek jak w Excelu (tylko ta tabela – styl DataTable i edytor Performance Objectives bez zmian). -->
+        <DataGrid x:Name="RowsGrid" Style="{StaticResource DataTable}" ItemsSource="{Binding Rows}"
+                  MaxHeight="640" FrozenColumnCount="1" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto"
+                  CanUserSortColumns="False" CanUserReorderColumns="False" SelectionUnit="Cell" SelectionMode="Extended"
+                  ClipboardCopyMode="ExcludeHeader"
+                  EnableRowVirtualization="True" EnableColumnVirtualization="True"
+                  VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling"
+                  BeginningEdit="OnBeginningEdit" PreparingCellForEdit="OnPreparingCellForEdit" CellEditEnding="OnCellEditEnding"
+                  RowEditEnding="OnRowEditEnding" CurrentCellChanged="OnCurrentCellChanged" PreviewKeyDown="OnPreviewKeyDown"
+                  LostKeyboardFocus="OnLostKeyboardFocus" IsVisibleChanged="OnIsVisibleChanged">
+            <DataGrid.RowStyle>
+                <Style TargetType="DataGridRow">
+                    <Style.Triggers>
+                        <!-- Wiersz z niezapisanymi zmianami (zapis w toku albo nieudany – komunikat nad tabelą). -->
+                        <DataTrigger Binding="{Binding HasChanges}" Value="True">
+                            <Setter Property="Background" Value="{StaticResource WarnSoft}" />
+                            <Setter Property="ToolTip" Value="Niezapisane zmiany – zapis w toku albo nieudany (komunikat nad tabelą); „Odrzuć niezapisane” cofa" />
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </DataGrid.RowStyle>
+        </DataGrid>
+        <TextBlock Text="{Binding Notice}" Foreground="{StaticResource Info}" Margin="0,4,0,0" TextWrapping="Wrap" />
+        <TextBlock Style="{StaticResource MutedText}" FontSize="11" Margin="0,4,0,0" TextWrapping="Wrap"
+                   Text="Jak w Excelu: pisanie zastępuje komórkę, Enter / Tab – dalej (zapis wiersza od razu), Esc – cofnij wiersz, Ctrl+C / Ctrl+V – kopiuj / wklej blok (jedna komórka wypełnia zaznaczenie; komórki, których nie można zmienić, są pomijane), Delete – wyczyść (bez WP), Ctrl+D – wypełnij w dół, Alt+→ / Alt+← – rozwiń / zwiń wiersz, CAM – wpisz fragment USRID albo nazwiska · podświetlenie: czerwone – błąd, żółte – ostrzeżenie; wiersz żółty – niezapisany" />
+    </StackPanel>
 </UserControl>

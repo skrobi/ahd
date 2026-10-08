@@ -22,7 +22,20 @@ Słowniki, kreator projektu).
   albo imienia i nazwiska: zapisywany USRID, wyświetlane imię i nazwisko; wpisany lub wklejony USRID albo
   jednoznaczne imię i nazwisko są rozpoznawane. Komórka z problemem jest podświetlona od razu po wpisaniu (czerwona
   – ERROR: zły typ, pole wymagane, wartość spoza listy; żółta – WARNING: wartość spoza słownika powiązanego), opis
-  w podpowiedzi; pełna walidacja (duplikaty, reguły słownika) – przy zapisie.
+  w podpowiedzi; pełna walidacja (duplikaty, reguły słownika) – przy zapisie. Ctrl+Z / „Cofnij” cofa ostatnie zmiany
+  tabeli (wpis, wklejenie, Delete, Ctrl+D, dodanie i usunięcie wierszy); „Usuń wiersze” / Ctrl+minus usuwa wiersze
+  zaznaczonych komórek; kliknięcie nagłówka sortuje (liczby według wartości). Komórka w trakcie edycji jest zatwierdzana
+  przed zapisem, zmianą słownika i wczytaniem z pliku.
+- **Wczytanie z pliku bez cichej utraty danych:** kolumna opcjonalna, której nie ma w pliku, zachowuje wartości słownika
+  (ostrzeżenie); kolumna spoza słownika – pominięta z ostrzeżeniem; plik, który usuwa ponad połowę wierszy –
+  ostrzeżenie; komunikaty wskazują wiersz pliku jak w Excelu („wiersz N w pliku”); błędy formuł (`#N/A` itd.) – ERROR;
+  liczby także w zapisie angielskim (`1,234.56`); kolumna powiązana (CAM) – imię i nazwisko zamieniane na USRID.
+  Słowniki „WP i CAM” i „Harmonogram i budżet”: wiersz z samym kluczem (szablon uzupełniony częściowo) jest pomijany.
+  Skoroszyt z kilkoma arkuszami bez arkusza słownika – błąd (nie pierwszy arkusz). Plik otwarty w Excelu można wczytać.
+- **Pobrany plik / szablon:** format całej kolumny (kolumny tekstowe – tekst, więc Excel nie usuwa zer wiodących i nie
+  zamienia kodów na daty także w nowych wierszach), autofiltr, zamrożony nagłówek, lista wyboru dla kolumn z listą
+  wartości, lista osób dla CAM (arkusz „Listy” na końcu skoroszytu), opis kolumny w komentarzu nagłówka. Szablon
+  słowników projektu dopisuje elementy P1S z zakresu bez WP i WP bez harmonogramu.
 - **Historia:** każda zmiana zapisuje kto, kiedy, poprzednią i nową wartość oraz okres obowiązywania
   (`docs/model-danych.md`, rozdz. 3).
 - **Walidacja przy zapisie** (rozdz. 5): ERROR nie pozwala zapisać (komunikat przy polu), WARNING wymaga

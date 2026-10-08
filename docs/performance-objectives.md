@@ -105,8 +105,9 @@ i budżetem (`StructureBuilder`).
 - **WP** to znacznik elementu P1S (wiersz z kodem P1S), który wskażą finansiści: zaznaczony element jest pakietem pracy
   i ma mieć koszty i budżet. Kodem nowego WP jest kod elementu P1S (WP z wcześniej wczytanego słownika zachowuje swój
   kod). WP nie jest osobnym poziomem drzewa.
-- **CAM** wybiera się z listy osób (słownik Osoby wczytywany z HR – `docs/slowniki.md`, rozdz. 2): zapisywany jest USRID,
-  wyświetlane imię i nazwisko. CAM wpisany wcześniej spoza słownika jest na liście pod swoją wartością.
+- **CAM** wybiera się z listy osób z wyszukiwaniem po fragmencie USRID albo imienia i nazwiska (słownik Osoby wczytywany
+  z HR – `docs/slowniki.md`, rozdz. 2; ta sama lista co w tabeli słownika): zapisywany jest USRID, wyświetlane imię
+  i nazwisko. CAM wpisany wcześniej spoza słownika jest na liście pod swoją wartością.
 - **Sumy:** budżet i daty wiersza obejmują poddrzewo, każdy WP liczony raz; braki – element nakładki bez WP,
   WP bez budżetu.
 - **Edycja w komórkach** (zapis od razu po zatwierdzeniu wiersza – Enter albo przejście do innego wiersza, bez
@@ -115,7 +116,17 @@ i budżetem (`StructureBuilder`).
   WP nie jest przypisany do innego elementu; WP wymaga CAM – zaznacz WP i wybierz CAM przed opuszczeniem wiersza);
   BAC HOURS, BAC MATERIAL, Baseline Start, Baseline Koniec wiersza, którego sumy to jego własny WP → „Harmonogram
   i budżet” (klucz – WP). Walidacja jak przy zapisie słownika: ERROR blokuje zapis (zmiany zostają w wierszu, komunikat
-  nad tabelą), WARNING nie wstrzymuje. Kolumny zablokowane do edycji – lista `StructureEdits.Locked` (do ustalenia).
+  nad tabelą), WARNING nie wstrzymuje. Błąd, który słownik miał już wcześniej w innym wierszu (np. element poza zakresem
+  po odświeżeniu mapowania), nie blokuje zmiany – jest ostrzeżeniem. Zmiana `Legacy WBS` razem z WP / CAM w jednym
+  wierszu przypisuje WP do nowego kodu P1S. Kolumny zablokowane do edycji – lista `StructureEdits.Locked` (do ustalenia).
+- **Jak w Excelu:** zaznaczanie komórek, pisanie zastępuje zawartość komórki, Ctrl+C / Ctrl+V – kopiowanie i wklejanie
+  bloku od bieżącej komórki (jedna komórka wypełnia zaznaczenie, wiersz nagłówków pomijany, komórki, których w danym
+  wierszu nie można zmienić, pomijane – liczba pod tabelą), Delete – wyczyszczenie (bez WP), Ctrl+D – wypełnienie w dół,
+  Alt+→ / Alt+← – rozwinięcie / zwinięcie wiersza. Komórka liczby / daty z błędem jest podświetlona od razu po wpisaniu.
+  Zmienione wiersze są zapisywane po kolei (kolejka), po serii – jedno odświeżenie; edycja w toku jest zatwierdzana przy
+  wyjściu z tabeli (przycisk, inna zakładka). Wiersz z niezapisanymi zmianami (zapis w toku albo nieudany) jest żółty
+  i zachowuje zmiany po odświeżeniu; powrót do listy i edycja Performance Objectives czekają na zapis. Odznaczenie WP
+  z budżetem lub datami wymaga potwierdzenia (usuwa harmonogram WP).
 
 ---
 

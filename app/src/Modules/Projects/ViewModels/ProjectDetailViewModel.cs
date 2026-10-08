@@ -33,6 +33,9 @@ public sealed class ProjectDetailViewModel : ObservableObject
     private bool _isEditingObjectives;
     private bool _isReady;
     private DictionaryPanelViewModel? _selectedDictionary;
+    private readonly Queue<StructureRowViewModel> _commits = new();
+    private bool _committing;
+    private int _reloads;
 
     public ProjectDetailViewModel(ProjectService service, IFileDialogs dialogs, BusyState busy, ProjectInfo project, Action back)
     {
@@ -40,21 +43,22 @@ public sealed class ProjectDetailViewModel : ObservableObject
         _dialogs = dialogs;
         Busy = busy;
         Project = project;
-        Structure = new StructureViewModel { Commit = CommitRow, CanEditNow = () => !Busy.IsBusy };
+        // Edycja struktury także w trakcie zapisu – zapisy idą po kolei (CommitRow), niezapisane zmiany trwają po odświeżeniu.
+        Structure = new StructureViewModel { Commit = CommitRow, CanEditNow = () => !IsEditingObjectives };
         // Edycja nakładki tym samym edytorem co w kreatorze (przeciąganie, przesuwanie, usuwanie, węzły wirtualne);
         // „Wczytaj Excel” podmienia strukturę (elementy o tym samym WBS element zachowują historię).
         Objectives = new PoEditorViewModel(dialogs, busy, service.ReadObjectives, tree => ObjectivesValidator.Validate(tree, _owners), ProjectService.Refresh);
         Objectives.ResolveMapping = tree => ProjectService.Resolve(tree, _mapping);
-        EditObjectives = new RelayCommand(_ => StartEditObjectives(), _ => !IsEditingObjectives && !Busy.IsBusy);
+        EditObjectives = new RelayCommand(_ => { if (StructureSettled("edycją Performance Objectives")) StartEditObjectives(); }, _ => !IsEditingObjectives && !Busy.IsBusy);
         SaveObjectives = new AsyncRelayCommand(DoSaveObjectives, () => IsEditingObjectives && Objectives.IsDirty && !Busy.IsBusy);
         CancelObjectives = new RelayCommand(_ => { IsEditingObjectives = false; Status = Objectives.IsDirty ? "Zmiany Performance Objectives odrzucone." : ""; },
             _ => IsEditingObjectives && !Busy.IsBusy);
-        Back = new RelayCommand(_ => back(), _ => !Busy.IsBusy);
+        Back = new RelayCommand(_ => { if (StructureSettled("powrotem do listy")) back(); }, _ => !Busy.IsBusy);
         AddFromExcel = new AsyncRelayCommand(DoAddFromExcel, () => !Busy.IsBusy);
         ExportCostReport = new AsyncRelayCommand(DoExportCostReport, () => !Busy.IsBusy);
         ExportDictionaries = new AsyncRelayCommand(DoExportDictionaries, () => !Busy.IsBusy);
         CreateFolders = new AsyncRelayCommand(DoCreateFolders, () => !Busy.IsBusy);
-        RefreshMapping = new AsyncRelayCommand(() => Reload(refreshMapping: true), () => !Busy.IsBusy);
+        RefreshMapping = new AsyncRelayCommand(() => { Structure.CommitEdits(); return Reload(refreshMapping: true); }, () => !Busy.IsBusy);
         foreach (var item in ProjectDictionaries.ForType(project.Type))
         {
             var panel = new DictionaryPanelViewModel(item, project.Type);
@@ -186,8 +190,9 @@ public sealed class ProjectDetailViewModel : ObservableObject
     /// Wczytuje stan projektu w tle (struktura zachowuje rozwinięcie i zaznaczenie). Tabela wybranego słownika – tylko
     /// bez niezapisanych zmian, chyba że discard (Odrzuć zmiany).
     /// </summary>
-    private async Task Reload(bool refreshMapping, bool discard = false)
+    private async Task Reload(bool refreshMapping, bool discard = false, IReadOnlySet<string>? saved = null)
     {
+        var version = ++_reloads;
         var codes = Dictionaries.Where(p => p.Item.Stored).Select(p => p.Item.Code).ToList();
         var selected = _selectedDictionary;
         var table = selected is { Item.Stored: true } && (discard || !Table.HasPendingChanges) ? selected.Item.Code : null;
@@ -204,6 +209,8 @@ public sealed class ProjectDetailViewModel : ObservableObject
                     codes.ToDictionary(c => c, c => (_service.Rows(c, Code).Count, _service.LastChange(c, Code))), structure, ProjectService.PersonOptions(persons, wpCam),
                     table is null ? null : _service.EditableRows(table, Code), ProjectService.Lookups(persons));
             });
+            if (version != _reloads)
+                return;   // w międzyczasie ruszyło nowsze odświeżenie – starszy wynik pomijany
             _saved = snapshot.Tree;
             _mapping = snapshot.Mapping;
             _owners = snapshot.Owners;
@@ -211,7 +218,7 @@ public sealed class ProjectDetailViewModel : ObservableObject
             if (IsEditingObjectives)
                 Objectives.Refresh();
             OnPropertyChanged(nameof(MappingInfo));
-            Structure.Load(snapshot.Structure, snapshot.Persons);
+            Structure.Load(snapshot.Structure, snapshot.Persons, saved);
             ShowKpis(snapshot.Structure.Summary);
             foreach (var panel in Dictionaries.Where(p => p.Item.Stored))
                 (panel.Rows, panel.LastChange) = snapshot.Dictionaries[panel.Item.Code];
@@ -241,16 +248,77 @@ public sealed class ProjectDetailViewModel : ObservableObject
     }
 
     /// <summary>Zapis zmian wiersza struktury od razu po zatwierdzeniu; błąd – zmiany zostają w wierszu, komunikat wyżej.</summary>
+    /// <summary>
+    /// Zapis zmian wiersza struktury od razu po zatwierdzeniu. Wiersze czekają w kolejce i są zapisywane po kolei
+    /// (Enter w kolejnych wierszach, wklejenie bloku), po całej serii – jedno odświeżenie (także po nieudanym zapisie –
+    /// część zmian mogła się zapisać). Nieudany zapis – zmiany zostają w wierszu (żółty), komunikat wyżej.
+    /// </summary>
     private async Task CommitRow(StructureRowViewModel row)
     {
-        var (changes, structureRow, mapping) = (row.Changes.ToDictionary(c => c.Key, c => c.Value), row.Row, _mapping);
-        await Try(async () =>
+        if (!_commits.Contains(row))
+            _commits.Enqueue(row);
+        if (_committing)
+            return;
+        _committing = true;
+        var saved = new HashSet<string>();
+        var messages = new List<string>();
+        var failures = new List<string>();
+        try
         {
-            var (saved, message) = await Busy.Run("Zapisywanie zmiany…", () => _service.SaveStructureEdit(Code, mapping, structureRow, changes));
-            if (saved)
-                await Reload(refreshMapping: false);
-            Status = saved ? message : $"Nie zapisano ({row.Row.Name}): {message} Popraw komórki albo „Odrzuć niezapisane”.";
-        });
+            while (_commits.TryDequeue(out var next))
+            {
+                if (next.Changes.Count == 0 || !ConfirmWpRemoval(next))
+                    continue;
+                var (changes, structureRow, mapping) = (next.Changes.ToDictionary(c => c.Key, c => c.Value), next.Row, _mapping);
+                await Try(async () =>
+                {
+                    var (ok, message) = await Busy.Run(_commits.Count > 0 ? $"Zapisywanie zmian (w kolejce: {_commits.Count})…" : "Zapisywanie zmiany…",
+                        () => _service.SaveStructureEdit(Code, mapping, structureRow, changes));
+                    if (ok)
+                    {
+                        saved.Add(next.Id);
+                        messages.Add(message);
+                    }
+                    else
+                        failures.Add($"{next.Row.Name}: {message}");
+                });
+            }
+            await Reload(refreshMapping: false, saved: saved);
+            Status = failures.Count > 0
+                ? $"Nie zapisano ({failures.Count}): {string.Join(" · ", failures.Take(3))}{(failures.Count > 3 ? " …" : "")} Popraw komórki (wiersze żółte) albo „Odrzuć niezapisane”."
+                : saved.Count > 1 ? $"Zapisano wierszy: {saved.Count}." : messages.LastOrDefault() ?? Status;
+        }
+        finally
+        {
+            _committing = false;
+        }
+        if (_commits.Count > 0)
+            await CommitRow(_commits.Peek());
+    }
+
+    /// <summary>Odznaczenie WP z budżetem lub datami usuwa harmonogram WP – wymaga potwierdzenia; „nie” cofa znacznik.</summary>
+    private bool ConfirmWpRemoval(StructureRowViewModel row)
+    {
+        if (!row.Changes.TryGetValue(StructureEdits.Wp, out var flag) || StructureEdits.IsChecked(flag) || row.Row.Wp is not { } wp
+            || row.Row.OwnsBudget is false || (row.Row.BacHours == 0 && row.Row.BacMaterial == 0 && row.Row.Start is null && row.Row.Finish is null))
+            return true;
+        if (_dialogs.Confirm("Odznaczenie WP",
+                $"Odznaczenie WP {wp} („{row.Row.Name}”) usunie jego przypisanie (CAM, Cost Category) oraz harmonogram i budżet WP. Kontynuować?"))
+            return true;
+        row[StructureEdits.Wp] = "true";
+        return row.Changes.Count > 0;
+    }
+
+    /// <summary>Przed wyjściem z tabeli struktury: edycja w toku zatwierdzona; zapis w toku albo nieudany – komunikat.</summary>
+    private bool StructureSettled(string action)
+    {
+        Structure.CommitEdits();
+        if (!_committing && _commits.Count == 0 && !Structure.HasChanges)
+            return true;
+        Status = _committing || _commits.Count > 0
+            ? $"Trwa zapis zmian struktury – poczekaj przed {action}."
+            : $"Struktura ma niezapisane zmiany (wiersze żółte) – popraw je albo „Odrzuć niezapisane” przed {action}.";
+        return false;
     }
 
     private void StartEditObjectives()
