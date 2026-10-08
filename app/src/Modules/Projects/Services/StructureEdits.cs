@@ -48,6 +48,13 @@ public static class StructureEdits
         };
     }
 
+    /// <summary>
+    /// Budżet i daty wiersza, w którym WP jest właśnie zaznaczany (wklejenie WP z budżetem za jednym razem): wiersz
+    /// z kodem P1S, bez WP i bez WP w poddrzewie – po zapisie jego sumy to jego własny WP.
+    /// </summary>
+    public static bool CanEditWithNewWp(StructureRow row, string column) =>
+        !Locked.Contains(column) && ScheduleColumns.Contains(column) && row is { P1s: not null, Wp: null, Wps.Count: 0 };
+
     /// <summary>Nazwa kolumny słownika dla kolumny tabeli.</summary>
     public static string DictionaryColumn(string column) => column switch
     {

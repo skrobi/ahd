@@ -396,6 +396,15 @@ public sealed class ProjectStoreAndServiceTests : IDisposable
         Assert.True(both.Saved, both.Message);
         Assert.Contains(_service.Rows(ProjectDictionaries.WpCam, "M28"), r => r["Element P1S"] == "AC-CAB.6.38.02.01" && r["CAM"] == "e123456");
 
+        // Wklejenie WP z budżetem za jednym razem: nowy WP i jego harmonogram w jednym zapisie wiersza.
+        var pasted = _service.SaveStructureEdit("M28", inputs, Row("4D06WP000003"), new Dictionary<string, string?>
+            { [StructureEdits.Wp] = "true", [StructureEdits.Cam] = "e123456", [StructureEdits.BacHours] = "40", [StructureEdits.Start] = "2026-02-01" });
+        Assert.True(pasted.Saved, pasted.Message);
+        var newWp = Row("4D06WP000003");
+        Assert.Equal((40m, "2026-02-01"), (newWp.BacHours, newWp.Start));
+        Assert.True(newWp.OwnsBudget);
+        Assert.True(_service.SaveStructureEdit("M28", inputs, newWp, new Dictionary<string, string?> { [StructureEdits.Wp] = "false" }).Saved);
+
         // Cofnięcie wklejenia WP z budżetem: odznaczenie WP i wyczyszczenie budżetu w jednym wierszu – zapisane.
         Assert.True(_service.SaveStructureEdit("M28", inputs, Row("4D06WP000001"), new Dictionary<string, string?> { [StructureEdits.BacHours] = "8" }).Saved);
         Assert.Single(_service.Rows(ProjectDictionaries.ScheduleBudget, "M28"));
