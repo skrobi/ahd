@@ -54,10 +54,11 @@ public sealed class TestDatabase : IDisposable
         }
         if (config.Environment != "TEST")
             return (null, $"Brak bazy testowej – pzl-ev.json ma Env = {config.Environment} (testy używają tylko TEST); ustaw zmienną {Variable} (app/README.md)");
-        var connection = new SqlConnectionStringBuilder(new SqlDatabase(config.Sql, "test").ConnectionString) { ConnectTimeout = 5 }.ConnectionString;
+        // Krótki limit tylko na sprawdzenie dostępności – testy łączą się z domyślnym limitem (baza TEST bywa obciążona).
+        var connection = new SqlDatabase(config.Sql, "test").ConnectionString;
         try
         {
-            using var probe = new SqlConnection(connection);
+            using var probe = new SqlConnection(new SqlConnectionStringBuilder(connection) { ConnectTimeout = 5 }.ConnectionString);
             probe.Open();
             return (connection, $"baza aplikacji z pzl-ev.json (TEST: {config.Sql.Describe})");
         }
