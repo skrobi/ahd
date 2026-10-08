@@ -97,6 +97,9 @@ public sealed class TestDatabase : IDisposable
             SELECT @sql += N'DROP PROCEDURE ' + QUOTENAME(s.name) + N'.' + QUOTENAME(o.name) + N';'
             FROM sys.procedures o JOIN sys.schemas s ON s.schema_id = o.schema_id
             WHERE s.name = @schema AND LEFT(o.name, LEN(@prefix)) = @prefix;
+            SELECT @sql += N'DROP FUNCTION ' + QUOTENAME(s.name) + N'.' + QUOTENAME(o.name) + N';'
+            FROM sys.objects o JOIN sys.schemas s ON s.schema_id = o.schema_id
+            WHERE o.type IN ('IF', 'FN', 'TF') AND s.name = @schema AND LEFT(o.name, LEN(@prefix)) = @prefix;
             SELECT @sql += N'DROP SEQUENCE ' + QUOTENAME(s.name) + N'.' + QUOTENAME(q.name) + N';'
             FROM sys.sequences q JOIN sys.schemas s ON s.schema_id = q.schema_id
             WHERE s.name = @schema AND LEFT(q.name, LEN(@prefix)) = @prefix;

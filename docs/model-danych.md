@@ -264,6 +264,19 @@ projektu PZL-EV) – tylko wiersze, których `Project definition` jest w nakład
 minuty samego przesyłania i wyświetlania; dane jednego projektu – sekunda. Przykład:
 `EXEC [FINOP].[PZLEV_CAN_LatestImport] @Parser = 'ACTUALS', @Project = 'M28';`. Wymaga aplikacji 0.23.0.
 
+**Migracja `sql/mssql/013_raport_kosztow_projektu.sql`:** funkcja `CAN_LatestFiles(@Parser, @SourceCode, @AsOf)` –
+najnowsza wersja każdego pliku parsera (wspólna dla `CAN_LatestImport` i raportów) – oraz procedura
+**`REP_ProjectCosts @Project, @Value = 'ValueObjCrcy'`** – raport kosztów projektu z ostatniego importu ACTUALS:
+- wiersz: `Project definition` z nakładki projektu × `Cost Element` – tylko elementy z kosztami projektu, bez wierszy
+  pasujących do słownika projektu „Wykluczenia” (każde wypełnione pole wykluczenia musi się zgadzać);
+- kolumny: `Grouping` (nazwa korzenia nakładki nad Project definition), `Project definition`, `Project definition
+  description` (nazwa elementu nakładki = Project definition), `Cost Element`, `Cost Elem. Descr.` i `Cost grouping`
+  (słownik Cost Category: zmiany projektu przed globalnym; opis bez wpisu – z danych), `Period MM/RRRR` (ostatni okres
+  w danych ACTUALS), kolumny lat projektu od najnowszego;
+- kwota: pole `@Value` parsera ACTUALS – domyślnie `ValueObjCrcy` (waluta obiektu, PLN), np. `ValueRepCur`.
+Pomiar: 1,5 mln wierszy ACTUALS – raport projektu w ok. 0,2–0,7 s. Ekran Projekt, zakładka Wskaźniki: „Raport kosztów
+(Excel)”. Przykład: `EXEC [FINOP].[PZLEV_REP_ProjectCosts] @Project = 'M28';`.
+
 Aplikacja zapisuje dziś do tabel importu, konfiguracji importu, słowników globalnych, korekt mapowania, dziennika i problemów;
 tabele projektów i słowników projektu czekają na moduły F4. Blokada importu – plik na dysku sieciowym
 (`docs/pipeline-fazy.md`, rozdz. 1.3), `sp_getapplock` razem z procedurami (F10.2).

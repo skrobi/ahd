@@ -128,4 +128,42 @@ public sealed class LatestImportProcedureTests : IDisposable
         Assert.Equal(6, Latest("ACTUALS").Count);
         Assert.Equal(50013, Assert.Throws<SqlException>(() => Latest("ACTUALS", project: "BRAK")).Number);
     }
+
+    /// <summary>Raport kosztów projektu (migracja 013): Project definition nakładki × Cost Element, wykluczenia, słownik, okres i lata.</summary>
+    [SqlFact]
+    public void Project_cost_report_groups_by_project_definition_and_cost_element()
+    {
+        Use();
+        Write("ACTUALS_PAF_01.csv", 0, new DateTime(2026, 10, 6, 23, 0, 0, DateTimeKind.Utc));
+        _import.Run();
+        var tree = new PoTree();
+        var group = tree.AddVirtual(null, "SWBS 2DI473");
+        var project = tree.Add(new PoNode { Key = tree.NewKey(), ParentKey = group.Key, WbsElement = "2DI473", Name = "Projekt 2DI473", ProjectDefinition = "2DI473" });
+        tree.Add(new PoNode { Key = tree.NewKey(), ParentKey = project.Key, WbsElement = "2DI473001001", Name = "element", ProjectDefinition = "2DI473" });
+        Assert.True(new SqlProjectStore(_database!.Sql, _services.Clock, _services.User).Create("M28", "M28", ProjectTypes.Internal, tree).Success);
+        using var connection = _database.Sql.Open();
+        connection.Execute($"INSERT INTO {_database.Sql.Table("dict.Exclusion")} (RowId, Version, Project, WbsElement, Description, RecordedAt, RecordedBy) " +
+                           "VALUES (1, 1, 'M28', '2DI473001002', N'poza raportem', SYSDATETIMEOFFSET(), 'test')");
+
+        var rows = connection.Query(_database.Sql.Table("rep.ProjectCosts"), new { Project = "M28" }, commandType: CommandType.StoredProcedure)
+            .Select(r => (IDictionary<string, object?>)r).ToList();
+
+        Assert.Equal(["Grouping", "Project definition", "Project definition description", "Cost Element", "Cost Elem. Descr.", "Cost grouping", "Period 03/2026", "2026"],
+            rows[0].Keys);
+        Assert.Equal(2, rows.Count);   // 4D03GZ spoza nakładki; wiersze WBS 2DI473001002 wykluczone
+        Assert.Equal(("SWBS 2DI473", "2DI473", "Projekt 2DI473", "0051105550", "PZL Mat Consump", "Direct Materials", 1254.51m, 1254.51m),
+            ((string)rows[0]["Grouping"]!, (string)rows[0]["Project definition"]!, (string)rows[0]["Project definition description"]!, (string)rows[0]["Cost Element"]!,
+             (string)rows[0]["Cost Elem. Descr."]!, (string)rows[0]["Cost grouping"]!, (decimal)rows[0]["Period 03/2026"]!, (decimal)rows[0]["2026"]!));
+        Assert.Equal(("0092212550", 4800m), ((string)rows[1]["Cost Element"]!, (decimal)rows[1]["2026"]!));
+
+        var (columns, report) = new SqlProjectStore(_database.Sql, _services.Clock, _services.User).CostReport("M28", "ValueObjCrcy");   // eksport z aplikacji
+        Assert.Equal(rows[0].Keys, columns);
+        Assert.Equal(1254.51m, report[0][7]);
+
+        var usd = connection.Query(_database.Sql.Table("rep.ProjectCosts"), new { Project = "M28", Value = "ValueRepCur" }, commandType: CommandType.StoredProcedure)
+            .Select(r => (IDictionary<string, object?>)r).ToList();
+        Assert.NotEqual(1254.51m, (decimal)usd[0]["2026"]!);
+        Assert.Equal(50014, Assert.Throws<SqlException>(() =>
+            connection.Query(_database.Sql.Table("rep.ProjectCosts"), new { Project = "M28", Value = "Brak" }, commandType: CommandType.StoredProcedure).ToList()).Number);
+    }
 }

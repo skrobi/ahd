@@ -286,6 +286,20 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
         return shown.Count == 0 ? message : $"{message} – {string.Join("; ", shown)}{(issues.Count > 3 ? $" (+{issues.Count - 3})" : "")}";
     }
 
+    // ---------- raport kosztów ----------
+
+    /// <summary>Pole kwoty ACTUALS w raporcie kosztów – waluta obiektu (PLN).</summary>
+    public const string DefaultCostValue = "ValueObjCrcy";
+
+    /// <summary>Raport kosztów projektu do Excela (REP_ProjectCosts – ostatni import ACTUALS); zwraca liczbę wierszy.</summary>
+    public int ExportCostReport(string path, string code, string value = DefaultCostValue)
+    {
+        var (columns, rows) = store.CostReport(code, value);
+        ExcelTableWriter.WriteSheets(path, [("Koszty", columns, rows)]);
+        journal.Add(Area, $"{code}: raport kosztów pobrany do Excela ({rows.Count} wierszy)", code);
+        return rows.Count;
+    }
+
     // ---------- gotowość, baza analityczna ----------
 
     public List<Issue> Readiness(ProjectInfo project, PoTree tree, MappingInputs inputs)
