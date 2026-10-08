@@ -14,6 +14,15 @@ Słowniki, kreator projektu).
 
 - **Źródłem prawdy jest baza PZL-EV** (MS SQL, schemat `dict`). Edycja w aplikacji: tabela / formularz
   z polami typowanymi (data, liczba, wybór z listy); klucze WBS i numery zawsze jako tekst.
+- **Tabela słownika jak arkusz Excela** (ekran Słowniki i zakładka Słowniki projektu – ta sama tabela):
+  pisanie zastępuje zawartość komórki, Enter / Tab – następna komórka, Esc – cofnięcie; zaznaczanie komórek,
+  Ctrl+C / Ctrl+V – kopiowanie i wklejanie bloku (od bieżącej komórki, brakujące wiersze dopisywane), Delete –
+  wyczyszczenie zaznaczonych, Ctrl+D – wypełnienie w dół. Kolumna z listą wartości – lista z możliwością wpisania;
+  kolumna powiązana z innym słownikiem (np. CAM – słownik Osoby z HR) – lista z wyszukiwaniem po fragmencie USRID
+  albo imienia i nazwiska: zapisywany USRID, wyświetlane imię i nazwisko; wpisany lub wklejony USRID albo
+  jednoznaczne imię i nazwisko są rozpoznawane. Komórka z problemem jest podświetlona od razu po wpisaniu (czerwona
+  – ERROR: zły typ, pole wymagane, wartość spoza listy; żółta – WARNING: wartość spoza słownika powiązanego), opis
+  w podpowiedzi; pełna walidacja (duplikaty, reguły słownika) – przy zapisie.
 - **Historia:** każda zmiana zapisuje kto, kiedy, poprzednią i nową wartość oraz okres obowiązywania
   (`docs/model-danych.md`, rozdz. 3).
 - **Walidacja przy zapisie** (rozdz. 5): ERROR nie pozwala zapisać (komunikat przy polu), WARNING wymaga

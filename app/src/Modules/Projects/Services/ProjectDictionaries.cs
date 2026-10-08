@@ -30,7 +30,7 @@ public static class ProjectDictionaries
         [
             new("Element P1S", ColumnType.Text, Key: true),
             new("WP", ColumnType.Text, Required: true, CheckSimilar: true),
-            new("CAM", ColumnType.Text, Required: true, CheckSimilar: true),
+            new("CAM", ColumnType.Text, Required: true, CheckSimilar: true, Lookup: GlobalDictionaries.Persons),
             new("Cost Category", ColumnType.Choice, Choices: CostCategoryChoices),
         ],
     };

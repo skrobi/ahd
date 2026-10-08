@@ -1,0 +1,44 @@
+using System.ComponentModel;
+using PzlEv.Shared.Models;
+using PzlEv.Shared.Models.Dictionaries;
+using PzlEv.Shared.Models.Pipeline;
+using PzlEv.Shared.Utils.Dictionaries;
+
+namespace PzlEv.Shared.Utils.Ui.Dictionaries;
+
+/// <summary>
+/// Komórka tabeli słownika: wartość (zapisywana w wierszu), tekst do wyświetlenia (w kolumnie powiązanej – opis,
+/// np. imię i nazwisko), problem sprawdzony od razu po wpisaniu (DictionaryCells) – podświetlenie i podpowiedź.
+/// </summary>
+public sealed class DictCellViewModel(DictRowViewModel row, int index, DictionarySpec spec, DictColumn column, IReadOnlyList<LookupOption>? options)
+    : INotifyPropertyChanged
+{
+    private Issue? _issue = DictionaryCells.Check(spec, column, row[index], options);
+
+    public event PropertyChangedEventHandler? PropertyChanged;
+
+    public DictColumn Column => column;
+
+    /// <summary>Wartości słownika powiązanego (lista wyboru); null – kolumna bez powiązania.</summary>
+    public IReadOnlyList<LookupOption>? Options => options;
+
+    public string? Value
+    {
+        get => row[index];
+        set => row[index] = ValueFormat.Clean(value);
+    }
+
+    public string Display => DictionaryCells.Display(row[index], options);
+
+    /// <summary>Poziom problemu jako kolor palety: crit, warn albo pusty.</summary>
+    public string Level => _issue is null ? "" : _issue.Level == CheckLevel.Error ? "crit" : "warn";
+
+    public string? Problem => _issue is null ? null : $"{_issue.LevelText}: {_issue.Message}";
+
+    internal void Changed()
+    {
+        _issue = DictionaryCells.Check(spec, column, row[index], options);
+        foreach (var name in new[] { nameof(Value), nameof(Display), nameof(Level), nameof(Problem) })
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+    }
+}
