@@ -178,7 +178,7 @@ public sealed class ProjectDetailViewModel : ObservableObject
     /// <summary>Stan projektu z bazy w jednym odczycie w tle: nakładka, mapowanie, gotowość, słowniki, struktura.</summary>
     private sealed record Snapshot(PoTree Tree, MappingInputs Mapping, IReadOnlyDictionary<string, string> Owners, List<Issue> Readiness,
         IReadOnlyDictionary<string, (int Rows, string LastChange)> Dictionaries, ProjectStructure Structure, IReadOnlyList<PersonOption> Persons,
-        IReadOnlyList<(DictRow Row, bool Inherited)>? Table);
+        IReadOnlyList<(DictRow Row, bool Inherited)>? Table, IReadOnlyDictionary<string, IReadOnlyList<LookupOption>> Lookups);
 
     /// <summary>
     /// Wczytuje stan projektu w tle (struktura zachowuje rozwinięcie i zaznaczenie). Tabela wybranego słownika – tylko
@@ -199,7 +199,7 @@ public sealed class ProjectDetailViewModel : ObservableObject
                 var structure = ProjectService.Structure(tree, mapping, wpCam, _service.Rows(ProjectDictionaries.ScheduleBudget, Code));
                 return new Snapshot(tree, mapping, _service.WbsOwners(Code), _service.Readiness(Project, tree, mapping),
                     codes.ToDictionary(c => c, c => (_service.Rows(c, Code).Count, _service.LastChange(c, Code))), structure, _service.PersonOptions(wpCam),
-                    table is null ? null : _service.EditableRows(table, Code));
+                    table is null ? null : _service.EditableRows(table, Code), _service.Lookups());
             });
             _saved = snapshot.Tree;
             _mapping = snapshot.Mapping;
@@ -213,7 +213,7 @@ public sealed class ProjectDetailViewModel : ObservableObject
             foreach (var panel in Dictionaries.Where(p => p.Item.Stored))
                 (panel.Rows, panel.LastChange) = snapshot.Dictionaries[panel.Item.Code];
             if (ReferenceEquals(selected, _selectedDictionary) && (snapshot.Table is not null || selected is { Item.Stored: false }))
-                Table.Load(selected is { Item.Stored: true } ? ProjectDictionaries.Base(selected.Item.Code) : null, snapshot.Table ?? []);
+                Table.Load(selected is { Item.Stored: true } ? ProjectDictionaries.Base(selected.Item.Code) : null, snapshot.Table ?? [], snapshot.Lookups);
             if (discard)
                 Status = "Zmiany słownika odrzucone.";
             Readiness.Clear();

@@ -11,8 +11,9 @@ namespace PzlEv.Shared.Utils.Ui.Dictionaries;
 
 /// <summary>
 /// Tabela słownika do edycji w komórkach (ekran Słowniki, zakładka „Słowniki projektu”; widok – DictionaryGrid):
-/// wiersze z opisu słownika, filtr, dodawanie i usuwanie, stan do zapisu (DictionaryService.Save) i wynik walidacji.
-/// Zapis i odczyt wykonuje ekran nadrzędny.
+/// wiersze z opisu słownika, filtr, dodawanie i usuwanie, edycja jak w Excelu (wklejanie bloku, czyszczenie
+/// i wypełnianie w dół zaznaczonych komórek), listy wyboru wartości słowników powiązanych (DictColumn.Lookup), stan
+/// do zapisu (DictionaryService.Save) i wynik walidacji. Zapis i odczyt wykonuje ekran nadrzędny.
 /// </summary>
 public sealed class DictionaryTableViewModel : ObservableObject
 {
@@ -21,6 +22,7 @@ public sealed class DictionaryTableViewModel : ObservableObject
     private DictRowViewModel? _selectedRow;
     private string _filter = "";
     private bool _needsConfirmation;
+    private IReadOnlyDictionary<string, IReadOnlyList<LookupOption>> _lookups = new Dictionary<string, IReadOnlyList<LookupOption>>();
 
     public DictionaryTableViewModel()
     {
@@ -68,11 +70,17 @@ public sealed class DictionaryTableViewModel : ObservableObject
 
     public bool HasPendingChanges => _removed.Count > 0 || Rows.Any(r => r.IsNew || r.IsModified);
 
-    /// <summary>Nowa zawartość tabeli (niezapisane zmiany i wynik walidacji przepadają); inherited – wiersz dziedziczony.</summary>
-    public void Load(DictionarySpec? spec, IEnumerable<(DictRow Row, bool Inherited)> rows)
+    /// <summary>
+    /// Nowa zawartość tabeli (niezapisane zmiany i wynik walidacji przepadają); inherited – wiersz dziedziczony;
+    /// lookups – wartości słowników powiązanych według kodu słownika (DictColumn.Lookup).
+    /// </summary>
+    public void Load(DictionarySpec? spec, IEnumerable<(DictRow Row, bool Inherited)> rows,
+        IReadOnlyDictionary<string, IReadOnlyList<LookupOption>>? lookups = null)
     {
         var columns = !ReferenceEquals(spec, _spec);
         _spec = spec;
+        if (lookups is not null)
+            _lookups = lookups;
         Rows.Clear();
         _removed.Clear();
         SelectedRow = null;
@@ -80,7 +88,8 @@ public sealed class DictionaryTableViewModel : ObservableObject
         if (spec is not null)
         {
             foreach (var (row, inherited) in rows)
-                Rows.Add(new DictRowViewModel(row.RowId, row.Version, spec.Columns.Select(c => (string?)ValueFormat.Display(c, row[c.Name])).ToArray(), inherited));
+                Rows.Add(new DictRowViewModel(row.RowId, row.Version, spec.Columns.Select(c => (string?)ValueFormat.Display(c, row[c.Name])).ToArray(), inherited,
+                    spec, Options));
         }
         OnPropertyChanged(nameof(Spec));
         if (columns)
@@ -89,11 +98,47 @@ public sealed class DictionaryTableViewModel : ObservableObject
 
     public void Load(DictionarySpec? spec, IEnumerable<DictRow> rows) => Load(spec, rows.Select(r => (r, false)));
 
-    public void AddRow()
+    /// <summary>Wartości do wyboru w kolumnie powiązanej z innym słownikiem; null – kolumna bez powiązania.</summary>
+    public IReadOnlyList<LookupOption>? Options(DictColumn column) =>
+        column.Lookup is { } code && _lookups.TryGetValue(code, out var options) ? options : null;
+
+    public DictRowViewModel AddRow()
     {
-        var row = new DictRowViewModel(null, null, new string?[_spec!.Columns.Count]);
-        Rows.Add(row);
+        var row = NewRow();
         SelectedRow = row;
+        return row;
+    }
+
+    /// <summary>Wpis do komórek (Delete – null, wypełnianie w dół); w kolumnie powiązanej opis zamieniany na wartość.</summary>
+    public void SetCells(IEnumerable<(DictRowViewModel Row, int Column, string? Text)> cells)
+    {
+        foreach (var (row, column, text) in cells)
+            row[column] = DictionaryCells.Resolve(text, Options(_spec!.Columns[column]));
+    }
+
+    /// <summary>
+    /// Wklejenie bloku komórek (Excel) od wiersza start (null – na końcu) i kolumny column w kolejności widocznych
+    /// wierszy; brakujące wiersze są dopisywane, kolumny poza słownikiem pomijane. Zwraca liczbę wklejonych wierszy.
+    /// </summary>
+    public int Paste(DictRowViewModel? start, int column, IReadOnlyList<string[]> block)
+    {
+        if (_spec is null || block.Count == 0)
+            return 0;
+        var visible = RowsView.Cast<DictRowViewModel>().ToList();
+        var at = start is null ? visible.Count : Math.Max(0, visible.IndexOf(start));
+        for (var r = 0; r < block.Count; r++)
+        {
+            var row = at + r < visible.Count ? visible[at + r] : NewRow();
+            SetCells(block[r].Select((text, c) => (row, column + c, (string?)text)).Where(x => x.Item2 < _spec.Columns.Count));
+        }
+        return block.Count;
+    }
+
+    private DictRowViewModel NewRow()
+    {
+        var row = new DictRowViewModel(null, null, new string?[_spec!.Columns.Count], spec: _spec, options: Options);
+        Rows.Add(row);
+        return row;
     }
 
     /// <summary>Usuwa zaznaczony wiersz z tabeli (wiersza dziedziczonego nie – false).</summary>

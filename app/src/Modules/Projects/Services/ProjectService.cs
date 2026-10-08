@@ -150,6 +150,20 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
         return persons.OrderBy(p => p.Name, StringComparer.CurrentCulture).ToList();
     }
 
+    /// <summary>
+    /// Wartości słowników powiązanych do wyboru w tabeli słownika (DictColumn.Lookup): Osoby – USRID → imię i nazwisko
+    /// (słownik Osoby wczytany z HR).
+    /// </summary>
+    public IReadOnlyDictionary<string, IReadOnlyList<LookupOption>> Lookups() =>
+        new Dictionary<string, IReadOnlyList<LookupOption>>
+        {
+            [GlobalDictionaries.Persons] = dictionaries.Current(GlobalDictionaries.Persons)
+                .Where(r => r.Values.GetValueOrDefault("USRID") is not null)
+                .Select(r => new LookupOption(r.Values["USRID"]!, r.Values.GetValueOrDefault("Imię i nazwisko") ?? r.Values["USRID"]!))
+                .OrderBy(o => o.Label, StringComparer.CurrentCulture)
+                .ToList(),
+        };
+
     // ---------- mapowanie CES ↔ P1S (strona P1S nakładki) ----------
 
     /// <summary>
