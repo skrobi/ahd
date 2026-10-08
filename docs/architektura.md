@@ -172,7 +172,7 @@ wyłącznie z bazy (`Dashboard/Data/SqlDashboardData`).
 **Testy** (`app/tests`, xUnit, `net10.0`): projekt kompiluje pliki logiki aplikacji – wszystko poza `Views`,
 `ViewModels`, `Shell`, `Shared/Utils/Ui` i plikami `*Module.cs` – więc logika nie może używać typów WPF i testy
 działają także poza Windows. Testy magazynów i serwisów działają na bazie SQL (`TestDatabase`, atrybut `[SqlFact]`);
-bez zmiennej `PZLEV_TEST_SQL` są pomijane. Dane wzorcowe z oczekiwanymi sumami – `app/testdata`.
+baza to sekcja TEST z `pzl-ev.json` (konto AD, jak aplikacja) albo zmienna `PZLEV_TEST_SQL`; bazy niedostępnej – pomijane z powodem. Dane wzorcowe z oczekiwanymi sumami – `app/testdata`.
 `build.cmd` uruchamia testy przed publikacją.
 
 **Konwencje:** jeden typ w pliku, nazwa pliku = nazwa typu; sufiksy `…Module`, `…View`, `…ViewModel`,

@@ -9,7 +9,7 @@ zmiana zakresu zadania w trakcie realizacji wymaga uzgodnienia.
 - **Dane:** aplikacja pracuje na bazie MS SQL (`PZLTEST.FINOP.PZLEV_*`); warstwa w pamięci była przejściowa (F0.4) – usunięta 2026-10-02 z aplikacji i z testów; Pulpit czyta z bazy.
   Każdy moduł rozmawia z danymi przez `Data/I<Moduł>Store` – kontrakt odpowiadający przyszłym procedurom i widokom.
   Przejście na MS SQL (F10) zmienia tylko implementacje magazynów i skrypty `sql/mssql` (`docs/architektura.md`, rozdz. 5.3).
-- **Testy kontraktu:** testy magazynów i serwisów na bazie SQL (`PZLEV_TEST_SQL`); bez bazy – pomijane.
+- **Testy kontraktu:** testy magazynów i serwisów na bazie SQL (baza TEST z `pzl-ev.json` albo `PZLEV_TEST_SQL`); bez bazy – pomijane.
 - **Weryfikacja przepływu:** każdy etap zapisuje liczbę wierszy i sumy kontrolne; dane wzorcowe (F0.9) mają oczekiwane wyniki.
 - **Kolejność typów projektów:** wewnętrzny → SAC → CAS.
 - **Status zadania** – w pliku zadania i w tabeli poniżej: do zrobienia / w toku / zrobione / zablokowane (O…).

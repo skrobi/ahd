@@ -214,9 +214,11 @@ Wynik: `publish\PZL-EV.exe` (ok. 70–100 MB – zawiera runtime .NET i WPF).
 
 **Testy** (`tests/PzlEv.Tests.csproj`, xUnit): `build.cmd` uruchamia je przed publikacją; ręcznie – `dotnet test tests\PzlEv.Tests.csproj`.
 Testy magazynów i serwisów (import, administracja, słowniki, Pulpit, migracje) działają tylko na bazie SQL – nie ma
-wersji w pamięci. Wymagają zmiennej środowiskowej `PZLEV_TEST_SQL` z ciągiem połączenia (np.
-`Server=pzltestdb.intl.lmco.com;Database=PZLTEST;Integrated Security=True;Encrypt=True`); bez niej są pomijane
-(`build.cmd` wypisuje ostrzeżenie). Każdy test zakłada w schemacie `FINOP` tabele z losową sygnaturą (`T…_`)
+wersji w pamięci. Domyślnie łączą się z tą samą bazą i tym samym kontem AD co aplikacja – sekcja
+`Environments.TEST.Sql` wzoru `app/pzl-ev.json` (tylko gdy `Env` = `TEST`; PROD nigdy). Inna baza (np. lokalny SQL
+Server) – zmienna środowiskowa `PZLEV_TEST_SQL` z ciągiem połączenia, ma pierwszeństwo. Gdy baza jest niedostępna
+(np. poza siecią LM), testy SQL są pomijane z powodem w wyniku testów. Konto musi mieć prawo zakładania i usuwania
+tabel w schemacie `FINOP` bazy testowej (jak przy migracji). Każdy test zakłada w schemacie `FINOP` tabele z losową sygnaturą (`T…_`)
 i usuwa je po sobie – nie dotyka tabel aplikacji (`PZLEV_*`).
 Test wydajności importu (`ImportPerformanceTests`, plik ACTUALS z powtórzonych wierszy wzorcowych) działa tylko ze
 zmienną `PZLEV_PERF_ROWS` (liczba wierszy, np. `1000000`; `PZLEV_PERF_FORMAT=xlsx` – plik Excel, domyślnie CSV):
