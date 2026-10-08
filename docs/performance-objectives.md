@@ -30,8 +30,10 @@ czytane przy budowie nakładki), `docs/zrodla-danych.md` (struktura CES, drzewo 
   - cel P1S z mapowania – element CES nakładki rozstrzygany tymi samymi regułami co ekran Mapowanie (korekta
     elementu → raport → dziedziczenie z projektu CES; projekt CES elementu z kolumny `Project definition`, a dla
     elementu dodanego ręcznie – najbliższego elementu nad nim) – status (`REPORT`, `OVERRIDE`, `INHERITED`, `UNMAPPED`) i cel przy elemencie,
-  - poddrzewo celu z `LOG.WBS` (PZLPROD, po `PARENT`) – element należy do najbliższego celu nad nim,
-  - kolumna `Legacy WBS` z Excela (np. `AC-CAB.6.38`).
+  - kolumna `Legacy WBS` z Excela (np. `AC-CAB.6.38`),
+  - poddrzewa celu i `Legacy WBS` z `LOG.WBS` (PZLPROD, po `PARENT`) – P1S bywa rozbudowane głębiej niż `Legacy WBS`;
+    element należy do najbliższego kodu węzła nad nim (decyzja 2026-10-08: mapowanie zostaje obok `Legacy WBS`,
+    dopóki nie okaże się, że sam `Legacy WBS` wystarcza).
 - Mapowanie CES ↔ P1S jest **globalne i administracyjne** – budowa nakładki tylko je **czyta**; nakładka nie
   zmienia mapowania, a mapowanie nie zależy od projektu.
 
@@ -41,11 +43,13 @@ czytane przy budowie nakładki), `docs/zrodla-danych.md` (struktura CES, drzewo 
 
 - **Utworzenie przy zakładaniu projektu** (krok „Performance Objectives” – `docs/funkcjonalnosc.md`, F01):
   wczytanie z **Excela** (układ w rozdz. 5) albo budowa ręczna.
-- **Edycja w aplikacji:** dodawanie i przenoszenie elementów, tworzenie wirtualnych węzłów grupujących,
-  zmiana nazw.
-- **Odświeżenie na żądanie:** ponowny import Excela na ekranie projektu zastępuje strukturę strukturą z pliku;
-  elementy o tym samym `WBS element` zachowują identyfikator i historię. Węzły wirtualne i ręczne zmiany nie są
-  przenoszone – trzeba je odtworzyć przed zapisem (rozwiązanie tymczasowe; docelowo – O47).
+- **Edycja w kreatorze:** dodawanie i przenoszenie elementów, tworzenie wirtualnych węzłów grupujących,
+  zmiana nazw (rozdz. niżej – elementy w strukturze).
+- **Po utworzeniu projektu – tylko dokładanie** (ekran Projekt, zakładka Struktura, „Dołóż z Excela”): kolejny
+  eksport SAP dokłada elementy, których nakładka jeszcze nie ma (np. kolejne `Project definition` – projekt PZL-EV
+  „kabina” obejmuje kilkanaście projektów CES, uruchamianych z czasem), pod ich rodzica z pliku (istniejący element
+  albo nowy); istniejące węzły, węzły wirtualne i zmiany w aplikacji zostają bez zmian. W tabeli zmienia się nazwę
+  węzła i `Legacy WBS` (zapis od razu, z historią); przenoszenie i usuwanie – tylko w kreatorze.
 - **Element CES należy do co najwyżej jednej nakładki** (jednego projektu) – element z nakładki innego projektu
   jest odrzucany przy wczytaniu i zapisie (ERROR z kodem projektu, który go ma).
 - **Elementy w strukturze:** przenoszenie z poddrzewem (przeciągnięcie na inny węzeł albo na korzeń, zmiana kolejności,
@@ -68,14 +72,38 @@ czytane przy budowie nakładki), `docs/zrodla-danych.md` (struktura CES, drzewo 
 ### 4.1 Powiązanie nakładki z WP
 
 - Kody P1S węzła nakładki: `Legacy WBS` i cel z mapowania (rozdz. 2). Zakres projektu po stronie P1S to kody
-  P1S elementów nakładki i elementy `LOG.WBS` pod celami mapowania. Element P1S należy do projektu, gdy jest jednym
-  z tych kodów, leży pod celem w `LOG.WBS` albo jego kod zaczyna się od kodu z kropką (np. `AC-CAB.6.38.01` pod
-  `AC-CAB.6.38`).
+  P1S elementów nakładki i elementy `LOG.WBS` pod nimi (pod celami mapowania i pod `Legacy WBS`). Element P1S należy
+  do projektu, gdy jest jednym z tych kodów, leży pod nim w `LOG.WBS` (należy do najbliższego kodu nad nim) albo
+  jego kod zaczyna się od kodu z kropką (np. `AC-CAB.6.38.01` pod `AC-CAB.6.38`).
 - WP ze słownika „WP i CAM” podpina się pod węzeł nakładki, którego kod P1S obejmuje element (najdłuższy pasujący
   kod; przy kilku węzłach z tym kodem – pod najgłębszy). Węzeł wirtualny ma WP swoich elementów; sumy węzła obejmują jego poddrzewo, każdy WP liczony raz.
 - Element nakładki, pod którym nie ma żadnego WP, jest brakiem w bazie analitycznej (kreator, krok 5).
 - Element CES bez celu mapowania (`UNMAPPED`) i bez `Legacy WBS` nie ma kodu P1S – WARNING w gotowości projektu
   (`docs/funkcjonalnosc.md`, F02); brak raportu mapowań albo PZLPROD – WARNING z powodem.
+
+### 4.2 Struktura projektu (ekran Projekt)
+
+Zakładka **Struktura** ekranu Projekt to tabela-drzewo na wzór Deltek Cobra: nakładka połączona z harmonogramem
+i budżetem (`StructureBuilder`).
+
+- **Wiersze:** węzły nakładki, a pod każdym – elementy P1S rozwinięte z `LOG.WBS` spod jego kodu (rozdz. 4.1).
+  Wiersz węzła pokazuje pierwszy kod P1S (`Legacy WBS`, a bez niego cel mapowania); cel mapowania inny niż
+  `Legacy WBS` to osobny wiersz „cel mapowania CES ↔ P1S” pod węzłem. Rozwinięcie zatrzymuje się na kodzie innego
+  węzła (ten element jest pod swoim węzłem), więc każdy element P1S występuje raz. Element ze słownika „WP i CAM”,
+  którego nie ma w `LOG.WBS` (np. bez PZLPROD), jest pod wierszem o najdłuższym pasującym kodzie, a bez niego –
+  w grupie „Elementy P1S spoza struktury”.
+- **Kolumny:** Nazwa (drzewo, zamrożona), Element CES, P1S, WP, CAM, Cost Category, BAC HOURS, BAC MATERIAL, Start,
+  Koniec, Braki. Kolumny mają stałą szerokość – przy kolejnych kolumnach tabela przewija się w poziomie. WP nie jest
+  osobnym poziomem drzewa: WP przypisuje się do elementu P1S, który wskażą finansiści (wiersz z kodem P1S).
+- **Sumy:** budżet i daty wiersza obejmują poddrzewo, każdy WP liczony raz; braki – element nakładki bez WP,
+  WP bez budżetu.
+- **Edycja w komórkach** (zapis od razu po zatwierdzeniu wiersza – Enter albo przejście do innego wiersza, bez
+  osobnego „Zapisz”; Esc cofa): nazwa i `Legacy WBS` węzła → nakładka; WP, CAM, Cost Category wiersza z kodem P1S →
+  „WP i CAM” (klucz – kod P1S; puste wszystkie trzy – przypisanie usunięte); BAC HOURS, BAC MATERIAL, Start, Koniec
+  wiersza, którego sumy to jego własny WP → „Harmonogram i budżet” (klucz – WP). Walidacja jak przy zapisie słownika:
+  ERROR blokuje zapis (zmiany zostają w wierszu, komunikat nad tabelą), WARNING nie wstrzymuje. Zmiana WP przenosi
+  budżet starego WP na nowy, gdy stary nie jest już przypisany do innego elementu. Kolumny zablokowane do edycji –
+  lista `StructureEdits.Locked` (do ustalenia).
 
 ---
 
@@ -120,4 +148,4 @@ tworzenia i utrzymania projektu.
 | # | Kwestia |
 |---|---|
 | O45 | Przypisywanie kosztów i zaawansowania do węzłów nakładki (z plików) – późniejszy etap |
-| O47 | Odświeżenie z SAP: zachowanie wirtualnych węzłów i ręcznych zmian (dziś – nie są przenoszone, rozdz. 3) |
+| ~~O47~~ | Odświeżenie z SAP – **rozstrzygnięte (2026-10-08):** po utworzeniu projektu eksport SAP tylko dokłada nowe elementy; węzły wirtualne i zmiany w aplikacji zostają (rozdz. 3) |

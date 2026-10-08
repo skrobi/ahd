@@ -58,7 +58,10 @@ Definicje źródeł i ich prefiksy są konfiguracją importu – `docs/zrodla-da
 | Wykluczenia | elementy pomijane na późniejszym etapie analizy: kombinacja `Cost Element`, `WBS Element`, `Partner object` (co najmniej jedno z trzech) + wymagany opis (rozdz. 7) – **opcjonalny** | kombinacja trzech pól |
 
 - Słowniki projektu powstają w kreatorze projektu z plików Excel (szablon z elementami projektu – jeden
-  plik z arkuszami albo osobne pliki / CSV) i są dalej utrzymywane w aplikacji (`docs/funkcjonalnosc.md`, F01, F03).
+  plik z arkuszami albo osobne pliki / CSV) i są dalej utrzymywane w aplikacji (`docs/funkcjonalnosc.md`, F01, F03):
+  na ekranie Projekt w zakładce Słowniki projektu (Excel z podglądem różnic), a „WP i CAM” oraz „Harmonogram
+  i budżet” także w komórkach tabeli w zakładce Struktura – zapis od razu po zatwierdzeniu wiersza, z tą samą
+  walidacją i historią (`docs/performance-objectives.md`, rozdz. 4.2).
 - Harmonogram i budżet mogą się zmieniać w trakcie projektu – każda zmiana jest w historii, a przebieg liczy
   na stanie z chwili przypięcia.
 
@@ -97,7 +100,7 @@ Kontekst biznesowy typów – `readme.md`.
 
 | Reguła | Poziom |
 |---|---|
-| element P1S należy do projektu (równy `Legacy WBS` elementu nakładki albo pod nim) i nie należy do innego projektu | ERROR |
+| element P1S należy do projektu (kod P1S elementu nakładki – `Legacy WBS` albo cel mapowania – albo pod nim, także w `LOG.WBS`) i nie należy do innego projektu | ERROR |
 | jeden WP na element P1S | ERROR |
 | WP wymaga CAM | ERROR |
 | CAM wybierany z listy osób; przy wczytaniu z Excela CAM spoza listy osób | – / WARNING |

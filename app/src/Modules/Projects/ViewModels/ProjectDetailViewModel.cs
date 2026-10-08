@@ -12,9 +12,10 @@ using Serilog;
 namespace PzlEv.Modules.Projects.ViewModels;
 
 /// <summary>
-/// Ekran Projekt (docs/funkcjonalnosc.md, rozdz. 2; F02): gotowość, nakładka Performance Objectives (edycja i zapis
-/// z historią, odświeżenie z SAP), słowniki projektu (pobierz / wczytaj z Excela z podglądem różnic), historia
-/// przebiegów, struktura folderów.
+/// Ekran Projekt (docs/funkcjonalnosc.md, rozdz. 2; F02) w zakładkach: Wskaźniki (sumy projektu, miejsce na wskaźniki
+/// EV, gotowość do przebiegu), Struktura (nakładka Performance Objectives z rozwinięciem P1S, WP, CAM, budżetem
+/// i datami – edycja w komórkach zapisywana od razu, dokładanie elementów z kolejnego eksportu SAP), Słowniki projektu
+/// (pobierz / wczytaj z Excela z podglądem różnic), Przebiegi, Foldery.
 /// </summary>
 public sealed class ProjectDetailViewModel : ObservableObject
 {
@@ -25,8 +26,8 @@ public sealed class ProjectDetailViewModel : ObservableObject
     private string _status = "";
     private Pill _readiness = new("muted", "");
     private MappingInputs _mapping = MappingInputs.None;
-    private IReadOnlyDictionary<string, string> _owners = new Dictionary<string, string>();
     private PoTree _saved = new();
+    private bool _isReady;
 
     public ProjectDetailViewModel(ProjectService service, IFileDialogs dialogs, BusyState busy, ProjectInfo project, Action back)
     {
@@ -34,20 +35,16 @@ public sealed class ProjectDetailViewModel : ObservableObject
         _dialogs = dialogs;
         Busy = busy;
         Project = project;
-        // Kontrola nakładki w pamięci (elementy CES innych projektów wczytane przy otwarciu); zapis sprawdza je w bazie.
-        Objectives = new PoEditorViewModel(dialogs, busy, service.ReadObjectives, tree => ObjectivesValidator.Validate(tree, _owners), ProjectService.Refresh);
-        Objectives.ResolveMapping = tree => ProjectService.Resolve(tree, _mapping);
-        Objectives.MappingInfo = "Wczytywanie danych mapowania CES ↔ P1S…";
+        Structure = new StructureViewModel { Commit = CommitRow, CanEditNow = () => !Busy.IsBusy };
         Back = new RelayCommand(_ => back(), _ => !Busy.IsBusy);
-        SaveObjectives = new AsyncRelayCommand(DoSaveObjectives, () => Objectives.IsDirty && !Busy.IsBusy);
-        DiscardObjectives = new RelayCommand(_ => { Objectives.Load(_saved.Copy()); Status = "Zmiany nakładki odrzucone."; }, _ => Objectives.IsDirty && !Busy.IsBusy);
+        AddFromExcel = new AsyncRelayCommand(DoAddFromExcel, () => !Busy.IsBusy);
         ExportDictionaries = new AsyncRelayCommand(DoExportDictionaries, () => !Busy.IsBusy);
         CreateFolders = new AsyncRelayCommand(DoCreateFolders, () => !Busy.IsBusy);
-        RefreshMapping = new AsyncRelayCommand(() => Reload(refreshMapping: true), () => !Objectives.IsDirty && !Busy.IsBusy);
+        RefreshMapping = new AsyncRelayCommand(() => Reload(refreshMapping: true), () => !Busy.IsBusy);
         foreach (var item in ProjectDictionaries.ForType(project.Type))
         {
             var panel = new DictionaryPanelViewModel(item, project.Type);
-            panel.Load = new AsyncRelayCommand(() => LoadDictionary(panel), () => item.Stored && !Objectives.IsDirty && !Busy.IsBusy);
+            panel.Load = new AsyncRelayCommand(() => LoadDictionary(panel), () => item.Stored && !Busy.IsBusy);
             panel.Apply = new AsyncRelayCommand(() => ApplyDictionary(panel), () => panel.Preview is { HasErrors: false, HasChanges: true } && !Busy.IsBusy);
             panel.Remove = new RelayCommand(_ => { panel.SetPreview(null, ""); Status = "Wczytanie anulowane – słownik bez zmian."; }, _ => panel.HasPreview && !Busy.IsBusy);
             Dictionaries.Add(panel);
@@ -65,9 +62,20 @@ public sealed class ProjectDetailViewModel : ObservableObject
 
     public string Subtitle => $"{ProjectTypes.Label(Project.Type)} · utworzony {Project.RecordedAt:yyyy-MM-dd HH:mm} przez {Project.RecordedBy}";
 
-    public PoEditorViewModel Objectives { get; }
+    public StructureViewModel Structure { get; }
+
+    public ObservableCollection<KpiTile> Kpis { get; } = [];
+
+    /// <summary>Wskaźniki EV – liczone w przebiegach (docs/ev-obliczenia.md); do tego czasu kafelki bez wartości.</summary>
+    public IReadOnlyList<KpiTile> EvKpis { get; } =
+        new[] { "BCWS", "BCWP", "ACWP", "CPI", "SPI", "EAC" }.Select(k => new KpiTile(k, "—", "po obliczeniu EV w przebiegu", Pending: true)).ToList();
 
     public ObservableCollection<Issue> Readiness { get; } = [];
+
+    /// <summary>Czy projekt jest gotowy do przebiegu (kontrole F02 bez ERROR).</summary>
+    public bool IsReady { get => _isReady; private set => SetProperty(ref _isReady, value); }
+
+    public string MappingInfo => _mapping.Describe;
 
     public ObservableCollection<DictionaryPanelViewModel> Dictionaries { get; } = [];
 
@@ -84,66 +92,96 @@ public sealed class ProjectDetailViewModel : ObservableObject
     public string Runs => "Brak przebiegów. Przebiegi (Nowy przebieg, historia) powstaną w kolejnym etapie – docs/pipeline-fazy.md.";
 
     public ICommand Back { get; }
-    public ICommand SaveObjectives { get; }
-    public ICommand DiscardObjectives { get; }
+    public ICommand AddFromExcel { get; }
     public ICommand ExportDictionaries { get; }
     public ICommand CreateFolders { get; }
     public ICommand RefreshMapping { get; }
 
-    /// <summary>Stan projektu z bazy w jednym odczycie w tle: nakładka, mapowanie, gotowość, słowniki.</summary>
-    private sealed record Snapshot(PoTree Tree, MappingInputs Mapping, IReadOnlyDictionary<string, string> Owners, List<Issue> Readiness,
-        IReadOnlyDictionary<string, (int Rows, string LastChange)> Dictionaries);
+    /// <summary>Stan projektu z bazy w jednym odczycie w tle: nakładka, mapowanie, gotowość, słowniki, struktura.</summary>
+    private sealed record Snapshot(PoTree Tree, MappingInputs Mapping, List<Issue> Readiness,
+        IReadOnlyDictionary<string, (int Rows, string LastChange)> Dictionaries, ProjectStructure Structure);
 
-    /// <summary>Wczytuje stan projektu w tle; keepEdits – nakładka w edycji zostaje (odświeżane są gotowość i słowniki).</summary>
-    private async Task Reload(bool refreshMapping, bool keepEdits = false)
+    /// <summary>Wczytuje stan projektu w tle (struktura zachowuje rozwinięcie i zaznaczenie).</summary>
+    private async Task Reload(bool refreshMapping)
     {
         var codes = Dictionaries.Where(p => p.Item.Stored).Select(p => p.Item.Code).ToList();
         await Try(async () =>
         {
-            var snapshot = await Busy.Run(refreshMapping ? "Odświeżanie mapowania CES ↔ P1S i gotowości projektu…" : "Wczytywanie projektu, mapowania i gotowości…", () =>
+            var snapshot = await Busy.Run(refreshMapping ? "Odświeżanie mapowania CES ↔ P1S i struktury projektu…" : "Wczytywanie projektu, mapowania i struktury…", () =>
             {
                 var tree = _service.Objectives(Code);
                 var mapping = _service.Mapping(refreshMapping);
-                return new Snapshot(tree, mapping, _service.WbsOwners(Code), _service.Readiness(Project, tree, mapping),
-                    codes.ToDictionary(c => c, c => (_service.Rows(c, Code).Count, _service.LastChange(c, Code))));
+                var structure = ProjectService.Structure(tree, mapping, _service.Rows(ProjectDictionaries.WpCam, Code), _service.Rows(ProjectDictionaries.ScheduleBudget, Code));
+                return new Snapshot(tree, mapping, _service.Readiness(Project, tree, mapping),
+                    codes.ToDictionary(c => c, c => (_service.Rows(c, Code).Count, _service.LastChange(c, Code))), structure);
             });
             _saved = snapshot.Tree;
             _mapping = snapshot.Mapping;
-            _owners = snapshot.Owners;
-            Objectives.MappingInfo = _mapping.Describe;
-            if (keepEdits && Objectives.IsDirty)
-                Objectives.Refresh();
-            else
-                Objectives.Load(_saved.Copy());
+            OnPropertyChanged(nameof(MappingInfo));
+            Structure.Load(snapshot.Structure);
+            ShowKpis(snapshot.Structure.Summary);
             foreach (var panel in Dictionaries.Where(p => p.Item.Stored))
                 (panel.Rows, panel.LastChange) = snapshot.Dictionaries[panel.Item.Code];
             Readiness.Clear();
             foreach (var check in snapshot.Readiness)
                 Readiness.Add(check);
-            ReadinessPill = ProjectReadiness.IsReady(snapshot.Readiness) ? new Pill("ok", "gotowy") : new Pill("crit", "niegotowy – przebieg zablokowany");
+            IsReady = ProjectReadiness.IsReady(snapshot.Readiness);
+            ReadinessPill = IsReady ? new Pill("ok", "gotowy do przebiegu") : new Pill("crit", "niegotowy – przebieg zablokowany");
             if (refreshMapping)
                 Status = "Odświeżono mapowanie CES ↔ P1S.";
         });
     }
 
-    private async Task DoSaveObjectives()
+    private void ShowKpis(StructureSummary summary)
     {
-        var tree = Objectives.Tree.Copy();
+        static string Amount(decimal value) => PzlEv.Shared.Utils.Files.PolishNumber.ToDisplay(value);
+        Kpis.Clear();
+        Kpis.Add(new KpiTile("BAC HOURS", Amount(summary.BacHours), "budżet godzin – Harmonogram i budżet"));
+        Kpis.Add(new KpiTile("BAC MATERIAL", Amount(summary.BacMaterial), "budżet materiałów"));
+        Kpis.Add(new KpiTile("WP / CAM", $"{summary.Wps} / {summary.Cams}", "pakiety pracy i ich CAM w strukturze"));
+        Kpis.Add(new KpiTile("Okres", summary.Start is null && summary.Finish is null ? "—" : $"{summary.Start ?? "?"} – {summary.Finish ?? "?"}", "planowany start i koniec"));
+        Kpis.Add(new KpiTile("Braki", $"{summary.ElementsWithoutWp} / {summary.WpsWithoutBudget}", "elementy CES bez WP / WP bez budżetu"));
+    }
+
+    /// <summary>Zapis zmian wiersza struktury od razu po zatwierdzeniu; błąd – zmiany zostają w wierszu, komunikat wyżej.</summary>
+    private async Task CommitRow(StructureRowViewModel row)
+    {
+        var (changes, structureRow, mapping) = (row.Changes.ToDictionary(c => c.Key, c => c.Value), row.Row, _mapping);
         await Try(async () =>
         {
-            var (issues, result) = await Busy.Run("Zapisywanie nakładki Performance Objectives…", () => _service.SaveObjectives(Code, tree));
-            if (result is null)
+            var (saved, message) = await Busy.Run("Zapisywanie zmiany…", () => _service.SaveStructureEdit(Code, mapping, structureRow, changes));
+            if (saved)
+                await Reload(refreshMapping: false);
+            Status = saved ? message : $"Nie zapisano ({row.Row.Name}): {message} Popraw komórki albo „Odrzuć niezapisane”.";
+        });
+    }
+
+    /// <summary>Dołożenie elementów z kolejnego eksportu SAP (np. nowe Project definition) – istniejąca nakładka bez zmian.</summary>
+    private async Task DoAddFromExcel()
+    {
+        var path = _dialogs.OpenExcel($"Dołóż elementy do projektu {Code} – eksport struktury WBS z SAP");
+        if (path is null)
+            return;
+        await Try(async () =>
+        {
+            var (message, changed) = await Busy.Run($"Wczytywanie {Path.GetFileName(path)} i dokładanie nowych elementów…", () =>
             {
-                Status = "Nakładka ma błędy (ERROR) – nic nie zapisano.";
-                return;
-            }
-            if (!result.Success)
-            {
-                Status = result.Conflict!;
-                return;
-            }
-            await Reload(refreshMapping: false);
-            Status = $"Zapisano nakładkę: +{result.Added} ~{result.Updated} −{result.Removed}{(issues.Count > 0 ? $" (ostrzeżenia: {issues.Count})" : "")}.";
+                var read = _service.ReadObjectives(path);
+                if (read.HasErrors)
+                    return ($"Plik {read.FileName} ma błędy (ERROR) – nic nie dołożono: {string.Join("; ", read.Issues.Where(i => i.Level == Shared.Models.Pipeline.CheckLevel.Error).Take(3).Select(i => i.Message))}", false);
+                var (tree, added, projects) = ProjectService.AddNew(_service.Objectives(Code), read.Tree);
+                if (added == 0)
+                    return ($"Plik {read.FileName} nie zawiera nowych elementów – struktura bez zmian.", false);
+                var (issues, result) = _service.SaveObjectives(Code, tree);
+                if (result is null)
+                    return ($"Nie dołożono – nakładka miałaby błędy: {string.Join("; ", issues.Where(i => i.Level == Shared.Models.Pipeline.CheckLevel.Error).Take(3).Select(i => i.Message))}", false);
+                if (!result.Success)
+                    return (result.Conflict!, false);
+                return ($"Dołożono {added} elementów{(projects.Count > 0 ? $" (Project definition: {string.Join(", ", projects)})" : "")}.", true);
+            });
+            if (changed)
+                await Reload(refreshMapping: false);
+            Status = message;
         });
     }
 
@@ -184,7 +222,7 @@ public sealed class ProjectDetailViewModel : ObservableObject
             var outcome = await Busy.Run($"Zapisywanie słownika „{panel.Name}”…", () => _service.ApplyDictionary(panel.Item.Code, context(), preview, Code));
             if (outcome.Status == SaveStatus.Saved)
                 panel.SetPreview(null, "");
-            await Reload(refreshMapping: false, keepEdits: true);
+            await Reload(refreshMapping: false);
             Status = $"{panel.Name}: {outcome.Message}";
         });
     }
@@ -207,7 +245,7 @@ public sealed class ProjectDetailViewModel : ObservableObject
         await Try(async () =>
         {
             var created = await Busy.Run("Tworzenie folderów projektu…", () => _service.Folders.Create(Code));
-            await Reload(refreshMapping: false, keepEdits: true);
+            await Reload(refreshMapping: false);
             Status = created.Count == 0 ? "Wszystkie foldery projektu istnieją." : $"Utworzono foldery: {string.Join(", ", created)}.";
         });
     }

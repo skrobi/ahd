@@ -44,33 +44,6 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
 
     public PoImportResult ReadObjectives(string path) => PerformanceObjectivesReader.Read(path);
 
-    /// <summary>
-    /// Nakładka po ponownym imporcie z SAP (odświeżenie): struktura z pliku; elementy o tym samym WBS element zachowują
-    /// identyfikator (historia węzła trwa). Węzły wirtualne i ręczne zmiany nie są przenoszone – O47.
-    /// </summary>
-    public static PoTree Refresh(PoTree current, PoTree imported)
-    {
-        var existing = current.Nodes.Where(n => !n.IsVirtual && n.WbsElement is not null)
-            .GroupBy(n => n.WbsElement!, StringComparer.OrdinalIgnoreCase).ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
-        var keys = new Dictionary<long, long>();
-        var nodes = new List<PoNode>();
-        foreach (var node in imported.Nodes)
-        {
-            var copy = node.Copy();
-            if (node.WbsElement is not null && existing.TryGetValue(node.WbsElement, out var old))
-            {
-                copy = CopyWithKey(node, old.Key);
-                copy.NodeId = old.NodeId;
-                copy.Version = old.Version;
-            }
-            keys[node.Key] = copy.Key;
-            nodes.Add(copy);
-        }
-        foreach (var node in nodes)
-            node.ParentKey = node.ParentKey is { } p ? keys[p] : null;
-        return new PoTree(nodes);
-    }
-
     private static PoNode CopyWithKey(PoNode node, long key) => new()
     {
         Key = key, ParentKey = node.ParentKey, SortOrder = node.SortOrder, Level = node.Level, IsVirtual = node.IsVirtual,
@@ -78,6 +51,39 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
         ProfitCenter = node.ProfitCenter, LegacyWbs = node.LegacyWbs, PerformanceObligation = node.PerformanceObligation,
         SacObjNumber = node.SacObjNumber, IsStatistical = node.IsStatistical, IsAcctAsstElement = node.IsAcctAsstElement,
     };
+
+    /// <summary>
+    /// Dołożenie do nakładki elementów z kolejnego eksportu SAP (ekran Projekt – np. nowe Project definition): elementy
+    /// o WBS element, którego nakładka jeszcze nie ma, dochodzą pod swojego rodzica z pliku (istniejący element nakładki
+    /// albo nowy); istniejące węzły, węzły wirtualne i zmiany w aplikacji zostają bez zmian.
+    /// </summary>
+    public static (PoTree Tree, int Added, IReadOnlyList<string> Projects) AddNew(PoTree current, PoTree imported)
+    {
+        var tree = current.Copy();
+        var existing = tree.Nodes.Where(n => !n.IsVirtual && n.WbsElement is not null)
+            .GroupBy(n => n.WbsElement!, StringComparer.OrdinalIgnoreCase).ToDictionary(g => g.Key, g => g.First().Key, StringComparer.OrdinalIgnoreCase);
+        var keys = new Dictionary<long, long>();
+        var added = 0;
+        var projects = new List<string>();
+        foreach (var (node, _) in imported.Flatten())
+        {
+            if (node.WbsElement is not null && existing.TryGetValue(node.WbsElement, out var key))
+            {
+                keys[node.Key] = key;
+                continue;
+            }
+            var copy = CopyWithKey(node, tree.NewKey());
+            copy.ParentKey = node.ParentKey is { } parent && keys.TryGetValue(parent, out var mapped) ? mapped : null;
+            tree.Add(copy);
+            keys[node.Key] = copy.Key;
+            if (copy.WbsElement is not null)
+                existing[copy.WbsElement] = copy.Key;
+            added++;
+            if (node.ProjectDefinition is { Length: > 0 } project && !projects.Contains(project, StringComparer.OrdinalIgnoreCase))
+                projects.Add(project);
+        }
+        return (tree, added, projects);
+    }
 
     /// <summary>Zapis nakładki po edycji (z historią); ERROR walidacji blokuje zapis.</summary>
     public (List<Issue> Issues, StoreResult? Result) SaveObjectives(string code, PoTree tree)
@@ -192,6 +198,92 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
     {
         var last = dictionaries.Current(dictionary, code).MaxBy(r => r.RecordedAt);
         return last is null ? "" : $"{last.RecordedAt:yyyy-MM-dd HH:mm} · {last.RecordedBy}";
+    }
+
+    // ---------- struktura projektu (ekran Projekt) ----------
+
+    /// <summary>Struktura projektu: nakładka z rozwinięciem P1S, WP, CAM, budżet i daty (StructureBuilder).</summary>
+    public static ProjectStructure Structure(PoTree tree, MappingInputs inputs, IReadOnlyList<DictRow> wpCam, IReadOnlyList<DictRow> schedule) =>
+        StructureBuilder.Build(tree, Resolve(tree, inputs), inputs.P1s, wpCam, schedule);
+
+    /// <summary>
+    /// Zapis zmiany wiersza tabeli struktury od razu po jej zatwierdzeniu (bez osobnego „Zapisz”): nazwa i Legacy WBS –
+    /// nakładka; WP, CAM, Cost Category – „WP i CAM” (klucz – kod P1S wiersza); budżet i daty – „Harmonogram i budżet”
+    /// (klucz – WP wiersza). Ostrzeżenia nie wstrzymują zapisu (są w komunikacie), ERROR – tak. Zmiana WP przenosi budżet
+    /// starego WP, jeśli ten nie jest już przypisany do innego elementu (StructureEdits.ScheduleAfterWpChange).
+    /// </summary>
+    public (bool Saved, string Message) SaveStructureEdit(string code, MappingInputs inputs, StructureRow row, IReadOnlyDictionary<string, string?> changes)
+    {
+        var messages = new List<string>();
+        var tree = store.Objectives(code);
+        if (row.NodeKey is { } key && (changes.ContainsKey(StructureEdits.Name) || changes.ContainsKey(StructureEdits.P1s)))
+        {
+            if (tree.Find(key) is not { } node)
+                return (false, "Węzła nie ma już w nakładce – odśwież ekran.");
+            if (changes.TryGetValue(StructureEdits.Name, out var name))
+            {
+                if (string.IsNullOrWhiteSpace(name))
+                    return (false, "Podaj nazwę węzła.");
+                node.Name = name.Trim();
+            }
+            if (changes.TryGetValue(StructureEdits.P1s, out var legacy))
+                node.LegacyWbs = string.IsNullOrWhiteSpace(legacy) ? null : legacy.Trim();
+            var (issues, result) = SaveObjectives(code, tree);
+            if (result is null)
+                return (false, Describe("Nakładka ma błędy – nic nie zapisano", issues));
+            if (!result.Success)
+                return (false, result.Conflict!);
+            messages.Add("nakładka zapisana");
+            tree = store.Objectives(code);
+        }
+
+        var wpChanges = changes.Where(c => StructureEdits.WpCamColumns.Contains(c.Key)).ToDictionary(c => c.Key, c => c.Value);
+        var wp = row.Wp;
+        if (wpChanges.Count > 0)
+        {
+            if (row.P1s is null)
+                return (false, "Wiersz nie ma kodu P1S – WP przypisuje się do elementu P1S.");
+            var (working, removed) = StructureEdits.WpCam(Rows(ProjectDictionaries.WpCam, code), row.P1s, wpChanges);
+            var outcome = SaveDictionary(ProjectDictionaries.WpCam, Context(code, tree, null, inputs), working, removed, code);
+            if (outcome.Status is not (SaveStatus.Saved or SaveStatus.NoChanges))
+                return (false, Describe($"WP i CAM: {outcome.Message}", outcome.Issues));
+            messages.Add($"WP i CAM {(outcome.Status == SaveStatus.Saved ? "zapisane" : "bez zmian")}");
+            var assigned = Rows(ProjectDictionaries.WpCam, code);
+            wp = assigned.FirstOrDefault(r => MappingKeys.Key(r["Element P1S"]) == MappingKeys.Key(row.P1s))?["WP"];
+            if (row.Wp is { } oldWp && !string.Equals(oldWp, wp, StringComparison.OrdinalIgnoreCase)
+                && !assigned.Any(r => string.Equals(r["WP"], oldWp, StringComparison.OrdinalIgnoreCase)))
+            {
+                var (schedule, gone) = StructureEdits.ScheduleAfterWpChange(Rows(ProjectDictionaries.ScheduleBudget, code), oldWp, wp);
+                var moved = SaveDictionary(ProjectDictionaries.ScheduleBudget, Context(code, tree, assigned, inputs), schedule, gone, code);
+                if (moved.Status == SaveStatus.Saved)
+                    messages.Add(gone.Count > 0 ? $"usunięto harmonogram WP {oldWp}" : $"budżet WP {oldWp} przeniesiony na {wp}");
+                else if (moved.Status != SaveStatus.NoChanges)
+                    messages.Add(Describe($"harmonogram WP {oldWp} bez zmian: {moved.Message}", moved.Issues));
+            }
+        }
+
+        var budgetChanges = changes.Where(c => StructureEdits.ScheduleColumns.Contains(c.Key)).ToDictionary(c => c.Key, c => c.Value);
+        if (budgetChanges.Count > 0)
+        {
+            if (wp is null)
+                return (false, string.Join("; ", messages.Append("budżet i daty wymagają WP w wierszu")));
+            var (working, removed) = StructureEdits.Schedule(Rows(ProjectDictionaries.ScheduleBudget, code), wp, budgetChanges);
+            var outcome = SaveDictionary(ProjectDictionaries.ScheduleBudget, Context(code, tree, Rows(ProjectDictionaries.WpCam, code), inputs), working, removed, code);
+            if (outcome.Status is not (SaveStatus.Saved or SaveStatus.NoChanges))
+                return (false, Describe(string.Join("; ", messages.Append($"Harmonogram i budżet: {outcome.Message}")), outcome.Issues));
+            messages.Add($"harmonogram i budżet {(outcome.Status == SaveStatus.Saved ? "zapisane" : "bez zmian")}");
+        }
+        return (true, messages.Count == 0 ? "Brak zmian." : $"Zapisano: {string.Join("; ", messages)}.");
+    }
+
+    private SaveOutcome SaveDictionary(string dictionary, ProjectDictionaryContext context, IReadOnlyList<DictRow> working, IReadOnlyList<DictRow> removed, string code) =>
+        _dictionaries.Save(ProjectDictionaries.For(dictionary, context), working, removed, confirmWarnings: true, code);
+
+    /// <summary>Komunikat z pierwszymi problemami (ERROR przed WARNING).</summary>
+    private static string Describe(string message, IReadOnlyList<Issue> issues)
+    {
+        var shown = issues.OrderBy(i => i.Level == CheckLevel.Error ? 0 : 1).Take(3).Select(i => i.Element is null ? i.Message : $"{i.Message} ({i.Element})").ToList();
+        return shown.Count == 0 ? message : $"{message} – {string.Join("; ", shown)}{(issues.Count > 3 ? $" (+{issues.Count - 3})" : "")}";
     }
 
     // ---------- gotowość, baza analityczna ----------
