@@ -110,6 +110,14 @@ i budżetem (`StructureBuilder`).
   i nazwisko. CAM wpisany wcześniej spoza słownika jest na liście pod swoją wartością.
 - **Sumy:** budżet i daty wiersza obejmują poddrzewo, każdy WP liczony raz; braki – element nakładki bez WP,
   WP bez budżetu.
+- **ACWP** (tylko do odczytu): koszt rzeczywisty narastająco z ostatniego importu ACTUALS (PLN, bez wykluczeń
+  projektu; procedura `REP_ProjectCostsByElement`, `docs/model-danych.md`, migracja 016). Koszt elementu CES trafia
+  do WP na kodzie P1S jego węzła, a bez niego – do jedynego WP pod węzłem. Brak WP („koszt bez WP”) albo kilka WP pod
+  węzłem („koszt niejednoznaczny” – reguła rozdziału to O45) – koszt bez przypisania, w kolumnie Braki. Wiersz węzła
+  pokazuje koszt elementów CES swojego poddrzewa, wiersz elementu P1S – koszt przypisany do WP poddrzewa. Koszt
+  elementu CES projektu, którego nie ma w nakładce – „spoza nakładki”. Kafelki ACWP i „Koszt bez WP” w zakładce
+  Wskaźniki. Koszty są czytane przy otwarciu projektu i „Odśwież mapowanie i koszty” (nie po każdym zapisie wiersza).
+  To podgląd – formalny koszt WP liczy przebieg (P3, `ev.KosztWP`).
 - **Edycja w komórkach** (zapis od razu po zatwierdzeniu wiersza – Enter albo przejście do innego wiersza, bez
   osobnego „Zapisz”; Esc cofa): nazwa i `Legacy WBS` węzła → nakładka; WP i CAM wiersza z kodem P1S → „WP i CAM”
   (klucz – kod P1S; zaznaczenie WP albo wybór CAM tworzy przypisanie, odznaczenie WP je usuwa razem z budżetem WP, jeśli

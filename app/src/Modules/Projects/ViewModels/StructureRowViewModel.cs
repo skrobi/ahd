@@ -158,6 +158,7 @@ public sealed class StructureRowViewModel(StructureRow row) : INotifyPropertyCha
         StructureEdits.Start => row.Start,
         StructureEdits.Finish => row.Finish,
         "WpCount" => row.Wps.Count == 0 ? null : row.Wps.Count.ToString(System.Globalization.CultureInfo.InvariantCulture),
+        "Acwp" => Amount(row.Acwp),
         _ => null,
     };
 

@@ -39,4 +39,10 @@ public interface IProjectStore
     /// danych) i wiersze. value – pole kwoty parsera ACTUALS (np. ValueObjCrcy).
     /// </summary>
     (IReadOnlyList<string> Columns, IReadOnlyList<IReadOnlyList<object?>> Rows) CostReport(string code, string value);
+
+    /// <summary>
+    /// Koszt rzeczywisty (ACWP) projektu po WBS elemencie CES z ostatniego importu ACTUALS – suma całego zrzutu, bez
+    /// wykluczeń projektu (procedura REP_ProjectCostsByElement, migracja 016).
+    /// </summary>
+    IReadOnlyDictionary<string, decimal> CostsByElement(string code, string value);
 }
