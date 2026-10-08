@@ -258,6 +258,12 @@ wygenerował ponownie, zostaje w poprzedniej wersji (O38); w trakcie importu wyn
 „wykonać jako” (błąd 15517 przy migracji). Przykład:
 `EXEC [FINOP].[PZLEV_CAN_LatestImport] @Parser = 'ACTUALS', @SourceCode = 'ACTUALS_CES';`. Wymaga aplikacji 0.21.0.
 
+**Migracja `sql/mssql/012_ostatni_import_projektu.sql`:** `CAN_LatestImport` dostaje parametr `@Project` (kod
+projektu PZL-EV) – tylko wiersze, których `Project definition` jest w nakładce Performance Objectives projektu
+(bieżące wersje; parser musi mieć pole `ProjectDefinition`). Pełny zrzut ACTUALS (ok. 1,5 mln wierszy, 35 kolumn) to
+minuty samego przesyłania i wyświetlania; dane jednego projektu – sekunda. Przykład:
+`EXEC [FINOP].[PZLEV_CAN_LatestImport] @Parser = 'ACTUALS', @Project = 'M28';`. Wymaga aplikacji 0.23.0.
+
 Aplikacja zapisuje dziś do tabel importu, konfiguracji importu, słowników globalnych, korekt mapowania, dziennika i problemów;
 tabele projektów i słowników projektu czekają na moduły F4. Blokada importu – plik na dysku sieciowym
 (`docs/pipeline-fazy.md`, rozdz. 1.3), `sp_getapplock` razem z procedurami (F10.2).

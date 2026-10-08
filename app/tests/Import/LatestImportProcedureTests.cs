@@ -6,6 +6,8 @@ using PzlEv.Modules.Administration.Models;
 using PzlEv.Modules.Administration.Services;
 using PzlEv.Modules.Import.Data;
 using PzlEv.Modules.Import.Services;
+using PzlEv.Modules.Projects.Data;
+using PzlEv.Modules.Projects.Models;
 using PzlEv.Shared.Utils.Data;
 using PzlEv.Tests.TestSupport;
 using Xunit;
@@ -47,10 +49,10 @@ public sealed class LatestImportProcedureTests : IDisposable
         File.SetLastWriteTimeUtc(target, modified);
     }
 
-    private List<IDictionary<string, object?>> Latest(string parser, string? sourceCode = null, DateTimeOffset? asOf = null)
+    private List<IDictionary<string, object?>> Latest(string parser, string? sourceCode = null, DateTimeOffset? asOf = null, string? project = null)
     {
         using var connection = _database!.Sql.Open();
-        return connection.Query(_database.Sql.Table("can.LatestImport"), new { Parser = parser, SourceCode = sourceCode, AsOf = asOf },
+        return connection.Query(_database.Sql.Table("can.LatestImport"), new { Parser = parser, SourceCode = sourceCode, AsOf = asOf, Project = project },
                 commandType: CommandType.StoredProcedure)
             .Select(r => (IDictionary<string, object?>)r)
             .ToList();
@@ -106,5 +108,24 @@ public sealed class LatestImportProcedureTests : IDisposable
 
         Assert.Equal(50011, error.Number);
         Assert.Contains("NIEZNANY", error.Message);
+    }
+
+    [SqlFact]
+    public void Project_filter_returns_only_project_definitions_of_its_objectives()
+    {
+        Use();
+        Write("ACTUALS_PAF_01.csv", 0, new DateTime(2026, 10, 6, 23, 0, 0, DateTimeKind.Utc));
+        _import.Run();
+        var tree = new PoTree();
+        var root = tree.Add(new PoNode { Key = tree.NewKey(), WbsElement = "4D03GZ", Name = "projekt", ProjectDefinition = "4D03GZ" });
+        tree.AddElement(root.Key, "4D03GZ000001", "element", null);
+        Assert.True(new SqlProjectStore(_database!.Sql, _services.Clock, _services.User).Create("M28", "M28", ProjectTypes.Internal, tree).Success);
+
+        var rows = Latest("ACTUALS", project: "M28");
+
+        Assert.Equal(2, rows.Count);   // oba wiersze 4D03GZ (także element spoza nakładki – filtr po Project definition)
+        Assert.All(rows, r => Assert.Equal("4D03GZ", r["ProjectDefinition"]));
+        Assert.Equal(6, Latest("ACTUALS").Count);
+        Assert.Equal(50013, Assert.Throws<SqlException>(() => Latest("ACTUALS", project: "BRAK")).Number);
     }
 }
