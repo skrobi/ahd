@@ -73,9 +73,9 @@ public static class AnalyticBaseBuilder
         return new AnalyticBase(rows, byCam, withoutWp, withoutBudget, allWps.Count, total.Hours, total.Material);
     }
 
-    private static bool HasBudget(DictRow? row) => row is not null && (row["BAC HOURS"] is not null || row["BAC MATERIAL"] is not null);
+    internal static bool HasBudget(DictRow? row) => row is not null && (row["BAC HOURS"] is not null || row["BAC MATERIAL"] is not null);
 
-    private static (decimal Hours, decimal Material, string? Start, string? Finish) Totals(IReadOnlyList<string> wps, IReadOnlyDictionary<string, DictRow> budgets)
+    internal static (decimal Hours, decimal Material, string? Start, string? Finish) Totals(IReadOnlyList<string> wps, IReadOnlyDictionary<string, DictRow> budgets)
     {
         decimal hours = 0, material = 0;
         string? start = null, finish = null;
