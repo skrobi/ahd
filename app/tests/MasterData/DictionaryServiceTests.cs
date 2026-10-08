@@ -259,5 +259,33 @@ public sealed class DictionaryServiceTests : IDisposable
         }
     }
 
+    [SqlFact]
+    public void Keys_are_compared_without_letter_case()
+    {
+        // „W31” i „w31” to ten sam klucz – duplikat.
+        var duplicate = _service.Save(Rates, [Rate("W31", "100"), Rate("w31", "100")], [], true);
+        Assert.Equal(SaveStatus.Rejected, duplicate.Status);
+        Assert.Contains(duplicate.Issues, i => i.Message.StartsWith("Duplikat klucza"));
+
+        // Plik z „w30” zmienia wiersz „W30” (historia zostaje), nie dodaje nowego i nie usuwa starego.
+        _service.Save(Rates, [Rate("W30", "100")], [], true);
+        var path = TempXlsx();
+        try
+        {
+            ExcelTableWriter.Write(path, "Stawki", ["MPK", "Year", "Labor Rate", "Overhead"], [["w30", 2026L, 100m, 0m]]);
+            var preview = _service.PreviewImport(Rates, path);
+            Assert.Empty(preview.Added);
+            Assert.Empty(preview.Removed);
+            Assert.Contains("MPK: W30 → w30", Assert.Single(preview.Changed));
+            Assert.Equal(SaveStatus.Saved, _service.ApplyImport(Rates, preview).Status);
+            var row = Assert.Single(_service.Load(Rates));
+            Assert.Equal(("w30", 2), (row["MPK"], row.Version));
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
     private static string TempXlsx() => Path.Combine(Path.GetTempPath(), $"pzl-ev-{Guid.NewGuid():N}.xlsx");
 }

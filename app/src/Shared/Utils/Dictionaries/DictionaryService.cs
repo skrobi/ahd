@@ -164,7 +164,9 @@ public sealed class DictionaryService(IDictionaryStore store, IJournal journal)
         var issues = new List<Issue>();
         var fileName = source;
         var current = Load(spec, project);
-        var currentByKey = current.GroupBy(r => spec.KeyOf(r.Values)).ToDictionary(g => g.Key, g => g.First());
+        // Klucz bez względu na wielkość liter: „E123” w pliku zmienia wiersz „e123” (historia zostaje), nie dodaje nowego.
+        var currentByKey = current.GroupBy(r => spec.KeyOf(r.Values), StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
         var normalized = DictionaryValidator.Normalize(spec, ResolveLookups(spec, sourceRows, issues, rowNumbers), issues);
 
         if (keep is { Count: > 0 })
@@ -174,7 +176,8 @@ public sealed class DictionaryService(IDictionaryStore store, IJournal journal)
 
         if (inherited is { Count: > 0 })
         {
-            var global = inherited.GroupBy(r => spec.KeyOf(r.Values)).ToDictionary(g => g.Key, g => g.First());
+            var global = inherited.GroupBy(r => spec.KeyOf(r.Values), StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
             var same = normalized.Select((row, i) => (row, i))
                 .Where(x => global.TryGetValue(spec.KeyOf(x.row.Values), out var g) && SameValues(spec, g.Values, x.row.Values))
                 .Select(x => x.i).ToHashSet();
@@ -189,7 +192,7 @@ public sealed class DictionaryService(IDictionaryStore store, IJournal journal)
         var working = new List<DictRow>();
         var added = new List<string>();
         var changed = new List<string>();
-        var seen = new HashSet<string>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var row in normalized)
         {
             var key = spec.KeyOf(row.Values);

@@ -88,6 +88,8 @@
                                 <Button Content="Zwiń wszystko" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding Structure.CollapseAll}" />
                                 <Button Content="Odśwież mapowanie" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding RefreshMapping}"
                                         ToolTip="Ponowny odczyt raportu mapowań CES ↔ P1S i struktury P1S (PZLPROD)" />
+                                <Button Content="Cofnij wklejenie" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding Structure.Undo}"
+                                        ToolTip="Cofa ostatnie wklejenie, wyczyszczenie (Delete) albo wypełnienie w dół (Ctrl+D) – zapisuje wartości sprzed zmiany (Ctrl+Z)" />
                                 <Button Content="Odrzuć niezapisane" Style="{StaticResource Btn}" Command="{Binding Structure.RevertChanges}"
                                         ToolTip="Cofa zmiany wierszy, których nie udało się zapisać" />
                             </StackPanel>

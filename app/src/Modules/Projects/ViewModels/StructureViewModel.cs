@@ -12,7 +12,8 @@ namespace PzlEv.Modules.Projects.ViewModels;
 /// wstawia wiersze potomków, zwinięcie je usuwa. Stan rozwinięcia, zaznaczenie i niezapisane zmiany wierszy trwają po
 /// odświeżeniu danych (po identyfikatorze wiersza). Węzły nakładki są domyślnie rozwinięte, elementy P1S – zwinięte.
 /// Edycja jak w Excelu: wklejenie bloku, wyczyszczenie i wypełnienie w dół zaznaczonych komórek (SetCells) – każdy
-/// zmieniony wiersz trafia do zapisu (Commit, kolejka ekranu projektu).
+/// zmieniony wiersz trafia do zapisu (Commit, kolejka ekranu projektu). Ctrl+Z (Undo) cofa ostatnie takie operacje –
+/// zapisuje w komórkach wartości sprzed nich (zmiany są już w bazie, więc cofnięcie to kolejny zapis).
 /// </summary>
 public sealed class StructureViewModel : ObservableObject
 {
@@ -23,11 +24,14 @@ public sealed class StructureViewModel : ObservableObject
     private StructureRowViewModel? _selected;
     private StructureSummary _summary = ProjectStructure.Empty.Summary;
     private string _notice = "";
+    private const int UndoLimit = 20;
+    private readonly List<List<(string Id, string Column, string? Value)>> _undo = [];
 
     public StructureViewModel()
     {
         ExpandAll = new RelayCommand(_ => SetAll(true), _ => _all.Count > 0);
         CollapseAll = new RelayCommand(_ => SetAll(false), _ => _all.Count > 0);
+        Undo = new RelayCommand(_ => DoUndo(), _ => _undo.Count > 0);
         RevertChanges = new RelayCommand(_ => { foreach (var row in _all.Where(r => r.Changes.Count > 0)) row.Revert(); OnPropertyChanged(nameof(HasChanges)); },
             _ => HasChanges);
     }
@@ -67,6 +71,9 @@ public sealed class StructureViewModel : ObservableObject
     public ICommand ExpandAll { get; }
     public ICommand CollapseAll { get; }
     public ICommand RevertChanges { get; }
+
+    /// <summary>Cofnięcie ostatniego wklejenia, wyczyszczenia (Delete) albo wypełnienia w dół (Ctrl+D).</summary>
+    public ICommand Undo { get; }
 
     /// <summary>Zatwierdza komórkę w trakcie edycji (wartość trafia do wiersza, wiersz – do zapisu).</summary>
     public void CommitEdits() => EndEditRequested?.Invoke();
@@ -149,6 +156,7 @@ public sealed class StructureViewModel : ObservableObject
     public (int Set, int Skipped) SetCells(IEnumerable<(StructureRowViewModel Row, string Column, string? Text)> cells)
     {
         var changed = new List<StructureRowViewModel>();
+        var undo = new List<(string Id, string Column, string? Value)>();
         var (set, skipped) = (0, 0);
         foreach (var (row, column, text) in cells)
         {
@@ -157,23 +165,67 @@ public sealed class StructureViewModel : ObservableObject
                 skipped++;
                 continue;
             }
+            var before = row[column];
             row[column] = column switch
             {
                 StructureEdits.Cam => DictionaryCells.Resolve(text, Persons),
                 StructureEdits.Wp => IsYes(text) ? "true" : "false",
                 _ => ValueFormat.Clean(text),
             };
+            if ((before ?? "") != (row[column] ?? ""))
+                undo.Add((row.Id, column, before));
             set++;
+            if (!changed.Contains(row))
+                changed.Add(row);
+        }
+        if (undo.Count > 0)
+        {
+            _undo.Add(undo);
+            if (_undo.Count > UndoLimit)
+                _undo.RemoveAt(0);
+        }
+        var saving = changed.Where(r => r.Changes.Count > 0).ToList();
+        foreach (var row in saving)
+            _ = CommitRow(row);
+        Notice = $"Wpisano komórek: {set}" + (skipped > 0 ? $" · pominięto komórek, których nie można zmienić w tym wierszu: {skipped}" : "")
+            + (saving.Count > 0 ? $" · zapis wierszy: {saving.Count}" : "")
+            + (undo.Count > 0 ? " · Ctrl+Z cofa" : "");
+        OnPropertyChanged(nameof(HasChanges));
+        return (set, skipped);
+    }
+
+    /// <summary>
+    /// Cofnięcie ostatniego wklejenia / Delete / Ctrl+D: komórki dostają wartości sprzed operacji (wiersze po Id – także
+    /// po odświeżeniu) i wiersze są zapisywane jak po zwykłej edycji.
+    /// </summary>
+    private void DoUndo()
+    {
+        if (_undo.Count == 0)
+            return;
+        CommitEdits();
+        var cells = _undo[^1];
+        _undo.RemoveAt(_undo.Count - 1);
+        var changed = new List<StructureRowViewModel>();
+        var missing = 0;
+        foreach (var (id, column, value) in cells)
+        {
+            if (!_index.TryGetValue(id, out var position) || !_all[position].CanEdit(column))
+            {
+                missing++;
+                continue;
+            }
+            var row = _all[position];
+            row[column] = value;
             if (!changed.Contains(row))
                 changed.Add(row);
         }
         var saving = changed.Where(r => r.Changes.Count > 0).ToList();
         foreach (var row in saving)
             _ = CommitRow(row);
-        Notice = $"Wpisano komórek: {set}" + (skipped > 0 ? $" · pominięto komórek, których nie można zmienić w tym wierszu: {skipped}" : "")
-            + (saving.Count > 0 ? $" · zapis wierszy: {saving.Count}" : "");
+        Notice = $"Cofnięto zmianę komórek: {cells.Count - missing}" + (saving.Count > 0 ? $" · zapis wierszy: {saving.Count}" : "")
+            + (missing > 0 ? $" · pominięto komórek, których już nie ma w strukturze: {missing}" : "")
+            + (_undo.Count > 0 ? $" · można cofnąć jeszcze {_undo.Count}" : "");
         OnPropertyChanged(nameof(HasChanges));
-        return (set, skipped);
     }
 
     private static bool IsYes(string? text) =>
