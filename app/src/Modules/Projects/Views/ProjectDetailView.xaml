@@ -42,6 +42,9 @@
             <!-- Wskaźniki: sumy projektu teraz, wskaźniki EV po przebiegach; gotowość do przebiegu zwinięta -->
             <TabItem Header="Wskaźniki" Padding="12,4">
                 <StackPanel>
+                    <Button Content="Raport kosztów (Excel)" Style="{StaticResource Btn}" HorizontalAlignment="Left" Margin="0,0,0,12"
+                            Command="{Binding ExportCostReport}"
+                            ToolTip="Koszty ostatniego importu ACTUALS: Project definition × Cost Element, ostatni okres i lata (PLN), bez wykluczeń projektu" />
                     <ItemsControl ItemsSource="{Binding Kpis}" ItemTemplate="{StaticResource Kpi}">
                         <ItemsControl.ItemsPanel>
                             <ItemsPanelTemplate>

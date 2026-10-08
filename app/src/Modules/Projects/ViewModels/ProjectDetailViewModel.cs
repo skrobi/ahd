@@ -38,6 +38,7 @@ public sealed class ProjectDetailViewModel : ObservableObject
         Structure = new StructureViewModel { Commit = CommitRow, CanEditNow = () => !Busy.IsBusy };
         Back = new RelayCommand(_ => back(), _ => !Busy.IsBusy);
         AddFromExcel = new AsyncRelayCommand(DoAddFromExcel, () => !Busy.IsBusy);
+        ExportCostReport = new AsyncRelayCommand(DoExportCostReport, () => !Busy.IsBusy);
         ExportDictionaries = new AsyncRelayCommand(DoExportDictionaries, () => !Busy.IsBusy);
         CreateFolders = new AsyncRelayCommand(DoCreateFolders, () => !Busy.IsBusy);
         RefreshMapping = new AsyncRelayCommand(() => Reload(refreshMapping: true), () => !Busy.IsBusy);
@@ -93,6 +94,7 @@ public sealed class ProjectDetailViewModel : ObservableObject
 
     public ICommand Back { get; }
     public ICommand AddFromExcel { get; }
+    public ICommand ExportCostReport { get; }
     public ICommand ExportDictionaries { get; }
     public ICommand CreateFolders { get; }
     public ICommand RefreshMapping { get; }
@@ -153,6 +155,19 @@ public sealed class ProjectDetailViewModel : ObservableObject
             if (saved)
                 await Reload(refreshMapping: false);
             Status = saved ? message : $"Nie zapisano ({row.Row.Name}): {message} Popraw komórki albo „Odrzuć niezapisane”.";
+        });
+    }
+
+    /// <summary>Raport kosztów projektu z ostatniego importu ACTUALS do Excela (procedura REP_ProjectCosts).</summary>
+    private async Task DoExportCostReport()
+    {
+        var path = _dialogs.SaveExcel("Raport kosztów projektu", $"{Code}_koszty.xlsx");
+        if (path is null)
+            return;
+        await Try(async () =>
+        {
+            var rows = await Busy.Run("Raport kosztów – ostatni import ACTUALS projektu…", () => _service.ExportCostReport(path, Code));
+            Status = $"Zapisano {path} – {rows} wierszy (Project definition × Cost Element).";
         });
     }
 
