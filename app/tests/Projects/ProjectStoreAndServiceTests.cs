@@ -367,4 +367,39 @@ public sealed class ProjectStoreAndServiceTests : IDisposable
         Assert.Equal(["0061000000"], own.Working.Select(r => r["Numer elementu kosztowego"]));
         Assert.Contains(own.Issues, i => i.Message.Contains("identyczne ze słownikiem globalnym"));
     }
+
+    [SqlFact]
+    public void Structure_edit_is_not_blocked_by_existing_errors_and_legacy_wbs_with_wp_uses_new_code()
+    {
+        Assert.True(_store.Create("M28", "M28", ProjectTypes.Internal, Objectives()).Success);
+        var inputs = _service.Mapping();
+        StructureRow Row(string wbs) => ProjectService.Structure(_store.Objectives("M28"), inputs,
+            _service.Rows(ProjectDictionaries.WpCam, "M28"), _service.Rows(ProjectDictionaries.ScheduleBudget, "M28")).Rows.Single(r => r.WbsElement == wbs);
+
+        // Wiersz „WP i CAM” poza zakresem projektu (np. po zmianie mapowania) – zapisany bez reguł projektu.
+        var dictionaries = new DictionaryService(_dictionaries, new SqlJournal(_database!.Sql, _services.Clock, _services.User));
+        Assert.Equal(SaveStatus.Saved, dictionaries.Save(ProjectDictionaries.Base(ProjectDictionaries.WpCam),
+            [new DictRow(null, null, new Dictionary<string, string?> { ["Element P1S"] = "XX-POZA.1", ["WP"] = "WP-X", ["CAM"] = "e1", ["Cost Category"] = null })], [], true, "M28").Status);
+
+        // Istniejący błąd innego wiersza nie blokuje zmiany; nowy błąd (WP bez CAM) – nadal blokuje.
+        var missing = _service.SaveStructureEdit("M28", inputs, Row("4D06WP000001"), new Dictionary<string, string?> { [StructureEdits.Wp] = "true" });
+        Assert.False(missing.Saved);
+        Assert.Contains("CAM", missing.Message);
+        var assigned = _service.SaveStructureEdit("M28", inputs, Row("4D06WP000001"),
+            new Dictionary<string, string?> { [StructureEdits.Wp] = "true", [StructureEdits.Cam] = "e123456" });
+        Assert.True(assigned.Saved, assigned.Message);
+        Assert.Equal(2, _service.Rows(ProjectDictionaries.WpCam, "M28").Count);
+
+        // Legacy WBS i WP w jednym wierszu (wklejenie) – WP przypisany do nowego kodu P1S.
+        var both = _service.SaveStructureEdit("M28", inputs, Row("4D06WP000002"), new Dictionary<string, string?>
+            { [StructureEdits.P1s] = "AC-CAB.6.38.02.01", [StructureEdits.Wp] = "true", [StructureEdits.Cam] = "e123456" });
+        Assert.True(both.Saved, both.Message);
+        Assert.Contains(_service.Rows(ProjectDictionaries.WpCam, "M28"), r => r["Element P1S"] == "AC-CAB.6.38.02.01" && r["CAM"] == "e123456");
+
+        // Usunięcie Legacy WBS razem ze zmianą WP – odrzucone (zapis osobno).
+        var cleared = _service.SaveStructureEdit("M28", inputs, Row("4D06WP000002"), new Dictionary<string, string?>
+            { [StructureEdits.P1s] = null, [StructureEdits.Cam] = "e999" });
+        Assert.False(cleared.Saved);
+        Assert.Contains("osobno", cleared.Message);
+    }
 }

@@ -26,12 +26,19 @@ public sealed class DictionaryService(IDictionaryStore store, IJournal journal)
 
     /// <summary>
     /// Zapisuje docelowy stan słownika: working – wiersze po edycji (RowId null = nowy), removed – usunięte wiersze.
+    /// knownErrors – błędy, które słownik miał już przed zmianą (np. element poza zakresem po odświeżeniu mapowania;
+    /// klucz wiersza + komunikat – KnownErrors): nie blokują zapisu zmiany, są ostrzeżeniami.
     /// </summary>
-    public SaveOutcome Save(DictionarySpec spec, IReadOnlyList<DictRow> working, IReadOnlyList<DictRow> removed, bool confirmWarnings, string? project = null)
+    public SaveOutcome Save(DictionarySpec spec, IReadOnlyList<DictRow> working, IReadOnlyList<DictRow> removed, bool confirmWarnings, string? project = null,
+        IReadOnlySet<string>? knownErrors = null)
     {
         var issues = new List<Issue>();
         var rows = DictionaryValidator.Normalize(spec, working, issues);
         issues.AddRange(DictionaryValidator.Validate(spec, rows));
+        if (knownErrors is { Count: > 0 })
+            issues = issues.Select(i => i.Level == CheckLevel.Error && knownErrors.Contains(Signature(spec, rows, i))
+                ? Issue.Warning($"{i.Message} (błąd był już w słowniku – popraw go w zakładce Słowniki projektu)", i.Element)
+                : i).ToList();
 
         if (issues.Any(i => i.Level == CheckLevel.Error))
             return new SaveOutcome(SaveStatus.Rejected, issues, "Słownik ma błędy (ERROR) – nic nie zapisano.");
@@ -62,6 +69,25 @@ public sealed class DictionaryService(IDictionaryStore store, IJournal journal)
         var message = $"{spec.Name}: +{result.Added} ~{result.Updated} −{result.Removed}";
         journal.Add(Area, issues.Count > 0 ? $"{message} (zapis z ostrzeżeniami: {issues.Count})" : message, spec.Code);
         return new SaveOutcome(SaveStatus.Saved, issues, $"Zapisano – {message}.");
+    }
+
+    /// <summary>Błędy (ERROR) bieżącego stanu słownika jako klucz wiersza + komunikat – do Save(knownErrors).</summary>
+    public IReadOnlySet<string> KnownErrors(DictionarySpec spec, string? project = null)
+    {
+        var issues = new List<Issue>();
+        var rows = DictionaryValidator.Normalize(spec, Load(spec, project), issues);
+        issues.AddRange(DictionaryValidator.Validate(spec, rows));
+        return issues.Where(i => i.Level == CheckLevel.Error).Select(i => Signature(spec, rows, i)).ToHashSet();
+    }
+
+    /// <summary>Błąd wiersza („wiersz N”) – klucz wiersza i komunikat; inny – sam komunikat.</summary>
+    private static string Signature(DictionarySpec spec, IReadOnlyList<DictRow> rows, Issue issue)
+    {
+        var key = issue.Element is { } element && element.StartsWith("wiersz ", StringComparison.Ordinal)
+            && int.TryParse(element.AsSpan(7), out var n) && n >= 1 && n <= rows.Count
+            ? spec.KeyOf(rows[n - 1].Values)
+            : "";
+        return $"{key}\u001f{issue.Message}";
     }
 
     public void Export(DictionarySpec spec, string path, string? project = null)

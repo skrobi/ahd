@@ -302,6 +302,15 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
     {
         var messages = new List<string>();
         var tree = store.Objectives(code);
+        var element = row.P1s;
+        var dictionaryChanges = changes.Keys.Any(k => StructureEdits.WpCamColumns.Contains(k) || StructureEdits.ScheduleColumns.Contains(k));
+        if (changes.TryGetValue(StructureEdits.P1s, out var newCode))
+        {
+            // Legacy WBS i WP / CAM w jednym wierszu (np. wklejenie): WP przypisywany do nowego kodu P1S.
+            if (string.IsNullOrWhiteSpace(newCode) && dictionaryChanges)
+                return (false, "Usunięcie Legacy WBS i zmiana WP / CAM / budżetu w jednym wierszu – zapisz je osobno.");
+            element = string.IsNullOrWhiteSpace(newCode) ? null : newCode.Trim();
+        }
         if (row.NodeKey is { } key && (changes.ContainsKey(StructureEdits.Name) || changes.ContainsKey(StructureEdits.P1s)))
         {
             if (tree.Find(key) is not { } node)
@@ -321,26 +330,28 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
                 return (false, result.Conflict!);
             messages.Add("nakładka zapisana");
             tree = store.Objectives(code);
+            if (changes.ContainsKey(StructureEdits.P1s) && row.Wp is { } assignedWp && !dictionaryChanges)
+                messages.Add($"uwaga: WP {assignedWp} jest przypisany do elementu {row.P1s} – zaznacz WP przy nowym kodzie P1S albo zmień „WP i CAM”");
         }
 
         var wpChanges = changes.Where(c => StructureEdits.WpCamColumns.Contains(c.Key)).ToDictionary(c => c.Key, c => c.Value);
         var wp = row.Wp;
         if (wpChanges.Count > 0)
         {
-            if (row.P1s is null)
+            if (element is null)
                 return (false, "Wiersz nie ma kodu P1S – WP przypisuje się do elementu P1S.");
-            var (working, removed) = StructureEdits.WpCam(Rows(ProjectDictionaries.WpCam, code), row.P1s, wpChanges);
-            var outcome = SaveDictionary(ProjectDictionaries.WpCam, Context(code, tree, null, inputs), working, removed, code);
+            var (working, removed) = StructureEdits.WpCam(Rows(ProjectDictionaries.WpCam, code), element, wpChanges);
+            var outcome = SaveStructureDictionary(ProjectDictionaries.WpCam, Context(code, tree, null, inputs), working, removed, code);
             if (outcome.Status is not (SaveStatus.Saved or SaveStatus.NoChanges))
                 return (false, Describe($"WP i CAM: {outcome.Message}", outcome.Issues));
             messages.Add($"WP i CAM {(outcome.Status == SaveStatus.Saved ? "zapisane" : "bez zmian")}");
             var assigned = Rows(ProjectDictionaries.WpCam, code);
-            wp = assigned.FirstOrDefault(r => MappingKeys.Key(r["Element P1S"]) == MappingKeys.Key(row.P1s))?["WP"];
+            wp = assigned.FirstOrDefault(r => MappingKeys.Key(r["Element P1S"]) == MappingKeys.Key(element))?["WP"];
             if (row.Wp is { } oldWp && !string.Equals(oldWp, wp, StringComparison.OrdinalIgnoreCase)
                 && !assigned.Any(r => string.Equals(r["WP"], oldWp, StringComparison.OrdinalIgnoreCase)))
             {
                 var (schedule, gone) = StructureEdits.ScheduleAfterWpChange(Rows(ProjectDictionaries.ScheduleBudget, code), oldWp, wp);
-                var moved = SaveDictionary(ProjectDictionaries.ScheduleBudget, Context(code, tree, assigned, inputs), schedule, gone, code);
+                var moved = SaveStructureDictionary(ProjectDictionaries.ScheduleBudget, Context(code, tree, assigned, inputs), schedule, gone, code);
                 if (moved.Status == SaveStatus.Saved)
                     messages.Add(gone.Count > 0 ? $"usunięto harmonogram WP {oldWp}" : $"budżet WP {oldWp} przeniesiony na {wp}");
                 else if (moved.Status != SaveStatus.NoChanges)
@@ -354,7 +365,7 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
             if (wp is null)
                 return (false, string.Join("; ", messages.Append("budżet i daty wymagają WP w wierszu")));
             var (working, removed) = StructureEdits.Schedule(Rows(ProjectDictionaries.ScheduleBudget, code), wp, budgetChanges);
-            var outcome = SaveDictionary(ProjectDictionaries.ScheduleBudget, Context(code, tree, Rows(ProjectDictionaries.WpCam, code), inputs), working, removed, code);
+            var outcome = SaveStructureDictionary(ProjectDictionaries.ScheduleBudget, Context(code, tree, Rows(ProjectDictionaries.WpCam, code), inputs), working, removed, code);
             if (outcome.Status is not (SaveStatus.Saved or SaveStatus.NoChanges))
                 return (false, Describe(string.Join("; ", messages.Append($"Harmonogram i budżet: {outcome.Message}")), outcome.Issues));
             messages.Add($"harmonogram i budżet {(outcome.Status == SaveStatus.Saved ? "zapisane" : "bez zmian")}");
@@ -369,6 +380,16 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
     public SaveOutcome SaveDictionary(string dictionary, ProjectDictionaryContext context, IReadOnlyList<DictRow> working, IReadOnlyList<DictRow> removed, string code,
         bool confirmWarnings = true) =>
         _dictionaries.Save(ProjectDictionaries.For(dictionary, context), working, removed, confirmWarnings, code);
+
+    /// <summary>
+    /// Zapis słownika projektu po zmianie w tabeli struktury: ostrzeżenia nie wstrzymują zapisu, a błędy, które słownik
+    /// miał już wcześniej w innych wierszach (np. element poza zakresem po zmianie mapowania), nie blokują zmiany.
+    /// </summary>
+    private SaveOutcome SaveStructureDictionary(string dictionary, ProjectDictionaryContext context, IReadOnlyList<DictRow> working, IReadOnlyList<DictRow> removed, string code)
+    {
+        var spec = ProjectDictionaries.For(dictionary, context);
+        return _dictionaries.Save(spec, working, removed, confirmWarnings: true, code, _dictionaries.KnownErrors(spec, code));
+    }
 
     /// <summary>Komunikat z pierwszymi problemami (ERROR przed WARNING).</summary>
     private static string Describe(string message, IReadOnlyList<Issue> issues)

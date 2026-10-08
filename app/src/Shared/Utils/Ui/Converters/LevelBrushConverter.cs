@@ -7,12 +7,15 @@ namespace PzlEv.Shared.Utils.Ui.Converters;
 
 /// <summary>
 /// Mapuje poziom ("ok", "warn", "crit", "info", "stale", "ready", "accent", "muted")
-/// na pędzel z Theme.xaml. ConverterParameter = "fg" (tekst) albo "bg" (tło).
+/// na pędzel z Theme.xaml. ConverterParameter = "fg" (tekst), "bg" (tło) albo "cell" (tło komórki tabeli z problemem:
+/// pusty poziom – przezroczyste).
 /// </summary>
 public sealed class LevelBrushConverter : IValueConverter
 {
     public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
     {
+        if (string.Equals(parameter as string, "cell", StringComparison.OrdinalIgnoreCase) && string.IsNullOrEmpty(value as string))
+            return Brushes.Transparent;
         var level = (value as string ?? "muted").ToLowerInvariant();
         var fg = string.Equals(parameter as string, "fg", StringComparison.OrdinalIgnoreCase);
 

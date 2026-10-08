@@ -20,7 +20,7 @@ namespace PzlEv.Shared.Views.Partials;
 /// </summary>
 public sealed class DictionaryCellColumn : DataGridColumn
 {
-    private static readonly IValueConverter LevelBackground = new LevelBackgroundConverter();
+    private static readonly IValueConverter LevelBackground = new PzlEv.Shared.Utils.Ui.Converters.LevelBrushConverter();
 
     public DictionaryCellColumn(int index, DictColumn column, IReadOnlyList<LookupOption>? options)
     {
@@ -48,7 +48,7 @@ public sealed class DictionaryCellColumn : DataGridColumn
         if (Column.Type is ColumnType.Decimal or ColumnType.Integer)
             text.TextAlignment = TextAlignment.Right;
         var border = new Border { Child = text };
-        border.SetBinding(Border.BackgroundProperty, new Binding(Path(nameof(DictCellViewModel.Level))) { Converter = LevelBackground });
+        border.SetBinding(Border.BackgroundProperty, new Binding(Path(nameof(DictCellViewModel.Level))) { Converter = LevelBackground, ConverterParameter = "cell" });
         border.SetBinding(FrameworkElement.ToolTipProperty, new Binding(Path(nameof(DictCellViewModel.Problem))));
         return border;
     }
@@ -56,7 +56,7 @@ public sealed class DictionaryCellColumn : DataGridColumn
     protected override FrameworkElement GenerateEditingElement(DataGridCell cell, object dataItem)
     {
         if (Options is { } options)
-            return LookupEditor(options, dataItem as DictRowViewModel);
+            return LookupComboBox.Create(options);
         if (Column.Choices is { } choices)
         {
             var combo = new ComboBox { IsEditable = true, ItemsSource = choices, BorderThickness = new Thickness(0) };
@@ -70,44 +70,15 @@ public sealed class DictionaryCellColumn : DataGridColumn
         return box;
     }
 
-    /// <summary>Lista z wyszukiwaniem: wpisany tekst zawęża listę (fragment wartości albo opisu).</summary>
-    private static ComboBox LookupEditor(IReadOnlyList<LookupOption> options, DictRowViewModel? row)
-    {
-        var view = new ListCollectionView(options.ToList());
-        var combo = new ComboBox
-        {
-            IsEditable = true,
-            IsTextSearchEnabled = false,
-            ItemsSource = view,
-            DisplayMemberPath = nameof(LookupOption.Text),
-            BorderThickness = new Thickness(0),
-            MaxDropDownHeight = 320,
-        };
-        combo.AddHandler(TextBoxBase.TextChangedEvent, new TextChangedEventHandler((_, _) =>
-        {
-            if (!combo.IsKeyboardFocusWithin || combo.SelectedItem is LookupOption chosen && chosen.Text == combo.Text)
-                return;
-            var search = combo.Text.Trim();
-            view.Filter = o => ((LookupOption)o).Matches(search);
-            combo.IsDropDownOpen = !view.IsEmpty;
-        }));
-        return combo;
-    }
-
     protected override object PrepareCellForEdit(FrameworkElement editingElement, RoutedEventArgs editingEventArgs)
     {
         var box = editingElement as TextBox;
         if (editingElement is ComboBox combo)
         {
             combo.ApplyTemplate();
-            box = combo.Template.FindName("PART_EditableTextBox", combo) as TextBox;
-            if (Options is not null && combo.DataContext is DictRowViewModel row)
-            {
-                var value = row[Index];
-                var current = Options.FirstOrDefault(o => string.Equals(o.Value, value, StringComparison.OrdinalIgnoreCase));
-                combo.SelectedItem = current;
-                combo.Text = current?.Text ?? value ?? "";
-            }
+            box = Options is not null && combo.DataContext is DictRowViewModel row
+                ? LookupComboBox.Prepare(combo, row[Index], Options)
+                : combo.Template.FindName("PART_EditableTextBox", combo) as TextBox;
         }
         if (box is null)
             return "";
@@ -127,30 +98,12 @@ public sealed class DictionaryCellColumn : DataGridColumn
     {
         if (Options is { } options && editingElement is ComboBox { DataContext: DictRowViewModel row } combo)
         {
-            var value = combo.SelectedItem is LookupOption chosen && chosen.Text == combo.Text
-                ? chosen.Value
-                : DictionaryCells.Resolve(combo.Text, options);
-            // Jak autouzupełnianie w Excelu: wpisany fragment, który zostawił na liście jedną osobę, wybiera ją.
-            if (value is not null && !options.Any(o => string.Equals(o.Value, value, StringComparison.OrdinalIgnoreCase))
-                && combo.ItemsSource is ListCollectionView { Count: 1 } view && view.GetItemAt(0) is LookupOption only)
-                value = only.Value;
+            var value = LookupComboBox.ValueOf(combo, options);
             row[Index] = value;
             return true;
         }
         var property = editingElement is ComboBox ? ComboBox.TextProperty : TextBox.TextProperty;
         BindingOperations.GetBindingExpression(editingElement, property)?.UpdateSource();
         return true;
-    }
-
-    private sealed class LevelBackgroundConverter : IValueConverter
-    {
-        public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture) => value switch
-        {
-            "crit" => Application.Current?.TryFindResource("CritSoft") as Brush ?? Brushes.MistyRose,
-            "warn" => Application.Current?.TryFindResource("WarnSoft") as Brush ?? Brushes.LightYellow,
-            _ => Brushes.Transparent,
-        };
-
-        public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) => Binding.DoNothing;
     }
 }
