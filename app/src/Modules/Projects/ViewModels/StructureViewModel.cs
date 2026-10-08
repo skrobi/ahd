@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Windows.Input;
 using PzlEv.Modules.Projects.Models;
+using PzlEv.Shared.Models.Dictionaries;
 using PzlEv.Shared.Utils.Ui.Mvvm;
 
 namespace PzlEv.Modules.Projects.ViewModels;
@@ -36,7 +37,7 @@ public sealed class StructureViewModel : ObservableObject
     public ObservableCollection<StructureRowViewModel> Rows { get; } = [];
 
     /// <summary>Lista wyboru CAM (USRID → imię i nazwisko).</summary>
-    public ObservableCollection<PersonOption> Persons { get; } = [];
+    public ObservableCollection<LookupOption> Persons { get; } = [];
 
     public StructureRowViewModel? Selected { get => _selected; set => SetProperty(ref _selected, value); }
 
@@ -53,7 +54,7 @@ public sealed class StructureViewModel : ObservableObject
     public ICommand RevertChanges { get; }
 
     /// <summary>Nowe dane struktury – zachowuje rozwinięcie i zaznaczenie; niezapisane zmiany wierszy przepadają.</summary>
-    public void Load(ProjectStructure structure, IReadOnlyList<PersonOption> persons)
+    public void Load(ProjectStructure structure, IReadOnlyList<LookupOption> persons)
     {
         if (!Persons.SequenceEqual(persons))
         {

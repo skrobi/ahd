@@ -5,6 +5,7 @@ using System.Windows.Threading;
 using PzlEv.Modules.Projects.Models;
 using PzlEv.Modules.Projects.Services;
 using PzlEv.Modules.Projects.ViewModels;
+using PzlEv.Shared.Models.Dictionaries;
 
 namespace PzlEv.Modules.Projects.Views;
 
@@ -42,8 +43,8 @@ public partial class StructureView : UserControl
             Header = "CAM",
             Width = 180,
             SortMemberPath = StructureEdits.Cam,
-            SelectedValuePath = nameof(PersonOption.Usrid),
-            DisplayMemberPath = nameof(PersonOption.Name),
+            SelectedValuePath = nameof(LookupOption.Value),
+            DisplayMemberPath = nameof(LookupOption.Label),
             SelectedValueBinding = new Binding($"[{StructureEdits.Cam}]") { Mode = BindingMode.TwoWay, UpdateSourceTrigger = UpdateSourceTrigger.PropertyChanged },
         };
         BuildColumns();

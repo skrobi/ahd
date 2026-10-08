@@ -33,6 +33,7 @@ public static class ProjectDictionaries
             new("CAM", ColumnType.Text, Required: true, CheckSimilar: true, Lookup: GlobalDictionaries.Persons),
             new("Cost Category", ColumnType.Choice, Choices: CostCategoryChoices),
         ],
+        SkipKeyOnlyRows = true,
     };
 
     private static readonly DictionarySpec ScheduleBudgetSpec = new()
@@ -48,6 +49,7 @@ public static class ProjectDictionaries
             new("Baseline Start", ColumnType.Date, Aliases: ["Planowany Start"]),
             new("Baseline Koniec", ColumnType.Date, Aliases: ["Planowany Koniec"]),
         ],
+        SkipKeyOnlyRows = true,
     };
 
     private static readonly DictionarySpec ExclusionsSpec = new()
@@ -121,7 +123,7 @@ public static class ProjectDictionaries
     private static DictionarySpec With(DictionarySpec spec, Func<IReadOnlyList<DictRow>, IEnumerable<Issue>> rules) => new()
     {
         Code = spec.Code, Name = spec.Name, Description = spec.Description, Columns = spec.Columns, Validity = spec.Validity,
-        EmptyKeyPartsAllowed = spec.EmptyKeyPartsAllowed, Rules = rules,
+        EmptyKeyPartsAllowed = spec.EmptyKeyPartsAllowed, SkipKeyOnlyRows = spec.SkipKeyOnlyRows, Rules = rules,
     };
 
     /// <summary>docs/slowniki.md, rozdz. 5.2. Jeden WP na element P1S i WP wymaga CAM – klucz i pole wymagane.</summary>

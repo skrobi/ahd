@@ -6,9 +6,11 @@ public sealed class FileDialogs : IFileDialogs
 {
     private const string ExcelFilter = "Excel (*.xlsx)|*.xlsx|Wszystkie pliki (*.*)|*.*";
 
+    private const string OpenFilter = "Excel i CSV (*.xlsx;*.xlsm;*.csv;*.txt)|*.xlsx;*.xlsm;*.csv;*.txt|Wszystkie pliki (*.*)|*.*";
+
     public string? OpenExcel(string title)
     {
-        var dialog = new OpenFileDialog { Title = title, Filter = ExcelFilter };
+        var dialog = new OpenFileDialog { Title = title, Filter = OpenFilter };
         return dialog.ShowDialog() == true ? dialog.FileName : null;
     }
 

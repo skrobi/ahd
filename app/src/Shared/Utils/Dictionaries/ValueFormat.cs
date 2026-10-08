@@ -9,8 +9,18 @@ namespace PzlEv.Shared.Utils.Dictionaries;
 /// </summary>
 public static class ValueFormat
 {
-    private static readonly string[] Yes = ["tak", "t", "true", "1", "x", "yes", "y"];
-    private static readonly string[] No = ["nie", "n", "false", "0", "no"];
+    private static readonly string[] Yes = ["tak", "t", "true", "1", "x", "yes", "y", "prawda"];
+    private static readonly string[] No = ["nie", "n", "false", "0", "no", "fałsz"];
+
+    /// <summary>Wartości błędów formuł Excela (#N/A itd., także polskie) – nie są danymi.</summary>
+    private static readonly HashSet<string> ExcelErrors = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "#N/A", "#VALUE!", "#REF!", "#DIV/0!", "#NUM!", "#NAME?", "#NULL!", "#SPILL!", "#CALC!", "#GETTING_DATA",
+        "#ARG!", "#ADR!", "#DZIEL/0!", "#LICZBA!", "#NAZWA?", "#ZERO!", "#WARTOŚĆ!", "#BRAK!",
+    };
+
+    /// <summary>Liczba miejsc po przecinku przechowywana w bazie (DECIMAL(28,8)).</summary>
+    private const int Decimals = 8;
 
     /// <summary>Normalizuje wartość; zwraca false i opis błędu, gdy wartość nie pasuje do typu kolumny.</summary>
     public static bool TryNormalize(DictColumn column, string? input, out string? canonical, out string? error)
@@ -19,6 +29,11 @@ public static class ValueFormat
         canonical = Clean(input);
         if (canonical is null)
             return true;
+        if (ExcelErrors.Contains(canonical))
+        {
+            error = $"'{canonical}' – błąd formuły Excela, nie wartość";
+            return false;
+        }
 
         switch (column.Type)
         {
@@ -39,7 +54,8 @@ public static class ValueFormat
             case ColumnType.Decimal:
                 if (PolishNumber.TryParse(canonical, out var number))
                 {
-                    canonical = PolishNumber.ToCanonical(number);
+                    // Jak w bazie – inaczej ponowne wczytanie tego samego pliku pokazywałoby zmianę (np. =1/3,95).
+                    canonical = PolishNumber.ToCanonical(Math.Round(number, Decimals, MidpointRounding.AwayFromZero));
                     return true;
                 }
                 error = $"'{input}' – oczekiwano liczby";
