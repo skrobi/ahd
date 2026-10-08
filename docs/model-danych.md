@@ -277,6 +277,11 @@ najnowsza wersja każdego pliku parsera (wspólna dla `CAN_LatestImport` i rapor
 Pomiar: 1,5 mln wierszy ACTUALS – raport projektu w ok. 0,2–0,7 s. Ekran Projekt, zakładka Wskaźniki: „Raport kosztów
 (Excel)”. Przykład: `EXEC [FINOP].[PZLEV_REP_ProjectCosts] @Project = 'M28';`.
 
+**Migracja `sql/mssql/014_definicje_projektu.sql`:** Project definition projektu (`CAN_LatestImport @Project`,
+`REP_ProjectCosts`) to Project definition **i WBS element** węzłów nakładki – element CES dodany ręcznie nie ma
+Project definition, a najwyższy element CES to sam Project definition (np. `4D06WP`). Wcześniej projekt z takim
+elementem dawał pusty wynik. Wymaga aplikacji 0.23.1.
+
 Aplikacja zapisuje dziś do tabel importu, konfiguracji importu, słowników globalnych, korekt mapowania, dziennika i problemów;
 tabele projektów i słowników projektu czekają na moduły F4. Blokada importu – plik na dysku sieciowym
 (`docs/pipeline-fazy.md`, rozdz. 1.3), `sp_getapplock` razem z procedurami (F10.2).

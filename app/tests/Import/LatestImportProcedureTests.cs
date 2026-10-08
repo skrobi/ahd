@@ -166,4 +166,22 @@ public sealed class LatestImportProcedureTests : IDisposable
         Assert.Equal(50014, Assert.Throws<SqlException>(() =>
             connection.Query(_database.Sql.Table("rep.ProjectCosts"), new { Project = "M28", Value = "Brak" }, commandType: CommandType.StoredProcedure).ToList()).Number);
     }
+
+    /// <summary>Migracja 014: element CES dodany ręcznie (bez Project definition) – Project definition z jego WBS elementu.</summary>
+    [SqlFact]
+    public void Manually_added_top_element_without_project_definition_still_selects_its_costs()
+    {
+        Use();
+        Write("ACTUALS_PAF_01.csv", 0, new DateTime(2026, 10, 6, 23, 0, 0, DateTimeKind.Utc));
+        _import.Run();
+        var tree = new PoTree();
+        tree.AddElement(null, "4D03GZ", "projekt dodany ręcznie", null);
+        Assert.True(new SqlProjectStore(_database!.Sql, _services.Clock, _services.User).Create("M29", "M29", ProjectTypes.Internal, tree).Success);
+
+        Assert.Equal(2, Latest("ACTUALS", project: "M29").Count);
+        var (columns, rows) = new SqlProjectStore(_database.Sql, _services.Clock, _services.User).CostReport("M29", "ValueObjCrcy");
+        Assert.Equal(["0051105550", "9221X550"], rows.Select(r => (string)r[3]!));
+        Assert.All(rows, r => Assert.Equal(("projekt dodany ręcznie", "4D03GZ", "projekt dodany ręcznie"), ((string)r[0]!, (string)r[1]!, (string)r[2]!)));
+        Assert.Equal(-230.40m, rows[0][columns.ToList().IndexOf("2026")]);
+    }
 }
