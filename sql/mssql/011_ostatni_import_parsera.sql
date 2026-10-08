@@ -14,6 +14,10 @@
    wygenerował ponownie, zostaje w poprzedniej wersji (O38). W trakcie importu wynik łączy pliki nowe i jeszcze
    poprzednie – kolumny ImportedAt i BatchId pokazują, skąd jest wiersz.
 
+   Uprawnienia: zapytanie dynamiczne działa z prawami wywołującego – potrzebny SELECT na META_Parser,
+   META_SourceDefinition, META_SourceFile i CAN_Row (jak aplikacja). Bez EXECUTE AS OWNER: właścicielem schematu bywa
+   grupa AD (np. INTL\RMS_PZL_SQL_FINOP), a grupy nie da się „wykonać jako” – migracja kończyła się błędem 15517.
+
    Uruchomienie: aplikacja (Diagnostyka → Migracja albo pytanie przy starcie) – w jednej transakcji; ręcznie:
        sqlcmd -S pzltestdb.intl.lmco.com -d PZLTEST -E -f 65001 -v Schema=FINOP Prefix=PZLEV_ -i 011_ostatni_import_parsera.sql
    Skrypt jest idempotentny. */
@@ -26,7 +30,6 @@ CREATE OR ALTER PROCEDURE [$(Schema)].[$(Prefix)CAN_LatestImport]
     @Parser     VARCHAR(30),
     @SourceCode VARCHAR(60)       = NULL,
     @AsOf       DATETIMEOFFSET(7) = NULL
-WITH EXECUTE AS OWNER   -- zapytanie dynamiczne: rola z samym EXECUTE nie ma SELECT na tabelach
 AS
 BEGIN
     SET NOCOUNT ON;

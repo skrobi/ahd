@@ -252,8 +252,10 @@ Parametry: `@Parser` (kod, np. `ACTUALS` – wszystkie jego źródła, `ACTUALS_
 `@SourceCode` (jedno źródło) i `@AsOf` (stan na moment – pliki zaimportowane do tej chwili). Nocny import w kilku
 partiach daje komplet: każdy plik w wersji z ostatniej partii, która go przyniosła; plik, którego RABIT nie
 wygenerował ponownie, zostaje w poprzedniej wersji (O38); w trakcie importu wynik łączy pliki nowe i poprzednie
-(kolumny `ImportedAt`, `BatchId`). Procedura działa z prawami właściciela (`EXECUTE AS OWNER`) – rola `pzl_ev_user`
-potrzebuje tylko `EXECUTE` (nadawane przez migrację, gdy rola istnieje). Przykład:
+(kolumny `ImportedAt`, `BatchId`). Procedura działa z prawami wywołującego: potrzebny `EXECUTE` (migracja nadaje go roli
+`pzl_ev_user`, gdy rola istnieje) i `SELECT` na `META_Parser`, `META_SourceDefinition`, `META_SourceFile`, `CAN_Row`
+– jak aplikacja dziś. `EXECUTE AS OWNER` nie jest używane: właścicielem schematu bywa grupa AD, której nie da się
+„wykonać jako” (błąd 15517 przy migracji). Przykład:
 `EXEC [FINOP].[PZLEV_CAN_LatestImport] @Parser = 'ACTUALS', @SourceCode = 'ACTUALS_CES';`. Wymaga aplikacji 0.21.0.
 
 Aplikacja zapisuje dziś do tabel importu, konfiguracji importu, słowników globalnych, korekt mapowania, dziennika i problemów;
