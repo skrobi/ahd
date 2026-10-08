@@ -26,7 +26,7 @@ Role, zakres danych i egzekwowanie – `docs/uprawnienia.md`.
 |---|---|---|
 | **Pulpit** | karty projektów ze stanem bieżącego przebiegu, „Wymaga uwagi”, ostatnie zdarzenia (F07) | przejście do projektu / przebiegu, nowy projekt |
 | **Import** | import źródeł, historia importów, decyzje dla plików (F05) | importuj |
-| **Projekty** | lista projektów: typ, rozmiar nakładki Performance Objectives, aktywny przebieg, folder | nowy projekt |
+| **Projekty** | lista projektów: kod, nazwa, typ, aktywny przebieg, folder – sam odczyt projektów (nakładka, gotowość i mapowanie – na ekranie projektu) | nowy projekt |
 | **Projekt** | zakładki: Wskaźniki (sumy projektu, miejsce na wskaźniki EV, gotowość F02 zwinięta; znacznik gotowości w nagłówku), Struktura (nakładka z rozwinięciem P1S, WP, CAM, budżet i daty – `docs/performance-objectives.md`, rozdz. 4.2), Słowniki projektu, Przebiegi, Foldery | edycja w komórkach struktury (zapis od razu); dołożenie elementów z kolejnego eksportu SAP; raport kosztów projektu do Excela (`docs/model-danych.md`, migracja 013); nowy przebieg; pobierz / wczytaj słowniki z Excela |
 | **Kreator projektu** | 5 kroków (F01) | utwórz projekt |
 | **Przebiegi** | wszystkie przebiegi wszystkich projektów: tydzień, czy zamykający, stan, osoba | przejście do przebiegu |

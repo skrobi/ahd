@@ -23,14 +23,6 @@
                 <DataGridTextColumn Header="Kod" Binding="{Binding Code}" FontWeight="SemiBold" />
                 <DataGridTextColumn Header="Nazwa" Binding="{Binding Name}" Width="*" />
                 <DataGridTextColumn Header="Typ" Binding="{Binding Type}" />
-                <DataGridTextColumn Header="Performance Objectives" Binding="{Binding Objectives}" />
-                <DataGridTemplateColumn Header="Gotowość">
-                    <DataGridTemplateColumn.CellTemplate>
-                        <DataTemplate>
-                            <ContentControl Content="{Binding Readiness}" Margin="4,2" />
-                        </DataTemplate>
-                    </DataGridTemplateColumn.CellTemplate>
-                </DataGridTemplateColumn>
                 <DataGridTextColumn Header="Aktywny przebieg" Binding="{Binding ActiveRun}" />
                 <DataGridTextColumn Header="Folder" Binding="{Binding Folder}" />
                 <DataGridTemplateColumn>
