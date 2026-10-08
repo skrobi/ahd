@@ -17,6 +17,9 @@ namespace PzlEv.Tests.TestSupport;
 public sealed class TestDatabase : IDisposable
 {
     public const string Variable = "PZLEV_TEST_SQL";
+
+    /// <summary>„0” – testy SQL na bazie z pzl-ev.json wyłączone (build.cmd bez parametru sql – na zdalnej bazie TEST trwają długo).</summary>
+    public const string Enabled = "PZLEV_SQL_TESTS";
     public const string Schema = "FINOP";
 
     private static readonly object Ddl = new();
@@ -41,6 +44,9 @@ public sealed class TestDatabase : IDisposable
     {
         if (Environment.GetEnvironmentVariable(Variable) is { Length: > 0 } value)
             return (value, $"zmienna {Variable}");
+
+        if (Environment.GetEnvironmentVariable(Enabled) == "0")
+            return (null, "Testy SQL pominięte (build.cmd bez parametru sql) – uruchom build.cmd sql albo dotnet test (app/README.md)");
 
         // Baza aplikacji (wzór pzl-ev.json w katalogu testów) – tylko środowisko TEST, nigdy PROD.
         AppConfig config;

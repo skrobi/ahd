@@ -217,7 +217,10 @@ Testy magazynów i serwisów (import, administracja, słowniki, Pulpit, migracje
 wersji w pamięci. Domyślnie łączą się z tą samą bazą i tym samym kontem AD co aplikacja – sekcja
 `Environments.TEST.Sql` wzoru `app/pzl-ev.json` (tylko gdy `Env` = `TEST`; PROD nigdy). Inna baza (np. lokalny SQL
 Server) – zmienna środowiskowa `PZLEV_TEST_SQL` z ciągiem połączenia, ma pierwszeństwo. Gdy baza jest niedostępna
-(np. poza siecią LM), testy SQL są pomijane z powodem w wyniku testów. Konto musi mieć prawo zakładania i usuwania
+(np. poza siecią LM), testy SQL są pomijane z powodem w wyniku testów. Na zdalnej bazie TEST pełny przebieg testów SQL trwa
+kilkadziesiąt minut (każdy test zakłada swoje tabele migracjami), dlatego `build.cmd` wykonuje je tylko na żądanie –
+`build.cmd sql` – albo przy ustawionej `PZLEV_TEST_SQL`; bez tego testy SQL są pominięte (zmienna `PZLEV_SQL_TESTS=0`),
+a testy logiki działają zawsze. `dotnet test` uruchomione ręcznie wykonuje testy SQL. Konto musi mieć prawo zakładania i usuwania
 tabel i procedur w schemacie `FINOP` bazy testowej (jak przy migracji); schematów testy nie zakładają. Każdy test zakłada w schemacie `FINOP` tabele z losową sygnaturą (`T…_`)
 i usuwa je po sobie – nie dotyka tabel aplikacji (`PZLEV_*`).
 Test wydajności importu (`ImportPerformanceTests`, plik ACTUALS z powtórzonych wierszy wzorcowych) działa tylko ze
