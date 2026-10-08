@@ -260,4 +260,59 @@ public sealed class ProjectStoreAndServiceTests : IDisposable
         Assert.Equal(("technolodzy – zmiana", "AC-CAB.6.38.02.01", 2), (node.Name, node.LegacyWbs, node.Version));
         Assert.False(_service.SaveStructureEdit("M28", inputs, Row("4D06WP000002"), new Dictionary<string, string?> { [StructureEdits.Name] = " " }).Saved);
     }
+
+    [SqlFact]
+    public void Project_dictionaries_are_edited_in_table_and_cost_category_changes_stay_in_project()
+    {
+        Assert.True(_store.Create("M28", "M28", ProjectTypes.Internal, Objectives()).Success);
+        var context = _service.Context("M28", _store.Objectives("M28"), null, _service.Mapping());
+        static Dictionary<string, string?> Category(string element, string category) =>
+            new() { ["Numer elementu kosztowego"] = element, ["Opis"] = "opis", ["Obszar"] = "A", ["Cost Category"] = category };
+        var globalSpec = GlobalDictionaries.Get(GlobalDictionaries.CostCategory);
+        var dictionaries = new DictionaryService(_dictionaries, new SqlJournal(_database!.Sql, _services.Clock, _services.User));
+        Assert.Equal(SaveStatus.Saved, dictionaries.Save(globalSpec,
+            [new DictRow(null, null, Category("57100000", "Material")), new DictRow(null, null, Category("61000000", "Labor"))], [], confirmWarnings: true).Status);
+
+        // Cost Category projektu: na początku same pozycje globalne (dziedziczone).
+        var rows = _service.EditableRows(GlobalDictionaries.CostCategory, "M28");
+        Assert.All(rows, r => Assert.True(r.Inherited));
+        Assert.Equal(2, rows.Count);
+
+        // Zmiana jednej linii – zapis jako zmiana projektu (wiersz bez RowId), słownik globalny bez zmian.
+        var changed = rows.Single(r => r.Row["Numer elementu kosztowego"] == "0061000000").Row;
+        var values = changed.Values.ToDictionary(p => p.Key, p => p.Value);
+        values["Cost Category"] = "Subcontract";
+        var saved = _service.SaveDictionary(GlobalDictionaries.CostCategory, context, [new DictRow(null, null, values)], [], "M28", confirmWarnings: false);
+        Assert.Equal(SaveStatus.Saved, saved.Status);
+        rows = _service.EditableRows(GlobalDictionaries.CostCategory, "M28");
+        Assert.Equal([("0057100000", "Material", true), ("0061000000", "Subcontract", false)],
+            rows.Select(r => (r.Row["Numer elementu kosztowego"], r.Row["Cost Category"], r.Inherited)));
+        Assert.Equal(["Material", "Labor"], _dictionaries.Current(GlobalDictionaries.CostCategory).Select(r => r.Values["Cost Category"]));
+
+        // Usunięcie zmiany projektu – wraca pozycja globalna.
+        var own = rows.Single(r => !r.Inherited).Row;
+        Assert.Equal(SaveStatus.Saved, _service.SaveDictionary(GlobalDictionaries.CostCategory, context, [], [own], "M28").Status);
+        rows = _service.EditableRows(GlobalDictionaries.CostCategory, "M28");
+        Assert.Equal([("0057100000", "Material"), ("0061000000", "Labor")], rows.Select(r => (r.Row["Numer elementu kosztowego"], r.Row["Cost Category"])));
+        Assert.All(rows, r => Assert.True(r.Inherited));
+
+        // Wykluczenia: dodanie, zmiana, usunięcie.
+        static Dictionary<string, string?> Exclusion(string ce, string description) =>
+            new() { ["Cost Element"] = ce, ["WBS Element"] = null, ["Partner object"] = null, ["Opis"] = description };
+        Assert.Equal(SaveStatus.Saved, _service.SaveDictionary(ProjectDictionaries.Exclusions, context,
+            [new DictRow(null, null, Exclusion("57100000", "rozliczenie")), new DictRow(null, null, Exclusion("61000000", "IC"))], [], "M28").Status);
+        var exclusions = _service.EditableRows(ProjectDictionaries.Exclusions, "M28").Select(r => r.Row).ToList();
+        Assert.Equal(2, exclusions.Count);
+        var editedValues = exclusions[0].Values.ToDictionary(p => p.Key, p => p.Value);
+        editedValues["Opis"] = "rozliczenie – zmiana";
+        var edited = exclusions[0] with { Values = editedValues };
+        Assert.Equal(SaveStatus.Saved, _service.SaveDictionary(ProjectDictionaries.Exclusions, context, [edited], [exclusions[1]], "M28").Status);
+        var left = Assert.Single(_service.Rows(ProjectDictionaries.Exclusions, "M28"));
+        Assert.Equal(("0057100000", "rozliczenie – zmiana"), (left["Cost Element"], left["Opis"]));
+
+        // Błąd (brak opisu) – nic nie zapisano.
+        var rejected = _service.SaveDictionary(ProjectDictionaries.Exclusions, context, [new DictRow(null, null, Exclusion("70000000", ""))], [], "M28");
+        Assert.Equal(SaveStatus.Rejected, rejected.Status);
+        Assert.Single(_service.Rows(ProjectDictionaries.Exclusions, "M28"));
+    }
 }

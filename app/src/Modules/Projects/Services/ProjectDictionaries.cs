@@ -104,6 +104,20 @@ public static class ProjectDictionaries
         _ => throw new NotSupportedException($"Słownik {code} nie jest zapisywany w bazie"),
     };
 
+    /// <summary>
+    /// Cost Category projektu do edycji (zakładka „Słowniki projektu”): zmiany projektu i pozycje słownika globalnego,
+    /// których projekt nie zmienia (dziedziczone – Inherited). Zmiana pozycji dziedziczonej zapisuje się jako zmiana
+    /// projektu, usunięcie zmiany projektu przywraca pozycję globalną. Kolejność – według klucza.
+    /// </summary>
+    public static IReadOnlyList<(DictRow Row, bool Inherited)> WithGlobal(DictionarySpec spec, IReadOnlyList<DictRow> global, IReadOnlyList<DictRow> project)
+    {
+        var own = project.Select(r => spec.KeyOf(r.Values)).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        return project.Select(r => (r, false))
+            .Concat(global.Where(r => !own.Contains(spec.KeyOf(r.Values))).Select(r => (r, true)))
+            .OrderBy(x => spec.KeyOf(x.Item1.Values), StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
     private static DictionarySpec With(DictionarySpec spec, Func<IReadOnlyList<DictRow>, IEnumerable<Issue>> rules) => new()
     {
         Code = spec.Code, Name = spec.Name, Description = spec.Description, Columns = spec.Columns, Validity = spec.Validity,

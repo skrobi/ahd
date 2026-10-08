@@ -47,28 +47,14 @@
                         <Button Content="Odrzuć zmiany" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding Discard}" />
                         <Button Content="Zapisz" Style="{StaticResource BtnPrimary}" Command="{Binding Save}" />
                         <TextBlock Text="Filtr" VerticalAlignment="Center" Margin="16,0,6,0" Foreground="{StaticResource Muted}" />
-                        <TextBox Width="180" Style="{StaticResource Input}" Text="{Binding Filter, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBox Width="180" Style="{StaticResource Input}" Text="{Binding Table.Filter, UpdateSourceTrigger=PropertyChanged}" />
                     </StackPanel>
                 </DockPanel>
                 <partials:BusyBar DataContext="{Binding Busy}" />
                 <TextBlock Text="{Binding Status}" TextWrapping="Wrap" Margin="0,0,0,8" />
 
-                <!-- Wiersze słownika: kolumny budowane według opisu słownika (MasterDataView.xaml.cs) -->
-                <DataGrid x:Name="RowsGrid" Style="{StaticResource DataTable}" ItemsSource="{Binding RowsView}"
-                          SelectedItem="{Binding SelectedRow}" />
-                <TextBlock Text="* kolumna klucza" Style="{StaticResource MutedText}" FontSize="11" Margin="0,4,0,0" />
-
-                <!-- Wynik walidacji -->
-                <Border Style="{StaticResource Panel}" Margin="0,12,0,0"
-                        Visibility="{Binding HasIssues, Converter={StaticResource BoolToVisibility}}">
-                    <StackPanel>
-                        <TextBlock Text="Wynik walidacji" Style="{StaticResource H2}" FontSize="15" Margin="0,0,0,6" />
-                        <ItemsControl ItemsSource="{Binding Issues}" />
-                        <Button Content="Zapisz mimo ostrzeżeń" Style="{StaticResource BtnPrimary}" HorizontalAlignment="Left"
-                                Margin="0,8,0,0" Command="{Binding SaveWithWarnings}"
-                                Visibility="{Binding NeedsConfirmation, Converter={StaticResource BoolToVisibility}}" />
-                    </StackPanel>
-                </Border>
+                <!-- Wiersze słownika i wynik walidacji: wspólna tabela słownika (Shared/Views/Partials/DictionaryGrid) -->
+                <partials:DictionaryGrid DataContext="{Binding Table}" />
 
                 <!-- Podgląd wczytania z Excela -->
                 <Border Style="{StaticResource Panel}" Margin="0,12,0,0" BorderBrush="{StaticResource Accent}"
