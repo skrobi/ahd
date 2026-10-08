@@ -290,10 +290,10 @@ app/
     │   ├── Mapping/             Mapowanie CES ↔ P1S (F3): rozstrzyganie, drzewo P1S, korekty
     │   └── Runs/ Projects/ …    pozostałe moduły: plik wejścia + etapy, ekran zastępczy
     └── Shared/
-        ├── Utils/Ui/            MVVM, konwertery, okna wyboru pliku, kontrakt modułu (WPF)
+        ├── Utils/Ui/            MVVM, konwertery, okna wyboru pliku, kontrakt modułu, tabela słownika do edycji (WPF)
         ├── Utils/Config|Data|Files/  konfiguracja, baza MS SQL (Data/Sql), dziennik, problemy, Excel/CSV
         ├── Models/              modele wspólne; Db/ – tabele schematu; Sources/ – układy źródeł; Pipeline/ – kontrakt etapu
         └── Views/
             ├── Templates/       Theme.xaml – paleta z prototypu, style, tabele, układ strony
-            └── Partials/        pigułka statusu, wynik kontroli, nagłówek ekranu, ekran zastępczy
+            └── Partials/        pigułka statusu, wynik kontroli, nagłówek ekranu, ekran zastępczy, tabela słownika (DictionaryGrid)
 ```

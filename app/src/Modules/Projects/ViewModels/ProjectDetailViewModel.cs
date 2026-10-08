@@ -6,6 +6,7 @@ using PzlEv.Modules.Projects.Services;
 using PzlEv.Shared.Models;
 using PzlEv.Shared.Models.Dictionaries;
 using PzlEv.Shared.Utils.Ui.Dialogs;
+using PzlEv.Shared.Utils.Ui.Dictionaries;
 using PzlEv.Shared.Utils.Ui.Mvvm;
 using Serilog;
 
@@ -15,7 +16,8 @@ namespace PzlEv.Modules.Projects.ViewModels;
 /// Ekran Projekt (docs/funkcjonalnosc.md, rozdz. 2; F02) w zakładkach: Wskaźniki (sumy projektu, miejsce na wskaźniki
 /// EV, gotowość do przebiegu), Struktura (nakładka Performance Objectives z rozwinięciem P1S, WP, CAM, budżetem
 /// i datami – edycja w komórkach zapisywana od razu, dokładanie elementów z kolejnego eksportu SAP), Słowniki projektu
-/// (pobierz / wczytaj z Excela z podglądem różnic), Przebiegi, Foldery.
+/// (wybrany słownik w tabeli z edycją w komórkach jak na ekranie Słowniki; pobierz / wczytaj z Excela z podglądem
+/// różnic), Przebiegi, Foldery.
 /// </summary>
 public sealed class ProjectDetailViewModel : ObservableObject
 {
@@ -30,6 +32,7 @@ public sealed class ProjectDetailViewModel : ObservableObject
     private IReadOnlyDictionary<string, string> _owners = new Dictionary<string, string>();
     private bool _isEditingObjectives;
     private bool _isReady;
+    private DictionaryPanelViewModel? _selectedDictionary;
 
     public ProjectDetailViewModel(ProjectService service, IFileDialogs dialogs, BusyState busy, ProjectInfo project, Action back)
     {
@@ -60,6 +63,13 @@ public sealed class ProjectDetailViewModel : ObservableObject
             panel.Remove = new RelayCommand(_ => { panel.SetPreview(null, ""); Status = "Wczytanie anulowane – słownik bez zmian."; }, _ => panel.HasPreview && !Busy.IsBusy);
             Dictionaries.Add(panel);
         }
+        AddDictionaryRow = new RelayCommand(_ => { Table.AddRow(); Status = "Dodano wiersz – uzupełnij wartości i zapisz."; },
+            _ => Table.Spec is not null && !Busy.IsBusy);
+        RemoveDictionaryRow = new RelayCommand(_ => DoRemoveDictionaryRow(), _ => Table.SelectedRow is not null && !Busy.IsBusy);
+        SaveDictionary = new AsyncRelayCommand(() => DoSaveDictionary(confirmWarnings: false), () => Table.Spec is not null && !Busy.IsBusy);
+        Table.SaveWithWarnings = new AsyncRelayCommand(() => DoSaveDictionary(confirmWarnings: true), () => Table.NeedsConfirmation && !Busy.IsBusy);
+        DiscardDictionary = new AsyncRelayCommand(() => Reload(refreshMapping: false, discard: true), () => Table.HasPendingChanges && !Busy.IsBusy);
+        _selectedDictionary = Dictionaries.FirstOrDefault();
         _ = Reload(refreshMapping: false);
     }
 
@@ -105,6 +115,40 @@ public sealed class ProjectDetailViewModel : ObservableObject
 
     public ObservableCollection<DictionaryPanelViewModel> Dictionaries { get; } = [];
 
+    /// <summary>Słownik projektu pokazany w tabeli (zakładka „Słowniki projektu”).</summary>
+    public DictionaryPanelViewModel? SelectedDictionary
+    {
+        get => _selectedDictionary;
+        set
+        {
+            if (value is null || ReferenceEquals(value, _selectedDictionary))
+                return;
+            if (Table.HasPendingChanges || Busy.IsBusy)
+            {
+                Status = Busy.IsBusy ? "Poczekaj na zakończenie bieżącej operacji." : "Masz niezapisane zmiany słownika – zapisz albo odrzuć je przed zmianą słownika.";
+                OnPropertyChanged();
+                return;
+            }
+            _selectedDictionary = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(DictionaryHint));
+            _ = Reload(refreshMapping: false);
+        }
+    }
+
+    /// <summary>Wiersze wybranego słownika projektu – edycja w komórkach (wspólna tabela słownika).</summary>
+    public DictionaryTableViewModel Table { get; } = new();
+
+    public string DictionaryHint => _selectedDictionary?.Item.Code switch
+    {
+        ProjectDictionaries.WpCam or ProjectDictionaries.ScheduleBudget =>
+            "Ten sam słownik zmieniasz w zakładce Struktura (WP, CAM, budżet, daty) – zmiana w jednym miejscu jest widoczna w drugim.",
+        PzlEv.Shared.Utils.Dictionaries.GlobalDictionaries.CostCategory =>
+            "Pozycje ze słownika globalnego mają stan „globalny”. Zmiana wiersza zapisuje zmianę tylko dla tego projektu; usunięcie zmiany projektu przywraca wartość globalną.",
+        ProjectDictionaries.CasRates => "Zawartość słownika nie jest jeszcze ustalona (O37) – brak danych do edycji.",
+        _ => "Dodawaj, zmieniaj i usuwaj wiersze, potem „Zapisz” (ERROR blokuje zapis, WARNING wymaga potwierdzenia).",
+    };
+
     public Pill ReadinessPill { get => _readiness; private set => SetProperty(ref _readiness, value); }
 
     public string Status { get => _status; private set => SetProperty(ref _status, value); }
@@ -124,17 +168,27 @@ public sealed class ProjectDetailViewModel : ObservableObject
     public ICommand CancelObjectives { get; }
     public ICommand ExportCostReport { get; }
     public ICommand ExportDictionaries { get; }
+    public ICommand AddDictionaryRow { get; }
+    public ICommand RemoveDictionaryRow { get; }
+    public ICommand SaveDictionary { get; }
+    public ICommand DiscardDictionary { get; }
     public ICommand CreateFolders { get; }
     public ICommand RefreshMapping { get; }
 
     /// <summary>Stan projektu z bazy w jednym odczycie w tle: nakładka, mapowanie, gotowość, słowniki, struktura.</summary>
     private sealed record Snapshot(PoTree Tree, MappingInputs Mapping, IReadOnlyDictionary<string, string> Owners, List<Issue> Readiness,
-        IReadOnlyDictionary<string, (int Rows, string LastChange)> Dictionaries, ProjectStructure Structure, IReadOnlyList<PersonOption> Persons);
+        IReadOnlyDictionary<string, (int Rows, string LastChange)> Dictionaries, ProjectStructure Structure, IReadOnlyList<PersonOption> Persons,
+        IReadOnlyList<(DictRow Row, bool Inherited)>? Table);
 
-    /// <summary>Wczytuje stan projektu w tle (struktura zachowuje rozwinięcie i zaznaczenie).</summary>
-    private async Task Reload(bool refreshMapping)
+    /// <summary>
+    /// Wczytuje stan projektu w tle (struktura zachowuje rozwinięcie i zaznaczenie). Tabela wybranego słownika – tylko
+    /// bez niezapisanych zmian, chyba że discard (Odrzuć zmiany).
+    /// </summary>
+    private async Task Reload(bool refreshMapping, bool discard = false)
     {
         var codes = Dictionaries.Where(p => p.Item.Stored).Select(p => p.Item.Code).ToList();
+        var selected = _selectedDictionary;
+        var table = selected is { Item.Stored: true } && (discard || !Table.HasPendingChanges) ? selected.Item.Code : null;
         await Try(async () =>
         {
             var snapshot = await Busy.Run(refreshMapping ? "Odświeżanie mapowania CES ↔ P1S i struktury projektu…" : "Wczytywanie projektu, mapowania i struktury…", () =>
@@ -144,7 +198,8 @@ public sealed class ProjectDetailViewModel : ObservableObject
                 var wpCam = _service.Rows(ProjectDictionaries.WpCam, Code);
                 var structure = ProjectService.Structure(tree, mapping, wpCam, _service.Rows(ProjectDictionaries.ScheduleBudget, Code));
                 return new Snapshot(tree, mapping, _service.WbsOwners(Code), _service.Readiness(Project, tree, mapping),
-                    codes.ToDictionary(c => c, c => (_service.Rows(c, Code).Count, _service.LastChange(c, Code))), structure, _service.PersonOptions(wpCam));
+                    codes.ToDictionary(c => c, c => (_service.Rows(c, Code).Count, _service.LastChange(c, Code))), structure, _service.PersonOptions(wpCam),
+                    table is null ? null : _service.EditableRows(table, Code));
             });
             _saved = snapshot.Tree;
             _mapping = snapshot.Mapping;
@@ -157,6 +212,10 @@ public sealed class ProjectDetailViewModel : ObservableObject
             ShowKpis(snapshot.Structure.Summary);
             foreach (var panel in Dictionaries.Where(p => p.Item.Stored))
                 (panel.Rows, panel.LastChange) = snapshot.Dictionaries[panel.Item.Code];
+            if (ReferenceEquals(selected, _selectedDictionary) && (snapshot.Table is not null || selected is { Item.Stored: false }))
+                Table.Load(selected is { Item.Stored: true } ? ProjectDictionaries.Base(selected.Item.Code) : null, snapshot.Table ?? []);
+            if (discard)
+                Status = "Zmiany słownika odrzucone.";
             Readiness.Clear();
             foreach (var check in snapshot.Readiness)
                 Readiness.Add(check);
@@ -273,6 +332,11 @@ public sealed class ProjectDetailViewModel : ObservableObject
 
     private async Task LoadDictionary(DictionaryPanelViewModel panel)
     {
+        if (Table.HasPendingChanges)
+        {
+            Status = "Masz niezapisane zmiany słownika – zapisz albo odrzuć je przed wczytaniem z Excela.";
+            return;
+        }
         var path = _dialogs.OpenExcel($"Wczytaj słownik „{panel.Name}” projektu {Code}");
         if (path is null)
             return;
@@ -300,6 +364,46 @@ public sealed class ProjectDetailViewModel : ObservableObject
             if (outcome.Status == SaveStatus.Saved)
                 panel.SetPreview(null, "");
             await Reload(refreshMapping: false);
+            Status = $"{panel.Name}: {outcome.Message}";
+        });
+    }
+
+    private void DoRemoveDictionaryRow()
+    {
+        var inherited = Table.SelectedRow?.IsInherited == true;
+        Status = Table.RemoveSelected()
+            ? _selectedDictionary?.Item.Code == PzlEv.Shared.Utils.Dictionaries.GlobalDictionaries.CostCategory
+                ? "Zmiana projektu usunięta z tabeli – po zapisie obowiązuje pozycja ze słownika globalnego."
+                : "Wiersz usunięty z tabeli – zapisz, aby zamknąć jego obowiązywanie (historia zostaje)."
+            : inherited
+                ? "To pozycja słownika globalnego – w projekcie możesz ją zmienić (zapis tworzy zmianę projektu); usuwa się ją na ekranie Słowniki."
+                : "";
+    }
+
+    /// <summary>Zapis tabeli wybranego słownika z regułami projektu; po zapisie – odświeżenie struktury i liczników.</summary>
+    private async Task DoSaveDictionary(bool confirmWarnings)
+    {
+        var panel = _selectedDictionary!;
+        var context = Context(panel.Item.Code);
+        var (working, removed) = Table.State();
+        await Try(async () =>
+        {
+            var outcome = await Busy.Run($"Zapisywanie słownika „{panel.Name}”…",
+                () => _service.SaveDictionary(panel.Item.Code, context(), working, removed, Code, confirmWarnings));
+            switch (outcome.Status)
+            {
+                case SaveStatus.Saved:
+                case SaveStatus.NoChanges:
+                    await Reload(refreshMapping: false, discard: true);
+                    Table.SetIssues(outcome.Issues);
+                    break;
+                case SaveStatus.NeedsConfirmation:
+                    Table.SetIssues(outcome.Issues, needsConfirmation: true);
+                    break;
+                default:
+                    Table.SetIssues(outcome.Issues);
+                    break;
+            }
             Status = $"{panel.Name}: {outcome.Message}";
         });
     }

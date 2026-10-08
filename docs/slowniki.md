@@ -59,9 +59,11 @@ Definicje źródeł i ich prefiksy są konfiguracją importu – `docs/zrodla-da
 
 - Słowniki projektu powstają w kreatorze projektu z plików Excel (szablon z elementami projektu – jeden
   plik z arkuszami albo osobne pliki / CSV) i są dalej utrzymywane w aplikacji (`docs/funkcjonalnosc.md`, F01, F03):
-  na ekranie Projekt w zakładce Słowniki projektu (Excel z podglądem różnic), a „WP i CAM” oraz „Harmonogram
-  i budżet” także w komórkach tabeli w zakładce Struktura – zapis od razu po zatwierdzeniu wiersza, z tą samą
-  walidacją i historią (`docs/performance-objectives.md`, rozdz. 4.2).
+  na ekranie Projekt w zakładce Słowniki projektu – lista słowników i tabela wybranego słownika z edycją
+  w komórkach jak na ekranie Słowniki (dodaj / zmień / usuń wiersz, „Zapisz” z walidacją, „Odrzuć zmiany”, filtr)
+  oraz pobranie i wczytanie z Excela z podglądem różnic. „WP i CAM” oraz „Harmonogram i budżet” zmienia się też
+  w komórkach tabeli w zakładce Struktura – to te same słowniki (zapis od razu po zatwierdzeniu wiersza, z tą samą
+  walidacją i historią; `docs/performance-objectives.md`, rozdz. 4.2).
 - Harmonogram i budżet mogą się zmieniać w trakcie projektu – każda zmiana jest w historii, a przebieg liczy
   na stanie z chwili przypięcia.
 
@@ -161,6 +163,9 @@ wpisu w Cost Category) – `docs/pipeline-fazy.md`, P2.
   `docs/zrodla-danych.md`, rozdz. 4) → Opis, Obszar, Cost Category. Początkowa zawartość – załącznik A.
 - **„Cost Category – zmiany w projekcie”** – opcjonalny słownik projektu; zmienia i dodaje pozycje, ma
   pierwszeństwo przed globalnym. **Słownik efektywny projektu = globalny + zmiany projektu.**
+- W zakładce Słowniki projektu tabela pokazuje słownik efektywny: pozycje globalne bez zmiany w projekcie mają stan
+  „globalny”. Zmiana takiej linii zapisuje się jako zmiana projektu (słownik globalny bez zmian); usunięcie zmiany
+  projektu przywraca pozycję globalną. Pozycji globalnej nie usuwa się w projekcie – tylko na ekranie Słowniki.
 - Numer elementu kosztowego z kosztów projektu bez wpisu w słowniku efektywnym naprawia się dodaniem pozycji
   w słowniku projektu.
 

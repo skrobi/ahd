@@ -109,22 +109,49 @@
                 </StackPanel>
             </TabItem>
 
-            <!-- Słowniki projektu -->
+            <!-- Słowniki projektu: lista słowników i tabela wybranego słownika z edycją w komórkach (jak ekran Słowniki) -->
             <TabItem Header="Słowniki projektu" Padding="12,4">
-                <StackPanel>
-                    <DockPanel Margin="0,0,0,8">
-                        <Button DockPanel.Dock="Right" Content="Pobierz słowniki (Excel)" Style="{StaticResource Btn}" Command="{Binding ExportDictionaries}" />
-                        <TextBlock Style="{StaticResource MutedText}" TextWrapping="Wrap" VerticalAlignment="Center" Margin="0,0,12,0"
-                                   Text="Pobierz, popraw w Excelu i wczytaj ponownie – przed zapisem zobaczysz różnice. WP i CAM oraz harmonogram i budżet można też zmieniać w zakładce Struktura." />
-                    </DockPanel>
-                    <ItemsControl ItemsSource="{Binding Dictionaries}">
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate>
-                                <views:DictionaryPanelView />
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-                </StackPanel>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="260" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+
+                    <StackPanel Margin="0,0,16,0">
+                        <Border Style="{StaticResource Panel}" Padding="8" VerticalAlignment="Top">
+                            <ListBox ItemsSource="{Binding Dictionaries}" SelectedItem="{Binding SelectedDictionary}"
+                                     BorderThickness="0" Background="Transparent">
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <StackPanel Width="220" Margin="0,4">
+                                            <TextBlock Text="{Binding Name}" FontWeight="Medium" TextWrapping="Wrap" />
+                                            <ContentControl Content="{Binding StatusPill}" HorizontalAlignment="Left" Margin="0,2,0,0" />
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                        </Border>
+                        <Button Content="Pobierz słowniki (Excel)" Style="{StaticResource Btn}" HorizontalAlignment="Left" Margin="0,10,0,0"
+                                Command="{Binding ExportDictionaries}"
+                                ToolTip="Wszystkie słowniki projektu w jednym skoroszycie – popraw i wczytaj ponownie (przed zapisem zobaczysz różnice)" />
+                    </StackPanel>
+
+                    <StackPanel Grid.Column="1">
+                        <!-- Stan słownika, wczytanie z Excela z podglądem różnic -->
+                        <views:DictionaryPanelView DataContext="{Binding SelectedDictionary}" />
+                        <TextBlock Text="{Binding Table.Spec.Description}" Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="0,0,0,4" />
+                        <TextBlock Text="{Binding DictionaryHint}" Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="0,0,0,8" />
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                            <Button Content="Dodaj wiersz" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding AddDictionaryRow}" />
+                            <Button Content="Usuń wiersz" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding RemoveDictionaryRow}" />
+                            <Button Content="Odrzuć zmiany" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding DiscardDictionary}" />
+                            <Button Content="Zapisz" Style="{StaticResource BtnPrimary}" Command="{Binding SaveDictionary}" />
+                            <TextBlock Text="Filtr" VerticalAlignment="Center" Margin="16,0,6,0" Foreground="{StaticResource Muted}" />
+                            <TextBox Width="180" Style="{StaticResource Input}" Text="{Binding Table.Filter, UpdateSourceTrigger=PropertyChanged}" />
+                        </StackPanel>
+                        <partials:DictionaryGrid DataContext="{Binding Table}" />
+                    </StackPanel>
+                </Grid>
             </TabItem>
 
             <!-- Przebiegi -->

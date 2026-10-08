@@ -198,6 +198,18 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
 
     public IReadOnlyList<DictRow> Rows(string dictionary, string code) => _dictionaries.Load(ProjectDictionaries.Base(dictionary), code);
 
+    /// <summary>
+    /// Wiersze słownika projektu do edycji w tabeli: Cost Category – zmiany projektu i pozycje globalne
+    /// (ProjectDictionaries.WithGlobal), pozostałe – wiersze projektu.
+    /// </summary>
+    public IReadOnlyList<(DictRow Row, bool Inherited)> EditableRows(string dictionary, string code)
+    {
+        if (dictionary != GlobalDictionaries.CostCategory)
+            return Rows(dictionary, code).Select(r => (r, false)).ToList();
+        var spec = ProjectDictionaries.Base(dictionary);
+        return ProjectDictionaries.WithGlobal(spec, _dictionaries.Load(spec), Rows(dictionary, code));
+    }
+
     /// <summary>Arkusz słownika w skoroszycie (nazwa jak w szablonie); null – plik bez takiego arkusza albo CSV.</summary>
     public static string? FindSheet(string path, ProjectDictionaryItem item) =>
         TabularFileReader.SheetNames(path).FirstOrDefault(s =>
@@ -320,8 +332,13 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
         return (true, messages.Count == 0 ? "Brak zmian." : $"Zapisano: {string.Join("; ", messages)}.");
     }
 
-    private SaveOutcome SaveDictionary(string dictionary, ProjectDictionaryContext context, IReadOnlyList<DictRow> working, IReadOnlyList<DictRow> removed, string code) =>
-        _dictionaries.Save(ProjectDictionaries.For(dictionary, context), working, removed, confirmWarnings: true, code);
+    /// <summary>
+    /// Zapis stanu słownika projektu (edycja w zakładce „Słowniki projektu”, zmiana w tabeli struktury) z regułami
+    /// projektu; working – wiersze projektu po edycji, removed – usunięte.
+    /// </summary>
+    public SaveOutcome SaveDictionary(string dictionary, ProjectDictionaryContext context, IReadOnlyList<DictRow> working, IReadOnlyList<DictRow> removed, string code,
+        bool confirmWarnings = true) =>
+        _dictionaries.Save(ProjectDictionaries.For(dictionary, context), working, removed, confirmWarnings, code);
 
     /// <summary>Komunikat z pierwszymi problemami (ERROR przed WARNING).</summary>
     private static string Describe(string message, IReadOnlyList<Issue> issues)
