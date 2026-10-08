@@ -82,7 +82,7 @@ public sealed class DictionaryService(IDictionaryStore store, IJournal journal)
         var columnIndex = new Dictionary<string, int>();
         foreach (var column in spec.Columns)
         {
-            var index = FindHeader(data.Headers, column.Name);
+            var index = new[] { column.Name }.Concat(column.Aliases ?? []).Select(n => FindHeader(data.Headers, n)).FirstOrDefault(i => i >= 0, -1);
             if (index >= 0)
                 columnIndex[column.Name] = index;
             else if (column.Key || column.Required)
@@ -91,14 +91,24 @@ public sealed class DictionaryService(IDictionaryStore store, IJournal journal)
         if (issues.Count > 0)
             return new ImportPreview(spec.Code, fileName, [], [], [], issues, [], []);
 
-        var current = Load(spec, project);
-        var currentByKey = current.GroupBy(r => spec.KeyOf(r.Values)).ToDictionary(g => g.Key, g => g.First());
-
         var fileRows = data.Rows
             .Select(cells => new DictRow(null, null, spec.Columns.ToDictionary(
                 c => c.Name, c => columnIndex.TryGetValue(c.Name, out var i) && i < cells.Length ? cells[i] : null)))
             .ToList();
-        var normalized = DictionaryValidator.Normalize(spec, fileRows, issues);
+        return PreviewRows(spec, fileRows, fileName, project);
+    }
+
+    /// <summary>
+    /// Podgląd zastąpienia zawartości słownika wierszami z innego źródła (plik, HR): nowe, zmienione, usunięte, walidacja.
+    /// Zapis – ApplyImport.
+    /// </summary>
+    public ImportPreview PreviewRows(DictionarySpec spec, IReadOnlyList<DictRow> sourceRows, string source, string? project = null)
+    {
+        var issues = new List<Issue>();
+        var fileName = source;
+        var current = Load(spec, project);
+        var currentByKey = current.GroupBy(r => spec.KeyOf(r.Values)).ToDictionary(g => g.Key, g => g.First());
+        var normalized = DictionaryValidator.Normalize(spec, sourceRows, issues);
 
         var working = new List<DictRow>();
         var added = new List<string>();

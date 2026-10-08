@@ -30,7 +30,7 @@ public sealed class ProjectDictionariesTests
         new() { ["Element P1S"] = element, ["WP"] = wp, ["CAM"] = cam, ["Cost Category"] = category };
 
     private static Dictionary<string, string?> Plan(string wp, string? hours, string? material, string? start = null, string? end = null) =>
-        new() { ["WP"] = wp, ["BAC HOURS"] = hours, ["BAC MATERIAL"] = material, ["Planowany Start"] = start, ["Planowany Koniec"] = end };
+        new() { ["WP"] = wp, ["BAC HOURS"] = hours, ["BAC MATERIAL"] = material, ["Baseline Start"] = start, ["Baseline Koniec"] = end };
 
     private static Dictionary<string, string?> Excl(string? ce, string? wbs, string? partner, string? description) =>
         new() { ["Cost Element"] = ce, ["WBS Element"] = wbs, ["Partner object"] = partner, ["Opis"] = description };

@@ -4,6 +4,7 @@ using System.ComponentModel;
 using System.Windows.Data;
 using System.Windows.Input;
 using PzlEv.Shared.Models.Dictionaries;
+using PzlEv.Shared.Utils.Data;
 using PzlEv.Shared.Utils.Dictionaries;
 using PzlEv.Shared.Models;
 using PzlEv.Shared.Utils.Ui.Dialogs;
@@ -28,11 +29,14 @@ public sealed class MasterDataViewModel : ObservableObject
     private string _status = "";
     private bool _needsConfirmation;
     private ImportPreview? _preview;
+    private readonly IHrSource? _hr;
 
-    public MasterDataViewModel(DictionaryService service, IFileDialogs dialogs)
+    /// <param name="hr">Pracownicy z PZLHRPROD (słownik Osoby); null – brak sekcji PzlHrProd w pzl-ev.json.</param>
+    public MasterDataViewModel(DictionaryService service, IFileDialogs dialogs, IHrSource? hr = null)
     {
         _service = service;
         _dialogs = dialogs;
+        _hr = hr;
         Dictionaries = GlobalDictionaries.All.Select(spec => new DictionaryItem(spec, 0)).ToList();
         RowsView = CollectionViewSource.GetDefaultView(Rows);
         RowsView.Filter = o => _filter.Length == 0 || o is DictRowViewModel row && row.Matches(_filter);
@@ -45,6 +49,7 @@ public sealed class MasterDataViewModel : ObservableObject
         Export = new AsyncRelayCommand(DoExport, () => Spec is not null && !Busy.IsBusy);
         Import = new AsyncRelayCommand(DoImport, () => Spec is not null && _preview is null && !Busy.IsBusy);
         ApplyImport = new AsyncRelayCommand(DoApplyImport, () => _preview is { HasErrors: false, HasChanges: true } && !Busy.IsBusy);
+        ImportFromHr = new AsyncRelayCommand(DoImportFromHr, () => IsPersons && _preview is null && !Busy.IsBusy);
         CancelImport = new RelayCommand(_ => ClosePreview("Wczytanie anulowane – słownik bez zmian."), _ => _preview is not null && !Busy.IsBusy);
 
         SelectedDictionary = Dictionaries.FirstOrDefault();
@@ -103,6 +108,7 @@ public sealed class MasterDataViewModel : ObservableObject
             _selectedDictionary = value;
             OnPropertyChanged();
             OnPropertyChanged(nameof(Spec));
+            OnPropertyChanged(nameof(IsPersons));
             ColumnsChanged?.Invoke();
             ClosePreview(null);
             _ = Reload("");
@@ -168,6 +174,10 @@ public sealed class MasterDataViewModel : ObservableObject
     public ICommand Import { get; }
     public ICommand ApplyImport { get; }
     public ICommand CancelImport { get; }
+    public ICommand ImportFromHr { get; }
+
+    /// <summary>Wybrany słownik Osoby – „Wczytaj z HR”.</summary>
+    public bool IsPersons => Spec?.Code == GlobalDictionaries.Persons;
 
     private async Task Reload(string status)
     {
@@ -281,19 +291,46 @@ public sealed class MasterDataViewModel : ObservableObject
         await Try(async () =>
         {
             var preview = await Busy.Run("Wczytywanie i sprawdzanie pliku Excel…", () => _service.PreviewImport(spec, path));
-            _preview = preview;
-            PreviewLines.Clear();
-            AddPreviewLines("+", preview.Added);
-            AddPreviewLines("~", preview.Changed);
-            AddPreviewLines("−", preview.Removed);
-            PreviewIssues.Clear();
-            foreach (var issue in preview.Issues) PreviewIssues.Add(issue);
-            Status = preview.HasErrors
-                ? "Plik ma błędy (ERROR) – nie można go wczytać. Popraw plik i wczytaj ponownie."
-                : preview.HasChanges ? "Sprawdź różnice i zatwierdź wczytanie." : "Plik nie zawiera zmian względem słownika.";
-            OnPropertyChanged(nameof(HasPreview));
-            OnPropertyChanged(nameof(PreviewTitle));
+            ShowPreview(preview, "Plik");
         });
+    }
+
+    /// <summary>Słownik Osoby z PZLHRPROD (HR.ORG): podgląd różnic jak przy wczytaniu z Excela – zawartość zastępowana.</summary>
+    private async Task DoImportFromHr()
+    {
+        if (_hr is null)
+        {
+            Status = "Brak połączenia z PZLHRPROD – dodaj sekcję PzlHrProd w pzl-ev.json (Environments.<Env>.PzlHrProd: Server, Database, Schema).";
+            return;
+        }
+        if (HasPendingChanges)
+        {
+            Status = "Masz niezapisane zmiany – zapisz albo odrzuć je przed wczytaniem z HR.";
+            return;
+        }
+        var spec = Spec!;
+        await Try(async () =>
+        {
+            var preview = await Busy.Run("Wczytywanie pracowników z PZLHRPROD (HR.ORG)…", () =>
+                _service.PreviewRows(spec, GlobalDictionaries.PersonRows(_hr.Persons()), "PZLHRPROD HR.ORG"));
+            ShowPreview(preview, "Dane z HR");
+        });
+    }
+
+    private void ShowPreview(ImportPreview preview, string source)
+    {
+        _preview = preview;
+        PreviewLines.Clear();
+        AddPreviewLines("+", preview.Added);
+        AddPreviewLines("~", preview.Changed);
+        AddPreviewLines("−", preview.Removed);
+        PreviewIssues.Clear();
+        foreach (var issue in preview.Issues) PreviewIssues.Add(issue);
+        Status = preview.HasErrors
+            ? $"{source} ma błędy (ERROR) – nie można wczytać."
+            : preview.HasChanges ? "Sprawdź różnice i zatwierdź wczytanie." : $"{source} nie zawiera zmian względem słownika.";
+        OnPropertyChanged(nameof(HasPreview));
+        OnPropertyChanged(nameof(PreviewTitle));
     }
 
     private async Task DoApplyImport()

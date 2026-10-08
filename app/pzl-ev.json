@@ -30,6 +30,15 @@
         "Database": "PZLPROD",
         "Schema": "LOG",
         "TrustServerCertificate": false
+      },
+
+      // Baza PZLHRPROD (pracownicy: [HR].[ORG]) – tylko odczyt, kontem AD użytkownika; źródło słownika Osoby
+      // („Wczytaj z HR” na ekranie Słowniki). Serwer do potwierdzenia. Bez tej sekcji przycisk pokazuje, czego brakuje.
+      "PzlHrProd": {
+        "Server": "splmcd03",
+        "Database": "PZLHRPROD",
+        "Schema": "HR",
+        "TrustServerCertificate": false
       }
     },
 
@@ -47,6 +56,12 @@
         "Server": "splmcd03",
         "Database": "PZLPROD",
         "Schema": "LOG",
+        "TrustServerCertificate": false
+      },
+      "PzlHrProd": {
+        "Server": "splmcd03",
+        "Database": "PZLHRPROD",
+        "Schema": "HR",
         "TrustServerCertificate": false
       }
     }

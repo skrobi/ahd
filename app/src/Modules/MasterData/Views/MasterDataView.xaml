@@ -37,6 +37,9 @@
                     <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
                         <Button Content="Pobierz do Excela" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding Export}" />
                         <Button Content="Wczytaj z Excela" Style="{StaticResource Btn}" Command="{Binding Import}" />
+                        <Button Content="Wczytaj z HR" Style="{StaticResource Btn}" Margin="8,0,0,0" Command="{Binding ImportFromHr}"
+                                Visibility="{Binding IsPersons, Converter={StaticResource BoolToVisibility}}"
+                                ToolTip="Pracownicy z PZLHRPROD (HR.ORG) – podgląd różnic przed zapisem; zawartość słownika zostaje zastąpiona" />
                     </StackPanel>
                     <StackPanel Orientation="Horizontal">
                         <Button Content="Dodaj wiersz" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding AddRow}" />

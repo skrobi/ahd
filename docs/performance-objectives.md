@@ -97,18 +97,25 @@ i budżetem (`StructureBuilder`).
   węzła (ten element jest pod swoim węzłem), więc każdy element P1S występuje raz. Element ze słownika „WP i CAM”,
   którego nie ma w `LOG.WBS` (np. bez PZLPROD), jest pod wierszem o najdłuższym pasującym kodzie, a bez niego –
   w grupie „Elementy P1S spoza struktury”.
-- **Kolumny:** Nazwa (drzewo, zamrożona), Element CES, P1S, WP, CAM, Cost Category, BAC HOURS, BAC MATERIAL, Start,
-  Koniec, Braki. Kolumny mają stałą szerokość – przy kolejnych kolumnach tabela przewija się w poziomie. WP nie jest
-  osobnym poziomem drzewa: WP przypisuje się do elementu P1S, który wskażą finansiści (wiersz z kodem P1S).
+- **Kolumny:** Nazwa (drzewo, zamrożona), Element CES i P1S (domyślnie schowane – „+” / „−” w nagłówku Nazwa, jak
+  grupowanie kolumn w Excelu), WP (checkbox), CAM (lista osób), BAC HOURS, BAC MATERIAL, Baseline Start, Baseline Koniec
+  (RRRR-MM-DD), Braki. Kolumny mają stałą szerokość – przy kolejnych kolumnach tabela przewija się w poziomie. Za BAC
+  MATERIAL nie ma na razie kolumn (dawna Cost Category zniknęła z tabeli – zostaje w słowniku „WP i CAM”; co ma tu być –
+  do ustalenia).
+- **WP** to znacznik elementu P1S (wiersz z kodem P1S), który wskażą finansiści: zaznaczony element jest pakietem pracy
+  i ma mieć koszty i budżet. Kodem nowego WP jest kod elementu P1S (WP z wcześniej wczytanego słownika zachowuje swój
+  kod). WP nie jest osobnym poziomem drzewa.
+- **CAM** wybiera się z listy osób (słownik Osoby wczytywany z HR – `docs/slowniki.md`, rozdz. 2): zapisywany jest USRID,
+  wyświetlane imię i nazwisko. CAM wpisany wcześniej spoza słownika jest na liście pod swoją wartością.
 - **Sumy:** budżet i daty wiersza obejmują poddrzewo, każdy WP liczony raz; braki – element nakładki bez WP,
   WP bez budżetu.
 - **Edycja w komórkach** (zapis od razu po zatwierdzeniu wiersza – Enter albo przejście do innego wiersza, bez
-  osobnego „Zapisz”; Esc cofa): nazwa i `Legacy WBS` węzła → nakładka; WP, CAM, Cost Category wiersza z kodem P1S →
-  „WP i CAM” (klucz – kod P1S; puste wszystkie trzy – przypisanie usunięte); BAC HOURS, BAC MATERIAL, Start, Koniec
-  wiersza, którego sumy to jego własny WP → „Harmonogram i budżet” (klucz – WP). Walidacja jak przy zapisie słownika:
-  ERROR blokuje zapis (zmiany zostają w wierszu, komunikat nad tabelą), WARNING nie wstrzymuje. Zmiana WP przenosi
-  budżet starego WP na nowy, gdy stary nie jest już przypisany do innego elementu. Kolumny zablokowane do edycji –
-  lista `StructureEdits.Locked` (do ustalenia).
+  osobnego „Zapisz”; Esc cofa): nazwa i `Legacy WBS` węzła → nakładka; WP i CAM wiersza z kodem P1S → „WP i CAM”
+  (klucz – kod P1S; zaznaczenie WP albo wybór CAM tworzy przypisanie, odznaczenie WP je usuwa razem z budżetem WP, jeśli
+  WP nie jest przypisany do innego elementu; WP wymaga CAM – zaznacz WP i wybierz CAM przed opuszczeniem wiersza);
+  BAC HOURS, BAC MATERIAL, Baseline Start, Baseline Koniec wiersza, którego sumy to jego własny WP → „Harmonogram
+  i budżet” (klucz – WP). Walidacja jak przy zapisie słownika: ERROR blokuje zapis (zmiany zostają w wierszu, komunikat
+  nad tabelą), WARNING nie wstrzymuje. Kolumny zablokowane do edycji – lista `StructureEdits.Locked` (do ustalenia).
 
 ---
 

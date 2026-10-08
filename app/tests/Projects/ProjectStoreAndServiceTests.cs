@@ -226,31 +226,32 @@ public sealed class ProjectStoreAndServiceTests : IDisposable
             _service.Rows(ProjectDictionaries.WpCam, "M28"), _service.Rows(ProjectDictionaries.ScheduleBudget, "M28")).Rows.Single(r => r.WbsElement == wbs);
 
         // Nowy WP bez CAM – ERROR (CAM wymagany), nic nie zapisano.
-        var missing = _service.SaveStructureEdit("M28", inputs, Row("4D06WP000001"), new Dictionary<string, string?> { [StructureEdits.Wp] = "WP-1" });
+        var missing = _service.SaveStructureEdit("M28", inputs, Row("4D06WP000001"), new Dictionary<string, string?> { [StructureEdits.Wp] = "true" });
         Assert.False(missing.Saved);
         Assert.Contains("CAM", missing.Message);
         Assert.Empty(_service.Rows(ProjectDictionaries.WpCam, "M28"));
 
         var assigned = _service.SaveStructureEdit("M28", inputs, Row("4D06WP000001"),
-            new Dictionary<string, string?> { [StructureEdits.Wp] = "WP-1", [StructureEdits.Cam] = "Anna Nowak" });
+            new Dictionary<string, string?> { [StructureEdits.Wp] = "true", [StructureEdits.Cam] = "e123456" });
         Assert.True(assigned.Saved, assigned.Message);
         var wp = Assert.Single(_service.Rows(ProjectDictionaries.WpCam, "M28"));
-        Assert.Equal(("AC-CAB.6.38.01", "WP-1", "Anna Nowak"), (wp["Element P1S"], wp["WP"], wp["CAM"]));
+        Assert.Equal(("AC-CAB.6.38.01", "AC-CAB.6.38.01", "e123456"), (wp["Element P1S"], wp["WP"], wp["CAM"]));
+        Assert.Equal([new PersonOption("e123456", "e123456")], _service.PersonOptions(_service.Rows(ProjectDictionaries.WpCam, "M28")));   // CAM spoza słownika Osoby
 
         Assert.True(_service.SaveStructureEdit("M28", inputs, Row("4D06WP000001"),
             new Dictionary<string, string?> { [StructureEdits.BacHours] = "12,5", [StructureEdits.Start] = "2026-01-05" }).Saved);
         var budget = Assert.Single(_service.Rows(ProjectDictionaries.ScheduleBudget, "M28"));
-        Assert.Equal(("WP-1", "12.5", "2026-01-05"), (budget["WP"], budget["BAC HOURS"], budget["Planowany Start"]));
+        Assert.Equal(("AC-CAB.6.38.01", "12.5", "2026-01-05"), (budget["WP"], budget["BAC HOURS"], budget["Baseline Start"]));
         Assert.Equal(12.5m, Row("4D06WP000001").BacHours);
 
         var negative = _service.SaveStructureEdit("M28", inputs, Row("4D06WP000001"), new Dictionary<string, string?> { [StructureEdits.BacHours] = "-1" });
         Assert.False(negative.Saved);
         Assert.Contains("ujemny", negative.Message);
 
-        // Zmiana WP – budżet przechodzi na nowy WP (stary nie jest już przypisany).
-        Assert.True(_service.SaveStructureEdit("M28", inputs, Row("4D06WP000001"), new Dictionary<string, string?> { [StructureEdits.Wp] = "WP-2" }).Saved);
-        Assert.Equal(("WP-2", "12.5"), (Assert.Single(_service.Rows(ProjectDictionaries.ScheduleBudget, "M28"))["WP"],
-            _service.Rows(ProjectDictionaries.ScheduleBudget, "M28")[0]["BAC HOURS"]));
+        // Odznaczenie WP – przypisanie i budżet WP usunięte.
+        Assert.True(_service.SaveStructureEdit("M28", inputs, Row("4D06WP000001"), new Dictionary<string, string?> { [StructureEdits.Wp] = "false" }).Saved);
+        Assert.Empty(_service.Rows(ProjectDictionaries.WpCam, "M28"));
+        Assert.Empty(_service.Rows(ProjectDictionaries.ScheduleBudget, "M28"));
 
         var renamed = _service.SaveStructureEdit("M28", inputs, Row("4D06WP000002"),
             new Dictionary<string, string?> { [StructureEdits.Name] = "technolodzy – zmiana", [StructureEdits.P1s] = "AC-CAB.6.38.02.01" });

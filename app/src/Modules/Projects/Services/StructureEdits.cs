@@ -56,17 +56,44 @@ public static class StructureEdits
         CostCategory => "Cost Category",
         BacHours => "BAC HOURS",
         BacMaterial => "BAC MATERIAL",
-        Start => "Planowany Start",
-        Finish => "Planowany Koniec",
+        Start => "Baseline Start",
+        Finish => "Baseline Koniec",
         _ => throw new ArgumentOutOfRangeException(nameof(column), column, null),
     };
 
     /// <summary>
-    /// „WP i CAM” po zmianie przypisania elementu P1S: wiersz elementu zmieniony albo dodany; wszystkie pola puste –
-    /// wiersz usunięty. Zwraca stan do zapisu (DictionaryService.Save).
+    /// „WP i CAM” po zmianie w wierszu elementu P1S. WP to znacznik (Wp = "true" / "false"): zaznaczenie – element jest
+    /// pakietem pracy, który ma mieć koszty i budżet (kod WP = kod elementu; dotychczasowy kod WP zostaje); odznaczenie –
+    /// przypisanie usuwane (WP, CAM, Cost Category). Wybór CAM w wierszu bez WP zaznacza WP. Zwraca stan do zapisu
+    /// (DictionaryService.Save).
     /// </summary>
-    public static (List<DictRow> Working, List<DictRow> Removed) WpCam(IReadOnlyList<DictRow> rows, string element, IReadOnlyDictionary<string, string?> changes) =>
-        Change(rows, r => MappingKeys.Key(r["Element P1S"]) == MappingKeys.Key(element), "Element P1S", element, WpCamColumns, changes);
+    public static (List<DictRow> Working, List<DictRow> Removed) WpCam(IReadOnlyList<DictRow> rows, string element, IReadOnlyDictionary<string, string?> changes)
+    {
+        var index = rows.ToList().FindIndex(r => MappingKeys.Key(r["Element P1S"]) == MappingKeys.Key(element));
+        var existingWp = index >= 0 ? rows[index]["WP"] : null;
+        var values = new Dictionary<string, string?>();
+        var cleared = changes.TryGetValue(Wp, out var flag) && !IsChecked(flag);
+        if (cleared)
+        {
+            values[Wp] = null;
+            values[Cam] = null;
+            values[CostCategory] = null;
+        }
+        else
+        {
+            if (changes.TryGetValue(Cam, out var cam))
+                values[Cam] = cam;
+            if (changes.TryGetValue(CostCategory, out var category))
+                values[CostCategory] = category;
+            if (IsChecked(flag) || values.Count > 0)
+                values[Wp] = existingWp ?? element;
+        }
+        return Change(rows, r => MappingKeys.Key(r["Element P1S"]) == MappingKeys.Key(element), "Element P1S", element, WpCamColumns, values);
+    }
+
+    /// <summary>Wartość znacznika WP z tabeli (checkbox): "true" / "tak" / "1" – zaznaczony.</summary>
+    public static bool IsChecked(string? value) =>
+        value is not null && (value.Equals("true", StringComparison.OrdinalIgnoreCase) || value.Equals("tak", StringComparison.OrdinalIgnoreCase) || value == "1");
 
     /// <summary>„Harmonogram i budżet” po zmianie budżetu lub dat WP (wszystkie puste – wiersz usunięty).</summary>
     public static (List<DictRow> Working, List<DictRow> Removed) Schedule(IReadOnlyList<DictRow> rows, string wp, IReadOnlyDictionary<string, string?> changes) =>

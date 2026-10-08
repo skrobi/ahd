@@ -71,7 +71,15 @@ public sealed class StructureRowViewModel(StructureRow row) : INotifyPropertyCha
             else
                 _changes[column] = value;
             Notify("Item[]");
+            Notify(nameof(IsWp));
         }
+    }
+
+    /// <summary>Znacznik WP (checkbox): element P1S jest pakietem pracy z kosztami i budżetem.</summary>
+    public bool IsWp
+    {
+        get => StructureEdits.IsChecked(this[StructureEdits.Wp]);
+        set => this[StructureEdits.Wp] = value ? "true" : "false";
     }
 
     public bool CanEdit(string column) => StructureEdits.CanEdit(row, column);
@@ -81,6 +89,7 @@ public sealed class StructureRowViewModel(StructureRow row) : INotifyPropertyCha
     {
         _changes.Clear();
         Notify("Item[]");
+        Notify(nameof(IsWp));
     }
 
     public void BeginEdit() => _beforeEdit ??= new Dictionary<string, string?>(_changes);
@@ -94,6 +103,7 @@ public sealed class StructureRowViewModel(StructureRow row) : INotifyPropertyCha
             _changes[key] = value;
         _beforeEdit = null;
         Notify("Item[]");
+        Notify(nameof(IsWp));
     }
 
     public void EndEdit() => _beforeEdit = null;
@@ -103,7 +113,7 @@ public sealed class StructureRowViewModel(StructureRow row) : INotifyPropertyCha
         StructureEdits.Name => row.Name,
         "WbsElement" => row.WbsElement,
         StructureEdits.P1s => row.P1s,
-        StructureEdits.Wp => row.Wp,
+        StructureEdits.Wp => row.Wp is null ? "false" : "true",
         StructureEdits.Cam => row.Cam,
         StructureEdits.CostCategory => row.CostCategory,
         StructureEdits.BacHours => Amount(row.BacHours),

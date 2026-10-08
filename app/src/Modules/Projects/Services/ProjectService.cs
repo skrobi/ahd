@@ -130,9 +130,25 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
     /// <summary>Konta AD i nazwiska ze słownika globalnego Osoby (CAM wybierany z listy osób).</summary>
     public IReadOnlySet<string> Persons() =>
         dictionaries.Current(GlobalDictionaries.Persons)
-            .SelectMany(r => new[] { r.Values.GetValueOrDefault("Konto AD"), r.Values.GetValueOrDefault("Imię i nazwisko") })
+            .SelectMany(r => new[] { r.Values.GetValueOrDefault("USRID"), r.Values.GetValueOrDefault("Imię i nazwisko") })
             .OfType<string>()
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Lista wyboru CAM: osoby ze słownika Osoby (USRID → imię i nazwisko) oraz CAM już wpisane w „WP i CAM”, których
+    /// nie ma w słowniku (np. sprzed wczytania osób z HR) – żeby tabela je pokazała.
+    /// </summary>
+    public IReadOnlyList<PersonOption> PersonOptions(IEnumerable<DictRow> wpCam)
+    {
+        var persons = dictionaries.Current(GlobalDictionaries.Persons)
+            .Where(r => r.Values.GetValueOrDefault("USRID") is not null)
+            .Select(r => new PersonOption(r.Values["USRID"]!, r.Values.GetValueOrDefault("Imię i nazwisko") ?? r.Values["USRID"]!))
+            .ToList();
+        var known = persons.Select(p => p.Usrid).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        persons.AddRange(wpCam.Select(r => r["CAM"]).OfType<string>().Where(c => !known.Contains(c)).Distinct(StringComparer.OrdinalIgnoreCase)
+            .Select(c => new PersonOption(c, c)));
+        return persons.OrderBy(p => p.Name, StringComparer.CurrentCulture).ToList();
+    }
 
     // ---------- mapowanie CES ↔ P1S (strona P1S nakładki) ----------
 
