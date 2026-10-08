@@ -42,7 +42,8 @@ public static class DictionaryValidator
                 issues.Add(Issue.Error($"{column.Name}: pole wymagane", RowElement(i)));
         }
 
-        foreach (var group in rows.Select((r, i) => (Key: spec.KeyOf(r.Values), Index: i)).GroupBy(x => x.Key).Where(g => g.Count() > 1))
+        // Klucz bez względu na wielkość liter: „e123” i „E123” to ten sam wiersz.
+        foreach (var group in rows.Select((r, i) => (Key: spec.KeyOf(r.Values), Index: i)).GroupBy(x => x.Key, StringComparer.OrdinalIgnoreCase).Where(g => g.Count() > 1))
         {
             var lines = string.Join(", ", group.Select(x => x.Index + 1));
             issues.Add(Issue.Error($"Duplikat klucza {group.Key} (wiersze {lines})", "klucz"));

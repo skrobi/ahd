@@ -17,7 +17,7 @@ namespace PzlEv.Modules.Projects.Views;
 /// Kolumny tabeli struktury (stała szerokość – przy wielu kolumnach pojawia się suwak poziomy; pierwsza kolumna
 /// zamrożona) i edycja jak w Excelu: komórki spoza StructureEdits.CanEdit są zablokowane, zatwierdzenie wiersza
 /// (Enter, przejście do innego wiersza, wyjście z tabeli) zapisuje zmiany; zaznaczanie komórek, Ctrl+C / Ctrl+V,
-/// Delete, Ctrl+D, Alt+→ / Alt+← (rozwiń / zwiń). Kolumna klucza komórki – SortMemberPath (klucz StructureEdits).
+/// Delete, Ctrl+D, Ctrl+Z (cofnij wklejenie), Alt+→ / Alt+← (rozwiń / zwiń). Kolumna klucza komórki – SortMemberPath (klucz StructureEdits).
 /// </summary>
 public partial class StructureView : UserControl
 {
@@ -246,6 +246,11 @@ public partial class StructureView : UserControl
                     return cells.Skip(1).Select(c => (c.Row, c.Column, value));
                 })
                 .ToList());
+            e.Handled = true;
+        }
+        else if (ctrl && e.Key == Key.Z)
+        {
+            model.Undo.Execute(null);
             e.Handled = true;
         }
         else if (Keyboard.Modifiers == ModifierKeys.Alt && e.SystemKey is Key.Right or Key.Left && RowsGrid.CurrentItem is StructureRowViewModel row)

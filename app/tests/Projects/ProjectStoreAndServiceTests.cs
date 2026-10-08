@@ -396,6 +396,15 @@ public sealed class ProjectStoreAndServiceTests : IDisposable
         Assert.True(both.Saved, both.Message);
         Assert.Contains(_service.Rows(ProjectDictionaries.WpCam, "M28"), r => r["Element P1S"] == "AC-CAB.6.38.02.01" && r["CAM"] == "e123456");
 
+        // Cofnięcie wklejenia WP z budżetem: odznaczenie WP i wyczyszczenie budżetu w jednym wierszu – zapisane.
+        Assert.True(_service.SaveStructureEdit("M28", inputs, Row("4D06WP000001"), new Dictionary<string, string?> { [StructureEdits.BacHours] = "8" }).Saved);
+        Assert.Single(_service.Rows(ProjectDictionaries.ScheduleBudget, "M28"));
+        var undone = _service.SaveStructureEdit("M28", inputs, Row("4D06WP000001"),
+            new Dictionary<string, string?> { [StructureEdits.Wp] = "false", [StructureEdits.Cam] = null, [StructureEdits.BacHours] = null });
+        Assert.True(undone.Saved, undone.Message);
+        Assert.Empty(_service.Rows(ProjectDictionaries.ScheduleBudget, "M28"));
+        Assert.DoesNotContain(_service.Rows(ProjectDictionaries.WpCam, "M28"), r => r["Element P1S"] == "AC-CAB.6.38.01");
+
         // Usunięcie Legacy WBS razem ze zmianą WP – odrzucone (zapis osobno).
         var cleared = _service.SaveStructureEdit("M28", inputs, Row("4D06WP000002"), new Dictionary<string, string?>
             { [StructureEdits.P1s] = null, [StructureEdits.Cam] = "e999" });

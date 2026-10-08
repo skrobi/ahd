@@ -47,6 +47,8 @@ Słowniki, kreator projektu).
   dużych zmianach pierwsze 200 pozycji każdego rodzaju i liczba pozostałych); ta sama walidacja co przy zapisie
   w aplikacji; słownik z błędem ERROR nie zostaje zapisany. Numer zapisany w Excelu jako liczba
   jest uzupełniany zerami do długości klucza (np. `51105550` → `0051105550`).
+- **Klucz bez względu na wielkość liter:** „e123” i „E123” to ten sam wiersz – w jednym słowniku to duplikat,
+  a wczytanie pliku z inną pisownią zmienia istniejący wiersz (historia zostaje), nie dodaje nowego.
 - **Równoczesna edycja:** zapis jest krótką transakcją; jeśli wiersz zmienił ktoś inny od chwili otwarcia,
   zapis jest odrzucany z komunikatem i trzeba go ponowić na aktualnych danych.
 - Przebieg czyta słowniki w stanie na swój znacznik stanu (`docs/model-danych.md`, rozdz. 4.2); zmiana

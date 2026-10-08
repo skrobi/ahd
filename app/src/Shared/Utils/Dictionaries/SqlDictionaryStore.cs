@@ -71,7 +71,7 @@ public sealed class SqlDictionaryStore(SqlDatabase db, IClock clock, ICurrentUse
                     .Where(r => !touched.Contains(r.RowId))
                     .Select(r => r.Key)
                     .Concat(changes.Where(c => c.Kind != RowChangeKind.Removed).Select(c => c.Key))
-                    .GroupBy(k => k)
+                    .GroupBy(k => k, StringComparer.OrdinalIgnoreCase)   // klucz bez względu na wielkość liter (jak indeks w bazie)
                     .FirstOrDefault(g => g.Count() > 1);
                 if (duplicate is not null)
                     return StoreResult.Rejected($"Klucz {duplicate.Key} już istnieje w słowniku – odśwież dane.");

@@ -362,6 +362,8 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
         var budgetChanges = changes.Where(c => StructureEdits.ScheduleColumns.Contains(c.Key)).ToDictionary(c => c.Key, c => c.Value);
         if (budgetChanges.Count > 0)
         {
+            if (wp is null && budgetChanges.Values.All(string.IsNullOrWhiteSpace))
+                return (true, messages.Count == 0 ? "Brak zmian." : $"Zapisano: {string.Join("; ", messages)}.");   // WP usunięty razem z budżetem (np. cofnięcie wklejenia)
             if (wp is null)
                 return (false, string.Join("; ", messages.Append("budżet i daty wymagają WP w wierszu")));
             var (working, removed) = StructureEdits.Schedule(Rows(ProjectDictionaries.ScheduleBudget, code), wp, budgetChanges);
