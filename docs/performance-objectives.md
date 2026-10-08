@@ -45,11 +45,16 @@ czytane przy budowie nakładki), `docs/zrodla-danych.md` (struktura CES, drzewo 
   wczytanie z **Excela** (układ w rozdz. 5) albo budowa ręczna.
 - **Edycja w kreatorze:** dodawanie i przenoszenie elementów, tworzenie wirtualnych węzłów grupujących,
   zmiana nazw (rozdz. niżej – elementy w strukturze).
-- **Po utworzeniu projektu – tylko dokładanie** (ekran Projekt, zakładka Struktura, „Dołóż z Excela”): kolejny
-  eksport SAP dokłada elementy, których nakładka jeszcze nie ma (np. kolejne `Project definition` – projekt PZL-EV
-  „kabina” obejmuje kilkanaście projektów CES, uruchamianych z czasem), pod ich rodzica z pliku (istniejący element
-  albo nowy); istniejące węzły, węzły wirtualne i zmiany w aplikacji zostają bez zmian. W tabeli zmienia się nazwę
-  węzła i `Legacy WBS` (zapis od razu, z historią); przenoszenie i usuwanie – tylko w kreatorze.
+- **Po utworzeniu projektu** (ekran Projekt, zakładka Struktura):
+  - „Dołóż z Excela” – kolejny eksport SAP dokłada elementy, których nakładka jeszcze nie ma (np. kolejne
+    `Project definition` – projekt PZL-EV „kabina” obejmuje kilkanaście projektów CES, uruchamianych z czasem), pod
+    ich rodzica z pliku (istniejący element albo nowy); istniejące węzły, węzły wirtualne i zmiany w aplikacji
+    zostają bez zmian;
+  - „Edytuj Performance Objectives” – ten sam edytor co w kreatorze (przeciąganie, przesuwanie, poziom wyżej,
+    usuwanie, węzły wirtualne, elementy CES); „Wczytaj Excel” w edytorze **podmienia** strukturę strukturą z pliku
+    (elementy o tym samym `WBS element` zachowują identyfikator i historię; węzły wirtualne i ręczne zmiany nie są
+    przenoszone). Zapis „Zapisz Performance Objectives” tworzy nowe wersje zmienionych węzłów, „Anuluj” odrzuca zmiany;
+  - w tabeli struktury zmienia się nazwę węzła i `Legacy WBS` (zapis od razu, z historią).
 - **Element CES należy do co najwyżej jednej nakładki** (jednego projektu) – element z nakładki innego projektu
   jest odrzucany przy wczytaniu i zapisie (ERROR z kodem projektu, który go ma).
 - **Elementy w strukturze:** przenoszenie z poddrzewem (przeciągnięcie na inny węzeł albo na korzeń, zmiana kolejności,
@@ -148,4 +153,4 @@ tworzenia i utrzymania projektu.
 | # | Kwestia |
 |---|---|
 | O45 | Przypisywanie kosztów i zaawansowania do węzłów nakładki (z plików) – późniejszy etap |
-| ~~O47~~ | Odświeżenie z SAP – **rozstrzygnięte (2026-10-08):** po utworzeniu projektu eksport SAP tylko dokłada nowe elementy; węzły wirtualne i zmiany w aplikacji zostają (rozdz. 3) |
+| ~~O47~~ | Odświeżenie z SAP – **rozstrzygnięte (2026-10-08):** „Dołóż z Excela” dokłada nowe elementy i zachowuje węzły wirtualne i zmiany; podmiana z Excela w edytorze – świadomie bez nich (rozdz. 3) |

@@ -44,6 +44,34 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
 
     public PoImportResult ReadObjectives(string path) => PerformanceObjectivesReader.Read(path);
 
+    /// <summary>
+    /// Podmiana nakładki eksportem SAP (edytor nakładki – „Wczytaj Excel”): struktura z pliku; elementy o tym samym
+    /// WBS element zachowują identyfikator (historia węzła trwa). Węzły wirtualne i ręczne zmiany nie są przenoszone –
+    /// zachowuje je „Dołóż z Excela” (AddNew).
+    /// </summary>
+    public static PoTree Refresh(PoTree current, PoTree imported)
+    {
+        var existing = current.Nodes.Where(n => !n.IsVirtual && n.WbsElement is not null)
+            .GroupBy(n => n.WbsElement!, StringComparer.OrdinalIgnoreCase).ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
+        var keys = new Dictionary<long, long>();
+        var nodes = new List<PoNode>();
+        foreach (var node in imported.Nodes)
+        {
+            var copy = node.Copy();
+            if (node.WbsElement is not null && existing.TryGetValue(node.WbsElement, out var old))
+            {
+                copy = CopyWithKey(node, old.Key);
+                copy.NodeId = old.NodeId;
+                copy.Version = old.Version;
+            }
+            keys[node.Key] = copy.Key;
+            nodes.Add(copy);
+        }
+        foreach (var node in nodes)
+            node.ParentKey = node.ParentKey is { } p ? keys[p] : null;
+        return new PoTree(nodes);
+    }
+
     private static PoNode CopyWithKey(PoNode node, long key) => new()
     {
         Key = key, ParentKey = node.ParentKey, SortOrder = node.SortOrder, Level = node.Level, IsVirtual = node.IsVirtual,

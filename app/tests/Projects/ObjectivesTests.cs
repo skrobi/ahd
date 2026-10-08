@@ -90,4 +90,31 @@ public sealed class ObjectivesTests
         var issues = ObjectivesValidator.Validate(tree, new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["4d06wp.02"] = "S70I" });
         Assert.Contains(issues, i => i.Level == CheckLevel.Error && i.Element == "4D06WP.02" && i.Message.Contains("S70I"));
     }
+
+    [Fact]
+    public void Refresh_keeps_identity_of_existing_elements()
+    {
+        var current = PerformanceObjectivesReader.Read(TestServices.TestData("Projekty", "PO_M28.xlsx")).Tree;
+        long id = 100;
+        foreach (var node in current.Nodes)
+        {
+            node.NodeId = id++;
+            node.Version = 1;
+        }
+        var saved = new PoTree(current.Nodes.Select(n => new PoNode
+        {
+            Key = n.NodeId!.Value, NodeId = n.NodeId, Version = 1, WbsElement = n.WbsElement, Name = n.Name,
+            ParentKey = n.ParentKey is { } p ? current.Find(p)!.NodeId : null, SortOrder = n.SortOrder,
+        }));
+        var imported = PerformanceObjectivesReader.Read(TestServices.TestData("Projekty", "PO_M28.xlsx")).Tree;
+        imported.AddElement(null, "4D06WP.99", "nowy", null);
+
+        var refreshed = ProjectService.Refresh(saved, imported);
+
+        var ra = refreshed.Nodes.Single(n => n.WbsElement == "4D06WP.RA");
+        Assert.Equal(saved.Nodes.Single(n => n.WbsElement == "4D06WP.RA").NodeId, ra.NodeId);
+        Assert.Equal(saved.Nodes.Single(n => n.WbsElement == "4D06WP").Key, ra.ParentKey);
+        Assert.Null(refreshed.Nodes.Single(n => n.WbsElement == "4D06WP.99").NodeId);
+        Assert.Equal(Shape(imported), Shape(refreshed));
+    }
 }

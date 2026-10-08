@@ -27,6 +27,8 @@ public sealed class ProjectDetailViewModel : ObservableObject
     private Pill _readiness = new("muted", "");
     private MappingInputs _mapping = MappingInputs.None;
     private PoTree _saved = new();
+    private IReadOnlyDictionary<string, string> _owners = new Dictionary<string, string>();
+    private bool _isEditingObjectives;
     private bool _isReady;
 
     public ProjectDetailViewModel(ProjectService service, IFileDialogs dialogs, BusyState busy, ProjectInfo project, Action back)
@@ -36,6 +38,14 @@ public sealed class ProjectDetailViewModel : ObservableObject
         Busy = busy;
         Project = project;
         Structure = new StructureViewModel { Commit = CommitRow, CanEditNow = () => !Busy.IsBusy };
+        // Edycja nakładki tym samym edytorem co w kreatorze (przeciąganie, przesuwanie, usuwanie, węzły wirtualne);
+        // „Wczytaj Excel” podmienia strukturę (elementy o tym samym WBS element zachowują historię).
+        Objectives = new PoEditorViewModel(dialogs, busy, service.ReadObjectives, tree => ObjectivesValidator.Validate(tree, _owners), ProjectService.Refresh);
+        Objectives.ResolveMapping = tree => ProjectService.Resolve(tree, _mapping);
+        EditObjectives = new RelayCommand(_ => StartEditObjectives(), _ => !IsEditingObjectives && !Busy.IsBusy);
+        SaveObjectives = new AsyncRelayCommand(DoSaveObjectives, () => IsEditingObjectives && Objectives.IsDirty && !Busy.IsBusy);
+        CancelObjectives = new RelayCommand(_ => { IsEditingObjectives = false; Status = Objectives.IsDirty ? "Zmiany Performance Objectives odrzucone." : ""; },
+            _ => IsEditingObjectives && !Busy.IsBusy);
         Back = new RelayCommand(_ => back(), _ => !Busy.IsBusy);
         AddFromExcel = new AsyncRelayCommand(DoAddFromExcel, () => !Busy.IsBusy);
         ExportCostReport = new AsyncRelayCommand(DoExportCostReport, () => !Busy.IsBusy);
@@ -64,6 +74,21 @@ public sealed class ProjectDetailViewModel : ObservableObject
     public string Subtitle => $"{ProjectTypes.Label(Project.Type)} · utworzony {Project.RecordedAt:yyyy-MM-dd HH:mm} przez {Project.RecordedBy}";
 
     public StructureViewModel Structure { get; }
+
+    /// <summary>Edytor nakładki Performance Objectives (ten sam co w kreatorze), widoczny w trybie edycji.</summary>
+    public PoEditorViewModel Objectives { get; }
+
+    public bool IsEditingObjectives
+    {
+        get => _isEditingObjectives;
+        private set
+        {
+            if (SetProperty(ref _isEditingObjectives, value))
+                OnPropertyChanged(nameof(IsViewingStructure));
+        }
+    }
+
+    public bool IsViewingStructure => !_isEditingObjectives;
 
     public ObservableCollection<KpiTile> Kpis { get; } = [];
 
@@ -94,13 +119,16 @@ public sealed class ProjectDetailViewModel : ObservableObject
 
     public ICommand Back { get; }
     public ICommand AddFromExcel { get; }
+    public ICommand EditObjectives { get; }
+    public ICommand SaveObjectives { get; }
+    public ICommand CancelObjectives { get; }
     public ICommand ExportCostReport { get; }
     public ICommand ExportDictionaries { get; }
     public ICommand CreateFolders { get; }
     public ICommand RefreshMapping { get; }
 
     /// <summary>Stan projektu z bazy w jednym odczycie w tle: nakładka, mapowanie, gotowość, słowniki, struktura.</summary>
-    private sealed record Snapshot(PoTree Tree, MappingInputs Mapping, List<Issue> Readiness,
+    private sealed record Snapshot(PoTree Tree, MappingInputs Mapping, IReadOnlyDictionary<string, string> Owners, List<Issue> Readiness,
         IReadOnlyDictionary<string, (int Rows, string LastChange)> Dictionaries, ProjectStructure Structure);
 
     /// <summary>Wczytuje stan projektu w tle (struktura zachowuje rozwinięcie i zaznaczenie).</summary>
@@ -114,11 +142,15 @@ public sealed class ProjectDetailViewModel : ObservableObject
                 var tree = _service.Objectives(Code);
                 var mapping = _service.Mapping(refreshMapping);
                 var structure = ProjectService.Structure(tree, mapping, _service.Rows(ProjectDictionaries.WpCam, Code), _service.Rows(ProjectDictionaries.ScheduleBudget, Code));
-                return new Snapshot(tree, mapping, _service.Readiness(Project, tree, mapping),
+                return new Snapshot(tree, mapping, _service.WbsOwners(Code), _service.Readiness(Project, tree, mapping),
                     codes.ToDictionary(c => c, c => (_service.Rows(c, Code).Count, _service.LastChange(c, Code))), structure);
             });
             _saved = snapshot.Tree;
             _mapping = snapshot.Mapping;
+            _owners = snapshot.Owners;
+            Objectives.MappingInfo = _mapping.Describe;
+            if (IsEditingObjectives)
+                Objectives.Refresh();
             OnPropertyChanged(nameof(MappingInfo));
             Structure.Load(snapshot.Structure);
             ShowKpis(snapshot.Structure.Summary);
@@ -155,6 +187,35 @@ public sealed class ProjectDetailViewModel : ObservableObject
             if (saved)
                 await Reload(refreshMapping: false);
             Status = saved ? message : $"Nie zapisano ({row.Row.Name}): {message} Popraw komórki albo „Odrzuć niezapisane”.";
+        });
+    }
+
+    private void StartEditObjectives()
+    {
+        Objectives.Load(_saved.Copy());
+        IsEditingObjectives = true;
+        Status = "Edycja Performance Objectives – zapis tworzy nowe wersje zmienionych węzłów (historia).";
+    }
+
+    private async Task DoSaveObjectives()
+    {
+        var tree = Objectives.Tree.Copy();
+        await Try(async () =>
+        {
+            var (issues, result) = await Busy.Run("Zapisywanie Performance Objectives…", () => _service.SaveObjectives(Code, tree));
+            if (result is null)
+            {
+                Status = "Performance Objectives mają błędy (ERROR) – nic nie zapisano.";
+                return;
+            }
+            if (!result.Success)
+            {
+                Status = result.Conflict!;
+                return;
+            }
+            IsEditingObjectives = false;
+            await Reload(refreshMapping: false);
+            Status = $"Zapisano Performance Objectives: +{result.Added} ~{result.Updated} −{result.Removed}{(issues.Count > 0 ? $" (ostrzeżenia: {issues.Count})" : "")}.";
         });
     }
 
