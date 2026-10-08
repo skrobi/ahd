@@ -27,6 +27,7 @@ zmieni). Brak pliku albo błąd w nim = komunikat przy starcie z nazwą pola –
 | `Sql.Schema`, `Sql.TablePrefix` | schemat i sygnatura tabel: `[FINOP].[PZLEV_META_ImportBatch]` (`docs/model-danych.md`, rozdz. 2); tylko litery, cyfry i `_`; sygnatura domyślnie `PZLEV_` |
 | `Sql.TrustServerCertificate` | `true` tylko gdy połączenie zgłasza niezaufany certyfikat serwera |
 | `PzlProd.Server`, `PzlProd.Database`, `PzlProd.Schema` | baza ze strukturą P1S (`splmcd03`, `PZLPROD`, schemat `LOG`: tabele `WBS`, `WBS_DIC`) – tylko odczyt kontem AD; sekcja opcjonalna – bez niej ekran Mapowanie pokazuje, czego brakuje; **Diagnostyka → Sprawdź PZLPROD** testuje połączenie |
+| `PzlHrProd.Server`, `PzlHrProd.Database`, `PzlHrProd.Schema` | baza pracowników (`PZLHRPROD`, schemat `HR`, tabela `ORG`) – tylko odczyt kontem AD; źródło słownika Osoby („Wczytaj z HR” na ekranie Słowniki); sekcja opcjonalna; serwer we wzorze (`splmcd03`) do potwierdzenia |
 
 **Baza danych – migracje:** skrypty `sql/mssql/NNN_*.sql` są wbudowane w exe:
 - `001_etap1_import_slowniki_projekty.sql` – tabele etapu 1;
@@ -58,7 +59,8 @@ zmieni). Brak pliku albo błąd w nim = komunikat przy starcie z nazwą pola –
 - `012_ostatni_import_projektu.sql` – `CAN_LatestImport` z parametrem `@Project`: tylko Project definition z nakładki
   projektu;
 - `013_raport_kosztow_projektu.sql` – `CAN_LatestFiles` i procedura raportu kosztów projektu `REP_ProjectCosts`;
-- `014_definicje_projektu.sql` – Project definition projektu także z WBS elementu węzłów nakładki.
+- `014_definicje_projektu.sql` – Project definition projektu także z WBS elementu węzłów nakładki;
+- `015_osoby_z_hr.sql` – słownik Osoby z HR: kolumny imię, nazwisko, e-mail, MPK, dział, stanowisko, pion, manager, PERNR.
 
 Migracje wykonuje przycisk **Diagnostyka → Migracja** – uruchamia po kolei skrypty, których numeru nie ma
 w `META_SchemaVersion`, a wykonane pomija. Lista na tym ekranie pokazuje, które skrypty są wykonane (kiedy, kto)

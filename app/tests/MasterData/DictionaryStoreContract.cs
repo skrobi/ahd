@@ -131,7 +131,7 @@ public sealed class DictionaryStoreContract : IDisposable
         store.Save(GlobalDictionaries.FxRates, null, [new RowChange(RowChangeKind.Added, null, null, "USD | 2026-10",
             new Dictionary<string, string?> { ["Waluta"] = "USD", ["Okres"] = "2026-10", ["Kurs"] = "3.98765432" })]);
         store.Save(GlobalDictionaries.Persons, null, [new RowChange(RowChangeKind.Added, null, null, @"PZL\jan.kowalski",
-            new Dictionary<string, string?> { ["Konto AD"] = @"PZL\jan.kowalski", ["Imię i nazwisko"] = "Jan Kowalski" })]);
+            new Dictionary<string, string?> { ["USRID"] = "e123456", ["Imię i nazwisko"] = "Jan Kowalski" })]);
 
         var calendar = store.Current(GlobalDictionaries.Calendar);
         var expected = IsoCalendar.Rows(2026).Concat(IsoCalendar.Rows(2027)).ToList();

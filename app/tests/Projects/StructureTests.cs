@@ -37,7 +37,7 @@ public sealed class StructureTests
     private static DictRow Wp(string element, string wp, string cam = "Anna Nowak") => Row(("Element P1S", element), ("WP", wp), ("CAM", cam), ("Cost Category", null));
 
     private static DictRow Budget(string wp, string? hours, string? material = null, string? start = null, string? end = null) =>
-        Row(("WP", wp), ("BAC HOURS", hours), ("BAC MATERIAL", material), ("Planowany Start", start), ("Planowany Koniec", end));
+        Row(("WP", wp), ("BAC HOURS", hours), ("BAC MATERIAL", material), ("Baseline Start", start), ("Baseline Koniec", end));
 
     private static StructureRow Of(ProjectStructure structure, string idOrWbs) =>
         structure.Rows.Single(r => r.WbsElement == idOrWbs || r.Id == idOrWbs);
@@ -134,15 +134,22 @@ public sealed class StructureTests
     {
         DictRow[] wpCam = [Wp("XYZ-1", "WP-1") with { RowId = 1, Version = 1 }];
 
-        var (added, _) = StructureEdits.WpCam(wpCam, "AC-CAB.6.38.07", new Dictionary<string, string?> { [StructureEdits.Wp] = " WP-7 ", [StructureEdits.Cam] = "Jan" });
+        // Zaznaczenie WP – kodem WP jest kod elementu P1S.
+        var (added, _) = StructureEdits.WpCam(wpCam, "AC-CAB.6.38.07", new Dictionary<string, string?> { [StructureEdits.Wp] = "true", [StructureEdits.Cam] = "e123456" });
         Assert.Equal(2, added.Count);
-        Assert.Equal(("AC-CAB.6.38.07", "WP-7", "Jan"), (added[1]["Element P1S"], added[1]["WP"], added[1]["CAM"]));
+        Assert.Equal(("AC-CAB.6.38.07", "AC-CAB.6.38.07", "e123456"), (added[1]["Element P1S"], added[1]["WP"], added[1]["CAM"]));
 
-        var (changed, none) = StructureEdits.WpCam(wpCam, "xyz-1", new Dictionary<string, string?> { [StructureEdits.Cam] = "Jan" });
-        Assert.Equal((1L, "WP-1", "Jan"), (changed[0].RowId!.Value, changed[0]["WP"], changed[0]["CAM"]));
+        // Zmiana CAM – dotychczasowy kod WP zostaje.
+        var (changed, none) = StructureEdits.WpCam(wpCam, "xyz-1", new Dictionary<string, string?> { [StructureEdits.Cam] = "e123456" });
+        Assert.Equal((1L, "WP-1", "e123456"), (changed[0].RowId!.Value, changed[0]["WP"], changed[0]["CAM"]));
         Assert.Empty(none);
 
-        var (cleared, removed) = StructureEdits.WpCam(wpCam, "XYZ-1", new Dictionary<string, string?> { [StructureEdits.Wp] = "", [StructureEdits.Cam] = null });
+        // Wybór CAM w wierszu bez WP zaznacza WP.
+        var (camOnly, _) = StructureEdits.WpCam(wpCam, "AC-CAB.6.38.07", new Dictionary<string, string?> { [StructureEdits.Cam] = "e123456" });
+        Assert.Equal("AC-CAB.6.38.07", camOnly[1]["WP"]);
+
+        // Odznaczenie WP – przypisanie usunięte.
+        var (cleared, removed) = StructureEdits.WpCam(wpCam, "XYZ-1", new Dictionary<string, string?> { [StructureEdits.Wp] = "false" });
         Assert.Empty(cleared);
         Assert.Equal(1L, Assert.Single(removed).RowId);
 

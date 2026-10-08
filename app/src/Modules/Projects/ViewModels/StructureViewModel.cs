@@ -35,6 +35,9 @@ public sealed class StructureViewModel : ObservableObject
 
     public ObservableCollection<StructureRowViewModel> Rows { get; } = [];
 
+    /// <summary>Lista wyboru CAM (USRID → imię i nazwisko).</summary>
+    public ObservableCollection<PersonOption> Persons { get; } = [];
+
     public StructureRowViewModel? Selected { get => _selected; set => SetProperty(ref _selected, value); }
 
     public StructureSummary Summary { get => _summary; private set => SetProperty(ref _summary, value); }
@@ -50,8 +53,14 @@ public sealed class StructureViewModel : ObservableObject
     public ICommand RevertChanges { get; }
 
     /// <summary>Nowe dane struktury – zachowuje rozwinięcie i zaznaczenie; niezapisane zmiany wierszy przepadają.</summary>
-    public void Load(ProjectStructure structure)
+    public void Load(ProjectStructure structure, IReadOnlyList<PersonOption> persons)
     {
+        if (!Persons.SequenceEqual(persons))
+        {
+            Persons.Clear();
+            foreach (var person in persons)
+                Persons.Add(person);
+        }
         var selected = _selected?.Id;
         _all = structure.Rows.Select(r => new StructureRowViewModel(r)).ToList();
         _index = _all.Select((r, i) => (r.Id, i)).ToDictionary(x => x.Id, x => x.i);

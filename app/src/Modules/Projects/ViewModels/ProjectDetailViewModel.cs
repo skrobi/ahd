@@ -129,7 +129,7 @@ public sealed class ProjectDetailViewModel : ObservableObject
 
     /// <summary>Stan projektu z bazy w jednym odczycie w tle: nakładka, mapowanie, gotowość, słowniki, struktura.</summary>
     private sealed record Snapshot(PoTree Tree, MappingInputs Mapping, IReadOnlyDictionary<string, string> Owners, List<Issue> Readiness,
-        IReadOnlyDictionary<string, (int Rows, string LastChange)> Dictionaries, ProjectStructure Structure);
+        IReadOnlyDictionary<string, (int Rows, string LastChange)> Dictionaries, ProjectStructure Structure, IReadOnlyList<PersonOption> Persons);
 
     /// <summary>Wczytuje stan projektu w tle (struktura zachowuje rozwinięcie i zaznaczenie).</summary>
     private async Task Reload(bool refreshMapping)
@@ -141,9 +141,10 @@ public sealed class ProjectDetailViewModel : ObservableObject
             {
                 var tree = _service.Objectives(Code);
                 var mapping = _service.Mapping(refreshMapping);
-                var structure = ProjectService.Structure(tree, mapping, _service.Rows(ProjectDictionaries.WpCam, Code), _service.Rows(ProjectDictionaries.ScheduleBudget, Code));
+                var wpCam = _service.Rows(ProjectDictionaries.WpCam, Code);
+                var structure = ProjectService.Structure(tree, mapping, wpCam, _service.Rows(ProjectDictionaries.ScheduleBudget, Code));
                 return new Snapshot(tree, mapping, _service.WbsOwners(Code), _service.Readiness(Project, tree, mapping),
-                    codes.ToDictionary(c => c, c => (_service.Rows(c, Code).Count, _service.LastChange(c, Code))), structure);
+                    codes.ToDictionary(c => c, c => (_service.Rows(c, Code).Count, _service.LastChange(c, Code))), structure, _service.PersonOptions(wpCam));
             });
             _saved = snapshot.Tree;
             _mapping = snapshot.Mapping;
@@ -152,7 +153,7 @@ public sealed class ProjectDetailViewModel : ObservableObject
             if (IsEditingObjectives)
                 Objectives.Refresh();
             OnPropertyChanged(nameof(MappingInfo));
-            Structure.Load(snapshot.Structure);
+            Structure.Load(snapshot.Structure, snapshot.Persons);
             ShowKpis(snapshot.Structure.Summary);
             foreach (var panel in Dictionaries.Where(p => p.Item.Stored))
                 (panel.Rows, panel.LastChange) = snapshot.Dictionaries[panel.Item.Code];

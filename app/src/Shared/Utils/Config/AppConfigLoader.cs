@@ -9,7 +9,7 @@ namespace PzlEv.Shared.Utils.Config;
 /// Układ: "Env" (TEST / PROD) i "Environments": { "TEST": { NetworkRoot, Sql: { Server, Database, Schema,
 /// TablePrefix, TrustServerCertificate }, PzlProd: { Server, Database, Schema, TrustServerCertificate } }, "PROD": {…} }.
 /// Plik jest wymagany; brak pliku albo pola = błąd z opisem przy starcie (bez cichych wartości domyślnych). Sekcja
-/// PzlProd jest opcjonalna – bez niej ekran mapowania pokazuje, czego brakuje. Ścieżki mogą zawierać zmienne, np. %LOCALAPPDATA%.
+/// PzlProd jest opcjonalna – bez niej ekran mapowania pokazuje, czego brakuje; PzlHrProd (pracownicy HR.ORG) – też opcjonalna. Ścieżki mogą zawierać zmienne, np. %LOCALAPPDATA%.
 /// </summary>
 public static partial class AppConfigLoader
 {
@@ -46,7 +46,8 @@ public static partial class AppConfigLoader
                 throw new InvalidOperationException($"{path}: {at}.Sql – sekcja wymagana (Server, Database, Schema)");
 
             var pzlProd = section.TryGetProperty("PzlProd", out var prod) ? ReadSql(prod, $"{path}: {at}.PzlProd", tablePrefix: false) : null;
-            return new AppConfig(env, System.Environment.ExpandEnvironmentVariables(networkRoot), ReadSql(sql, $"{path}: {at}.Sql"), pzlProd);
+            var hrProd = section.TryGetProperty("PzlHrProd", out var hr) ? ReadSql(hr, $"{path}: {at}.PzlHrProd", tablePrefix: false) : null;
+            return new AppConfig(env, System.Environment.ExpandEnvironmentVariables(networkRoot), ReadSql(sql, $"{path}: {at}.Sql"), pzlProd, hrProd);
         }
     }
 

@@ -1,3 +1,4 @@
+using PzlEv.Shared.Models.Hr;
 using System.Globalization;
 using System.Text.RegularExpressions;
 using PzlEv.Shared.Models.Dictionaries;
@@ -95,13 +96,22 @@ public static partial class GlobalDictionaries
         {
             Code = Persons,
             Name = "Osoby",
-            Description = "Osoby pełniące funkcję CAM – wybór CAM w słowniku „WP i CAM”.",
+            Description = "Pracownicy z HR (PZLHRPROD, HR.ORG – „Wczytaj z HR”): USRID (numer znaczka, login) → imię i nazwisko, MPK, dział, stanowisko. CAM w strukturze projektu wybiera się z tej listy (zapisywany USRID).",
             Columns =
             [
-                new("Konto AD", ColumnType.Text, Key: true),
+                new("USRID", ColumnType.Text, Key: true, Aliases: ["Konto AD"]),
                 new("Imię i nazwisko", ColumnType.Text, Required: true, CheckSimilar: true),
+                new("Imię", ColumnType.Text),
+                new("Nazwisko", ColumnType.Text),
+                new("E-mail", ColumnType.Text),
+                new("MPK", ColumnType.Text),
+                new("Dział", ColumnType.Text),
+                new("Dział – pełna nazwa", ColumnType.Text),
+                new("Stanowisko", ColumnType.Text),
+                new("Pion", ColumnType.Text),
+                new("Manager", ColumnType.Text),
+                new("PERNR", ColumnType.Text),
             ],
-            Rules = PersonRules,
         },
         new()
         {
@@ -131,7 +141,12 @@ public static partial class GlobalDictionaries
         new(Get(FxRates), "dict.FxRate", [("Waluta", "Currency"), ("Okres", "Period"), ("Kurs", "Rate")]),
         new(Get(CostCategory), "dict.CostCategory",
             [("Numer elementu kosztowego", "CostElement"), ("Opis", "Description"), ("Obszar", "Area"), ("Cost Category", "CostCategory")]),
-        new(Get(Persons), "dict.Person", [("Konto AD", "AdAccount"), ("Imię i nazwisko", "FullName")]),
+        new(Get(Persons), "dict.Person",
+        [
+            ("USRID", "AdAccount"), ("Imię i nazwisko", "FullName"), ("Imię", "FirstName"), ("Nazwisko", "LastName"), ("E-mail", "Email"),
+            ("MPK", "CostCenter"), ("Dział", "DepartmentShort"), ("Dział – pełna nazwa", "DepartmentName"), ("Stanowisko", "Position"),
+            ("Pion", "Division"), ("Manager", "IsManager"), ("PERNR", "Pernr"),
+        ]),
         new(Get(MappingReport), "dict.MappingReport", MappingReportColumns),
     ];
 
@@ -218,15 +233,6 @@ public static partial class GlobalDictionaries
         }
     }
 
-    private static IEnumerable<Issue> PersonRules(IReadOnlyList<DictRow> rows)
-    {
-        for (var i = 0; i < rows.Count; i++)
-        {
-            if (rows[i]["Konto AD"] is { } account && !account.Contains('\\'))
-                yield return Issue.Warning($"Konto '{account}' bez domeny (oczekiwano DOMENA\\login)", DictionaryValidator.RowElement(i));
-        }
-    }
-
     /// <summary>
     /// Wiersz raportu mapowań bez przypisania (rozstrzyganie go pominie): brak elementu CES (wbs_ces, a w wierszu CES – wbs)
     /// albo celu P1S (pspnr_sap / wbs_sap, a w wierszu SAP – pspnr / wbs) i brak pary project_ces → project_sap.
@@ -260,4 +266,24 @@ public static partial class GlobalDictionaries
 
     [GeneratedRegex(@"^[A-Z]{3}$")]
     private static partial Regex CurrencyPattern();
+
+    /// <summary>
+    /// Wiersze słownika Osoby z pracowników HR (PZLHRPROD.HR.ORG): USRID – klucz, imię i nazwisko z imienia i nazwiska;
+    /// USRID powtórzony w HR (kilka stanowisk) – pierwszy wiersz.
+    /// </summary>
+    public static IReadOnlyList<DictRow> PersonRows(IEnumerable<HrPerson> persons) =>
+        persons.Where(p => p.Usrid.Length > 0)
+            .GroupBy(p => p.Usrid, StringComparer.OrdinalIgnoreCase)
+            .Select(g => g.First())
+            .OrderBy(p => p.LastName, StringComparer.CurrentCulture).ThenBy(p => p.FirstName, StringComparer.CurrentCulture)
+            .Select(p => new DictRow(null, null, new Dictionary<string, string?>
+            {
+                ["USRID"] = p.Usrid, ["Imię i nazwisko"] = p.FullName.Length > 0 ? p.FullName : p.Usrid, ["Imię"] = Null(p.FirstName),
+                ["Nazwisko"] = Null(p.LastName), ["E-mail"] = Null(p.Email), ["MPK"] = Null(p.CostCenter), ["Dział"] = Null(p.DepartmentShort),
+                ["Dział – pełna nazwa"] = Null(p.DepartmentName), ["Stanowisko"] = Null(p.Position), ["Pion"] = Null(p.Division),
+                ["Manager"] = Null(p.IsManager), ["PERNR"] = Null(p.Pernr),
+            }))
+            .ToList();
+
+    private static string? Null(string value) => value.Length == 0 ? null : value;
 }
