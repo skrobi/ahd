@@ -218,7 +218,7 @@ wersji w pamięci. Domyślnie łączą się z tą samą bazą i tym samym kontem
 `Environments.TEST.Sql` wzoru `app/pzl-ev.json` (tylko gdy `Env` = `TEST`; PROD nigdy). Inna baza (np. lokalny SQL
 Server) – zmienna środowiskowa `PZLEV_TEST_SQL` z ciągiem połączenia, ma pierwszeństwo. Gdy baza jest niedostępna
 (np. poza siecią LM), testy SQL są pomijane z powodem w wyniku testów. Konto musi mieć prawo zakładania i usuwania
-tabel w schemacie `FINOP` bazy testowej (jak przy migracji). Każdy test zakłada w schemacie `FINOP` tabele z losową sygnaturą (`T…_`)
+tabel i procedur w schemacie `FINOP` bazy testowej (jak przy migracji); schematów testy nie zakładają. Każdy test zakłada w schemacie `FINOP` tabele z losową sygnaturą (`T…_`)
 i usuwa je po sobie – nie dotyka tabel aplikacji (`PZLEV_*`).
 Test wydajności importu (`ImportPerformanceTests`, plik ACTUALS z powtórzonych wierszy wzorcowych) działa tylko ze
 zmienną `PZLEV_PERF_ROWS` (liczba wierszy, np. `1000000`; `PZLEV_PERF_FORMAT=xlsx` – plik Excel, domyślnie CSV):
