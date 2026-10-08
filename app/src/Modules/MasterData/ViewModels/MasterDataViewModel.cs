@@ -91,6 +91,7 @@ public sealed class MasterDataViewModel : ObservableObject
         {
             if (value is null || ReferenceEquals(value, _selectedDictionary))
                 return;
+            Table.CommitEdits();
             if (HasPendingChanges || Busy.IsBusy)
             {
                 Status = Busy.IsBusy ? "Poczekaj na zakończenie bieżącej operacji." : "Masz niezapisane zmiany – zapisz albo odrzuć je przed zmianą słownika.";
@@ -165,13 +166,14 @@ public sealed class MasterDataViewModel : ObservableObject
 
     private void DoRemoveRow()
     {
-        Table.RemoveSelected();
-        Status = "Wiersz usunięty z tabeli – zapisz, aby zamknąć jego obowiązywanie (historia zostaje).";
+        var (removed, _) = Table.RemoveSelected();
+        Status = removed == 0 ? "" : "Wiersze usunięte z tabeli – zapisz, aby zamknąć ich obowiązywanie (historia zostaje).";
     }
 
     private async Task DoSave(bool confirmWarnings)
     {
         var spec = Spec!;
+        Table.CommitEdits();
         var (working, removed) = Table.State();
         SaveOutcome outcome;
         try
@@ -218,6 +220,7 @@ public sealed class MasterDataViewModel : ObservableObject
 
     private async Task DoImport()
     {
+        Table.CommitEdits();
         if (HasPendingChanges)
         {
             Status = "Masz niezapisane zmiany – zapisz albo odrzuć je przed wczytaniem z Excela.";
@@ -242,6 +245,7 @@ public sealed class MasterDataViewModel : ObservableObject
             Status = "Brak połączenia z PZLHRPROD – dodaj sekcję PzlHrProd w pzl-ev.json (Environments.<Env>.PzlHrProd: Server, Database, Schema).";
             return;
         }
+        Table.CommitEdits();
         if (HasPendingChanges)
         {
             Status = "Masz niezapisane zmiany – zapisz albo odrzuć je przed wczytaniem z HR.";

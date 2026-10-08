@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
@@ -9,8 +10,9 @@ namespace PzlEv.Shared.Views.Partials;
 
 /// <summary>
 /// Tabela słownika jak arkusz Excela: kolumny z opisu słownika (DictionaryCellColumn), zaznaczanie komórek,
-/// Ctrl+V – wklejenie bloku od bieżącej komórki, Delete – wyczyszczenie, Ctrl+D – wypełnienie w dół wartością
-/// z pierwszego zaznaczonego wiersza (Ctrl+C – kopiowanie DataGrid). Bieżący wiersz – DictionaryTableViewModel.SelectedRow.
+/// Ctrl+V – wklejenie bloku od bieżącej komórki (jedna komórka – do całego zaznaczenia), Delete – wyczyszczenie,
+/// Ctrl+D – wypełnienie w dół wartością z pierwszego zaznaczonego wiersza, Ctrl+Z – cofnięcie, Ctrl+minus – usunięcie
+/// wierszy zaznaczenia (Ctrl+C – kopiowanie DataGrid). Bieżący wiersz – DictionaryTableViewModel.SelectedRow.
 /// </summary>
 public partial class DictionaryGrid : UserControl
 {
@@ -22,9 +24,15 @@ public partial class DictionaryGrid : UserControl
         DataContextChanged += (_, e) =>
         {
             if (e.OldValue is DictionaryTableViewModel old)
+            {
                 old.ColumnsChanged -= RebuildColumns;
+                old.EndEditRequested -= EndEdit;
+            }
             if (e.NewValue is DictionaryTableViewModel table)
+            {
                 table.ColumnsChanged += RebuildColumns;
+                table.EndEditRequested += EndEdit;
+            }
             RebuildColumns();
         };
     }
@@ -47,6 +55,18 @@ public partial class DictionaryGrid : UserControl
         });
     }
 
+    /// <summary>Zatwierdzenie (Zapisz, zmiana słownika, filtr) albo anulowanie (Odrzuć zmiany) komórki w trakcie edycji.</summary>
+    private void EndEdit(bool commit)
+    {
+        if (!_editing)
+            return;
+        if (commit)
+            RowsGrid.CommitEdit(DataGridEditingUnit.Cell, exitEditingMode: true);
+        else
+            RowsGrid.CancelEdit(DataGridEditingUnit.Cell);
+        _editing = false;
+    }
+
     private void OnBeginningEdit(object? sender, DataGridBeginningEditEventArgs e) => _editing = !e.Cancel;
 
     private void OnCellEditEnding(object? sender, DataGridCellEditEndingEventArgs e) => _editing = false;
@@ -57,6 +77,12 @@ public partial class DictionaryGrid : UserControl
             table.SelectedRow = row;
     }
 
+    private void OnSelectedCellsChanged(object sender, SelectedCellsChangedEventArgs e)
+    {
+        if (Table is { } table)
+            table.SelectedRows = RowsGrid.SelectedCells.Select(c => c.Item).OfType<DictRowViewModel>().Distinct().ToList();
+    }
+
     private void OnPreviewKeyDown(object sender, KeyEventArgs e)
     {
         if (_editing || Table is not { Spec: not null } table)
@@ -64,9 +90,8 @@ public partial class DictionaryGrid : UserControl
         var ctrl = Keyboard.Modifiers == ModifierKeys.Control;
         if (ctrl && e.Key == Key.V)
         {
-            var block = ClipboardTable.Parse(Clipboard.ContainsText() ? Clipboard.GetText() : null);
             var column = (RowsGrid.CurrentCell.Column as DictionaryCellColumn)?.Index ?? 0;
-            table.Paste(RowsGrid.CurrentCell.Item as DictRowViewModel, column, block);
+            table.Paste(RowsGrid.CurrentCell.Item as DictRowViewModel, column, ClipboardTable.Parse(ClipboardText()), SelectedCells());
             e.Handled = true;
         }
         else if (e.Key == Key.Delete && Keyboard.Modifiers == ModifierKeys.None)
@@ -89,9 +114,32 @@ public partial class DictionaryGrid : UserControl
             table.SetCells(fill);
             e.Handled = true;
         }
+        else if (ctrl && e.Key == Key.Z)
+        {
+            table.Undo.Execute(null);
+            e.Handled = true;
+        }
+        else if (ctrl && e.Key is Key.OemMinus or Key.Subtract)
+        {
+            table.RemoveSelected();
+            e.Handled = true;
+        }
     }
 
-    private IEnumerable<(DictRowViewModel Row, int Column)> SelectedCells() =>
+    /// <summary>Tekst schowka; schowek zajęty przez inny program – brak wklejenia zamiast błędu.</summary>
+    private static string? ClipboardText()
+    {
+        try
+        {
+            return Clipboard.ContainsText() ? Clipboard.GetText() : null;
+        }
+        catch (COMException)
+        {
+            return null;
+        }
+    }
+
+    private IReadOnlyList<(DictRowViewModel Row, int Column)> SelectedCells() =>
         RowsGrid.SelectedCells
             .Where(c => c.Item is DictRowViewModel && c.Column is DictionaryCellColumn)
             .Select(c => ((DictRowViewModel)c.Item, ((DictionaryCellColumn)c.Column).Index))

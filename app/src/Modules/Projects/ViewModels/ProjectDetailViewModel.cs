@@ -68,7 +68,8 @@ public sealed class ProjectDetailViewModel : ObservableObject
         RemoveDictionaryRow = new RelayCommand(_ => DoRemoveDictionaryRow(), _ => Table.SelectedRow is not null && !Busy.IsBusy);
         SaveDictionary = new AsyncRelayCommand(() => DoSaveDictionary(confirmWarnings: false), () => Table.Spec is not null && !Busy.IsBusy);
         Table.SaveWithWarnings = new AsyncRelayCommand(() => DoSaveDictionary(confirmWarnings: true), () => Table.NeedsConfirmation && !Busy.IsBusy);
-        DiscardDictionary = new AsyncRelayCommand(() => Reload(refreshMapping: false, discard: true), () => Table.HasPendingChanges && !Busy.IsBusy);
+        // Dostępne zawsze – komórka w trakcie edycji nie jest jeszcze zmianą wiersza (Reload ją anuluje).
+        DiscardDictionary = new AsyncRelayCommand(() => Reload(refreshMapping: false, discard: true), () => Table.Spec is not null && !Busy.IsBusy);
         _selectedDictionary = Dictionaries.FirstOrDefault();
         _ = Reload(refreshMapping: false);
     }
@@ -123,6 +124,7 @@ public sealed class ProjectDetailViewModel : ObservableObject
         {
             if (value is null || ReferenceEquals(value, _selectedDictionary))
                 return;
+            Table.CommitEdits();
             if (Table.HasPendingChanges || Busy.IsBusy)
             {
                 Status = Busy.IsBusy ? "Poczekaj na zakończenie bieżącej operacji." : "Masz niezapisane zmiany słownika – zapisz albo odrzuć je przed zmianą słownika.";
@@ -332,6 +334,7 @@ public sealed class ProjectDetailViewModel : ObservableObject
 
     private async Task LoadDictionary(DictionaryPanelViewModel panel)
     {
+        Table.CommitEdits();
         if (Table.HasPendingChanges)
         {
             Status = "Masz niezapisane zmiany słownika – zapisz albo odrzuć je przed wczytaniem z Excela.";
@@ -370,14 +373,11 @@ public sealed class ProjectDetailViewModel : ObservableObject
 
     private void DoRemoveDictionaryRow()
     {
-        var inherited = Table.SelectedRow?.IsInherited == true;
-        Status = Table.RemoveSelected()
-            ? _selectedDictionary?.Item.Code == PzlEv.Shared.Utils.Dictionaries.GlobalDictionaries.CostCategory
-                ? "Zmiana projektu usunięta z tabeli – po zapisie obowiązuje pozycja ze słownika globalnego."
-                : "Wiersz usunięty z tabeli – zapisz, aby zamknąć jego obowiązywanie (historia zostaje)."
-            : inherited
-                ? "To pozycja słownika globalnego – w projekcie możesz ją zmienić (zapis tworzy zmianę projektu); usuwa się ją na ekranie Słowniki."
-                : "";
+        var (removed, _) = Table.RemoveSelected();
+        Status = removed == 0 ? ""
+            : _selectedDictionary?.Item.Code == PzlEv.Shared.Utils.Dictionaries.GlobalDictionaries.CostCategory
+                ? "Zmiany projektu usunięte z tabeli – po zapisie obowiązują pozycje ze słownika globalnego."
+                : "Wiersze usunięte z tabeli – zapisz, aby zamknąć ich obowiązywanie (historia zostaje).";
     }
 
     /// <summary>Zapis tabeli wybranego słownika z regułami projektu; po zapisie – odświeżenie struktury i liczników.</summary>
@@ -385,6 +385,7 @@ public sealed class ProjectDetailViewModel : ObservableObject
     {
         var panel = _selectedDictionary!;
         var context = Context(panel.Item.Code);
+        Table.CommitEdits();
         var (working, removed) = Table.State();
         await Try(async () =>
         {

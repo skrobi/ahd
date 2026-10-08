@@ -43,7 +43,8 @@
                     </StackPanel>
                     <StackPanel Orientation="Horizontal">
                         <Button Content="Dodaj wiersz" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding AddRow}" />
-                        <Button Content="Usuń wiersz" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding RemoveRow}" />
+                        <Button Content="Usuń wiersze" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding RemoveRow}" ToolTip="Usuwa wiersze zaznaczonych komórek (Ctrl+minus)" />
+                        <Button Content="Cofnij" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding Table.Undo}" ToolTip="Cofa ostatnią zmianę w tabeli (Ctrl+Z)" />
                         <Button Content="Odrzuć zmiany" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding Discard}" />
                         <Button Content="Zapisz" Style="{StaticResource BtnPrimary}" Command="{Binding Save}" />
                         <TextBlock Text="Filtr" VerticalAlignment="Center" Margin="16,0,6,0" Foreground="{StaticResource Muted}" />

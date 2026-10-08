@@ -28,7 +28,7 @@ public sealed class DictionaryCellColumn : DataGridColumn
         Column = column;
         Options = options;
         Header = column.Key ? $"{column.Name} *" : column.Name;
-        SortMemberPath = $"Cells[{index}].Display";
+        SortMemberPath = $"Cells[{index}].SortKey";
         ClipboardContentBinding = new Binding($"Cells[{index}].Value");
         MinWidth = 80;
     }
@@ -127,9 +127,14 @@ public sealed class DictionaryCellColumn : DataGridColumn
     {
         if (Options is { } options && editingElement is ComboBox { DataContext: DictRowViewModel row } combo)
         {
-            row[Index] = combo.SelectedItem is LookupOption chosen && chosen.Text == combo.Text
+            var value = combo.SelectedItem is LookupOption chosen && chosen.Text == combo.Text
                 ? chosen.Value
                 : DictionaryCells.Resolve(combo.Text, options);
+            // Jak autouzupełnianie w Excelu: wpisany fragment, który zostawił na liście jedną osobę, wybiera ją.
+            if (value is not null && !options.Any(o => string.Equals(o.Value, value, StringComparison.OrdinalIgnoreCase))
+                && combo.ItemsSource is ListCollectionView { Count: 1 } view && view.GetItemAt(0) is LookupOption only)
+                value = only.Value;
+            row[Index] = value;
             return true;
         }
         var property = editingElement is ComboBox ? ComboBox.TextProperty : TextBox.TextProperty;
