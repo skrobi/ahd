@@ -84,12 +84,21 @@ public sealed class StructureRowViewModel(StructureRow row) : INotifyPropertyCha
         get => _changes.TryGetValue(column, out var changed) ? changed : Value(column);
         set
         {
-            if (!StructureEdits.CanEdit(row, column))
+            if (!CanEdit(column))
                 return;
             if ((value ?? "") == (Value(column) ?? ""))
                 _changes.Remove(column);
             else
                 _changes[column] = value;
+            // WP odznaczone z powrotem – budżet i daty wpisane dla nowego WP nie mają już gdzie trafić.
+            if (column == StructureEdits.Wp)
+            {
+                foreach (var key in _changes.Keys.Where(k => StructureEdits.ScheduleColumns.Contains(k) && !CanEdit(k)).ToList())
+                {
+                    _changes.Remove(key);
+                    _problems.Remove(key);
+                }
+            }
             Check(column);
             Changed();
         }
@@ -102,7 +111,13 @@ public sealed class StructureRowViewModel(StructureRow row) : INotifyPropertyCha
         set => this[StructureEdits.Wp] = value ? "true" : "false";
     }
 
-    public bool CanEdit(string column) => StructureEdits.CanEdit(row, column);
+    /// <summary>
+    /// Czy komórkę można zmienić: StructureEdits.CanEdit, a budżet i daty także w wierszu, w którym WP jest właśnie
+    /// zaznaczany (StructureEdits.CanEditWithNewWp) – WP z budżetem wklejone za jednym razem.
+    /// </summary>
+    public bool CanEdit(string column) =>
+        StructureEdits.CanEdit(row, column)
+        || _changes.TryGetValue(StructureEdits.Wp, out var wp) && StructureEdits.IsChecked(wp) && StructureEdits.CanEditWithNewWp(row, column);
 
     /// <summary>Odrzuca niezapisane zmiany wiersza.</summary>
     public void Revert()

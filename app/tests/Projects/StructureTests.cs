@@ -127,6 +127,13 @@ public sealed class StructureTests
         Assert.False(StructureEdits.CanEdit(leaf, StructureEdits.Name));
         Assert.True(StructureEdits.CanEdit(leaf, StructureEdits.BacHours));
         Assert.False(StructureEdits.CanEdit(Of(structure, "p1s:AC-CAB.6.38.07"), StructureEdits.Start));   // bez własnego WP
+        // WP zaznaczany w tym wierszu (wklejenie WP z budżetem): budżet edytowalny, gdy w poddrzewie nie ma innych WP.
+        var empty = ProjectService.Structure(Objectives(), Inputs(), [], []);
+        Assert.True(StructureEdits.CanEditWithNewWp(Of(empty, "p1s:AC-CAB.6.38.07"), StructureEdits.Start));
+        Assert.False(StructureEdits.CanEditWithNewWp(Of(empty, "p1s:AC-CAB.6.38.07"), StructureEdits.Cam));
+        Assert.False(StructureEdits.CanEditWithNewWp(Of(structure, "p1s:AC-CAB.6.38.07"), StructureEdits.Start));   // WP-1 niżej (XYZ-1)
+        Assert.False(StructureEdits.CanEditWithNewWp(node, StructureEdits.BacHours));   // WP w poddrzewie
+        Assert.False(StructureEdits.CanEditWithNewWp(leaf, StructureEdits.BacHours));   // ma już WP
     }
 
     [Fact]
