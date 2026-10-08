@@ -80,4 +80,13 @@ public sealed class DictionaryCellsTests
         Assert.Equal([["jedna"]], ClipboardTable.Parse("jedna"));
         Assert.Empty(ClipboardTable.Parse(""));
     }
+
+    [Fact]
+    public void Header_row_copied_with_data_is_recognised()
+    {
+        Assert.True(DictionaryCells.IsHeaderRow(Spec, 0, ["Element *", "cam", "Kategoria"]));
+        Assert.True(DictionaryCells.IsHeaderRow(Spec, 1, ["CAM", "", "BAC", "Inna kolumna poza słownikiem"]));
+        Assert.False(DictionaryCells.IsHeaderRow(Spec, 0, ["AC-CAB.6.38", "e123456"]));
+        Assert.False(DictionaryCells.IsHeaderRow(Spec, 0, ["", ""]));
+    }
 }

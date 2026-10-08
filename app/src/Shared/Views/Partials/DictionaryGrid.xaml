@@ -7,9 +7,10 @@
         <DataGrid x:Name="RowsGrid" Style="{StaticResource DataTable}" ItemsSource="{Binding RowsView}"
                   SelectionUnit="Cell" SelectionMode="Extended" ClipboardCopyMode="ExcludeHeader"
                   PreviewKeyDown="OnPreviewKeyDown" CurrentCellChanged="OnCurrentCellChanged"
-                  BeginningEdit="OnBeginningEdit" CellEditEnding="OnCellEditEnding" />
+                  BeginningEdit="OnBeginningEdit" CellEditEnding="OnCellEditEnding" SelectedCellsChanged="OnSelectedCellsChanged" />
+        <TextBlock Text="{Binding Notice}" Foreground="{StaticResource Info}" Margin="0,4,0,0" TextWrapping="Wrap" />
         <TextBlock Style="{StaticResource MutedText}" FontSize="11" Margin="0,4,0,0" TextWrapping="Wrap"
-                   Text="* kolumna klucza · jak w Excelu: pisanie zastępuje komórkę, Enter / Tab – dalej, Esc – cofnij, Ctrl+C / Ctrl+V – kopiuj / wklej blok (brakujące wiersze dopisywane), Delete – wyczyść zaznaczone, Ctrl+D – wypełnij w dół · podświetlenie: czerwone – błąd, żółte – ostrzeżenie (opis w podpowiedzi)" />
+                   Text="* kolumna klucza · jak w Excelu: pisanie zastępuje komórkę, Enter / Tab – dalej, Esc – cofnij, Ctrl+C / Ctrl+V – kopiuj / wklej blok (brakujące wiersze dopisywane, jedna komórka wypełnia zaznaczenie), Delete – wyczyść zaznaczone, Ctrl+D – wypełnij w dół, Ctrl+Z – cofnij, Ctrl+minus – usuń wiersze zaznaczenia, kliknięcie nagłówka – sortowanie · podświetlenie: czerwone – błąd, żółte – ostrzeżenie (opis w podpowiedzi)" />
 
         <Border Style="{StaticResource Panel}" Margin="0,12,0,0"
                 Visibility="{Binding HasIssues, Converter={StaticResource BoolToVisibility}}">

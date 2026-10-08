@@ -41,6 +41,20 @@ public static class DictionaryCells
     public static string Display(string? value, IReadOnlyList<LookupOption>? options) =>
         value is null ? "" : options?.FirstOrDefault(o => string.Equals(o.Value, value, StringComparison.OrdinalIgnoreCase))?.Label ?? value;
 
+    /// <summary>
+    /// Wiersz wklejanego bloku to nagłówki kolumn słownika od kolumny column (skopiowane z Excela razem z danymi):
+    /// każda niepusta komórka równa nazwie albo dawnej nazwie kolumny (bez spacji, wielkości liter i „*”).
+    /// </summary>
+    public static bool IsHeaderRow(DictionarySpec spec, int column, IReadOnlyList<string> cells)
+    {
+        static string Norm(string s) => new string(s.Where(ch => !char.IsWhiteSpace(ch) && ch != '*').ToArray()).ToLowerInvariant();
+        var matched = cells.Select((text, i) => (text, i: column + i))
+            .Where(x => x.i < spec.Columns.Count && x.text.Trim().Length > 0)
+            .ToList();
+        return matched.Count > 0 && matched.All(x =>
+            new[] { spec.Columns[x.i].Name }.Concat(spec.Columns[x.i].Aliases ?? []).Any(n => Norm(n) == Norm(x.text)));
+    }
+
     private static LookupOption? Single(IEnumerable<LookupOption> options)
     {
         var list = options.Take(2).ToList();
