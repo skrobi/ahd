@@ -43,8 +43,8 @@ public sealed class HrPersonsTests
         try
         {
             var people = new SqlHrSource(hr).Persons();
-            Assert.Equal(["e334541", "e100200"], people.Select(p => p.Usrid));
-            Assert.Equal(("Dawid Moraniec", "4711", "1001", "1"), (people[0].FullName, people[0].CostCenter, people[0].Pernr, people[0].IsManager));
+            Assert.Equal(["e100200", "e334541"], people.Select(p => p.Usrid));   // stała kolejność (ORDER BY USRID)
+            Assert.Equal(("Dawid Moraniec", "4711", "1001", "1"), (people[1].FullName, people[1].CostCenter, people[1].Pernr, people[1].IsManager));
 
             var store = new SqlDictionaryStore(database.Sql, services.Clock, services.User, GlobalDictionaries.Tables);
             var service = new DictionaryService(store, new SqlJournal(database.Sql, services.Clock, services.User));
@@ -57,7 +57,7 @@ public sealed class HrPersonsTests
                 (saved["Imię i nazwisko"], saved["Imię"], saved["Nazwisko"], saved["MPK"], saved["Stanowisko"], saved["Pion"]));
 
             // Osoby spoza HR są usuwane przy kolejnym wczytaniu (historia zostaje).
-            var next = service.PreviewRows(spec, GlobalDictionaries.PersonRows(people.Take(1)), "PZLHRPROD HR.ORG");
+            var next = service.PreviewRows(spec, GlobalDictionaries.PersonRows(people.Where(p => p.Usrid == "e334541")), "PZLHRPROD HR.ORG");
             Assert.Equal(["e100200"], next.Removed);
         }
         finally

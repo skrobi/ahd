@@ -252,6 +252,19 @@ public static partial class GlobalDictionaries
         }
     }
 
+    /// <summary>
+    /// Wartości słownika do wyboru w kolumnie powiązanej (DictColumn.Lookup): Osoby – USRID → imię i nazwisko,
+    /// posortowane po opisie. Inne słowniki – klucz bez opisu.
+    /// </summary>
+    public static IReadOnlyList<LookupOption> LookupOptions(string code, IEnumerable<DictRow> rows) => code switch
+    {
+        Persons => rows.Where(r => r["USRID"] is not null)
+            .Select(r => new LookupOption(r["USRID"]!, r["Imię i nazwisko"] ?? r["USRID"]!))
+            .OrderBy(o => o.Label, StringComparer.CurrentCulture)
+            .ToList(),
+        _ => rows.Select(r => Get(code).KeyOf(r.Values)).Distinct().Select(k => new LookupOption(k, k)).ToList(),
+    };
+
     private static int? Int(string? canonical) =>
         int.TryParse(canonical, NumberStyles.Integer, CultureInfo.InvariantCulture, out var v) ? v : null;
 

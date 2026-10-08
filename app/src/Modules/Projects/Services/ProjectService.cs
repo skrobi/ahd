@@ -127,42 +127,32 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
 
     // ---------- słowniki projektu ----------
 
-    /// <summary>Konta AD i nazwiska ze słownika globalnego Osoby (CAM wybierany z listy osób).</summary>
-    public IReadOnlySet<string> Persons() =>
-        dictionaries.Current(GlobalDictionaries.Persons)
-            .SelectMany(r => new[] { r.Values.GetValueOrDefault("USRID"), r.Values.GetValueOrDefault("Imię i nazwisko") })
-            .OfType<string>()
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+    /// <summary>USRID ze słownika globalnego Osoby (CAM wybierany z listy osób; zapisywany USRID).</summary>
+    public IReadOnlySet<string> Persons() => PersonLookups().Select(o => o.Value).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Osoby ze słownika Osoby: USRID → imię i nazwisko (posortowane po nazwisku).</summary>
+    public IReadOnlyList<LookupOption> PersonLookups() =>
+        GlobalDictionaries.LookupOptions(GlobalDictionaries.Persons, _dictionaries.Load(GlobalDictionaries.Get(GlobalDictionaries.Persons)));
 
     /// <summary>
-    /// Lista wyboru CAM: osoby ze słownika Osoby (USRID → imię i nazwisko) oraz CAM już wpisane w „WP i CAM”, których
+    /// Lista wyboru CAM w tabeli struktury: osoby ze słownika Osoby (persons) oraz CAM już wpisane w „WP i CAM”, których
     /// nie ma w słowniku (np. sprzed wczytania osób z HR) – żeby tabela je pokazała.
     /// </summary>
-    public IReadOnlyList<PersonOption> PersonOptions(IEnumerable<DictRow> wpCam)
+    public static IReadOnlyList<LookupOption> PersonOptions(IReadOnlyList<LookupOption> persons, IEnumerable<DictRow> wpCam)
     {
-        var persons = dictionaries.Current(GlobalDictionaries.Persons)
-            .Where(r => r.Values.GetValueOrDefault("USRID") is not null)
-            .Select(r => new PersonOption(r.Values["USRID"]!, r.Values.GetValueOrDefault("Imię i nazwisko") ?? r.Values["USRID"]!))
+        var known = persons.Select(p => p.Value).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        return persons.Concat(wpCam.Select(r => r["CAM"]).OfType<string>().Where(c => !known.Contains(c)).Distinct(StringComparer.OrdinalIgnoreCase)
+                .Select(c => new LookupOption(c, c)))
+            .OrderBy(p => p.Label, StringComparer.CurrentCulture)
             .ToList();
-        var known = persons.Select(p => p.Usrid).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        persons.AddRange(wpCam.Select(r => r["CAM"]).OfType<string>().Where(c => !known.Contains(c)).Distinct(StringComparer.OrdinalIgnoreCase)
-            .Select(c => new PersonOption(c, c)));
-        return persons.OrderBy(p => p.Name, StringComparer.CurrentCulture).ToList();
     }
 
     /// <summary>
     /// Wartości słowników powiązanych do wyboru w tabeli słownika (DictColumn.Lookup): Osoby – USRID → imię i nazwisko
     /// (słownik Osoby wczytany z HR).
     /// </summary>
-    public IReadOnlyDictionary<string, IReadOnlyList<LookupOption>> Lookups() =>
-        new Dictionary<string, IReadOnlyList<LookupOption>>
-        {
-            [GlobalDictionaries.Persons] = dictionaries.Current(GlobalDictionaries.Persons)
-                .Where(r => r.Values.GetValueOrDefault("USRID") is not null)
-                .Select(r => new LookupOption(r.Values["USRID"]!, r.Values.GetValueOrDefault("Imię i nazwisko") ?? r.Values["USRID"]!))
-                .OrderBy(o => o.Label, StringComparer.CurrentCulture)
-                .ToList(),
-        };
+    public static IReadOnlyDictionary<string, IReadOnlyList<LookupOption>> Lookups(IReadOnlyList<LookupOption> persons) =>
+        new Dictionary<string, IReadOnlyList<LookupOption>> { [GlobalDictionaries.Persons] = persons };
 
     // ---------- mapowanie CES ↔ P1S (strona P1S nakładki) ----------
 
@@ -229,28 +219,54 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
         TabularFileReader.SheetNames(path).FirstOrDefault(s =>
             s.Equals(item.Sheet, StringComparison.OrdinalIgnoreCase) || s.Equals(item.Name, StringComparison.OrdinalIgnoreCase));
 
-    public ImportPreview PreviewDictionary(string dictionary, ProjectDictionaryContext context, string path, string code, string? sheet) =>
-        _dictionaries.PreviewImport(ProjectDictionaries.For(dictionary, context), path, code, sheet);
+    /// <summary>
+    /// Podgląd wczytania słownika projektu z pliku. Skoroszyt z kilkoma arkuszami bez arkusza słownika – błąd (zamiast
+    /// cichego wczytania pierwszego arkusza, np. „WP i CAM” jako harmonogramu). Cost Category – wiersze identyczne ze
+    /// słownikiem globalnym pomijane (nie stają się zmianami projektu).
+    /// </summary>
+    public ImportPreview PreviewDictionary(string dictionary, ProjectDictionaryContext context, string path, string code, string? sheet)
+    {
+        var item = ProjectDictionaries.Item(dictionary);
+        if (sheet is null && TabularFileReader.ExcelExtensions.Contains(Path.GetExtension(path)) && TabularFileReader.SheetNames(path) is { Count: > 1 } sheets)
+            return new ImportPreview(dictionary, Path.GetFileName(path), [], [], [],
+                [Issue.Error($"Skoroszyt ma kilka arkuszy ({string.Join(", ", sheets)}), żaden nie nazywa się „{item.Sheet}” ani „{item.Name}” – zmień nazwę arkusza albo zapisz słownik w osobnym pliku", Path.GetFileName(path))],
+                [], []);
+        var inherited = dictionary == GlobalDictionaries.CostCategory ? _dictionaries.Load(ProjectDictionaries.Base(dictionary)) : null;
+        return _dictionaries.PreviewImport(ProjectDictionaries.For(dictionary, context), path, code, sheet, inherited);
+    }
 
     public SaveOutcome ApplyDictionary(string dictionary, ProjectDictionaryContext context, ImportPreview preview, string code) =>
         _dictionaries.ApplyImport(ProjectDictionaries.For(dictionary, context), preview, code);
 
-    /// <summary>Słowniki projektu do Excela – arkusz na słownik; pusty „WP i CAM” dostaje elementy P1S z zakresu (szablon).</summary>
+    /// <summary>
+    /// Słowniki projektu do Excela – arkusz na słownik; szablon do uzupełnienia: „WP i CAM” z elementami P1S z zakresu
+    /// bez WP, „Harmonogram i budżet” z WP bez harmonogramu.
+    /// </summary>
     public void ExportDictionaries(string path, string code, string type, PoTree tree, MappingInputs inputs)
     {
-        var sheets = new List<(string, IReadOnlyList<string>, IEnumerable<IReadOnlyList<object?>>)>();
+        var sheets = new List<(string, IReadOnlyList<ExcelTableWriter.ExcelColumn>, IEnumerable<IReadOnlyList<object?>>)>();
         foreach (var item in ProjectDictionaries.ForType(type).Where(i => i.Stored))
         {
             var spec = ProjectDictionaries.Base(item.Code);
             var rows = code.Length > 0 ? Rows(item.Code, code) : [];
             IEnumerable<IReadOnlyList<object?>> data = rows.Select(r => (IReadOnlyList<object?>)spec.Columns.Select(c => ValueFormat.ToExcel(c, r[c.Name])).ToList());
-            if (item.Code == ProjectDictionaries.WpCam && rows.Count == 0)
+            // Szablon do uzupełnienia: elementy P1S z zakresu bez WP i WP bez harmonogramu (wiersze z samym kluczem
+            // pomijane przy wczytaniu – SkipKeyOnlyRows).
+            if (item.Code == ProjectDictionaries.WpCam)
             {
-                data = Scope(tree, inputs).Elements().Select(l => (IReadOnlyList<object?>)new object?[] { l, null, null, null });
+                var assigned = rows.Select(r => r["Element P1S"]).OfType<string>().Select(MappingKeys.Key).ToHashSet();
+                data = data.Concat(Scope(tree, inputs).Elements().Where(l => !assigned.Contains(MappingKeys.Key(l)))
+                    .Select(l => (IReadOnlyList<object?>)new object?[] { l, null, null, null }));
             }
-            sheets.Add((item.Sheet, spec.Columns.Select(c => c.Name).ToList(), data));
+            else if (item.Code == ProjectDictionaries.ScheduleBudget && code.Length > 0)
+            {
+                var planned = rows.Select(r => r["WP"]).OfType<string>().ToHashSet(StringComparer.OrdinalIgnoreCase);
+                data = data.Concat(Rows(ProjectDictionaries.WpCam, code).Select(r => r["WP"]).OfType<string>().Distinct(StringComparer.OrdinalIgnoreCase)
+                    .Where(wp => !planned.Contains(wp)).Select(wp => (IReadOnlyList<object?>)new object?[] { wp, null, null, null, null }));
+            }
+            sheets.Add((item.Sheet, _dictionaries.ExcelColumns(spec), data));
         }
-        ExcelTableWriter.WriteSheets(path, sheets);
+        ExcelTableWriter.WriteTemplate(path, sheets);
         journal.Add(Area, $"{(code.Length > 0 ? code : "nowy projekt")}: słowniki projektu pobrane do Excela", code.Length > 0 ? code : null);
     }
 

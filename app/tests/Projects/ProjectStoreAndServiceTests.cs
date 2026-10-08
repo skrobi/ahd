@@ -6,6 +6,7 @@ using PzlEv.Shared.Models.Pipeline;
 using PzlEv.Shared.Utils.Data;
 using PzlEv.Shared.Utils.Data.Sql;
 using PzlEv.Shared.Utils.Dictionaries;
+using PzlEv.Shared.Utils.Files;
 using PzlEv.Shared.Utils.Mapping;
 using PzlEv.Tests.TestSupport;
 using Xunit;
@@ -236,7 +237,7 @@ public sealed class ProjectStoreAndServiceTests : IDisposable
         Assert.True(assigned.Saved, assigned.Message);
         var wp = Assert.Single(_service.Rows(ProjectDictionaries.WpCam, "M28"));
         Assert.Equal(("AC-CAB.6.38.01", "AC-CAB.6.38.01", "e123456"), (wp["Element P1S"], wp["WP"], wp["CAM"]));
-        Assert.Equal([new PersonOption("e123456", "e123456")], _service.PersonOptions(_service.Rows(ProjectDictionaries.WpCam, "M28")));   // CAM spoza słownika Osoby
+        Assert.Equal([new LookupOption("e123456", "e123456")], ProjectService.PersonOptions(_service.PersonLookups(), _service.Rows(ProjectDictionaries.WpCam, "M28")));   // CAM spoza słownika Osoby
 
         Assert.True(_service.SaveStructureEdit("M28", inputs, Row("4D06WP000001"),
             new Dictionary<string, string?> { [StructureEdits.BacHours] = "12,5", [StructureEdits.Start] = "2026-01-05" }).Saved);
@@ -314,5 +315,56 @@ public sealed class ProjectStoreAndServiceTests : IDisposable
         var rejected = _service.SaveDictionary(ProjectDictionaries.Exclusions, context, [new DictRow(null, null, Exclusion("70000000", ""))], [], "M28");
         Assert.Equal(SaveStatus.Rejected, rejected.Status);
         Assert.Single(_service.Rows(ProjectDictionaries.Exclusions, "M28"));
+    }
+
+    [SqlFact]
+    public void Project_dictionary_file_import_skips_empty_template_rows_resolves_cam_names_and_needs_the_sheet()
+    {
+        Assert.True(_store.Create("M28", "M28", ProjectTypes.Internal, Objectives()).Success);
+        var (tree, inputs) = (_store.Objectives("M28"), _service.Mapping());
+        var dictionaries = new DictionaryService(_dictionaries, new SqlJournal(_database!.Sql, _services.Clock, _services.User));
+        Assert.Equal(SaveStatus.Saved, dictionaries.Save(GlobalDictionaries.Get(GlobalDictionaries.Persons),
+            [new DictRow(null, null, new Dictionary<string, string?> { ["USRID"] = "e123456", ["Imię i nazwisko"] = "Anna Nowak" })], [], true).Status);
+        var context = _service.Context("M28", tree, null, inputs);
+        var item = ProjectDictionaries.Item(ProjectDictionaries.WpCam);
+
+        // Szablon z projektu: same klucze – nic do zapisania, bez błędów.
+        var template = Path.Combine(_root, "szablon.xlsx");
+        _service.ExportDictionaries(template, "M28", ProjectTypes.Internal, tree, inputs);
+        var empty = _service.PreviewDictionary(ProjectDictionaries.WpCam, context, template, "M28", ProjectService.FindSheet(template, item));
+        Assert.False(empty.HasErrors, string.Join("; ", empty.Issues.Select(i => i.Message)));
+        Assert.Empty(empty.Working);
+
+        // Częściowo uzupełniony szablon: CAM wpisany imieniem i nazwiskiem – zapisany USRID; wiersz bez WP pominięty.
+        var filled = Path.Combine(_root, "slowniki.xlsx");
+        ExcelTableWriter.WriteSheets(filled,
+        [
+            ("WP i CAM", ["Element P1S", "WP", "CAM", "Cost Category"],
+                [new object?[] { "AC-CAB.6.38.01", "WP-1", "Anna Nowak", "Labor" }, new object?[] { "AC-CAB.6.38.02", null, null, null }]),
+            ("Inny arkusz", ["x"], []),
+        ]);
+        var preview = _service.PreviewDictionary(ProjectDictionaries.WpCam, context, filled, "M28", ProjectService.FindSheet(filled, item));
+        Assert.False(preview.HasErrors, string.Join("; ", preview.Issues.Select(i => i.Message)));
+        var row = Assert.Single(preview.Working);
+        Assert.Equal(("WP-1", "e123456"), (row["WP"], row["CAM"]));
+        Assert.Contains(preview.Issues, i => i.Message.Contains("samym kluczem"));
+
+        // Skoroszyt z kilkoma arkuszami bez arkusza słownika – błąd zamiast cichego wczytania pierwszego arkusza.
+        var missing = _service.PreviewDictionary(ProjectDictionaries.ScheduleBudget, context, filled, "M28",
+            ProjectService.FindSheet(filled, ProjectDictionaries.Item(ProjectDictionaries.ScheduleBudget)));
+        Assert.True(missing.HasErrors);
+        Assert.Contains("kilka arkuszy", missing.Issues.Single().Message);
+
+        // Cost Category projektu: wiersze identyczne ze słownikiem globalnym nie stają się zmianami projektu.
+        var globalSpec = GlobalDictionaries.Get(GlobalDictionaries.CostCategory);
+        static Dictionary<string, string?> Category(string element, string category) =>
+            new() { ["Numer elementu kosztowego"] = element, ["Opis"] = "opis", ["Obszar"] = "A", ["Cost Category"] = category };
+        dictionaries.Save(globalSpec, [new DictRow(null, null, Category("57100000", "Material")), new DictRow(null, null, Category("61000000", "Labor"))], [], true);
+        var categories = Path.Combine(_root, "cc.xlsx");
+        ExcelTableWriter.Write(categories, "Cost Category projektu", ["Numer elementu kosztowego", "Opis", "Obszar", "Cost Category"],
+            [new object?[] { "0057100000", "opis", "A", "Material" }, new object?[] { "61000000", "opis", "A", "Subcontract" }]);
+        var own = _service.PreviewDictionary(GlobalDictionaries.CostCategory, context, categories, "M28", null);
+        Assert.Equal(["0061000000"], own.Working.Select(r => r["Numer elementu kosztowego"]));
+        Assert.Contains(own.Issues, i => i.Message.Contains("identyczne ze słownikiem globalnym"));
     }
 }

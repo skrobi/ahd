@@ -5,7 +5,7 @@ namespace PzlEv.Shared.Utils.Data.Sql;
 
 /// <summary>
 /// PZLHRPROD przez SQL (pzl-ev.json, Environments.&lt;Env&gt;.PzlHrProd; schemat HR, tabela ORG): kolumny czytane jako
-/// tekst, tylko pracownicy z niepustym USRID.
+/// tekst, tylko pracownicy z niepustym USRID; stała kolejność (osoba z kilkoma wierszami HR – zawsze ten sam wiersz).
 /// </summary>
 public sealed class SqlHrSource(SqlDatabase db) : IHrSource
 {
@@ -20,6 +20,7 @@ public sealed class SqlHrSource(SqlDatabase db) : IHrSource
                        CAST(STEXT AS NVARCHAR(200)) AS Position, CAST(PION AS NVARCHAR(100)) AS Division, CAST(ISMANAGER AS NVARCHAR(10)) AS IsManager
                 FROM {db.Table("ORG")}
                 WHERE USRID IS NOT NULL AND LTRIM(RTRIM(CAST(USRID AS NVARCHAR(128)))) <> ''
+                ORDER BY USRID, PERNR
                 """,
                 commandTimeout: 300)
             .Select(r => new HrPerson(T(r.Usrid), T(r.Pernr), T(r.FirstName), T(r.LastName), T(r.Email), T(r.CostCenter), T(r.DepartmentShort),

@@ -30,7 +30,7 @@ public static class TabularFileReader
     {
         if (!ExcelExtensions.Contains(Path.GetExtension(path)))
             return [];
-        using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
+        using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
         return XlsxStreamReader.SheetNames(stream);
     }
 
@@ -45,7 +45,7 @@ public static class TabularFileReader
 
     /// <summary>Otwarcie pliku z dysku do odczytu strumieniowego – każde czytanie wierszy otwiera plik od nowa (import).</summary>
     public static TabularSource OpenFile(string path, string? sheet = null) =>
-        Open(() => new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 1 << 16, FileOptions.SequentialScan), Path.GetFileName(path), sheet);
+        Open(() => new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, 1 << 16, FileOptions.SequentialScan), Path.GetFileName(path), sheet);
 
     /// <summary>open – nowy strumień treści przy każdym odczycie.</summary>
     public static TabularSource Open(Func<Stream> open, string fileName, string? sheet = null)
@@ -86,14 +86,17 @@ public static class TabularFileReader
         if (header is null)
             return new TabularSource([], type, null, encodingName, name, () => []);
 
-        IEnumerable<string?[]> Rows()
+        // Numer wiersza = numer rekordu (nagłówek – 1); rekord z końcem linii w cudzysłowie liczony jako jeden wiersz.
+        IEnumerable<(int Row, string?[] Cells)> Rows()
         {
             using var reader = Reader();
+            var number = 1;
             foreach (var record in CsvParser.Read(reader, delimiter).Skip(1))
             {
+                number++;
                 if (record.All(string.IsNullOrWhiteSpace))
                     continue;
-                yield return record.Select(v => string.IsNullOrEmpty(v) ? null : v).ToArray();
+                yield return (number, record.Select(v => string.IsNullOrEmpty(v) ? null : v).ToArray());
             }
         }
         return new TabularSource(header.Select(h => h.Trim()).ToList(), type, null, encodingName, name, Rows);

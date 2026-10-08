@@ -179,7 +179,7 @@ public sealed class ProjectDetailViewModel : ObservableObject
 
     /// <summary>Stan projektu z bazy w jednym odczycie w tle: nakładka, mapowanie, gotowość, słowniki, struktura.</summary>
     private sealed record Snapshot(PoTree Tree, MappingInputs Mapping, IReadOnlyDictionary<string, string> Owners, List<Issue> Readiness,
-        IReadOnlyDictionary<string, (int Rows, string LastChange)> Dictionaries, ProjectStructure Structure, IReadOnlyList<PersonOption> Persons,
+        IReadOnlyDictionary<string, (int Rows, string LastChange)> Dictionaries, ProjectStructure Structure, IReadOnlyList<LookupOption> Persons,
         IReadOnlyList<(DictRow Row, bool Inherited)>? Table, IReadOnlyDictionary<string, IReadOnlyList<LookupOption>> Lookups);
 
     /// <summary>
@@ -199,9 +199,10 @@ public sealed class ProjectDetailViewModel : ObservableObject
                 var mapping = _service.Mapping(refreshMapping);
                 var wpCam = _service.Rows(ProjectDictionaries.WpCam, Code);
                 var structure = ProjectService.Structure(tree, mapping, wpCam, _service.Rows(ProjectDictionaries.ScheduleBudget, Code));
+                var persons = _service.PersonLookups();
                 return new Snapshot(tree, mapping, _service.WbsOwners(Code), _service.Readiness(Project, tree, mapping),
-                    codes.ToDictionary(c => c, c => (_service.Rows(c, Code).Count, _service.LastChange(c, Code))), structure, _service.PersonOptions(wpCam),
-                    table is null ? null : _service.EditableRows(table, Code), _service.Lookups());
+                    codes.ToDictionary(c => c, c => (_service.Rows(c, Code).Count, _service.LastChange(c, Code))), structure, ProjectService.PersonOptions(persons, wpCam),
+                    table is null ? null : _service.EditableRows(table, Code), ProjectService.Lookups(persons));
             });
             _saved = snapshot.Tree;
             _mapping = snapshot.Mapping;

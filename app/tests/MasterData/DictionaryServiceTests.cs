@@ -3,6 +3,7 @@ using PzlEv.Shared.Models.Dictionaries;
 using PzlEv.Shared.Utils.Data;
 using PzlEv.Shared.Utils.Data.Sql;
 using PzlEv.Shared.Utils.Files;
+using PzlEv.Shared.Models.Pipeline;
 using PzlEv.Tests.TestSupport;
 using Xunit;
 
@@ -190,6 +191,72 @@ public sealed class DictionaryServiceTests : IDisposable
         Assert.Equal(33, costCategory.Count);
         var warning = Assert.Single(DictionaryValidator.Validate(CostCategory, costCategory));
         Assert.Contains("0057100000", warning.Message);
+    }
+
+    [SqlFact]
+    public void Excel_without_optional_column_keeps_values_and_reports_file_rows()
+    {
+        var saved = _service.Save(Rates, [new(null, null, new Dictionary<string, string?>
+            { ["MPK"] = "W30", ["Department"] = "Wydział 30", ["Year"] = "2026", ["Labor Rate"] = "100", ["Overhead"] = "5" })], [], true);
+        Assert.Equal(SaveStatus.Saved, saved.Status);
+        var path = TempXlsx();
+        try
+        {
+            // Bez kolumn Department i Overhead, z kolumną spoza słownika; wiersz W31 z błędem – drugi wiersz danych (wiersz 3 w Excelu).
+            ExcelTableWriter.Write(path, "Stawki", ["MPK", "Year", "Labor Rate", "Komentarz"], [["W30", 2026L, 120m, "x"], ["W31", 2026L, "sto", "y"]]);
+            var preview = _service.PreviewImport(Rates, path);
+            Assert.Contains(preview.Issues, i => i.Level == CheckLevel.Warning && i.Message.Contains("Brak kolumny 'Overhead'") && i.Message.Contains("bez zmian"));
+            Assert.Contains(preview.Issues, i => i.Level == CheckLevel.Warning && i.Message.Contains("'Komentarz'"));
+            Assert.Contains(preview.Issues, i => i.Level == CheckLevel.Error && i.Element == "wiersz 3 w pliku");
+
+            ExcelTableWriter.Write(path, "Stawki", ["MPK", "Year", "Labor Rate"], [["W30", 2026L, 120m]]);
+            preview = _service.PreviewImport(Rates, path);
+            Assert.False(preview.HasErrors);
+            Assert.Equal(SaveStatus.Saved, _service.ApplyImport(Rates, preview).Status);
+            var row = Assert.Single(_service.Load(Rates));
+            Assert.Equal(("120", "5", "Wydział 30"), (row["Labor Rate"], row["Overhead"], row["Department"]));
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [SqlFact]
+    public void Import_warns_when_file_removes_most_rows_and_rejects_excel_errors()
+    {
+        _service.Save(Rates, [Rate("W30", "100"), Rate("W31", "100"), Rate("W32", "100")], [], true);
+        var path = TempXlsx();
+        try
+        {
+            ExcelTableWriter.Write(path, "Stawki", ["MPK", "Year", "Labor Rate", "Overhead"], [["W30", 2026L, "#N/A", 0m]]);
+            var preview = _service.PreviewImport(Rates, path);
+            Assert.Contains(preview.Issues, i => i.Level == CheckLevel.Warning && i.Message.Contains("usuwa 2 z 3"));
+            Assert.Contains(preview.Issues, i => i.Level == CheckLevel.Error && i.Message.Contains("błąd formuły"));
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [SqlFact]
+    public void Exported_dictionary_reimports_without_changes()
+    {
+        _service.Save(Rates, [new(null, null, new Dictionary<string, string?>
+            { ["MPK"] = "0000412100", ["Department"] = "W", ["Year"] = "2026", ["Labor Rate"] = "123.45678912", ["Overhead"] = "0.25" })], [], true);
+        var path = TempXlsx();
+        try
+        {
+            _service.Export(Rates, path);
+            var preview = _service.PreviewImport(Rates, path);
+            Assert.False(preview.HasChanges, preview.Summary + string.Join("; ", preview.Changed));
+            Assert.DoesNotContain(preview.Issues, i => i.Level == CheckLevel.Error);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
     }
 
     private static string TempXlsx() => Path.Combine(Path.GetTempPath(), $"pzl-ev-{Guid.NewGuid():N}.xlsx");

@@ -268,7 +268,11 @@ public sealed class MasterDataViewModel : ObservableObject
         AddPreviewLines("~", preview.Changed);
         AddPreviewLines("−", preview.Removed);
         PreviewIssues.Clear();
-        foreach (var issue in preview.Issues) PreviewIssues.Add(issue);
+        // Pierwsze problemy (ERROR przed WARNING) – tysiące ostrzeżeń dużego słownika zablokowałyby ekran.
+        foreach (var issue in preview.Issues.OrderBy(i => i.Level == Shared.Models.Pipeline.CheckLevel.Error ? 0 : 1).Take(PreviewLimit))
+            PreviewIssues.Add(issue);
+        if (preview.Issues.Count > PreviewLimit)
+            PreviewIssues.Add(Issue.Warning($"… i {preview.Issues.Count - PreviewLimit} kolejnych problemów"));
         Status = preview.HasErrors
             ? $"{source} ma błędy (ERROR) – nie można wczytać."
             : preview.HasChanges ? "Sprawdź różnice i zatwierdź wczytanie." : $"{source} nie zawiera zmian względem słownika.";
