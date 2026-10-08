@@ -114,6 +114,30 @@ public sealed class StructureTests
     }
 
     [Fact]
+    public void Actual_cost_of_ces_elements_goes_to_wp_or_to_gaps()
+    {
+        DictRow[] wpCam = [Wp("XYZ-1", "WP-1"), Wp("AC-CAB.6.38.01", "WP-2"), Wp("AC-CAB.6.38.03.01.05", "WP-3")];
+        DictRow[] schedule = [Budget("WP-1", "10"), Budget("WP-2", "5"), Budget("WP-3", "1")];
+        var costs = new Dictionary<string, decimal>
+        {
+            ["4D06WP000001"] = 100m,   // WP na kodzie P1S węzła (WP-2)
+            ["4d06wp000002"] = 30m,    // bez WP (wielkość liter bez znaczenia)
+            ["4D06WP.RA"] = 50m,       // trzy WP pod elementem – niejednoznaczny
+            ["4D06WP.02"] = 7m,        // jedyny WP pod elementem (WP-3)
+            ["XXX-SPOZA"] = 5m,        // element CES projektu spoza nakładki
+        };
+
+        var structure = ProjectService.Structure(Objectives(), Inputs(), wpCam, schedule, costs);
+
+        Assert.Equal(100m, Of(structure, "4D06WP000001").Acwp);
+        Assert.Contains("koszt bez WP (30)", Of(structure, "4D06WP000002").Gap);
+        Assert.Contains("koszt niejednoznaczny (50) – 3 WP", Of(structure, "4D06WP.RA").Gap);
+        Assert.Equal(7m, Of(structure, "p1s:AC-CAB.6.38.03.01.05").Acwp);   // wiersz WP-3: koszt przypisany do WP
+        Assert.Equal((187m, 80m, 5m, true), (structure.Summary.Acwp, structure.Summary.AcwpWithoutWp, structure.Summary.AcwpOutside, structure.Summary.HasCosts));
+        Assert.False(ProjectService.Structure(Objectives(), Inputs(), wpCam, schedule).Summary.HasCosts);
+    }
+
+    [Fact]
     public void Editable_cells_depend_on_row()
     {
         var structure = ProjectService.Structure(Objectives(), Inputs(), [Wp("XYZ-1", "WP-1")], [Budget("WP-1", "10")]);

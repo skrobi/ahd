@@ -245,4 +245,12 @@ public sealed class SqlProjectStore(SqlDatabase db, IClock clock, ICurrentUser u
             rows.Add(Enumerable.Range(0, reader.FieldCount).Select(i => reader.IsDBNull(i) ? null : reader.GetValue(i)).ToList());
         return (columns, rows);
     }
+
+    public IReadOnlyDictionary<string, decimal> CostsByElement(string code, string value)
+    {
+        using var connection = db.Open();
+        return connection.Query<(string WbsElement, decimal? Amount)>(db.Table("rep.ProjectCostsByElement"), new { Project = code, Value = value },
+                commandType: System.Data.CommandType.StoredProcedure, commandTimeout: 600)
+            .ToDictionary(r => r.WbsElement, r => r.Amount ?? 0, StringComparer.OrdinalIgnoreCase);
+    }
 }

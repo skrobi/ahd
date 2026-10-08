@@ -36,6 +36,9 @@ public sealed class ProjectDetailViewModel : ObservableObject
     private readonly Queue<StructureRowViewModel> _commits = new();
     private bool _committing;
     private int _reloads;
+    /// <summary>ACWP po elemencie CES (ostatni import ACTUALS) – czytany przy otwarciu i „Odśwież mapowanie i koszty”, nie po każdym zapisie.</summary>
+    private IReadOnlyDictionary<string, decimal>? _costs;
+    private string? _costsError;
 
     public ProjectDetailViewModel(ProjectService service, IFileDialogs dialogs, BusyState busy, ProjectInfo project, Action back)
     {
@@ -109,7 +112,7 @@ public sealed class ProjectDetailViewModel : ObservableObject
 
     /// <summary>Wskaźniki EV – liczone w przebiegach (docs/ev-obliczenia.md); do tego czasu kafelki bez wartości.</summary>
     public IReadOnlyList<KpiTile> EvKpis { get; } =
-        new[] { "BCWS", "BCWP", "ACWP", "CPI", "SPI", "EAC" }.Select(k => new KpiTile(k, "—", "po obliczeniu EV w przebiegu", Pending: true)).ToList();
+        new[] { "BCWS", "BCWP", "CPI", "SPI", "EAC" }.Select(k => new KpiTile(k, "—", "po obliczeniu EV w przebiegu", Pending: true)).ToList();
 
     public ObservableCollection<Issue> Readiness { get; } = [];
 
@@ -184,7 +187,8 @@ public sealed class ProjectDetailViewModel : ObservableObject
     /// <summary>Stan projektu z bazy w jednym odczycie w tle: nakładka, mapowanie, gotowość, słowniki, struktura.</summary>
     private sealed record Snapshot(PoTree Tree, MappingInputs Mapping, IReadOnlyDictionary<string, string> Owners, List<Issue> Readiness,
         IReadOnlyDictionary<string, (int Rows, string LastChange)> Dictionaries, ProjectStructure Structure, IReadOnlyList<LookupOption> Persons,
-        IReadOnlyList<(DictRow Row, bool Inherited)>? Table, IReadOnlyDictionary<string, IReadOnlyList<LookupOption>> Lookups);
+        IReadOnlyList<(DictRow Row, bool Inherited)>? Table, IReadOnlyDictionary<string, IReadOnlyList<LookupOption>> Lookups,
+        IReadOnlyDictionary<string, decimal> Costs, string? CostsError);
 
     /// <summary>
     /// Wczytuje stan projektu w tle (struktura zachowuje rozwinięcie i zaznaczenie). Tabela wybranego słownika – tylko
@@ -203,15 +207,17 @@ public sealed class ProjectDetailViewModel : ObservableObject
                 var tree = _service.Objectives(Code);
                 var mapping = _service.Mapping(refreshMapping);
                 var wpCam = _service.Rows(ProjectDictionaries.WpCam, Code);
-                var structure = ProjectService.Structure(tree, mapping, wpCam, _service.Rows(ProjectDictionaries.ScheduleBudget, Code));
+                var (costs, costsError) = refreshMapping || _costs is null ? ReadCosts() : (_costs, _costsError);
+                var structure = ProjectService.Structure(tree, mapping, wpCam, _service.Rows(ProjectDictionaries.ScheduleBudget, Code), costs);
                 var persons = _service.PersonLookups();
                 return new Snapshot(tree, mapping, _service.WbsOwners(Code), _service.Readiness(Project, tree, mapping),
                     codes.ToDictionary(c => c, c => (_service.Rows(c, Code).Count, _service.LastChange(c, Code))), structure, ProjectService.PersonOptions(persons, wpCam),
-                    table is null ? null : _service.EditableRows(table, Code), ProjectService.Lookups(persons));
+                    table is null ? null : _service.EditableRows(table, Code), ProjectService.Lookups(persons), costs, costsError);
             });
             if (version != _reloads)
                 return;   // w międzyczasie ruszyło nowsze odświeżenie – starszy wynik pomijany
             _saved = snapshot.Tree;
+            (_costs, _costsError) = (snapshot.Costs, snapshot.CostsError);
             _mapping = snapshot.Mapping;
             _owners = snapshot.Owners;
             Objectives.MappingInfo = _mapping.Describe;
@@ -232,8 +238,22 @@ public sealed class ProjectDetailViewModel : ObservableObject
             IsReady = ProjectReadiness.IsReady(snapshot.Readiness);
             ReadinessPill = IsReady ? new Pill("ok", "gotowy do przebiegu") : new Pill("crit", "niegotowy – przebieg zablokowany");
             if (refreshMapping)
-                Status = "Odświeżono mapowanie CES ↔ P1S.";
+                Status = _costsError is null ? "Odświeżono mapowanie CES ↔ P1S i koszty (ostatni import ACTUALS)." : $"Odświeżono mapowanie CES ↔ P1S; {_costsError}";
         });
+    }
+
+    /// <summary>ACWP po elemencie CES (w tle); brak danych lub procedury – pusta lista i powód (struktura bez kosztów).</summary>
+    private (IReadOnlyDictionary<string, decimal> Costs, string? Error) ReadCosts()
+    {
+        try
+        {
+            return (_service.CostsByElement(Code), null);
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            Logger.Warning(ex, "Koszty projektu {Code}", Code);
+            return (new Dictionary<string, decimal>(), $"koszty (ACWP) niedostępne: {ex.Message}");
+        }
     }
 
     private void ShowKpis(StructureSummary summary)
@@ -245,6 +265,11 @@ public sealed class ProjectDetailViewModel : ObservableObject
         Kpis.Add(new KpiTile("WP / CAM", $"{summary.Wps} / {summary.Cams}", "pakiety pracy i ich CAM w strukturze"));
         Kpis.Add(new KpiTile("Okres", summary.Start is null && summary.Finish is null ? "—" : $"{summary.Start ?? "?"} – {summary.Finish ?? "?"}", "planowany start i koniec"));
         Kpis.Add(new KpiTile("Braki", $"{summary.ElementsWithoutWp} / {summary.WpsWithoutBudget}", "elementy CES bez WP / WP bez budżetu"));
+        Kpis.Add(_costsError is null
+            ? new KpiTile("ACWP", Amount(summary.Acwp), "koszt rzeczywisty narastająco (PLN) – ostatni import ACTUALS, bez wykluczeń")
+            : new KpiTile("ACWP", "—", _costsError, Pending: true));
+        Kpis.Add(new KpiTile("Koszt bez WP", Amount(summary.AcwpWithoutWp + summary.AcwpOutside),
+            $"bez przypisania do WP: {Amount(summary.AcwpWithoutWp)} (brak WP / kilka WP – O45); elementy CES spoza nakładki: {Amount(summary.AcwpOutside)}"));
     }
 
     /// <summary>Zapis zmian wiersza struktury od razu po zatwierdzeniu; błąd – zmiany zostają w wierszu, komunikat wyżej.</summary>

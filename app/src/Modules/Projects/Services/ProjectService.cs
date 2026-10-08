@@ -289,8 +289,12 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
     // ---------- struktura projektu (ekran Projekt) ----------
 
     /// <summary>Struktura projektu: nakładka z rozwinięciem P1S, WP, CAM, budżet i daty (StructureBuilder).</summary>
-    public static ProjectStructure Structure(PoTree tree, MappingInputs inputs, IReadOnlyList<DictRow> wpCam, IReadOnlyList<DictRow> schedule) =>
-        StructureBuilder.Build(tree, Resolve(tree, inputs), inputs.P1s, wpCam, schedule);
+    public static ProjectStructure Structure(PoTree tree, MappingInputs inputs, IReadOnlyList<DictRow> wpCam, IReadOnlyList<DictRow> schedule,
+        IReadOnlyDictionary<string, decimal>? costs = null) =>
+        StructureBuilder.Build(tree, Resolve(tree, inputs), inputs.P1s, wpCam, schedule, costs);
+
+    /// <summary>ACWP po elemencie CES z ostatniego importu ACTUALS (waluta obiektu – PLN) – kolumna ACWP struktury.</summary>
+    public IReadOnlyDictionary<string, decimal> CostsByElement(string code) => store.CostsByElement(code, DefaultCostValue);
 
     /// <summary>
     /// Zapis zmiany wiersza tabeli struktury od razu po jej zatwierdzeniu (bez osobnego „Zapisz”): nazwa i Legacy WBS –

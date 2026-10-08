@@ -2,6 +2,7 @@ using PzlEv.Modules.Projects.Models;
 using PzlEv.Shared.Models.Dictionaries;
 using PzlEv.Shared.Models.Mapping;
 using PzlEv.Shared.Models.PzlProd;
+using PzlEv.Shared.Utils.Files;
 using PzlEv.Shared.Utils.Mapping;
 
 namespace PzlEv.Modules.Projects.Services;
@@ -13,6 +14,9 @@ namespace PzlEv.Modules.Projects.Services;
 /// występuje raz. Elementy „WP i CAM” spoza LOG.WBS (np. bez PZLPROD) trafiają pod wiersz o najdłuższym pasującym
 /// kodzie (kod + kropka), a bez niego – do grupy „spoza struktury”. WP, CAM i budżet z słowników projektu; sumy
 /// wiersza obejmują poddrzewo (WP liczony raz).
+/// Koszt rzeczywisty (costs – ACWP po elemencie CES z ostatniego importu ACTUALS): koszt elementu nakładki trafia do
+/// WP na jego kodzie P1S, a bez niego – do jedynego WP pod elementem; brak WP albo kilka WP – koszt bez przypisania
+/// (w brakach wiersza; reguła rozdziału – O45). Koszt elementu CES, którego nie ma w nakładce – „spoza nakładki”.
 /// </summary>
 public static class StructureBuilder
 {
@@ -32,10 +36,13 @@ public static class StructureBuilder
         public bool IsGreyed { get; init; }
         public List<Item> Children { get; } = [];
         public HashSet<string> Wps { get; } = new(StringComparer.OrdinalIgnoreCase);
+        public decimal OwnCost { get; set; }
+        public decimal Cost { get; set; }
+        public string? CostGap { get; set; }
     }
 
     public static ProjectStructure Build(PoTree tree, IReadOnlyDictionary<long, MappingResult> mapping, IReadOnlyList<P1sElement>? p1s,
-        IReadOnlyList<DictRow> wpCam, IReadOnlyList<DictRow> schedule)
+        IReadOnlyList<DictRow> wpCam, IReadOnlyList<DictRow> schedule, IReadOnlyDictionary<string, decimal>? costs = null)
     {
         var budgets = schedule.Where(r => r["WP"] is not null).GroupBy(r => r["WP"]!, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
@@ -142,6 +149,35 @@ public static class StructureBuilder
         foreach (var root in roots)
             Collect(root);
 
+        // Koszt rzeczywisty: element nakładki → WP na jego kodzie P1S albo jedyny WP pod nim; suma poddrzewa nakładki.
+        var costOf = costs is null ? new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase)
+            : costs.ToDictionary(c => c.Key, c => c.Value, StringComparer.OrdinalIgnoreCase);
+        var wpCost = new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase);
+        var used = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var withoutWp = 0m;
+        decimal Assign(Item item)
+        {
+            if (item.Kind == GridRowKind.Objective && item.WbsElement is { } wbs && costOf.TryGetValue(wbs, out var amount) && used.Add(wbs) && amount != 0)
+            {
+                item.OwnCost = amount;
+                var own = item.P1s is null ? null : assignments.GetValueOrDefault(MappingKeys.Key(item.P1s))?["WP"];
+                var target = own ?? (item.Wps.Count == 1 ? item.Wps.First() : null);
+                if (target is not null)
+                    wpCost[target] = wpCost.GetValueOrDefault(target) + amount;
+                else
+                {
+                    withoutWp += amount;
+                    item.CostGap = item.Wps.Count == 0
+                        ? $"koszt bez WP ({PolishNumber.ToDisplay(amount)})"
+                        : $"koszt niejednoznaczny ({PolishNumber.ToDisplay(amount)}) – {item.Wps.Count} WP pod elementem, reguła rozdziału O45";
+                }
+            }
+            item.Cost = item.OwnCost + item.Children.Sum(Assign);
+            return item.Cost;
+        }
+        foreach (var root in roots)
+            Assign(root);
+
         var rows = new List<StructureRow>();
         void Emit(Item item, string? parentId, int depth)
         {
@@ -153,9 +189,12 @@ public static class StructureBuilder
                 gap = item.HasCode ? "element nakładki bez WP" : "brak kodu P1S (Legacy WBS ani mapowania) – bez WP";
             else if (wps.Any(w => !AnalyticBaseBuilder.HasBudget(budgets.GetValueOrDefault(w))))
                 gap = "WP bez budżetu";
+            if (item.CostGap is { } costGap)
+                gap = gap is null ? costGap : $"{gap}; {costGap}";
+            var acwp = item.Kind == GridRowKind.Objective ? item.Cost : wps.Sum(w => wpCost.GetValueOrDefault(w));
             rows.Add(new StructureRow(item.Id, parentId, depth, item.Kind, item.NodeKey, item.IsVirtual, item.Name, item.WbsElement, item.P1s,
                 item.Note, item.IsGreyed, assignment?["WP"], assignment?["CAM"], assignment?["Cost Category"], wps, hours, material, start, finish,
-                gap, item.Children.Count > 0));
+                gap, item.Children.Count > 0, acwp));
             foreach (var child in item.Children)
                 Emit(child, item.Id, depth + 1);
         }
@@ -171,7 +210,11 @@ public static class StructureBuilder
             all.Select(w => camOf.GetValueOrDefault(w)).OfType<string>().Distinct(StringComparer.OrdinalIgnoreCase).Count(),
             total.Hours, total.Material, total.Start, total.Finish,
             rows.Count(r => r is { Kind: GridRowKind.Objective, IsVirtual: false } && r.Wps.Count == 0),
-            all.Count(w => !AnalyticBaseBuilder.HasBudget(budgets.GetValueOrDefault(w))));
+            all.Count(w => !AnalyticBaseBuilder.HasBudget(budgets.GetValueOrDefault(w))),
+            roots.Sum(r => r.Cost),
+            withoutWp,
+            costOf.Where(c => !used.Contains(c.Key)).Sum(c => c.Value),
+            costs is not null);
         return new ProjectStructure(rows, summary);
     }
 }

@@ -184,4 +184,29 @@ public sealed class LatestImportProcedureTests : IDisposable
         Assert.All(rows, r => Assert.Equal(("projekt dodany ręcznie", "4D03GZ", "projekt dodany ręcznie"), ((string)r[0]!, (string)r[1]!, (string)r[2]!)));
         Assert.Equal(-230.40m, rows[0][columns.ToList().IndexOf("2026")]);
     }
+
+    /// <summary>Migracja 016: ACWP po elemencie CES – suma całego ostatniego importu, bez wykluczeń, tylko elementy projektu.</summary>
+    [SqlFact]
+    public void Project_costs_by_ces_element_sum_whole_latest_import_without_exclusions()
+    {
+        Use();
+        Write("ACTUALS_PAF_01.csv", 0, new DateTime(2026, 10, 6, 23, 0, 0, DateTimeKind.Utc));
+        _import.Run();
+        var tree = new PoTree();
+        var project = tree.Add(new PoNode { Key = tree.NewKey(), WbsElement = "2DI473", Name = "Projekt 2DI473", ProjectDefinition = "2DI473" });
+        tree.Add(new PoNode { Key = tree.NewKey(), ParentKey = project.Key, WbsElement = "2DI473001001", Name = "element", ProjectDefinition = "2DI473" });
+        var store = new SqlProjectStore(_database!.Sql, _services.Clock, _services.User);
+        Assert.True(store.Create("M28", "M28", ProjectTypes.Internal, tree).Success);
+        using var connection = _database.Sql.Open();
+        connection.Execute($"INSERT INTO {_database.Sql.Table("dict.Exclusion")} (RowId, Version, Project, CostElement, Description, RecordedAt, RecordedBy) " +
+                           "VALUES (1, 1, 'M28', '0057120550', N'delegacje poza analizą', SYSDATETIMEOFFSET(), 'test')");
+
+        var costs = store.CostsByElement("M28", "ValueObjCrcy");
+
+        // 2DI473001001: 1 254,51 + 4 800; 2DI473001002 (spoza nakładki, ale projektu): 2 400 bez wykluczonej delegacji (430); 4D03GZ – inny projekt.
+        Assert.Equal(2, costs.Count);
+        Assert.Equal(6054.51m, costs["2DI473001001"]);
+        Assert.Equal(2400m, costs["2di473001002"]);
+        Assert.Equal(50014, Assert.Throws<SqlException>(() => store.CostsByElement("M28", "Brak")).Number);
+    }
 }

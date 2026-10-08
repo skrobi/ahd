@@ -286,6 +286,12 @@ elementem dawał pusty wynik. Wymaga aplikacji 0.23.1.
 `CostCenter`, `DepartmentShort`, `DepartmentName`, `Position`, `Division`, `IsManager`, `Pernr`); kluczem jest USRID
 (dotychczasowa kolumna `AdAccount`). Słownik Osoby wczytuje się z PZLHRPROD (`HR.ORG`). Wymaga aplikacji 0.24.0.
 
+**Migracja `sql/mssql/016_koszty_po_elementach.sql`:** procedura `REP_ProjectCostsByElement @Project, @Value =
+'ValueObjCrcy'` – koszt rzeczywisty (ACWP) projektu po WBS elemencie CES: suma kwoty z ostatniego importu ACTUALS
+(`CAN_LatestFiles`; zrzut zawsze zawiera całość, więc to koszt narastająco), Project definition projektu jak
+w `REP_ProjectCosts`, bez wykluczeń projektu; wiersz bez WBS elementu – pod Project definition. Kolumna ACWP tabeli
+struktury (`docs/performance-objectives.md`, rozdz. 4.2). Wymaga aplikacji 0.28.0.
+
 Aplikacja zapisuje dziś do tabel importu, konfiguracji importu, słowników globalnych, korekt mapowania, dziennika i problemów;
 tabele projektów i słowników projektu czekają na moduły F4. Blokada importu – plik na dysku sieciowym
 (`docs/pipeline-fazy.md`, rozdz. 1.3), `sp_getapplock` razem z procedurami (F10.2).

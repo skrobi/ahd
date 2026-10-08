@@ -36,6 +36,9 @@ public partial class StructureView : UserControl
         (StructureEdits.Finish, "Baseline Koniec", 110, true, false),
     ];
 
+    /// <summary>Kolumny tylko do odczytu: element CES (klucz nakładki), ACWP (z danych ACTUALS).</summary>
+    private static readonly HashSet<string> ReadOnly = ["WbsElement", "Acwp"];
+
     private static readonly IValueConverter CellBackground = new LevelBrushConverter();
 
     private readonly List<DataGridColumn> _codeColumns = [];
@@ -103,6 +106,8 @@ public partial class StructureView : UserControl
         RowsGrid.Columns.Add(_cam);
         foreach (var column in Budget)
             TextColumn(column);
+        // ACWP – koszt rzeczywisty z ostatniego importu ACTUALS (tylko do odczytu; nieprzypisany do WP – w Brakach).
+        TextColumn(("Acwp", "ACWP", 110, false, true));
         RowsGrid.Columns.Add(new DataGridTemplateColumn
         {
             Header = "Braki",
@@ -126,8 +131,8 @@ public partial class StructureView : UserControl
             Header = header,
             Width = width,
             SortMemberPath = key,
-            Binding = new Binding($"[{key}]") { Mode = key == "WbsElement" ? BindingMode.OneWay : BindingMode.TwoWay, UpdateSourceTrigger = UpdateSourceTrigger.LostFocus },
-            IsReadOnly = key == "WbsElement",
+            Binding = new Binding($"[{key}]") { Mode = ReadOnly.Contains(key) ? BindingMode.OneWay : BindingMode.TwoWay, UpdateSourceTrigger = UpdateSourceTrigger.LostFocus },
+            IsReadOnly = ReadOnly.Contains(key),
             ElementStyle = style,
         };
         if (mono)
