@@ -76,7 +76,7 @@ Definicje źródeł i ich prefiksy są konfiguracją importu – `docs/zrodla-da
 | Słownik | Zawartość | Klucz |
 |---|---|---|
 | WP i CAM | element P1S projektu → WP, CAM, Cost Category (kategoria ze słownika „Kategorie WBS” projektu); powiązanie z nakładką przez `Legacy WBS` (`docs/performance-objectives.md`, rozdz. 4.1) | element P1S |
-| Harmonogram i budżet | WP → `BAC HOURS` (godziny), `BAC MATERIAL` (koszt materiałów), Baseline Start, Baseline Koniec (RRRR-MM-DD; w plikach Excel rozpoznawane też dawne nagłówki „Planowany Start/Koniec”) – baseline projektu | WP |
+| Harmonogram i budżet | WP → `BAC HOURS` (godziny), `BAC MATERIAL` (koszt materiałów), `BAC` (budżet kosztowy WP – kwota), Baseline Start, Baseline Koniec (RRRR-MM-DD; w plikach Excel rozpoznawane też dawne nagłówki „Planowany Start/Koniec”) – baseline projektu | WP |
 | Kategorie WBS | kategorie elementów WBS indywidualne dla projektu: `Cost Category` (np. Production, Programs), `Opis` – lista wyboru kolumny Cost Category w strukturze projektu i w „WP i CAM”; raport po kategoriach (wiele elementów WBS w jednej kategorii); inne niż globalny słownik Cost Category (numer elementu kosztowego) – **opcjonalny** | Cost Category |
 | Stawki CAS | stawki CAS projektu (zawartość – O37); do ustalenia słownik nie jest wczytywany, a projekt CAS jest niegotowy (ERROR) | do ustalenia |
 | Cost Category – zmiany w projekcie | zmiany i uzupełnienia słownika globalnego Cost Category dla projektu (rozdz. 6) | numer elementu kosztowego |
@@ -143,7 +143,7 @@ Kontekst biznesowy typów – `readme.md`.
 | data rozpoczęcia ≤ data zakończenia (bazowe, planowane, rzeczywiste) | ERROR |
 | budżet ≥ 0 | ERROR |
 | budżet na elemencie bez WP | WARNING |
-| WP bez budżetu | WARNING |
+| WP bez budżetu (`BAC HOURS`, `BAC MATERIAL` i `BAC` puste) | WARNING |
 
 ### 5.4 Stawki wydziałów i stawki CAS
 
