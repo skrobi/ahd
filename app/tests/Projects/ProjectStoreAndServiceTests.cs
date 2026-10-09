@@ -158,8 +158,8 @@ public sealed class ProjectStoreAndServiceTests : IDisposable
     [SqlFact]
     public void Create_with_all_dictionaries_from_one_workbook()
     {
-        // Kategorie WBS – słownik opcjonalny, którego arkusza nie ma w skoroszycie testowym (wczytuje się tylko podane pliki).
-        var files = ProjectDictionaries.ForType(ProjectTypes.Sac).Where(i => i.Stored && i.Code != ProjectDictionaries.WbsCategories)
+        // Kategorie WBS, Elementy wirtualne P1S – słowniki opcjonalne, których arkuszy nie ma w skoroszycie testowym (wczytuje się tylko podane pliki).
+        var files = ProjectDictionaries.ForType(ProjectTypes.Sac).Where(i => i.Stored && i.Code is not (ProjectDictionaries.WbsCategories or ProjectDictionaries.VirtualP1s))
             .Select(i => (i.Code, Sheet: ProjectService.FindSheet(Dictionaries, i)))
             .ToDictionary(x => x.Code, x => (Dictionaries, x.Sheet));
         Assert.All(files.Values, f => Assert.NotNull(f.Sheet));
@@ -215,7 +215,7 @@ public sealed class ProjectStoreAndServiceTests : IDisposable
         _service.ExportDictionaries(path, "", ProjectTypes.Internal, Objectives(), MappingInputs.None);
 
         var sheets = PzlEv.Shared.Utils.Files.TabularFileReader.SheetNames(path);
-        Assert.Equal(["WP i CAM", "Harmonogram i budżet", "Kategorie WBS", "Cost Category projektu", "Wykluczenia"], sheets);
+        Assert.Equal(["WP i CAM", "Harmonogram i budżet", "Kategorie WBS", "Elementy wirtualne P1S", "Cost Category projektu", "Wykluczenia"], sheets);
         var wp = PzlEv.Shared.Utils.Files.TabularFileReader.Read(path, "WP i CAM");
         Assert.Equal(["AC-CAB", "AC-CAB.6.38", "AC-CAB.6.38.01", "AC-CAB.6.38.02", "AC-CAB.6.38.03", "AC-CAB.6.38.03.01"], wp.Rows.Select(r => r[0]));
     }

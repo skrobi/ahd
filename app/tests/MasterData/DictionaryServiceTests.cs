@@ -191,6 +191,19 @@ public sealed class DictionaryServiceTests : IDisposable
         Assert.Equal(33, costCategory.Count);
         var warning = Assert.Single(DictionaryValidator.Validate(CostCategory, costCategory));
         Assert.Contains("0057100000", warning.Message);
+
+        // 023: parametry produkcji jak raport S70MR – poprawne, odczytane jako parametry (nie domyślne)
+        var djkSpec = GlobalDictionaries.Get(GlobalDictionaries.DjkRates);
+        var parameterSpec = GlobalDictionaries.Get(GlobalDictionaries.ProductionParameters);
+        var (djk, parameters) = (_service.Load(djkSpec), _service.Load(parameterSpec));
+        Assert.Empty(DictionaryValidator.Validate(djkSpec, djk));
+        Assert.Empty(DictionaryValidator.Validate(parameterSpec, parameters));
+        var read = GlobalDictionaries.ProductionParametersFrom(djk, parameters);
+        var defaults = PzlEv.Shared.Models.PzlProd.ProductionParameters.Default;
+        Assert.False(read.IsDefault);
+        Assert.Equal(defaults.Djk.OrderBy(d => d.Prefix), read.Djk.OrderBy(d => d.Prefix));
+        Assert.Equal((defaults.ProductivityMonths, defaults.DivideByZClo), (read.ProductivityMonths, read.DivideByZClo));
+        Assert.Equal(defaults.DeliveredStatuses, read.DeliveredStatuses);
     }
 
     [SqlFact]

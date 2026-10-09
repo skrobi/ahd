@@ -10,7 +10,7 @@ namespace PzlEv.Modules.Projects.Models;
 /// Operational EV (z PZLPROD na żywo, null – brak danych): OpsBacHours, EvHours, AcHours – suma elementów P1S poddrzewa
 /// (vAHDD); PvHours – BAC Hours WP poddrzewa rozłożone liniowo na dni robocze baseline do dnia stanu. ActualMaterial –
 /// materiały dostarczone (vAPD). Financial EV: PvCost = BAC Cost × udział dni roboczych baseline, EvCost = BAC Cost ×
-/// (EV Hours / BAC Hours) WP. ActualStart / ActualFinish – z godzin AHD (do ustalenia kolumn dat vAHDD).
+/// (EV Hours / BAC Hours) WP. ActualStart / ActualFinish – vAHDD (GSTRI, LTRMI; element wirtualny – DATA_REAL); koniec, gdy wszystkie zlecenia zamknięte.
 /// </summary>
 public sealed record StructureRow(
     string Id,

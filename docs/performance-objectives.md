@@ -105,12 +105,16 @@ i budżetem (`StructureBuilder`).
   | Grupa | Kolumny |
   |---|---|
   | WBS Attributes | WBS Name (drzewo, zamrożona; poziom – wcięcie), CES Element i Legacy Element (P1S) (domyślnie schowane – „+” w nagłówku WBS Name), WP (checkbox), CAM (lista osób), Cost Category (lista kategorii projektu) |
-  | Schedule | Baseline Start, Baseline Finish (RRRR-MM-DD, „Harmonogram i budżet”); Actual Start, Actual Finish – z godzin AHD (pierwsza data CATS, data EV = BAC); kolumny dat `vAHDD` do ustalenia (O10) – na razie puste |
+  | Schedule | Baseline Start, Baseline Finish (RRRR-MM-DD, „Harmonogram i budżet”); Actual Start (najwcześniejszy `GSTRI` zleceń), Actual Finish (najpóźniejszy `LTRMI`, gdy wszystkie zlecenia zamknięte – inaczej puste); element wirtualny – `DATA_REAL` operacji |
   | Operational EV | BAC Hours (AHD: TECH ÷ produktywność IPT z 12 mies. + DJK), PV Hours (BAC Hours AHD WP rozłożone liniowo na dni robocze pn–pt baseline, stan na dziś), EV Hours (TECH_PON ÷ produktywność + DJK), AC Hours (CATS) |
   | Materials | BAC Material („Harmonogram i budżet”), Actual Material (vAPD: dostarczone / wydane, USD bez narzutu Z_CLO) |
   | Financial EV | BAC Hours baseline i BAC Cost („Harmonogram i budżet”), PV Cost (BAC Cost × udział dni roboczych baseline), EV Cost (BAC Cost × EV Hours ÷ BAC Hours AHD, najwyżej BAC Cost), ACWP |
 
   Wartości z PZLPROD to suma elementów P1S poddrzewa wiersza (każdy element raz); PV i EV kosztowe – suma WP poddrzewa.
+  **Elementy wirtualne P1S** (np. Paint – słownik projektu „Elementy wirtualne P1S”): wiersz pod elementem nadrzędnym
+  (znacznik „wirtualny”, reguła w podpowiedzi nazwy); godziny i daty operacji zgodnych z regułą, odjęte od nadrzędnego
+  (suma nadrzędnego z poddrzewem bez zmian); WP, CAM, Cost Category, budżet i daty – jak na elemencie P1S; materiały
+  i ACWP – na nadrzędnym.
   Dane produkcyjne są czytane na żywo (`IPzlProdSource.Production`, zakres P1S projektu zamiast filtra programu) przy
   otwarciu projektu, „Odśwież mapowanie i koszty” i po zmianie Legacy WBS; chwila odczytu – w nagłówku ekranu
   („Produkcja (PZLPROD) …”). Kolumny mają stałą szerokość – przy kolejnych kolumnach tabela przewija się w poziomie.

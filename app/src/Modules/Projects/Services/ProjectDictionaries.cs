@@ -19,6 +19,7 @@ public static class ProjectDictionaries
     public const string Exclusions = "exclusions";
     public const string CasRates = "cas-rates";
     public const string WbsCategories = "wbs-categories";
+    public const string VirtualP1s = "virtual-p1s";
 
     private static readonly DictionarySpec WpCamSpec = new()
     {
@@ -64,6 +65,22 @@ public static class ProjectDictionaries
         ],
     };
 
+    private static readonly DictionarySpec VirtualP1sSpec = new()
+    {
+        Code = VirtualP1s,
+        Name = "Elementy wirtualne P1S",
+        Description = "Element P1S, którego nie ma w LOG.WBS (np. Paint), wydzielony z elementu nadrzędnego regułą operacji vAHDD: SWBS, CPLGR (grupa stanowisk), ARBPL (stanowisko) – puste = dowolne, co najmniej jedno wypełnione. Godziny operacji zgodnych z regułą należą do elementu wirtualnego (odejmowane od nadrzędnego); materiały i ACWP zostają na nadrzędnym. Kod = kod nadrzędnego + kropka + nazwa (np. AC-CAB.6.38.07.PAINT).",
+        Columns =
+        [
+            new("Element wirtualny", ColumnType.Text, Key: true),
+            new("Element nadrzędny", ColumnType.Text, Required: true),
+            new("Nazwa", ColumnType.Text, Required: true),
+            new("SWBS", ColumnType.Text),
+            new("CPLGR", ColumnType.Text),
+            new("ARBPL", ColumnType.Text),
+        ],
+    };
+
     private static readonly DictionarySpec ExclusionsSpec = new()
     {
         Code = Exclusions,
@@ -86,6 +103,7 @@ public static class ProjectDictionaries
         new(ScheduleBudget, "Harmonogram i budżet", "Harmonogram i budżet", RequiredFor: ProjectTypes.All, Stored: true),
         new(CasRates, "Stawki CAS", "Stawki CAS", RequiredFor: [ProjectTypes.Cas], Stored: false),
         new(WbsCategories, "Kategorie WBS", "Kategorie WBS", RequiredFor: [], Stored: true),
+        new(VirtualP1s, "Elementy wirtualne P1S", "Elementy wirtualne P1S", RequiredFor: [], Stored: true),
         new(GlobalDictionaries.CostCategory, "Cost Category – zmiany w projekcie", "Cost Category projektu", RequiredFor: [], Stored: true),
         new(Exclusions, "Wykluczenia", "Wykluczenia", RequiredFor: [], Stored: true),
     ];
@@ -101,6 +119,8 @@ public static class ProjectDictionaries
         new(ScheduleBudgetSpec, "dict.ScheduleBudget",
             [("WP", "Wp"), ("BAC HOURS", "BacHours"), ("BAC MATERIAL", "BacMaterial"), ("BAC", "Bac"), ("Baseline Start", "PlannedStart"), ("Baseline Koniec", "PlannedEnd")]),
         new(WbsCategoriesSpec, "dict.WbsCategory", [("Cost Category", "Category"), ("Opis", "Description")]),
+        new(VirtualP1sSpec, "dict.VirtualP1s",
+            [("Element wirtualny", "Code"), ("Element nadrzędny", "Parent"), ("Nazwa", "Name"), ("SWBS", "Swbs"), ("CPLGR", "Cplgr"), ("ARBPL", "Arbpl")]),
         new(ExclusionsSpec, "dict.Exclusion", [("Cost Element", "CostElement"), ("WBS Element", "WbsElement"), ("Partner object", "PartnerObject"), ("Opis", "Description")]),
     ];
 
@@ -117,6 +137,7 @@ public static class ProjectDictionaries
         ScheduleBudget => With(ScheduleBudgetSpec, rows => ScheduleBudgetRules(rows, context)),
         Exclusions => With(ExclusionsSpec, ExclusionRules),
         WbsCategories => WbsCategoriesSpec,
+        VirtualP1s => With(VirtualP1sSpec, rows => VirtualP1sRules(rows, context)),
         GlobalDictionaries.CostCategory => GlobalDictionaries.Get(GlobalDictionaries.CostCategory),
         _ => throw new NotSupportedException($"Słownik {code} nie jest zapisywany w bazie"),
     };
@@ -187,6 +208,28 @@ public static class ProjectDictionaries
                 yield return Issue.Warning($"WP {row["WP"]} bez budżetu (BAC HOURS, BAC MATERIAL i BAC puste)", at);
             if (row["Baseline Start"] is { } start && row["Baseline Koniec"] is { } end && string.CompareOrdinal(start, end) > 0)
                 yield return Issue.Error("Baseline Start jest późniejszy niż Baseline Koniec", at);
+        }
+    }
+
+    /// <summary>
+    /// docs/slowniki.md, rozdz. 5.9: element nadrzędny w zakresie projektu; kod elementu wirtualnego = kod nadrzędnego + kropka
+    /// + nazwa (leży pod nim – zakres i miejsce w strukturze); reguła – co najmniej jedno z SWBS, CPLGR, ARBPL.
+    /// </summary>
+    private static IEnumerable<Issue> VirtualP1sRules(IReadOnlyList<DictRow> rows, ProjectDictionaryContext context)
+    {
+        for (var i = 0; i < rows.Count; i++)
+        {
+            var at = DictionaryValidator.RowElement(i);
+            var row = rows[i];
+            if (row["Element nadrzędny"] is { } parent)
+            {
+                if (context.Scope.RootOf(parent) is null)
+                    yield return Issue.Error($"Element nadrzędny {parent} jest poza zakresem projektu", at);
+                if (row["Element wirtualny"] is { } code && !(code.StartsWith(parent + ".", StringComparison.OrdinalIgnoreCase) && code.Length > parent.Length + 1))
+                    yield return Issue.Error($"Kod elementu wirtualnego {code} – zacznij od kodu nadrzędnego i kropki (np. {parent}.PAINT)", at);
+            }
+            if (row["SWBS"] is null && row["CPLGR"] is null && row["ARBPL"] is null)
+                yield return Issue.Error("Reguła – podaj co najmniej jedno z pól SWBS, CPLGR, ARBPL", at);
         }
     }
 

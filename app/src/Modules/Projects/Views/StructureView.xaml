@@ -8,7 +8,7 @@
                 <Button Content="{Binding Glyph}" Width="18" Padding="0" Margin="0,0,4,0" Background="Transparent" BorderThickness="0"
                         Foreground="{StaticResource Muted}" Cursor="Hand" Click="OnToggle" Focusable="False" />
                 <Border Style="{StaticResource Tag}" Margin="0,0,6,0" Visibility="{Binding IsVirtual, Converter={StaticResource BoolToVisibility}}">
-                    <TextBlock Text="węzeł" FontSize="11" />
+                    <TextBlock Text="{Binding VirtualTag}" FontSize="11" />
                 </Border>
                 <TextBlock Text="{Binding [Name]}" VerticalAlignment="Center" ToolTip="{Binding Note}">
                     <TextBlock.Style>

@@ -110,7 +110,9 @@ public sealed class ProjectDetailViewModel : ObservableObject
 
     public string ProductionDetails => _production is null ? ""
         : (_production.Error ?? $"Operational EV i Actual Material odczytane na żywo z PZLPROD (LOG.vAHDD, LOG.vAPD) o {_production.ReadAt:yyyy-MM-dd HH:mm} – " +
-            $"elementów P1S z danymi: {_production.ByPspnr.Count}. Ponowny odczyt: „Odśwież mapowanie i koszty”.") + "\n" + ProductionData.DatesNote;
+            $"elementów z danymi: {_production.ByPspnr.Count}. Ponowny odczyt: „Odśwież mapowanie i koszty”.")
+          + (_production.Note is { } note ? $"\nUwaga: {note}" : "")
+          + "\nZapytanie: sql/pzlprod/produkcja.sql; parametry – słowniki „Wskaźniki DJK” i „Parametry produkcji”; elementy wirtualne (np. Paint) – słownik projektu „Elementy wirtualne P1S”.";
 
     public string Subtitle => $"{ProjectTypes.Label(Project.Type)} · utworzony {Project.RecordedAt:yyyy-MM-dd HH:mm} przez {Project.RecordedBy}";
 
@@ -246,8 +248,10 @@ public sealed class ProjectDetailViewModel : ObservableObject
                 var rows = states.ToDictionary(s => s.Key, s => s.Value.Rows);
                 var wpCam = rows.GetValueOrDefault(ProjectDictionaries.WpCam) ?? [];
                 var (costs, costsError) = refreshMapping || _costs is null ? ReadCosts() : (_costs, _costsError);
-                var production = cachedProduction ?? _service.Production(tree, mapping, resolved);
-                var structure = ProjectService.Structure(tree, mapping, resolved, wpCam, rows.GetValueOrDefault(ProjectDictionaries.ScheduleBudget) ?? [], costs, production);
+                var virtualP1s = rows.GetValueOrDefault(ProjectDictionaries.VirtualP1s) ?? [];
+                var production = cachedProduction ?? _service.Production(Code, tree, mapping, resolved, virtualP1s);
+                var structure = ProjectService.Structure(tree, mapping, resolved, wpCam, rows.GetValueOrDefault(ProjectDictionaries.ScheduleBudget) ?? [], costs, production,
+                    virtualP1s);
                 var persons = cachedPersons ?? _service.PersonLookups();
                 var folderChecks = cachedFolders ?? _service.FolderChecks(Code);
                 var categories = ProjectService.CategoryLookups(rows.GetValueOrDefault(ProjectDictionaries.WbsCategories) ?? []);
@@ -563,6 +567,8 @@ public sealed class ProjectDetailViewModel : ObservableObject
             var outcome = await Busy.Run($"Zapisywanie słownika „{panel.Name}”…", () => _service.ApplyDictionary(panel.Item.Code, context(), preview, Code));
             if (outcome.Status == SaveStatus.Saved)
                 panel.SetPreview(null, "");
+            if (outcome.Status == SaveStatus.Saved && panel.Item.Code == ProjectDictionaries.VirtualP1s)
+                _production = null;   // nowe reguły elementów wirtualnych – dane produkcyjne czytane ponownie
             await Reload(refreshMapping: false);
             Status = $"{panel.Name}: {outcome.Message}";
         });
@@ -592,6 +598,8 @@ public sealed class ProjectDetailViewModel : ObservableObject
             {
                 case SaveStatus.Saved:
                 case SaveStatus.NoChanges:
+                    if (panel.Item.Code == ProjectDictionaries.VirtualP1s)
+                        _production = null;   // nowe reguły elementów wirtualnych – dane produkcyjne czytane ponownie
                     await Reload(refreshMapping: false, discard: true);
                     Table.SetIssues(outcome.Issues);
                     break;

@@ -35,7 +35,7 @@ public static class StructureColumns
     public static IReadOnlyList<Group> Groups { get; } =
     [
         new(WbsAttributes, false, "Atrybuty elementu WBS: drzewo nakładki z rozwinięciem P1S, pakiet pracy, CAM, kategoria."),
-        new(Schedule, true, "Harmonogram: baseline (wpisywany) i daty rzeczywiste (z produkcji)."),
+        new(Schedule, true, "Harmonogram: baseline (wpisywany) i daty rzeczywiste (z produkcji, vAHDD)."),
         new(OperationalEv, true, "Perspektywa operacyjna – godziny z raportu AHD (PZLPROD, na żywo)."),
         new(Materials, false, "Materiały: budżet i wartość dostarczona."),
         new(FinancialEv, true, "Perspektywa finansowa – koszty: budżet, wartość planowana i wypracowana, koszt rzeczywisty."),
@@ -52,16 +52,16 @@ public static class StructureColumns
 
         new(StructureEdits.Start, "Baseline Start", Schedule, "Planowany start WP (baseline, RRRR-MM-DD) – „Harmonogram i budżet”.", 110, Mono: true, Right: false),
         new(StructureEdits.Finish, "Baseline Finish", Schedule, "Planowany koniec WP (baseline, RRRR-MM-DD) – „Harmonogram i budżet”.", 110, Mono: true, Right: false),
-        new(ActualStart, "Actual Start", Schedule, "Rzeczywisty start – pierwsza data godzin (CATS) w AHD; kolumny dat vAHDD do ustalenia (O10) – na razie puste.", 110, Mono: true, Right: false, FromView: true),
-        new(ActualFinish, "Actual Finish", Schedule, "Rzeczywisty koniec – data, gdy EV Hours osiągnęło BAC Hours (AHD); kolumny dat vAHDD do ustalenia (O10) – na razie puste.", 110, Mono: true, Right: false, FromView: true),
+        new(ActualStart, "Actual Start", Schedule, "Rzeczywisty start – najwcześniejszy rzeczywisty start zlecenia (vAHDD GSTRI); element wirtualny (np. Paint) – najwcześniejsza data wykonania jego operacji (DATA_REAL).", 110, Mono: true, Right: false, FromView: true),
+        new(ActualFinish, "Actual Finish", Schedule, "Rzeczywisty koniec – najpóźniejszy rzeczywisty koniec zlecenia (vAHDD LTRMI; wirtualny – DATA_REAL), gdy wszystkie zlecenia elementu są zamknięte (STAT = DONE); inaczej puste – element trwa.", 110, Mono: true, Right: false, FromView: true),
 
-        new(OpsBacHours, "BAC Hours", OperationalEv, "Budżet godzin z AHD (vAHDD): TECH ÷ produktywność IPT (12 mies.) + godziny jakości DJK; może różnić się od BAC Hours baseline. Suma elementów P1S poddrzewa.", FromView: true),
+        new(OpsBacHours, "BAC Hours", OperationalEv, "Budżet godzin z AHD (vAHDD): TECH ÷ produktywność IPT + godziny jakości DJK (słowniki „Parametry produkcji”, „Wskaźniki DJK”); może różnić się od BAC Hours baseline. Suma elementów P1S poddrzewa.", FromView: true),
         new(PvHours, "PV Hours", OperationalEv, "Godziny do wypracowania wg harmonogramu baseline: BAC Hours (AHD) WP rozłożone liniowo na dni robocze (pn–pt) od Baseline Start do Baseline Finish, stan na dziś.", FromView: true),
         new(EvHours, "EV Hours", OperationalEv, "Godziny zarobione wg raportu AHD (vAHDD): TECH_PON ÷ produktywność IPT + DJK.", FromView: true),
         new(AcHours, "AC Hours", OperationalEv, "Godziny rzeczywiste – zaraportowane godziny CATS (vAHDD).", FromView: true),
 
         new(StructureEdits.BacMaterial, "BAC Material", Materials, "Budżet materiałów WP – „Harmonogram i budżet”."),
-        new(ActualMaterial, "Actual Material", Materials, "Materiały dostarczone / wydane (vAPD, STATUS DOST, WYD) – wartość w USD bez narzutu Z_CLO.", FromView: true),
+        new(ActualMaterial, "Actual Material", Materials, "Materiały dostarczone (vAPD, statusy i narzut Z_CLO – słownik „Parametry produkcji”), USD; na elemencie nadrzędnym, nie wirtualnym.", FromView: true),
 
         new(StructureEdits.BacHours, "BAC Hours baseline", FinancialEv, "Budżet godzin w baseline projektu – „Harmonogram i budżet” (wpisywany)."),
         new(StructureEdits.Bac, "BAC Cost", FinancialEv, "Budżet kosztowy WP (kwota) – „Harmonogram i budżet”."),

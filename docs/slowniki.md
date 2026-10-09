@@ -66,6 +66,8 @@ Słowniki, kreator projektu).
 | Cost Category | numer elementu kosztowego → Opis, Obszar, Cost Category (rozdz. 6) | numer elementu kosztowego | walidacja (P2), łączenie źródeł (P3) |
 | Osoby | pracownicy z HR – „Wczytaj z HR” (PZLHRPROD `HR.ORG`, osoby z niepustym `USRID`; zawartość zastępowana po podglądzie różnic): USRID (numer znaczka, login), imię i nazwisko, imię, nazwisko, e-mail, MPK (`KOSTL`), dział (`SHORT`, `LONG`), stanowisko (`STEXT`), pion, manager, PERNR | USRID | wybór CAM w strukturze projektu i słowniku „WP i CAM” (zapisywany USRID) |
 | Raport mapowań CES ↔ P1S | raport mapowań SAP↔CES z `PZLPROD` – wszystkie kolumny pliku (`docs/mapowanie-ces-p1s.md`, rozdz. 2); wczytywany w całości nowym raportem | `src` + `pspnr` | mapowanie CES ↔ P1S (ekran Mapowanie, nakładka projektu, G2, P1, P3) |
+| Wskaźniki DJK | prefiks grupy stanowisk (IPT, np. `W2`, `W51`) → `Udział DJK` (0–1) – godziny jakości doliczane do godzin TECH / TECH_PON; liczy się najdłuższy pasujący prefiks; dane startowe (migracja 023): W2–W4 10%, W5 15%, W6 20% | grupa stanowisk | Operational EV struktury projektu (`docs/zrodla-danych.md`, rozdz. 6) |
+| Parametry produkcji | `Okno produktywności IPT (mies.)` (12), `Statusy materiałów dostarczonych` (DOST, WYD), `Wartość materiałów ÷ (1 + Z_CLO)` (tak); puste słowniki – wartości raportu S70MR (informacja na ekranie projektu) | parametr | odczyt danych produkcyjnych (`sql/pzlprod/produkcja.sql`) |
 
 Definicje źródeł i ich prefiksy są konfiguracją importu – `docs/zrodla-danych.md`, rozdz. 2.
 
@@ -77,6 +79,7 @@ Definicje źródeł i ich prefiksy są konfiguracją importu – `docs/zrodla-da
 |---|---|---|
 | WP i CAM | element P1S projektu → WP, CAM, Cost Category (kategoria ze słownika „Kategorie WBS” projektu); powiązanie z nakładką przez `Legacy WBS` (`docs/performance-objectives.md`, rozdz. 4.1) | element P1S |
 | Harmonogram i budżet | WP → `BAC HOURS` (godziny), `BAC MATERIAL` (koszt materiałów), `BAC` (budżet kosztowy WP – kwota), Baseline Start, Baseline Koniec (RRRR-MM-DD; w plikach Excel rozpoznawane też dawne nagłówki „Planowany Start/Koniec”) – baseline projektu | WP |
+| Elementy wirtualne P1S | element spoza `LOG.WBS` (np. Paint) wydzielony z elementu nadrzędnego regułą operacji `vAHDD`: `Element wirtualny` (kod nadrzędnego + kropka + nazwa, np. `AC-CAB.6.38.07.PAINT`), `Element nadrzędny`, `Nazwa`, `SWBS`, `CPLGR` (grupa stanowisk), `ARBPL` (stanowisko) – puste = dowolne; godziny operacji zgodnych z regułą (z DJK stanowiska) należą do elementu wirtualnego i są odejmowane od nadrzędnego, materiały i ACWP zostają na nadrzędnym; w strukturze – wiersz pod nadrzędnym (WP, CAM, budżet jak element P1S) – **opcjonalny**, dodawany ręcznie | Element wirtualny |
 | Kategorie WBS | kategorie elementów WBS indywidualne dla projektu: `Cost Category` (np. Production, Programs), `Opis` – lista wyboru kolumny Cost Category w strukturze projektu i w „WP i CAM”; raport po kategoriach (wiele elementów WBS w jednej kategorii); inne niż globalny słownik Cost Category (numer elementu kosztowego) – **opcjonalny** | Cost Category |
 | Stawki CAS | stawki CAS projektu (zawartość – O37); do ustalenia słownik nie jest wczytywany, a projekt CAS jest niegotowy (ERROR) | do ustalenia |
 | Cost Category – zmiany w projekcie | zmiany i uzupełnienia słownika globalnego Cost Category dla projektu (rozdz. 6) | numer elementu kosztowego |
@@ -178,6 +181,16 @@ Kontekst biznesowy typów – `readme.md`.
 
 Reguły rozstrzygania na zawartości raportu (kilka celów jednego elementu CES, cel spoza `LOG.WBS`) sprawdza ekran
 Mapowanie – `docs/mapowanie-ces-p1s.md`, rozdz. 10.
+
+### 5.9 Elementy wirtualne P1S i parametry produkcji
+
+| Reguła | Poziom |
+|---|---|
+| element nadrzędny w zakresie projektu; kod elementu wirtualnego = kod nadrzędnego + kropka + nazwa | ERROR |
+| reguła – co najmniej jedno z `SWBS`, `CPLGR`, `ARBPL` | ERROR |
+| element nadrzędny spoza `LOG.WBS` – element w strukturze bez godzin (uwaga przy danych produkcyjnych) | informacja |
+| „Wskaźniki DJK”: udział od 0 do 1; prefiks zawarty w innym (W5 i W51) | ERROR / WARNING |
+| „Parametry produkcji”: okno 1–120 miesięcy; statusy niepuste; Z_CLO – tak / nie | ERROR |
 
 ### 5.8 Kategorie WBS
 
