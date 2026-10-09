@@ -325,6 +325,41 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
         IReadOnlyDictionary<string, decimal>? costs = null) =>
         StructureBuilder.Build(tree, Resolve(tree, inputs), inputs.P1s, wpCam, schedule, costs);
 
+    /// <summary>Nagłówki arkusza „Struktura” (ExportStructure).</summary>
+    public static readonly IReadOnlyList<string> StructureHeaders =
+    [
+        "Poziom", "Nazwa", "Rodzaj", "Element CES", "P1S", "WP", "CAM", "CAM – imię i nazwisko", "Cost Category", "WP w poddrzewie",
+        "BAC HOURS", "BAC MATERIAL", "BAC", "Baseline Start", "Baseline Koniec", "ACWP", "Braki", "Uwagi",
+    ];
+
+    /// <summary>
+    /// Wiersze arkusza „Struktura”: całe drzewo (także zwinięte wiersze) w kolejności tabeli, nazwa wcięta według poziomu;
+    /// budżet, daty i ACWP jak w tabeli (sumy poddrzewa); CAM – USRID i imię i nazwisko ze słownika Osoby.
+    /// </summary>
+    public static IEnumerable<IReadOnlyList<object?>> StructureRows(ProjectStructure structure, IReadOnlyList<LookupOption> persons)
+    {
+        var names = persons.GroupBy(p => p.Value, StringComparer.OrdinalIgnoreCase).ToDictionary(g => g.Key, g => g.First().Label, StringComparer.OrdinalIgnoreCase);
+        static DateOnly? Date(string? value) =>
+            DateOnly.TryParseExact(value, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var d) ? d : null;
+        return structure.Rows.Select(r => (IReadOnlyList<object?>)new object?[]
+        {
+            r.Depth + 1, new string(' ', r.Depth * 2) + r.Name,
+            r.Kind == GridRowKind.P1s ? "element P1S" : r.IsVirtual ? "węzeł wirtualny" : "element nakładki",
+            r.WbsElement, r.P1s, r.Wp, r.Cam, r.Cam is { } cam ? names.GetValueOrDefault(cam) : null, r.CostCategory,
+            r.Wps.Count == 0 ? null : string.Join(", ", r.Wps),
+            r.Wps.Count == 0 ? null : r.BacHours, r.Wps.Count == 0 ? null : r.BacMaterial, r.Wps.Count == 0 ? null : r.Bac,
+            Date(r.Start), Date(r.Finish), r.Acwp == 0 ? null : r.Acwp, r.Gap, r.Note,
+        });
+    }
+
+    /// <summary>Struktura projektu do Excela – arkusz „Struktura” (StructureRows); zwraca liczbę wierszy.</summary>
+    public int ExportStructure(string path, string code, ProjectStructure structure, IReadOnlyList<LookupOption> persons)
+    {
+        ExcelTableWriter.WriteSheets(path, [("Struktura", StructureHeaders, StructureRows(structure, persons))]);
+        journal.Add(Area, $"{code}: struktura projektu pobrana do Excela ({structure.Rows.Count} wierszy)", code);
+        return structure.Rows.Count;
+    }
+
     /// <summary>ACWP po elemencie CES z ostatniego importu ACTUALS (waluta obiektu – PLN) – kolumna ACWP struktury.</summary>
     public IReadOnlyDictionary<string, decimal> CostsByElement(string code) => store.CostsByElement(code, DefaultCostValue);
 

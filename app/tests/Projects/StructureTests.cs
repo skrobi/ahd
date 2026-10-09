@@ -210,6 +210,28 @@ public sealed class StructureTests
     }
 
     [Fact]
+    public void Structure_export_has_whole_tree_with_all_columns()
+    {
+        DictRow[] wpCam = [Row(("Element P1S", "XYZ-1"), ("WP", "WP-1"), ("CAM", "e123456"), ("Cost Category", "Production"))];
+        DictRow[] schedule = [Budget("WP-1", "10", "100", "2026-01-01", "2026-06-30", "1000")];
+        var structure = ProjectService.Structure(Objectives(), Inputs(), wpCam, schedule);
+        var rows = ProjectService.StructureRows(structure, [new LookupOption("e123456", "Anna Nowak")]).ToList();
+
+        Assert.Equal(structure.Rows.Count, rows.Count);   // także wiersze zwinięte w tabeli
+        Assert.All(rows, r => Assert.Equal(ProjectService.StructureHeaders.Count, r.Count));
+        var leaf = rows[structure.Rows.ToList().FindIndex(r => r.Id == "p1s:XYZ-1")];
+        var header = ProjectService.StructureHeaders.ToList();
+        object? Cell(string column) => leaf[header.IndexOf(column)];
+        Assert.Equal(("element P1S", "WP-1", "e123456", "Anna Nowak", "Production"), (Cell("Rodzaj"), Cell("WP"), Cell("CAM"), Cell("CAM – imię i nazwisko"), Cell("Cost Category")));
+        Assert.Equal((10m, 100m, 1000m, new DateOnly(2026, 1, 1), new DateOnly(2026, 6, 30)),
+            (Cell("BAC HOURS"), Cell("BAC MATERIAL"), Cell("BAC"), Cell("Baseline Start"), Cell("Baseline Koniec")));
+        Assert.StartsWith(new string(' ', structure.Rows.Single(r => r.Id == "p1s:XYZ-1").Depth * 2), (string)Cell("Nazwa")!);
+        // Wiersz bez WP w poddrzewie – budżet pusty (nie 0).
+        var empty = rows[structure.Rows.ToList().FindIndex(r => r.Wps.Count == 0)];
+        Assert.Null(empty[header.IndexOf("BAC HOURS")]);
+    }
+
+    [Fact]
     public void Next_project_definition_is_added_without_touching_existing_nodes()
     {
         var current = Objectives();

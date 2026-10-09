@@ -38,6 +38,7 @@ public sealed class ProjectDetailViewModel : ObservableObject
     private int _reloads;
     /// <summary>ACWP po elemencie CES (ostatni import ACTUALS) – czytany przy otwarciu i „Odśwież mapowanie i koszty”, nie po każdym zapisie.</summary>
     private IReadOnlyDictionary<string, decimal>? _costs;
+    private (ProjectStructure Structure, IReadOnlyList<LookupOption> Persons)? _structure;   // ostatnio wczytana – eksport do Excela
     private string? _costsError;
 
     public ProjectDetailViewModel(ProjectService service, IFileDialogs dialogs, BusyState busy, ProjectInfo project, Action back)
@@ -59,6 +60,7 @@ public sealed class ProjectDetailViewModel : ObservableObject
         Back = new RelayCommand(_ => { if (StructureSettled("powrotem do listy")) back(); }, _ => !Busy.IsBusy);
         AddFromExcel = new AsyncRelayCommand(DoAddFromExcel, () => !Busy.IsBusy);
         ExportCostReport = new AsyncRelayCommand(DoExportCostReport, () => !Busy.IsBusy);
+        ExportStructure = new AsyncRelayCommand(DoExportStructure, () => _structure is not null && !Busy.IsBusy);
         ExportDictionaries = new AsyncRelayCommand(DoExportDictionaries, () => !Busy.IsBusy);
         CreateFolders = new AsyncRelayCommand(DoCreateFolders, () => !Busy.IsBusy);
         RefreshMapping = new AsyncRelayCommand(() => { Structure.CommitEdits(); return Reload(refreshMapping: true); }, () => !Busy.IsBusy);
@@ -178,6 +180,7 @@ public sealed class ProjectDetailViewModel : ObservableObject
     public ICommand SaveObjectives { get; }
     public ICommand CancelObjectives { get; }
     public ICommand ExportCostReport { get; }
+    public ICommand ExportStructure { get; }
     public ICommand ExportDictionaries { get; }
     public ICommand AddDictionaryRow { get; }
     public ICommand RemoveDictionaryRow { get; }
@@ -230,6 +233,7 @@ public sealed class ProjectDetailViewModel : ObservableObject
                 Objectives.Refresh();
             OnPropertyChanged(nameof(MappingInfo));
             Structure.Load(snapshot.Structure, snapshot.Persons, snapshot.Categories, saved);
+            _structure = (snapshot.Structure, snapshot.Persons);
             ShowKpis(snapshot.Structure.Summary);
             foreach (var panel in Dictionaries.Where(p => p.Item.Stored))
                 (panel.Rows, panel.LastChange) = snapshot.Dictionaries[panel.Item.Code];
@@ -391,6 +395,21 @@ public sealed class ProjectDetailViewModel : ObservableObject
         {
             var rows = await Busy.Run("Raport kosztów – ostatni import ACTUALS projektu…", () => _service.ExportCostReport(path, Code));
             Status = $"Zapisano {path} – {rows} wierszy (Project definition × Cost Element).";
+        });
+    }
+
+    /// <summary>Struktura projektu (stan zapisany w bazie, wszystkie kolumny) do Excela; niezapisane zmiany – najpierw zapis.</summary>
+    private async Task DoExportStructure()
+    {
+        if (!StructureSettled("pobraniem struktury do Excela") || _structure is not { } current)
+            return;
+        var path = _dialogs.SaveExcel("Pobierz strukturę projektu", $"{Code}_struktura.xlsx");
+        if (path is null)
+            return;
+        await Try(async () =>
+        {
+            var rows = await Busy.Run("Zapisywanie struktury projektu do Excela…", () => _service.ExportStructure(path, Code, current.Structure, current.Persons));
+            Status = $"Zapisano {path} – {rows} wierszy struktury.";
         });
     }
 
