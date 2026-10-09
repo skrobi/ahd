@@ -29,19 +29,21 @@
         <partials:PageHeader Eyebrow="Projekty / projekt" Title="{Binding Title}" Subtitle="{Binding Subtitle}">
             <partials:PageHeader.Actions>
                 <StackPanel Orientation="Horizontal">
-                    <!-- Z kiedy są dane RABIT (ACTUALS): data raportu w RABIT, import, ostatnie sprawdzenie; szczegóły na plik w podpowiedzi -->
-                    <Border Style="{StaticResource Tag}" VerticalAlignment="Center" Margin="0,0,12,0" ToolTip="{Binding DataInfoDetails}">
-                        <TextBlock Text="{Binding DataInfo}" FontSize="12" />
-                    </Border>
-                    <Border Style="{StaticResource Tag}" VerticalAlignment="Center" Margin="0,0,12,0" ToolTip="{Binding ProductionDetails}">
-                        <TextBlock Text="{Binding ProductionInfo}" FontSize="12" />
-                    </Border>
                     <ContentControl Content="{Binding ReadinessPill}" VerticalAlignment="Center" Margin="0,0,12,0"
                                     ToolTip="Gotowość do przebiegu – szczegóły w zakładce Wskaźniki" />
                     <Button Content="← Lista projektów" Style="{StaticResource Btn}" Command="{Binding Back}" />
                 </StackPanel>
             </partials:PageHeader.Actions>
         </partials:PageHeader>
+        <!-- Z kiedy są dane: RABIT (ACTUALS) i produkcja (PZLPROD) – osobna linia pod nagłówkiem (tytuł i opis mają całą szerokość) -->
+        <WrapPanel Margin="0,-12,0,12">
+            <Border Style="{StaticResource Tag}" VerticalAlignment="Center" Margin="0,0,8,4" ToolTip="{Binding DataInfoDetails}">
+                <TextBlock Text="{Binding DataInfo}" FontSize="12" />
+            </Border>
+            <Border Style="{StaticResource Tag}" VerticalAlignment="Center" Margin="0,0,8,4" ToolTip="{Binding ProductionDetails}">
+                <TextBlock Text="{Binding ProductionInfo}" FontSize="12" />
+            </Border>
+        </WrapPanel>
         <partials:BusyBar DataContext="{Binding Busy}" />
         <TextBlock Text="{Binding Status}" TextWrapping="Wrap" Margin="0,0,0,8" />
 

@@ -44,6 +44,18 @@ public partial class StructureView : UserControl
         InitializeComponent();
         BuildColumns();
         BuildColumnHelp();
+        // Wysokość tabeli – do dołu okna (zamiast stałej): przy zmianie rozmiaru okna, zwinięciu menu, pokazaniu zakładki.
+        Loaded += (_, _) =>
+        {
+            _host ??= FindAncestor<ScrollViewer>(this);
+            if (_host is not null)
+            {
+                _host.SizeChanged -= OnHostSizeChanged;
+                _host.SizeChanged += OnHostSizeChanged;
+            }
+            Dispatcher.BeginInvoke(FitHeight, DispatcherPriority.Loaded);
+        };
+        RowsGrid.IsVisibleChanged += (_, _) => Dispatcher.BeginInvoke(FitHeight, DispatcherPriority.Loaded);
         DataContextChanged += (_, e) =>
         {
             if (e.OldValue is StructureViewModel old)
@@ -64,6 +76,30 @@ public partial class StructureView : UserControl
     }
 
     private StructureViewModel? Model => DataContext as StructureViewModel;
+
+    private ScrollViewer? _host;
+
+    private void OnHostSizeChanged(object sender, SizeChangedEventArgs e) => FitHeight();
+
+    /// <summary>
+    /// Tabela sięga dołu widocznej części strony (przewijana strona – pod tabelą podpowiedzi i „Opis kolumn”); kolumny
+    /// rozciągają się z szerokością okna (DataGrid w pełnej szerokości strony).
+    /// </summary>
+    private void FitHeight()
+    {
+        if (_host is null || !RowsGrid.IsVisible)
+            return;
+        var top = RowsGrid.TranslatePoint(new Point(0, 0), _host).Y + _host.VerticalOffset;
+        RowsGrid.Height = Math.Max(RowsGrid.MinHeight, _host.ViewportHeight - top - 16);
+    }
+
+    private static T? FindAncestor<T>(DependencyObject child) where T : DependencyObject
+    {
+        for (var parent = VisualTreeHelper.GetParent(child); parent is not null; parent = VisualTreeHelper.GetParent(parent))
+            if (parent is T found)
+                return found;
+        return null;
+    }
 
     /// <summary>
     /// Kolumny w grupach (StructureColumns): nagłówek – nazwa grupy z przyciskiem „−” / „+” nad pierwszą kolumną grupy

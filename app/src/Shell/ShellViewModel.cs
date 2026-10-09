@@ -18,6 +18,7 @@ public sealed class ShellViewModel : ObservableObject, INavigator
     private readonly AppServices _services;
     private readonly Dictionary<string, FrameworkElement> _views = new();
     private FrameworkElement? _currentView;
+    private bool _navCollapsed;
 
     public ShellViewModel(IReadOnlyList<IModule> modules, AppServices services)
     {
@@ -28,6 +29,7 @@ public sealed class ShellViewModel : ObservableObject, INavigator
             .Select(m => new NavItem(m.Key, m.NavLabel!, m.NavBadge))
             .ToList();
         Navigate = new RelayCommand(p => NavigateTo(p as string ?? ModuleKeys.Dashboard));
+        ToggleNav = new RelayCommand(_ => NavCollapsed = !NavCollapsed);
         NavigateTo(ModuleKeys.Dashboard);
     }
 
@@ -39,6 +41,15 @@ public sealed class ShellViewModel : ObservableObject, INavigator
     public IReadOnlyList<NavItem> Nav { get; }
 
     public ICommand Navigate { get; }
+
+    /// <summary>Menu zwinięte do ikon (więcej miejsca na ekran modułu, np. tabelę struktury); nazwa modułu w podpowiedzi.</summary>
+    public bool NavCollapsed
+    {
+        get => _navCollapsed;
+        set => SetProperty(ref _navCollapsed, value);
+    }
+
+    public ICommand ToggleNav { get; }
 
     public FrameworkElement? CurrentView
     {
