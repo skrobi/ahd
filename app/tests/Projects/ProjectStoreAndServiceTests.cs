@@ -226,11 +226,13 @@ public sealed class ProjectStoreAndServiceTests : IDisposable
         StructureRow Row(string wbs) => ProjectService.Structure(_store.Objectives("M28"), inputs,
             _service.Rows(ProjectDictionaries.WpCam, "M28"), _service.Rows(ProjectDictionaries.ScheduleBudget, "M28")).Rows.Single(r => r.WbsElement == wbs);
 
-        // Nowy WP bez CAM – ERROR (CAM wymagany), nic nie zapisano.
-        var missing = _service.SaveStructureEdit("M28", inputs, Row("4D06WP000001"), new Dictionary<string, string?> { [StructureEdits.Wp] = "true" });
-        Assert.False(missing.Saved);
-        Assert.Contains("CAM", missing.Message);
-        Assert.Empty(_service.Rows(ProjectDictionaries.WpCam, "M28"));
+        // Nowy WP bez CAM – zapisany (CAM uzupełnia się później), w strukturze brak „WP bez CAM”, gotowość – ERROR.
+        var withoutCam = _service.SaveStructureEdit("M28", inputs, Row("4D06WP000001"), new Dictionary<string, string?> { [StructureEdits.Wp] = "true" });
+        Assert.True(withoutCam.Saved, withoutCam.Message);
+        var marked = Assert.Single(_service.Rows(ProjectDictionaries.WpCam, "M28"));
+        Assert.Equal(("AC-CAB.6.38.01", null), (marked["WP"], marked["CAM"]));
+        Assert.Contains("WP bez CAM", Row("4D06WP000001").Gap);
+        Assert.Contains(_service.Readiness(_store.Find("M28")!, _store.Objectives("M28"), inputs), i => i.Level == CheckLevel.Error && i.Message.StartsWith("WP bez CAM"));
 
         var assigned = _service.SaveStructureEdit("M28", inputs, Row("4D06WP000001"),
             new Dictionary<string, string?> { [StructureEdits.Wp] = "true", [StructureEdits.Cam] = "e123456" });

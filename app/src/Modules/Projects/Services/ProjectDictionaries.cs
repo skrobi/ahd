@@ -29,7 +29,7 @@ public static class ProjectDictionaries
         [
             new("Element P1S", ColumnType.Text, Key: true),
             new("WP", ColumnType.Text, Required: true, CheckSimilar: true),
-            new("CAM", ColumnType.Text, Required: true, CheckSimilar: true, Lookup: GlobalDictionaries.Persons),
+            new("CAM", ColumnType.Text, CheckSimilar: true, Lookup: GlobalDictionaries.Persons),
             new("Cost Category", ColumnType.Text, CheckSimilar: true, Lookup: WbsCategories),
         ],
         SkipKeyOnlyRows = true,
@@ -141,7 +141,10 @@ public static class ProjectDictionaries
         EmptyKeyPartsAllowed = spec.EmptyKeyPartsAllowed, SkipKeyOnlyRows = spec.SkipKeyOnlyRows, Rules = rules,
     };
 
-    /// <summary>docs/slowniki.md, rozdz. 5.2. Jeden WP na element P1S i WP wymaga CAM – klucz i pole wymagane.</summary>
+    /// <summary>
+    /// docs/slowniki.md, rozdz. 5.2. Jeden WP na element P1S – klucz. CAM uzupełnia się później (najpierw wskazuje się WP):
+    /// WP bez CAM – WARNING przy zapisie, ERROR w gotowości projektu (blokuje przebieg – ProjectReadiness).
+    /// </summary>
     private static IEnumerable<Issue> WpCamRules(IReadOnlyList<DictRow> rows, ProjectDictionaryContext context)
     {
         for (var i = 0; i < rows.Count; i++)
@@ -154,6 +157,8 @@ public static class ProjectDictionaries
                 else if (context.Scope.RootOf(element) is null)
                     yield return Issue.Error($"Element P1S {element} jest poza zakresem projektu (nie jest Legacy WBS ani celem mapowania elementu nakładki i nie leży pod nimi)", at);
             }
+            if (rows[i]["WP"] is { } wp && rows[i]["CAM"] is null)
+                yield return Issue.Warning($"WP {wp} bez CAM – uzupełnij CAM przed przebiegiem", at);
             if (rows[i]["CAM"] is { } cam && !context.Persons.Contains(cam))
                 yield return Issue.Warning($"CAM „{cam}” spoza listy osób (słownik Osoby) – sprawdź pisownię", at);
             if (rows[i]["Cost Category"] is { } category && context.Categories is { } categories && !categories.Contains(category))

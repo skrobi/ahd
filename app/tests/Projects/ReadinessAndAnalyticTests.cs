@@ -38,6 +38,14 @@ public sealed class ReadinessAndAnalyticTests
     }
 
     [Fact]
+    public void Wp_without_cam_blocks_the_run()
+    {
+        var checks = ProjectReadiness.Check(ProjectTypes.Internal, Objectives(), Rows(4, 3), [], P1sSide, FoldersOk, CamAccess, ["WP-1", "WP-2"]);
+        Assert.False(ProjectReadiness.IsReady(checks));
+        Assert.Contains(checks, c => c.Level == CheckLevel.Error && c.Message.StartsWith("WP bez CAM (2)") && c.Message.Contains("WP-1, WP-2"));
+    }
+
+    [Fact]
     public void Empty_objectives_and_cas_rates_block()
     {
         var empty = ProjectReadiness.Check(ProjectTypes.Internal, new PoTree(), Rows(4, 3), [], P1sSide, FoldersOk, CamAccess);

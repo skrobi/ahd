@@ -491,10 +491,12 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
     {
         var counts = ProjectDictionaries.Items.Where(i => i.Stored).ToDictionary(i => i.Code, i => Rows(i.Code, project.Code).Count);
         var persons = Persons();
-        var camsOutside = Rows(ProjectDictionaries.WpCam, project.Code).Select(r => r["CAM"]).OfType<string>()
+        var wpCam = Rows(ProjectDictionaries.WpCam, project.Code);
+        var withoutCam = wpCam.Where(r => r["WP"] is not null && r["CAM"] is null).Select(r => r["WP"]!).Distinct(StringComparer.OrdinalIgnoreCase).Order().ToList();
+        var camsOutside = wpCam.Select(r => r["CAM"]).OfType<string>()
             .Where(c => !persons.Contains(c)).Distinct(StringComparer.OrdinalIgnoreCase).Order().ToList();
         return ProjectReadiness.Check(project.Type, tree, counts, camsOutside, ObjectivesMapping.Check(tree, Resolve(tree, inputs), inputs),
-            folders.CheckStructure(project.Code), folders.CamAccessWarning(project.Code));
+            folders.CheckStructure(project.Code), folders.CamAccessWarning(project.Code), withoutCam);
     }
 
     public static AnalyticBase Analytic(PoTree tree, IReadOnlyList<DictRow> wpCam, IReadOnlyList<DictRow> schedule, MappingInputs inputs)

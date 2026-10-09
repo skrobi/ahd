@@ -189,6 +189,8 @@ public static class StructureBuilder
                 gap = item.HasCode ? "element nakładki bez WP" : "brak kodu P1S (Legacy WBS ani mapowania) – bez WP";
             else if (wps.Any(w => !AnalyticBaseBuilder.HasBudget(budgets.GetValueOrDefault(w))))
                 gap = "WP bez budżetu";
+            if (assignment?["WP"] is not null && assignment["CAM"] is null)
+                gap = gap is null ? "WP bez CAM" : $"{gap}; WP bez CAM";
             if (item.CostGap is { } costGap)
                 gap = gap is null ? costGap : $"{gap}; {costGap}";
             var acwp = item.Kind == GridRowKind.Objective ? item.Cost : wps.Sum(w => wpCost.GetValueOrDefault(w));
