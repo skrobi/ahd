@@ -58,6 +58,24 @@ public sealed class SqlDatabase
         return result;
     }
 
+    /// <summary>
+    /// count kolejnych identyfikatorów wierszy logicznych jednym wywołaniem (sp_sequence_get_range na META_LogicalId,
+    /// INCREMENT BY 1) – zapis wielu wierszy bez zapytania o każdy identyfikator.
+    /// </summary>
+    public IReadOnlyList<long> NextLogicalIds(SqlConnection connection, SqlTransaction transaction, int count)
+    {
+        if (count <= 0)
+            return [];
+        if (count == 1)
+            return [NextLogicalId(connection, transaction)];
+        var first = connection.ExecuteScalar<long>(
+            "DECLARE @first SQL_VARIANT; " +
+            "EXEC sys.sp_sequence_get_range @sequence_name = @sequence, @range_size = @count, @range_first_value = @first OUTPUT; " +
+            "SELECT CAST(@first AS BIGINT);",
+            new { sequence = Table("meta.LogicalId"), count = (long)count }, transaction);
+        return Enumerable.Range(0, count).Select(i => first + i).ToList();
+    }
+
     /// <summary>Nowy identyfikator wiersza logicznego (sekwencja META_LogicalId).</summary>
     public long NextLogicalId(SqlConnection connection, SqlTransaction transaction) =>
         connection.ExecuteScalar<long>($"SELECT NEXT VALUE FOR {Table("meta.LogicalId")}", transaction: transaction);

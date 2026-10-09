@@ -72,10 +72,13 @@ public sealed class DictionaryService(IDictionaryStore store, IJournal journal)
     }
 
     /// <summary>Błędy (ERROR) bieżącego stanu słownika jako klucz wiersza + komunikat – do Save(knownErrors).</summary>
-    public IReadOnlySet<string> KnownErrors(DictionarySpec spec, string? project = null)
+    public IReadOnlySet<string> KnownErrors(DictionarySpec spec, string? project = null) => KnownErrors(spec, Load(spec, project));
+
+    /// <summary>Błędy (ERROR) stanu słownika już wczytanego (current) – bez ponownego odczytu z bazy.</summary>
+    public IReadOnlySet<string> KnownErrors(DictionarySpec spec, IReadOnlyList<DictRow> current)
     {
         var issues = new List<Issue>();
-        var rows = DictionaryValidator.Normalize(spec, Load(spec, project), issues);
+        var rows = DictionaryValidator.Normalize(spec, current, issues);
         issues.AddRange(DictionaryValidator.Validate(spec, rows));
         return issues.Where(i => i.Level == CheckLevel.Error).Select(i => Signature(spec, rows, i)).ToHashSet();
     }

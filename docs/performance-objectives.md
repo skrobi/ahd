@@ -150,7 +150,14 @@ i budżetem (`StructureBuilder`).
   w poddrzewie), budżet i daty są od razu edytowalne i zapisują się pod nowym WP. Ctrl+Z / „Cofnij wklejenie” –
   cofnięcie ostatniego wklejenia, wyczyszczenia albo wypełnienia (do 20 kroków; komórki
   dostają wartości sprzed operacji i wiersze są ponownie zapisywane), Alt+→ / Alt+← – rozwinięcie / zwinięcie wiersza. Komórka liczby / daty z błędem jest podświetlona od razu po wpisaniu.
-  Zmienione wiersze są zapisywane po kolei (kolejka), po serii – jedno odświeżenie; edycja w toku jest zatwierdzana przy
+  **Zapis wsadowy:** wiersze zatwierdzone w krótkim czasie (kilka kliknięć WP w ciągu 0,3 s, Enter w kolejnych wierszach,
+  wklejenie bloku, Delete, Ctrl+D, Ctrl+Z) idą jednym zapisem na słownik – „WP i CAM” i „Harmonogram i budżet” wczytane
+  raz, zmiany wszystkich wierszy nakładane po kolei, jedna transakcja i jeden wpis w dzienniku na słownik
+  (`ProjectService.SaveStructureEdits`); nazwa i `Legacy WBS` – wiersz po wierszu. Paczka z błędem (ERROR) albo konfliktem
+  jest zapisywana wiersz po wierszu – poprawne wiersze się zapisują, błędne zostają żółte z komunikatem. Po serii – jedno
+  odświeżenie danych projektu (każdy słownik czytany raz; osoby, nakładki innych projektów, foldery i koszty – z pamięci
+  ekranu, ponownie przy „Odśwież mapowanie i koszty”). Pomiar (SQL Server lokalnie, 4 wiersze): zapis 48 → 11 zapytań,
+  odświeżenie 23 → 6 zapytań; liczba zapytań zapisu nie rośnie z liczbą wierszy. Edycja w toku jest zatwierdzana przy
   wyjściu z tabeli (przycisk, inna zakładka). Wiersz z niezapisanymi zmianami (zapis w toku albo nieudany) jest żółty
   i zachowuje zmiany po odświeżeniu; powrót do listy i edycja Performance Objectives czekają na zapis. Odznaczenie WP
   z budżetem lub datami wymaga potwierdzenia (usuwa harmonogram WP).

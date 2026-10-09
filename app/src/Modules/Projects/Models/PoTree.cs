@@ -32,9 +32,10 @@ public sealed class PoTree
     public IReadOnlyList<(PoNode Node, int Depth)> Flatten()
     {
         var result = new List<(PoNode, int)>(_nodes.Count);
+        var children = _nodes.ToLookup(n => n.ParentKey);   // jeden przebieg zamiast Children(...) dla każdego węzła
         void Walk(long? parent, int depth)
         {
-            foreach (var child in Children(parent))
+            foreach (var child in children[parent].OrderBy(n => n.SortOrder))
             {
                 result.Add((child, depth));
                 Walk(child.Key, depth + 1);
