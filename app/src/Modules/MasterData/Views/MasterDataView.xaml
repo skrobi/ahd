@@ -40,6 +40,9 @@
                         <Button Content="Wczytaj z HR" Style="{StaticResource Btn}" Margin="8,0,0,0" Command="{Binding ImportFromHr}"
                                 Visibility="{Binding IsPersons, Converter={StaticResource BoolToVisibility}}"
                                 ToolTip="Pracownicy z PZLHRPROD (HR.ORG) – podgląd różnic przed zapisem; zawartość słownika zostaje zastąpiona" />
+                        <Button Content="Uzupełnij z ACTUALS" Style="{StaticResource Btn}" Margin="8,0,0,0" Command="{Binding FillFromActuals}"
+                                Visibility="{Binding IsCostCategory, Converter={StaticResource BoolToVisibility}}"
+                                ToolTip="Dopisuje cost elementy z całego ostatniego importu ACTUALS, których nie ma w słowniku (podgląd przed zapisem; nic nie jest usuwane) – Cost Category i „Rozliczeniowy” uzupełnia finansista" />
                     </StackPanel>
                     <StackPanel Orientation="Horizontal">
                         <Button Content="Dodaj wiersz" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding AddRow}" />

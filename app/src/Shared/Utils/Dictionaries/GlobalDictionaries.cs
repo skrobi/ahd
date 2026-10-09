@@ -3,6 +3,7 @@ using System.Globalization;
 using System.Text.RegularExpressions;
 using PzlEv.Shared.Models.Dictionaries;
 using PzlEv.Shared.Models;
+using PzlEv.Shared.Utils.Data;
 
 namespace PzlEv.Shared.Utils.Dictionaries;
 
@@ -252,6 +253,33 @@ public static partial class GlobalDictionaries
                 yield return Issue.Warning($"Wiersz CES {row["pspnr"]} bez przypisania (brak wbs_ces / wbs albo pspnr_sap / wbs_sap i pary project_ces → project_sap)",
                     DictionaryValidator.RowElement(i));
         }
+    }
+
+    /// <summary>
+    /// Cost Category uzupełniony o cost elementy z danych ACTUALS („Uzupełnij z ACTUALS”): bieżące wiersze bez zmian
+    /// i nowe wiersze dla numerów, których w słowniku nie ma (opis z danych; Cost Category i „Rozliczeniowy” – do
+    /// określenia przez finansistę). Numer porównywany po normalizacji (zera wiodące, wielkość liter). Wynik dla
+    /// DictionaryService.PreviewRows – podgląd pokazuje same nowe pozycje, nic nie jest usuwane.
+    /// </summary>
+    public static (IReadOnlyList<DictRow> Rows, int Added) CostCategoryWithActuals(IReadOnlyList<DictRow> current, IEnumerable<ActualsCostElement> elements)
+    {
+        var spec = Get(CostCategory);
+        var number = spec.Columns[0];
+        string Key(string? value) => ValueFormat.TryNormalize(number, value, out var canonical, out _) ? canonical ?? "" : value ?? "";
+        var known = current.Select(r => Key(r[number.Name])).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var rows = current.Select(r => new DictRow(null, null, r.Values)).ToList();
+        var added = 0;
+        foreach (var element in elements.OrderBy(e => Key(e.CostElement), StringComparer.OrdinalIgnoreCase))
+        {
+            if (!known.Add(Key(element.CostElement)))
+                continue;
+            rows.Add(new DictRow(null, null, new Dictionary<string, string?>
+            {
+                [number.Name] = element.CostElement, ["Opis"] = element.Name, ["Obszar"] = null, ["Cost Category"] = null, ["Rozliczeniowy"] = null,
+            }));
+            added++;
+        }
+        return (rows, added);
     }
 
     /// <summary>

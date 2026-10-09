@@ -298,6 +298,10 @@ pomija rozliczenie wychodzące: wiersze z cost elementem rozliczeniowym (słowni
 obiektu partnera nie jest „Profit analysis”; rozliczenie przychodzące („Profit analysis”) zostaje w ACWP. Bez tego
 suma zrzutu na elemencie WBS rozliczanym co miesiąc wynosi 0. Wymaga aplikacji 0.29.0.
 
+**Migracja `sql/mssql/018_cost_elementy_z_actuals.sql`:** procedura `CAN_ActualsCostElements @Value` – cost elementy
+całego ostatniego importu ACTUALS (nazwa z danych, liczba wierszy, suma kwoty) dla „Uzupełnij z ACTUALS” w słowniku
+Cost Category (`docs/slowniki.md`, rozdz. 6).
+
 Aplikacja zapisuje dziś do tabel importu, konfiguracji importu, słowników globalnych, korekt mapowania, dziennika i problemów;
 tabele projektów i słowników projektu czekają na moduły F4. Blokada importu – plik na dysku sieciowym
 (`docs/pipeline-fazy.md`, rozdz. 1.3), `sp_getapplock` razem z procedurami (F10.2).
