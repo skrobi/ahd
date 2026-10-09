@@ -25,13 +25,16 @@ public sealed class MasterDataViewModel : ObservableObject
     private string _status = "";
     private ImportPreview? _preview;
     private readonly IHrSource? _hr;
+    private readonly ICostElementSource? _costElements;
 
     /// <param name="hr">Pracownicy z PZLHRPROD (słownik Osoby); null – brak sekcji PzlHrProd w pzl-ev.json.</param>
-    public MasterDataViewModel(DictionaryService service, IFileDialogs dialogs, IHrSource? hr = null)
+    /// <param name="costElements">Cost elementy ostatniego importu ACTUALS – „Uzupełnij z ACTUALS” w Cost Category.</param>
+    public MasterDataViewModel(DictionaryService service, IFileDialogs dialogs, IHrSource? hr = null, ICostElementSource? costElements = null)
     {
         _service = service;
         _dialogs = dialogs;
         _hr = hr;
+        _costElements = costElements;
         Dictionaries = GlobalDictionaries.All.Select(spec => new DictionaryItem(spec, 0)).ToList();
         Table.PropertyChanged += (_, e) =>
         {
@@ -48,6 +51,7 @@ public sealed class MasterDataViewModel : ObservableObject
         Import = new AsyncRelayCommand(DoImport, () => Spec is not null && _preview is null && !Busy.IsBusy);
         ApplyImport = new AsyncRelayCommand(DoApplyImport, () => _preview is { HasErrors: false, HasChanges: true } && !Busy.IsBusy);
         ImportFromHr = new AsyncRelayCommand(DoImportFromHr, () => IsPersons && _preview is null && !Busy.IsBusy);
+        FillFromActuals = new AsyncRelayCommand(DoFillFromActuals, () => IsCostCategory && _costElements is not null && _preview is null && !Busy.IsBusy);
         CancelImport = new RelayCommand(_ => ClosePreview("Wczytanie anulowane – słownik bez zmian."), _ => _preview is not null && !Busy.IsBusy);
 
         SelectedDictionary = Dictionaries.FirstOrDefault();
@@ -102,6 +106,7 @@ public sealed class MasterDataViewModel : ObservableObject
             OnPropertyChanged();
             OnPropertyChanged(nameof(Spec));
             OnPropertyChanged(nameof(IsPersons));
+            OnPropertyChanged(nameof(IsCostCategory));
             ClosePreview(null);
             _ = Reload("");
         }
@@ -130,6 +135,10 @@ public sealed class MasterDataViewModel : ObservableObject
     public ICommand ApplyImport { get; }
     public ICommand CancelImport { get; }
     public ICommand ImportFromHr { get; }
+    public ICommand FillFromActuals { get; }
+
+    /// <summary>Wybrany słownik Cost Category – „Uzupełnij z ACTUALS”.</summary>
+    public bool IsCostCategory => Spec?.Code == GlobalDictionaries.CostCategory;
 
     /// <summary>Wybrany słownik Osoby – „Wczytaj z HR”.</summary>
     public bool IsPersons => Spec?.Code == GlobalDictionaries.Persons;
@@ -234,6 +243,35 @@ public sealed class MasterDataViewModel : ObservableObject
         {
             var preview = await Busy.Run("Wczytywanie i sprawdzanie pliku Excel…", () => _service.PreviewImport(spec, path));
             ShowPreview(preview, "Plik");
+        });
+    }
+
+    /// <summary>
+    /// Cost Category uzupełniony o cost elementy całego ostatniego importu ACTUALS, których w słowniku nie ma (opis
+    /// z danych; Cost Category i „Rozliczeniowy” określa finansista). Podgląd jak przy wczytaniu z Excela – same nowe
+    /// pozycje, nic nie jest zmieniane ani usuwane.
+    /// </summary>
+    private async Task DoFillFromActuals()
+    {
+        Table.CommitEdits();
+        if (HasPendingChanges)
+        {
+            Status = "Masz niezapisane zmiany – zapisz albo odrzuć je przed uzupełnieniem z ACTUALS.";
+            return;
+        }
+        var spec = Spec!;
+        await Try(async () =>
+        {
+            var (preview, added, total) = await Busy.Run("Odczyt cost elementów z ostatniego importu ACTUALS…", () =>
+            {
+                var elements = _costElements!.CostElements();
+                var (rows, count) = GlobalDictionaries.CostCategoryWithActuals(_service.Load(spec), elements);
+                return (_service.PreviewRows(spec, rows, "ACTUALS – ostatni import"), count, elements.Count);
+            });
+            ShowPreview(preview, "ACTUALS");
+            Status = added == 0
+                ? $"Wszystkie cost elementy z ACTUALS ({total}) są już w słowniku."
+                : $"Nowe cost elementy z ACTUALS: {added} (z {total}) – zatwierdź wczytanie, potem uzupełnij Cost Category i „Rozliczeniowy”.";
         });
     }
 

@@ -218,4 +218,39 @@ public sealed class LatestImportProcedureTests : IDisposable
                            "VALUES (900001, 1, 'M28', '0092212550', 0, SYSDATETIMEOFFSET(), 'test')");
         Assert.Equal(6054.51m, store.CostsByElement("M28", "ValueObjCrcy")["2DI473001001"]);   // w projekcie nie jest rozliczeniowy
     }
+
+    /// <summary>Migracja 018: cost elementy całego ostatniego importu ACTUALS i „Uzupełnij z ACTUALS” w Cost Category (same nowe pozycje).</summary>
+    [SqlFact]
+    public void Missing_cost_elements_from_actuals_are_added_to_cost_category()
+    {
+        Use();
+        Write("ACTUALS_PAF_01.csv", 0, new DateTime(2026, 10, 6, 23, 0, 0, DateTimeKind.Utc));
+        _import.Run();
+
+        var elements = new PzlEv.Shared.Utils.Data.Sql.SqlCostElementSource(_database!.Sql).CostElements();
+        Assert.Equal(5, elements.Count);   // 6 wierszy wzorca, 51105550 dwa razy
+        Assert.Contains(elements, e => e.CostElement.EndsWith("9221X550") && e.Name == "PZL MFG Indirect" && e.Rows == 1);
+
+        var store = new PzlEv.Shared.Utils.Dictionaries.SqlDictionaryStore(_database.Sql, _services.Clock, _services.User, PzlEv.Shared.Utils.Dictionaries.GlobalDictionaries.Tables);
+        var dictionaries = new PzlEv.Shared.Utils.Dictionaries.DictionaryService(store, _app.Journal);
+        var spec = PzlEv.Shared.Utils.Dictionaries.GlobalDictionaries.Get(PzlEv.Shared.Utils.Dictionaries.GlobalDictionaries.CostCategory);
+        using (var connection = _database.Sql.Open())   // w danych startowych są wszystkie cost elementy wzorca – jeden usunięty
+            Assert.Equal(1, connection.Execute($"UPDATE {_database.Sql.Table("dict.CostCategory")} SET SupersededAt = SYSDATETIMEOFFSET(), SupersededBy = 'test' " +
+                                               "WHERE Project IS NULL AND SupersededAt IS NULL AND CostElement = '9221X550'"));
+        var before = dictionaries.Load(spec);
+        var (rows, added) = PzlEv.Shared.Utils.Dictionaries.GlobalDictionaries.CostCategoryWithActuals(before, elements);
+        var preview = dictionaries.PreviewRows(spec, rows, "ACTUALS");
+
+        Assert.Equal(1, added);
+        Assert.Equal(added, preview.Added.Count);
+        Assert.Empty(preview.Removed);
+        Assert.Empty(preview.Changed);
+        Assert.Equal(PzlEv.Shared.Models.Dictionaries.SaveStatus.Saved, dictionaries.ApplyImport(spec, preview).Status);
+        var after = dictionaries.Load(spec);
+        Assert.Equal(before.Count + added, after.Count);
+        Assert.Contains(after, r => r["Numer elementu kosztowego"] == "9221X550" && r["Opis"] == "PZL MFG Indirect" && r["Cost Category"] is null);
+
+        // Drugie uzupełnienie – nic nowego.
+        Assert.Equal(0, PzlEv.Shared.Utils.Dictionaries.GlobalDictionaries.CostCategoryWithActuals(after, elements).Added);
+    }
 }

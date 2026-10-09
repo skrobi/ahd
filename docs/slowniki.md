@@ -188,6 +188,10 @@ wpisu w Cost Category) – `docs/pipeline-fazy.md`, P2.
 - **„Rozliczeniowy”** (pole wyboru): cost element rozliczenia SAP (settlement, np. 0091902551 „PZL Invent Cost Set”).
   Rozliczenie wychodzące (klasa obiektu partnera inna niż „Profit analysis”) jest pomijane w ACWP struktury projektu –
   inaczej koszty elementu WBS rozliczanego co miesiąc sumują się do 0 (`docs/performance-objectives.md`, rozdz. 4.2).
+- **„Uzupełnij z ACTUALS”** (ekran Słowniki, Cost Category): dopisuje cost elementy z całego ostatniego importu ACTUALS
+  (wszystkie projekty), których w słowniku nie ma – numer i opis z danych; Cost Category i „Rozliczeniowy” uzupełnia
+  finansista. Podgląd przed zapisem jak przy wczytaniu z Excela; istniejące pozycje bez zmian, nic nie jest usuwane
+  (procedura `CAN_ActualsCostElements`, `docs/model-danych.md`, migracja 018).
 - **„Cost Category – zmiany w projekcie”** – opcjonalny słownik projektu; zmienia i dodaje pozycje, ma
   pierwszeństwo przed globalnym. **Słownik efektywny projektu = globalny + zmiany projektu.**
 - W zakładce Słowniki projektu tabela pokazuje słownik efektywny: pozycje globalne bez zmiany w projekcie mają stan
