@@ -31,6 +31,8 @@ public sealed class DictionaryCellColumn : DataGridColumn
         SortMemberPath = $"Cells[{index}].SortKey";
         ClipboardContentBinding = new Binding($"Cells[{index}].Value");
         MinWidth = 80;
+        // Tak / nie – pole wyboru zmieniane jednym kliknięciem (bez trybu edycji); wklejenie i Delete działają jak w innych kolumnach.
+        IsReadOnly = column.Type == ColumnType.Boolean;
     }
 
     public int Index { get; }
@@ -43,6 +45,15 @@ public sealed class DictionaryCellColumn : DataGridColumn
 
     protected override FrameworkElement GenerateElement(DataGridCell cell, object dataItem)
     {
+        if (Column.Type == ColumnType.Boolean)
+        {
+            var box = new CheckBox { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Focusable = false };
+            box.SetBinding(ToggleButton.IsCheckedProperty, new Binding(Path(nameof(DictCellViewModel.IsChecked))) { Mode = BindingMode.TwoWay, UpdateSourceTrigger = UpdateSourceTrigger.PropertyChanged });
+            var frame = new Border { Child = box };
+            frame.SetBinding(Border.BackgroundProperty, new Binding(Path(nameof(DictCellViewModel.Level))) { Converter = LevelBackground, ConverterParameter = "cell" });
+            frame.SetBinding(FrameworkElement.ToolTipProperty, new Binding(Path(nameof(DictCellViewModel.Problem))));
+            return frame;
+        }
         var text = new TextBlock { Padding = new Thickness(4, 1, 4, 1), VerticalAlignment = VerticalAlignment.Center };
         text.SetBinding(TextBlock.TextProperty, new Binding(Path(nameof(DictCellViewModel.Display))));
         if (Column.Type is ColumnType.Decimal or ColumnType.Integer)

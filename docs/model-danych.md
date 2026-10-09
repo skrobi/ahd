@@ -292,6 +292,12 @@ elementem dawał pusty wynik. Wymaga aplikacji 0.23.1.
 w `REP_ProjectCosts`, bez wykluczeń projektu; wiersz bez WBS elementu – pod Project definition. Kolumna ACWP tabeli
 struktury (`docs/performance-objectives.md`, rozdz. 4.2). Wymaga aplikacji 0.28.0.
 
+**Migracja `sql/mssql/017_cost_element_rozliczeniowy.sql`:** `DICT_CostCategory.IsSettlement` – znacznik
+„Rozliczeniowy” (cost element rozliczenia SAP, np. 0091902551 „PZL Invent Cost Set”). `REP_ProjectCostsByElement`
+pomija rozliczenie wychodzące: wiersze z cost elementem rozliczeniowym (słownik efektywny projektu), których klasa
+obiektu partnera nie jest „Profit analysis”; rozliczenie przychodzące („Profit analysis”) zostaje w ACWP. Bez tego
+suma zrzutu na elemencie WBS rozliczanym co miesiąc wynosi 0. Wymaga aplikacji 0.29.0.
+
 Aplikacja zapisuje dziś do tabel importu, konfiguracji importu, słowników globalnych, korekt mapowania, dziennika i problemów;
 tabele projektów i słowników projektu czekają na moduły F4. Blokada importu – plik na dysku sieciowym
 (`docs/pipeline-fazy.md`, rozdz. 1.3), `sp_getapplock` razem z procedurami (F10.2).

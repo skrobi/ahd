@@ -30,6 +30,13 @@ public sealed class DictCellViewModel(DictRowViewModel row, int index, Dictionar
 
     public string Display => DictionaryCells.Display(row[index], options);
 
+    /// <summary>Kolumna tak / nie jako pole wyboru: zaznaczone – „tak”, odznaczone – puste (nie).</summary>
+    public bool IsChecked
+    {
+        get => ValueFormat.TryNormalize(column, row[index], out var canonical, out _) && canonical == "tak";
+        set => Value = value ? "tak" : null;
+    }
+
     /// <summary>Klucz sortowania: liczba w kolumnach liczbowych (sortowanie jak w Excelu, nie jak tekst), inaczej tekst.</summary>
     public object? SortKey => column.Type is ColumnType.Decimal or ColumnType.Integer
         ? PzlEv.Shared.Utils.Files.PolishNumber.TryParse(row[index], out var number) ? number : null
@@ -43,7 +50,7 @@ public sealed class DictCellViewModel(DictRowViewModel row, int index, Dictionar
     internal void Changed()
     {
         _issue = DictionaryCells.Check(spec, column, row[index], options);
-        foreach (var name in new[] { nameof(Value), nameof(Display), nameof(SortKey), nameof(Level), nameof(Problem) })
+        foreach (var name in new[] { nameof(Value), nameof(Display), nameof(IsChecked), nameof(SortKey), nameof(Level), nameof(Problem) })
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
     }
 }
