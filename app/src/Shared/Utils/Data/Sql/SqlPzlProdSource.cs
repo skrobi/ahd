@@ -68,6 +68,71 @@ public sealed class SqlPzlProdSource(SqlDatabase db) : IPzlProdSource
         return new PzlProdCheck(elements, groups, flags);
     }
 
+    /// <summary>
+    /// Odczyt na żywo zakresu projektu: PSPNR do tabeli tymczasowej (#pspnr – sesja połączenia, bez praw zapisu w PZLPROD),
+    /// godziny i materiały zsumowane po PSPNR w PZLPROD (docs/performance-objectives.md, rozdz. 4.2). Zapytania jak raport
+    /// produkcyjny S70MR – zamiast filtra programu (Z_OPIS, SERNR_LO) zakres P1S projektu; wiersze „Paint” (Hangar W20) –
+    /// w swoim elemencie.
+    /// </summary>
+    public IReadOnlyList<ProductionValues> Production(IReadOnlyCollection<string> pspnrs)
+    {
+        var keys = pspnrs.Select(p => long.TryParse(p.Trim(), out var value) ? value : (long?)null).OfType<long>().Distinct().ToList();
+        if (keys.Count == 0)
+            return [];
+        using var connection = db.Open();
+        connection.Execute("CREATE TABLE #pspnr (PSPNR BIGINT NOT NULL PRIMARY KEY);");
+        foreach (var chunk in keys.Chunk(1000))   // liczby – literały bezpieczne; 1000 wierszy na INSERT … VALUES
+            connection.Execute($"INSERT INTO #pspnr (PSPNR) VALUES {string.Join(", ", chunk.Select(k => $"({k})"))};");
+
+        var hours = connection.Query<HoursRow>(
+            $"""
+            WITH Produktywnosc AS (
+                SELECT IPT, SUM(CzTechPon) / SUM(CzRzecz) AS Factor
+                FROM {db.Table("vAHDD_PL_CPI")}
+                WHERE DataZakonczeniaOperacji >= DATEADD(YEAR, -1, GETDATE())
+                GROUP BY IPT
+                HAVING SUM(CzRzecz) > 0 AND SUM(CzTechPon) > 0),
+            A AS (
+                SELECT p.PSPNR, a.IPT, a.CATS, a.TECH, a.TECH_PON
+                FROM {db.Table("vAHDD")} a
+                JOIN #pspnr p ON p.PSPNR = TRY_CONVERT(BIGINT, a.PSPNR))
+            SELECT CAST(A.PSPNR AS NVARCHAR(50)) AS Pspnr,
+                   CAST(SUM(A.CATS) AS DECIMAL(28,8)) AS AcHours,
+                   CAST(SUM(A.TECH / ISNULL(P.Factor, 1)) + SUM(ISNULL(K.Share, 0) * A.TECH) AS DECIMAL(28,8)) AS BacHours,
+                   CAST(SUM(A.TECH_PON / ISNULL(P.Factor, 1)) + SUM(ISNULL(K.Share, 0) * A.TECH_PON) AS DECIMAL(28,8)) AS EvHours
+            FROM A
+            LEFT JOIN Produktywnosc P ON P.IPT = A.IPT
+            LEFT JOIN (VALUES ('W2', 0.10), ('W3', 0.10), ('W4', 0.10), ('W5', 0.15), ('W6', 0.20)) K (Prefix, Share) ON LEFT(A.IPT, 2) = K.Prefix
+            GROUP BY A.PSPNR
+            """, commandTimeout: Timeout).ToDictionary(r => r.Pspnr);
+        var materials = connection.Query<MaterialRow>(
+            $"""
+            SELECT CAST(p.PSPNR AS NVARCHAR(50)) AS Pspnr,
+                   CAST(SUM(CASE WHEN v.STATUS IN ('DOST', 'WYD') THEN v.NETWR_USD / (1 + ISNULL(v.Z_CLO, 0)) ELSE 0 END) AS DECIMAL(28,8)) AS Delivered
+            FROM {db.Table("vAPD")} v
+            JOIN #pspnr p ON p.PSPNR = TRY_CONVERT(BIGINT, v.PSPNR)
+            GROUP BY p.PSPNR
+            """, commandTimeout: Timeout).ToDictionary(r => r.Pspnr);
+        return hours.Keys.Union(materials.Keys)
+            .Select(k => new ProductionValues(k, hours.GetValueOrDefault(k)?.AcHours, hours.GetValueOrDefault(k)?.BacHours, hours.GetValueOrDefault(k)?.EvHours,
+                materials.GetValueOrDefault(k)?.Delivered))
+            .ToList();
+    }
+
+    private sealed class HoursRow
+    {
+        public string Pspnr { get; set; } = "";
+        public decimal? AcHours { get; set; }
+        public decimal? BacHours { get; set; }
+        public decimal? EvHours { get; set; }
+    }
+
+    private sealed class MaterialRow
+    {
+        public string Pspnr { get; set; } = "";
+        public decimal? Delivered { get; set; }
+    }
+
     private static string T(string? value) => value?.Trim() ?? "";
 
     private sealed class ElementRow

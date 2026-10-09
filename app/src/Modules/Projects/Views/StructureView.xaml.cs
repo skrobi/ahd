@@ -21,28 +21,18 @@ namespace PzlEv.Modules.Projects.Views;
 /// </summary>
 public partial class StructureView : UserControl
 {
-    /// <summary>Kolumny tekstowe: klucz (StructureEdits), nagłówek, szerokość, czcionka stała, wyrównanie do prawej.</summary>
-    private static readonly (string Key, string Header, double Width, bool Mono, bool Right)[] Codes =
-    [
-        ("WbsElement", "Element CES", 130, true, false),
-        (StructureEdits.P1s, "P1S", 160, true, false),
-    ];
-
-    private static readonly (string Key, string Header, double Width, bool Mono, bool Right)[] Budget =
-    [
-        (StructureEdits.BacHours, "BAC HOURS", 100, false, true),
-        (StructureEdits.BacMaterial, "BAC MATERIAL", 110, false, true),
-        (StructureEdits.Bac, "BAC", 110, false, true),
-        (StructureEdits.Start, "Baseline Start", 110, true, false),
-        (StructureEdits.Finish, "Baseline Koniec", 110, true, false),
-    ];
-
-    /// <summary>Kolumny tylko do odczytu: element CES (klucz nakładki), ACWP (z danych ACTUALS).</summary>
-    private static readonly HashSet<string> ReadOnly = ["WbsElement", "Acwp"];
-
     private static readonly IValueConverter CellBackground = new LevelBrushConverter();
 
     private readonly List<DataGridColumn> _codeColumns = [];
+    // Grupy kolumn jak grupowanie w Excelu (StructureColumns.Groups): kolumny grupy, kolumna zastępcza zwiniętej grupy
+    // („+ Schedule”), przycisk grupy w nagłówku pierwszej kolumny, stan zwinięcia; tekst nagłówka kolumny (wklejanie).
+    private readonly Dictionary<string, List<DataGridColumn>> _groupColumns = [];
+    private readonly Dictionary<string, DataGridColumn> _groupStubs = [];
+    private readonly Dictionary<string, Button> _groupButtons = [];
+    private readonly Dictionary<string, bool> _collapsed = StructureColumns.Groups.ToDictionary(g => g.Name, g => g.Collapsed);
+    private readonly Dictionary<DataGridColumn, string> _headers = [];
+    private DataGridColumn? _nameColumn;
+    private Button? _codesToggle;
     private readonly LookupColumn _cam = new(StructureEdits.Cam, "CAM", 180);
     private readonly LookupColumn _category = new(StructureEdits.CostCategory, "Cost Category", 150);
     private bool _codesVisible;
@@ -53,6 +43,7 @@ public partial class StructureView : UserControl
     {
         InitializeComponent();
         BuildColumns();
+        BuildColumnHelp();
         DataContextChanged += (_, e) =>
         {
             if (e.OldValue is StructureViewModel old)
@@ -74,83 +65,203 @@ public partial class StructureView : UserControl
 
     private StructureViewModel? Model => DataContext as StructureViewModel;
 
+    /// <summary>
+    /// Kolumny w grupach (StructureColumns): nagłówek – nazwa grupy z przyciskiem „−” / „+” nad pierwszą kolumną grupy
+    /// i nazwa kolumny, opis w podpowiedzi; zwinięta grupa – jedna wąska kolumna „+ Grupa”. Nazwa (drzewo, zamrożona) jest
+    /// zawsze widoczna – w jej nagłówku przycisk grupy WBS Attributes i „+” / „−” dla kolumn CES Element i P1S. Kolumny
+    /// z danych (FromView) – tylko do odczytu.
+    /// </summary>
     private void BuildColumns()
     {
-        // Nazwa (drzewo, zamrożona) – w nagłówku „+” / „−” pokazuje albo chowa kolumny Element CES i P1S.
-        var toggle = new Button { Content = "+", Width = 20, Padding = new Thickness(0), Margin = new Thickness(0, 0, 6, 0), ToolTip = "Pokaż / ukryj kolumny Element CES i P1S" };
-        toggle.Click += (_, _) => ShowCodes(!_codesVisible, toggle);
-        var header = new StackPanel { Orientation = Orientation.Horizontal };
-        header.Children.Add(toggle);
-        header.Children.Add(new TextBlock { Text = "Nazwa", VerticalAlignment = VerticalAlignment.Center });
-        RowsGrid.Columns.Add(new DataGridTemplateColumn
+        foreach (var group in StructureColumns.Groups)
         {
-            Header = header,
-            Width = 360,
-            SortMemberPath = StructureEdits.Name,
-            ClipboardContentBinding = new Binding($"[{StructureEdits.Name}]"),
-            CellTemplate = (DataTemplate)Resources["NameCell"],
-            CellEditingTemplate = (DataTemplate)Resources["NameEdit"],
-        });
-        foreach (var column in Codes)
-        {
-            var added = TextColumn(column);
-            added.Visibility = Visibility.Collapsed;
-            _codeColumns.Add(added);
+            var columns = StructureColumns.All.Where(c => c.Group == group.Name).ToList();
+            _groupColumns[group.Name] = [];
+            if (columns[0].Key != StructureEdits.Name)
+            {
+                var stub = new DataGridTemplateColumn
+                {
+                    Header = GroupButton(group, collapsedLabel: true),
+                    IsReadOnly = true,
+                    Width = DataGridLength.Auto,
+                    MinWidth = 40,
+                    CellTemplate = new DataTemplate(),
+                };
+                _groupStubs[group.Name] = stub;
+                RowsGrid.Columns.Add(stub);
+            }
+            for (var i = 0; i < columns.Count; i++)
+            {
+                var column = Create(columns[i]);
+                column.Header = Header(columns[i], group, first: i == 0);
+                _headers[column] = columns[i].Header;
+                _groupColumns[group.Name].Add(column);
+                if (!RowsGrid.Columns.Contains(column))
+                    RowsGrid.Columns.Add(column);
+            }
         }
         RowsGrid.Columns.Add(new DataGridTemplateColumn
         {
-            Header = "WP",
-            Width = 50,
-            IsReadOnly = true,   // znacznik zmienia kliknięcie pola (OnWpClick) albo wklejenie
-            SortMemberPath = StructureEdits.Wp,
-            ClipboardContentBinding = new Binding(nameof(StructureRowViewModel.IsWp)),
-            CellTemplate = (DataTemplate)Resources["WpCell"],
-        });
-        RowsGrid.Columns.Add(_cam);
-        RowsGrid.Columns.Add(_category);
-        foreach (var column in Budget)
-            TextColumn(column);
-        // ACWP – koszt rzeczywisty z ostatniego importu ACTUALS (tylko do odczytu; nieprzypisany do WP – w Brakach).
-        TextColumn(("Acwp", "ACWP", 110, false, true));
-        RowsGrid.Columns.Add(new DataGridTemplateColumn
-        {
-            Header = "Braki",
+            Header = Header(new StructureColumns.Column("Gaps", "Braki", "", "Braki do uzupełnienia: element bez WP, WP bez budżetu, WP bez CAM, koszt bez WP – szczegóły w podpowiedzi ⚠.", Right: false), null, first: false),
             Width = 60,
             IsReadOnly = true,
             CellTemplate = (DataTemplate)Resources["GapCell"],
         });
+        ApplyGroups();
     }
 
-    private DataGridTextColumn TextColumn((string Key, string Header, double Width, bool Mono, bool Right) definition)
+    /// <summary>„Opis kolumn” pod tabelą: grupy z opisem i kolumny z wyjaśnieniem (kolumny z danych – tylko do odczytu).</summary>
+    private void BuildColumnHelp()
     {
-        var (key, header, width, mono, right) = definition;
+        foreach (var group in StructureColumns.Groups)
+        {
+            ColumnHelp.Children.Add(new TextBlock
+            {
+                Text = $"{group.Name} – {group.Description}{(group.Collapsed ? " (domyślnie zwinięta)" : "")}",
+                FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 6, 0, 2), TextWrapping = TextWrapping.Wrap,
+            });
+            foreach (var column in StructureColumns.All.Where(c => c.Group == group.Name))
+                ColumnHelp.Children.Add(new TextBlock
+                {
+                    Text = $"• {column.Header}: {column.Description}{(column.FromView ? " [tylko do odczytu]" : "")}",
+                    Margin = new Thickness(12, 0, 0, 1), TextWrapping = TextWrapping.Wrap, FontSize = 12,
+                });
+        }
+    }
+
+    private DataGridColumn Create(StructureColumns.Column definition)
+    {
+        switch (definition.Key)
+        {
+            case StructureEdits.Name:
+                _nameColumn = new DataGridTemplateColumn
+                {
+                    Width = definition.Width,
+                    SortMemberPath = StructureEdits.Name,
+                    ClipboardContentBinding = new Binding($"[{StructureEdits.Name}]"),
+                    CellTemplate = (DataTemplate)Resources["NameCell"],
+                    CellEditingTemplate = (DataTemplate)Resources["NameEdit"],
+                };
+                return _nameColumn;
+            case StructureEdits.Wp:
+                return new DataGridTemplateColumn
+                {
+                    Width = definition.Width,
+                    IsReadOnly = true,   // znacznik zmienia kliknięcie pola (OnWpClick) albo wklejenie
+                    SortMemberPath = StructureEdits.Wp,
+                    ClipboardContentBinding = new Binding(nameof(StructureRowViewModel.IsWp)),
+                    CellTemplate = (DataTemplate)Resources["WpCell"],
+                };
+            case StructureEdits.Cam:
+                _cam.Width = definition.Width;
+                return _cam;
+            case StructureEdits.CostCategory:
+                _category.Width = definition.Width;
+                return _category;
+            default:
+                var column = TextColumn(definition);
+                if (definition.Key is StructureColumns.WbsElement or StructureEdits.P1s)
+                    _codeColumns.Add(column);
+                return column;
+        }
+    }
+
+    private DataGridTextColumn TextColumn(StructureColumns.Column definition)
+    {
+        var key = definition.Key;
         var style = new Style(typeof(TextBlock));
         style.Setters.Add(new Setter(TextBlock.PaddingProperty, new Thickness(4, 0, 4, 0)));
         style.Setters.Add(new Setter(TextBlock.BackgroundProperty, new Binding($"Problems[{key}]") { Converter = CellBackground, ConverterParameter = "cell" }));
         style.Setters.Add(new Setter(FrameworkElement.ToolTipProperty, new Binding($"ProblemText[{key}]")));
-        if (right)
+        if (definition.Right)
             style.Setters.Add(new Setter(TextBlock.TextAlignmentProperty, TextAlignment.Right));
+        if (definition.FromView)
+            style.Setters.Add(new Setter(TextBlock.ForegroundProperty, FindResource("Muted")));
         var column = new DataGridTextColumn
         {
-            Header = header,
-            Width = width,
+            Width = definition.Width,
             SortMemberPath = key,
-            Binding = new Binding($"[{key}]") { Mode = ReadOnly.Contains(key) ? BindingMode.OneWay : BindingMode.TwoWay, UpdateSourceTrigger = UpdateSourceTrigger.LostFocus },
-            IsReadOnly = ReadOnly.Contains(key),
+            Binding = new Binding($"[{key}]") { Mode = definition.FromView ? BindingMode.OneWay : BindingMode.TwoWay, UpdateSourceTrigger = UpdateSourceTrigger.LostFocus },
+            IsReadOnly = definition.FromView,
             ElementStyle = style,
         };
-        if (mono)
+        if (definition.Mono)
             column.FontFamily = (FontFamily)FindResource("FMono");
-        RowsGrid.Columns.Add(column);
         return column;
     }
 
-    private void ShowCodes(bool visible, Button toggle)
+    /// <summary>Nagłówek kolumny: linia grupy (przycisk i nazwa grupy nad pierwszą kolumną grupy) i nazwa kolumny; opis w podpowiedzi.</summary>
+    private FrameworkElement Header(StructureColumns.Column definition, StructureColumns.Group? group, bool first)
     {
-        _codesVisible = visible;
-        foreach (var column in _codeColumns)
-            column.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
-        toggle.Content = visible ? "−" : "+";
+        var panel = new StackPanel
+        {
+            ToolTip = $"{definition.Header}\n{definition.Description}" + (definition.FromView ? "\nTylko do odczytu – wartość z danych (nie edytuje się w tabeli)." : ""),
+        };
+        var top = new StackPanel { Orientation = Orientation.Horizontal, MinHeight = 20 };
+        if (first && group is not null)
+        {
+            top.Children.Add(GroupButton(group, collapsedLabel: false));
+            top.Children.Add(new TextBlock { Text = group.Name, FontWeight = FontWeights.SemiBold, FontSize = 11, VerticalAlignment = VerticalAlignment.Center });
+        }
+        panel.Children.Add(top);
+        var name = new StackPanel { Orientation = Orientation.Horizontal };
+        if (definition.Key == StructureEdits.Name)
+        {
+            _codesToggle = new Button { Content = "+", Width = 20, Padding = new Thickness(0), Margin = new Thickness(0, 0, 6, 0), ToolTip = "Pokaż / ukryj kolumny CES Element i Legacy Element (P1S)" };
+            _codesToggle.Click += (_, _) => { _codesVisible = !_codesVisible; ApplyGroups(); };
+            name.Children.Add(_codesToggle);
+        }
+        name.Children.Add(new TextBlock
+        {
+            Text = definition.Header,
+            VerticalAlignment = VerticalAlignment.Center,
+            FontStyle = definition.FromView ? FontStyles.Italic : FontStyles.Normal,
+        });
+        panel.Children.Add(name);
+        return panel;
+    }
+
+    /// <summary>Przycisk grupy: „−” nad pierwszą kolumną rozwiniętej grupy, „+ Grupa” w kolumnie zastępczej zwiniętej grupy.</summary>
+    private Button GroupButton(StructureColumns.Group group, bool collapsedLabel)
+    {
+        var columns = string.Join(", ", StructureColumns.All.Where(c => c.Group == group.Name && c.Key != StructureEdits.Name).Select(c => c.Header));
+        var button = new Button
+        {
+            Content = collapsedLabel ? $"+ {group.Name}" : "−",
+            MinWidth = 20,
+            Padding = new Thickness(4, 0, 4, 0),
+            Margin = new Thickness(0, 0, 6, 0),
+            ToolTip = $"{group.Name}: {group.Description}\nKolumny: {columns}\n{(collapsedLabel ? "Rozwiń grupę" : "Zwiń grupę")}",
+        };
+        button.Click += (_, _) =>
+        {
+            _collapsed[group.Name] = !collapsedLabel;
+            ApplyGroups();
+        };
+        if (!collapsedLabel)
+            _groupButtons[group.Name] = button;
+        return button;
+    }
+
+    /// <summary>Widoczność kolumn według zwinięcia grup i przełącznika CES Element / P1S.</summary>
+    private void ApplyGroups()
+    {
+        CommitEdit();
+        foreach (var (group, columns) in _groupColumns)
+        {
+            var collapsed = _collapsed[group];
+            foreach (var column in columns)
+            {
+                var visible = column == _nameColumn || (!collapsed && (!_codeColumns.Contains(column) || _codesVisible));
+                column.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
+            }
+            if (_groupStubs.TryGetValue(group, out var stub))
+                stub.Visibility = collapsed ? Visibility.Visible : Visibility.Collapsed;
+            if (_groupButtons.TryGetValue(group, out var button))
+                button.Content = collapsed ? "+" : "−";
+        }
+        if (_codesToggle is not null)
+            _codesToggle.Content = _codesVisible ? "−" : "+";
     }
 
     private void OnToggle(object sender, RoutedEventArgs e)
@@ -302,8 +413,8 @@ public partial class StructureView : UserControl
         model.SetCells(cells);
     }
 
-    private static string HeaderText(DataGridColumn column) =>
-        column.Header as string ?? (column.SortMemberPath == StructureEdits.Name ? "Nazwa" : "");
+    private string HeaderText(DataGridColumn column) =>
+        _headers.TryGetValue(column, out var text) ? text : column.Header as string ?? "";
 
     private List<(StructureRowViewModel Row, string Column)> SelectedCells() =>
         RowsGrid.SelectedCells

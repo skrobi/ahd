@@ -97,10 +97,23 @@ i budżetem (`StructureBuilder`).
   węzła (ten element jest pod swoim węzłem), więc każdy element P1S występuje raz. Element ze słownika „WP i CAM”,
   którego nie ma w `LOG.WBS` (np. bez PZLPROD), jest pod wierszem o najdłuższym pasującym kodzie, a bez niego –
   w grupie „Elementy P1S spoza struktury”.
-- **Kolumny:** Nazwa (drzewo, zamrożona), Element CES i P1S (domyślnie schowane – „+” / „−” w nagłówku Nazwa, jak
-  grupowanie kolumn w Excelu), WP (checkbox), CAM (lista osób), Cost Category (lista kategorii projektu), BAC HOURS,
-  BAC MATERIAL, BAC (budżet kosztowy), Baseline Start, Baseline Koniec (RRRR-MM-DD), ACWP, Braki. Kolumny mają stałą szerokość – przy kolejnych
-  kolumnach tabela przewija się w poziomie.
+- **Kolumny w grupach** (`StructureColumns`) – jedna struktura WBS dla perspektywy operacyjnej (godziny) i finansowej
+  (koszty); grupy zwijane jak grupowanie kolumn w Excelu („−” nad pierwszą kolumną grupy, zwinięta grupa – kolumna
+  „+ Grupa”); Schedule, Operational EV i Financial EV domyślnie zwinięte. Opis każdej kolumny – podpowiedź nagłówka
+  i „Opis kolumn” pod tabelą. Kolumny z danych (PZLPROD, ACTUALS, wyliczone) – tylko do odczytu (nagłówek kursywą).
+
+  | Grupa | Kolumny |
+  |---|---|
+  | WBS Attributes | WBS Name (drzewo, zamrożona; poziom – wcięcie), CES Element i Legacy Element (P1S) (domyślnie schowane – „+” w nagłówku WBS Name), WP (checkbox), CAM (lista osób), Cost Category (lista kategorii projektu) |
+  | Schedule | Baseline Start, Baseline Finish (RRRR-MM-DD, „Harmonogram i budżet”); Actual Start, Actual Finish – z godzin AHD (pierwsza data CATS, data EV = BAC); kolumny dat `vAHDD` do ustalenia (O10) – na razie puste |
+  | Operational EV | BAC Hours (AHD: TECH ÷ produktywność IPT z 12 mies. + DJK), PV Hours (BAC Hours AHD WP rozłożone liniowo na dni robocze pn–pt baseline, stan na dziś), EV Hours (TECH_PON ÷ produktywność + DJK), AC Hours (CATS) |
+  | Materials | BAC Material („Harmonogram i budżet”), Actual Material (vAPD: dostarczone / wydane, USD bez narzutu Z_CLO) |
+  | Financial EV | BAC Hours baseline i BAC Cost („Harmonogram i budżet”), PV Cost (BAC Cost × udział dni roboczych baseline), EV Cost (BAC Cost × EV Hours ÷ BAC Hours AHD, najwyżej BAC Cost), ACWP |
+
+  Wartości z PZLPROD to suma elementów P1S poddrzewa wiersza (każdy element raz); PV i EV kosztowe – suma WP poddrzewa.
+  Dane produkcyjne są czytane na żywo (`IPzlProdSource.Production`, zakres P1S projektu zamiast filtra programu) przy
+  otwarciu projektu, „Odśwież mapowanie i koszty” i po zmianie Legacy WBS; chwila odczytu – w nagłówku ekranu
+  („Produkcja (PZLPROD) …”). Kolumny mają stałą szerokość – przy kolejnych kolumnach tabela przewija się w poziomie.
 - **WP** to znacznik elementu P1S (wiersz z kodem P1S), który wskażą finansiści: zaznaczony element jest pakietem pracy
   i ma mieć koszty i budżet. Kodem nowego WP jest kod elementu P1S (WP z wcześniej wczytanego słownika zachowuje swój
   kod). WP nie jest osobnym poziomem drzewa.
