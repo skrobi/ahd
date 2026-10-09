@@ -15,7 +15,8 @@ public sealed class ProjectDictionariesTests
         new P1sScope(["AC-CAB.6.38", "AC-CAB.6.38.03"], []),
         new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["AC-CAB.6.38.09"] = "S70I" },
         new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Anna Nowak", "PZL\\anowak" },
-        new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "WP-1", "WP-2" });
+        new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "WP-1", "WP-2" },
+        new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Labor", "Material" });
 
     private static List<Issue> Validate(string dictionary, params Dictionary<string, string?>[] rows)
     {
@@ -52,11 +53,52 @@ public sealed class ProjectDictionariesTests
         Assert.True(HasError(Validate(ProjectDictionaries.WpCam, Wp("AC-CAB.6.38.09", "WP-1", "Anna Nowak")), "należy do projektu S70I"));
         Assert.True(HasError(Validate(ProjectDictionaries.WpCam, Wp("AC-CAB.6.38.01", "WP-1", "Anna Nowak"), Wp("AC-CAB.6.38.01", "WP-2", "Anna Nowak")), "Duplikat klucza"));
         Assert.True(HasError(Validate(ProjectDictionaries.WpCam, Wp("AC-CAB.6.38.01", "WP-1", null)), "CAM: pole wymagane"));
-        Assert.True(HasError(Validate(ProjectDictionaries.WpCam, Wp("AC-CAB.6.38.01", "WP-1", "Anna Nowak", "Overhead")), "dozwolone: Labor"));
         var outside = Validate(ProjectDictionaries.WpCam, Wp("AC-CAB.6.38.01", "WP-1", "Jan Obcy"));
         Assert.Contains(outside, i => i.Level == CheckLevel.Warning && i.Message.Contains("spoza listy osób"));
         Assert.DoesNotContain(outside, i => i.Level == CheckLevel.Error);
     }
+
+    [Fact]
+    public void WpCam_cost_category_comes_from_project_wbs_categories()
+    {
+        // Kategoria spoza słownika „Kategorie WBS” projektu – ostrzeżenie (nie blokuje zapisu dawnych wartości).
+        var outside = Validate(ProjectDictionaries.WpCam, Wp("AC-CAB.6.38.01", "WP-1", "Anna Nowak", "Overhead"));
+        Assert.Contains(outside, i => i.Level == CheckLevel.Warning && i.Message.Contains("„Overhead” spoza słownika „Kategorie WBS”"));
+        Assert.DoesNotContain(outside, i => i.Level == CheckLevel.Error);
+        // Pusta kategoria – bez uwag; słownik kategorii pusty (Categories null) – bez kontroli.
+        Assert.Empty(Validate(ProjectDictionaries.WpCam, Wp("AC-CAB.6.38.01", "WP-1", "Anna Nowak", null)));
+        var spec = ProjectDictionaries.For(ProjectDictionaries.WpCam, Context with { Categories = null });
+        var rows = DictionaryValidator.Normalize(spec, [new DictRow(null, null, Wp("AC-CAB.6.38.01", "WP-1", "Anna Nowak", "Overhead"))], []);
+        Assert.Empty(DictionaryValidator.Validate(spec, rows));
+        // Kolumna powiązana ze słownikiem projektu – lista wyboru w tabeli i strukturze.
+        Assert.Equal(ProjectDictionaries.WbsCategories, spec.Columns.Single(c => c.Name == "Cost Category").Lookup);
+    }
+
+    [Fact]
+    public void Wbs_categories_dictionary_is_optional_and_unique_by_category()
+    {
+        var item = ProjectDictionaries.Item(ProjectDictionaries.WbsCategories);
+        Assert.True(item.Stored);
+        Assert.Empty(item.RequiredFor);
+        Assert.Contains(ProjectDictionaries.ForType(ProjectTypes.Sac), i => i.Code == ProjectDictionaries.WbsCategories);
+        Assert.Contains(ProjectDictionaries.Tables, t => t.Spec.Code == ProjectDictionaries.WbsCategories);
+        Assert.Empty(Validate(ProjectDictionaries.WbsCategories, Cat("Production", "produkcja"), Cat("Programs", null)));
+        Assert.True(HasError(Validate(ProjectDictionaries.WbsCategories, Cat("Production", null), Cat("production", null)), "Duplikat klucza"));
+        Assert.True(HasError(Validate(ProjectDictionaries.WbsCategories, Cat(null, "bez nazwy")), "pole wymagane"));
+    }
+
+    [Fact]
+    public void Structure_category_options_keep_values_outside_dictionary()
+    {
+        var categories = new List<LookupOption> { new("Production", "Production"), new("Programs", "Programs") };
+        var wpCam = new[] { new DictRow(null, null, Wp("A", "WP-1", "x", "Labor")), new DictRow(null, null, Wp("B", "WP-2", "x", "production")) };
+        Assert.Equal(["Production", "Programs", "Labor"], ProjectService.CategoryOptions(categories, wpCam).Select(o => o.Value));
+        var lookups = ProjectService.Lookups([], categories);
+        Assert.Same(categories, lookups[ProjectDictionaries.WbsCategories]);
+    }
+
+    private static Dictionary<string, string?> Cat(string? category, string? description) =>
+        new() { ["Cost Category"] = category, ["Opis"] = description };
 
     [Fact]
     public void ScheduleBudget_rules()

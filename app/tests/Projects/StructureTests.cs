@@ -147,6 +147,7 @@ public sealed class StructureTests
         Assert.True(StructureEdits.CanEdit(node, StructureEdits.Name));
         Assert.True(StructureEdits.CanEdit(node, StructureEdits.P1s));
         Assert.True(StructureEdits.CanEdit(node, StructureEdits.Wp));
+        Assert.True(StructureEdits.CanEdit(leaf, StructureEdits.CostCategory));
         Assert.False(StructureEdits.CanEdit(node, StructureEdits.BacHours));   // suma poddrzewa
         Assert.False(StructureEdits.CanEdit(leaf, StructureEdits.Name));
         Assert.True(StructureEdits.CanEdit(leaf, StructureEdits.BacHours));
@@ -178,6 +179,11 @@ public sealed class StructureTests
         // Wybór CAM w wierszu bez WP zaznacza WP.
         var (camOnly, _) = StructureEdits.WpCam(wpCam, "AC-CAB.6.38.07", new Dictionary<string, string?> { [StructureEdits.Cam] = "e123456" });
         Assert.Equal("AC-CAB.6.38.07", camOnly[1]["WP"]);
+
+        // Cost Category (kategoria WBS projektu) – zapisywana w „WP i CAM” przy WP elementu; odczyt w strukturze.
+        var (categorized, _) = StructureEdits.WpCam(wpCam, "XYZ-1", new Dictionary<string, string?> { [StructureEdits.CostCategory] = "Production" });
+        Assert.Equal(("WP-1", "Production"), (categorized[0]["WP"], categorized[0]["Cost Category"]));
+        Assert.Equal("Production", Of(ProjectService.Structure(Objectives(), Inputs(), categorized, []), "p1s:XYZ-1").CostCategory);
 
         // Odznaczenie WP – przypisanie usunięte.
         var (cleared, removed) = StructureEdits.WpCam(wpCam, "XYZ-1", new Dictionary<string, string?> { [StructureEdits.Wp] = "false" });

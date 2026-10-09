@@ -75,8 +75,9 @@ Definicje źródeł i ich prefiksy są konfiguracją importu – `docs/zrodla-da
 
 | Słownik | Zawartość | Klucz |
 |---|---|---|
-| WP i CAM | element P1S projektu → WP, CAM, Cost Category (Labor / Material / Subcontract – O24); powiązanie z nakładką przez `Legacy WBS` (`docs/performance-objectives.md`, rozdz. 4.1) | element P1S |
+| WP i CAM | element P1S projektu → WP, CAM, Cost Category (kategoria ze słownika „Kategorie WBS” projektu); powiązanie z nakładką przez `Legacy WBS` (`docs/performance-objectives.md`, rozdz. 4.1) | element P1S |
 | Harmonogram i budżet | WP → `BAC HOURS` (godziny), `BAC MATERIAL` (koszt materiałów), Baseline Start, Baseline Koniec (RRRR-MM-DD; w plikach Excel rozpoznawane też dawne nagłówki „Planowany Start/Koniec”) – baseline projektu | WP |
+| Kategorie WBS | kategorie elementów WBS indywidualne dla projektu: `Cost Category` (np. Production, Programs), `Opis` – lista wyboru kolumny Cost Category w strukturze projektu i w „WP i CAM”; raport po kategoriach (wiele elementów WBS w jednej kategorii); inne niż globalny słownik Cost Category (numer elementu kosztowego) – **opcjonalny** | Cost Category |
 | Stawki CAS | stawki CAS projektu (zawartość – O37); do ustalenia słownik nie jest wczytywany, a projekt CAS jest niegotowy (ERROR) | do ustalenia |
 | Cost Category – zmiany w projekcie | zmiany i uzupełnienia słownika globalnego Cost Category dla projektu (rozdz. 6) | numer elementu kosztowego |
 | Wykluczenia | elementy pomijane na późniejszym etapie analizy: kombinacja `Cost Element`, `WBS Element`, `Partner object` (co najmniej jedno z trzech) + wymagany opis (rozdz. 7) – **opcjonalny** | kombinacja trzech pól |
@@ -85,7 +86,8 @@ Definicje źródeł i ich prefiksy są konfiguracją importu – `docs/zrodla-da
   plik z arkuszami albo osobne pliki / CSV) i są dalej utrzymywane w aplikacji (`docs/funkcjonalnosc.md`, F01, F03):
   na ekranie Projekt w zakładce Słowniki projektu – lista słowników i tabela wybranego słownika z edycją
   w komórkach jak na ekranie Słowniki (dodaj / zmień / usuń wiersz, „Zapisz” z walidacją, „Odrzuć zmiany”, filtr)
-  oraz pobranie i wczytanie z Excela z podglądem różnic. „WP i CAM” oraz „Harmonogram i budżet” zmienia się też
+  oraz pobranie i wczytanie z Excela z podglądem różnic (Cost Category w arkuszu „WP i CAM” – lista kategorii projektu
+  w arkuszu „Listy”). „WP i CAM” oraz „Harmonogram i budżet” zmienia się też
   w komórkach tabeli w zakładce Struktura – to te same słowniki (zapis od razu po zatwierdzeniu wiersza, z tą samą
   walidacją i historią; `docs/performance-objectives.md`, rozdz. 4.2).
 - Harmonogram i budżet mogą się zmieniać w trakcie projektu – każda zmiana jest w historii, a przebieg liczy
@@ -130,6 +132,7 @@ Kontekst biznesowy typów – `readme.md`.
 | jeden WP na element P1S | ERROR |
 | WP wymaga CAM | ERROR |
 | CAM wybierany z listy osób; przy wczytaniu z Excela CAM spoza listy osób | – / WARNING |
+| Cost Category spoza słownika „Kategorie WBS” projektu (sprawdzane, gdy słownik ma pozycje) | WARNING |
 
 ### 5.3 Harmonogram i budżet
 
@@ -175,6 +178,13 @@ Kontekst biznesowy typów – `readme.md`.
 
 Reguły rozstrzygania na zawartości raportu (kilka celów jednego elementu CES, cel spoza `LOG.WBS`) sprawdza ekran
 Mapowanie – `docs/mapowanie-ces-p1s.md`, rozdz. 10.
+
+### 5.8 Kategorie WBS
+
+| Reguła | Poziom |
+|---|---|
+| `Cost Category` wymagana i unikalna w projekcie (bez względu na wielkość liter) | ERROR |
+| zapis podobny do istniejącej kategorii | WARNING |
 
 Kontrole słowników względem danych przebiegu (np. MPK z kosztów bez stawki na dany rok, numer elementu kosztowego bez
 wpisu w Cost Category) – `docs/pipeline-fazy.md`, P2.
@@ -228,7 +238,6 @@ Wyklucza się po kombinacji trzech pól z raportu kosztów CES (`docs/zrodla-dan
 |---|---|
 | O9 | Los istniejących tabel słownikowych w `PZLPROD.LOG` (`Stanowiska`, `LearningCurve`, `PeriodDates`, `EmployeesHist`) – do ustalenia z właścicielami |
 | O18 | Numeracja tygodni w kalendarzu okresów (ISO czy wewnętrzna) |
-| O24 | Kolumna „Cost Category” w słowniku „WP i CAM” ma stałe wartości Labor / Material / Subcontract – czy ma przyjmować kategorie ze słownika Cost Category? |
 | O25 | Numer elementu kosztowego bez wpisu w Cost Category: ERROR (dziś) czy WARNING? |
 | O37 | Jakie stawki CAS są wykorzystywane i w jakim układzie |
 | O48 | Wykluczenia: na którym etapie analizy są stosowane i jak wykazywany jest wykluczony koszt |

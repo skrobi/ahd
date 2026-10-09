@@ -8,8 +8,8 @@ namespace PzlEv.Modules.Projects.Services;
 
 /// <summary>
 /// Słowniki projektu (docs/slowniki.md, rozdz. 3, 5.2–5.6) na mechanizmie słowników (Shared/Utils/Dictionaries):
-/// WP i CAM, Harmonogram i budżet, Cost Category – zmiany w projekcie (tabela słownika globalnego z kodem projektu),
-/// Wykluczenia. Reguły zależne od projektu (zakres, inne projekty, lista osób) dostają kontekst – For(...).
+/// WP i CAM, Harmonogram i budżet, Kategorie WBS, Cost Category – zmiany w projekcie (tabela słownika globalnego
+/// z kodem projektu), Wykluczenia. Reguły zależne od projektu (zakres, inne projekty, lista osób) dostają kontekst – For(...).
 /// Stawki CAS – zawartość nieustalona (O37): słownik nie jest wczytywany ani zapisywany.
 /// </summary>
 public static class ProjectDictionaries
@@ -18,20 +18,19 @@ public static class ProjectDictionaries
     public const string ScheduleBudget = "schedule-budget";
     public const string Exclusions = "exclusions";
     public const string CasRates = "cas-rates";
-
-    public static readonly IReadOnlyList<string> CostCategoryChoices = ["Labor", "Material", "Subcontract"];
+    public const string WbsCategories = "wbs-categories";
 
     private static readonly DictionarySpec WpCamSpec = new()
     {
         Code = WpCam,
         Name = "WP i CAM",
-        Description = "Element P1S projektu → WP, CAM, Cost Category. Element P1S należy do projektu, gdy jest kodem P1S elementu nakładki (Legacy WBS albo cel z mapowania) albo leży pod nim.",
+        Description = "Element P1S projektu → WP, CAM, Cost Category (kategoria ze słownika „Kategorie WBS” projektu). Element P1S należy do projektu, gdy jest kodem P1S elementu nakładki (Legacy WBS albo cel z mapowania) albo leży pod nim.",
         Columns =
         [
             new("Element P1S", ColumnType.Text, Key: true),
             new("WP", ColumnType.Text, Required: true, CheckSimilar: true),
             new("CAM", ColumnType.Text, Required: true, CheckSimilar: true, Lookup: GlobalDictionaries.Persons),
-            new("Cost Category", ColumnType.Choice, Choices: CostCategoryChoices),
+            new("Cost Category", ColumnType.Text, CheckSimilar: true, Lookup: WbsCategories),
         ],
         SkipKeyOnlyRows = true,
     };
@@ -50,6 +49,18 @@ public static class ProjectDictionaries
             new("Baseline Koniec", ColumnType.Date, Aliases: ["Planowany Koniec"]),
         ],
         SkipKeyOnlyRows = true,
+    };
+
+    private static readonly DictionarySpec WbsCategoriesSpec = new()
+    {
+        Code = WbsCategories,
+        Name = "Kategorie WBS",
+        Description = "Kategorie elementów WBS projektu (np. Production, Programs) – do wyboru w kolumnie Cost Category struktury i słownika „WP i CAM”; raport po kategoriach. Inne niż globalny słownik Cost Category (numer elementu kosztowego).",
+        Columns =
+        [
+            new("Cost Category", ColumnType.Text, Key: true, CheckSimilar: true),
+            new("Opis", ColumnType.Text),
+        ],
     };
 
     private static readonly DictionarySpec ExclusionsSpec = new()
@@ -73,6 +84,7 @@ public static class ProjectDictionaries
         new(WpCam, "WP i CAM", "WP i CAM", RequiredFor: ProjectTypes.All, Stored: true),
         new(ScheduleBudget, "Harmonogram i budżet", "Harmonogram i budżet", RequiredFor: ProjectTypes.All, Stored: true),
         new(CasRates, "Stawki CAS", "Stawki CAS", RequiredFor: [ProjectTypes.Cas], Stored: false),
+        new(WbsCategories, "Kategorie WBS", "Kategorie WBS", RequiredFor: [], Stored: true),
         new(GlobalDictionaries.CostCategory, "Cost Category – zmiany w projekcie", "Cost Category projektu", RequiredFor: [], Stored: true),
         new(Exclusions, "Wykluczenia", "Wykluczenia", RequiredFor: [], Stored: true),
     ];
@@ -87,6 +99,7 @@ public static class ProjectDictionaries
         new(WpCamSpec, "dict.WpCam", [("Element P1S", "P1sElement"), ("WP", "Wp"), ("CAM", "Cam"), ("Cost Category", "CostCategory")]),
         new(ScheduleBudgetSpec, "dict.ScheduleBudget",
             [("WP", "Wp"), ("BAC HOURS", "BacHours"), ("BAC MATERIAL", "BacMaterial"), ("Baseline Start", "PlannedStart"), ("Baseline Koniec", "PlannedEnd")]),
+        new(WbsCategoriesSpec, "dict.WbsCategory", [("Cost Category", "Category"), ("Opis", "Description")]),
         new(ExclusionsSpec, "dict.Exclusion", [("Cost Element", "CostElement"), ("WBS Element", "WbsElement"), ("Partner object", "PartnerObject"), ("Opis", "Description")]),
     ];
 
@@ -102,6 +115,7 @@ public static class ProjectDictionaries
         WpCam => With(WpCamSpec, rows => WpCamRules(rows, context)),
         ScheduleBudget => With(ScheduleBudgetSpec, rows => ScheduleBudgetRules(rows, context)),
         Exclusions => With(ExclusionsSpec, ExclusionRules),
+        WbsCategories => WbsCategoriesSpec,
         GlobalDictionaries.CostCategory => GlobalDictionaries.Get(GlobalDictionaries.CostCategory),
         _ => throw new NotSupportedException($"Słownik {code} nie jest zapisywany w bazie"),
     };
@@ -141,6 +155,8 @@ public static class ProjectDictionaries
             }
             if (rows[i]["CAM"] is { } cam && !context.Persons.Contains(cam))
                 yield return Issue.Warning($"CAM „{cam}” spoza listy osób (słownik Osoby) – sprawdź pisownię", at);
+            if (rows[i]["Cost Category"] is { } category && context.Categories is { } categories && !categories.Contains(category))
+                yield return Issue.Warning($"Cost Category „{category}” spoza słownika „Kategorie WBS” projektu – dodaj ją do słownika albo wybierz z listy", at);
         }
     }
 

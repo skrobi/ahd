@@ -147,12 +147,32 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
             .ToList();
     }
 
+    /// <summary>Kategorie ze słownika „Kategorie WBS” projektu (kolumna Cost Category w „WP i CAM” i strukturze).</summary>
+    public IReadOnlyList<LookupOption> CategoryLookups(string code) =>
+        Rows(ProjectDictionaries.WbsCategories, code)
+            .Where(r => r["Cost Category"] is not null)
+            .Select(r => new LookupOption(r["Cost Category"]!, r["Cost Category"]!))
+            .OrderBy(o => o.Value, StringComparer.CurrentCulture)
+            .ToList();
+
+    /// <summary>
+    /// Lista wyboru Cost Category w tabeli struktury: kategorie projektu (categories) oraz kategorie już wpisane
+    /// w „WP i CAM”, których nie ma w słowniku (np. dawne Labor / Material / Subcontract) – żeby tabela je pokazała.
+    /// </summary>
+    public static IReadOnlyList<LookupOption> CategoryOptions(IReadOnlyList<LookupOption> categories, IEnumerable<DictRow> wpCam)
+    {
+        var known = categories.Select(c => c.Value).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        return categories.Concat(wpCam.Select(r => r["Cost Category"]).OfType<string>().Where(c => !known.Contains(c)).Distinct(StringComparer.OrdinalIgnoreCase)
+                .Select(c => new LookupOption(c, c)))
+            .ToList();
+    }
+
     /// <summary>
     /// Wartości słowników powiązanych do wyboru w tabeli słownika (DictColumn.Lookup): Osoby – USRID → imię i nazwisko
-    /// (słownik Osoby wczytany z HR).
+    /// (słownik Osoby wczytany z HR); Kategorie WBS – kategorie projektu.
     /// </summary>
-    public static IReadOnlyDictionary<string, IReadOnlyList<LookupOption>> Lookups(IReadOnlyList<LookupOption> persons) =>
-        new Dictionary<string, IReadOnlyList<LookupOption>> { [GlobalDictionaries.Persons] = persons };
+    public static IReadOnlyDictionary<string, IReadOnlyList<LookupOption>> Lookups(IReadOnlyList<LookupOption> persons, IReadOnlyList<LookupOption> categories) =>
+        new Dictionary<string, IReadOnlyList<LookupOption>> { [GlobalDictionaries.Persons] = persons, [ProjectDictionaries.WbsCategories] = categories };
 
     // ---------- mapowanie CES ↔ P1S (strona P1S nakładki) ----------
 
@@ -198,7 +218,15 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
         new(Scope(tree, inputs),
             store.P1sOwners(code),
             Persons(),
-            wpCam?.Select(r => r["WP"]).OfType<string>().ToHashSet(StringComparer.OrdinalIgnoreCase));
+            wpCam?.Select(r => r["WP"]).OfType<string>().ToHashSet(StringComparer.OrdinalIgnoreCase),
+            Categories(code));
+
+    /// <summary>Kategorie „Kategorie WBS” projektu do sprawdzenia Cost Category w „WP i CAM”; słownik pusty – null (bez kontroli).</summary>
+    private IReadOnlySet<string>? Categories(string code)
+    {
+        var categories = CategoryLookups(code);
+        return categories.Count == 0 ? null : categories.Select(c => c.Value).ToHashSet(StringComparer.OrdinalIgnoreCase);
+    }
 
     public IReadOnlyList<DictRow> Rows(string dictionary, string code) => _dictionaries.Load(ProjectDictionaries.Base(dictionary), code);
 
@@ -264,7 +292,11 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
                 data = data.Concat(Rows(ProjectDictionaries.WpCam, code).Select(r => r["WP"]).OfType<string>().Distinct(StringComparer.OrdinalIgnoreCase)
                     .Where(wp => !planned.Contains(wp)).Select(wp => (IReadOnlyList<object?>)new object?[] { wp, null, null, null, null }));
             }
-            sheets.Add((item.Sheet, _dictionaries.ExcelColumns(spec), data));
+            var columns = _dictionaries.ExcelColumns(spec);
+            // Cost Category „WP i CAM” – lista kategorii projektu (słownik projektu – poza listami słowników globalnych).
+            if (item.Code == ProjectDictionaries.WpCam && code.Length > 0 && CategoryLookups(code) is { Count: > 0 } categories)
+                columns = columns.Select(c => c.Header == "Cost Category" ? c with { Lookup = categories.Select(o => (o.Value, o.Label)).ToList() } : c).ToList();
+            sheets.Add((item.Sheet, columns, data));
         }
         ExcelTableWriter.WriteTemplate(path, sheets);
         journal.Add(Area, $"{(code.Length > 0 ? code : "nowy projekt")}: słowniki projektu pobrane do Excela", code.Length > 0 ? code : null);

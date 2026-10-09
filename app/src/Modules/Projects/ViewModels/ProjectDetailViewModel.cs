@@ -151,7 +151,9 @@ public sealed class ProjectDetailViewModel : ObservableObject
     public string DictionaryHint => _selectedDictionary?.Item.Code switch
     {
         ProjectDictionaries.WpCam or ProjectDictionaries.ScheduleBudget =>
-            "Ten sam słownik zmieniasz w zakładce Struktura (WP, CAM, budżet, daty) – zmiana w jednym miejscu jest widoczna w drugim.",
+            "Ten sam słownik zmieniasz w zakładce Struktura (WP, CAM, Cost Category, budżet, daty) – zmiana w jednym miejscu jest widoczna w drugim.",
+        ProjectDictionaries.WbsCategories =>
+            "Kategorie elementów WBS tego projektu (np. Production, Programs) – do wyboru w kolumnie Cost Category w zakładce Struktura i w słowniku „WP i CAM”.",
         PzlEv.Shared.Utils.Dictionaries.GlobalDictionaries.CostCategory =>
             "Pozycje ze słownika globalnego mają stan „globalny”. Zmiana wiersza zapisuje zmianę tylko dla tego projektu; usunięcie zmiany projektu przywraca wartość globalną.",
         ProjectDictionaries.CasRates => "Zawartość słownika nie jest jeszcze ustalona (O37) – brak danych do edycji.",
@@ -187,6 +189,7 @@ public sealed class ProjectDetailViewModel : ObservableObject
     /// <summary>Stan projektu z bazy w jednym odczycie w tle: nakładka, mapowanie, gotowość, słowniki, struktura.</summary>
     private sealed record Snapshot(PoTree Tree, MappingInputs Mapping, IReadOnlyDictionary<string, string> Owners, List<Issue> Readiness,
         IReadOnlyDictionary<string, (int Rows, string LastChange)> Dictionaries, ProjectStructure Structure, IReadOnlyList<LookupOption> Persons,
+        IReadOnlyList<LookupOption> Categories,
         IReadOnlyList<(DictRow Row, bool Inherited)>? Table, IReadOnlyDictionary<string, IReadOnlyList<LookupOption>> Lookups,
         IReadOnlyDictionary<string, decimal> Costs, string? CostsError);
 
@@ -210,9 +213,11 @@ public sealed class ProjectDetailViewModel : ObservableObject
                 var (costs, costsError) = refreshMapping || _costs is null ? ReadCosts() : (_costs, _costsError);
                 var structure = ProjectService.Structure(tree, mapping, wpCam, _service.Rows(ProjectDictionaries.ScheduleBudget, Code), costs);
                 var persons = _service.PersonLookups();
+                var categories = _service.CategoryLookups(Code);
                 return new Snapshot(tree, mapping, _service.WbsOwners(Code), _service.Readiness(Project, tree, mapping),
                     codes.ToDictionary(c => c, c => (_service.Rows(c, Code).Count, _service.LastChange(c, Code))), structure, ProjectService.PersonOptions(persons, wpCam),
-                    table is null ? null : _service.EditableRows(table, Code), ProjectService.Lookups(persons), costs, costsError);
+                    ProjectService.CategoryOptions(categories, wpCam),
+                    table is null ? null : _service.EditableRows(table, Code), ProjectService.Lookups(persons, categories), costs, costsError);
             });
             if (version != _reloads)
                 return;   // w międzyczasie ruszyło nowsze odświeżenie – starszy wynik pomijany
@@ -224,7 +229,7 @@ public sealed class ProjectDetailViewModel : ObservableObject
             if (IsEditingObjectives)
                 Objectives.Refresh();
             OnPropertyChanged(nameof(MappingInfo));
-            Structure.Load(snapshot.Structure, snapshot.Persons, saved);
+            Structure.Load(snapshot.Structure, snapshot.Persons, snapshot.Categories, saved);
             ShowKpis(snapshot.Structure.Summary);
             foreach (var panel in Dictionaries.Where(p => p.Item.Stored))
                 (panel.Rows, panel.LastChange) = snapshot.Dictionaries[panel.Item.Code];
