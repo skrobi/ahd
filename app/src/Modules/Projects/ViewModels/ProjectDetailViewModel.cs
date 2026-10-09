@@ -35,6 +35,7 @@ public sealed class ProjectDetailViewModel : ObservableObject
     private IReadOnlyList<LookupOption>? _persons;
     private bool _ownersLoaded;
     private (Issue Structure, Issue CamAccess)? _folderChecks;
+    private ActualsFreshness? _actuals;   // z kiedy są dane ACTUALS – czytane razem z kosztami
     private bool _isEditingObjectives;
     private bool _isReady;
     private DictionaryPanelViewModel? _selectedDictionary;
@@ -95,6 +96,11 @@ public sealed class ProjectDetailViewModel : ObservableObject
     public string Code => Project.Code;
 
     public string Title => $"{Project.Code} · {Project.Name}";
+
+    /// <summary>Z kiedy są dane RABIT (ACTUALS) – data raportu w RABIT, import, ostatnie sprawdzenie (nagłówek).</summary>
+    public string DataInfo => _actuals?.Summary ?? "Dane RABIT: wczytywanie…";
+
+    public string DataInfoDetails => _actuals?.Details ?? "";
 
     public string Subtitle => $"{ProjectTypes.Label(Project.Type)} · utworzony {Project.RecordedAt:yyyy-MM-dd HH:mm} przez {Project.RecordedBy}";
 
@@ -199,7 +205,8 @@ public sealed class ProjectDetailViewModel : ObservableObject
         IReadOnlyDictionary<string, (int Rows, string LastChange)> Dictionaries, ProjectStructure Structure, IReadOnlyList<LookupOption> Persons,
         IReadOnlyList<LookupOption> Categories,
         IReadOnlyList<(DictRow Row, bool Inherited)>? Table, IReadOnlyDictionary<string, IReadOnlyList<LookupOption>> Lookups,
-        IReadOnlyDictionary<string, decimal> Costs, string? CostsError, IReadOnlyList<LookupOption> PersonLookups, (Issue Structure, Issue CamAccess) FolderChecks);
+        IReadOnlyDictionary<string, decimal> Costs, string? CostsError, IReadOnlyList<LookupOption> PersonLookups, (Issue Structure, Issue CamAccess) FolderChecks,
+        ActualsFreshness Actuals);
 
     /// <summary>
     /// Wczytuje stan projektu w tle (struktura zachowuje rozwinięcie i zaznaczenie). Tabela wybranego słownika – tylko
@@ -216,6 +223,7 @@ public sealed class ProjectDetailViewModel : ObservableObject
         var cachedPersons = refreshMapping ? null : _persons;
         var cachedFolders = refreshMapping ? null : _folderChecks;
         var cachedOwners = refreshMapping || !_ownersLoaded ? null : _owners;
+        var cachedActuals = refreshMapping ? null : _actuals;
         await Try(async () =>
         {
             var snapshot = await Busy.Run(refreshMapping ? "Odświeżanie mapowania CES ↔ P1S i struktury projektu…" : "Wczytywanie projektu, mapowania i struktury…", () =>
@@ -237,7 +245,7 @@ public sealed class ProjectDetailViewModel : ObservableObject
                     states.ToDictionary(s => s.Key, s => (s.Value.Rows.Count, s.Value.LastChange)), structure, ProjectService.PersonOptions(persons, wpCam),
                     ProjectService.CategoryOptions(categories, wpCam),
                     table is null ? null : _service.EditableRows(table, rows.TryGetValue(table, out var tableRows) ? tableRows : _service.Rows(table, Code)),
-                    ProjectService.Lookups(persons, categories), costs, costsError, persons, folderChecks);
+                    ProjectService.Lookups(persons, categories), costs, costsError, persons, folderChecks, cachedActuals ?? ReadActuals());
             });
             if (version != _reloads)
                 return;   // w międzyczasie ruszyło nowsze odświeżenie – starszy wynik pomijany
@@ -248,6 +256,9 @@ public sealed class ProjectDetailViewModel : ObservableObject
             _ownersLoaded = true;
             _persons = snapshot.PersonLookups;
             _folderChecks = snapshot.FolderChecks;
+            _actuals = snapshot.Actuals;
+            OnPropertyChanged(nameof(DataInfo));
+            OnPropertyChanged(nameof(DataInfoDetails));
             Objectives.MappingInfo = _mapping.Describe;
             if (IsEditingObjectives)
                 Objectives.Refresh();
@@ -269,6 +280,20 @@ public sealed class ProjectDetailViewModel : ObservableObject
             if (refreshMapping)
                 Status = _costsError is null ? "Odświeżono mapowanie CES ↔ P1S i koszty (ostatni import ACTUALS)." : $"Odświeżono mapowanie CES ↔ P1S; {_costsError}";
         });
+    }
+
+    /// <summary>Daty danych ACTUALS (w tle); błąd odczytu – informacja w nagłówku, ekran działa dalej.</summary>
+    private ActualsFreshness ReadActuals()
+    {
+        try
+        {
+            return _service.ActualsFreshness();
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            Logger.Warning(ex, "Daty danych ACTUALS projektu {Code}", Code);
+            return new ActualsFreshness([], ex.Message);
+        }
     }
 
     /// <summary>ACWP po elemencie CES (w tle); brak danych lub procedury – pusta lista i powód (struktura bez kosztów).</summary>

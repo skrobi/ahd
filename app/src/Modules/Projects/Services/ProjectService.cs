@@ -388,6 +388,9 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
     /// <summary>ACWP po elemencie CES z ostatniego importu ACTUALS (waluta obiektu – PLN) – kolumna ACWP struktury.</summary>
     public IReadOnlyDictionary<string, decimal> CostsByElement(string code) => store.CostsByElement(code, DefaultCostValue);
 
+    /// <summary>Z kiedy są dane ACTUALS (data raportu w RABIT, import, ostatnie sprawdzenie) – nagłówek ekranu projektu.</summary>
+    public ActualsFreshness ActualsFreshness() => new(store.ActualsFiles());
+
     /// <summary>
     /// Zapis zmiany wiersza tabeli struktury od razu po jej zatwierdzeniu (bez osobnego „Zapisz”): nazwa i Legacy WBS –
     /// nakładka; WP, CAM, Cost Category – „WP i CAM” (klucz – kod P1S wiersza); budżet i daty – „Harmonogram i budżet”

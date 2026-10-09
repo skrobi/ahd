@@ -38,6 +38,23 @@ public sealed class ReadinessAndAnalyticTests
     }
 
     [Fact]
+    public void Actuals_freshness_shows_rabit_data_date_import_and_last_check()
+    {
+        Assert.Equal("Dane RABIT: brak zaimportowanych plików ACTUALS", new ActualsFreshness([]).Summary);
+        Assert.Equal("Dane RABIT: nie udało się odczytać", new ActualsFreshness([], "timeout").Summary);
+        DateTimeOffset At(int day, int hour) => new(2026, 10, day, hour, 0, 0, TimeZoneInfo.Local.GetUtcOffset(new DateTime(2026, 10, day)));
+        var files = new[]
+        {
+            new ActualsFile("ACTUALS_PAF_01.csv", At(6, 23), At(7, 8), At(7, 23), At(8, 7)),   // ponowny raport bez zmian – dane na 7.10 23:00
+            new ActualsFile("ACTUALS_CES_01.csv", At(7, 23), At(8, 7), null, null),
+        };
+        Assert.Equal("Dane RABIT z 2026-10-07 23:00 · import 2026-10-08 07:00 · sprawdzone 2026-10-08 07:00", new ActualsFreshness(files).Summary);
+        var older = new[] { files[1], new ActualsFile("ACTUALS_PAF_02.csv", At(5, 23), At(6, 8), null, null) };
+        Assert.StartsWith("Dane RABIT z 2026-10-05 23:00 – 2026-10-07 23:00", new ActualsFreshness(older).Summary);   // pliki z różnych dni
+        Assert.Contains("ACTUALS_PAF_01.csv: raport RABIT 2026-10-06 23:00, import 2026-10-07 08:00; sprawdzony 2026-10-08 07:00", new ActualsFreshness(files).Details);
+    }
+
+    [Fact]
     public void Wp_without_cam_blocks_the_run()
     {
         var checks = ProjectReadiness.Check(ProjectTypes.Internal, Objectives(), Rows(4, 3), [], P1sSide, FoldersOk, CamAccess, ["WP-1", "WP-2"]);
