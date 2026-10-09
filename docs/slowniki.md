@@ -130,7 +130,7 @@ Kontekst biznesowy typów – `readme.md`.
 |---|---|
 | element P1S należy do projektu (kod P1S elementu nakładki – `Legacy WBS` albo cel mapowania – albo pod nim, także w `LOG.WBS`) i nie należy do innego projektu | ERROR |
 | jeden WP na element P1S | ERROR |
-| WP wymaga CAM | ERROR |
+| WP bez CAM – zapis dozwolony (najpierw wskazuje się WP, CAM uzupełnia się później); w strukturze brak „WP bez CAM”; gotowość projektu – ERROR (blokuje przebieg) | WARNING |
 | CAM wybierany z listy osób; przy wczytaniu z Excela CAM spoza listy osób | – / WARNING |
 | Cost Category spoza słownika „Kategorie WBS” projektu (sprawdzane, gdy słownik ma pozycje) | WARNING |
 

@@ -135,7 +135,8 @@ i budżetem (`StructureBuilder`).
 - **Edycja w komórkach** (zapis od razu po zatwierdzeniu wiersza – Enter albo przejście do innego wiersza, bez
   osobnego „Zapisz”; Esc cofa): nazwa i `Legacy WBS` węzła → nakładka; WP, CAM i Cost Category wiersza z kodem P1S → „WP i CAM”
   (klucz – kod P1S; zaznaczenie WP albo wybór CAM tworzy przypisanie, odznaczenie WP je usuwa razem z budżetem WP, jeśli
-  WP nie jest przypisany do innego elementu; WP wymaga CAM – zaznacz WP i wybierz CAM przed opuszczeniem wiersza);
+  WP nie jest przypisany do innego elementu; WP można zapisać bez CAM – brak „WP bez CAM”, CAM uzupełnia się później,
+  przebieg blokuje gotowość projektu);
   BAC HOURS, BAC MATERIAL, BAC, Baseline Start, Baseline Koniec wiersza z jednym WP w poddrzewie – własnym albo jedynym
   pod nim (np. węzeł nakładki nad elementem P1S z WP) → „Harmonogram i budżet” tego WP (klucz – WP); wiersz z kilkoma WP
   w poddrzewie pokazuje sumę i nie jest edytowalny. Walidacja jak przy zapisie słownika: ERROR blokuje zapis (zmiany zostają w wierszu, komunikat

@@ -12,9 +12,10 @@ public static class ProjectReadiness
 {
     /// <param name="dictionaryRows">Liczba bieżących wierszy słowników projektu (kod słownika → liczba).</param>
     /// <param name="camsOutsidePersons">CAM ze słownika „WP i CAM” spoza słownika Osoby.</param>
+    /// <param name="wpsWithoutCam">WP ze słownika „WP i CAM” bez CAM (zapis dozwolony – uzupełnia się później).</param>
     /// <param name="p1sSide">Strona P1S nakładki z mapowania CES ↔ P1S (ObjectivesMapping.Check).</param>
     public static List<Issue> Check(string type, PoTree objectives, IReadOnlyDictionary<string, int> dictionaryRows,
-        IReadOnlyCollection<string> camsOutsidePersons, Issue p1sSide, Issue folderStructure, Issue camAccess)
+        IReadOnlyCollection<string> camsOutsidePersons, Issue p1sSide, Issue folderStructure, Issue camAccess, IReadOnlyCollection<string>? wpsWithoutCam = null)
     {
         var checks = new List<Issue>
         {
@@ -38,6 +39,9 @@ public static class ProjectReadiness
 
         if (dictionaryRows.GetValueOrDefault(ProjectDictionaries.WpCam) > 0)
         {
+            if (wpsWithoutCam is { Count: > 0 })
+                checks.Add(Issue.Error($"WP bez CAM ({wpsWithoutCam.Count}) – uzupełnij CAM w strukturze, blokuje uruchomienie przebiegu: " +
+                    $"{string.Join(", ", wpsWithoutCam.Take(10))}{(wpsWithoutCam.Count > 10 ? " …" : "")}", "WP i CAM"));
             checks.Add(camsOutsidePersons.Count == 0
                 ? Pass("WP mają przypisanego CAM z listy osób")
                 : Issue.Warning($"CAM spoza listy osób (bez konta nie powstaną pliki CAM): {string.Join(", ", camsOutsidePersons.Take(10))}", "WP i CAM"));

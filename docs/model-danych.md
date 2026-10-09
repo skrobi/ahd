@@ -309,6 +309,9 @@ opis; klucz projekt + kategoria). Kolumna `DICT_WpCam.CostCategory` przyjmuje ka
 **Migracja `sql/mssql/020_bac_kosztowy.sql`:** kolumna `DICT_ScheduleBudget.Bac` – BAC, budżet kosztowy WP (kwota) obok
 BAC HOURS i BAC MATERIAL. Wymaga aplikacji 0.32.0.
 
+**Migracja `sql/mssql/021_cam_opcjonalny.sql`:** `DICT_WpCam.Cam` dopuszcza NULL – WP wskazuje się najpierw, CAM
+uzupełnia później (gotowość projektu blokuje przebieg z WP bez CAM). Wymaga aplikacji 0.34.0.
+
 Aplikacja zapisuje dziś do tabel importu, konfiguracji importu, słowników globalnych, korekt mapowania, dziennika i problemów;
 tabele projektów i słowników projektu czekają na moduły F4. Blokada importu – plik na dysku sieciowym
 (`docs/pipeline-fazy.md`, rozdz. 1.3), `sp_getapplock` razem z procedurami (F10.2).
