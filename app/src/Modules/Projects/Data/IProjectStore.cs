@@ -45,4 +45,10 @@ public interface IProjectStore
     /// wykluczeń projektu (procedura REP_ProjectCostsByElement, migracja 016).
     /// </summary>
     IReadOnlyDictionary<string, decimal> CostsByElement(string code, string value);
+
+    /// <summary>
+    /// Pliki ACTUALS, z których są koszty (najnowsza wersja każdego pliku – CAN_LatestFiles): data raportu w RABIT, import
+    /// i ostatnie sprawdzenie pliku w RABIT bez zmian treści (META_SourceFileSeen: pominięty / duplikat).
+    /// </summary>
+    IReadOnlyList<ActualsFile> ActualsFiles();
 }

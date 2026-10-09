@@ -5,6 +5,7 @@ using PzlEv.Modules.Projects.Models;
 using PzlEv.Modules.Projects.Services;
 using PzlEv.Shared.Models;
 using PzlEv.Shared.Models.Dictionaries;
+using PzlEv.Shared.Models.PzlProd;
 using PzlEv.Shared.Utils.Ui.Dialogs;
 using PzlEv.Shared.Utils.Ui.Dictionaries;
 using PzlEv.Shared.Utils.Ui.Mvvm;
@@ -30,6 +31,13 @@ public sealed class ProjectDetailViewModel : ObservableObject
     private MappingInputs _mapping = MappingInputs.None;
     private PoTree _saved = new();
     private IReadOnlyDictionary<string, string> _owners = new Dictionary<string, string>();
+    // Dane zmieniające się rzadko – czytane przy otwarciu projektu i „Odśwież mapowanie i koszty” (nie po każdym zapisie):
+    // osoby (słownik Osoby), elementy CES nakładek innych projektów, kontrola folderów na dysku sieciowym.
+    private IReadOnlyList<LookupOption>? _persons;
+    private bool _ownersLoaded;
+    private (Issue Structure, Issue CamAccess)? _folderChecks;
+    private ActualsFreshness? _actuals;   // z kiedy są dane ACTUALS – czytane razem z kosztami
+    private ProductionData? _production;  // PZLPROD na żywo (vAHDD, vAPD) – przy otwarciu, „Odśwież” i po zmianie Legacy WBS
     private bool _isEditingObjectives;
     private bool _isReady;
     private DictionaryPanelViewModel? _selectedDictionary;
@@ -38,6 +46,7 @@ public sealed class ProjectDetailViewModel : ObservableObject
     private int _reloads;
     /// <summary>ACWP po elemencie CES (ostatni import ACTUALS) – czytany przy otwarciu i „Odśwież mapowanie i koszty”, nie po każdym zapisie.</summary>
     private IReadOnlyDictionary<string, decimal>? _costs;
+    private (ProjectStructure Structure, IReadOnlyList<LookupOption> Persons)? _structure;   // ostatnio wczytana – eksport do Excela
     private string? _costsError;
 
     public ProjectDetailViewModel(ProjectService service, IFileDialogs dialogs, BusyState busy, ProjectInfo project, Action back)
@@ -59,6 +68,7 @@ public sealed class ProjectDetailViewModel : ObservableObject
         Back = new RelayCommand(_ => { if (StructureSettled("powrotem do listy")) back(); }, _ => !Busy.IsBusy);
         AddFromExcel = new AsyncRelayCommand(DoAddFromExcel, () => !Busy.IsBusy);
         ExportCostReport = new AsyncRelayCommand(DoExportCostReport, () => !Busy.IsBusy);
+        ExportStructure = new AsyncRelayCommand(DoExportStructure, () => _structure is not null && !Busy.IsBusy);
         ExportDictionaries = new AsyncRelayCommand(DoExportDictionaries, () => !Busy.IsBusy);
         CreateFolders = new AsyncRelayCommand(DoCreateFolders, () => !Busy.IsBusy);
         RefreshMapping = new AsyncRelayCommand(() => { Structure.CommitEdits(); return Reload(refreshMapping: true); }, () => !Busy.IsBusy);
@@ -88,6 +98,21 @@ public sealed class ProjectDetailViewModel : ObservableObject
     public string Code => Project.Code;
 
     public string Title => $"{Project.Code} · {Project.Name}";
+
+    /// <summary>Z kiedy są dane RABIT (ACTUALS) – data raportu w RABIT, import, ostatnie sprawdzenie (nagłówek).</summary>
+    public string DataInfo => _actuals?.Summary ?? "Dane RABIT: wczytywanie…";
+
+    public string DataInfoDetails => _actuals?.Details ?? "";
+
+    /// <summary>Dane produkcyjne (PZLPROD na żywo): chwila odczytu albo powód braku (nagłówek).</summary>
+    public string ProductionInfo => _production is null ? "Produkcja: wczytywanie…"
+        : _production.Error is null ? $"Produkcja (PZLPROD) {_production.ReadAt:yyyy-MM-dd HH:mm}" : "Produkcja: brak danych";
+
+    public string ProductionDetails => _production is null ? ""
+        : (_production.Error ?? $"Operational EV i Actual Material odczytane na żywo z PZLPROD (LOG.vAHDD, LOG.vAPD) o {_production.ReadAt:yyyy-MM-dd HH:mm} – " +
+            $"elementów z danymi: {_production.ByPspnr.Count}. Ponowny odczyt: „Odśwież mapowanie i koszty”.")
+          + (_production.Note is { } note ? $"\nUwaga: {note}" : "")
+          + "\nZapytanie: sql/pzlprod/produkcja.sql; parametry – słowniki „Wskaźniki DJK” i „Parametry produkcji”; elementy wirtualne (np. Paint) – słownik projektu „Elementy wirtualne P1S”.";
 
     public string Subtitle => $"{ProjectTypes.Label(Project.Type)} · utworzony {Project.RecordedAt:yyyy-MM-dd HH:mm} przez {Project.RecordedBy}";
 
@@ -151,7 +176,9 @@ public sealed class ProjectDetailViewModel : ObservableObject
     public string DictionaryHint => _selectedDictionary?.Item.Code switch
     {
         ProjectDictionaries.WpCam or ProjectDictionaries.ScheduleBudget =>
-            "Ten sam słownik zmieniasz w zakładce Struktura (WP, CAM, budżet, daty) – zmiana w jednym miejscu jest widoczna w drugim.",
+            "Ten sam słownik zmieniasz w zakładce Struktura (WP, CAM, Cost Category, budżet, daty) – zmiana w jednym miejscu jest widoczna w drugim.",
+        ProjectDictionaries.WbsCategories =>
+            "Kategorie elementów WBS tego projektu (np. Production, Programs) – do wyboru w kolumnie Cost Category w zakładce Struktura i w słowniku „WP i CAM”.",
         PzlEv.Shared.Utils.Dictionaries.GlobalDictionaries.CostCategory =>
             "Pozycje ze słownika globalnego mają stan „globalny”. Zmiana wiersza zapisuje zmianę tylko dla tego projektu; usunięcie zmiany projektu przywraca wartość globalną.",
         ProjectDictionaries.CasRates => "Zawartość słownika nie jest jeszcze ustalona (O37) – brak danych do edycji.",
@@ -176,6 +203,7 @@ public sealed class ProjectDetailViewModel : ObservableObject
     public ICommand SaveObjectives { get; }
     public ICommand CancelObjectives { get; }
     public ICommand ExportCostReport { get; }
+    public ICommand ExportStructure { get; }
     public ICommand ExportDictionaries { get; }
     public ICommand AddDictionaryRow { get; }
     public ICommand RemoveDictionaryRow { get; }
@@ -187,12 +215,16 @@ public sealed class ProjectDetailViewModel : ObservableObject
     /// <summary>Stan projektu z bazy w jednym odczycie w tle: nakładka, mapowanie, gotowość, słowniki, struktura.</summary>
     private sealed record Snapshot(PoTree Tree, MappingInputs Mapping, IReadOnlyDictionary<string, string> Owners, List<Issue> Readiness,
         IReadOnlyDictionary<string, (int Rows, string LastChange)> Dictionaries, ProjectStructure Structure, IReadOnlyList<LookupOption> Persons,
+        IReadOnlyList<LookupOption> Categories,
         IReadOnlyList<(DictRow Row, bool Inherited)>? Table, IReadOnlyDictionary<string, IReadOnlyList<LookupOption>> Lookups,
-        IReadOnlyDictionary<string, decimal> Costs, string? CostsError);
+        IReadOnlyDictionary<string, decimal> Costs, string? CostsError, IReadOnlyList<LookupOption> PersonLookups, (Issue Structure, Issue CamAccess) FolderChecks,
+        ActualsFreshness Actuals, ProductionData Production);
 
     /// <summary>
     /// Wczytuje stan projektu w tle (struktura zachowuje rozwinięcie i zaznaczenie). Tabela wybranego słownika – tylko
-    /// bez niezapisanych zmian, chyba że discard (Odrzuć zmiany).
+    /// bez niezapisanych zmian, chyba że discard (Odrzuć zmiany). Każdy słownik projektu jest czytany raz (wiersze, liczba,
+    /// ostatnia zmiana, struktura, gotowość i tabela z tego samego odczytu), mapowanie rozstrzygane raz; osoby, nakładki
+    /// innych projektów, foldery i koszty – z pamięci, ponownie przy refreshMapping („Odśwież mapowanie i koszty”).
     /// </summary>
     private async Task Reload(bool refreshMapping, bool discard = false, IReadOnlySet<string>? saved = null)
     {
@@ -200,19 +232,36 @@ public sealed class ProjectDetailViewModel : ObservableObject
         var codes = Dictionaries.Where(p => p.Item.Stored).Select(p => p.Item.Code).ToList();
         var selected = _selectedDictionary;
         var table = selected is { Item.Stored: true } && (discard || !Table.HasPendingChanges) ? selected.Item.Code : null;
+        var cachedPersons = refreshMapping ? null : _persons;
+        var cachedFolders = refreshMapping ? null : _folderChecks;
+        var cachedOwners = refreshMapping || !_ownersLoaded ? null : _owners;
+        var cachedActuals = refreshMapping ? null : _actuals;
+        var cachedProduction = refreshMapping ? null : _production;
         await Try(async () =>
         {
             var snapshot = await Busy.Run(refreshMapping ? "Odświeżanie mapowania CES ↔ P1S i struktury projektu…" : "Wczytywanie projektu, mapowania i struktury…", () =>
             {
                 var tree = _service.Objectives(Code);
                 var mapping = _service.Mapping(refreshMapping);
-                var wpCam = _service.Rows(ProjectDictionaries.WpCam, Code);
+                var resolved = ProjectService.Resolve(tree, mapping);
+                var states = codes.ToDictionary(c => c, c => _service.DictionaryState(c, Code));
+                var rows = states.ToDictionary(s => s.Key, s => s.Value.Rows);
+                var wpCam = rows.GetValueOrDefault(ProjectDictionaries.WpCam) ?? [];
                 var (costs, costsError) = refreshMapping || _costs is null ? ReadCosts() : (_costs, _costsError);
-                var structure = ProjectService.Structure(tree, mapping, wpCam, _service.Rows(ProjectDictionaries.ScheduleBudget, Code), costs);
-                var persons = _service.PersonLookups();
-                return new Snapshot(tree, mapping, _service.WbsOwners(Code), _service.Readiness(Project, tree, mapping),
-                    codes.ToDictionary(c => c, c => (_service.Rows(c, Code).Count, _service.LastChange(c, Code))), structure, ProjectService.PersonOptions(persons, wpCam),
-                    table is null ? null : _service.EditableRows(table, Code), ProjectService.Lookups(persons), costs, costsError);
+                var virtualP1s = rows.GetValueOrDefault(ProjectDictionaries.VirtualP1s) ?? [];
+                var production = cachedProduction ?? _service.Production(Code, tree, mapping, resolved, virtualP1s);
+                var structure = ProjectService.Structure(tree, mapping, resolved, wpCam, rows.GetValueOrDefault(ProjectDictionaries.ScheduleBudget) ?? [], costs, production,
+                    virtualP1s);
+                var persons = cachedPersons ?? _service.PersonLookups();
+                var folderChecks = cachedFolders ?? _service.FolderChecks(Code);
+                var categories = ProjectService.CategoryLookups(rows.GetValueOrDefault(ProjectDictionaries.WbsCategories) ?? []);
+                var readiness = ProjectService.Readiness(Project, tree, mapping, resolved, rows,
+                    persons.Select(p => p.Value).ToHashSet(StringComparer.OrdinalIgnoreCase), folderChecks);
+                return new Snapshot(tree, mapping, cachedOwners ?? _service.WbsOwners(Code), readiness,
+                    states.ToDictionary(s => s.Key, s => (s.Value.Rows.Count, s.Value.LastChange)), structure, ProjectService.PersonOptions(persons, wpCam),
+                    ProjectService.CategoryOptions(categories, wpCam),
+                    table is null ? null : _service.EditableRows(table, rows.TryGetValue(table, out var tableRows) ? tableRows : _service.Rows(table, Code)),
+                    ProjectService.Lookups(persons, categories), costs, costsError, persons, folderChecks, cachedActuals ?? ReadActuals(), production);
             });
             if (version != _reloads)
                 return;   // w międzyczasie ruszyło nowsze odświeżenie – starszy wynik pomijany
@@ -220,11 +269,21 @@ public sealed class ProjectDetailViewModel : ObservableObject
             (_costs, _costsError) = (snapshot.Costs, snapshot.CostsError);
             _mapping = snapshot.Mapping;
             _owners = snapshot.Owners;
+            _ownersLoaded = true;
+            _persons = snapshot.PersonLookups;
+            _folderChecks = snapshot.FolderChecks;
+            _actuals = snapshot.Actuals;
+            _production = snapshot.Production;
+            OnPropertyChanged(nameof(ProductionInfo));
+            OnPropertyChanged(nameof(ProductionDetails));
+            OnPropertyChanged(nameof(DataInfo));
+            OnPropertyChanged(nameof(DataInfoDetails));
             Objectives.MappingInfo = _mapping.Describe;
             if (IsEditingObjectives)
                 Objectives.Refresh();
             OnPropertyChanged(nameof(MappingInfo));
-            Structure.Load(snapshot.Structure, snapshot.Persons, saved);
+            Structure.Load(snapshot.Structure, snapshot.Persons, snapshot.Categories, saved);
+            _structure = (snapshot.Structure, snapshot.Persons);
             ShowKpis(snapshot.Structure.Summary);
             foreach (var panel in Dictionaries.Where(p => p.Item.Stored))
                 (panel.Rows, panel.LastChange) = snapshot.Dictionaries[panel.Item.Code];
@@ -240,6 +299,20 @@ public sealed class ProjectDetailViewModel : ObservableObject
             if (refreshMapping)
                 Status = _costsError is null ? "Odświeżono mapowanie CES ↔ P1S i koszty (ostatni import ACTUALS)." : $"Odświeżono mapowanie CES ↔ P1S; {_costsError}";
         });
+    }
+
+    /// <summary>Daty danych ACTUALS (w tle); błąd odczytu – informacja w nagłówku, ekran działa dalej.</summary>
+    private ActualsFreshness ReadActuals()
+    {
+        try
+        {
+            return _service.ActualsFreshness();
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            Logger.Warning(ex, "Daty danych ACTUALS projektu {Code}", Code);
+            return new ActualsFreshness([], ex.Message);
+        }
     }
 
     /// <summary>ACWP po elemencie CES (w tle); brak danych lub procedury – pusta lista i powód (struktura bez kosztów).</summary>
@@ -262,6 +335,7 @@ public sealed class ProjectDetailViewModel : ObservableObject
         Kpis.Clear();
         Kpis.Add(new KpiTile("BAC HOURS", Amount(summary.BacHours), "budżet godzin – Harmonogram i budżet"));
         Kpis.Add(new KpiTile("BAC MATERIAL", Amount(summary.BacMaterial), "budżet materiałów"));
+        Kpis.Add(new KpiTile("BAC", Amount(summary.Bac), "budżet kosztowy – Harmonogram i budżet"));
         Kpis.Add(new KpiTile("WP / CAM", $"{summary.Wps} / {summary.Cams}", "pakiety pracy i ich CAM w strukturze"));
         Kpis.Add(new KpiTile("Okres", summary.Start is null && summary.Finish is null ? "—" : $"{summary.Start ?? "?"} – {summary.Finish ?? "?"}", "planowany start i koniec"));
         Kpis.Add(new KpiTile("Braki", $"{summary.ElementsWithoutWp} / {summary.WpsWithoutBudget}", "elementy CES bez WP / WP bez budżetu"));
@@ -272,10 +346,13 @@ public sealed class ProjectDetailViewModel : ObservableObject
             $"bez przypisania do WP: {Amount(summary.AcwpWithoutWp)} (brak WP / kilka WP – O45); elementy CES spoza nakładki: {Amount(summary.AcwpOutside)}"));
     }
 
-    /// <summary>Zapis zmian wiersza struktury od razu po zatwierdzeniu; błąd – zmiany zostają w wierszu, komunikat wyżej.</summary>
+    /// <summary>Czas zbierania zmian przed zapisem – kilka kliknięć WP albo Enter w kolejnych wierszach idzie jednym zapisem.</summary>
+    private static readonly TimeSpan CommitDelay = TimeSpan.FromMilliseconds(300);
+
     /// <summary>
-    /// Zapis zmian wiersza struktury od razu po zatwierdzeniu. Wiersze czekają w kolejce i są zapisywane po kolei
-    /// (Enter w kolejnych wierszach, wklejenie bloku), po całej serii – jedno odświeżenie (także po nieudanym zapisie –
+    /// Zapis zmian wiersza struktury od razu po zatwierdzeniu. Wiersze zatwierdzone w krótkim czasie (kilka WP, Enter
+    /// w kolejnych wierszach, wklejenie bloku) czekają w kolejce i są zapisywane razem – jednym zapisem na słownik
+    /// (ProjectService.SaveStructureEdits); po serii – jedno odświeżenie danych projektu (także po nieudanym zapisie –
     /// część zmian mogła się zapisać). Nieudany zapis – zmiany zostają w wierszu (żółty), komunikat wyżej.
     /// </summary>
     private async Task CommitRow(StructureRowViewModel row)
@@ -290,22 +367,37 @@ public sealed class ProjectDetailViewModel : ObservableObject
         var failures = new List<string>();
         try
         {
-            while (_commits.TryDequeue(out var next))
+            await Task.Delay(CommitDelay);
+            while (_commits.Count > 0)
             {
-                if (next.Changes.Count == 0 || !ConfirmWpRemoval(next))
+                var edits = new List<StructureEdit>();
+                var names = new Dictionary<string, string>();
+                while (_commits.TryDequeue(out var next))
+                {
+                    if (next.Changes.Count == 0 || !ConfirmWpRemoval(next))
+                        continue;
+                    edits.Add(new StructureEdit(next.Id, next.Row, next.Changes.ToDictionary(c => c.Key, c => c.Value)));
+                    if (next.Changes.ContainsKey(StructureEdits.P1s))
+                        _production = null;   // zmiana Legacy WBS zmienia zakres P1S – dane produkcyjne czytane ponownie
+                    names[next.Id] = next.Row.Name;
+                }
+                if (edits.Count == 0)
                     continue;
-                var (changes, structureRow, mapping) = (next.Changes.ToDictionary(c => c.Key, c => c.Value), next.Row, _mapping);
+                var mapping = _mapping;
                 await Try(async () =>
                 {
-                    var (ok, message) = await Busy.Run(_commits.Count > 0 ? $"Zapisywanie zmian (w kolejce: {_commits.Count})…" : "Zapisywanie zmiany…",
-                        () => _service.SaveStructureEdit(Code, mapping, structureRow, changes));
-                    if (ok)
+                    var results = await Busy.Run(edits.Count > 1 ? $"Zapisywanie zmian ({edits.Count} wierszy)…" : "Zapisywanie zmiany…",
+                        () => _service.SaveStructureEdits(Code, mapping, edits));
+                    foreach (var result in results)
                     {
-                        saved.Add(next.Id);
-                        messages.Add(message);
+                        if (result.Saved)
+                        {
+                            saved.Add(result.Id);
+                            messages.Add(result.Message);
+                        }
+                        else
+                            failures.Add($"{names[result.Id]}: {result.Message}");
                     }
-                    else
-                        failures.Add($"{next.Row.Name}: {message}");
                 });
             }
             await Reload(refreshMapping: false, saved: saved);
@@ -325,7 +417,7 @@ public sealed class ProjectDetailViewModel : ObservableObject
     private bool ConfirmWpRemoval(StructureRowViewModel row)
     {
         if (!row.Changes.TryGetValue(StructureEdits.Wp, out var flag) || StructureEdits.IsChecked(flag) || row.Row.Wp is not { } wp
-            || row.Row.OwnsBudget is false || (row.Row.BacHours == 0 && row.Row.BacMaterial == 0 && row.Row.Start is null && row.Row.Finish is null))
+            || row.Row.OwnsBudget is false || (row.Row.BacHours == 0 && row.Row.BacMaterial == 0 && row.Row.Bac == 0 && row.Row.Start is null && row.Row.Finish is null))
             return true;
         if (_dialogs.Confirm("Odznaczenie WP",
                 $"Odznaczenie WP {wp} („{row.Row.Name}”) usunie jego przypisanie (CAM, Cost Category) oraz harmonogram i budżet WP. Kontynuować?"))
@@ -385,6 +477,21 @@ public sealed class ProjectDetailViewModel : ObservableObject
         {
             var rows = await Busy.Run("Raport kosztów – ostatni import ACTUALS projektu…", () => _service.ExportCostReport(path, Code));
             Status = $"Zapisano {path} – {rows} wierszy (Project definition × Cost Element).";
+        });
+    }
+
+    /// <summary>Struktura projektu (stan zapisany w bazie, wszystkie kolumny) do Excela; niezapisane zmiany – najpierw zapis.</summary>
+    private async Task DoExportStructure()
+    {
+        if (!StructureSettled("pobraniem struktury do Excela") || _structure is not { } current)
+            return;
+        var path = _dialogs.SaveExcel("Pobierz strukturę projektu", $"{Code}_struktura.xlsx");
+        if (path is null)
+            return;
+        await Try(async () =>
+        {
+            var rows = await Busy.Run("Zapisywanie struktury projektu do Excela…", () => _service.ExportStructure(path, Code, current.Structure, current.Persons));
+            Status = $"Zapisano {path} – {rows} wierszy struktury.";
         });
     }
 
@@ -460,6 +567,8 @@ public sealed class ProjectDetailViewModel : ObservableObject
             var outcome = await Busy.Run($"Zapisywanie słownika „{panel.Name}”…", () => _service.ApplyDictionary(panel.Item.Code, context(), preview, Code));
             if (outcome.Status == SaveStatus.Saved)
                 panel.SetPreview(null, "");
+            if (outcome.Status == SaveStatus.Saved && panel.Item.Code == ProjectDictionaries.VirtualP1s)
+                _production = null;   // nowe reguły elementów wirtualnych – dane produkcyjne czytane ponownie
             await Reload(refreshMapping: false);
             Status = $"{panel.Name}: {outcome.Message}";
         });
@@ -489,6 +598,8 @@ public sealed class ProjectDetailViewModel : ObservableObject
             {
                 case SaveStatus.Saved:
                 case SaveStatus.NoChanges:
+                    if (panel.Item.Code == ProjectDictionaries.VirtualP1s)
+                        _production = null;   // nowe reguły elementów wirtualnych – dane produkcyjne czytane ponownie
                     await Reload(refreshMapping: false, discard: true);
                     Table.SetIssues(outcome.Issues);
                     break;
@@ -521,6 +632,7 @@ public sealed class ProjectDetailViewModel : ObservableObject
         await Try(async () =>
         {
             var created = await Busy.Run("Tworzenie folderów projektu…", () => _service.Folders.Create(Code));
+            _folderChecks = null;   // ponowna kontrola folderów
             await Reload(refreshMapping: false);
             Status = created.Count == 0 ? "Wszystkie foldery projektu istnieją." : $"Utworzono foldery: {string.Join(", ", created)}.";
         });

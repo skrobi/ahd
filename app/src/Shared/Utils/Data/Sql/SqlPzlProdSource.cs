@@ -1,3 +1,4 @@
+using System.IO;
 using Dapper;
 using PzlEv.Shared.Models.PzlProd;
 
@@ -66,6 +67,74 @@ public sealed class SqlPzlProdSource(SqlDatabase db) : IPzlProdSource
             .OrderBy(f => f.Column).ThenByDescending(f => f.Rows)
             .ToList();
         return new PzlProdCheck(elements, groups, flags);
+    }
+
+    /// <summary>
+    /// Odczyt na żywo zakresu projektu – zapytanie sql/pzlprod/produkcja.sql (wbudowane): PSPNR, reguły elementów wirtualnych
+    /// i parametry do tabel tymczasowych sesji (bez praw zapisu w PZLPROD), wynik – godziny i daty po elemencie (P1S albo
+    /// wirtualny) i materiały po PSPNR (docs/zrodla-danych.md, rozdz. 6).
+    /// </summary>
+    public IReadOnlyList<ProductionValues> Production(IReadOnlyCollection<string> pspnrs, IReadOnlyCollection<VirtualRule> rules, ProductionParameters parameters)
+    {
+        static long? Number(string value) => long.TryParse(value.Trim(), out var number) ? number : null;
+        var keys = pspnrs.Select(Number).OfType<long>().Distinct().ToList();
+        if (keys.Count == 0)
+            return [];
+        using var connection = db.Open();
+        connection.Execute(
+            """
+            CREATE TABLE #pspnr (PSPNR BIGINT NOT NULL PRIMARY KEY);
+            CREATE TABLE #rule (Code NVARCHAR(100) NOT NULL, PSPNR BIGINT NOT NULL, SWBS NVARCHAR(100) NULL, CPLGR NVARCHAR(100) NULL, ARBPL NVARCHAR(100) NULL);
+            CREATE TABLE #djk (Prefix NVARCHAR(20) NOT NULL, Share DECIMAL(9,6) NOT NULL);
+            CREATE TABLE #delivered (Status NVARCHAR(20) NOT NULL);
+            """);
+        foreach (var chunk in keys.Chunk(1000))   // liczby – literały bezpieczne; 1000 wierszy na INSERT … VALUES
+            connection.Execute($"INSERT INTO #pspnr (PSPNR) VALUES {string.Join(", ", chunk.Select(k => $"({k})"))};");
+        connection.Execute("INSERT INTO #rule (Code, PSPNR, SWBS, CPLGR, ARBPL) VALUES (@Code, @Pspnr, @Swbs, @Cplgr, @Arbpl);",
+            rules.Where(r => Number(r.Pspnr) is not null).Select(r => new { r.Code, Pspnr = Number(r.Pspnr), r.Swbs, r.Cplgr, r.Arbpl }));
+        connection.Execute("INSERT INTO #djk (Prefix, Share) VALUES (@Prefix, @Share);", parameters.Djk.Select(d => new { d.Prefix, d.Share }));
+        connection.Execute("INSERT INTO #delivered (Status) VALUES (@Status);", parameters.DeliveredStatuses.Select(s => new { Status = s }));
+
+        using var results = connection.QueryMultiple(_query.Value, new { months = parameters.ProductivityMonths, divideZClo = parameters.DivideByZClo },
+            commandTimeout: Timeout);
+        var hours = results.Read<HoursRow>().ToList();
+        var materials = results.Read<MaterialRow>().ToDictionary(r => r.Pspnr);
+        var values = hours.Select(h => new ProductionValues(h.Pspnr, h.AcHours, h.BacHours, h.EvHours,
+                h.VirtualCode is null ? materials.GetValueOrDefault(h.Pspnr)?.Delivered : null, h.VirtualCode,
+                h.ActualStart is { } start ? DateOnly.FromDateTime(start) : null, h.ActualFinish is { } finish ? DateOnly.FromDateTime(finish) : null))
+            .ToList();
+        values.AddRange(materials.Values.Where(m => !hours.Any(h => h.VirtualCode is null && h.Pspnr == m.Pspnr))
+            .Select(m => new ProductionValues(m.Pspnr, null, null, null, m.Delivered)));
+        return values;
+    }
+
+    /// <summary>Zapytanie z pliku sql/pzlprod/produkcja.sql z nazwami widoków PZLPROD (schemat z konfiguracji).</summary>
+    private readonly Lazy<string> _query = new(() =>
+    {
+        using var stream = typeof(SqlPzlProdSource).Assembly.GetManifestResourceStream("PzlEv.PzlProd.produkcja.sql")
+            ?? throw new InvalidOperationException("Brak wbudowanego zapytania PzlEv.PzlProd.produkcja.sql");
+        using var reader = new StreamReader(stream);
+        return reader.ReadToEnd()
+            .Replace("$(vAHDD_PL_CPI)", db.Table("vAHDD_PL_CPI"))
+            .Replace("$(vAHDD)", db.Table("vAHDD"))
+            .Replace("$(vAPD)", db.Table("vAPD"));
+    });
+
+    private sealed class HoursRow
+    {
+        public string Pspnr { get; set; } = "";
+        public string? VirtualCode { get; set; }
+        public DateTime? ActualStart { get; set; }
+        public DateTime? ActualFinish { get; set; }
+        public decimal? AcHours { get; set; }
+        public decimal? BacHours { get; set; }
+        public decimal? EvHours { get; set; }
+    }
+
+    private sealed class MaterialRow
+    {
+        public string Pspnr { get; set; } = "";
+        public decimal? Delivered { get; set; }
     }
 
     private static string T(string? value) => value?.Trim() ?? "";

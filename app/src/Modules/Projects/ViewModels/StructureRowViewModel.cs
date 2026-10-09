@@ -31,6 +31,9 @@ public sealed class StructureRowViewModel(StructureRow row) : INotifyPropertyCha
 
     public bool IsVirtual => row.IsVirtual;
 
+    /// <summary>Znacznik przy nazwie: węzeł wirtualny nakładki albo element wirtualny P1S (np. Paint).</summary>
+    public string VirtualTag => IsObjective ? "węzeł" : "wirtualny";
+
     public bool IsGreyed => row.IsGreyed;
 
     public bool HasChildren => row.HasChildren;
@@ -155,10 +158,20 @@ public sealed class StructureRowViewModel(StructureRow row) : INotifyPropertyCha
         StructureEdits.CostCategory => row.CostCategory,
         StructureEdits.BacHours => Amount(row.BacHours),
         StructureEdits.BacMaterial => Amount(row.BacMaterial),
+        StructureEdits.Bac => Amount(row.Bac),
         StructureEdits.Start => row.Start,
         StructureEdits.Finish => row.Finish,
         "WpCount" => row.Wps.Count == 0 ? null : row.Wps.Count.ToString(System.Globalization.CultureInfo.InvariantCulture),
         "Acwp" => Amount(row.Acwp),
+        StructureColumns.ActualStart => row.ActualStart,
+        StructureColumns.ActualFinish => row.ActualFinish,
+        StructureColumns.OpsBacHours => Optional(row.OpsBacHours),
+        StructureColumns.PvHours => Optional(row.PvHours),
+        StructureColumns.EvHours => Optional(row.EvHours),
+        StructureColumns.AcHours => Optional(row.AcHours),
+        StructureColumns.ActualMaterial => Optional(row.ActualMaterial),
+        StructureColumns.PvCost => Optional(row.PvCost),
+        StructureColumns.EvCost => Optional(row.EvCost),
         _ => null,
     };
 
@@ -189,6 +202,9 @@ public sealed class StructureRowViewModel(StructureRow row) : INotifyPropertyCha
     }
 
     private static string? Amount(decimal value) => value == 0 ? null : PolishNumber.ToDisplay(value);
+
+    /// <summary>Wartość z danych (PZLPROD, wyliczona): brak danych – pusto, zero – „0” (np. brak godzin na elemencie).</summary>
+    private static string? Optional(decimal? value) => value is { } v ? PolishNumber.ToDisplay(Math.Round(v, 2)) : null;
 
     private void Notify(string name) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
 }

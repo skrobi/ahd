@@ -8,7 +8,7 @@
                 <Button Content="{Binding Glyph}" Width="18" Padding="0" Margin="0,0,4,0" Background="Transparent" BorderThickness="0"
                         Foreground="{StaticResource Muted}" Cursor="Hand" Click="OnToggle" Focusable="False" />
                 <Border Style="{StaticResource Tag}" Margin="0,0,6,0" Visibility="{Binding IsVirtual, Converter={StaticResource BoolToVisibility}}">
-                    <TextBlock Text="węzeł" FontSize="11" />
+                    <TextBlock Text="{Binding VirtualTag}" FontSize="11" />
                 </Border>
                 <TextBlock Text="{Binding [Name]}" VerticalAlignment="Center" ToolTip="{Binding Note}">
                     <TextBlock.Style>
@@ -45,12 +45,25 @@
         </DataTemplate>
     </UserControl.Resources>
     <StackPanel>
+        <!-- Wynik ostatniej operacji na komórkach (wklejenie, Delete) – nad tabelą; pod tabelą nic (tabela do dołu okna).
+             Skróty i opis kolumn – przycisk „?” na pasku nad tabelą (StructureHelpWindow). -->
+        <TextBlock Text="{Binding Notice}" Foreground="{StaticResource Info}" Margin="0,0,0,4" TextWrapping="Wrap">
+            <TextBlock.Style>
+                <Style TargetType="TextBlock">
+                    <Style.Triggers>
+                        <Trigger Property="Text" Value="">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                        </Trigger>
+                    </Style.Triggers>
+                </Style>
+            </TextBlock.Style>
+        </TextBlock>
         <!-- Zaznaczanie komórek jak w Excelu (tylko ta tabela – styl DataTable i edytor Performance Objectives bez zmian). -->
         <DataGrid x:Name="RowsGrid" Style="{StaticResource DataTable}" ItemsSource="{Binding Rows}"
-                  MaxHeight="640" FrozenColumnCount="1" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto"
+                  MinHeight="320" FrozenColumnCount="1" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto"
                   CanUserSortColumns="False" CanUserReorderColumns="False" SelectionUnit="Cell" SelectionMode="Extended"
                   ClipboardCopyMode="ExcludeHeader"
-                  EnableRowVirtualization="True" EnableColumnVirtualization="True"
+                  EnableRowVirtualization="True" EnableColumnVirtualization="False"
                   VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling"
                   BeginningEdit="OnBeginningEdit" PreparingCellForEdit="OnPreparingCellForEdit" CellEditEnding="OnCellEditEnding"
                   RowEditEnding="OnRowEditEnding" CurrentCellChanged="OnCurrentCellChanged" PreviewKeyDown="OnPreviewKeyDown"
@@ -67,8 +80,5 @@
                 </Style>
             </DataGrid.RowStyle>
         </DataGrid>
-        <TextBlock Text="{Binding Notice}" Foreground="{StaticResource Info}" Margin="0,4,0,0" TextWrapping="Wrap" />
-        <TextBlock Style="{StaticResource MutedText}" FontSize="11" Margin="0,4,0,0" TextWrapping="Wrap"
-                   Text="Jak w Excelu: pisanie zastępuje komórkę, Enter / Tab – dalej (zapis wiersza od razu), Esc – cofnij wiersz, Ctrl+C / Ctrl+V – kopiuj / wklej blok (jedna komórka wypełnia zaznaczenie; komórki, których nie można zmienić, są pomijane), Delete – wyczyść (bez WP), Ctrl+D – wypełnij w dół, Ctrl+Z – cofnij wklejenie / Delete / Ctrl+D, Alt+→ / Alt+← – rozwiń / zwiń wiersz, CAM – wpisz fragment USRID albo nazwiska · podświetlenie: czerwone – błąd, żółte – ostrzeżenie; wiersz żółty – niezapisany" />
     </StackPanel>
 </UserControl>

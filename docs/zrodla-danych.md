@@ -250,6 +250,26 @@ Z_KAT_ZBIORCZA
   `_PSPNR` i `_VORNR` (ta ostatnia wywołuje `uspUpdateZMTO`). Status odświeżenia i błędy zapisują
   `StatusAktualizacjiRaportow`, `ReportErrorInfo` i `TableList` – na tej podstawie etap P0 sprawdza świeżość
   danych produkcyjnych.
+- **Odczyt na żywo w strukturze projektu** – wzorowany na raporcie produkcyjnym S70MR z serwera produkcyjnego, z filtrem
+  programu (`Z_OPIS`, `SERNR_LO`) zastąpionym zakresem P1S projektu. Logika jest rozdzielona na trzy warstwy:
+  - **zapytanie** – plik `sql/pzlprod/produkcja.sql` (wbudowany w aplikację, wykonuje `SqlPzlProdSource.Production`);
+    nazwy widoków `$(vAHDD)`, `$(vAHDD_PL_CPI)`, `$(vAPD)` z konfiguracji; dane wejściowe w tabelach tymczasowych sesji
+    (bez praw zapisu w PZLPROD): `#pspnr` (zakres projektu), `#rule` (elementy wirtualne), `#djk`, `#delivered`;
+  - **parametry** – słowniki globalne „Wskaźniki DJK” i „Parametry produkcji” (`docs/slowniki.md`, rozdz. 2);
+  - **elementy wirtualne** (np. Paint) – słownik projektu „Elementy wirtualne P1S” (`docs/slowniki.md`, rozdz. 3).
+- Ziarno `vAHDD`: operacja (`VORNR`) zlecenia (`AUFNR`) pod elementem (`PSPNR`, `WBS_ELEMENT`); `CPLGR` – grupa stanowisk
+  (zwykle = `IPT`), `ARBPL` – stanowisko, `SWBS` – podział (np. Cabin, Hangar), `VERWE` – MFG / QUAL (operacje kontroli DJK).
+- Wynik po elemencie (PSPNR, a operacje zgodne z regułą elementu wirtualnego – po elemencie wirtualnym, odjęte od
+  nadrzędnego):
+  - AC = Σ `CATS`; BAC = Σ `TECH` ÷ produktywność IPT + DJK; EV = Σ `TECH_PON` ÷ produktywność IPT + DJK;
+    produktywność IPT = Σ `CzTechPon` ÷ Σ `CzRzecz` z `LOG.vAHDD_PL_CPI` w oknie z „Parametry produkcji” (brak – 1);
+    DJK = udział z „Wskaźniki DJK” (najdłuższy prefiks `IPT`) × godziny TECH / TECH_PON – idzie za stanowiskiem (DJK od W20
+    Paint – w Paint); operacje kontroli (`CPLGR` DJK, `VERWE` QUAL) – własne godziny w swoim elemencie;
+  - Actual Start = najwcześniejszy `GSTRI` (rzeczywisty start zlecenia); Actual Finish = najpóźniejszy `LTRMI`, gdy wszystkie
+    operacje elementu mają `STAT` = DONE, inaczej puste; element wirtualny – `DATA_REAL` jego operacji;
+  - materiały `LOG.vAPD` (po PSPNR, na elemencie nadrzędnym): Σ `NETWR_USD` [÷ (1 + `Z_CLO`)] statusów dostarczonych, USD.
+- Raport S70MR liczy jednocześnie operacje kontroli DJK i DJK procentowe od godzin W2–W6 – przeniesione bez zmian, do
+  potwierdzenia z autorem raportu (czy kontrola nie jest liczona podwójnie). TEMPO (`extCES.TEMPO1464`) – poza strukturą.
 
 ### 6.1 Istniejące obiekty na `splmcd03`
 
@@ -305,7 +325,8 @@ Kontrole danych względem okresu przebiegu i słowników – `docs/pipeline-fazy
 | # | Kwestia |
 |---|---|
 | O7 | Czy RABIT może eksportować CSV/TXT? (CSV preferowany) |
-| O10 | Źródło zaawansowania z produkcji (`vAHDD`) – potwierdzenie i definicja widoku |
+| O10 | Źródło zaawansowania z produkcji (`vAHDD`) – potwierdzenie i definicja widoku (kolumny z próbki danych użyte w `sql/pzlprod/produkcja.sql`) |
+| O49 | DJK w raporcie produkcyjnym: operacje kontroli (`CPLGR` DJK) i DJK procentowe od godzin W2–W6 liczone jednocześnie – potwierdzić, że to nie podwójne liczenie |
 | O27 | Zawartość pozostałych raportów RABIT (zobowiązania, „PZL roll”, „hedge”, „workaround”), ich prefiksy i definicje źródeł; układ `ACTUALS_*` – rozdz. 4 |
 | O28 | Które dane pochodzą z Cobra i w jakiej formie |
 | O38 | Wycofanie pliku, którego RABIT już nie generuje (dziś jego ostatnia wersja pozostaje najnowsza) |

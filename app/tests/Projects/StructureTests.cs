@@ -36,8 +36,8 @@ public sealed class StructureTests
 
     private static DictRow Wp(string element, string wp, string cam = "Anna Nowak") => Row(("Element P1S", element), ("WP", wp), ("CAM", cam), ("Cost Category", null));
 
-    private static DictRow Budget(string wp, string? hours, string? material = null, string? start = null, string? end = null) =>
-        Row(("WP", wp), ("BAC HOURS", hours), ("BAC MATERIAL", material), ("Baseline Start", start), ("Baseline Koniec", end));
+    private static DictRow Budget(string wp, string? hours, string? material = null, string? start = null, string? end = null, string? bac = null) =>
+        Row(("WP", wp), ("BAC HOURS", hours), ("BAC MATERIAL", material), ("BAC", bac), ("Baseline Start", start), ("Baseline Koniec", end));
 
     private static StructureRow Of(ProjectStructure structure, string idOrWbs) =>
         structure.Rows.Single(r => r.WbsElement == idOrWbs || r.Id == idOrWbs);
@@ -90,9 +90,10 @@ public sealed class StructureTests
     public void Wp_budget_and_gaps_roll_up_subtree()
     {
         DictRow[] wpCam = [Wp("XYZ-1", "WP-1"), Wp("AC-CAB.6.38.01", "WP-2"), Wp("AC-CAB.6.38.03.01.05", "WP-3"), Wp("ZZZ", "WP-4")];
-        DictRow[] schedule = [Budget("WP-1", "10", "100", "2026-01-01", "2026-06-30"), Budget("WP-2", "5", null, "2025-12-01", "2026-03-31")];
+        DictRow[] schedule = [Budget("WP-1", "10", "100", "2026-01-01", "2026-06-30", "1000"), Budget("WP-2", "5", null, "2025-12-01", "2026-03-31", "250.5")];
 
         var structure = ProjectService.Structure(Objectives(), Inputs(), wpCam, schedule);
+        Assert.Equal((1000m, 1250.5m, 1250.5m), (Of(structure, "p1s:XYZ-1").Bac, Of(structure, "4D06WP.RA").Bac, structure.Summary.Bac));   // BAC – suma poddrzewa
 
         var leaf = Of(structure, "p1s:XYZ-1");
         Assert.Equal(("WP-1", "Anna Nowak", 10m, 100m, true), (leaf.Wp, leaf.Cam, leaf.BacHours, leaf.BacMaterial, leaf.OwnsBudget));
@@ -147,10 +148,17 @@ public sealed class StructureTests
         Assert.True(StructureEdits.CanEdit(node, StructureEdits.Name));
         Assert.True(StructureEdits.CanEdit(node, StructureEdits.P1s));
         Assert.True(StructureEdits.CanEdit(node, StructureEdits.Wp));
-        Assert.False(StructureEdits.CanEdit(node, StructureEdits.BacHours));   // suma poddrzewa
+        Assert.True(StructureEdits.CanEdit(leaf, StructureEdits.CostCategory));
+        Assert.True(StructureEdits.CanEdit(node, StructureEdits.BacHours));   // jeden WP w poddrzewie (WP-1)
+        var two = ProjectService.Structure(Objectives(), Inputs(), [Wp("XYZ-1", "WP-1"), Wp("AC-CAB.6.38.01", "WP-2")], []);
+        Assert.False(StructureEdits.CanEdit(Of(two, "4D06WP.RA"), StructureEdits.BacHours));   // suma kilku WP
         Assert.False(StructureEdits.CanEdit(leaf, StructureEdits.Name));
         Assert.True(StructureEdits.CanEdit(leaf, StructureEdits.BacHours));
-        Assert.False(StructureEdits.CanEdit(Of(structure, "p1s:AC-CAB.6.38.07"), StructureEdits.Start));   // bez własnego WP
+        // Wiersz bez własnego WP z jednym WP pod sobą – budżet i daty edytowalne (zmiana trafia do tego WP).
+        var parent = Of(structure, "p1s:AC-CAB.6.38.07");
+        Assert.Equal(("WP-1", true, true), (parent.BudgetWp, StructureEdits.CanEdit(parent, StructureEdits.Start), StructureEdits.CanEdit(parent, StructureEdits.Bac)));
+        Assert.True(StructureEdits.CanEdit(leaf, StructureEdits.Bac));
+        Assert.False(StructureEdits.CanEdit(Of(ProjectService.Structure(Objectives(), Inputs(), [], []), "p1s:AC-CAB.6.38.07"), StructureEdits.Start));   // bez WP w poddrzewie
         // WP zaznaczany w tym wierszu (wklejenie WP z budżetem): budżet edytowalny, gdy w poddrzewie nie ma innych WP.
         var empty = ProjectService.Structure(Objectives(), Inputs(), [], []);
         Assert.True(StructureEdits.CanEditWithNewWp(Of(empty, "p1s:AC-CAB.6.38.07"), StructureEdits.Start));
@@ -179,14 +187,19 @@ public sealed class StructureTests
         var (camOnly, _) = StructureEdits.WpCam(wpCam, "AC-CAB.6.38.07", new Dictionary<string, string?> { [StructureEdits.Cam] = "e123456" });
         Assert.Equal("AC-CAB.6.38.07", camOnly[1]["WP"]);
 
+        // Cost Category (kategoria WBS projektu) – zapisywana w „WP i CAM” przy WP elementu; odczyt w strukturze.
+        var (categorized, _) = StructureEdits.WpCam(wpCam, "XYZ-1", new Dictionary<string, string?> { [StructureEdits.CostCategory] = "Production" });
+        Assert.Equal(("WP-1", "Production"), (categorized[0]["WP"], categorized[0]["Cost Category"]));
+        Assert.Equal("Production", Of(ProjectService.Structure(Objectives(), Inputs(), categorized, []), "p1s:XYZ-1").CostCategory);
+
         // Odznaczenie WP – przypisanie usunięte.
         var (cleared, removed) = StructureEdits.WpCam(wpCam, "XYZ-1", new Dictionary<string, string?> { [StructureEdits.Wp] = "false" });
         Assert.Empty(cleared);
         Assert.Equal(1L, Assert.Single(removed).RowId);
 
         DictRow[] schedule = [Budget("WP-1", "10", "5") with { RowId = 3, Version = 1 }];
-        var (budget, _) = StructureEdits.Schedule(schedule, "wp-1", new Dictionary<string, string?> { [StructureEdits.BacHours] = "12,5" });
-        Assert.Equal(("12,5", "5"), (budget[0]["BAC HOURS"], budget[0]["BAC MATERIAL"]));
+        var (budget, _) = StructureEdits.Schedule(schedule, "wp-1", new Dictionary<string, string?> { [StructureEdits.BacHours] = "12,5", [StructureEdits.Bac] = "900" });
+        Assert.Equal(("12,5", "5", "900"), (budget[0]["BAC HOURS"], budget[0]["BAC MATERIAL"], budget[0]["BAC"]));
 
         var (renamed, kept) = StructureEdits.ScheduleAfterWpChange(schedule, "WP-1", "WP-9");
         Assert.Equal(("WP-9", "10"), (renamed[0]["WP"], renamed[0]["BAC HOURS"]));
@@ -194,6 +207,90 @@ public sealed class StructureTests
         var (dropped, gone) = StructureEdits.ScheduleAfterWpChange([.. schedule, Budget("WP-9", "1")], "WP-1", "WP-9");
         Assert.Equal(["WP-9"], dropped.Select(r => r["WP"]));
         Assert.Single(gone);
+    }
+
+    [Fact]
+    public void Planned_value_spreads_budget_over_working_days_of_baseline()
+    {
+        Assert.Equal(5, EarnedValue.WorkingDays(new DateOnly(2026, 10, 5), new DateOnly(2026, 10, 11)));    // pn–nd
+        Assert.Equal(10, EarnedValue.WorkingDays(new DateOnly(2026, 10, 5), new DateOnly(2026, 10, 16)));
+        Assert.Equal(0, EarnedValue.WorkingDays(new DateOnly(2026, 10, 10), new DateOnly(2026, 10, 11)));   // weekend
+        Assert.Equal(0m, EarnedValue.Elapsed("2026-10-05", "2026-10-16", new DateOnly(2026, 10, 1)));       // przed startem
+        Assert.Equal(0.5m, EarnedValue.Elapsed("2026-10-05", "2026-10-16", new DateOnly(2026, 10, 11)));    // 5 z 10 dni roboczych
+        Assert.Equal(1m, EarnedValue.Elapsed("2026-10-05", "2026-10-16", new DateOnly(2026, 11, 1)));       // po końcu
+        Assert.Null(EarnedValue.Elapsed(null, "2026-10-16", new DateOnly(2026, 10, 11)));                   // brak daty
+        Assert.Null(EarnedValue.Elapsed("2026-10-16", "2026-10-05", new DateOnly(2026, 10, 11)));           // zła kolejność
+    }
+
+    [Fact]
+    public void Production_values_roll_up_and_give_planned_and_earned_value_of_wp()
+    {
+        // WP-1 na AC-CAB.6.38.07 (PSPNR 101) – pod nim XYZ-1 (102); produkcja na obu elementach.
+        DictRow[] wpCam = [Wp("AC-CAB.6.38.07", "WP-1")];
+        DictRow[] schedule = [Budget("WP-1", "100", null, "2026-10-05", "2026-10-16", "10000")];
+        var production = new ProductionData(new Dictionary<string, ProductionValues>
+        {
+            ["101"] = new("101", AcHours: 10, BacHours: 60, EvHours: 20, ActualMaterial: 500),
+            ["102"] = new("102", AcHours: 5, BacHours: 40, EvHours: 30, ActualMaterial: null),
+        }, DateTimeOffset.Now);
+        var structure = StructureBuilder.Build(Objectives(), ProjectService.Resolve(Objectives(), Inputs()), Inputs().P1s, wpCam, schedule,
+            production: production, statusDate: new DateOnly(2026, 10, 11));
+
+        var leaf = Of(structure, "p1s:XYZ-1");
+        Assert.Equal((40m, 30m, 5m, (decimal?)null), (leaf.OpsBacHours, leaf.EvHours, leaf.AcHours, leaf.ActualMaterial));
+        var wp = Of(structure, "p1s:AC-CAB.6.38.07");
+        Assert.Equal((100m, 50m, 15m, 500m), (wp.OpsBacHours, wp.EvHours, wp.AcHours, wp.ActualMaterial));   // suma poddrzewa
+        Assert.Equal(50m, wp.PvHours);      // BAC Hours (AHD) 100 × 5/10 dni roboczych
+        Assert.Equal(5000m, wp.PvCost);     // BAC Cost 10 000 × 0,5
+        Assert.Equal(5000m, wp.EvCost);     // BAC Cost × EV/BAC = 10 000 × 50/100
+        Assert.Equal((100m, 50m, 5000m), (Of(structure, "4D06WP.RA").OpsBacHours, Of(structure, "4D06WP.RA").PvHours, Of(structure, "4D06WP.RA").EvCost));
+        Assert.Null(Of(structure, "4D06WP000002").OpsBacHours);   // element bez danych produkcyjnych – puste, nie 0
+        Assert.Null(StructureBuilder.Build(Objectives(), ProjectService.Resolve(Objectives(), Inputs()), Inputs().P1s, wpCam, schedule).Rows.First().PvHours);
+    }
+
+    [Fact]
+    public void Virtual_p1s_element_is_under_its_parent_with_own_production_and_dates()
+    {
+        DictRow[] virtuals = [Row(("Element wirtualny", "XYZ-1.PAINT"), ("Element nadrzędny", "XYZ-1"), ("Nazwa", "Paint"), ("SWBS", "Hangar"), ("CPLGR", "W20"), ("ARBPL", null))];
+        DictRow[] wpCam = [Wp("XYZ-1.PAINT", "WP-P")];
+        var production = new ProductionData(new Dictionary<string, ProductionValues>
+        {
+            ["102"] = new("102", 5, 40, 30, 100, null, new DateOnly(2026, 1, 5), new DateOnly(2026, 2, 25)),
+            [ProductionData.VirtualKey("XYZ-1.PAINT")] = new("102", 4, 55, 22, null, "XYZ-1.PAINT", new DateOnly(2026, 3, 5), null),
+        }, DateTimeOffset.Now);
+        var structure = StructureBuilder.Build(Objectives(), ProjectService.Resolve(Objectives(), Inputs()), Inputs().P1s, wpCam, [],
+            production: production, virtualP1s: virtuals);
+
+        var paint = Of(structure, "p1s:XYZ-1.PAINT");
+        Assert.Equal((Of(structure, "p1s:XYZ-1").Id, true, "Paint", "WP-P"), (paint.ParentId, paint.IsVirtual, paint.Name, paint.Wp));
+        Assert.Contains("CPLGR = W20", paint.Note);
+        Assert.Equal((55m, 22m, 4m, "2026-03-05", (string?)null), (paint.OpsBacHours, paint.EvHours, paint.AcHours, paint.ActualStart, paint.ActualFinish));
+        var parent = Of(structure, "p1s:XYZ-1");
+        Assert.Equal((95m, 52m, 9m, 100m), (parent.OpsBacHours, parent.EvHours, parent.AcHours, parent.ActualMaterial));   // element + Paint
+        Assert.Equal(("2026-01-05", (string?)null), (parent.ActualStart, parent.ActualFinish));                             // Paint otwarty – bez końca
+        Assert.Single(structure.Rows, r => r.P1s == "XYZ-1.PAINT");                                                           // WP na elemencie wirtualnym – bez duplikatu
+    }
+
+    [Fact]
+    public void Structure_export_has_whole_tree_with_all_columns()
+    {
+        DictRow[] wpCam = [Row(("Element P1S", "XYZ-1"), ("WP", "WP-1"), ("CAM", "e123456"), ("Cost Category", "Production"))];
+        DictRow[] schedule = [Budget("WP-1", "10", "100", "2026-01-01", "2026-06-30", "1000")];
+        var structure = ProjectService.Structure(Objectives(), Inputs(), wpCam, schedule);
+        var rows = ProjectService.StructureRows(structure, [new LookupOption("e123456", "Anna Nowak")]).ToList();
+
+        Assert.Equal(structure.Rows.Count, rows.Count);   // także wiersze zwinięte w tabeli
+        Assert.All(rows, r => Assert.Equal(ProjectService.StructureHeaders.Count, r.Count));
+        var leaf = rows[structure.Rows.ToList().FindIndex(r => r.Id == "p1s:XYZ-1")];
+        var header = ProjectService.StructureHeaders.ToList();
+        object? Cell(string column) => leaf[header.IndexOf(column)];
+        Assert.Equal(("element P1S", "WP-1", "e123456", "Anna Nowak", "Production"), (Cell("Rodzaj"), Cell("WP"), Cell("CAM"), Cell("CAM – imię i nazwisko"), Cell("Cost Category")));
+        Assert.Equal((10m, 100m, 1000m, new DateOnly(2026, 1, 1), new DateOnly(2026, 6, 30)),
+            (Cell("BAC Hours baseline"), Cell("BAC Material"), Cell("BAC Cost"), Cell("Baseline Start"), Cell("Baseline Finish")));
+        Assert.StartsWith(new string(' ', structure.Rows.Single(r => r.Id == "p1s:XYZ-1").Depth * 2), (string)Cell("WBS Name")!);
+        // Wiersz bez WP w poddrzewie – budżet pusty (nie 0).
+        var empty = rows[structure.Rows.ToList().FindIndex(r => r.Wps.Count == 0)];
+        Assert.Null(empty[header.IndexOf("BAC Hours baseline")]);
     }
 
     [Fact]

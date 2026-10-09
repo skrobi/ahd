@@ -8,8 +8,8 @@ namespace PzlEv.Modules.Projects.Services;
 
 /// <summary>
 /// Słowniki projektu (docs/slowniki.md, rozdz. 3, 5.2–5.6) na mechanizmie słowników (Shared/Utils/Dictionaries):
-/// WP i CAM, Harmonogram i budżet, Cost Category – zmiany w projekcie (tabela słownika globalnego z kodem projektu),
-/// Wykluczenia. Reguły zależne od projektu (zakres, inne projekty, lista osób) dostają kontekst – For(...).
+/// WP i CAM, Harmonogram i budżet, Kategorie WBS, Cost Category – zmiany w projekcie (tabela słownika globalnego
+/// z kodem projektu), Wykluczenia. Reguły zależne od projektu (zakres, inne projekty, lista osób) dostają kontekst – For(...).
 /// Stawki CAS – zawartość nieustalona (O37): słownik nie jest wczytywany ani zapisywany.
 /// </summary>
 public static class ProjectDictionaries
@@ -18,20 +18,20 @@ public static class ProjectDictionaries
     public const string ScheduleBudget = "schedule-budget";
     public const string Exclusions = "exclusions";
     public const string CasRates = "cas-rates";
-
-    public static readonly IReadOnlyList<string> CostCategoryChoices = ["Labor", "Material", "Subcontract"];
+    public const string WbsCategories = "wbs-categories";
+    public const string VirtualP1s = "virtual-p1s";
 
     private static readonly DictionarySpec WpCamSpec = new()
     {
         Code = WpCam,
         Name = "WP i CAM",
-        Description = "Element P1S projektu → WP, CAM, Cost Category. Element P1S należy do projektu, gdy jest kodem P1S elementu nakładki (Legacy WBS albo cel z mapowania) albo leży pod nim.",
+        Description = "Element P1S projektu → WP, CAM, Cost Category (kategoria ze słownika „Kategorie WBS” projektu). Element P1S należy do projektu, gdy jest kodem P1S elementu nakładki (Legacy WBS albo cel z mapowania) albo leży pod nim.",
         Columns =
         [
             new("Element P1S", ColumnType.Text, Key: true),
             new("WP", ColumnType.Text, Required: true, CheckSimilar: true),
-            new("CAM", ColumnType.Text, Required: true, CheckSimilar: true, Lookup: GlobalDictionaries.Persons),
-            new("Cost Category", ColumnType.Choice, Choices: CostCategoryChoices),
+            new("CAM", ColumnType.Text, CheckSimilar: true, Lookup: GlobalDictionaries.Persons),
+            new("Cost Category", ColumnType.Text, CheckSimilar: true, Lookup: WbsCategories),
         ],
         SkipKeyOnlyRows = true,
     };
@@ -40,16 +40,45 @@ public static class ProjectDictionaries
     {
         Code = ScheduleBudget,
         Name = "Harmonogram i budżet",
-        Description = "WP → BAC HOURS (godziny), BAC MATERIAL (koszt materiałów), Baseline Start i Baseline Koniec – baseline projektu.",
+        Description = "WP → BAC HOURS (godziny), BAC MATERIAL (koszt materiałów), BAC (budżet kosztowy), Baseline Start i Baseline Koniec – baseline projektu.",
         Columns =
         [
             new("WP", ColumnType.Text, Key: true),
             new("BAC HOURS", ColumnType.Decimal),
             new("BAC MATERIAL", ColumnType.Decimal),
+            new("BAC", ColumnType.Decimal),
             new("Baseline Start", ColumnType.Date, Aliases: ["Planowany Start"]),
             new("Baseline Koniec", ColumnType.Date, Aliases: ["Planowany Koniec"]),
         ],
         SkipKeyOnlyRows = true,
+    };
+
+    private static readonly DictionarySpec WbsCategoriesSpec = new()
+    {
+        Code = WbsCategories,
+        Name = "Kategorie WBS",
+        Description = "Kategorie elementów WBS projektu (np. Production, Programs) – do wyboru w kolumnie Cost Category struktury i słownika „WP i CAM”; raport po kategoriach. Inne niż globalny słownik Cost Category (numer elementu kosztowego).",
+        Columns =
+        [
+            new("Cost Category", ColumnType.Text, Key: true, CheckSimilar: true),
+            new("Opis", ColumnType.Text),
+        ],
+    };
+
+    private static readonly DictionarySpec VirtualP1sSpec = new()
+    {
+        Code = VirtualP1s,
+        Name = "Elementy wirtualne P1S",
+        Description = "Element P1S, którego nie ma w LOG.WBS (np. Paint), wydzielony z elementu nadrzędnego regułą operacji vAHDD: SWBS, CPLGR (grupa stanowisk), ARBPL (stanowisko) – puste = dowolne, co najmniej jedno wypełnione. Godziny operacji zgodnych z regułą należą do elementu wirtualnego (odejmowane od nadrzędnego); materiały i ACWP zostają na nadrzędnym. Kod = kod nadrzędnego + kropka + nazwa (np. AC-CAB.6.38.07.PAINT).",
+        Columns =
+        [
+            new("Element wirtualny", ColumnType.Text, Key: true),
+            new("Element nadrzędny", ColumnType.Text, Required: true),
+            new("Nazwa", ColumnType.Text, Required: true),
+            new("SWBS", ColumnType.Text),
+            new("CPLGR", ColumnType.Text),
+            new("ARBPL", ColumnType.Text),
+        ],
     };
 
     private static readonly DictionarySpec ExclusionsSpec = new()
@@ -73,6 +102,8 @@ public static class ProjectDictionaries
         new(WpCam, "WP i CAM", "WP i CAM", RequiredFor: ProjectTypes.All, Stored: true),
         new(ScheduleBudget, "Harmonogram i budżet", "Harmonogram i budżet", RequiredFor: ProjectTypes.All, Stored: true),
         new(CasRates, "Stawki CAS", "Stawki CAS", RequiredFor: [ProjectTypes.Cas], Stored: false),
+        new(WbsCategories, "Kategorie WBS", "Kategorie WBS", RequiredFor: [], Stored: true),
+        new(VirtualP1s, "Elementy wirtualne P1S", "Elementy wirtualne P1S", RequiredFor: [], Stored: true),
         new(GlobalDictionaries.CostCategory, "Cost Category – zmiany w projekcie", "Cost Category projektu", RequiredFor: [], Stored: true),
         new(Exclusions, "Wykluczenia", "Wykluczenia", RequiredFor: [], Stored: true),
     ];
@@ -86,7 +117,10 @@ public static class ProjectDictionaries
     [
         new(WpCamSpec, "dict.WpCam", [("Element P1S", "P1sElement"), ("WP", "Wp"), ("CAM", "Cam"), ("Cost Category", "CostCategory")]),
         new(ScheduleBudgetSpec, "dict.ScheduleBudget",
-            [("WP", "Wp"), ("BAC HOURS", "BacHours"), ("BAC MATERIAL", "BacMaterial"), ("Baseline Start", "PlannedStart"), ("Baseline Koniec", "PlannedEnd")]),
+            [("WP", "Wp"), ("BAC HOURS", "BacHours"), ("BAC MATERIAL", "BacMaterial"), ("BAC", "Bac"), ("Baseline Start", "PlannedStart"), ("Baseline Koniec", "PlannedEnd")]),
+        new(WbsCategoriesSpec, "dict.WbsCategory", [("Cost Category", "Category"), ("Opis", "Description")]),
+        new(VirtualP1sSpec, "dict.VirtualP1s",
+            [("Element wirtualny", "Code"), ("Element nadrzędny", "Parent"), ("Nazwa", "Name"), ("SWBS", "Swbs"), ("CPLGR", "Cplgr"), ("ARBPL", "Arbpl")]),
         new(ExclusionsSpec, "dict.Exclusion", [("Cost Element", "CostElement"), ("WBS Element", "WbsElement"), ("Partner object", "PartnerObject"), ("Opis", "Description")]),
     ];
 
@@ -102,6 +136,8 @@ public static class ProjectDictionaries
         WpCam => With(WpCamSpec, rows => WpCamRules(rows, context)),
         ScheduleBudget => With(ScheduleBudgetSpec, rows => ScheduleBudgetRules(rows, context)),
         Exclusions => With(ExclusionsSpec, ExclusionRules),
+        WbsCategories => WbsCategoriesSpec,
+        VirtualP1s => With(VirtualP1sSpec, rows => VirtualP1sRules(rows, context)),
         GlobalDictionaries.CostCategory => GlobalDictionaries.Get(GlobalDictionaries.CostCategory),
         _ => throw new NotSupportedException($"Słownik {code} nie jest zapisywany w bazie"),
     };
@@ -126,7 +162,10 @@ public static class ProjectDictionaries
         EmptyKeyPartsAllowed = spec.EmptyKeyPartsAllowed, SkipKeyOnlyRows = spec.SkipKeyOnlyRows, Rules = rules,
     };
 
-    /// <summary>docs/slowniki.md, rozdz. 5.2. Jeden WP na element P1S i WP wymaga CAM – klucz i pole wymagane.</summary>
+    /// <summary>
+    /// docs/slowniki.md, rozdz. 5.2. Jeden WP na element P1S – klucz. CAM uzupełnia się później (najpierw wskazuje się WP):
+    /// WP bez CAM – WARNING przy zapisie, ERROR w gotowości projektu (blokuje przebieg – ProjectReadiness).
+    /// </summary>
     private static IEnumerable<Issue> WpCamRules(IReadOnlyList<DictRow> rows, ProjectDictionaryContext context)
     {
         for (var i = 0; i < rows.Count; i++)
@@ -139,8 +178,12 @@ public static class ProjectDictionaries
                 else if (context.Scope.RootOf(element) is null)
                     yield return Issue.Error($"Element P1S {element} jest poza zakresem projektu (nie jest Legacy WBS ani celem mapowania elementu nakładki i nie leży pod nimi)", at);
             }
+            if (rows[i]["WP"] is { } wp && rows[i]["CAM"] is null)
+                yield return Issue.Warning($"WP {wp} bez CAM – uzupełnij CAM przed przebiegiem", at);
             if (rows[i]["CAM"] is { } cam && !context.Persons.Contains(cam))
                 yield return Issue.Warning($"CAM „{cam}” spoza listy osób (słownik Osoby) – sprawdź pisownię", at);
+            if (rows[i]["Cost Category"] is { } category && context.Categories is { } categories && !categories.Contains(category))
+                yield return Issue.Warning($"Cost Category „{category}” spoza słownika „Kategorie WBS” projektu – dodaj ją do słownika albo wybierz z listy", at);
         }
     }
 
@@ -159,10 +202,34 @@ public static class ProjectDictionaries
                 yield return Issue.Error("BAC HOURS – budżet nie może być ujemny", at);
             if (Dec(row["BAC MATERIAL"]) is < 0)
                 yield return Issue.Error("BAC MATERIAL – budżet nie może być ujemny", at);
-            if (row["BAC HOURS"] is null && row["BAC MATERIAL"] is null)
-                yield return Issue.Warning($"WP {row["WP"]} bez budżetu (BAC HOURS i BAC MATERIAL puste)", at);
+            if (Dec(row["BAC"]) is < 0)
+                yield return Issue.Error("BAC – budżet nie może być ujemny", at);
+            if (row["BAC HOURS"] is null && row["BAC MATERIAL"] is null && row["BAC"] is null)
+                yield return Issue.Warning($"WP {row["WP"]} bez budżetu (BAC HOURS, BAC MATERIAL i BAC puste)", at);
             if (row["Baseline Start"] is { } start && row["Baseline Koniec"] is { } end && string.CompareOrdinal(start, end) > 0)
                 yield return Issue.Error("Baseline Start jest późniejszy niż Baseline Koniec", at);
+        }
+    }
+
+    /// <summary>
+    /// docs/slowniki.md, rozdz. 5.9: element nadrzędny w zakresie projektu; kod elementu wirtualnego = kod nadrzędnego + kropka
+    /// + nazwa (leży pod nim – zakres i miejsce w strukturze); reguła – co najmniej jedno z SWBS, CPLGR, ARBPL.
+    /// </summary>
+    private static IEnumerable<Issue> VirtualP1sRules(IReadOnlyList<DictRow> rows, ProjectDictionaryContext context)
+    {
+        for (var i = 0; i < rows.Count; i++)
+        {
+            var at = DictionaryValidator.RowElement(i);
+            var row = rows[i];
+            if (row["Element nadrzędny"] is { } parent)
+            {
+                if (context.Scope.RootOf(parent) is null)
+                    yield return Issue.Error($"Element nadrzędny {parent} jest poza zakresem projektu", at);
+                if (row["Element wirtualny"] is { } code && !(code.StartsWith(parent + ".", StringComparison.OrdinalIgnoreCase) && code.Length > parent.Length + 1))
+                    yield return Issue.Error($"Kod elementu wirtualnego {code} – zacznij od kodu nadrzędnego i kropki (np. {parent}.PAINT)", at);
+            }
+            if (row["SWBS"] is null && row["CPLGR"] is null && row["ARBPL"] is null)
+                yield return Issue.Error("Reguła – podaj co najmniej jedno z pól SWBS, CPLGR, ARBPL", at);
         }
     }
 

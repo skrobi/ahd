@@ -18,6 +18,7 @@ public static class StructureEdits
     public const string CostCategory = "CostCategory";
     public const string BacHours = "BacHours";
     public const string BacMaterial = "BacMaterial";
+    public const string Bac = "Bac";
     public const string Start = "Start";
     public const string Finish = "Finish";
 
@@ -28,11 +29,11 @@ public static class StructureEdits
     public static readonly IReadOnlyList<string> WpCamColumns = [Wp, Cam, CostCategory];
 
     /// <summary>Kolumny słownika „Harmonogram i budżet” (klucz – WP wiersza).</summary>
-    public static readonly IReadOnlyList<string> ScheduleColumns = [BacHours, BacMaterial, Start, Finish];
+    public static readonly IReadOnlyList<string> ScheduleColumns = [BacHours, BacMaterial, Bac, Start, Finish];
 
     /// <summary>
     /// Czy komórkę można zmienić: nazwa i Legacy WBS – węzeł nakładki; WP, CAM, Cost Category – wiersz z kodem P1S;
-    /// budżet i daty – wiersz, którego sumy to jego własny WP (bez innych WP w poddrzewie).
+    /// budżet i daty – wiersz z jednym WP w poddrzewie (własnym albo jedynym pod nim – StructureRow.BudgetWp).
     /// </summary>
     public static bool CanEdit(StructureRow row, string column)
     {
@@ -43,7 +44,7 @@ public static class StructureEdits
             Name => row.Kind == GridRowKind.Objective,
             P1s => row is { Kind: GridRowKind.Objective, IsVirtual: false },
             Wp or Cam or CostCategory => row.P1s is not null,
-            BacHours or BacMaterial or Start or Finish => row.OwnsBudget,
+            BacHours or BacMaterial or Bac or Start or Finish => row.BudgetWp is not null,
             _ => false,
         };
     }
@@ -63,6 +64,7 @@ public static class StructureEdits
         CostCategory => "Cost Category",
         BacHours => "BAC HOURS",
         BacMaterial => "BAC MATERIAL",
+        Bac => "BAC",
         Start => "Baseline Start",
         Finish => "Baseline Koniec",
         _ => throw new ArgumentOutOfRangeException(nameof(column), column, null),

@@ -26,6 +26,7 @@
   <ItemGroup>
     <!-- Migracje schematu (te same co w aplikacji) – testy magazynów SQL. -->
     <EmbeddedResource Include="..\..\sql\mssql\*.sql" LogicalName="PzlEv.Sql.%(Filename)%(Extension)" />
+    <EmbeddedResource Include="..\..\sql\pzlprod\*.sql" LogicalName="PzlEv.PzlProd.%(Filename)%(Extension)" />
   </ItemGroup>
 
   <ItemGroup>

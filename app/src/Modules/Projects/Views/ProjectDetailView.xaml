@@ -35,6 +35,15 @@
                 </StackPanel>
             </partials:PageHeader.Actions>
         </partials:PageHeader>
+        <!-- Z kiedy są dane: RABIT (ACTUALS) i produkcja (PZLPROD) – osobna linia pod nagłówkiem (tytuł i opis mają całą szerokość) -->
+        <WrapPanel Margin="0,-12,0,12">
+            <Border Style="{StaticResource Tag}" VerticalAlignment="Center" Margin="0,0,8,4" ToolTip="{Binding DataInfoDetails}">
+                <TextBlock Text="{Binding DataInfo}" FontSize="12" />
+            </Border>
+            <Border Style="{StaticResource Tag}" VerticalAlignment="Center" Margin="0,0,8,4" ToolTip="{Binding ProductionDetails}">
+                <TextBlock Text="{Binding ProductionInfo}" FontSize="12" />
+            </Border>
+        </WrapPanel>
         <partials:BusyBar DataContext="{Binding Busy}" />
         <TextBlock Text="{Binding Status}" TextWrapping="Wrap" Margin="0,0,0,8" />
 
@@ -79,19 +88,33 @@
                         <DockPanel Margin="0,0,0,8">
                             <TextBlock DockPanel.Dock="Right" Text="{Binding Structure.SummaryText}" Style="{StaticResource MutedText}" VerticalAlignment="Center"
                                        ToolTip="{Binding MappingInfo}" />
+                            <!-- Ikony z opisem w podpowiedzi (Segoe MDL2 / Fluent Icons) -->
                             <StackPanel Orientation="Horizontal">
-                                <Button Content="Edytuj Performance Objectives" Style="{StaticResource BtnPrimary}" Margin="0,0,8,0" Command="{Binding EditObjectives}"
-                                        ToolTip="Edytor jak w kreatorze: przeciąganie, przesuwanie, usuwanie, węzły wirtualne, podmiana z Excela" />
-                                <Button Content="Dołóż z Excela (eksport SAP)" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding AddFromExcel}"
-                                        ToolTip="Dokłada elementy, których projekt jeszcze nie ma (np. kolejne Project definition); istniejąca struktura zostaje bez zmian" />
-                                <Button Content="Rozwiń wszystko" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding Structure.ExpandAll}" />
-                                <Button Content="Zwiń wszystko" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding Structure.CollapseAll}" />
-                                <Button Content="Odśwież mapowanie i koszty" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding RefreshMapping}"
-                                        ToolTip="Ponowny odczyt raportu mapowań CES ↔ P1S, struktury P1S (PZLPROD) i kosztów ACWP z ostatniego importu ACTUALS" />
-                                <Button Content="Cofnij wklejenie" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding Structure.Undo}"
-                                        ToolTip="Cofa ostatnie wklejenie, wyczyszczenie (Delete) albo wypełnienie w dół (Ctrl+D) – zapisuje wartości sprzed zmiany (Ctrl+Z)" />
-                                <Button Content="Odrzuć niezapisane" Style="{StaticResource Btn}" Command="{Binding Structure.RevertChanges}"
-                                        ToolTip="Cofa zmiany wierszy, których nie udało się zapisać" />
+                                <Button Content="&#xE70F;" Style="{StaticResource BtnIconPrimary}" Command="{Binding EditObjectives}"
+                                        AutomationProperties.Name="Edytuj Performance Objectives"
+                                        ToolTip="Edytuj Performance Objectives – edytor jak w kreatorze: przeciąganie, przesuwanie, usuwanie, węzły wirtualne, podmiana z Excela" />
+                                <Button Content="&#xE710;" Style="{StaticResource BtnIcon}" Command="{Binding AddFromExcel}"
+                                        AutomationProperties.Name="Dołóż z Excela (eksport SAP)"
+                                        ToolTip="Dołóż z Excela (eksport SAP) – dokłada elementy, których projekt jeszcze nie ma (np. kolejne Project definition); istniejąca struktura zostaje bez zmian" />
+                                <Button Content="&#xE896;" Style="{StaticResource BtnIcon}" Margin="0,0,12,0" Command="{Binding ExportStructure}"
+                                        AutomationProperties.Name="Pobierz strukturę do Excela"
+                                        ToolTip="Pobierz strukturę do Excela – całe drzewo (także zwinięte wiersze) ze wszystkimi kolumnami: WP, CAM, Cost Category, budżet, daty, ACWP, braki" />
+                                <Button Content="&#xE70D;" Style="{StaticResource BtnIcon}" Command="{Binding Structure.ExpandAll}"
+                                        AutomationProperties.Name="Rozwiń wszystko" ToolTip="Rozwiń wszystko" />
+                                <Button Content="&#xE70E;" Style="{StaticResource BtnIcon}" Margin="0,0,12,0" Command="{Binding Structure.CollapseAll}"
+                                        AutomationProperties.Name="Zwiń wszystko" ToolTip="Zwiń wszystko" />
+                                <Button Content="&#xE72C;" Style="{StaticResource BtnIcon}" Command="{Binding RefreshMapping}"
+                                        AutomationProperties.Name="Odśwież mapowanie i koszty"
+                                        ToolTip="Odśwież mapowanie i koszty – ponowny odczyt raportu mapowań CES ↔ P1S, struktury P1S (PZLPROD) i kosztów ACWP z ostatniego importu ACTUALS" />
+                                <Button Content="&#xE7A7;" Style="{StaticResource BtnIcon}" Command="{Binding Structure.Undo}"
+                                        AutomationProperties.Name="Cofnij wklejenie"
+                                        ToolTip="Cofnij wklejenie – cofa ostatnie wklejenie, wyczyszczenie (Delete) albo wypełnienie w dół (Ctrl+D) i zapisuje wartości sprzed zmiany (Ctrl+Z)" />
+                                <Button Content="&#xE711;" Style="{StaticResource BtnIcon}" Command="{Binding Structure.RevertChanges}"
+                                        AutomationProperties.Name="Odrzuć niezapisane"
+                                        ToolTip="Odrzuć niezapisane – cofa zmiany wierszy, których nie udało się zapisać" />
+                                <Button Content="&#xE897;" Style="{StaticResource BtnIcon}" Margin="12,0,0,0" Click="OnStructureHelp"
+                                        AutomationProperties.Name="Skróty i opis kolumn"
+                                        ToolTip="Skróty i opis kolumn – obsługa tabeli jak w Excelu i wyjaśnienie każdej kolumny (osobne okno)" />
                             </StackPanel>
                         </DockPanel>
                         <views:StructureView DataContext="{Binding Structure}" />

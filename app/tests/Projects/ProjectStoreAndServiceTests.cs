@@ -158,7 +158,8 @@ public sealed class ProjectStoreAndServiceTests : IDisposable
     [SqlFact]
     public void Create_with_all_dictionaries_from_one_workbook()
     {
-        var files = ProjectDictionaries.ForType(ProjectTypes.Sac).Where(i => i.Stored)
+        // Kategorie WBS, Elementy wirtualne P1S – słowniki opcjonalne, których arkuszy nie ma w skoroszycie testowym (wczytuje się tylko podane pliki).
+        var files = ProjectDictionaries.ForType(ProjectTypes.Sac).Where(i => i.Stored && i.Code is not (ProjectDictionaries.WbsCategories or ProjectDictionaries.VirtualP1s))
             .Select(i => (i.Code, Sheet: ProjectService.FindSheet(Dictionaries, i)))
             .ToDictionary(x => x.Code, x => (Dictionaries, x.Sheet));
         Assert.All(files.Values, f => Assert.NotNull(f.Sheet));
@@ -214,7 +215,7 @@ public sealed class ProjectStoreAndServiceTests : IDisposable
         _service.ExportDictionaries(path, "", ProjectTypes.Internal, Objectives(), MappingInputs.None);
 
         var sheets = PzlEv.Shared.Utils.Files.TabularFileReader.SheetNames(path);
-        Assert.Equal(["WP i CAM", "Harmonogram i budżet", "Cost Category projektu", "Wykluczenia"], sheets);
+        Assert.Equal(["WP i CAM", "Harmonogram i budżet", "Kategorie WBS", "Elementy wirtualne P1S", "Cost Category projektu", "Wykluczenia"], sheets);
         var wp = PzlEv.Shared.Utils.Files.TabularFileReader.Read(path, "WP i CAM");
         Assert.Equal(["AC-CAB", "AC-CAB.6.38", "AC-CAB.6.38.01", "AC-CAB.6.38.02", "AC-CAB.6.38.03", "AC-CAB.6.38.03.01"], wp.Rows.Select(r => r[0]));
     }
@@ -226,11 +227,13 @@ public sealed class ProjectStoreAndServiceTests : IDisposable
         StructureRow Row(string wbs) => ProjectService.Structure(_store.Objectives("M28"), inputs,
             _service.Rows(ProjectDictionaries.WpCam, "M28"), _service.Rows(ProjectDictionaries.ScheduleBudget, "M28")).Rows.Single(r => r.WbsElement == wbs);
 
-        // Nowy WP bez CAM – ERROR (CAM wymagany), nic nie zapisano.
-        var missing = _service.SaveStructureEdit("M28", inputs, Row("4D06WP000001"), new Dictionary<string, string?> { [StructureEdits.Wp] = "true" });
-        Assert.False(missing.Saved);
-        Assert.Contains("CAM", missing.Message);
-        Assert.Empty(_service.Rows(ProjectDictionaries.WpCam, "M28"));
+        // Nowy WP bez CAM – zapisany (CAM uzupełnia się później), w strukturze brak „WP bez CAM”, gotowość – ERROR.
+        var withoutCam = _service.SaveStructureEdit("M28", inputs, Row("4D06WP000001"), new Dictionary<string, string?> { [StructureEdits.Wp] = "true" });
+        Assert.True(withoutCam.Saved, withoutCam.Message);
+        var marked = Assert.Single(_service.Rows(ProjectDictionaries.WpCam, "M28"));
+        Assert.Equal(("AC-CAB.6.38.01", null), (marked["WP"], marked["CAM"]));
+        Assert.Contains("WP bez CAM", Row("4D06WP000001").Gap);
+        Assert.Contains(_service.Readiness(_store.Find("M28")!, _store.Objectives("M28"), inputs), i => i.Level == CheckLevel.Error && i.Message.StartsWith("WP bez CAM"));
 
         var assigned = _service.SaveStructureEdit("M28", inputs, Row("4D06WP000001"),
             new Dictionary<string, string?> { [StructureEdits.Wp] = "true", [StructureEdits.Cam] = "e123456" });
@@ -240,14 +243,38 @@ public sealed class ProjectStoreAndServiceTests : IDisposable
         Assert.Equal([new LookupOption("e123456", "e123456")], ProjectService.PersonOptions(_service.PersonLookups(), _service.Rows(ProjectDictionaries.WpCam, "M28")));   // CAM spoza słownika Osoby
 
         Assert.True(_service.SaveStructureEdit("M28", inputs, Row("4D06WP000001"),
-            new Dictionary<string, string?> { [StructureEdits.BacHours] = "12,5", [StructureEdits.Start] = "2026-01-05" }).Saved);
+            new Dictionary<string, string?> { [StructureEdits.BacHours] = "12,5", [StructureEdits.Bac] = "15 000,50", [StructureEdits.Start] = "2026-01-05" }).Saved);
         var budget = Assert.Single(_service.Rows(ProjectDictionaries.ScheduleBudget, "M28"));
-        Assert.Equal(("AC-CAB.6.38.01", "12.5", "2026-01-05"), (budget["WP"], budget["BAC HOURS"], budget["Baseline Start"]));
+        Assert.Equal(("AC-CAB.6.38.01", "12.5", "15000.5", "2026-01-05"), (budget["WP"], budget["BAC HOURS"], budget["BAC"], budget["Baseline Start"]));
+        Assert.Equal(15000.5m, Row("4D06WP000001").Bac);
         Assert.Equal(12.5m, Row("4D06WP000001").BacHours);
 
         var negative = _service.SaveStructureEdit("M28", inputs, Row("4D06WP000001"), new Dictionary<string, string?> { [StructureEdits.BacHours] = "-1" });
         Assert.False(negative.Saved);
         Assert.Contains("ujemny", negative.Message);
+
+        // Cost Category z listy „Kategorie WBS” projektu; kategoria spoza słownika – zapis z ostrzeżeniem.
+        var categories = new[] { "Production", "Programs" }.Select(c => new DictRow(null, null, new Dictionary<string, string?> { ["Cost Category"] = c, ["Opis"] = null })).ToList();
+        Assert.Equal(SaveStatus.Saved, _service.SaveDictionary(ProjectDictionaries.WbsCategories, _service.Context("M28", _store.Objectives("M28"), null, inputs), categories, [], "M28").Status);
+        Assert.Equal(["Production", "Programs"], _service.CategoryLookups("M28").Select(o => o.Value));
+        Assert.Equal(["Production", "Programs"], _service.Context("M28", _store.Objectives("M28"), null, inputs).Categories!.Order());
+        var categorized = _service.SaveStructureEdit("M28", inputs, Row("4D06WP000001"), new Dictionary<string, string?> { [StructureEdits.CostCategory] = "Production" });
+        Assert.True(categorized.Saved, categorized.Message);
+        Assert.Equal(("AC-CAB.6.38.01", "Production"), (Row("4D06WP000001").Wp, Row("4D06WP000001").CostCategory));
+        var outside = _service.SaveStructureEdit("M28", inputs, Row("4D06WP000001"), new Dictionary<string, string?> { [StructureEdits.CostCategory] = "Overhead" });
+        Assert.True(outside.Saved, outside.Message);
+        Assert.Equal("Overhead", Row("4D06WP000001").CostCategory);
+        Assert.Equal(["Production", "Programs", "Overhead"], ProjectService.CategoryOptions(_service.CategoryLookups("M28"), _service.Rows(ProjectDictionaries.WpCam, "M28")).Select(o => o.Value));
+        var export = Path.Combine(Path.GetTempPath(), $"pzlev-categories-{Guid.NewGuid():N}.xlsx");
+        try
+        {
+            _service.ExportDictionaries(export, "M28", ProjectTypes.Internal, _store.Objectives("M28"), inputs);   // lista kategorii projektu w arkuszu „Listy”
+            Assert.Contains("Kategorie WBS", PzlEv.Shared.Utils.Files.TabularFileReader.SheetNames(export));
+        }
+        finally
+        {
+            File.Delete(export);
+        }
 
         // Odznaczenie WP – przypisanie i budżet WP usunięte.
         Assert.True(_service.SaveStructureEdit("M28", inputs, Row("4D06WP000001"), new Dictionary<string, string?> { [StructureEdits.Wp] = "false" }).Saved);
@@ -369,6 +396,50 @@ public sealed class ProjectStoreAndServiceTests : IDisposable
     }
 
     [SqlFact]
+    public void Structure_edits_of_many_rows_are_saved_together_and_invalid_rows_do_not_block_valid_ones()
+    {
+        Assert.True(_store.Create("M28", "M28", ProjectTypes.Internal, Objectives()).Success);
+        var inputs = _service.Mapping();
+        ProjectStructure Read() => ProjectService.Structure(_store.Objectives("M28"), inputs,
+            _service.Rows(ProjectDictionaries.WpCam, "M28"), _service.Rows(ProjectDictionaries.ScheduleBudget, "M28"));
+        // Liście z kodem P1S bez WP – żaden nie leży pod innym (każdy WP ma własny budżet).
+        var free = Read().Rows.Where(r => r.P1s is not null && r.Wps.Count == 0 && !r.HasChildren).Take(3).ToList();
+        Assert.True(free.Count >= 2);
+
+        // Kilka WP zaznaczonych naraz (bez CAM) – jeden zapis „WP i CAM”.
+        var marked = _service.SaveStructureEdits("M28", inputs,
+            free.Select(r => new StructureEdit(r.Id, r, new Dictionary<string, string?> { [StructureEdits.Wp] = "true" })).ToList());
+        Assert.All(marked, r => Assert.True(r.Saved, r.Message));
+        var wpCam = _service.Rows(ProjectDictionaries.WpCam, "M28");
+        Assert.Equal(free.Count, wpCam.Count);
+        Assert.All(wpCam, r => Assert.Null(r["CAM"]));
+        Assert.Equal(free.Count, wpCam.Select(r => r.RowId).Distinct().Count());   // identyfikatory z jednego zakresu sekwencji
+
+        // Budżet w paczce: poprawny wiersz zapisany, błędny (ujemny) – odrzucony z komunikatem, nie blokuje poprawnego.
+        var rows = Read().Rows;
+        var (a, b) = (rows.Single(r => r.Id == free[0].Id), rows.Single(r => r.Id == free[1].Id));
+        var budget = _service.SaveStructureEdits("M28", inputs,
+        [
+            new StructureEdit(a.Id, a, new Dictionary<string, string?> { [StructureEdits.BacHours] = "10", [StructureEdits.Bac] = "1000" }),
+            new StructureEdit(b.Id, b, new Dictionary<string, string?> { [StructureEdits.BacHours] = "-1" }),
+        ]);
+        Assert.True(budget.Single(r => r.Id == a.Id).Saved);
+        var rejected = budget.Single(r => r.Id == b.Id);
+        Assert.False(rejected.Saved);
+        Assert.Contains("ujemny", rejected.Message);
+        var schedule = Assert.Single(_service.Rows(ProjectDictionaries.ScheduleBudget, "M28"));
+        Assert.Equal((a.BudgetWp ?? a.P1s, "10", "1000"), (schedule["WP"], schedule["BAC HOURS"], schedule["BAC"]));
+
+        // Odznaczenie kilku WP naraz – przypisania i harmonogram usunięte jednym zapisem na słownik.
+        rows = Read().Rows;
+        var unmarked = _service.SaveStructureEdits("M28", inputs,
+            free.Select(f => rows.Single(r => r.Id == f.Id)).Select(r => new StructureEdit(r.Id, r, new Dictionary<string, string?> { [StructureEdits.Wp] = "false" })).ToList());
+        Assert.All(unmarked, r => Assert.True(r.Saved, r.Message));
+        Assert.Empty(_service.Rows(ProjectDictionaries.WpCam, "M28"));
+        Assert.Empty(_service.Rows(ProjectDictionaries.ScheduleBudget, "M28"));
+    }
+
+    [SqlFact]
     public void Structure_edit_is_not_blocked_by_existing_errors_and_legacy_wbs_with_wp_uses_new_code()
     {
         Assert.True(_store.Create("M28", "M28", ProjectTypes.Internal, Objectives()).Success);
@@ -381,10 +452,15 @@ public sealed class ProjectStoreAndServiceTests : IDisposable
         Assert.Equal(SaveStatus.Saved, dictionaries.Save(ProjectDictionaries.Base(ProjectDictionaries.WpCam),
             [new DictRow(null, null, new Dictionary<string, string?> { ["Element P1S"] = "XX-POZA.1", ["WP"] = "WP-X", ["CAM"] = "e1", ["Cost Category"] = null })], [], true, "M28").Status);
 
-        // Istniejący błąd innego wiersza nie blokuje zmiany; nowy błąd (WP bez CAM) – nadal blokuje.
-        var missing = _service.SaveStructureEdit("M28", inputs, Row("4D06WP000001"), new Dictionary<string, string?> { [StructureEdits.Wp] = "true" });
-        Assert.False(missing.Saved);
-        Assert.Contains("CAM", missing.Message);
+        // Istniejący błąd innego wiersza nie blokuje zmiany; nowy błąd (element P1S innego projektu) – nadal blokuje.
+        Assert.True(_store.Create("S70I", "S70I", ProjectTypes.Internal, new PoTree()).Success);
+        Assert.Equal(SaveStatus.Saved, dictionaries.Save(ProjectDictionaries.Base(ProjectDictionaries.WpCam),
+            [new DictRow(null, null, new Dictionary<string, string?> { ["Element P1S"] = "AC-CAB.6.38.01", ["WP"] = "WP-S", ["CAM"] = "e1", ["Cost Category"] = null })], [], true, "S70I").Status);
+        var owned = _service.SaveStructureEdit("M28", inputs, Row("4D06WP000001"), new Dictionary<string, string?> { [StructureEdits.Wp] = "true" });
+        Assert.False(owned.Saved);
+        Assert.Contains("należy do projektu S70I", owned.Message);
+        Assert.Equal(SaveStatus.Saved, dictionaries.Save(ProjectDictionaries.Base(ProjectDictionaries.WpCam), [],
+            dictionaries.Load(ProjectDictionaries.Base(ProjectDictionaries.WpCam), "S70I"), true, "S70I").Status);
         var assigned = _service.SaveStructureEdit("M28", inputs, Row("4D06WP000001"),
             new Dictionary<string, string?> { [StructureEdits.Wp] = "true", [StructureEdits.Cam] = "e123456" });
         Assert.True(assigned.Saved, assigned.Message);

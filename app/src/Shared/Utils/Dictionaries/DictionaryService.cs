@@ -72,10 +72,13 @@ public sealed class DictionaryService(IDictionaryStore store, IJournal journal)
     }
 
     /// <summary>Błędy (ERROR) bieżącego stanu słownika jako klucz wiersza + komunikat – do Save(knownErrors).</summary>
-    public IReadOnlySet<string> KnownErrors(DictionarySpec spec, string? project = null)
+    public IReadOnlySet<string> KnownErrors(DictionarySpec spec, string? project = null) => KnownErrors(spec, Load(spec, project));
+
+    /// <summary>Błędy (ERROR) stanu słownika już wczytanego (current) – bez ponownego odczytu z bazy.</summary>
+    public IReadOnlySet<string> KnownErrors(DictionarySpec spec, IReadOnlyList<DictRow> current)
     {
         var issues = new List<Issue>();
-        var rows = DictionaryValidator.Normalize(spec, Load(spec, project), issues);
+        var rows = DictionaryValidator.Normalize(spec, current, issues);
         issues.AddRange(DictionaryValidator.Validate(spec, rows));
         return issues.Where(i => i.Level == CheckLevel.Error).Select(i => Signature(spec, rows, i)).ToHashSet();
     }
@@ -240,7 +243,7 @@ public sealed class DictionaryService(IDictionaryStore store, IJournal journal)
             },
             c.Choices,
             ColumnNote(spec, c),
-            c.Lookup is { } code ? lookups[code].Select(o => (o.Value, o.Label)).ToList() : null)).ToList();
+            c.Lookup is { } code && lookups.TryGetValue(code, out var options) ? options.Select(o => (o.Value, o.Label)).ToList() : null)).ToList();
     }
 
     private static string ColumnNote(DictionarySpec spec, DictColumn column)
@@ -259,16 +262,22 @@ public sealed class DictionaryService(IDictionaryStore store, IJournal journal)
             ColumnType.Choice => $"jedna z: {string.Join(", ", column.Choices ?? [])}",
             _ => "tekst",
         });
-        if (column.Lookup is { } code)
+        if (column.Lookup is { } code && GlobalDictionaries.All.Any(s => s.Code == code))
             parts.Add($"wartość ze słownika {GlobalDictionaries.Get(code).Name} (arkusz „Listy”); imię i nazwisko zamieniane na USRID");
+        else if (column.Lookup is not null)
+            parts.Add("wartość ze słownika projektu (arkusz „Listy”)");
         if (column.PadNumericTo is { } pad)
             parts.Add($"numer uzupełniany zerami do {pad} znaków");
         return string.Join("; ", parts);
     }
 
-    /// <summary>Wartości słowników powiązanych z kolumnami słownika (DictColumn.Lookup) według kodu słownika.</summary>
+    /// <summary>
+    /// Wartości słowników globalnych powiązanych z kolumnami słownika (DictColumn.Lookup) według kodu słownika. Kolumna
+    /// powiązana ze słownikiem projektu (np. Kategorie WBS) – bez listy (wartość = klucz, zamiana opisu niepotrzebna).
+    /// </summary>
     public IReadOnlyDictionary<string, IReadOnlyList<LookupOption>> Lookups(DictionarySpec spec) =>
         spec.Columns.Select(c => c.Lookup).OfType<string>().Distinct()
+            .Where(code => GlobalDictionaries.All.Any(s => s.Code == code))
             .ToDictionary(code => code, code => GlobalDictionaries.LookupOptions(code, Load(GlobalDictionaries.Get(code))));
 
     /// <summary>Kolumny powiązane: opis (imię i nazwisko) → wartość (USRID), jak przy wpisaniu w tabeli; niejednoznaczny – ostrzeżenie.</summary>
@@ -281,7 +290,7 @@ public sealed class DictionaryService(IDictionaryStore store, IJournal journal)
         for (var i = 0; i < rows.Count; i++)
         {
             var values = rows[i].Values.ToDictionary(p => p.Key, p => p.Value);
-            foreach (var column in spec.Columns.Where(c => c.Lookup is not null))
+            foreach (var column in spec.Columns.Where(c => c.Lookup is not null && lookups.ContainsKey(c.Lookup)))
             {
                 var options = lookups[column.Lookup!];
                 var text = values.GetValueOrDefault(column.Name);

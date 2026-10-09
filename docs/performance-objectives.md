@@ -97,17 +97,42 @@ i budżetem (`StructureBuilder`).
   węzła (ten element jest pod swoim węzłem), więc każdy element P1S występuje raz. Element ze słownika „WP i CAM”,
   którego nie ma w `LOG.WBS` (np. bez PZLPROD), jest pod wierszem o najdłuższym pasującym kodzie, a bez niego –
   w grupie „Elementy P1S spoza struktury”.
-- **Kolumny:** Nazwa (drzewo, zamrożona), Element CES i P1S (domyślnie schowane – „+” / „−” w nagłówku Nazwa, jak
-  grupowanie kolumn w Excelu), WP (checkbox), CAM (lista osób), BAC HOURS, BAC MATERIAL, Baseline Start, Baseline Koniec
-  (RRRR-MM-DD), Braki. Kolumny mają stałą szerokość – przy kolejnych kolumnach tabela przewija się w poziomie. Za BAC
-  MATERIAL nie ma na razie kolumn (dawna Cost Category zniknęła z tabeli – zostaje w słowniku „WP i CAM”; co ma tu być –
-  do ustalenia).
+- **Kolumny w grupach** (`StructureColumns`) – jedna struktura WBS dla perspektywy operacyjnej (godziny) i finansowej
+  (koszty); grupy zwijane jak grupowanie kolumn w Excelu („−” nad pierwszą kolumną grupy, zwinięta grupa – kolumna
+  „+ Grupa”); Schedule, Operational EV i Financial EV domyślnie zwinięte. Opis każdej kolumny – podpowiedź nagłówka
+  i okno „Skróty i opis kolumn” (przycisk „?” nad tabelą). Kolumny z danych (PZLPROD, ACTUALS, wyliczone) – tylko do odczytu (nagłówek kursywą).
+
+  | Grupa | Kolumny |
+  |---|---|
+  | WBS Attributes | WBS Name (drzewo, zamrożona; poziom – wcięcie), CES Element i Legacy Element (P1S) (domyślnie schowane – „+” w nagłówku WBS Name), WP (checkbox), CAM (lista osób), Cost Category (lista kategorii projektu) |
+  | Schedule | Baseline Start, Baseline Finish (RRRR-MM-DD, „Harmonogram i budżet”); Actual Start (najwcześniejszy `GSTRI` zleceń), Actual Finish (najpóźniejszy `LTRMI`, gdy wszystkie zlecenia zamknięte – inaczej puste); element wirtualny – `DATA_REAL` operacji |
+  | Operational EV | BAC Hours (AHD: TECH ÷ produktywność IPT z 12 mies. + DJK), PV Hours (BAC Hours AHD WP rozłożone liniowo na dni robocze pn–pt baseline, stan na dziś), EV Hours (TECH_PON ÷ produktywność + DJK), AC Hours (CATS) |
+  | Materials | BAC Material („Harmonogram i budżet”), Actual Material (vAPD: dostarczone / wydane, USD bez narzutu Z_CLO) |
+  | Financial EV | BAC Hours baseline i BAC Cost („Harmonogram i budżet”), PV Cost (BAC Cost × udział dni roboczych baseline), EV Cost (BAC Cost × EV Hours ÷ BAC Hours AHD, najwyżej BAC Cost), ACWP |
+
+  Wartości z PZLPROD to suma elementów P1S poddrzewa wiersza (każdy element raz); PV i EV kosztowe – suma WP poddrzewa.
+  **Elementy wirtualne P1S** (np. Paint – słownik projektu „Elementy wirtualne P1S”): wiersz pod elementem nadrzędnym
+  (znacznik „wirtualny”, reguła w podpowiedzi nazwy); godziny i daty operacji zgodnych z regułą, odjęte od nadrzędnego
+  (suma nadrzędnego z poddrzewem bez zmian); WP, CAM, Cost Category, budżet i daty – jak na elemencie P1S; materiały
+  i ACWP – na nadrzędnym.
+  Dane produkcyjne są czytane na żywo (`IPzlProdSource.Production`, zakres P1S projektu zamiast filtra programu) przy
+  otwarciu projektu, „Odśwież mapowanie i koszty” i po zmianie Legacy WBS; chwila odczytu – w nagłówku ekranu
+  („Produkcja (PZLPROD) …”). Kolumny mają stałą szerokość – przy kolejnych kolumnach tabela przewija się w poziomie. Tabela kończy się na dole okna (wysokość
+  dopasowana do okna, strona bez przewijania – wiersze przewija tabela; przy zwiniętym menu – szersza); komunikat
+  o wklejeniu – nad tabelą, skróty klawiszowe i opis kolumn – okno „?”; nad tabelą daty danych RABIT i produkcji – osobna
+  linia pod nagłówkiem projektu.
 - **WP** to znacznik elementu P1S (wiersz z kodem P1S), który wskażą finansiści: zaznaczony element jest pakietem pracy
   i ma mieć koszty i budżet. Kodem nowego WP jest kod elementu P1S (WP z wcześniej wczytanego słownika zachowuje swój
   kod). WP nie jest osobnym poziomem drzewa.
 - **CAM** wybiera się z listy osób z wyszukiwaniem po fragmencie USRID albo imienia i nazwiska (słownik Osoby wczytywany
   z HR – `docs/slowniki.md`, rozdz. 2; ta sama lista co w tabeli słownika): zapisywany jest USRID, wyświetlane imię
   i nazwisko. CAM wpisany wcześniej spoza słownika jest na liście pod swoją wartością.
+- **Cost Category** – kategoria WP jako rodzaj kosztu (np. Production, Programs), żeby raportować nie tylko po elementach
+  WBS, ale i po kategoriach (wiele WP w jednej kategorii). Wybiera się ją z listy słownika projektu „Kategorie WBS”
+  (`docs/slowniki.md`, rozdz. 3 – edycja w zakładce Słowniki projektu); zapisywana w „WP i CAM” przy WP elementu (wybór
+  kategorii w wierszu bez WP zaznacza WP, odznaczenie WP ją usuwa). To nie jest globalny słownik Cost Category (numer
+  elementu kosztowego). Kategoria wpisana wcześniej spoza słownika (np. Labor / Material / Subcontract) jest na liście
+  pod swoją wartością; zapis takiej kategorii – WARNING.
 - **Sumy:** budżet i daty wiersza obejmują poddrzewo, każdy WP liczony raz; braki – element nakładki bez WP,
   WP bez budżetu.
 - **ACWP** (tylko do odczytu): koszt rzeczywisty narastająco z ostatniego importu ACTUALS (PLN, bez wykluczeń
@@ -119,13 +144,26 @@ i budżetem (`StructureBuilder`).
   pokazuje koszt elementów CES swojego poddrzewa, wiersz elementu P1S – koszt przypisany do WP poddrzewa. Koszt
   elementu CES projektu, którego nie ma w nakładce – „spoza nakładki”. Kafelki ACWP i „Koszt bez WP” w zakładce
   Wskaźniki. Koszty są czytane przy otwarciu projektu i „Odśwież mapowanie i koszty” (nie po każdym zapisie wiersza).
+  **Z kiedy są dane** – w nagłówku ekranu projektu: „Dane RABIT z … · import … · sprawdzone …” – data raportu w RABIT
+  (modyfikacja pliku ACTUALS), data importu i ostatniego pobrania z RABIT; podpowiedź – każdy plik osobno. Ponowne
+  pobranie raportu z tą samą treścią (import „pominięty” / „duplikat”) nie zmienia danych, ale przesuwa datę „dane z” na
+  nowszy raport – wiadomo, że dane są aktualne na tę datę (`CAN_LatestFiles` + `META_SourceFileSeen`).
   To podgląd – formalny koszt WP liczy przebieg (P3, `ev.KosztWP`).
+- **Pasek nad tabelą** – ikony z opisem w podpowiedzi: edycja Performance Objectives, dołożenie z Excela (eksport SAP),
+  pobranie struktury do Excela, rozwiń / zwiń wszystko, odświeżenie mapowania i kosztów, cofnięcie wklejenia, odrzucenie
+  niezapisanych zmian.
+- **Struktura do Excela** – arkusz „Struktura”: całe drzewo (także zwinięte wiersze) w kolejności tabeli, nazwa wcięta
+  według poziomu, kolumny Poziom, Rodzaj, Element CES, P1S, WP, CAM (USRID oraz imię i nazwisko), Cost Category, WP
+  w poddrzewie, BAC HOURS, BAC MATERIAL, BAC, Baseline Start, Baseline Koniec, ACWP, Braki, Uwagi (wartości jak w tabeli –
+  sumy poddrzewa). Eksportowany jest stan zapisany; przy niezapisanych zmianach – najpierw zapis albo „Odrzuć niezapisane”.
 - **Edycja w komórkach** (zapis od razu po zatwierdzeniu wiersza – Enter albo przejście do innego wiersza, bez
-  osobnego „Zapisz”; Esc cofa): nazwa i `Legacy WBS` węzła → nakładka; WP i CAM wiersza z kodem P1S → „WP i CAM”
+  osobnego „Zapisz”; Esc cofa): nazwa i `Legacy WBS` węzła → nakładka; WP, CAM i Cost Category wiersza z kodem P1S → „WP i CAM”
   (klucz – kod P1S; zaznaczenie WP albo wybór CAM tworzy przypisanie, odznaczenie WP je usuwa razem z budżetem WP, jeśli
-  WP nie jest przypisany do innego elementu; WP wymaga CAM – zaznacz WP i wybierz CAM przed opuszczeniem wiersza);
-  BAC HOURS, BAC MATERIAL, Baseline Start, Baseline Koniec wiersza, którego sumy to jego własny WP → „Harmonogram
-  i budżet” (klucz – WP). Walidacja jak przy zapisie słownika: ERROR blokuje zapis (zmiany zostają w wierszu, komunikat
+  WP nie jest przypisany do innego elementu; WP można zapisać bez CAM – brak „WP bez CAM”, CAM uzupełnia się później,
+  przebieg blokuje gotowość projektu);
+  BAC HOURS, BAC MATERIAL, BAC, Baseline Start, Baseline Koniec wiersza z jednym WP w poddrzewie – własnym albo jedynym
+  pod nim (np. węzeł nakładki nad elementem P1S z WP) → „Harmonogram i budżet” tego WP (klucz – WP); wiersz z kilkoma WP
+  w poddrzewie pokazuje sumę i nie jest edytowalny. Walidacja jak przy zapisie słownika: ERROR blokuje zapis (zmiany zostają w wierszu, komunikat
   nad tabelą), WARNING nie wstrzymuje. Błąd, który słownik miał już wcześniej w innym wierszu (np. element poza zakresem
   po odświeżeniu mapowania), nie blokuje zmiany – jest ostrzeżeniem. Zmiana `Legacy WBS` razem z WP / CAM w jednym
   wierszu przypisuje WP do nowego kodu P1S. Kolumny zablokowane do edycji – lista `StructureEdits.Locked` (do ustalenia).
@@ -136,7 +174,14 @@ i budżetem (`StructureBuilder`).
   w poddrzewie), budżet i daty są od razu edytowalne i zapisują się pod nowym WP. Ctrl+Z / „Cofnij wklejenie” –
   cofnięcie ostatniego wklejenia, wyczyszczenia albo wypełnienia (do 20 kroków; komórki
   dostają wartości sprzed operacji i wiersze są ponownie zapisywane), Alt+→ / Alt+← – rozwinięcie / zwinięcie wiersza. Komórka liczby / daty z błędem jest podświetlona od razu po wpisaniu.
-  Zmienione wiersze są zapisywane po kolei (kolejka), po serii – jedno odświeżenie; edycja w toku jest zatwierdzana przy
+  **Zapis wsadowy:** wiersze zatwierdzone w krótkim czasie (kilka kliknięć WP w ciągu 0,3 s, Enter w kolejnych wierszach,
+  wklejenie bloku, Delete, Ctrl+D, Ctrl+Z) idą jednym zapisem na słownik – „WP i CAM” i „Harmonogram i budżet” wczytane
+  raz, zmiany wszystkich wierszy nakładane po kolei, jedna transakcja i jeden wpis w dzienniku na słownik
+  (`ProjectService.SaveStructureEdits`); nazwa i `Legacy WBS` – wiersz po wierszu. Paczka z błędem (ERROR) albo konfliktem
+  jest zapisywana wiersz po wierszu – poprawne wiersze się zapisują, błędne zostają żółte z komunikatem. Po serii – jedno
+  odświeżenie danych projektu (każdy słownik czytany raz; osoby, nakładki innych projektów, foldery i koszty – z pamięci
+  ekranu, ponownie przy „Odśwież mapowanie i koszty”). Pomiar (SQL Server lokalnie, 4 wiersze): zapis 48 → 11 zapytań,
+  odświeżenie 23 → 6 zapytań; liczba zapytań zapisu nie rośnie z liczbą wierszy. Edycja w toku jest zatwierdzana przy
   wyjściu z tabeli (przycisk, inna zakładka). Wiersz z niezapisanymi zmianami (zapis w toku albo nieudany) jest żółty
   i zachowuje zmiany po odświeżeniu; powrót do listy i edycja Performance Objectives czekają na zapis. Odznaczenie WP
   z budżetem lub datami wymaga potwierdzenia (usuwa harmonogram WP).
