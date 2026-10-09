@@ -249,6 +249,29 @@ public sealed class ProjectStoreAndServiceTests : IDisposable
         Assert.False(negative.Saved);
         Assert.Contains("ujemny", negative.Message);
 
+        // Cost Category z listy „Kategorie WBS” projektu; kategoria spoza słownika – zapis z ostrzeżeniem.
+        var categories = new[] { "Production", "Programs" }.Select(c => new DictRow(null, null, new Dictionary<string, string?> { ["Cost Category"] = c, ["Opis"] = null })).ToList();
+        Assert.Equal(SaveStatus.Saved, _service.SaveDictionary(ProjectDictionaries.WbsCategories, _service.Context("M28", _store.Objectives("M28"), null, inputs), categories, [], "M28").Status);
+        Assert.Equal(["Production", "Programs"], _service.CategoryLookups("M28").Select(o => o.Value));
+        Assert.Equal(["Production", "Programs"], _service.Context("M28", _store.Objectives("M28"), null, inputs).Categories!.Order());
+        var categorized = _service.SaveStructureEdit("M28", inputs, Row("4D06WP000001"), new Dictionary<string, string?> { [StructureEdits.CostCategory] = "Production" });
+        Assert.True(categorized.Saved, categorized.Message);
+        Assert.Equal(("AC-CAB.6.38.01", "Production"), (Row("4D06WP000001").Wp, Row("4D06WP000001").CostCategory));
+        var outside = _service.SaveStructureEdit("M28", inputs, Row("4D06WP000001"), new Dictionary<string, string?> { [StructureEdits.CostCategory] = "Overhead" });
+        Assert.True(outside.Saved, outside.Message);
+        Assert.Equal("Overhead", Row("4D06WP000001").CostCategory);
+        Assert.Equal(["Production", "Programs", "Overhead"], ProjectService.CategoryOptions(_service.CategoryLookups("M28"), _service.Rows(ProjectDictionaries.WpCam, "M28")).Select(o => o.Value));
+        var export = Path.Combine(Path.GetTempPath(), $"pzlev-categories-{Guid.NewGuid():N}.xlsx");
+        try
+        {
+            _service.ExportDictionaries(export, "M28", ProjectTypes.Internal, _store.Objectives("M28"), inputs);   // lista kategorii projektu w arkuszu „Listy”
+            Assert.Contains("Kategorie WBS", PzlEv.Shared.Utils.Files.TabularFileReader.SheetNames(export));
+        }
+        finally
+        {
+            File.Delete(export);
+        }
+
         // Odznaczenie WP – przypisanie i budżet WP usunięte.
         Assert.True(_service.SaveStructureEdit("M28", inputs, Row("4D06WP000001"), new Dictionary<string, string?> { [StructureEdits.Wp] = "false" }).Saved);
         Assert.Empty(_service.Rows(ProjectDictionaries.WpCam, "M28"));

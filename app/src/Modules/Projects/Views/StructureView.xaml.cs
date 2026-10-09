@@ -42,7 +42,8 @@ public partial class StructureView : UserControl
     private static readonly IValueConverter CellBackground = new LevelBrushConverter();
 
     private readonly List<DataGridColumn> _codeColumns = [];
-    private readonly CamColumn _cam = new();
+    private readonly LookupColumn _cam = new(StructureEdits.Cam, "CAM", 180);
+    private readonly LookupColumn _category = new(StructureEdits.CostCategory, "Cost Category", 150);
     private bool _codesVisible;
     private bool _editing;
     private (string Id, int Column, bool Focused)? _current;
@@ -64,7 +65,8 @@ public partial class StructureView : UserControl
                 model.EndEditRequested += CommitEdit;
                 model.RowsReplacing += RememberCurrent;
                 model.RowsReplaced += RestoreCurrent;
-                _cam.Persons = model.Persons;
+                _cam.Options = model.Persons;
+                _category.Options = model.Categories;
             }
         };
     }
@@ -104,6 +106,7 @@ public partial class StructureView : UserControl
             CellTemplate = (DataTemplate)Resources["WpCell"],
         });
         RowsGrid.Columns.Add(_cam);
+        RowsGrid.Columns.Add(_category);
         foreach (var column in Budget)
             TextColumn(column);
         // ACWP – koszt rzeczywisty z ostatniego importu ACTUALS (tylko do odczytu; nieprzypisany do WP – w Brakach).

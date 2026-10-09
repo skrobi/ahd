@@ -98,16 +98,21 @@ i budżetem (`StructureBuilder`).
   którego nie ma w `LOG.WBS` (np. bez PZLPROD), jest pod wierszem o najdłuższym pasującym kodzie, a bez niego –
   w grupie „Elementy P1S spoza struktury”.
 - **Kolumny:** Nazwa (drzewo, zamrożona), Element CES i P1S (domyślnie schowane – „+” / „−” w nagłówku Nazwa, jak
-  grupowanie kolumn w Excelu), WP (checkbox), CAM (lista osób), BAC HOURS, BAC MATERIAL, Baseline Start, Baseline Koniec
-  (RRRR-MM-DD), Braki. Kolumny mają stałą szerokość – przy kolejnych kolumnach tabela przewija się w poziomie. Za BAC
-  MATERIAL nie ma na razie kolumn (dawna Cost Category zniknęła z tabeli – zostaje w słowniku „WP i CAM”; co ma tu być –
-  do ustalenia).
+  grupowanie kolumn w Excelu), WP (checkbox), CAM (lista osób), Cost Category (lista kategorii projektu), BAC HOURS,
+  BAC MATERIAL, Baseline Start, Baseline Koniec (RRRR-MM-DD), ACWP, Braki. Kolumny mają stałą szerokość – przy kolejnych
+  kolumnach tabela przewija się w poziomie.
 - **WP** to znacznik elementu P1S (wiersz z kodem P1S), który wskażą finansiści: zaznaczony element jest pakietem pracy
   i ma mieć koszty i budżet. Kodem nowego WP jest kod elementu P1S (WP z wcześniej wczytanego słownika zachowuje swój
   kod). WP nie jest osobnym poziomem drzewa.
 - **CAM** wybiera się z listy osób z wyszukiwaniem po fragmencie USRID albo imienia i nazwiska (słownik Osoby wczytywany
   z HR – `docs/slowniki.md`, rozdz. 2; ta sama lista co w tabeli słownika): zapisywany jest USRID, wyświetlane imię
   i nazwisko. CAM wpisany wcześniej spoza słownika jest na liście pod swoją wartością.
+- **Cost Category** – kategoria WP jako rodzaj kosztu (np. Production, Programs), żeby raportować nie tylko po elementach
+  WBS, ale i po kategoriach (wiele WP w jednej kategorii). Wybiera się ją z listy słownika projektu „Kategorie WBS”
+  (`docs/slowniki.md`, rozdz. 3 – edycja w zakładce Słowniki projektu); zapisywana w „WP i CAM” przy WP elementu (wybór
+  kategorii w wierszu bez WP zaznacza WP, odznaczenie WP ją usuwa). To nie jest globalny słownik Cost Category (numer
+  elementu kosztowego). Kategoria wpisana wcześniej spoza słownika (np. Labor / Material / Subcontract) jest na liście
+  pod swoją wartością; zapis takiej kategorii – WARNING.
 - **Sumy:** budżet i daty wiersza obejmują poddrzewo, każdy WP liczony raz; braki – element nakładki bez WP,
   WP bez budżetu.
 - **ACWP** (tylko do odczytu): koszt rzeczywisty narastająco z ostatniego importu ACTUALS (PLN, bez wykluczeń
@@ -121,7 +126,7 @@ i budżetem (`StructureBuilder`).
   Wskaźniki. Koszty są czytane przy otwarciu projektu i „Odśwież mapowanie i koszty” (nie po każdym zapisie wiersza).
   To podgląd – formalny koszt WP liczy przebieg (P3, `ev.KosztWP`).
 - **Edycja w komórkach** (zapis od razu po zatwierdzeniu wiersza – Enter albo przejście do innego wiersza, bez
-  osobnego „Zapisz”; Esc cofa): nazwa i `Legacy WBS` węzła → nakładka; WP i CAM wiersza z kodem P1S → „WP i CAM”
+  osobnego „Zapisz”; Esc cofa): nazwa i `Legacy WBS` węzła → nakładka; WP, CAM i Cost Category wiersza z kodem P1S → „WP i CAM”
   (klucz – kod P1S; zaznaczenie WP albo wybór CAM tworzy przypisanie, odznaczenie WP je usuwa razem z budżetem WP, jeśli
   WP nie jest przypisany do innego elementu; WP wymaga CAM – zaznacz WP i wybierz CAM przed opuszczeniem wiersza);
   BAC HOURS, BAC MATERIAL, Baseline Start, Baseline Koniec wiersza, którego sumy to jego własny WP → „Harmonogram
