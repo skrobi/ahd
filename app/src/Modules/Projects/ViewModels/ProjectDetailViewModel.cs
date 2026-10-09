@@ -5,6 +5,7 @@ using PzlEv.Modules.Projects.Models;
 using PzlEv.Modules.Projects.Services;
 using PzlEv.Shared.Models;
 using PzlEv.Shared.Models.Dictionaries;
+using PzlEv.Shared.Models.PzlProd;
 using PzlEv.Shared.Utils.Ui.Dialogs;
 using PzlEv.Shared.Utils.Ui.Dictionaries;
 using PzlEv.Shared.Utils.Ui.Mvvm;
@@ -36,6 +37,7 @@ public sealed class ProjectDetailViewModel : ObservableObject
     private bool _ownersLoaded;
     private (Issue Structure, Issue CamAccess)? _folderChecks;
     private ActualsFreshness? _actuals;   // z kiedy są dane ACTUALS – czytane razem z kosztami
+    private ProductionData? _production;  // PZLPROD na żywo (vAHDD, vAPD) – przy otwarciu, „Odśwież” i po zmianie Legacy WBS
     private bool _isEditingObjectives;
     private bool _isReady;
     private DictionaryPanelViewModel? _selectedDictionary;
@@ -101,6 +103,14 @@ public sealed class ProjectDetailViewModel : ObservableObject
     public string DataInfo => _actuals?.Summary ?? "Dane RABIT: wczytywanie…";
 
     public string DataInfoDetails => _actuals?.Details ?? "";
+
+    /// <summary>Dane produkcyjne (PZLPROD na żywo): chwila odczytu albo powód braku (nagłówek).</summary>
+    public string ProductionInfo => _production is null ? "Produkcja: wczytywanie…"
+        : _production.Error is null ? $"Produkcja (PZLPROD) {_production.ReadAt:yyyy-MM-dd HH:mm}" : "Produkcja: brak danych";
+
+    public string ProductionDetails => _production is null ? ""
+        : (_production.Error ?? $"Operational EV i Actual Material odczytane na żywo z PZLPROD (LOG.vAHDD, LOG.vAPD) o {_production.ReadAt:yyyy-MM-dd HH:mm} – " +
+            $"elementów P1S z danymi: {_production.ByPspnr.Count}. Ponowny odczyt: „Odśwież mapowanie i koszty”.") + "\n" + ProductionData.DatesNote;
 
     public string Subtitle => $"{ProjectTypes.Label(Project.Type)} · utworzony {Project.RecordedAt:yyyy-MM-dd HH:mm} przez {Project.RecordedBy}";
 
@@ -206,7 +216,7 @@ public sealed class ProjectDetailViewModel : ObservableObject
         IReadOnlyList<LookupOption> Categories,
         IReadOnlyList<(DictRow Row, bool Inherited)>? Table, IReadOnlyDictionary<string, IReadOnlyList<LookupOption>> Lookups,
         IReadOnlyDictionary<string, decimal> Costs, string? CostsError, IReadOnlyList<LookupOption> PersonLookups, (Issue Structure, Issue CamAccess) FolderChecks,
-        ActualsFreshness Actuals);
+        ActualsFreshness Actuals, ProductionData Production);
 
     /// <summary>
     /// Wczytuje stan projektu w tle (struktura zachowuje rozwinięcie i zaznaczenie). Tabela wybranego słownika – tylko
@@ -224,6 +234,7 @@ public sealed class ProjectDetailViewModel : ObservableObject
         var cachedFolders = refreshMapping ? null : _folderChecks;
         var cachedOwners = refreshMapping || !_ownersLoaded ? null : _owners;
         var cachedActuals = refreshMapping ? null : _actuals;
+        var cachedProduction = refreshMapping ? null : _production;
         await Try(async () =>
         {
             var snapshot = await Busy.Run(refreshMapping ? "Odświeżanie mapowania CES ↔ P1S i struktury projektu…" : "Wczytywanie projektu, mapowania i struktury…", () =>
@@ -235,7 +246,8 @@ public sealed class ProjectDetailViewModel : ObservableObject
                 var rows = states.ToDictionary(s => s.Key, s => s.Value.Rows);
                 var wpCam = rows.GetValueOrDefault(ProjectDictionaries.WpCam) ?? [];
                 var (costs, costsError) = refreshMapping || _costs is null ? ReadCosts() : (_costs, _costsError);
-                var structure = ProjectService.Structure(tree, mapping, resolved, wpCam, rows.GetValueOrDefault(ProjectDictionaries.ScheduleBudget) ?? [], costs);
+                var production = cachedProduction ?? _service.Production(tree, mapping, resolved);
+                var structure = ProjectService.Structure(tree, mapping, resolved, wpCam, rows.GetValueOrDefault(ProjectDictionaries.ScheduleBudget) ?? [], costs, production);
                 var persons = cachedPersons ?? _service.PersonLookups();
                 var folderChecks = cachedFolders ?? _service.FolderChecks(Code);
                 var categories = ProjectService.CategoryLookups(rows.GetValueOrDefault(ProjectDictionaries.WbsCategories) ?? []);
@@ -245,7 +257,7 @@ public sealed class ProjectDetailViewModel : ObservableObject
                     states.ToDictionary(s => s.Key, s => (s.Value.Rows.Count, s.Value.LastChange)), structure, ProjectService.PersonOptions(persons, wpCam),
                     ProjectService.CategoryOptions(categories, wpCam),
                     table is null ? null : _service.EditableRows(table, rows.TryGetValue(table, out var tableRows) ? tableRows : _service.Rows(table, Code)),
-                    ProjectService.Lookups(persons, categories), costs, costsError, persons, folderChecks, cachedActuals ?? ReadActuals());
+                    ProjectService.Lookups(persons, categories), costs, costsError, persons, folderChecks, cachedActuals ?? ReadActuals(), production);
             });
             if (version != _reloads)
                 return;   // w międzyczasie ruszyło nowsze odświeżenie – starszy wynik pomijany
@@ -257,6 +269,9 @@ public sealed class ProjectDetailViewModel : ObservableObject
             _persons = snapshot.PersonLookups;
             _folderChecks = snapshot.FolderChecks;
             _actuals = snapshot.Actuals;
+            _production = snapshot.Production;
+            OnPropertyChanged(nameof(ProductionInfo));
+            OnPropertyChanged(nameof(ProductionDetails));
             OnPropertyChanged(nameof(DataInfo));
             OnPropertyChanged(nameof(DataInfoDetails));
             Objectives.MappingInfo = _mapping.Describe;
@@ -358,6 +373,8 @@ public sealed class ProjectDetailViewModel : ObservableObject
                     if (next.Changes.Count == 0 || !ConfirmWpRemoval(next))
                         continue;
                     edits.Add(new StructureEdit(next.Id, next.Row, next.Changes.ToDictionary(c => c.Key, c => c.Value)));
+                    if (next.Changes.ContainsKey(StructureEdits.P1s))
+                        _production = null;   // zmiana Legacy WBS zmienia zakres P1S – dane produkcyjne czytane ponownie
                     names[next.Id] = next.Row.Name;
                 }
                 if (edits.Count == 0)

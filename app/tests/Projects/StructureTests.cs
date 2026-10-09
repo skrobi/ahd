@@ -210,6 +210,45 @@ public sealed class StructureTests
     }
 
     [Fact]
+    public void Planned_value_spreads_budget_over_working_days_of_baseline()
+    {
+        Assert.Equal(5, EarnedValue.WorkingDays(new DateOnly(2026, 10, 5), new DateOnly(2026, 10, 11)));    // pn–nd
+        Assert.Equal(10, EarnedValue.WorkingDays(new DateOnly(2026, 10, 5), new DateOnly(2026, 10, 16)));
+        Assert.Equal(0, EarnedValue.WorkingDays(new DateOnly(2026, 10, 10), new DateOnly(2026, 10, 11)));   // weekend
+        Assert.Equal(0m, EarnedValue.Elapsed("2026-10-05", "2026-10-16", new DateOnly(2026, 10, 1)));       // przed startem
+        Assert.Equal(0.5m, EarnedValue.Elapsed("2026-10-05", "2026-10-16", new DateOnly(2026, 10, 11)));    // 5 z 10 dni roboczych
+        Assert.Equal(1m, EarnedValue.Elapsed("2026-10-05", "2026-10-16", new DateOnly(2026, 11, 1)));       // po końcu
+        Assert.Null(EarnedValue.Elapsed(null, "2026-10-16", new DateOnly(2026, 10, 11)));                   // brak daty
+        Assert.Null(EarnedValue.Elapsed("2026-10-16", "2026-10-05", new DateOnly(2026, 10, 11)));           // zła kolejność
+    }
+
+    [Fact]
+    public void Production_values_roll_up_and_give_planned_and_earned_value_of_wp()
+    {
+        // WP-1 na AC-CAB.6.38.07 (PSPNR 101) – pod nim XYZ-1 (102); produkcja na obu elementach.
+        DictRow[] wpCam = [Wp("AC-CAB.6.38.07", "WP-1")];
+        DictRow[] schedule = [Budget("WP-1", "100", null, "2026-10-05", "2026-10-16", "10000")];
+        var production = new ProductionData(new Dictionary<string, ProductionValues>
+        {
+            ["101"] = new("101", AcHours: 10, BacHours: 60, EvHours: 20, ActualMaterial: 500),
+            ["102"] = new("102", AcHours: 5, BacHours: 40, EvHours: 30, ActualMaterial: null),
+        }, DateTimeOffset.Now);
+        var structure = StructureBuilder.Build(Objectives(), ProjectService.Resolve(Objectives(), Inputs()), Inputs().P1s, wpCam, schedule,
+            production: production, statusDate: new DateOnly(2026, 10, 11));
+
+        var leaf = Of(structure, "p1s:XYZ-1");
+        Assert.Equal((40m, 30m, 5m, (decimal?)null), (leaf.OpsBacHours, leaf.EvHours, leaf.AcHours, leaf.ActualMaterial));
+        var wp = Of(structure, "p1s:AC-CAB.6.38.07");
+        Assert.Equal((100m, 50m, 15m, 500m), (wp.OpsBacHours, wp.EvHours, wp.AcHours, wp.ActualMaterial));   // suma poddrzewa
+        Assert.Equal(50m, wp.PvHours);      // BAC Hours (AHD) 100 × 5/10 dni roboczych
+        Assert.Equal(5000m, wp.PvCost);     // BAC Cost 10 000 × 0,5
+        Assert.Equal(5000m, wp.EvCost);     // BAC Cost × EV/BAC = 10 000 × 50/100
+        Assert.Equal((100m, 50m, 5000m), (Of(structure, "4D06WP.RA").OpsBacHours, Of(structure, "4D06WP.RA").PvHours, Of(structure, "4D06WP.RA").EvCost));
+        Assert.Null(Of(structure, "4D06WP000002").OpsBacHours);   // element bez danych produkcyjnych – puste, nie 0
+        Assert.Null(StructureBuilder.Build(Objectives(), ProjectService.Resolve(Objectives(), Inputs()), Inputs().P1s, wpCam, schedule).Rows.First().PvHours);
+    }
+
+    [Fact]
     public void Structure_export_has_whole_tree_with_all_columns()
     {
         DictRow[] wpCam = [Row(("Element P1S", "XYZ-1"), ("WP", "WP-1"), ("CAM", "e123456"), ("Cost Category", "Production"))];
@@ -224,11 +263,11 @@ public sealed class StructureTests
         object? Cell(string column) => leaf[header.IndexOf(column)];
         Assert.Equal(("element P1S", "WP-1", "e123456", "Anna Nowak", "Production"), (Cell("Rodzaj"), Cell("WP"), Cell("CAM"), Cell("CAM – imię i nazwisko"), Cell("Cost Category")));
         Assert.Equal((10m, 100m, 1000m, new DateOnly(2026, 1, 1), new DateOnly(2026, 6, 30)),
-            (Cell("BAC HOURS"), Cell("BAC MATERIAL"), Cell("BAC"), Cell("Baseline Start"), Cell("Baseline Koniec")));
-        Assert.StartsWith(new string(' ', structure.Rows.Single(r => r.Id == "p1s:XYZ-1").Depth * 2), (string)Cell("Nazwa")!);
+            (Cell("BAC Hours baseline"), Cell("BAC Material"), Cell("BAC Cost"), Cell("Baseline Start"), Cell("Baseline Finish")));
+        Assert.StartsWith(new string(' ', structure.Rows.Single(r => r.Id == "p1s:XYZ-1").Depth * 2), (string)Cell("WBS Name")!);
         // Wiersz bez WP w poddrzewie – budżet pusty (nie 0).
         var empty = rows[structure.Rows.ToList().FindIndex(r => r.Wps.Count == 0)];
-        Assert.Null(empty[header.IndexOf("BAC HOURS")]);
+        Assert.Null(empty[header.IndexOf("BAC Hours baseline")]);
     }
 
     [Fact]

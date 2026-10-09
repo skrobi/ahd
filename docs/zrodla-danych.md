@@ -250,6 +250,17 @@ Z_KAT_ZBIORCZA
   `_PSPNR` i `_VORNR` (ta ostatnia wywołuje `uspUpdateZMTO`). Status odświeżenia i błędy zapisują
   `StatusAktualizacjiRaportow`, `ReportErrorInfo` i `TableList` – na tej podstawie etap P0 sprawdza świeżość
   danych produkcyjnych.
+- **Odczyt na żywo w strukturze projektu** (`SqlPzlProdSource.Production`, `docs/performance-objectives.md`, rozdz. 4.2) –
+  wzorowany na raporcie produkcyjnym S70MR z serwera produkcyjnego, z filtrem programu (`Z_OPIS`, `SERNR_LO`)
+  zastąpionym zakresem P1S projektu (PSPNR w tabeli tymczasowej sesji – bez praw zapisu w PZLPROD):
+  - godziny `LOG.vAHDD` po PSPNR: AC = `CATS`; BAC = `TECH` ÷ produktywność IPT + DJK; EV = `TECH_PON` ÷ produktywność + DJK;
+    produktywność IPT = Σ `CzTechPon` ÷ Σ `CzRzecz` z `LOG.vAHDD_PL_CPI` z ostatnich 12 miesięcy (`DataZakonczeniaOperacji`),
+    brak – 1; DJK (godziny jakości) = % godzin TECH / TECH_PON według stanowiska (`LEFT(IPT, 2)`): W2–W4 10%, W5 15%, W6 20%;
+  - materiały `LOG.vAPD`: wartość dostarczona / wydana (`STATUS` DOST, WYD) = Σ `NETWR_USD` ÷ (1 + `Z_CLO`), USD;
+  - wiersze „Paint” (Hangar W20, w raporcie osobny PSPNR `.1`) – w swoim elemencie P1S; TEMPO (`extCES.TEMPO1464`) –
+    poza strukturą.
+  Stałe (DJK, okno produktywności) są na razie w zapytaniu – docelowo słownik (O49). Daty rzeczywiste (Actual Start /
+  Finish) – kolumny dat `vAHDD` do ustalenia (O10).
 
 ### 6.1 Istniejące obiekty na `splmcd03`
 
@@ -305,7 +316,8 @@ Kontrole danych względem okresu przebiegu i słowników – `docs/pipeline-fazy
 | # | Kwestia |
 |---|---|
 | O7 | Czy RABIT może eksportować CSV/TXT? (CSV preferowany) |
-| O10 | Źródło zaawansowania z produkcji (`vAHDD`) – potwierdzenie i definicja widoku |
+| O10 | Źródło zaawansowania z produkcji (`vAHDD`) – potwierdzenie i definicja widoku; kolumny dat dla Actual Start / Finish |
+| O49 | Stałe raportu produkcyjnego (DJK według stanowiska, okno produktywności IPT, statusy TEMPO) – słownik z historią zamiast wartości w zapytaniu |
 | O27 | Zawartość pozostałych raportów RABIT (zobowiązania, „PZL roll”, „hedge”, „workaround”), ich prefiksy i definicje źródeł; układ `ACTUALS_*` – rozdz. 4 |
 | O28 | Które dane pochodzą z Cobra i w jakiej formie |
 | O38 | Wycofanie pliku, którego RABIT już nie generuje (dziś jego ostatnia wersja pozostaje najnowsza) |

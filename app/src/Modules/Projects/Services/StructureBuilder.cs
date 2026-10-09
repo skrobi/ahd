@@ -37,13 +37,32 @@ public static class StructureBuilder
         public List<Item> Children { get; } = [];
         public HashSet<string> Wps { get; } = new(StringComparer.OrdinalIgnoreCase);
         public decimal OwnCost { get; set; }
+        public ProductionValues? OwnProduction { get; set; }
+        public ProductionSum Production { get; set; }
         public decimal Cost { get; set; }
         public string? CostGap { get; set; }
     }
 
-    public static ProjectStructure Build(PoTree tree, IReadOnlyDictionary<long, MappingResult> mapping, IReadOnlyList<P1sElement>? p1s,
-        IReadOnlyList<DictRow> wpCam, IReadOnlyList<DictRow> schedule, IReadOnlyDictionary<string, decimal>? costs = null)
+    /// <summary>Suma wartości produkcyjnych (null – żaden element nie ma danych).</summary>
+    private readonly record struct ProductionSum(decimal? Ac, decimal? Bac, decimal? Ev, decimal? Material)
     {
+        public ProductionSum Add(ProductionValues? v) => v is null ? this
+            : new(Plus(Ac, v.AcHours), Plus(Bac, v.BacHours), Plus(Ev, v.EvHours), Plus(Material, v.ActualMaterial));
+
+        public ProductionSum Add(ProductionSum v) => new(Plus(Ac, v.Ac), Plus(Bac, v.Bac), Plus(Ev, v.Ev), Plus(Material, v.Material));
+
+        private static decimal? Plus(decimal? a, decimal? b) => a is null ? b : b is null ? a : a + b;
+    }
+
+    /// <param name="production">Wartości produkcyjne z PZLPROD (Operational EV, materiały) – null: kolumny puste.</param>
+    /// <param name="statusDate">Dzień stanu dla PV (domyślnie dziś).</param>
+    public static ProjectStructure Build(PoTree tree, IReadOnlyDictionary<long, MappingResult> mapping, IReadOnlyList<P1sElement>? p1s,
+        IReadOnlyList<DictRow> wpCam, IReadOnlyList<DictRow> schedule, IReadOnlyDictionary<string, decimal>? costs = null,
+        ProductionData? production = null, DateOnly? statusDate = null)
+    {
+        var today = statusDate ?? DateOnly.FromDateTime(DateTime.Today);
+        var productionOf = (production?.ByPspnr ?? new Dictionary<string, ProductionValues>())
+            .GroupBy(p => MappingKeys.Key(p.Key)).ToDictionary(g => g.Key, g => g.First().Value);
         var budgets = schedule.Where(r => r["WP"] is not null).GroupBy(r => r["WP"]!, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
         var assignments = wpCam.Where(r => r["Element P1S"] is not null).GroupBy(r => MappingKeys.Key(r["Element P1S"]))
@@ -180,6 +199,29 @@ public static class StructureBuilder
         foreach (var root in roots)
             Assign(root);
 
+        // Produkcja (PZLPROD): element P1S wiersza → PSPNR → wartości; sumy poddrzewa (każdy element P1S jest raz w drzewie).
+        // WP: wartości poddrzewa wiersza z własnym WP – podstawa PV Hours, EV Cost.
+        var wpProduction = new Dictionary<string, ProductionSum>(StringComparer.OrdinalIgnoreCase);
+        ProductionSum Produce(Item item)
+        {
+            if (item.P1s is not null && byCode.GetValueOrDefault(MappingKeys.Key(item.P1s)) is { } element)
+                item.OwnProduction = productionOf.GetValueOrDefault(MappingKeys.Key(element.Pspnr));
+            item.Production = item.Children.Aggregate(new ProductionSum().Add(item.OwnProduction), (sum, child) => sum.Add(Produce(child)));
+            if (item.P1s is not null && assignments.GetValueOrDefault(MappingKeys.Key(item.P1s))?["WP"] is { } ownWp)
+                wpProduction[ownWp] = item.Production;
+            return item.Production;
+        }
+        foreach (var root in roots)
+            Produce(root);
+        decimal? Elapsed(string wp) => budgets.GetValueOrDefault(wp) is { } b ? EarnedValue.Elapsed(b["Baseline Start"], b["Baseline Koniec"], today) : null;
+        decimal? Sum(IEnumerable<string> wps, Func<string, decimal?> value) =>
+            wps.Select(value).Aggregate((decimal?)null, (sum, v) => v is null ? sum : (sum ?? 0) + v);
+        decimal? PvHours(string wp) => wpProduction.GetValueOrDefault(wp).Bac * Elapsed(wp);
+        decimal? BacCost(string wp) => budgets.GetValueOrDefault(wp) is { } b && decimal.TryParse(b["BAC"], System.Globalization.NumberStyles.Number,
+            System.Globalization.CultureInfo.InvariantCulture, out var v) ? v : null;
+        decimal? PvCost(string wp) => BacCost(wp) * Elapsed(wp);
+        decimal? EvCost(string wp) => wpProduction.GetValueOrDefault(wp) is { Bac: > 0 } p && p.Ev is { } ev ? BacCost(wp) * Math.Min(1, ev / p.Bac.Value) : null;
+
         var rows = new List<StructureRow>();
         void Emit(Item item, string? parentId, int depth)
         {
@@ -198,7 +240,8 @@ public static class StructureBuilder
             var acwp = item.Kind == GridRowKind.Objective ? item.Cost : wps.Sum(w => wpCost.GetValueOrDefault(w));
             rows.Add(new StructureRow(item.Id, parentId, depth, item.Kind, item.NodeKey, item.IsVirtual, item.Name, item.WbsElement, item.P1s,
                 item.Note, item.IsGreyed, assignment?["WP"], assignment?["CAM"], assignment?["Cost Category"], wps, hours, material, start, finish,
-                gap, item.Children.Count > 0, acwp, AnalyticBaseBuilder.Bac(wps, budgets)));
+                gap, item.Children.Count > 0, acwp, AnalyticBaseBuilder.Bac(wps, budgets), null, null,
+                item.Production.Bac, Sum(wps, PvHours), item.Production.Ev, item.Production.Ac, item.Production.Material, Sum(wps, PvCost), Sum(wps, EvCost)));
             foreach (var child in item.Children)
                 Emit(child, item.Id, depth + 1);
         }

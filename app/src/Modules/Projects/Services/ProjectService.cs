@@ -347,33 +347,69 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
 
     /// <summary>Struktura z mapowaniem już rozstrzygniętym (Resolve) – rozstrzyganie raz na odczyt ekranu.</summary>
     public static ProjectStructure Structure(PoTree tree, MappingInputs inputs, IReadOnlyDictionary<long, MappingResult> resolved, IReadOnlyList<DictRow> wpCam,
-        IReadOnlyList<DictRow> schedule, IReadOnlyDictionary<string, decimal>? costs = null) =>
-        StructureBuilder.Build(tree, resolved, inputs.P1s, wpCam, schedule, costs);
+        IReadOnlyList<DictRow> schedule, IReadOnlyDictionary<string, decimal>? costs = null, ProductionData? production = null) =>
+        StructureBuilder.Build(tree, resolved, inputs.P1s, wpCam, schedule, costs, production);
 
-    /// <summary>Nagłówki arkusza „Struktura” (ExportStructure).</summary>
+    /// <summary>
+    /// Dane produkcyjne projektu na żywo z PZLPROD (Operational EV, materiały dostarczone): elementy P1S zakresu projektu
+    /// (Legacy WBS i cele mapowania z poddrzewami LOG.WBS) → PSPNR → vAHDD / vAPD. Bez PZLPROD albo błąd odczytu –
+    /// dane puste z powodem (struktura działa bez kolumn produkcyjnych).
+    /// </summary>
+    public ProductionData Production(PoTree tree, MappingInputs inputs, IReadOnlyDictionary<long, MappingResult> resolved)
+    {
+        var now = DateTimeOffset.Now;
+        if (pzlProd is null || inputs.P1s is null)
+            return ProductionData.Unavailable(inputs.P1sError ?? "Brak połączenia z PZLPROD (pzl-ev.json, PzlProd)", now);
+        var byCode = inputs.P1s.GroupBy(e => MappingKeys.Key(e.WbsElement)).ToDictionary(g => g.Key, g => g.First().Pspnr);
+        var pspnrs = ObjectivesMapping.Scope(tree, resolved, inputs).Elements()
+            .Select(code => byCode.GetValueOrDefault(MappingKeys.Key(code))).OfType<string>().Distinct().ToList();
+        try
+        {
+            var values = pzlProd.Production(pspnrs);
+            return new ProductionData(values.GroupBy(v => MappingKeys.Key(v.Pspnr)).ToDictionary(g => g.Key, g => g.First()), now);
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            return ProductionData.Unavailable($"Odczyt danych produkcyjnych (PZLPROD vAHDD / vAPD) nieudany: {ex.Message}", now);
+        }
+    }
+
+    /// <summary>Nagłówki arkusza „Struktura” (ExportStructure) – kolumny tabeli w grupach (StructureColumns) i pola pomocnicze.</summary>
     public static readonly IReadOnlyList<string> StructureHeaders =
     [
-        "Poziom", "Nazwa", "Rodzaj", "Element CES", "P1S", "WP", "CAM", "CAM – imię i nazwisko", "Cost Category", "WP w poddrzewie",
-        "BAC HOURS", "BAC MATERIAL", "BAC", "Baseline Start", "Baseline Koniec", "ACWP", "Braki", "Uwagi",
+        "Poziom", "WBS Name", "Rodzaj", "CES Element", "Legacy Element (P1S)", "WP", "CAM", "CAM – imię i nazwisko", "Cost Category", "WP w poddrzewie",
+        "Baseline Start", "Baseline Finish", "Actual Start", "Actual Finish",
+        "BAC Hours", "PV Hours", "EV Hours", "AC Hours",
+        "BAC Material", "Actual Material",
+        "BAC Hours baseline", "BAC Cost", "PV Cost", "EV Cost", "ACWP",
+        "Braki", "Uwagi",
     ];
 
     /// <summary>
     /// Wiersze arkusza „Struktura”: całe drzewo (także zwinięte wiersze) w kolejności tabeli, nazwa wcięta według poziomu;
-    /// budżet, daty i ACWP jak w tabeli (sumy poddrzewa); CAM – USRID i imię i nazwisko ze słownika Osoby.
+    /// budżet, daty, wartości produkcyjne i koszty jak w tabeli (sumy poddrzewa); CAM – USRID i imię i nazwisko ze słownika Osoby.
     /// </summary>
     public static IEnumerable<IReadOnlyList<object?>> StructureRows(ProjectStructure structure, IReadOnlyList<LookupOption> persons)
     {
         var names = persons.GroupBy(p => p.Value, StringComparer.OrdinalIgnoreCase).ToDictionary(g => g.Key, g => g.First().Label, StringComparer.OrdinalIgnoreCase);
         static DateOnly? Date(string? value) =>
             DateOnly.TryParseExact(value, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var d) ? d : null;
-        return structure.Rows.Select(r => (IReadOnlyList<object?>)new object?[]
+        static object? Round(decimal? value) => value is { } v ? Math.Round(v, 2) : null;
+        return structure.Rows.Select(r =>
         {
-            r.Depth + 1, new string(' ', r.Depth * 2) + r.Name,
-            r.Kind == GridRowKind.P1s ? "element P1S" : r.IsVirtual ? "węzeł wirtualny" : "element nakładki",
-            r.WbsElement, r.P1s, r.Wp, r.Cam, r.Cam is { } cam ? names.GetValueOrDefault(cam) : null, r.CostCategory,
-            r.Wps.Count == 0 ? null : string.Join(", ", r.Wps),
-            r.Wps.Count == 0 ? null : r.BacHours, r.Wps.Count == 0 ? null : r.BacMaterial, r.Wps.Count == 0 ? null : r.Bac,
-            Date(r.Start), Date(r.Finish), r.Acwp == 0 ? null : r.Acwp, r.Gap, r.Note,
+            var budget = r.Wps.Count > 0;
+            return (IReadOnlyList<object?>)new object?[]
+            {
+                r.Depth + 1, new string(' ', r.Depth * 2) + r.Name,
+                r.Kind == GridRowKind.P1s ? "element P1S" : r.IsVirtual ? "węzeł wirtualny" : "element nakładki",
+                r.WbsElement, r.P1s, r.Wp, r.Cam, r.Cam is { } cam ? names.GetValueOrDefault(cam) : null, r.CostCategory,
+                budget ? string.Join(", ", r.Wps) : null,
+                Date(r.Start), Date(r.Finish), Date(r.ActualStart), Date(r.ActualFinish),
+                Round(r.OpsBacHours), Round(r.PvHours), Round(r.EvHours), Round(r.AcHours),
+                budget ? r.BacMaterial : null, Round(r.ActualMaterial),
+                budget ? r.BacHours : null, budget ? r.Bac : null, Round(r.PvCost), Round(r.EvCost), r.Acwp == 0 ? null : r.Acwp,
+                r.Gap, r.Note,
+            };
         });
     }
 

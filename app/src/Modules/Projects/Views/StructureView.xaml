@@ -68,6 +68,10 @@
             </DataGrid.RowStyle>
         </DataGrid>
         <TextBlock Text="{Binding Notice}" Foreground="{StaticResource Info}" Margin="0,4,0,0" TextWrapping="Wrap" />
+        <!-- Opis kolumn w grupach (StructureColumns) – to samo co podpowiedź nagłówka -->
+        <Expander Header="Opis kolumn" Margin="0,6,0,0">
+            <StackPanel x:Name="ColumnHelp" Margin="8,4,0,0" />
+        </Expander>
         <TextBlock Style="{StaticResource MutedText}" FontSize="11" Margin="0,4,0,0" TextWrapping="Wrap"
                    Text="Jak w Excelu: pisanie zastępuje komórkę, Enter / Tab – dalej (zapis wiersza od razu), Esc – cofnij wiersz, Ctrl+C / Ctrl+V – kopiuj / wklej blok (jedna komórka wypełnia zaznaczenie; komórki, których nie można zmienić, są pomijane), Delete – wyczyść (bez WP), Ctrl+D – wypełnij w dół, Ctrl+Z – cofnij wklejenie / Delete / Ctrl+D, Alt+→ / Alt+← – rozwiń / zwiń wiersz, CAM – wpisz fragment USRID albo nazwiska · podświetlenie: czerwone – błąd, żółte – ostrzeżenie; wiersz żółty – niezapisany" />
     </StackPanel>

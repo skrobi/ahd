@@ -13,4 +13,10 @@ public interface IPzlProdSource
     IReadOnlyList<P1sGroup> Groups();
 
     PzlProdCheck Check();
+
+    /// <summary>
+    /// Godziny (LOG.vAHDD, produktywność LOG.vAHDD_PL_CPI, DJK) i materiały dostarczone (LOG.vAPD) elementów P1S o podanych
+    /// PSPNR (zakres projektu) – zsumowane po PSPNR (ProductionValues).
+    /// </summary>
+    IReadOnlyList<ProductionValues> Production(IReadOnlyCollection<string> pspnrs);
 }
