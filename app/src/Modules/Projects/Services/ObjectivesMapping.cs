@@ -51,16 +51,25 @@ public static class ObjectivesMapping
         return codes;
     }
 
-    /// <summary>Zakres P1S projektu: kody węzłów i elementy LOG.WBS pod celami mapowania (poddrzewa wg PARENT).</summary>
+    /// <summary>
+    /// Zakres P1S projektu: kody węzłów i elementy LOG.WBS pod nimi (poddrzewa wg PARENT) – pod celami mapowania i pod
+    /// Legacy WBS (P1S bywa rozbudowane głębiej niż Legacy WBS z Excela).
+    /// </summary>
     public static P1sScope Scope(PoTree tree, IReadOnlyDictionary<long, MappingResult> mapping, MappingInputs inputs)
     {
         var roots = tree.Nodes.Where(n => !n.IsVirtual).SelectMany(n => CodesOf(n, mapping)).ToList();
         var below = new List<(string, string)>();
         if (inputs.P1s is { } p1s)
         {
-            // Element LOG.WBS należy do najbliższego celu mapowania nad nim (wspinaczka po PARENT).
+            // Element LOG.WBS należy do najbliższego kodu węzła nad nim (wspinaczka po PARENT): cel mapowania albo Legacy WBS.
             var targets = mapping.Values.Where(r => r.IsMapped && r.TargetPspnr.Length > 0)
                 .GroupBy(r => MappingKeys.Key(r.TargetPspnr)).ToDictionary(g => g.Key, g => g.First().Target);
+            var byCode = p1s.GroupBy(e => MappingKeys.Key(e.WbsElement)).ToDictionary(g => g.Key, g => g.First());
+            foreach (var code in roots)
+            {
+                if (byCode.GetValueOrDefault(MappingKeys.Key(code)) is { } element)
+                    targets.TryAdd(MappingKeys.Key(element.Pspnr), element.WbsElement);
+            }
             var parents = p1s.GroupBy(e => MappingKeys.Key(e.Pspnr)).ToDictionary(g => g.Key, g => MappingKeys.Key(g.First().Parent));
             foreach (var element in p1s.Where(e => !targets.ContainsKey(MappingKeys.Key(e.Pspnr))))
             {
@@ -92,7 +101,7 @@ public static class ObjectivesMapping
         if (withoutCode.Count > 0)
             return Issue.Warning($"Elementy nakładki bez strony P1S (UNMAPPED i bez Legacy WBS) – nie podepnie się do nich WP: {string.Join(", ", withoutCode.Take(10))}{(withoutCode.Count > 10 ? "…" : "")}", "Mapowanie CES ↔ P1S");
         if (inputs.Report is null && inputs.Corrections.Count == 0)
-            return Issue.Warning("Raport mapowań nie został zaimportowany – strona P1S tylko z Legacy WBS", "Mapowanie CES ↔ P1S");
+            return Issue.Warning("Słownik „Raport mapowań CES ↔ P1S” jest pusty – strona P1S tylko z Legacy WBS", "Mapowanie CES ↔ P1S");
         if (inputs.P1sError is not null)
             return Issue.Warning($"{inputs.P1sError} – zakres P1S bez poddrzew LOG.WBS", "Mapowanie CES ↔ P1S");
         return new Issue(Shared.Models.Pipeline.CheckLevel.Pass, $"Strona P1S: {mapped} z {elements.Count} elementów z celem mapowania CES ↔ P1S");

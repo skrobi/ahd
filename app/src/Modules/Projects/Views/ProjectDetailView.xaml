@@ -4,85 +4,178 @@
              xmlns:partials="clr-namespace:PzlEv.Shared.Views.Partials"
              xmlns:views="clr-namespace:PzlEv.Modules.Projects.Views">
     <!-- Ekran Projekt (DataContext: ProjectDetailViewModel) – docs/funkcjonalnosc.md, rozdz. 2 i F02. -->
+    <UserControl.Resources>
+        <DataTemplate x:Key="Kpi">
+            <Border Style="{StaticResource Panel}" Width="190" Margin="0,0,12,12" ToolTip="{Binding Hint}">
+                <StackPanel>
+                    <TextBlock Text="{Binding Label}" Style="{StaticResource Eyebrow}" />
+                    <TextBlock Text="{Binding Value}" FontSize="22" FontWeight="SemiBold" Margin="0,4,0,2">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding Pending}" Value="True">
+                                        <Setter Property="Foreground" Value="{StaticResource Muted}" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+                    <TextBlock Text="{Binding Hint}" Style="{StaticResource MutedText}" FontSize="11" TextWrapping="Wrap" />
+                </StackPanel>
+            </Border>
+        </DataTemplate>
+    </UserControl.Resources>
     <StackPanel>
         <partials:PageHeader Eyebrow="Projekty / projekt" Title="{Binding Title}" Subtitle="{Binding Subtitle}">
             <partials:PageHeader.Actions>
-                <Button Content="← Lista projektów" Style="{StaticResource Btn}" Command="{Binding Back}" />
+                <StackPanel Orientation="Horizontal">
+                    <ContentControl Content="{Binding ReadinessPill}" VerticalAlignment="Center" Margin="0,0,12,0"
+                                    ToolTip="Gotowość do przebiegu – szczegóły w zakładce Wskaźniki" />
+                    <Button Content="← Lista projektów" Style="{StaticResource Btn}" Command="{Binding Back}" />
+                </StackPanel>
             </partials:PageHeader.Actions>
         </partials:PageHeader>
         <partials:BusyBar DataContext="{Binding Busy}" />
         <TextBlock Text="{Binding Status}" TextWrapping="Wrap" Margin="0,0,0,8" />
 
-        <!-- Gotowość (F02) -->
-        <Border Style="{StaticResource Panel}" Margin="0,0,0,12">
-            <StackPanel>
-                <DockPanel Margin="0,0,0,6">
-                    <ContentControl DockPanel.Dock="Right" Content="{Binding ReadinessPill}" />
-                    <TextBlock Text="Gotowość projektu" Style="{StaticResource H2}" />
-                </DockPanel>
-                <ItemsControl ItemsSource="{Binding Readiness}" />
-            </StackPanel>
-        </Border>
+        <TabControl Background="Transparent" BorderThickness="0,1,0,0" Padding="0,12,0,0">
+            <!-- Wskaźniki: sumy projektu teraz, wskaźniki EV po przebiegach; gotowość do przebiegu zwinięta -->
+            <TabItem Header="Wskaźniki" Padding="12,4">
+                <StackPanel>
+                    <Button Content="Raport kosztów (Excel)" Style="{StaticResource Btn}" HorizontalAlignment="Left" Margin="0,0,0,12"
+                            Command="{Binding ExportCostReport}"
+                            ToolTip="Koszty ostatniego importu ACTUALS: Project definition × Cost Element, ostatni okres i lata (PLN), bez wykluczeń projektu" />
+                    <ItemsControl ItemsSource="{Binding Kpis}" ItemTemplate="{StaticResource Kpi}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <WrapPanel />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                    </ItemsControl>
+                    <ItemsControl ItemsSource="{Binding EvKpis}" ItemTemplate="{StaticResource Kpi}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <WrapPanel />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                    </ItemsControl>
+                    <Expander Margin="0,4,0,0">
+                        <Expander.Header>
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="Gotowość do przebiegu" FontWeight="SemiBold" Margin="0,0,8,0" VerticalAlignment="Center" />
+                                <ContentControl Content="{Binding ReadinessPill}" />
+                            </StackPanel>
+                        </Expander.Header>
+                        <ItemsControl ItemsSource="{Binding Readiness}" Margin="0,8,0,0" />
+                    </Expander>
+                </StackPanel>
+            </TabItem>
 
-        <!-- Performance Objectives -->
-        <Border Style="{StaticResource Panel}" Margin="0,0,0,12">
-            <StackPanel>
-                <DockPanel Margin="0,0,0,6">
-                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
-                        <Button Content="Odśwież mapowanie" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding RefreshMapping}" />
-                        <Button Content="Odrzuć zmiany" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding DiscardObjectives}" />
-                        <Button Content="Zapisz nakładkę" Style="{StaticResource BtnPrimary}" Command="{Binding SaveObjectives}" />
+            <!-- Struktura: Performance Objectives z rozwinięciem P1S, WP, CAM, budżet i daty – edycja w komórkach -->
+            <TabItem Header="Struktura" Padding="12,4">
+                <StackPanel>
+                    <!-- Przegląd: tabela struktury -->
+                    <StackPanel Visibility="{Binding IsViewingStructure, Converter={StaticResource BoolToVisibility}}">
+                        <DockPanel Margin="0,0,0,8">
+                            <TextBlock DockPanel.Dock="Right" Text="{Binding Structure.SummaryText}" Style="{StaticResource MutedText}" VerticalAlignment="Center"
+                                       ToolTip="{Binding MappingInfo}" />
+                            <StackPanel Orientation="Horizontal">
+                                <Button Content="Edytuj Performance Objectives" Style="{StaticResource BtnPrimary}" Margin="0,0,8,0" Command="{Binding EditObjectives}"
+                                        ToolTip="Edytor jak w kreatorze: przeciąganie, przesuwanie, usuwanie, węzły wirtualne, podmiana z Excela" />
+                                <Button Content="Dołóż z Excela (eksport SAP)" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding AddFromExcel}"
+                                        ToolTip="Dokłada elementy, których projekt jeszcze nie ma (np. kolejne Project definition); istniejąca struktura zostaje bez zmian" />
+                                <Button Content="Rozwiń wszystko" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding Structure.ExpandAll}" />
+                                <Button Content="Zwiń wszystko" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding Structure.CollapseAll}" />
+                                <Button Content="Odśwież mapowanie i koszty" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding RefreshMapping}"
+                                        ToolTip="Ponowny odczyt raportu mapowań CES ↔ P1S, struktury P1S (PZLPROD) i kosztów ACWP z ostatniego importu ACTUALS" />
+                                <Button Content="Cofnij wklejenie" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding Structure.Undo}"
+                                        ToolTip="Cofa ostatnie wklejenie, wyczyszczenie (Delete) albo wypełnienie w dół (Ctrl+D) – zapisuje wartości sprzed zmiany (Ctrl+Z)" />
+                                <Button Content="Odrzuć niezapisane" Style="{StaticResource Btn}" Command="{Binding Structure.RevertChanges}"
+                                        ToolTip="Cofa zmiany wierszy, których nie udało się zapisać" />
+                            </StackPanel>
+                        </DockPanel>
+                        <views:StructureView DataContext="{Binding Structure}" />
                     </StackPanel>
-                    <TextBlock Text="Performance Objectives" Style="{StaticResource H2}" />
-                </DockPanel>
-                <TextBlock Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="0,0,0,8"
-                           Text="Zapis tworzy nowe wersje zmienionych węzłów (historia). Ponowne wczytanie eksportu SAP odświeża strukturę: elementy o tym samym WBS element zachowują historię; węzły wirtualne i ręczne zmiany trzeba odtworzyć (O47)." />
-                <partials:BusyBar DataContext="{Binding Busy}" />
-                <views:PoEditorView DataContext="{Binding Objectives}" />
-            </StackPanel>
-        </Border>
 
-        <!-- Słowniki projektu -->
-        <Border Style="{StaticResource Panel}" Margin="0,0,0,12">
-            <StackPanel>
-                <DockPanel Margin="0,0,0,6">
-                    <Button DockPanel.Dock="Right" Content="Pobierz słowniki (Excel)" Style="{StaticResource Btn}" Command="{Binding ExportDictionaries}" />
-                    <TextBlock Text="Słowniki projektu" Style="{StaticResource H2}" />
-                </DockPanel>
-                <TextBlock Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="0,0,0,8"
-                           Text="Pobierz obecny stan, popraw w Excelu i wczytaj ponownie – przed zapisem zobaczysz różnice (+ nowe / ~ zmienione / − usunięte). Słownik z błędem ERROR nie zostanie zapisany; wiersze usunięte z pliku zostaną zamknięte (historia zostaje)." />
-                <partials:BusyBar DataContext="{Binding Busy}" />
-                <ItemsControl ItemsSource="{Binding Dictionaries}">
-                    <ItemsControl.ItemTemplate>
-                        <DataTemplate>
-                            <views:DictionaryPanelView />
-                        </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                </ItemsControl>
-            </StackPanel>
-        </Border>
+                    <!-- Edycja Performance Objectives: edytor z kreatora -->
+                    <StackPanel Visibility="{Binding IsEditingObjectives, Converter={StaticResource BoolToVisibility}}">
+                        <DockPanel Margin="0,0,0,8">
+                            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                                <Button Content="Anuluj" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding CancelObjectives}" />
+                                <Button Content="Zapisz Performance Objectives" Style="{StaticResource BtnPrimary}" Command="{Binding SaveObjectives}" />
+                            </StackPanel>
+                            <TextBlock Text="Edycja Performance Objectives" Style="{StaticResource H2}" VerticalAlignment="Center" />
+                        </DockPanel>
+                        <views:PoEditorView DataContext="{Binding Objectives}" />
+                    </StackPanel>
+                </StackPanel>
+            </TabItem>
 
-        <!-- Przebiegi -->
-        <Border Style="{StaticResource Panel}" Margin="0,0,0,12">
-            <StackPanel>
-                <TextBlock Text="Historia przebiegów" Style="{StaticResource H2}" Margin="0,0,0,6" />
+            <!-- Słowniki projektu: lista słowników i tabela wybranego słownika z edycją w komórkach (jak ekran Słowniki) -->
+            <TabItem Header="Słowniki projektu" Padding="12,4">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="260" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+
+                    <StackPanel Margin="0,0,16,0">
+                        <Border Style="{StaticResource Panel}" Padding="8" VerticalAlignment="Top">
+                            <ListBox ItemsSource="{Binding Dictionaries}" SelectedItem="{Binding SelectedDictionary}"
+                                     BorderThickness="0" Background="Transparent">
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <StackPanel Width="220" Margin="0,4">
+                                            <TextBlock Text="{Binding Name}" FontWeight="Medium" TextWrapping="Wrap" />
+                                            <ContentControl Content="{Binding StatusPill}" HorizontalAlignment="Left" Margin="0,2,0,0" />
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                        </Border>
+                        <Button Content="Pobierz słowniki (Excel)" Style="{StaticResource Btn}" HorizontalAlignment="Left" Margin="0,10,0,0"
+                                Command="{Binding ExportDictionaries}"
+                                ToolTip="Wszystkie słowniki projektu w jednym skoroszycie – popraw i wczytaj ponownie (przed zapisem zobaczysz różnice)" />
+                    </StackPanel>
+
+                    <StackPanel Grid.Column="1">
+                        <!-- Stan słownika, wczytanie z Excela z podglądem różnic -->
+                        <views:DictionaryPanelView DataContext="{Binding SelectedDictionary}" />
+                        <TextBlock Text="{Binding Table.Spec.Description}" Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="0,0,0,4" />
+                        <TextBlock Text="{Binding DictionaryHint}" Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="0,0,0,8" />
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                            <Button Content="Dodaj wiersz" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding AddDictionaryRow}" />
+                            <Button Content="Usuń wiersze" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding RemoveDictionaryRow}" ToolTip="Usuwa wiersze zaznaczonych komórek (Ctrl+minus)" />
+                            <Button Content="Cofnij" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding Table.Undo}" ToolTip="Cofa ostatnią zmianę w tabeli (Ctrl+Z)" />
+                            <Button Content="Odrzuć zmiany" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding DiscardDictionary}" />
+                            <Button Content="Zapisz" Style="{StaticResource BtnPrimary}" Command="{Binding SaveDictionary}" />
+                            <TextBlock Text="Filtr" VerticalAlignment="Center" Margin="16,0,6,0" Foreground="{StaticResource Muted}" />
+                            <TextBox Width="180" Style="{StaticResource Input}" Text="{Binding Table.Filter, UpdateSourceTrigger=PropertyChanged}" />
+                        </StackPanel>
+                        <partials:DictionaryGrid DataContext="{Binding Table}" />
+                    </StackPanel>
+                </Grid>
+            </TabItem>
+
+            <!-- Przebiegi -->
+            <TabItem Header="Przebiegi" Padding="12,4">
                 <TextBlock Text="{Binding Runs}" Style="{StaticResource MutedText}" TextWrapping="Wrap" />
-            </StackPanel>
-        </Border>
+            </TabItem>
 
-        <!-- Foldery -->
-        <Border Style="{StaticResource Panel}">
-            <StackPanel>
-                <DockPanel Margin="0,0,0,6">
-                    <Button DockPanel.Dock="Right" Content="Utwórz brakujące foldery" Style="{StaticResource Btn}" Command="{Binding CreateFolders}" />
-                    <TextBlock Text="Struktura folderów" Style="{StaticResource H2}" />
-                </DockPanel>
-                <Border Background="{StaticResource Surface2}" Padding="10" Margin="0,0,0,8">
-                    <TextBlock Text="{Binding FolderPreview}" FontFamily="{StaticResource FMono}" />
-                </Border>
-                <TextBlock Text="Zgłoszenie do IT (dostęp CAM do folderu Zwrocone)" Style="{StaticResource MutedText}" Margin="0,0,0,4" />
-                <TextBox Style="{StaticResource Input}" Text="{Binding ItRequest, Mode=OneWay}" IsReadOnly="True" TextWrapping="Wrap" />
-            </StackPanel>
-        </Border>
+            <!-- Foldery -->
+            <TabItem Header="Foldery" Padding="12,4">
+                <StackPanel>
+                    <DockPanel Margin="0,0,0,8">
+                        <Button DockPanel.Dock="Right" Content="Utwórz brakujące foldery" Style="{StaticResource Btn}" Command="{Binding CreateFolders}" />
+                        <TextBlock Text="Struktura folderów" Style="{StaticResource H2}" />
+                    </DockPanel>
+                    <Border Background="{StaticResource Surface2}" Padding="10" Margin="0,0,0,8">
+                        <TextBlock Text="{Binding FolderPreview}" FontFamily="{StaticResource FMono}" />
+                    </Border>
+                    <TextBlock Text="Zgłoszenie do IT (dostęp CAM do folderu Zwrocone)" Style="{StaticResource MutedText}" Margin="0,0,0,4" />
+                    <TextBox Style="{StaticResource Input}" Text="{Binding ItRequest, Mode=OneWay}" IsReadOnly="True" TextWrapping="Wrap" />
+                </StackPanel>
+            </TabItem>
+        </TabControl>
     </StackPanel>
 </UserControl>

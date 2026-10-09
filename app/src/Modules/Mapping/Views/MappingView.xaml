@@ -37,7 +37,7 @@
 
     <StackPanel>
         <partials:PageHeader Eyebrow="Faza globalna G2" Title="Mapowanie CES ↔ P1S"
-                             Subtitle="Przypisanie elementów WBS z SAP CES (ACTUALS) do elementów P1S: raport mapowań SAP↔CES z importu, struktura P1S z PZLPROD, korekty elementu i projektu CES z uzasadnieniem. Statusy są wyliczane; bez kwot.">
+                             Subtitle="Przypisanie elementów WBS z SAP CES (ACTUALS) do elementów P1S: raport mapowań SAP↔CES ze słownika (Słowniki), struktura P1S z PZLPROD, korekty elementu i projektu CES z uzasadnieniem. Statusy są wyliczane; bez kwot.">
             <partials:PageHeader.Actions>
                 <Button Content="Odśwież" Style="{StaticResource Btn}" Command="{Binding Refresh}" />
             </partials:PageHeader.Actions>

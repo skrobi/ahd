@@ -24,6 +24,12 @@ public sealed class DictionarySpec
     /// </summary>
     public bool EmptyKeyPartsAllowed { get; init; }
 
+    /// <summary>
+    /// Przy wczytaniu z pliku wiersz z samym kluczem (pozostałe kolumny puste) jest pomijany – np. szablon „WP i CAM”
+    /// z elementami P1S, z których część nie ma jeszcze WP.
+    /// </summary>
+    public bool SkipKeyOnlyRows { get; init; }
+
     /// <summary>Reguły szczegółowe na całym zestawie wierszy (po normalizacji wartości).</summary>
     public Func<IReadOnlyList<DictRow>, IEnumerable<Issue>>? Rules { get; init; }
 

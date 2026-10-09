@@ -24,8 +24,16 @@ public static class PolishNumber
             s = s[..^1];
         }
         s = s.Replace(" ", "").Replace(" ", "").Replace(" ", "").Replace("'", "");
-        if (s.Contains(','))
-            s = s.Replace(".", "").Replace(',', '.');
+        // Separator dziesiętny: przy obu znakach – ostatni z nich (1.234,56 i 1,234.56); jeden rodzaj występujący kilka
+        // razy – separator tysięcy (1,234,567 i 1.234.567); pojedynczy przecinek – dziesiętny (zapis polski).
+        var comma = s.LastIndexOf(',');
+        var dot = s.LastIndexOf('.');
+        if (comma >= 0 && dot >= 0)
+            s = comma > dot ? s.Replace(".", "").Replace(',', '.') : s.Replace(",", "");
+        else if (comma >= 0)
+            s = s.Count(ch => ch == ',') > 1 ? s.Replace(",", "") : s.Replace(',', '.');
+        else if (dot >= 0 && s.Count(ch => ch == '.') > 1)
+            s = s.Replace(".", "");
 
         if (!decimal.TryParse(s, NumberStyles.AllowLeadingSign | NumberStyles.AllowDecimalPoint | NumberStyles.AllowExponent,
                 CultureInfo.InvariantCulture, out value))

@@ -9,7 +9,7 @@ zmiana zakresu zadania w trakcie realizacji wymaga uzgodnienia.
 - **Dane:** aplikacja pracuje na bazie MS SQL (`PZLTEST.FINOP.PZLEV_*`); warstwa w pamięci była przejściowa (F0.4) – usunięta 2026-10-02 z aplikacji i z testów; Pulpit czyta z bazy.
   Każdy moduł rozmawia z danymi przez `Data/I<Moduł>Store` – kontrakt odpowiadający przyszłym procedurom i widokom.
   Przejście na MS SQL (F10) zmienia tylko implementacje magazynów i skrypty `sql/mssql` (`docs/architektura.md`, rozdz. 5.3).
-- **Testy kontraktu:** testy magazynów i serwisów na bazie SQL (`PZLEV_TEST_SQL`); bez bazy – pomijane.
+- **Testy kontraktu:** testy magazynów i serwisów na bazie SQL (baza TEST z `pzl-ev.json` albo `PZLEV_TEST_SQL`); bez bazy – pomijane.
 - **Weryfikacja przepływu:** każdy etap zapisuje liczbę wierszy i sumy kontrolne; dane wzorcowe (F0.9) mają oczekiwane wyniki.
 - **Kolejność typów projektów:** wewnętrzny → SAC → CAS.
 - **Status zadania** – w pliku zadania i w tabeli poniżej: do zrobienia / w toku / zrobione / zablokowane (O…).
@@ -72,10 +72,11 @@ zmiana zakresu zadania w trakcie realizacji wymaga uzgodnienia.
 | Zadanie | Moduł | Zależy od | Otwarte kwestie | Status |
 |---|---|---|---|---|
 | [F4.1 Projekt i foldery](F4.1-projekt-i-foldery.md) | Projects | F0.7 | – | zrobione |
-| [F4.2 Nakładka Performance Objectives](F4.2-nakladka-performance-objectives.md) | Projects | F4.1, F3.2 | O47 | zrobione |
+| [F4.2 Nakładka Performance Objectives](F4.2-nakladka-performance-objectives.md) | Projects | F4.1, F3.2 | – | zrobione |
 | [F4.3 Słowniki projektu](F4.3-slowniki-projektu.md) | Projects / MasterData | F1.1, F4.2 | O24, O37 | zrobione – Stawki CAS po O37 |
 | [F4.4 Kreator projektu](F4.4-kreator-projektu.md) | Projects | F4.1–F4.3 | O23 | zrobione |
 | [F4.5 Gotowość projektu i ekrany Projekty / Projekt](F4.5-gotowosc-projektu-i-ekrany-projekty-projekt.md) | Projects | F4.4 | – | zrobione – historia przebiegów po F5 |
+| [F4.6 Ekran Projekt – zakładki i struktura projektu](F4.6-ekran-projektu-zakladki-i-struktura.md) | Projects | F4.5 | – | zrobione – wskaźniki EV po F8; test ekranu na Windows |
 
 ## F5. Przebieg – rdzeń (P0, P1, P2, Z)
 

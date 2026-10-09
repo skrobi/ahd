@@ -60,8 +60,8 @@ public sealed class ReadinessAndAnalyticTests
         ];
         DictRow[] plan =
         [
-            Row(("WP", "WP-101"), ("BAC HOURS", "600"), ("BAC MATERIAL", "20000"), ("Planowany Start", "2026-10-01"), ("Planowany Koniec", "2027-03-31")),
-            Row(("WP", "WP-103"), ("BAC HOURS", null), ("BAC MATERIAL", null), ("Planowany Start", null), ("Planowany Koniec", null)),
+            Row(("WP", "WP-101"), ("BAC HOURS", "600"), ("BAC MATERIAL", "20000"), ("Baseline Start", "2026-10-01"), ("Baseline Koniec", "2027-03-31")),
+            Row(("WP", "WP-103"), ("BAC HOURS", null), ("BAC MATERIAL", null), ("Baseline Start", null), ("Baseline Koniec", null)),
         ];
 
         var a = AnalyticBaseBuilder.Build(Objectives(), wp, plan);

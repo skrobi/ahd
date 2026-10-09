@@ -70,7 +70,7 @@ na dysku sieciowym.
  └──────┬──────────────┬────────┘                              │ odczyt
         │ WebDAV       │ SMB                 ┌─────────────────▼──────────────────┐
         ▼              ▼                     │ splmcd03: PZLPROD.LOG, PZL_SAP     │
- SharePoint RABIT   Dysk sieciowy            │ struktura P1S, raport mapowań,     │
+ SharePoint RABIT   Dysk sieciowy            │ struktura P1S,                     │
  (raporty SAP CES)  (pliki dla finansów,     │ zaawansowanie z produkcji          │
                      CAM, wyniki EV)         └────────────────────────────────────┘
 ```
@@ -172,7 +172,7 @@ wyłącznie z bazy (`Dashboard/Data/SqlDashboardData`).
 **Testy** (`app/tests`, xUnit, `net10.0`): projekt kompiluje pliki logiki aplikacji – wszystko poza `Views`,
 `ViewModels`, `Shell`, `Shared/Utils/Ui` i plikami `*Module.cs` – więc logika nie może używać typów WPF i testy
 działają także poza Windows. Testy magazynów i serwisów działają na bazie SQL (`TestDatabase`, atrybut `[SqlFact]`);
-bez zmiennej `PZLEV_TEST_SQL` są pomijane. Dane wzorcowe z oczekiwanymi sumami – `app/testdata`.
+baza to sekcja TEST z `pzl-ev.json` (konto AD, jak aplikacja) albo zmienna `PZLEV_TEST_SQL`; bazy niedostępnej – pomijane z powodem. Dane wzorcowe z oczekiwanymi sumami – `app/testdata`.
 `build.cmd` uruchamia testy przed publikacją.
 
 **Konwencje:** jeden typ w pliku, nazwa pliku = nazwa typu; sufiksy `…Module`, `…View`, `…ViewModel`,
@@ -297,7 +297,7 @@ decyzji (P4, P6, Z) albo z wynikiem ERROR.
 | 2 | Uruchamianie pliku exe zablokowane (AppLocker, antywirus) | test przed decyzją o formie dystrybucji (O6); podpis kodu; alternatywnie instalacja zarządzana przez IT |
 | 3 | Przebiegi trwające dni | trwały stan w bazie, kontynuacja przez inną osobę, unieważnianie etapów |
 | 4 | Zmiana słowników lub nowe importy w trakcie przebiegu | znacznik stanu, decyzja „kontynuuj / przypnij ponownie” w dzienniku |
-| 5 | Zmiana istniejących wierszy w `PZLPROD` (założenie przyrostowości) | odczyt bez kopiowania; zmiana `LOG.WBS` nie jest wykrywana i może zmienić wynik odtworzenia rewizji; raport mapowań jest importowany jako wersje pliku |
+| 5 | Zmiana istniejących wierszy w `PZLPROD` (założenie przyrostowości) | odczyt bez kopiowania; zmiana `LOG.WBS` nie jest wykrywana i może zmienić wynik odtworzenia rewizji; raport mapowań jest słownikiem z historią wierszy |
 | 6 | Nieaktualne dane produkcyjne (`vAHDD`) | kontrola świeżości w P0 |
 | 7 | Mieszanie źródeł zaawansowania | zapis pochodzenia; w przebiegu zamykającym wyłącznie CAM |
 | 8 | Nowe elementy SAP bez przypisania | wykrywanie po imporcie i w P3; blokada w przebiegu zamykającym |

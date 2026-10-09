@@ -1,0 +1,26 @@
+<UserControl x:Class="PzlEv.Shared.Views.Partials.DictionaryGrid"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <!-- Tabela słownika z edycją w komórkach (DataContext: DictionaryTableViewModel); kolumny z opisu słownika
+         (DictionaryGrid.xaml.cs), pod tabelą wynik walidacji zapisu. -->
+    <StackPanel>
+        <DataGrid x:Name="RowsGrid" Style="{StaticResource DataTable}" ItemsSource="{Binding RowsView}"
+                  SelectionUnit="Cell" SelectionMode="Extended" ClipboardCopyMode="ExcludeHeader"
+                  PreviewKeyDown="OnPreviewKeyDown" CurrentCellChanged="OnCurrentCellChanged"
+                  BeginningEdit="OnBeginningEdit" CellEditEnding="OnCellEditEnding" SelectedCellsChanged="OnSelectedCellsChanged" />
+        <TextBlock Text="{Binding Notice}" Foreground="{StaticResource Info}" Margin="0,4,0,0" TextWrapping="Wrap" />
+        <TextBlock Style="{StaticResource MutedText}" FontSize="11" Margin="0,4,0,0" TextWrapping="Wrap"
+                   Text="* kolumna klucza · jak w Excelu: pisanie zastępuje komórkę, Enter / Tab – dalej, Esc – cofnij, Ctrl+C / Ctrl+V – kopiuj / wklej blok (brakujące wiersze dopisywane, jedna komórka wypełnia zaznaczenie), Delete – wyczyść zaznaczone, Ctrl+D – wypełnij w dół, Ctrl+Z – cofnij, Ctrl+minus – usuń wiersze zaznaczenia, kliknięcie nagłówka – sortowanie · podświetlenie: czerwone – błąd, żółte – ostrzeżenie (opis w podpowiedzi)" />
+
+        <Border Style="{StaticResource Panel}" Margin="0,12,0,0"
+                Visibility="{Binding HasIssues, Converter={StaticResource BoolToVisibility}}">
+            <StackPanel>
+                <TextBlock Text="Wynik walidacji" Style="{StaticResource H2}" FontSize="15" Margin="0,0,0,6" />
+                <ItemsControl ItemsSource="{Binding Issues}" />
+                <Button Content="Zapisz mimo ostrzeżeń" Style="{StaticResource BtnPrimary}" HorizontalAlignment="Left"
+                        Margin="0,8,0,0" Command="{Binding SaveWithWarnings}"
+                        Visibility="{Binding NeedsConfirmation, Converter={StaticResource BoolToVisibility}}" />
+            </StackPanel>
+        </Border>
+    </StackPanel>
+</UserControl>

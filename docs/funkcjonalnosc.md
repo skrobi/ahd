@@ -26,8 +26,8 @@ Role, zakres danych i egzekwowanie – `docs/uprawnienia.md`.
 |---|---|---|
 | **Pulpit** | karty projektów ze stanem bieżącego przebiegu, „Wymaga uwagi”, ostatnie zdarzenia (F07) | przejście do projektu / przebiegu, nowy projekt |
 | **Import** | import źródeł, historia importów, decyzje dla plików (F05) | importuj |
-| **Projekty** | lista projektów: typ, rozmiar nakładki Performance Objectives, aktywny przebieg, folder | nowy projekt |
-| **Projekt** | gotowość (F02), nakładka Performance Objectives, słowniki projektu, historia przebiegów, struktura folderów | nowy przebieg; pobierz / wczytaj słowniki z Excela |
+| **Projekty** | lista projektów: kod, nazwa, typ, aktywny przebieg, folder – sam odczyt projektów (nakładka, gotowość i mapowanie – na ekranie projektu) | nowy projekt |
+| **Projekt** | zakładki: Wskaźniki (sumy projektu, miejsce na wskaźniki EV, gotowość F02 zwinięta; znacznik gotowości w nagłówku), Struktura (nakładka z rozwinięciem P1S, WP, CAM, budżet i daty – `docs/performance-objectives.md`, rozdz. 4.2), Słowniki projektu, Przebiegi, Foldery | edycja w komórkach struktury (zapis od razu); dołożenie elementów z kolejnego eksportu SAP; raport kosztów projektu do Excela (`docs/model-danych.md`, migracja 013); nowy przebieg; edycja słowników projektu w tabeli (Cost Category – pozycje globalne i zmiany projektu, `docs/slowniki.md`, rozdz. 6); pobierz / wczytaj słowniki z Excela |
 | **Kreator projektu** | 5 kroków (F01) | utwórz projekt |
 | **Przebiegi** | wszystkie przebiegi wszystkich projektów: tydzień, czy zamykający, stan, osoba | przejście do przebiegu |
 | **Przebieg** | kroki i etapy (F06), panel wybranego etapu, znacznik stanu, problemy, rewizje, dziennik | akcje etapów |
@@ -72,7 +72,7 @@ Kroki kreatora:
 
    **Utwórz projekt** – rejestracja w bazie, utworzenie folderów, kontrola struktury.
 
-Baza analityczna na stronie projektu (po zmianie słowników) – O23.
+Na stronie projektu bazę analityczną zastępuje zakładka Struktura (te same sumy i braki, aktualne po każdej zmianie).
 
 ### F02. Gotowość projektu
 
@@ -92,6 +92,8 @@ Lista kontrolna na ekranie projektu:
 - Ekran Słowniki: słowniki globalne i słowniki projektu, edycja w tabeli / formularzu, historia zmian każdego
   wiersza.
 - Zapis, historia, walidacja, wymiana przez Excel i równoczesna edycja – `docs/slowniki.md`, rozdz. 1 i 5.
+- Tu jest też raport mapowań CES ↔ P1S (słownik globalny): nowy raport z `PZLPROD` wczytuje się w całości
+  (`docs/mapowanie-ces-p1s.md`, rozdz. 2); ekran Mapowanie tylko z niego czyta.
 - Przebiegi z wcześniejszym znacznikiem stanu pokazują zmianę (`docs/pipeline-fazy.md`, rozdz. 5).
 
 ### F04. Mapowanie CES ↔ P1S
@@ -183,5 +185,5 @@ potwierdzenia.
 | O3 | Plik CAM: jeden na CAM (rekomendacja) czy jeden na projekt? |
 | O16 | Zawartość plików dla finansów (P4) – lista i układ |
 | O17 | Układ pliku CAM – które pola uzupełnia CAM (zaawansowanie %, ETC, komentarz) |
-| O23 | Baza analityczna także na stronie projektu (po zmianie słowników), nie tylko w kreatorze? |
+| ~~O23~~ | Baza analityczna na stronie projektu – **rozstrzygnięte (2026-10-08):** zakładka Struktura ekranu Projekt |
 | O26 | Panel „Koszty wg kategorii P1S” na stronie projektu – w v1 czy później? |

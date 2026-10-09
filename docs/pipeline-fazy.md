@@ -140,7 +140,7 @@ Decyzja dla pliku:
 | | |
 |---|---|
 | **Cel** | Dla każdego elementu WBS CES z danych znać jego element P1S (globalnie) i wychwycić elementy bez przypisania. |
-| **Wejście** | Elementy CES z nowych wersji plików (G1); raport mapowań (najnowszy zaimportowany plik); korekty; drzewo P1S (PZLPROD). |
+| **Wejście** | Elementy CES z nowych wersji plików (G1); raport mapowań (słownik globalny – bieżący stan); korekty; drzewo P1S (PZLPROD). |
 | **Działanie** | Automatycznie po imporcie – kolejność rozstrzygania według `docs/mapowanie-ces-p1s.md`, rozdz. 5. Lista nowych elementów z wynikiem (`INHERITED`, `UNMAPPED`). Do czasu silnika etapów (F0.6) – przy otwarciu ekranu Mapowanie i „Odśwież” (`docs/mapowanie-ces-p1s.md`, rozdz. 9). |
 | **Kontrole** | Element `UNMAPPED` z kosztem → WARNING w rejestrze problemów (raz na import). |
 | **Akcje** | Korekta na ekranie Mapowanie CES ↔ P1S. |
@@ -211,7 +211,7 @@ Kalendarz okresów wyznacza wariant przebiegu:
 |---|---|
 | **Cel** | Nie dopuścić niespójnych danych i słowników do obliczeń. |
 | **Działanie** | Poprawność samych słowników zapewnia walidacja przy zapisie (`docs/slowniki.md`, rozdz. 5), a plików – import (`docs/zrodla-danych.md`, rozdz. 8). Tu: spójność danych projektu ze słownikami i okresem. |
-| **Kontrole** | wydział z kosztów bez stawki na dany rok – stawki wydziałów albo, w CAS, stawki CAS (ERROR); numer elementu kosztowego bez wpisu w efektywnym słowniku Cost Category (ERROR – O25; naprawa: pozycja w słowniku projektu); numer bez kategorii (WARNING); WP bez budżetu (WARNING); daty księgowania niezgodne z okresem przebiegu według znaczenia okresu w definicji źródła (ERROR); duplikaty wierszy między częściami źródła (ERROR). |
+| **Kontrole** | MPK z kosztów bez stawki na dany rok – stawki wydziałów (klucz MPK + rok) albo, w CAS, stawki CAS (ERROR); numer elementu kosztowego bez wpisu w efektywnym słowniku Cost Category (ERROR – O25; naprawa: pozycja w słowniku projektu); numer bez kategorii (WARNING); WP bez budżetu (WARNING); daty księgowania niezgodne z okresem przebiegu według znaczenia okresu w definicji źródła (ERROR); duplikaty wierszy między częściami źródła (ERROR). |
 | **Przy ERROR** | **Popraw w aplikacji** (ekran Słowniki albo Mapowanie z filtrem na problem) → **Przypnij ponownie** (P1) i waliduj. |
 | **Efekt** | Problemy przebiegu; WARNING trafiają do raportu przebiegu. |
 | **Przekazanie** | P3 rusza tylko bez ERROR. |
@@ -221,7 +221,7 @@ Kalendarz okresów wyznacza wariant przebiegu:
 | | |
 |---|---|
 | **Cel** | Jeden spójny obraz kosztów projektu: koszt rzeczywisty (ACWP) przypisany do WP, CAM i kategorii kosztów, w walucie wyniku. |
-| **Działanie** | Procedury w bazie (logika – O14): element CES → element P1S (mapowanie) → WP (słownik „WP i CAM”); przeliczenie godzin na koszt według stawek wydziałów albo stawek CAS (typ projektu); przeliczenie waluty według kursów. Podsumowanie: koszt okresu, liczba zmapowanych elementów, liczba WP, suma kontrolna. |
+| **Działanie** | Procedury w bazie (logika – O14): element CES → element P1S (mapowanie) → WP (słownik „WP i CAM”); przeliczenie godzin na koszt według stawek wydziałów (MPK + rok) albo stawek CAS (typ projektu); przeliczenie waluty według kursów. Podsumowanie: koszt okresu, liczba zmapowanych elementów, liczba WP, suma kontrolna. |
 | **Kontrole** | suma kontrolna: koszt po połączeniu = koszt danych projektu (ERROR). **Elementy bez przypisania:** element CES z kosztem spoza nakładki projektu, element z zaawansowaniem bez WP – WARNING w środku okresu, ERROR w przebiegu zamykającym (O33). |
 | **Akcje** | **Przypisz** – korekta mapowania (ekran Mapowanie) albo słownik „WP i CAM” → przypnij ponownie (P1). **Kontynuuj bez tych elementów** – tylko w środku okresu; decyzja w dzienniku, wartość poza EV pokazana w raporcie przebiegu. |
 | **Efekt** | `ev.KosztWP` (przebieg, WP, okres, kwoty, pochodzenie) i raport pokrycia. |

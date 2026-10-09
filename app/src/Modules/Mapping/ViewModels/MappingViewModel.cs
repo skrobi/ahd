@@ -208,7 +208,7 @@ public sealed class MappingViewModel : ObservableObject
             });
             _state = state;
             P1sError = state.P1sError;
-            Source = $"Raport mapowań: {state.Report?.Describe ?? "nie zaimportowano (Import, parser MAPOWANIA)"} · " +
+            Source = $"Raport mapowań: {state.Report?.Describe ?? "słownik pusty – wczytaj go na ekranie Słowniki"} · " +
                      $"P1S: {(state.P1s is null ? "niedostępne" : $"{state.P1s.Count} elementów LOG.WBS")}";
             Checks = state.Issues.OrderBy(i => i.Level == CheckLevel.Error ? 0 : 1).ToList();
             Tree = BuildTree(state);

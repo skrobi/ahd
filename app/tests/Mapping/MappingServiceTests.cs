@@ -11,14 +11,16 @@ using PzlEv.Shared.Models.Db;
 using PzlEv.Shared.Models.Pipeline;
 using PzlEv.Shared.Utils.Data;
 using PzlEv.Shared.Utils.Data.Sql;
+using PzlEv.Shared.Utils.Dictionaries;
+using PzlEv.Shared.Models.Dictionaries;
 using PzlEv.Tests.TestSupport;
 using Xunit;
 
 namespace PzlEv.Tests.Mapping;
 
 /// <summary>
-/// Mapowanie na bazie testowej: raport mapowań i ACTUALS przez import (parsery MAPOWANIA i ACTUALS), struktura P1S
-/// z PZLPROD (TestPzlProd), rozstrzyganie, korekty z historią i problemy po imporcie (G2).
+/// Mapowanie na bazie testowej: ACTUALS przez import, raport mapowań – słownik globalny wczytany z pliku (jak na ekranie
+/// Słowniki), struktura P1S z PZLPROD (TestPzlProd), rozstrzyganie, korekty z historią i problemy po imporcie (G2).
 /// </summary>
 public sealed class MappingServiceTests : IDisposable
 {
@@ -32,8 +34,9 @@ public sealed class MappingServiceTests : IDisposable
     private AppServices _app = null!;
     private ImportService _import = null!;
     private MappingService _mapping = null!;
+    private DictionaryService _dictionaries = null!;
 
-    /// <summary>Baza z presetami (ACTUALS_PAF), definicja raportu mapowań (prefiks MAPOWANIA_) i PZLPROD testowy.</summary>
+    /// <summary>Baza z presetami (ACTUALS_PAF), słownik raportu mapowań i PZLPROD testowy.</summary>
     private void Use(bool pzlProd = true)
     {
         _database = new TestDatabase(presets: true);
@@ -41,7 +44,7 @@ public sealed class MappingServiceTests : IDisposable
         var config = new SourceConfigService(new SqlSourceConfigStore(_database.Sql, _services.Clock, _services.User), _app.Journal);
         var rabit = Assert.Single(config.Locations());
         Assert.True(config.SaveLocation(new LocationInput(rabit.LocationId, rabit.Version, rabit.Name, rabit.Path, Active: false)).Success);
-        Assert.True(config.SaveDefinition(new DefinitionInput(null, null, "MAPOWANIA", "MAPOWANIA_", "Raport mapowań SAP↔CES", "MAPOWANIA", Active: true)).Success);
+        _dictionaries = new DictionaryService(new SqlDictionaryStore(_database.Sql, _services.Clock, _services.User, GlobalDictionaries.Tables), _app.Journal);
         _import = new ImportService(new SqlImportStore(_database.Sql), _app);
         _prod = pzlProd ? new TestPzlProd(P1sSample.Elements) : null;
         _mapping = Mapping();
@@ -55,16 +58,27 @@ public sealed class MappingServiceTests : IDisposable
     {
         Directory.CreateDirectory(_app.Config.ImportFolder);
         File.Copy(TestServices.TestData("RABIT", "ACTUALS_PAF_01.csv"), Path.Combine(_app.Config.ImportFolder, "ACTUALS_PAF_01.csv"), overwrite: true);
-        File.WriteAllLines(Path.Combine(_app.Config.ImportFolder, "MAPOWANIA_SAP_CES.csv"),
+        var run = _import.Run();
+        Assert.Equal(FileDecisions.Imported, Assert.Single(run.Files).Decision);
+        LoadReport(
         [
-            ReportHeader,
             "SAP;1003;1003;50001;1002;AC-I39;AC-I39.1.01;AC-I39;2DI473;AC-I39.1.01.01;AC-I39.1.01.01;2DI473001001;ENG;",
             "CES;60002;1002;;;2DI473;AC-I39.1.01;AC-I39;2DI473;2DI473001099;;;Element tylko w CES;",
             .. extraReportLines,
         ]);
-        var run = _import.Run();
-        Assert.All(run.Files, f => Assert.Equal(FileDecisions.Imported, f.Decision));
-        Assert.Equal(2, run.Files.Count);
+    }
+
+    /// <summary>Wczytanie raportu mapowań do słownika jak na ekranie Słowniki: podgląd różnic i zatwierdzenie.</summary>
+    private ImportPreview LoadReport(IEnumerable<string> lines)
+    {
+        var path = Path.Combine(_root, "raport_mapowan.csv");
+        File.WriteAllLines(path, [ReportHeader, .. lines]);
+        var spec = GlobalDictionaries.Get(GlobalDictionaries.MappingReport);
+        var preview = _dictionaries.PreviewImport(spec, path);
+        Assert.False(preview.HasErrors, string.Join("; ", preview.Issues.Select(i => i.Message)));
+        var outcome = _dictionaries.ApplyImport(spec, preview);
+        Assert.True(outcome.Status is SaveStatus.Saved or SaveStatus.NoChanges, outcome.Message);
+        return preview;
     }
 
     private static MappingResult Of(MappingState state, string element) => state.Results.Single(r => r.CesElement == element);
@@ -86,8 +100,8 @@ public sealed class MappingServiceTests : IDisposable
 
         Assert.Null(state.P1sError);
         Assert.Equal(P1sSample.Elements.Count, state.Tree.Sum(n => n.ElementCount));
-        Assert.Equal("MAPOWANIA_SAP_CES.csv", state.Report!.FileName);
-        Assert.Equal(2, state.Report.Entries.Count);
+        Assert.Equal(2, state.Report!.Entries.Count);
+        Assert.Equal("raport mapowań, wiersz SAP 1003", Of(state, "2DI473001001").Origin);
         Assert.Equal((MappingStatuses.Report, "00001003", "AC-I39.1.01.01"),
             (Of(state, "2DI473001001").Status, Of(state, "2DI473001001").TargetPspnr, Of(state, "2DI473001001").TargetWbs));
         Assert.Equal((MappingStatuses.Inherited, "AC-I39.1.01"), (Of(state, "2DI473001002").Status, Of(state, "2DI473001002").TargetWbs));
@@ -213,6 +227,30 @@ public sealed class MappingServiceTests : IDisposable
         var result = _mapping.SaveCorrection(new CorrectionInput(CorrectionKinds.Project, "4D03GZ", "00002001", null), state);
         Assert.False(result.Success);
         Assert.Contains(result.Issues, i => i.Message.Contains("PzlProd"));
+    }
+
+    [SqlFact]
+    public void Loading_report_again_replaces_whole_mapping_and_keeps_history()
+    {
+        Use();
+        ImportSamples();
+
+        // nowy plik: wiersza SAP 1003 nie ma (usunięty), projekt 2DI473 wskazuje inny element P1S, dochodzi projekt 4D03GZ
+        var preview = LoadReport(
+        [
+            "CES;60002;1001;;;2DI473;AC-I39.1;AC-I39;2DI473;2DI473001099;;;Element tylko w CES;",
+            "CES;60003;2001;;;MC-00;MC-00.001;MC-00;4D03GZ;4D03GZ;;4D03GZ;Projekt CES;",
+        ]);
+
+        Assert.Equal(["CES | 60003"], preview.Added);
+        Assert.StartsWith("CES | 60002 – pspnr_sap: 1002 → 1001", Assert.Single(preview.Changed));
+        Assert.Equal(["SAP | 1003"], preview.Removed);
+        var state = _mapping.Load();
+        Assert.Equal(2, state.Report!.Entries.Count);
+        Assert.Equal((MappingStatuses.Inherited, "AC-I39.1"), (Of(state, "2DI473001001").Status, Of(state, "2DI473001001").TargetWbs));
+        Assert.Equal((MappingStatuses.Inherited, "MC-00.001"), (Of(state, "4D03GZ000041").Status, Of(state, "4D03GZ000041").TargetWbs));
+        var history = _dictionaries.History(Assert.Single(preview.RemovedRows).RowId!.Value);   // usunięty wiersz zostaje w historii
+        Assert.NotNull(Assert.Single(history).SupersededAt);
     }
 
     [SqlFact]

@@ -45,8 +45,9 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
     public PoImportResult ReadObjectives(string path) => PerformanceObjectivesReader.Read(path);
 
     /// <summary>
-    /// Nakładka po ponownym imporcie z SAP (odświeżenie): struktura z pliku; elementy o tym samym WBS element zachowują
-    /// identyfikator (historia węzła trwa). Węzły wirtualne i ręczne zmiany nie są przenoszone – O47.
+    /// Podmiana nakładki eksportem SAP (edytor nakładki – „Wczytaj Excel”): struktura z pliku; elementy o tym samym
+    /// WBS element zachowują identyfikator (historia węzła trwa). Węzły wirtualne i ręczne zmiany nie są przenoszone –
+    /// zachowuje je „Dołóż z Excela” (AddNew).
     /// </summary>
     public static PoTree Refresh(PoTree current, PoTree imported)
     {
@@ -79,6 +80,39 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
         SacObjNumber = node.SacObjNumber, IsStatistical = node.IsStatistical, IsAcctAsstElement = node.IsAcctAsstElement,
     };
 
+    /// <summary>
+    /// Dołożenie do nakładki elementów z kolejnego eksportu SAP (ekran Projekt – np. nowe Project definition): elementy
+    /// o WBS element, którego nakładka jeszcze nie ma, dochodzą pod swojego rodzica z pliku (istniejący element nakładki
+    /// albo nowy); istniejące węzły, węzły wirtualne i zmiany w aplikacji zostają bez zmian.
+    /// </summary>
+    public static (PoTree Tree, int Added, IReadOnlyList<string> Projects) AddNew(PoTree current, PoTree imported)
+    {
+        var tree = current.Copy();
+        var existing = tree.Nodes.Where(n => !n.IsVirtual && n.WbsElement is not null)
+            .GroupBy(n => n.WbsElement!, StringComparer.OrdinalIgnoreCase).ToDictionary(g => g.Key, g => g.First().Key, StringComparer.OrdinalIgnoreCase);
+        var keys = new Dictionary<long, long>();
+        var added = 0;
+        var projects = new List<string>();
+        foreach (var (node, _) in imported.Flatten())
+        {
+            if (node.WbsElement is not null && existing.TryGetValue(node.WbsElement, out var key))
+            {
+                keys[node.Key] = key;
+                continue;
+            }
+            var copy = CopyWithKey(node, tree.NewKey());
+            copy.ParentKey = node.ParentKey is { } parent && keys.TryGetValue(parent, out var mapped) ? mapped : null;
+            tree.Add(copy);
+            keys[node.Key] = copy.Key;
+            if (copy.WbsElement is not null)
+                existing[copy.WbsElement] = copy.Key;
+            added++;
+            if (node.ProjectDefinition is { Length: > 0 } project && !projects.Contains(project, StringComparer.OrdinalIgnoreCase))
+                projects.Add(project);
+        }
+        return (tree, added, projects);
+    }
+
     /// <summary>Zapis nakładki po edycji (z historią); ERROR walidacji blokuje zapis.</summary>
     public (List<Issue> Issues, StoreResult? Result) SaveObjectives(string code, PoTree tree)
     {
@@ -93,12 +127,32 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
 
     // ---------- słowniki projektu ----------
 
-    /// <summary>Konta AD i nazwiska ze słownika globalnego Osoby (CAM wybierany z listy osób).</summary>
-    public IReadOnlySet<string> Persons() =>
-        dictionaries.Current(GlobalDictionaries.Persons)
-            .SelectMany(r => new[] { r.Values.GetValueOrDefault("Konto AD"), r.Values.GetValueOrDefault("Imię i nazwisko") })
-            .OfType<string>()
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+    /// <summary>USRID ze słownika globalnego Osoby (CAM wybierany z listy osób; zapisywany USRID).</summary>
+    public IReadOnlySet<string> Persons() => PersonLookups().Select(o => o.Value).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Osoby ze słownika Osoby: USRID → imię i nazwisko (posortowane po nazwisku).</summary>
+    public IReadOnlyList<LookupOption> PersonLookups() =>
+        GlobalDictionaries.LookupOptions(GlobalDictionaries.Persons, _dictionaries.Load(GlobalDictionaries.Get(GlobalDictionaries.Persons)));
+
+    /// <summary>
+    /// Lista wyboru CAM w tabeli struktury: osoby ze słownika Osoby (persons) oraz CAM już wpisane w „WP i CAM”, których
+    /// nie ma w słowniku (np. sprzed wczytania osób z HR) – żeby tabela je pokazała.
+    /// </summary>
+    public static IReadOnlyList<LookupOption> PersonOptions(IReadOnlyList<LookupOption> persons, IEnumerable<DictRow> wpCam)
+    {
+        var known = persons.Select(p => p.Value).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        return persons.Concat(wpCam.Select(r => r["CAM"]).OfType<string>().Where(c => !known.Contains(c)).Distinct(StringComparer.OrdinalIgnoreCase)
+                .Select(c => new LookupOption(c, c)))
+            .OrderBy(p => p.Label, StringComparer.CurrentCulture)
+            .ToList();
+    }
+
+    /// <summary>
+    /// Wartości słowników powiązanych do wyboru w tabeli słownika (DictColumn.Lookup): Osoby – USRID → imię i nazwisko
+    /// (słownik Osoby wczytany z HR).
+    /// </summary>
+    public static IReadOnlyDictionary<string, IReadOnlyList<LookupOption>> Lookups(IReadOnlyList<LookupOption> persons) =>
+        new Dictionary<string, IReadOnlyList<LookupOption>> { [GlobalDictionaries.Persons] = persons };
 
     // ---------- mapowanie CES ↔ P1S (strona P1S nakładki) ----------
 
@@ -132,7 +186,7 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
                 error = $"Odczyt PZLPROD (LOG.WBS) nieudany: {ex.Message}";
             }
         }
-        return new MappingInputs(mapping.LatestReport(), mapping.ActiveCorrections(), p1s, error);
+        return new MappingInputs(mapping.Report(), mapping.ActiveCorrections(), p1s, error);
     }
 
     public static IReadOnlyDictionary<long, MappingResult> Resolve(PoTree tree, MappingInputs inputs) => ObjectivesMapping.Resolve(tree, inputs);
@@ -148,33 +202,71 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
 
     public IReadOnlyList<DictRow> Rows(string dictionary, string code) => _dictionaries.Load(ProjectDictionaries.Base(dictionary), code);
 
+    /// <summary>
+    /// Wiersze słownika projektu do edycji w tabeli: Cost Category – zmiany projektu i pozycje globalne
+    /// (ProjectDictionaries.WithGlobal), pozostałe – wiersze projektu.
+    /// </summary>
+    public IReadOnlyList<(DictRow Row, bool Inherited)> EditableRows(string dictionary, string code)
+    {
+        if (dictionary != GlobalDictionaries.CostCategory)
+            return Rows(dictionary, code).Select(r => (r, false)).ToList();
+        var spec = ProjectDictionaries.Base(dictionary);
+        return ProjectDictionaries.WithGlobal(spec, _dictionaries.Load(spec), Rows(dictionary, code));
+    }
+
     /// <summary>Arkusz słownika w skoroszycie (nazwa jak w szablonie); null – plik bez takiego arkusza albo CSV.</summary>
     public static string? FindSheet(string path, ProjectDictionaryItem item) =>
         TabularFileReader.SheetNames(path).FirstOrDefault(s =>
             s.Equals(item.Sheet, StringComparison.OrdinalIgnoreCase) || s.Equals(item.Name, StringComparison.OrdinalIgnoreCase));
 
-    public ImportPreview PreviewDictionary(string dictionary, ProjectDictionaryContext context, string path, string code, string? sheet) =>
-        _dictionaries.PreviewImport(ProjectDictionaries.For(dictionary, context), path, code, sheet);
+    /// <summary>
+    /// Podgląd wczytania słownika projektu z pliku. Skoroszyt z kilkoma arkuszami bez arkusza słownika – błąd (zamiast
+    /// cichego wczytania pierwszego arkusza, np. „WP i CAM” jako harmonogramu). Cost Category – wiersze identyczne ze
+    /// słownikiem globalnym pomijane (nie stają się zmianami projektu).
+    /// </summary>
+    public ImportPreview PreviewDictionary(string dictionary, ProjectDictionaryContext context, string path, string code, string? sheet)
+    {
+        var item = ProjectDictionaries.Item(dictionary);
+        if (sheet is null && TabularFileReader.ExcelExtensions.Contains(Path.GetExtension(path)) && TabularFileReader.SheetNames(path) is { Count: > 1 } sheets)
+            return new ImportPreview(dictionary, Path.GetFileName(path), [], [], [],
+                [Issue.Error($"Skoroszyt ma kilka arkuszy ({string.Join(", ", sheets)}), żaden nie nazywa się „{item.Sheet}” ani „{item.Name}” – zmień nazwę arkusza albo zapisz słownik w osobnym pliku", Path.GetFileName(path))],
+                [], []);
+        var inherited = dictionary == GlobalDictionaries.CostCategory ? _dictionaries.Load(ProjectDictionaries.Base(dictionary)) : null;
+        return _dictionaries.PreviewImport(ProjectDictionaries.For(dictionary, context), path, code, sheet, inherited);
+    }
 
     public SaveOutcome ApplyDictionary(string dictionary, ProjectDictionaryContext context, ImportPreview preview, string code) =>
         _dictionaries.ApplyImport(ProjectDictionaries.For(dictionary, context), preview, code);
 
-    /// <summary>Słowniki projektu do Excela – arkusz na słownik; pusty „WP i CAM” dostaje elementy P1S z zakresu (szablon).</summary>
+    /// <summary>
+    /// Słowniki projektu do Excela – arkusz na słownik; szablon do uzupełnienia: „WP i CAM” z elementami P1S z zakresu
+    /// bez WP, „Harmonogram i budżet” z WP bez harmonogramu.
+    /// </summary>
     public void ExportDictionaries(string path, string code, string type, PoTree tree, MappingInputs inputs)
     {
-        var sheets = new List<(string, IReadOnlyList<string>, IEnumerable<IReadOnlyList<object?>>)>();
+        var sheets = new List<(string, IReadOnlyList<ExcelTableWriter.ExcelColumn>, IEnumerable<IReadOnlyList<object?>>)>();
         foreach (var item in ProjectDictionaries.ForType(type).Where(i => i.Stored))
         {
             var spec = ProjectDictionaries.Base(item.Code);
             var rows = code.Length > 0 ? Rows(item.Code, code) : [];
             IEnumerable<IReadOnlyList<object?>> data = rows.Select(r => (IReadOnlyList<object?>)spec.Columns.Select(c => ValueFormat.ToExcel(c, r[c.Name])).ToList());
-            if (item.Code == ProjectDictionaries.WpCam && rows.Count == 0)
+            // Szablon do uzupełnienia: elementy P1S z zakresu bez WP i WP bez harmonogramu (wiersze z samym kluczem
+            // pomijane przy wczytaniu – SkipKeyOnlyRows).
+            if (item.Code == ProjectDictionaries.WpCam)
             {
-                data = Scope(tree, inputs).Elements().Select(l => (IReadOnlyList<object?>)new object?[] { l, null, null, null });
+                var assigned = rows.Select(r => r["Element P1S"]).OfType<string>().Select(MappingKeys.Key).ToHashSet();
+                data = data.Concat(Scope(tree, inputs).Elements().Where(l => !assigned.Contains(MappingKeys.Key(l)))
+                    .Select(l => (IReadOnlyList<object?>)new object?[] { l, null, null, null }));
             }
-            sheets.Add((item.Sheet, spec.Columns.Select(c => c.Name).ToList(), data));
+            else if (item.Code == ProjectDictionaries.ScheduleBudget && code.Length > 0)
+            {
+                var planned = rows.Select(r => r["WP"]).OfType<string>().ToHashSet(StringComparer.OrdinalIgnoreCase);
+                data = data.Concat(Rows(ProjectDictionaries.WpCam, code).Select(r => r["WP"]).OfType<string>().Distinct(StringComparer.OrdinalIgnoreCase)
+                    .Where(wp => !planned.Contains(wp)).Select(wp => (IReadOnlyList<object?>)new object?[] { wp, null, null, null, null }));
+            }
+            sheets.Add((item.Sheet, _dictionaries.ExcelColumns(spec), data));
         }
-        ExcelTableWriter.WriteSheets(path, sheets);
+        ExcelTableWriter.WriteTemplate(path, sheets);
         journal.Add(Area, $"{(code.Length > 0 ? code : "nowy projekt")}: słowniki projektu pobrane do Excela", code.Length > 0 ? code : null);
     }
 
@@ -192,6 +284,138 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
     {
         var last = dictionaries.Current(dictionary, code).MaxBy(r => r.RecordedAt);
         return last is null ? "" : $"{last.RecordedAt:yyyy-MM-dd HH:mm} · {last.RecordedBy}";
+    }
+
+    // ---------- struktura projektu (ekran Projekt) ----------
+
+    /// <summary>Struktura projektu: nakładka z rozwinięciem P1S, WP, CAM, budżet i daty (StructureBuilder).</summary>
+    public static ProjectStructure Structure(PoTree tree, MappingInputs inputs, IReadOnlyList<DictRow> wpCam, IReadOnlyList<DictRow> schedule,
+        IReadOnlyDictionary<string, decimal>? costs = null) =>
+        StructureBuilder.Build(tree, Resolve(tree, inputs), inputs.P1s, wpCam, schedule, costs);
+
+    /// <summary>ACWP po elemencie CES z ostatniego importu ACTUALS (waluta obiektu – PLN) – kolumna ACWP struktury.</summary>
+    public IReadOnlyDictionary<string, decimal> CostsByElement(string code) => store.CostsByElement(code, DefaultCostValue);
+
+    /// <summary>
+    /// Zapis zmiany wiersza tabeli struktury od razu po jej zatwierdzeniu (bez osobnego „Zapisz”): nazwa i Legacy WBS –
+    /// nakładka; WP, CAM, Cost Category – „WP i CAM” (klucz – kod P1S wiersza); budżet i daty – „Harmonogram i budżet”
+    /// (klucz – WP wiersza). Ostrzeżenia nie wstrzymują zapisu (są w komunikacie), ERROR – tak. Zmiana WP przenosi budżet
+    /// starego WP, jeśli ten nie jest już przypisany do innego elementu (StructureEdits.ScheduleAfterWpChange).
+    /// </summary>
+    public (bool Saved, string Message) SaveStructureEdit(string code, MappingInputs inputs, StructureRow row, IReadOnlyDictionary<string, string?> changes)
+    {
+        var messages = new List<string>();
+        var tree = store.Objectives(code);
+        var element = row.P1s;
+        var dictionaryChanges = changes.Keys.Any(k => StructureEdits.WpCamColumns.Contains(k) || StructureEdits.ScheduleColumns.Contains(k));
+        if (changes.TryGetValue(StructureEdits.P1s, out var newCode))
+        {
+            // Legacy WBS i WP / CAM w jednym wierszu (np. wklejenie): WP przypisywany do nowego kodu P1S.
+            if (string.IsNullOrWhiteSpace(newCode) && dictionaryChanges)
+                return (false, "Usunięcie Legacy WBS i zmiana WP / CAM / budżetu w jednym wierszu – zapisz je osobno.");
+            element = string.IsNullOrWhiteSpace(newCode) ? null : newCode.Trim();
+        }
+        if (row.NodeKey is { } key && (changes.ContainsKey(StructureEdits.Name) || changes.ContainsKey(StructureEdits.P1s)))
+        {
+            if (tree.Find(key) is not { } node)
+                return (false, "Węzła nie ma już w nakładce – odśwież ekran.");
+            if (changes.TryGetValue(StructureEdits.Name, out var name))
+            {
+                if (string.IsNullOrWhiteSpace(name))
+                    return (false, "Podaj nazwę węzła.");
+                node.Name = name.Trim();
+            }
+            if (changes.TryGetValue(StructureEdits.P1s, out var legacy))
+                node.LegacyWbs = string.IsNullOrWhiteSpace(legacy) ? null : legacy.Trim();
+            var (issues, result) = SaveObjectives(code, tree);
+            if (result is null)
+                return (false, Describe("Nakładka ma błędy – nic nie zapisano", issues));
+            if (!result.Success)
+                return (false, result.Conflict!);
+            messages.Add("nakładka zapisana");
+            tree = store.Objectives(code);
+            if (changes.ContainsKey(StructureEdits.P1s) && row.Wp is { } assignedWp && !dictionaryChanges)
+                messages.Add($"uwaga: WP {assignedWp} jest przypisany do elementu {row.P1s} – zaznacz WP przy nowym kodzie P1S albo zmień „WP i CAM”");
+        }
+
+        var wpChanges = changes.Where(c => StructureEdits.WpCamColumns.Contains(c.Key)).ToDictionary(c => c.Key, c => c.Value);
+        var wp = row.Wp;
+        if (wpChanges.Count > 0)
+        {
+            if (element is null)
+                return (false, "Wiersz nie ma kodu P1S – WP przypisuje się do elementu P1S.");
+            var (working, removed) = StructureEdits.WpCam(Rows(ProjectDictionaries.WpCam, code), element, wpChanges);
+            var outcome = SaveStructureDictionary(ProjectDictionaries.WpCam, Context(code, tree, null, inputs), working, removed, code);
+            if (outcome.Status is not (SaveStatus.Saved or SaveStatus.NoChanges))
+                return (false, Describe($"WP i CAM: {outcome.Message}", outcome.Issues));
+            messages.Add($"WP i CAM {(outcome.Status == SaveStatus.Saved ? "zapisane" : "bez zmian")}");
+            var assigned = Rows(ProjectDictionaries.WpCam, code);
+            wp = assigned.FirstOrDefault(r => MappingKeys.Key(r["Element P1S"]) == MappingKeys.Key(element))?["WP"];
+            if (row.Wp is { } oldWp && !string.Equals(oldWp, wp, StringComparison.OrdinalIgnoreCase)
+                && !assigned.Any(r => string.Equals(r["WP"], oldWp, StringComparison.OrdinalIgnoreCase)))
+            {
+                var (schedule, gone) = StructureEdits.ScheduleAfterWpChange(Rows(ProjectDictionaries.ScheduleBudget, code), oldWp, wp);
+                var moved = SaveStructureDictionary(ProjectDictionaries.ScheduleBudget, Context(code, tree, assigned, inputs), schedule, gone, code);
+                if (moved.Status == SaveStatus.Saved)
+                    messages.Add(gone.Count > 0 ? $"usunięto harmonogram WP {oldWp}" : $"budżet WP {oldWp} przeniesiony na {wp}");
+                else if (moved.Status != SaveStatus.NoChanges)
+                    messages.Add(Describe($"harmonogram WP {oldWp} bez zmian: {moved.Message}", moved.Issues));
+            }
+        }
+
+        var budgetChanges = changes.Where(c => StructureEdits.ScheduleColumns.Contains(c.Key)).ToDictionary(c => c.Key, c => c.Value);
+        if (budgetChanges.Count > 0)
+        {
+            if (wp is null && budgetChanges.Values.All(string.IsNullOrWhiteSpace))
+                return (true, messages.Count == 0 ? "Brak zmian." : $"Zapisano: {string.Join("; ", messages)}.");   // WP usunięty razem z budżetem (np. cofnięcie wklejenia)
+            if (wp is null)
+                return (false, string.Join("; ", messages.Append("budżet i daty wymagają WP w wierszu")));
+            var (working, removed) = StructureEdits.Schedule(Rows(ProjectDictionaries.ScheduleBudget, code), wp, budgetChanges);
+            var outcome = SaveStructureDictionary(ProjectDictionaries.ScheduleBudget, Context(code, tree, Rows(ProjectDictionaries.WpCam, code), inputs), working, removed, code);
+            if (outcome.Status is not (SaveStatus.Saved or SaveStatus.NoChanges))
+                return (false, Describe(string.Join("; ", messages.Append($"Harmonogram i budżet: {outcome.Message}")), outcome.Issues));
+            messages.Add($"harmonogram i budżet {(outcome.Status == SaveStatus.Saved ? "zapisane" : "bez zmian")}");
+        }
+        return (true, messages.Count == 0 ? "Brak zmian." : $"Zapisano: {string.Join("; ", messages)}.");
+    }
+
+    /// <summary>
+    /// Zapis stanu słownika projektu (edycja w zakładce „Słowniki projektu”, zmiana w tabeli struktury) z regułami
+    /// projektu; working – wiersze projektu po edycji, removed – usunięte.
+    /// </summary>
+    public SaveOutcome SaveDictionary(string dictionary, ProjectDictionaryContext context, IReadOnlyList<DictRow> working, IReadOnlyList<DictRow> removed, string code,
+        bool confirmWarnings = true) =>
+        _dictionaries.Save(ProjectDictionaries.For(dictionary, context), working, removed, confirmWarnings, code);
+
+    /// <summary>
+    /// Zapis słownika projektu po zmianie w tabeli struktury: ostrzeżenia nie wstrzymują zapisu, a błędy, które słownik
+    /// miał już wcześniej w innych wierszach (np. element poza zakresem po zmianie mapowania), nie blokują zmiany.
+    /// </summary>
+    private SaveOutcome SaveStructureDictionary(string dictionary, ProjectDictionaryContext context, IReadOnlyList<DictRow> working, IReadOnlyList<DictRow> removed, string code)
+    {
+        var spec = ProjectDictionaries.For(dictionary, context);
+        return _dictionaries.Save(spec, working, removed, confirmWarnings: true, code, _dictionaries.KnownErrors(spec, code));
+    }
+
+    /// <summary>Komunikat z pierwszymi problemami (ERROR przed WARNING).</summary>
+    private static string Describe(string message, IReadOnlyList<Issue> issues)
+    {
+        var shown = issues.OrderBy(i => i.Level == CheckLevel.Error ? 0 : 1).Take(3).Select(i => i.Element is null ? i.Message : $"{i.Message} ({i.Element})").ToList();
+        return shown.Count == 0 ? message : $"{message} – {string.Join("; ", shown)}{(issues.Count > 3 ? $" (+{issues.Count - 3})" : "")}";
+    }
+
+    // ---------- raport kosztów ----------
+
+    /// <summary>Pole kwoty ACTUALS w raporcie kosztów – waluta obiektu (PLN).</summary>
+    public const string DefaultCostValue = "ValueObjCrcy";
+
+    /// <summary>Raport kosztów projektu do Excela (REP_ProjectCosts – ostatni import ACTUALS); zwraca liczbę wierszy.</summary>
+    public int ExportCostReport(string path, string code, string value = DefaultCostValue)
+    {
+        var (columns, rows) = store.CostReport(code, value);
+        ExcelTableWriter.WriteSheets(path, [("Koszty", columns, rows)]);
+        journal.Add(Area, $"{code}: raport kosztów pobrany do Excela ({rows.Count} wierszy)", code);
+        return rows.Count;
     }
 
     // ---------- gotowość, baza analityczna ----------

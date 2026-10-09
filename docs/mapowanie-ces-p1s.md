@@ -3,8 +3,9 @@
 Zakres: przypisanie elementów WBS z SAP CES (koszty) do elementów WBS z SAP P1S (produkcja) – źródło prawdy,
 dziedziczenie, korekty, kolejność rozstrzygania, statusy, model danych, widok i reguły walidacji.
 
-Powiązane: `docs/zrodla-danych.md` (raport kosztów CES, struktura P1S i drzewo), `docs/pipeline-fazy.md`
-(G2 – rozstrzyganie po imporcie, P1 i P3 – użycie w przebiegu), `docs/model-danych.md` (historia).
+Powiązane: `docs/zrodla-danych.md` (raport kosztów CES, struktura P1S i drzewo), `docs/slowniki.md` (słownik „Raport
+mapowań CES ↔ P1S”), `docs/pipeline-fazy.md` (G2 – rozstrzyganie po imporcie, P1 i P3 – użycie w przebiegu),
+`docs/model-danych.md` (historia).
 
 ---
 
@@ -27,16 +28,22 @@ SAP CES → projekt CES / WBS CES → mapowanie PZL-EV (globalne) → element P1
 ## 2. Źródło prawdy – raport mapowań SAP↔CES
 
 Powiązanie CES ↔ P1S pochodzi z **raportu mapowań SAP↔CES**, eksportowanego z `PZLPROD` do Excela
-i **importowanego** jak raporty RABIT (`docs/zrodla-danych.md`, rozdz. 2): parser `MAPOWANIA` (migracja 005, tabela
-`can.MappingReport`), definicja źródła z prefiksem nazwy pliku – dodawana w Administracji. Każda wersja pliku zostaje
-w bazie; mapowanie czyta **najnowszy** zaimportowany plik. Strukturę P1S (`LOG.WBS`) aplikacja czyta bezpośrednio
-z `PZLPROD` (`docs/zrodla-danych.md`, rozdz. 5).
+i utrzymywanego jako **słownik globalny „Raport mapowań CES ↔ P1S”** na ekranie Słowniki (`docs/slowniki.md`,
+rozdz. 2; tabela `dict.MappingReport`, migracja 009). Nowy raport wczytuje się w całości: **Wczytaj z Excela** →
+podgląd różnic → zatwierdzenie; zawartość słownika staje się równa plikowi – wiersze spoza pliku są usuwane
+(zamknięta wersja, historia zostaje). Mapowanie czyta **bieżący stan** słownika, przebieg – stan na swój znacznik
+stanu. Raport nie jest importowany z RABIT (parser `MAPOWANIA` usunięty w migracji 009). Strukturę P1S (`LOG.WBS`)
+aplikacja czyta bezpośrednio z `PZLPROD` (`docs/zrodla-danych.md`, rozdz. 5).
 
-Kolumny:
+Kolumny (nagłówek pierwszego wiersza; rozpoznawane po nazwie, bez względu na wielkość liter i spacje):
 
 `src, pspnr, pspnr_sap, pspnr_ces, pspnr_parent, project, project_sap, project_sap_org, project_ces, wbs,
-wbs_sap, wbs_ces, wbs_desc(_sap/_ces), prctr(_sap/_ces), lvl(_sap/_ces), perf_obg, techs, sales_order_typ,
-sales_order, sales_order_pos, matnr, network`
+wbs_sap, wbs_ces, wbs_desc, wbs_desc_sap, wbs_desc_ces, prctr, prctr_sap, prctr_ces, lvl, lvl_sap, lvl_ces, perf_obg,
+techs, sales_order_typ, sales_order, sales_order_pos, matnr, network`
+
+Klucz wiersza: `src` + `pspnr`. Wymagane są tylko `src` (`SAP` / `CES`) i `pspnr`; pozostałe kolumny mogą być puste
+albo nieobecne w pliku. Słownik przechowuje wszystkie kolumny (pobranie do Excela daje pełny układ), rozstrzyganie
+czyta te z odczytu wiersza (niżej). Wartości są tekstem – PSPNR i numery bez zmiany zer wiodących.
 
 | Wiersz | Znaczenie | Przykład |
 |---|---|---|
@@ -50,9 +57,6 @@ sales_order, sales_order_pos, matnr, network`
   poziom, ani opis nie są kluczem.
 - Raport wskazuje element P1S dokładnie (nie zawsze `PROJORG`).
 - Połączenie z drzewem P1S: `LOG.WBS.PSPNR` = `pspnr_sap` (`docs/zrodla-danych.md`, rozdz. 5).
-- Parser `MAPOWANIA` czyta kolumny potrzebne do rozstrzygania: `src`, `pspnr`, `pspnr_sap`, `pspnr_ces`,
-  `pspnr_parent`, `project`, `project_sap`, `project_ces`, `wbs`, `wbs_sap`, `wbs_ces` (wymagane `src`; dane w `can.Row`,
-  sloty T01–T11); pozostałe kolumny pliku nie są zapisywane.
 - Odczyt wiersza: element CES = `wbs_ces`, a w wierszu `src` = CES bez `wbs_ces` – `wbs`; cel P1S = `pspnr_sap`,
   a w wierszu `src` = SAP bez `pspnr_sap` – `pspnr` (kod WBS celu: `wbs_sap`, w wierszu SAP – `wbs`); odpowiednik
   projektu CES: `project_ces` → `project_sap`. Element CES z raportu łączy się z elementem kosztów po kodzie WBS
@@ -82,7 +86,9 @@ Korekty są **globalne** i mają **pierwszeństwo przed raportem**:
 - Korekta zapisuje się z historią: kto, kiedy, poprzedni i nowy cel, `valid_from` / `valid_to`.
 - Zmiana względem raportu wymaga **uzasadnienia**.
 - **Usunięcie korekty** (zamknięcie `valid_to`) przywraca przypisanie z raportu albo dziedziczenie.
-- Przypisania z raportu **nie da się usunąć** – można je tylko skorygować.
+- Przypisania z raportu **nie da się usunąć** na ekranie Mapowanie – można je tylko skorygować. Słownik raportu
+  odzwierciedla raport z `PZLPROD` i zmienia się przez wczytanie nowego raportu (rozdz. 2); zmiana przypisania
+  w PZL-EV to korekta (z uzasadnieniem i celem sprawdzonym w `LOG.WBS`), nie edycja wiersza słownika.
 
 ---
 
@@ -128,8 +134,8 @@ przypisanych elementów tego samego projektu CES.
 
 ## 8. Model danych
 
-Przypisania z raportu mapowań są w bazie jako zaimportowane wersje pliku (parser `MAPOWANIA` w `can.Row`, rozdz. 2) –
-aplikacja ich nie zmienia. Wyniki rozstrzygania nie są zapisywane. W bazie PZL-EV (`dict.MappingCorrection`,
+Przypisania z raportu mapowań są w słowniku globalnym `dict.MappingReport` (rozdz. 2; historia wersji jak w każdym
+słowniku – `docs/slowniki.md`, rozdz. 1); ekran Mapowanie ich nie zmienia. Wyniki rozstrzygania nie są zapisywane. W bazie PZL-EV (`dict.MappingCorrection`,
 migracja 005) zapisywane są **korekty**:
 
 | Pole | Opis |
@@ -146,7 +152,7 @@ migracja 005) zapisywane są **korekty**:
 Jeden element (projekt) CES ma co najwyżej jedną obowiązującą korektę – unikalny indeks na wersjach bez
 `SupersededAt` i `ValidTo`. Zapis na nieaktualnej wersji (zmiana innej osoby w międzyczasie) jest odrzucany.
 
-Przebieg czyta korekty w stanie na swój znacznik stanu (`docs/model-danych.md`, rozdz. 4.2).
+Przebieg czyta raport mapowań i korekty w stanie na swój znacznik stanu (`docs/model-danych.md`, rozdz. 4.2).
 
 ---
 
@@ -183,7 +189,7 @@ Poziomy ERROR / WARNING – `docs/pipeline-fazy.md`, rozdz. 1.3.
 | korekta zmieniająca przypisanie z raportu ma uzasadnienie | ERROR |
 | przypisania z raportu nie można usunąć – tylko skorygować | ERROR |
 | cel korekty to element P1S nieaktywny albo usunięty (`Z_ACTIVE`, `LOEKZ`) | WARNING |
-| raport przypisuje elementowi CES kilka celów albo projektowi CES kilka `project_sap` (przyjmowany pierwszy wiersz) | ERROR |
+| raport przypisuje elementowi CES kilka celów albo projektowi CES kilka `project_sap` (przyjmowany pierwszy wiersz słownika) | ERROR |
 | cel z raportu albo korekty nie istnieje w `LOG.WBS` | WARNING |
 | element CES `UNMAPPED` z kosztem – koszt nie trafi do EV żadnego projektu (rozdz. 7) | WARNING |
 | cel korekty spoza `LOG.WBS` (PZLPROD niedostępny albo zły PSPNR) | ERROR – korekta nie jest zapisywana |
@@ -198,7 +204,9 @@ Poziomy ERROR / WARNING – `docs/pipeline-fazy.md`, rozdz. 1.3.
   którego są przypisane – kategorię dostają przez przypisanie (w mapowaniu kategorii się nie przypisuje). Elementy
   nieaktywne i usunięte – kursywą. Elementy bez celu są w węźle **„Nieprzypisane”** (według projektu CES,
   z propozycją celu); cele spoza `LOG.WBS` – w węźle „Cel spoza LOG.WBS”.
-- Nagłówek: liczba elementów według statusu, plik raportu mapowań i stan PZLPROD; **Kontrole** – reguły rozdz. 10.
+- Nagłówek: liczba elementów według statusu, słownik raportu mapowań (liczba wierszy, ostatnia zmiana – kto
+  i kiedy) i stan PZLPROD; **Kontrole** – reguły rozdz. 10. Źródło przypisania z raportu: „raport mapowań, wiersz
+  `<src> <pspnr>`” (klucz wiersza słownika).
 - **Korekta**: element CES wybrany na liście albo w drzewie; cel – element P1S wybrany w drzewie, w wyszukiwaniu
   (kod WBS, opis, PSPNR) albo „Użyj propozycji”; „Korekta projektu CES” – cel dla WBS projektu spoza raportu;
   uzasadnienie; „Zapisz korektę”, „Usuń korektę” i historia wersji. Zapis i usunięcie – wpis w dzienniku.

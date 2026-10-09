@@ -35,7 +35,7 @@ public sealed class MappingService(IMappingStore store, IPzlProdSource? prod, IJ
                 p1sError = $"Odczyt PZLPROD (LOG.WBS) nieudany: {ex.Message}";
             }
         }
-        var report = store.LatestReport();
+        var report = store.Report();
         var elements = store.CesElements();
         var corrections = store.ActiveCorrections();
         // Ostatni import z danymi ACTUALS – elementy, które pojawiły się w nim pierwszy raz, są „nowe” (G2).

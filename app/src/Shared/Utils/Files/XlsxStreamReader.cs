@@ -117,7 +117,7 @@ public static class XlsxStreamReader
         // Wiersz co najmniej tak szeroki jak nagłówek (puste komórki na końcu wiersza nie są zapisane w pliku).
         return new TabularSource(headers, fileType, name, null, null,
             () => Cells().Where(r => r.Row > header.Row && r.Cells.Any(c => !string.IsNullOrWhiteSpace(c)))
-                .Select(r => r.Cells.Length >= headers.Count ? r.Cells : [.. r.Cells, .. new string?[headers.Count - r.Cells.Length]]));
+                .Select(r => (r.Row, r.Cells.Length >= headers.Count ? r.Cells : [.. r.Cells, .. new string?[headers.Count - r.Cells.Length]])));
     }
 
     /// <summary>Komórka &lt;c&gt; (czytnik stoi na jej początku) → tekst; czytnik przechodzi za koniec komórki.</summary>

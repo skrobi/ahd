@@ -31,7 +31,7 @@ public static class MappingResolver
             reportElements[group.Key] = first;
             var distinct = group.Select(targets.Describe).Distinct().ToList();
             if (distinct.Count > 1)
-                issues.Add(Issue.Error($"Element CES {first.CesElement}: w raporcie mapowań kilka celów P1S ({string.Join(", ", distinct)}) – element CES może mieć jeden cel; przyjęto wiersz {first.RowNumber}", first.CesElement));
+                issues.Add(Issue.Error($"Element CES {first.CesElement}: w raporcie mapowań kilka celów P1S ({string.Join(", ", distinct)}) – element CES może mieć jeden cel; przyjęto wiersz {first.Label}", first.CesElement));
         }
 
         var reportProjects = new Dictionary<string, ReportEntry>();
@@ -43,7 +43,7 @@ public static class MappingResolver
             reportProjects[group.Key] = first;
             var distinct = group.Select(e => e.SapProject).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
             if (distinct.Count > 1)
-                issues.Add(Issue.Error($"Projekt CES {first.CesProject}: w raporcie mapowań kilka odpowiedników project_sap ({string.Join(", ", distinct)}); przyjęto {first.SapProject}", first.CesProject));
+                issues.Add(Issue.Error($"Projekt CES {first.CesProject}: w raporcie mapowań kilka odpowiedników project_sap ({string.Join(", ", distinct)}); przyjęto {first.SapProject} (wiersz {first.Label})", first.CesProject));
         }
 
         var elementCorrections = corrections.Where(c => c.Kind == CorrectionKinds.Element && c.IsActive).ToDictionary(c => MappingKeys.Key(c.CesKey));
@@ -64,7 +64,7 @@ public static class MappingResolver
             {
                 var (pspnr, wbs) = targets.Of(entry.TargetPspnr, entry.TargetWbs);
                 results.Add(new MappingResult(element.WbsElement, element.Project, MappingStatuses.Report, pspnr, wbs,
-                    $"raport mapowań, wiersz {entry.RowNumber}", element.HasCost, isNew));
+                    $"raport mapowań, wiersz {entry.Label}", element.HasCost, isNew));
             }
             else if (projectCorrections.TryGetValue(MappingKeys.Key(element.Project), out var projectCorrection))
             {
@@ -76,7 +76,7 @@ public static class MappingResolver
             {
                 var (pspnr, wbs) = targets.Of("", project.SapProject);
                 results.Add(new MappingResult(element.WbsElement, element.Project, MappingStatuses.Inherited, pspnr, wbs,
-                    $"projekt CES {element.Project} → {project.SapProject} (raport mapowań, wiersz {project.RowNumber})", element.HasCost, isNew));
+                    $"projekt CES {element.Project} → {project.SapProject} (raport mapowań, wiersz {project.Label})", element.HasCost, isNew));
             }
             else
             {
