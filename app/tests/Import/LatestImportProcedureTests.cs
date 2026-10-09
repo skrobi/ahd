@@ -208,5 +208,14 @@ public sealed class LatestImportProcedureTests : IDisposable
         Assert.Equal(6054.51m, costs["2DI473001001"]);
         Assert.Equal(2400m, costs["2di473001002"]);
         Assert.Equal(50014, Assert.Throws<SqlException>(() => store.CostsByElement("M28", "Brak")).Number);
+
+        // Migracja 017: cost element rozliczeniowy (Cost Category „Rozliczeniowy”) – rozliczenie wychodzące (klasa partnera
+        // inna niż „Profit analysis”) pominięte; zmiana projektu w Cost Category ma pierwszeństwo przed globalnym.
+        Assert.Equal(1, connection.Execute($"UPDATE {_database.Sql.Table("dict.CostCategory")} SET IsSettlement = 1 " +
+                                           "WHERE Project IS NULL AND SupersededAt IS NULL AND CostElement = '0092212550'"));   // pozycja z danych startowych
+        Assert.Equal(1254.51m, store.CostsByElement("M28", "ValueObjCrcy")["2DI473001001"]);   // bez 4 800 (W30, klasa KSTL)
+        connection.Execute($"INSERT INTO {_database.Sql.Table("dict.CostCategory")} (RowId, Version, Project, CostElement, IsSettlement, RecordedAt, RecordedBy) " +
+                           "VALUES (900001, 1, 'M28', '0092212550', 0, SYSDATETIMEOFFSET(), 'test')");
+        Assert.Equal(6054.51m, store.CostsByElement("M28", "ValueObjCrcy")["2DI473001001"]);   // w projekcie nie jest rozliczeniowy
     }
 }

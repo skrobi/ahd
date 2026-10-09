@@ -185,6 +185,9 @@ wpisu w Cost Category) – `docs/pipeline-fazy.md`, P2.
 
 - **Globalny** słownik: numer elementu kosztowego z kosztów rzeczywistych (`Cost Element` w raporcie ACTUALS –
   `docs/zrodla-danych.md`, rozdz. 4) → Opis, Obszar, Cost Category. Początkowa zawartość – załącznik A.
+- **„Rozliczeniowy”** (pole wyboru): cost element rozliczenia SAP (settlement, np. 0091902551 „PZL Invent Cost Set”).
+  Rozliczenie wychodzące (klasa obiektu partnera inna niż „Profit analysis”) jest pomijane w ACWP struktury projektu –
+  inaczej koszty elementu WBS rozliczanego co miesiąc sumują się do 0 (`docs/performance-objectives.md`, rozdz. 4.2).
 - **„Cost Category – zmiany w projekcie”** – opcjonalny słownik projektu; zmienia i dodaje pozycje, ma
   pierwszeństwo przed globalnym. **Słownik efektywny projektu = globalny + zmiany projektu.**
 - W zakładce Słowniki projektu tabela pokazuje słownik efektywny: pozycje globalne bez zmiany w projekcie mają stan

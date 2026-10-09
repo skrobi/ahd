@@ -82,13 +82,14 @@ public static partial class GlobalDictionaries
         {
             Code = CostCategory,
             Name = "Cost Category",
-            Description = "Numer elementu kosztowego → opis, obszar, Cost Category. Numer liczbowy uzupełniany zerami do 10 znaków.",
+            Description = "Numer elementu kosztowego → opis, obszar, Cost Category; „Rozliczeniowy” – cost element rozliczenia (settlement), pomijany w ACWP jako rozliczenie wychodzące. Numer liczbowy uzupełniany zerami do 10 znaków.",
             Columns =
             [
                 new("Numer elementu kosztowego", ColumnType.Text, Key: true, PadNumericTo: 10),
                 new("Opis", ColumnType.Text),
                 new("Obszar", ColumnType.Text, CheckSimilar: true),
                 new("Cost Category", ColumnType.Text, CheckSimilar: true),
+                new("Rozliczeniowy", ColumnType.Boolean),
             ],
             Rules = CostCategoryRules,
         },
@@ -140,7 +141,8 @@ public static partial class GlobalDictionaries
             [("MPK", "CostCenter"), ("Department", "Department"), ("Year", "Year"), ("Labor Rate", "LaborRate"), ("Overhead", "Overhead")]),
         new(Get(FxRates), "dict.FxRate", [("Waluta", "Currency"), ("Okres", "Period"), ("Kurs", "Rate")]),
         new(Get(CostCategory), "dict.CostCategory",
-            [("Numer elementu kosztowego", "CostElement"), ("Opis", "Description"), ("Obszar", "Area"), ("Cost Category", "CostCategory")]),
+            [("Numer elementu kosztowego", "CostElement"), ("Opis", "Description"), ("Obszar", "Area"), ("Cost Category", "CostCategory"),
+             ("Rozliczeniowy", "IsSettlement")]),
         new(Get(Persons), "dict.Person",
         [
             ("USRID", "AdAccount"), ("Imię i nazwisko", "FullName"), ("Imię", "FirstName"), ("Nazwisko", "LastName"), ("E-mail", "Email"),
