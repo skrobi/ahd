@@ -23,7 +23,7 @@ public sealed class DictionaryStoreContract : IDisposable
     }
 
     private static Dictionary<string, string?> Rate(string dept, string rate) =>
-        new() { ["Department"] = dept, ["Year"] = "2026", ["Labor Rate"] = rate, ["Overhead"] = "0" };
+        new() { ["MPK"] = dept, ["Year"] = "2026", ["Labor Rate"] = rate, ["Overhead"] = "0" };
 
     private static RowChange Add(string dept, string rate) => new(RowChangeKind.Added, null, null, $"{dept} | 2026", Rate(dept, rate));
 
@@ -85,8 +85,8 @@ public sealed class DictionaryStoreContract : IDisposable
         var (store, clock, _) = Create();
         store.Save("department-rates", null, [Add("W30", "100"), Add("W40", "110")]);
         var rows = store.Current("department-rates");
-        var w30 = rows.Single(r => r.Values["Department"] == "W30");
-        var w40 = rows.Single(r => r.Values["Department"] == "W40");
+        var w30 = rows.Single(r => r.Values["MPK"] == "W30");
+        var w40 = rows.Single(r => r.Values["MPK"] == "W40");
         store.Save("department-rates", null, [new RowChange(RowChangeKind.Updated, w30.RowId, 1, w30.Key, Rate("W30", "105"))]);
         clock.Advance(TimeSpan.FromMinutes(1));
 
@@ -131,7 +131,7 @@ public sealed class DictionaryStoreContract : IDisposable
         store.Save(GlobalDictionaries.FxRates, null, [new RowChange(RowChangeKind.Added, null, null, "USD | 2026-10",
             new Dictionary<string, string?> { ["Waluta"] = "USD", ["Okres"] = "2026-10", ["Kurs"] = "3.98765432" })]);
         store.Save(GlobalDictionaries.Persons, null, [new RowChange(RowChangeKind.Added, null, null, @"PZL\jan.kowalski",
-            new Dictionary<string, string?> { ["Konto AD"] = @"PZL\jan.kowalski", ["Imię i nazwisko"] = "Jan Kowalski" })]);
+            new Dictionary<string, string?> { ["USRID"] = "e123456", ["Imię i nazwisko"] = "Jan Kowalski" })]);
 
         var calendar = store.Current(GlobalDictionaries.Calendar);
         var expected = IsoCalendar.Rows(2026).Concat(IsoCalendar.Rows(2027)).ToList();

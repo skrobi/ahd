@@ -162,7 +162,7 @@ public sealed class PerfFactAttribute : FactAttribute
     public PerfFactAttribute()
     {
         if (TestDatabase.ConnectionString is null || Rows is null)
-            Skip = $"Test wydajności – ustaw {TestDatabase.Variable} i {Variable} (np. 2000000)";
+            Skip = $"Test wydajności (opcjonalny) – uruchamiany tylko ze zmienną {Variable} (np. 2000000) i dostępną bazą testową";
     }
 
     public static int? Rows => int.TryParse(Environment.GetEnvironmentVariable(Variable), out var rows) && rows >= 6 ? rows : null;

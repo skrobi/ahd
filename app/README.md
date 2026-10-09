@@ -27,6 +27,7 @@ zmieni). Brak pliku albo błąd w nim = komunikat przy starcie z nazwą pola –
 | `Sql.Schema`, `Sql.TablePrefix` | schemat i sygnatura tabel: `[FINOP].[PZLEV_META_ImportBatch]` (`docs/model-danych.md`, rozdz. 2); tylko litery, cyfry i `_`; sygnatura domyślnie `PZLEV_` |
 | `Sql.TrustServerCertificate` | `true` tylko gdy połączenie zgłasza niezaufany certyfikat serwera |
 | `PzlProd.Server`, `PzlProd.Database`, `PzlProd.Schema` | baza ze strukturą P1S (`splmcd03`, `PZLPROD`, schemat `LOG`: tabele `WBS`, `WBS_DIC`) – tylko odczyt kontem AD; sekcja opcjonalna – bez niej ekran Mapowanie pokazuje, czego brakuje; **Diagnostyka → Sprawdź PZLPROD** testuje połączenie |
+| `PzlHrProd.Server`, `PzlHrProd.Database`, `PzlHrProd.Schema` | baza pracowników (`PZLHRPROD`, schemat `HR`, tabela `ORG`) – tylko odczyt kontem AD; źródło słownika Osoby („Wczytaj z HR” na ekranie Słowniki); sekcja opcjonalna; serwer we wzorze (`splmcd03`) do potwierdzenia |
 
 **Baza danych – migracje:** skrypty `sql/mssql/NNN_*.sql` są wbudowane w exe:
 - `001_etap1_import_slowniki_projekty.sql` – tabele etapu 1;
@@ -48,7 +49,18 @@ zmieni). Brak pliku albo błąd w nim = komunikat przy starcie z nazwą pola –
   bazy co najmniej 130 (Diagnostyka → **Serwer SQL**); po niej aplikacja nie zmienia tabel – nowy parser i nowe
   pole to tylko zapis parsera (`docs/model-danych.md`, rozdz. 5.1);
 - `008_bez_tresci_plikow.sql` – usuwa przechowywaną treść plików (`META_SourceFileContent`): w bazie zostają wersje
-  plików i dane kanoniczne, sam plik nie jest przechowywany.
+  plików i dane kanoniczne, sam plik nie jest przechowywany;
+- `009_raport_mapowan_slownik.sql` – raport mapowań SAP↔CES jako słownik globalny (`DICT_MappingReport`); usuwa
+  definicje źródeł z parserem `MAPOWANIA` i sam parser – raport wczytuje się raz do słownika (Słowniki);
+- `010_stawki_mpk.sql` – stawki wydziałów według MPK: klucz MPK + rok, `Department` (opis MPK) i `Overhead`
+  opcjonalne; istniejące stawki dostają MPK z dotychczasowego pola `Department`;
+- `011_ostatni_import_parsera.sql` – procedura `CAN_LatestImport`: dane kanoniczne parsera z najnowszej wersji każdego
+  pliku, pola parsera pod własnymi nazwami (`docs/model-danych.md`, rozdz. 5.1);
+- `012_ostatni_import_projektu.sql` – `CAN_LatestImport` z parametrem `@Project`: tylko Project definition z nakładki
+  projektu;
+- `013_raport_kosztow_projektu.sql` – `CAN_LatestFiles` i procedura raportu kosztów projektu `REP_ProjectCosts`;
+- `014_definicje_projektu.sql` – Project definition projektu także z WBS elementu węzłów nakładki;
+- `015_osoby_z_hr.sql` – słownik Osoby z HR: kolumny imię, nazwisko, e-mail, MPK, dział, stanowisko, pion, manager, PERNR.
 
 Migracje wykonuje przycisk **Diagnostyka → Migracja** – uruchamia po kolei skrypty, których numeru nie ma
 w `META_SchemaVersion`, a wykonane pomija. Lista na tym ekranie pokazuje, które skrypty są wykonane (kiedy, kto)
@@ -91,8 +103,9 @@ na ekranie **Diagnostyka** i w stopce okna.
 6. **Administracja** – definicję źródła można usunąć (**Usuń definicję** → **Potwierdź usunięcie**); historia zostaje.
 7. **Mapowanie CES ↔ P1S** – **Diagnostyka → Sprawdź PZLPROD**: liczba elementów `LOG.WBS`, grup `WBS_DIC`
    i faktyczne wartości `Z_ACTIVE` / `LOEKZ` (aplikacja przyjmuje: `LOEKZ` niepuste = usunięty; `Z_ACTIVE` puste,
-   `0` albo `N` = nieaktywny). **Administracja** → **Nowa definicja**: kod `MAPOWANIA`, prefiks – początek nazwy
-   pliku raportu mapowań, parser `MAPOWANIA` → **Zapisz definicję**; plik do `Do_importu` → **Importuj**.
+   `0` albo `N` = nieaktywny). **Słowniki** → „Raport mapowań CES ↔ P1S” → **Wczytaj z Excela** (np.
+   `testdata/Mapowanie/Raport_mapowan.csv` albo eksport z `PZLPROD`) → podgląd różnic → **Zatwierdź wczytanie**;
+   ponowne wczytanie innego pliku zastępuje cały raport (wiersze spoza pliku – „−”, historia zostaje).
    **Mapowanie**: statusy elementów CES z raportów ACTUALS (REPORT, INHERITED, OVERRIDE, UNMAPPED), drzewo P1S
    z elementami CES pod celami i węzłem „Nieprzypisane” (z propozycją). Korekta: wybierz element CES → cel w drzewie
    albo w wyszukiwaniu → uzasadnienie (wymagane przy zmianie przypisania z raportu) → **Zapisz korektę**; status
@@ -103,7 +116,7 @@ na ekranie **Diagnostyka** i w stopce okna.
    (wpis w dzienniku).
 9. **Projekty** – **+ Nowy projekt**: kod `M28`, nazwa, typ → **Performance Objectives**: **Wczytaj Excel**
    `testdata/Projekty/PO_M28.xlsx` (8 elementów; kolumna „P1S z mapowania” – status i cel z mapowania CES ↔ P1S,
-   gdy zaimportowano raport mapowań), dodaj węzeł wirtualny i przeciągnij do niego elementy →
+   gdy słownik raportu mapowań nie jest pusty), dodaj węzeł wirtualny i przeciągnij do niego elementy →
    **Słowniki projektu**: **Pobierz szablon Excel** (arkusz „WP i CAM” z elementami P1S z zakresu) albo
    **Wczytaj skoroszyt** `testdata/Projekty/Slowniki_M28.xlsx` → **Foldery** → **Podsumowanie**: baza analityczna
    (3 WP, 2 250 h, 75 000,50 materiałów) → **Utwórz projekt**. Bez słowników projekt powstaje, ale jest niegotowy
@@ -207,9 +220,14 @@ Wynik: `publish\PZL-EV.exe` (ok. 70–100 MB – zawiera runtime .NET i WPF).
 
 **Testy** (`tests/PzlEv.Tests.csproj`, xUnit): `build.cmd` uruchamia je przed publikacją; ręcznie – `dotnet test tests\PzlEv.Tests.csproj`.
 Testy magazynów i serwisów (import, administracja, słowniki, Pulpit, migracje) działają tylko na bazie SQL – nie ma
-wersji w pamięci. Wymagają zmiennej środowiskowej `PZLEV_TEST_SQL` z ciągiem połączenia (np.
-`Server=pzltestdb.intl.lmco.com;Database=PZLTEST;Integrated Security=True;Encrypt=True`); bez niej są pomijane
-(`build.cmd` wypisuje ostrzeżenie). Każdy test zakłada w schemacie `FINOP` tabele z losową sygnaturą (`T…_`)
+wersji w pamięci. Domyślnie łączą się z tą samą bazą i tym samym kontem AD co aplikacja – sekcja
+`Environments.TEST.Sql` wzoru `app/pzl-ev.json` (tylko gdy `Env` = `TEST`; PROD nigdy). Inna baza (np. lokalny SQL
+Server) – zmienna środowiskowa `PZLEV_TEST_SQL` z ciągiem połączenia, ma pierwszeństwo. Gdy baza jest niedostępna
+(np. poza siecią LM), testy SQL są pomijane z powodem w wyniku testów. Na zdalnej bazie TEST pełny przebieg testów SQL trwa
+kilkadziesiąt minut (każdy test zakłada swoje tabele migracjami), dlatego `build.cmd` wykonuje je tylko na żądanie –
+`build.cmd sql` – albo przy ustawionej `PZLEV_TEST_SQL`; bez tego testy SQL są pominięte (zmienna `PZLEV_SQL_TESTS=0`),
+a testy logiki działają zawsze. `dotnet test` uruchomione ręcznie wykonuje testy SQL. Konto musi mieć prawo zakładania i usuwania
+tabel i procedur w schemacie `FINOP` bazy testowej (jak przy migracji); schematów testy nie zakładają. Każdy test zakłada w schemacie `FINOP` tabele z losową sygnaturą (`T…_`)
 i usuwa je po sobie – nie dotyka tabel aplikacji (`PZLEV_*`).
 Test wydajności importu (`ImportPerformanceTests`, plik ACTUALS z powtórzonych wierszy wzorcowych) działa tylko ze
 zmienną `PZLEV_PERF_ROWS` (liczba wierszy, np. `1000000`; `PZLEV_PERF_FORMAT=xlsx` – plik Excel, domyślnie CSV):
@@ -269,13 +287,13 @@ app/
     │   ├── Administration/      definicje źródeł, lokalizacje RABIT (F2)
     │   ├── Dashboard/           Pulpit: import, źródła, słowniki, otwarte problemy, dziennik (z bazy)
     │   ├── Diagnostics/         test stosu, konfiguracja środowiska, migracje, sprawdzenie PZLPROD
-    │   ├── Mapping/             Mapowanie CES ↔ P1S (F3): raport mapowań, drzewo P1S, korekty
+    │   ├── Mapping/             Mapowanie CES ↔ P1S (F3): rozstrzyganie, drzewo P1S, korekty
     │   └── Runs/ Projects/ …    pozostałe moduły: plik wejścia + etapy, ekran zastępczy
     └── Shared/
-        ├── Utils/Ui/            MVVM, konwertery, okna wyboru pliku, kontrakt modułu (WPF)
+        ├── Utils/Ui/            MVVM, konwertery, okna wyboru pliku, kontrakt modułu, tabela słownika do edycji (WPF)
         ├── Utils/Config|Data|Files/  konfiguracja, baza MS SQL (Data/Sql), dziennik, problemy, Excel/CSV
         ├── Models/              modele wspólne; Db/ – tabele schematu; Sources/ – układy źródeł; Pipeline/ – kontrakt etapu
         └── Views/
             ├── Templates/       Theme.xaml – paleta z prototypu, style, tabele, układ strony
-            └── Partials/        pigułka statusu, wynik kontroli, nagłówek ekranu, ekran zastępczy
+            └── Partials/        pigułka statusu, wynik kontroli, nagłówek ekranu, ekran zastępczy, tabela słownika (DictionaryGrid)
 ```

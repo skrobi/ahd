@@ -18,6 +18,6 @@ public sealed record MappingInputs(
 
     /// <summary>Opis źródła do pokazania przy nakładce.</summary>
     public string Describe =>
-        (Report is null ? "Raport mapowań nie został zaimportowany – cel P1S tylko z korekt i Legacy WBS." : $"Mapowanie: raport {Report.Describe}, korekt {Corrections.Count}.")
+        (Report is null ? "Słownik „Raport mapowań CES ↔ P1S” jest pusty – cel P1S tylko z korekt i Legacy WBS." : $"Mapowanie: raport {Report.Describe}, korekt {Corrections.Count}.")
         + (P1sError is null ? "" : $" {P1sError} – bez poddrzew LOG.WBS.");
 }

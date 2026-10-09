@@ -15,6 +15,10 @@ public class FileUtilsTests
     [InlineData("0,000", "0")]
     [InlineData("1.234.567,8", "1234567.8")]
     [InlineData("1E-05", "0.00001")]
+    [InlineData("1,234.56", "1234.56")]       // zapis angielski (Excel EN, dane z USA)
+    [InlineData("1,234,567", "1234567")]
+    [InlineData("1.234.567", "1234567")]
+    [InlineData("1,5", "1.5")]
     public void Polish_numbers_are_parsed(string text, string expected)
     {
         Assert.True(PolishNumber.TryParse(text, out var value));

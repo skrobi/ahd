@@ -1,12 +1,12 @@
 using System.IO;
 using System.Collections.ObjectModel;
-using System.ComponentModel;
-using System.Windows.Data;
 using System.Windows.Input;
 using PzlEv.Shared.Models.Dictionaries;
+using PzlEv.Shared.Utils.Data;
 using PzlEv.Shared.Utils.Dictionaries;
 using PzlEv.Shared.Models;
 using PzlEv.Shared.Utils.Ui.Dialogs;
+using PzlEv.Shared.Utils.Ui.Dictionaries;
 using PzlEv.Shared.Utils.Ui.Mvvm;
 using Serilog;
 
@@ -17,32 +17,41 @@ public sealed class MasterDataViewModel : ObservableObject
 {
     private static readonly ILogger Logger = Log.ForContext("Module", "master-data");
 
+    private const int PreviewLimit = 200;
+
     private readonly DictionaryService _service;
     private readonly IFileDialogs _dialogs;
-    private readonly List<DictRow> _removed = [];
     private DictionaryItem? _selectedDictionary;
-    private DictRowViewModel? _selectedRow;
-    private string _filter = "";
     private string _status = "";
-    private bool _needsConfirmation;
     private ImportPreview? _preview;
+    private readonly IHrSource? _hr;
+    private readonly ICostElementSource? _costElements;
 
-    public MasterDataViewModel(DictionaryService service, IFileDialogs dialogs)
+    /// <param name="hr">Pracownicy z PZLHRPROD (słownik Osoby); null – brak sekcji PzlHrProd w pzl-ev.json.</param>
+    /// <param name="costElements">Cost elementy ostatniego importu ACTUALS – „Uzupełnij z ACTUALS” w Cost Category.</param>
+    public MasterDataViewModel(DictionaryService service, IFileDialogs dialogs, IHrSource? hr = null, ICostElementSource? costElements = null)
     {
         _service = service;
         _dialogs = dialogs;
+        _hr = hr;
+        _costElements = costElements;
         Dictionaries = GlobalDictionaries.All.Select(spec => new DictionaryItem(spec, 0)).ToList();
-        RowsView = CollectionViewSource.GetDefaultView(Rows);
-        RowsView.Filter = o => _filter.Length == 0 || o is DictRowViewModel row && row.Matches(_filter);
+        Table.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(DictionaryTableViewModel.SelectedRow))
+                _ = LoadHistory();
+        };
 
         AddRow = new RelayCommand(_ => DoAddRow(), _ => Spec is not null && _preview is null && !Busy.IsBusy);
-        RemoveRow = new RelayCommand(_ => DoRemoveRow(), _ => _selectedRow is not null && _preview is null && !Busy.IsBusy);
+        RemoveRow = new RelayCommand(_ => DoRemoveRow(), _ => Table.SelectedRow is not null && _preview is null && !Busy.IsBusy);
         Save = new AsyncRelayCommand(() => DoSave(confirmWarnings: false), () => Spec is not null && _preview is null && !Busy.IsBusy);
-        SaveWithWarnings = new AsyncRelayCommand(() => DoSave(confirmWarnings: true), () => _needsConfirmation && !Busy.IsBusy);
+        Table.SaveWithWarnings = new AsyncRelayCommand(() => DoSave(confirmWarnings: true), () => Table.NeedsConfirmation && !Busy.IsBusy);
         Discard = new AsyncRelayCommand(() => Reload("Zmiany odrzucone."), () => Spec is not null && _preview is null && !Busy.IsBusy);
         Export = new AsyncRelayCommand(DoExport, () => Spec is not null && !Busy.IsBusy);
         Import = new AsyncRelayCommand(DoImport, () => Spec is not null && _preview is null && !Busy.IsBusy);
         ApplyImport = new AsyncRelayCommand(DoApplyImport, () => _preview is { HasErrors: false, HasChanges: true } && !Busy.IsBusy);
+        ImportFromHr = new AsyncRelayCommand(DoImportFromHr, () => IsPersons && _preview is null && !Busy.IsBusy);
+        FillFromActuals = new AsyncRelayCommand(DoFillFromActuals, () => IsCostCategory && _costElements is not null && _preview is null && !Busy.IsBusy);
         CancelImport = new RelayCommand(_ => ClosePreview("Wczytanie anulowane – słownik bez zmian."), _ => _preview is not null && !Busy.IsBusy);
 
         SelectedDictionary = Dictionaries.FirstOrDefault();
@@ -66,16 +75,10 @@ public sealed class MasterDataViewModel : ObservableObject
         }
     }
 
-    /// <summary>Widok przebudowuje kolumny tabeli po zmianie słownika.</summary>
-    public event Action? ColumnsChanged;
-
     public IReadOnlyList<DictionaryItem> Dictionaries { get; }
 
-    public ObservableCollection<DictRowViewModel> Rows { get; } = [];
-
-    public ICollectionView RowsView { get; }
-
-    public ObservableCollection<Issue> Issues { get; } = [];
+    /// <summary>Wiersze wybranego słownika – edycja w komórkach (wspólna tabela słownika).</summary>
+    public DictionaryTableViewModel Table { get; } = new();
 
     public ObservableCollection<HistoryItem> History { get; } = [];
 
@@ -92,6 +95,7 @@ public sealed class MasterDataViewModel : ObservableObject
         {
             if (value is null || ReferenceEquals(value, _selectedDictionary))
                 return;
+            Table.CommitEdits();
             if (HasPendingChanges || Busy.IsBusy)
             {
                 Status = Busy.IsBusy ? "Poczekaj na zakończenie bieżącej operacji." : "Masz niezapisane zmiany – zapisz albo odrzuć je przed zmianą słownika.";
@@ -101,37 +105,10 @@ public sealed class MasterDataViewModel : ObservableObject
             _selectedDictionary = value;
             OnPropertyChanged();
             OnPropertyChanged(nameof(Spec));
-            ColumnsChanged?.Invoke();
+            OnPropertyChanged(nameof(IsPersons));
+            OnPropertyChanged(nameof(IsCostCategory));
             ClosePreview(null);
             _ = Reload("");
-        }
-    }
-
-    public DictRowViewModel? SelectedRow
-    {
-        get => _selectedRow;
-        set
-        {
-            if (SetProperty(ref _selectedRow, value))
-                _ = LoadHistory();
-        }
-    }
-
-    public string Filter
-    {
-        get => _filter;
-        set
-        {
-            if (!SetProperty(ref _filter, value.Trim()))
-                return;
-            if (RowsView is IEditableCollectionView editable)
-            {
-                if (editable.IsEditingItem)
-                    editable.CommitEdit();
-                if (editable.IsAddingNew)
-                    editable.CommitNew();
-            }
-            RowsView.Refresh();
         }
     }
 
@@ -141,39 +118,34 @@ public sealed class MasterDataViewModel : ObservableObject
         private set => SetProperty(ref _status, value);
     }
 
-    public bool NeedsConfirmation
-    {
-        get => _needsConfirmation;
-        private set => SetProperty(ref _needsConfirmation, value);
-    }
-
-    public bool HasIssues => Issues.Count > 0;
-
     public bool HasHistory => History.Count > 0;
 
     public bool HasPreview => _preview is not null;
 
     public string PreviewTitle => _preview is null ? "" : $"Podgląd wczytania: {_preview.FileName} – {_preview.Summary}";
 
-    public bool HasPendingChanges => _removed.Count > 0 || Rows.Any(r => r.IsNew || r.IsModified);
+    public bool HasPendingChanges => Table.HasPendingChanges;
 
     public ICommand AddRow { get; }
     public ICommand RemoveRow { get; }
     public ICommand Save { get; }
-    public ICommand SaveWithWarnings { get; }
     public ICommand Discard { get; }
     public ICommand Export { get; }
     public ICommand Import { get; }
     public ICommand ApplyImport { get; }
     public ICommand CancelImport { get; }
+    public ICommand ImportFromHr { get; }
+    public ICommand FillFromActuals { get; }
+
+    /// <summary>Wybrany słownik Cost Category – „Uzupełnij z ACTUALS”.</summary>
+    public bool IsCostCategory => Spec?.Code == GlobalDictionaries.CostCategory;
+
+    /// <summary>Wybrany słownik Osoby – „Wczytaj z HR”.</summary>
+    public bool IsPersons => Spec?.Code == GlobalDictionaries.Persons;
 
     private async Task Reload(string status)
     {
-        Rows.Clear();
-        _removed.Clear();
-        SelectedRow = null;
-        SetIssues([]);
-        NeedsConfirmation = false;
+        Table.Load(Spec, Array.Empty<DictRow>());
         if (Spec is { } spec)
         {
             var item = _selectedDictionary!;
@@ -182,9 +154,8 @@ public sealed class MasterDataViewModel : ObservableObject
                 var rows = await Busy.Run($"Wczytywanie słownika „{spec.Name}”…", () => _service.Load(spec));
                 if (!ReferenceEquals(item, _selectedDictionary))
                     return;   // w międzyczasie wybrano inny słownik
-                foreach (var row in rows)
-                    Rows.Add(ToViewModel(spec, row));
-                item.Count = Rows.Count;
+                Table.Load(spec, rows);
+                item.Count = rows.Count;
             }
             catch (Exception ex) when (ex is not OutOfMemoryException)
             {
@@ -196,30 +167,23 @@ public sealed class MasterDataViewModel : ObservableObject
         Status = status;
     }
 
-    private static DictRowViewModel ToViewModel(DictionarySpec spec, DictRow row) =>
-        new(row.RowId, row.Version, spec.Columns.Select(c => (string?)ValueFormat.Display(c, row[c.Name])).ToArray());
-
     private void DoAddRow()
     {
-        var row = new DictRowViewModel(null, null, new string?[Spec!.Columns.Count]);
-        Rows.Add(row);
-        SelectedRow = row;
+        Table.AddRow();
         Status = "Dodano wiersz – uzupełnij wartości i zapisz.";
     }
 
     private void DoRemoveRow()
     {
-        var row = _selectedRow!;
-        if (!row.IsNew)
-            _removed.Add(row.ToDictRow(Spec!));
-        Rows.Remove(row);
-        Status = "Wiersz usunięty z tabeli – zapisz, aby zamknąć jego obowiązywanie (historia zostaje).";
+        var (removed, _) = Table.RemoveSelected();
+        Status = removed == 0 ? "" : "Wiersze usunięte z tabeli – zapisz, aby zamknąć ich obowiązywanie (historia zostaje).";
     }
 
     private async Task DoSave(bool confirmWarnings)
     {
         var spec = Spec!;
-        var (working, removed) = (Rows.Select(r => r.ToDictRow(spec)).ToList(), _removed.ToList());
+        Table.CommitEdits();
+        var (working, removed) = Table.State();
         SaveOutcome outcome;
         try
         {
@@ -236,16 +200,14 @@ public sealed class MasterDataViewModel : ObservableObject
             case SaveStatus.Saved:
             case SaveStatus.NoChanges:
                 await Reload(outcome.Message);
-                SetIssues(outcome.Issues);
+                Table.SetIssues(outcome.Issues);
                 break;
             case SaveStatus.NeedsConfirmation:
-                SetIssues(outcome.Issues);
-                NeedsConfirmation = true;
+                Table.SetIssues(outcome.Issues, needsConfirmation: true);
                 Status = outcome.Message;
                 break;
             default:
-                SetIssues(outcome.Issues);
-                NeedsConfirmation = false;
+                Table.SetIssues(outcome.Issues);
                 Status = outcome.Message;
                 break;
         }
@@ -267,6 +229,7 @@ public sealed class MasterDataViewModel : ObservableObject
 
     private async Task DoImport()
     {
+        Table.CommitEdits();
         if (HasPendingChanges)
         {
             Status = "Masz niezapisane zmiany – zapisz albo odrzuć je przed wczytaniem z Excela.";
@@ -279,19 +242,80 @@ public sealed class MasterDataViewModel : ObservableObject
         await Try(async () =>
         {
             var preview = await Busy.Run("Wczytywanie i sprawdzanie pliku Excel…", () => _service.PreviewImport(spec, path));
-            _preview = preview;
-            PreviewLines.Clear();
-            foreach (var key in preview.Added) PreviewLines.Add($"+ {key}");
-            foreach (var line in preview.Changed) PreviewLines.Add($"~ {line}");
-            foreach (var key in preview.Removed) PreviewLines.Add($"− {key}");
-            PreviewIssues.Clear();
-            foreach (var issue in preview.Issues) PreviewIssues.Add(issue);
-            Status = preview.HasErrors
-                ? "Plik ma błędy (ERROR) – nie można go wczytać. Popraw plik i wczytaj ponownie."
-                : preview.HasChanges ? "Sprawdź różnice i zatwierdź wczytanie." : "Plik nie zawiera zmian względem słownika.";
-            OnPropertyChanged(nameof(HasPreview));
-            OnPropertyChanged(nameof(PreviewTitle));
+            ShowPreview(preview, "Plik");
         });
+    }
+
+    /// <summary>
+    /// Cost Category uzupełniony o cost elementy całego ostatniego importu ACTUALS, których w słowniku nie ma (opis
+    /// z danych; Cost Category i „Rozliczeniowy” określa finansista). Podgląd jak przy wczytaniu z Excela – same nowe
+    /// pozycje, nic nie jest zmieniane ani usuwane.
+    /// </summary>
+    private async Task DoFillFromActuals()
+    {
+        Table.CommitEdits();
+        if (HasPendingChanges)
+        {
+            Status = "Masz niezapisane zmiany – zapisz albo odrzuć je przed uzupełnieniem z ACTUALS.";
+            return;
+        }
+        var spec = Spec!;
+        await Try(async () =>
+        {
+            var (preview, added, total) = await Busy.Run("Odczyt cost elementów z ostatniego importu ACTUALS…", () =>
+            {
+                var elements = _costElements!.CostElements();
+                var (rows, count) = GlobalDictionaries.CostCategoryWithActuals(_service.Load(spec), elements);
+                return (_service.PreviewRows(spec, rows, "ACTUALS – ostatni import"), count, elements.Count);
+            });
+            ShowPreview(preview, "ACTUALS");
+            Status = added == 0
+                ? $"Wszystkie cost elementy z ACTUALS ({total}) są już w słowniku."
+                : $"Nowe cost elementy z ACTUALS: {added} (z {total}) – zatwierdź wczytanie, potem uzupełnij Cost Category i „Rozliczeniowy”.";
+        });
+    }
+
+    /// <summary>Słownik Osoby z PZLHRPROD (HR.ORG): podgląd różnic jak przy wczytaniu z Excela – zawartość zastępowana.</summary>
+    private async Task DoImportFromHr()
+    {
+        if (_hr is null)
+        {
+            Status = "Brak połączenia z PZLHRPROD – dodaj sekcję PzlHrProd w pzl-ev.json (Environments.<Env>.PzlHrProd: Server, Database, Schema).";
+            return;
+        }
+        Table.CommitEdits();
+        if (HasPendingChanges)
+        {
+            Status = "Masz niezapisane zmiany – zapisz albo odrzuć je przed wczytaniem z HR.";
+            return;
+        }
+        var spec = Spec!;
+        await Try(async () =>
+        {
+            var preview = await Busy.Run("Wczytywanie pracowników z PZLHRPROD (HR.ORG)…", () =>
+                _service.PreviewRows(spec, GlobalDictionaries.PersonRows(_hr.Persons()), "PZLHRPROD HR.ORG"));
+            ShowPreview(preview, "Dane z HR");
+        });
+    }
+
+    private void ShowPreview(ImportPreview preview, string source)
+    {
+        _preview = preview;
+        PreviewLines.Clear();
+        AddPreviewLines("+", preview.Added);
+        AddPreviewLines("~", preview.Changed);
+        AddPreviewLines("−", preview.Removed);
+        PreviewIssues.Clear();
+        // Pierwsze problemy (ERROR przed WARNING) – tysiące ostrzeżeń dużego słownika zablokowałyby ekran.
+        foreach (var issue in preview.Issues.OrderBy(i => i.Level == Shared.Models.Pipeline.CheckLevel.Error ? 0 : 1).Take(PreviewLimit))
+            PreviewIssues.Add(issue);
+        if (preview.Issues.Count > PreviewLimit)
+            PreviewIssues.Add(Issue.Warning($"… i {preview.Issues.Count - PreviewLimit} kolejnych problemów"));
+        Status = preview.HasErrors
+            ? $"{source} ma błędy (ERROR) – nie można wczytać."
+            : preview.HasChanges ? "Sprawdź różnice i zatwierdź wczytanie." : $"{source} nie zawiera zmian względem słownika.";
+        OnPropertyChanged(nameof(HasPreview));
+        OnPropertyChanged(nameof(PreviewTitle));
     }
 
     private async Task DoApplyImport()
@@ -305,8 +329,17 @@ public sealed class MasterDataViewModel : ObservableObject
                 await Reload(outcome.Message);
             else
                 Status = outcome.Message;
-            SetIssues(outcome.Issues);
+            Table.SetIssues(outcome.Issues);
         });
+    }
+
+    /// <summary>Pierwsze linie zmian danego rodzaju – pełne wczytanie dużego słownika (raport mapowań) to tysiące wierszy.</summary>
+    private void AddPreviewLines(string sign, IReadOnlyList<string> lines)
+    {
+        foreach (var line in lines.Take(PreviewLimit))
+            PreviewLines.Add($"{sign} {line}");
+        if (lines.Count > PreviewLimit)
+            PreviewLines.Add($"{sign} … i {lines.Count - PreviewLimit} więcej");
     }
 
     private void ClosePreview(string? status)
@@ -324,7 +357,7 @@ public sealed class MasterDataViewModel : ObservableObject
     {
         History.Clear();
         OnPropertyChanged(nameof(HasHistory));
-        if (_selectedRow?.RowId is { } rowId && Spec is { } spec)
+        if (Table.SelectedRow?.RowId is { } rowId && Spec is { } spec)
         {
             IReadOnlyList<Shared.Models.Db.DictionaryEntryRow> versions;
             try
@@ -336,7 +369,7 @@ public sealed class MasterDataViewModel : ObservableObject
                 Logger.Error(ex, "Historia wiersza {RowId}", rowId);
                 return;
             }
-            if (_selectedRow?.RowId != rowId)
+            if (Table.SelectedRow?.RowId != rowId)
                 return;   // w międzyczasie zaznaczono inny wiersz
             for (var i = versions.Count - 1; i >= 0; i--)
             {
@@ -351,14 +384,6 @@ public sealed class MasterDataViewModel : ObservableObject
             }
         }
         OnPropertyChanged(nameof(HasHistory));
-    }
-
-    private void SetIssues(IReadOnlyList<Issue> issues)
-    {
-        Issues.Clear();
-        foreach (var issue in issues)
-            Issues.Add(issue);
-        OnPropertyChanged(nameof(HasIssues));
     }
 
     private async Task Try(Func<Task> action)

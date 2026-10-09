@@ -30,7 +30,7 @@ public sealed class ProjectDictionariesTests
         new() { ["Element P1S"] = element, ["WP"] = wp, ["CAM"] = cam, ["Cost Category"] = category };
 
     private static Dictionary<string, string?> Plan(string wp, string? hours, string? material, string? start = null, string? end = null) =>
-        new() { ["WP"] = wp, ["BAC HOURS"] = hours, ["BAC MATERIAL"] = material, ["Planowany Start"] = start, ["Planowany Koniec"] = end };
+        new() { ["WP"] = wp, ["BAC HOURS"] = hours, ["BAC MATERIAL"] = material, ["Baseline Start"] = start, ["Baseline Koniec"] = end };
 
     private static Dictionary<string, string?> Excl(string? ce, string? wbs, string? partner, string? description) =>
         new() { ["Cost Element"] = ce, ["WBS Element"] = wbs, ["Partner object"] = partner, ["Opis"] = description };
@@ -96,5 +96,20 @@ public sealed class ProjectDictionariesTests
     {
         Assert.DoesNotContain(ProjectDictionaries.ForType(ProjectTypes.Sac), i => i.Code == ProjectDictionaries.CasRates);
         Assert.Contains(ProjectDictionaries.ForType(ProjectTypes.Cas), i => i.Code == ProjectDictionaries.CasRates && !i.Stored && i.IsRequired(ProjectTypes.Cas));
+    }
+
+    [Fact]
+    public void Cost_category_for_editing_merges_global_rows_with_project_changes()
+    {
+        var spec = ProjectDictionaries.Base(GlobalDictionaries.CostCategory);
+        static DictRow Row(long id, string element, string category) =>
+            new(id, 1, new Dictionary<string, string?> { ["Numer elementu kosztowego"] = element, ["Opis"] = null, ["Obszar"] = null, ["Cost Category"] = category });
+        var global = new[] { Row(1, "0057100000", "Material"), Row(2, "0061000000", "Labor") };
+        var project = new[] { Row(7, "0061000000", "Subcontract"), Row(8, "0070000000", "Labor") };
+
+        var rows = ProjectDictionaries.WithGlobal(spec, global, project);
+
+        // Pozycja globalna zmieniona w projekcie – tylko wiersz projektu; pozostałe globalne – dziedziczone.
+        Assert.Equal([(1L, true), (7L, false), (8L, false)], rows.Select(r => (r.Row.RowId!.Value, r.Inherited)));
     }
 }

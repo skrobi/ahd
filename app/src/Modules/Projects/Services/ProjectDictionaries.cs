@@ -30,24 +30,26 @@ public static class ProjectDictionaries
         [
             new("Element P1S", ColumnType.Text, Key: true),
             new("WP", ColumnType.Text, Required: true, CheckSimilar: true),
-            new("CAM", ColumnType.Text, Required: true, CheckSimilar: true),
+            new("CAM", ColumnType.Text, Required: true, CheckSimilar: true, Lookup: GlobalDictionaries.Persons),
             new("Cost Category", ColumnType.Choice, Choices: CostCategoryChoices),
         ],
+        SkipKeyOnlyRows = true,
     };
 
     private static readonly DictionarySpec ScheduleBudgetSpec = new()
     {
         Code = ScheduleBudget,
         Name = "Harmonogram i budżet",
-        Description = "WP → BAC HOURS (godziny), BAC MATERIAL (koszt materiałów), planowany start i koniec – baseline projektu.",
+        Description = "WP → BAC HOURS (godziny), BAC MATERIAL (koszt materiałów), Baseline Start i Baseline Koniec – baseline projektu.",
         Columns =
         [
             new("WP", ColumnType.Text, Key: true),
             new("BAC HOURS", ColumnType.Decimal),
             new("BAC MATERIAL", ColumnType.Decimal),
-            new("Planowany Start", ColumnType.Date),
-            new("Planowany Koniec", ColumnType.Date),
+            new("Baseline Start", ColumnType.Date, Aliases: ["Planowany Start"]),
+            new("Baseline Koniec", ColumnType.Date, Aliases: ["Planowany Koniec"]),
         ],
+        SkipKeyOnlyRows = true,
     };
 
     private static readonly DictionarySpec ExclusionsSpec = new()
@@ -84,7 +86,7 @@ public static class ProjectDictionaries
     [
         new(WpCamSpec, "dict.WpCam", [("Element P1S", "P1sElement"), ("WP", "Wp"), ("CAM", "Cam"), ("Cost Category", "CostCategory")]),
         new(ScheduleBudgetSpec, "dict.ScheduleBudget",
-            [("WP", "Wp"), ("BAC HOURS", "BacHours"), ("BAC MATERIAL", "BacMaterial"), ("Planowany Start", "PlannedStart"), ("Planowany Koniec", "PlannedEnd")]),
+            [("WP", "Wp"), ("BAC HOURS", "BacHours"), ("BAC MATERIAL", "BacMaterial"), ("Baseline Start", "PlannedStart"), ("Baseline Koniec", "PlannedEnd")]),
         new(ExclusionsSpec, "dict.Exclusion", [("Cost Element", "CostElement"), ("WBS Element", "WbsElement"), ("Partner object", "PartnerObject"), ("Opis", "Description")]),
     ];
 
@@ -104,10 +106,24 @@ public static class ProjectDictionaries
         _ => throw new NotSupportedException($"Słownik {code} nie jest zapisywany w bazie"),
     };
 
+    /// <summary>
+    /// Cost Category projektu do edycji (zakładka „Słowniki projektu”): zmiany projektu i pozycje słownika globalnego,
+    /// których projekt nie zmienia (dziedziczone – Inherited). Zmiana pozycji dziedziczonej zapisuje się jako zmiana
+    /// projektu, usunięcie zmiany projektu przywraca pozycję globalną. Kolejność – według klucza.
+    /// </summary>
+    public static IReadOnlyList<(DictRow Row, bool Inherited)> WithGlobal(DictionarySpec spec, IReadOnlyList<DictRow> global, IReadOnlyList<DictRow> project)
+    {
+        var own = project.Select(r => spec.KeyOf(r.Values)).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        return project.Select(r => (r, false))
+            .Concat(global.Where(r => !own.Contains(spec.KeyOf(r.Values))).Select(r => (r, true)))
+            .OrderBy(x => spec.KeyOf(x.Item1.Values), StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
     private static DictionarySpec With(DictionarySpec spec, Func<IReadOnlyList<DictRow>, IEnumerable<Issue>> rules) => new()
     {
         Code = spec.Code, Name = spec.Name, Description = spec.Description, Columns = spec.Columns, Validity = spec.Validity,
-        EmptyKeyPartsAllowed = spec.EmptyKeyPartsAllowed, Rules = rules,
+        EmptyKeyPartsAllowed = spec.EmptyKeyPartsAllowed, SkipKeyOnlyRows = spec.SkipKeyOnlyRows, Rules = rules,
     };
 
     /// <summary>docs/slowniki.md, rozdz. 5.2. Jeden WP na element P1S i WP wymaga CAM – klucz i pole wymagane.</summary>
@@ -145,8 +161,8 @@ public static class ProjectDictionaries
                 yield return Issue.Error("BAC MATERIAL – budżet nie może być ujemny", at);
             if (row["BAC HOURS"] is null && row["BAC MATERIAL"] is null)
                 yield return Issue.Warning($"WP {row["WP"]} bez budżetu (BAC HOURS i BAC MATERIAL puste)", at);
-            if (row["Planowany Start"] is { } start && row["Planowany Koniec"] is { } end && string.CompareOrdinal(start, end) > 0)
-                yield return Issue.Error("Planowany Start jest późniejszy niż Planowany Koniec", at);
+            if (row["Baseline Start"] is { } start && row["Baseline Koniec"] is { } end && string.CompareOrdinal(start, end) > 0)
+                yield return Issue.Error("Baseline Start jest późniejszy niż Baseline Koniec", at);
         }
     }
 

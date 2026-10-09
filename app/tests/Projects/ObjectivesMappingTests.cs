@@ -24,10 +24,10 @@ public sealed class ObjectivesMappingTests
     /// AC-CAB.9.01. LOG.WBS: pod AC-CAB.6.38 element AC-CAB.6.38.07 i pod nim XYZ-1 (kod spoza wzorca kropek).
     /// </summary>
     private static MappingInputs Inputs(bool withPzlProd = true) => new(
-        new ReportInfo(1, "mapowania.xlsx", DateTimeOffset.Now,
+        new ReportInfo(DateTimeOffset.Now, "PZL\\anowak",
         [
-            new ReportEntry(2, "CES", "4D06WP.RA", "4D06WP", "100", "AC-CAB.6.38", ""),
-            new ReportEntry(3, "CES", "4D06WP", "4D06WP", "1", "AC-CAB", "AC-CAB"),
+            new ReportEntry(2, "CES", "70002", "4D06WP.RA", "4D06WP", "100", "AC-CAB.6.38", ""),
+            new ReportEntry(3, "CES", "70003", "4D06WP", "4D06WP", "1", "AC-CAB", "AC-CAB"),
         ]),
         [
             new CorrectionRow(1, 10, 1, CorrectionKinds.Element, "4D06WP000004", "200", "AC-CAB.9.01", null, "zmiana", DateTime.Today, null,
@@ -96,7 +96,7 @@ public sealed class ObjectivesMappingTests
         Assert.Equal(CheckLevel.Pass, ObjectivesMapping.Check(tree, ProjectService.Resolve(tree, Inputs()), Inputs()).Level);
 
         var noReport = MappingInputs.None;
-        Assert.Contains("nie został zaimportowany", ObjectivesMapping.Check(tree, ProjectService.Resolve(tree, noReport), noReport).Message);
+        Assert.Contains("jest pusty", ObjectivesMapping.Check(tree, ProjectService.Resolve(tree, noReport), noReport).Message);
 
         var manual = new PoTree();
         manual.AddElement(null, "9Z99", "bez mapowania", null);

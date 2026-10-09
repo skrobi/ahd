@@ -4,12 +4,13 @@ using PzlEv.Shared.Models.Mapping;
 using PzlEv.Shared.Models.Db;
 using PzlEv.Shared.Utils.Data;
 using PzlEv.Shared.Utils.Data.Sql;
+using PzlEv.Shared.Utils.Dictionaries;
 
 namespace PzlEv.Shared.Utils.Mapping;
 
 /// <summary>
-/// Dane mapowania w MS SQL: raport mapowań i elementy CES z CAN_Row (pola parserów MAPOWANIA i ACTUALS według slotów),
-/// korekty – DICT_MappingCorrection (zapis z historią).
+/// Dane mapowania w MS SQL: raport mapowań – słownik globalny DICT_MappingReport, elementy CES z CAN_Row (pola parsera
+/// ACTUALS według slotów), korekty – DICT_MappingCorrection (zapis z historią).
 /// </summary>
 public sealed class SqlMappingStore(SqlDatabase db, IClock clock, ICurrentUser user) : IMappingStore
 {
@@ -21,37 +22,17 @@ public sealed class SqlMappingStore(SqlDatabase db, IClock clock, ICurrentUser u
 
     private string Canonical => db.Table(DbTables.CanonicalRow);
 
-    /// <summary>Kod parsera raportu mapowań (migracja 005).</summary>
-    public const string ReportParser = "MAPOWANIA";
-
     /// <summary>Kod parsera kosztów rzeczywistych – źródło elementów CES (pola WbsElement, ProjectDefinition, kwoty).</summary>
     public const string ActualsParser = "ACTUALS";
 
-    public ReportInfo? LatestReport()
+    public ReportInfo? Report()
     {
-        using var connection = db.Open();
-        if (SqlCanonical.CurrentParser(connection, db, ReportParser) is not { } parser)
+        var report = new SqlDictionaryStore(db, clock, user, GlobalDictionaries.Tables).Current(GlobalDictionaries.MappingReport);
+        if (report.Count == 0)
             return null;
-        var file = connection.QueryFirstOrDefault<FileInfoRow>(
-            $"""
-            SELECT TOP 1 f.FileId, f.FileName, f.ImportedAt FROM {db.Table(DbTables.SourceFile)} f
-            WHERE EXISTS (SELECT 1 FROM {Canonical} r WHERE r.FileId = f.FileId AND r.ParserId = @parserId)
-            ORDER BY f.ImportedAt DESC, f.FileId DESC
-            """,
-            new { parserId = parser.ParserId });
-        if (file is null)
-            return null;
-        string S(string field) => SqlCanonical.SlotOrNull(parser, field);
-        var entries = connection.Query<ReportRow>(
-                $"""
-                SELECT RowNumber, {S("Src")} AS Src, {S("Pspnr")} AS Pspnr, {S("PspnrSap")} AS PspnrSap, {S("PspnrCes")} AS PspnrCes,
-                       {S("ProjectSap")} AS ProjectSap, {S("ProjectCes")} AS ProjectCes, {S("Wbs")} AS Wbs, {S("WbsSap")} AS WbsSap, {S("WbsCes")} AS WbsCes
-                FROM {Canonical} WHERE FileId = @fileId AND ParserId = @parserId ORDER BY RowNumber
-                """,
-                new { file.FileId, parserId = parser.ParserId }, commandTimeout: 300)
-            .Select(MappingKeys.Entry)
-            .ToList();
-        return new ReportInfo(file.FileId, file.FileName, file.ImportedAt, entries);
+        var entries = report.Select((r, i) => MappingKeys.Entry(i + 1, r.Values)).ToList();
+        var last = report.MaxBy(r => r.RecordedAt)!;
+        return new ReportInfo(last.RecordedAt, last.RecordedBy, entries);
     }
 
     public IReadOnlyList<CesElement> CesElements()
@@ -168,15 +149,9 @@ public sealed class SqlMappingStore(SqlDatabase db, IClock clock, ICurrentUser u
         connection.Execute($"UPDATE {Corrections} SET SupersededAt = @now, SupersededBy = @user WHERE RowId = @rowId AND SupersededAt IS NULL",
             new { now, user = user.Account, rowId }, transaction);
 
-    private sealed class FileInfoRow
-    {
-        public long FileId { get; set; }
-        public string FileName { get; set; } = "";
-        public DateTimeOffset ImportedAt { get; set; }
-    }
 }
 
-/// <summary>Wiersz CAN_MappingReport (pola parsera MAPOWANIA).</summary>
+/// <summary>Wiersz słownika „Raport mapowań CES ↔ P1S” – kolumny potrzebne do rozstrzygania.</summary>
 public sealed class ReportRow
 {
     public int RowNumber { get; set; }

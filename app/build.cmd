@@ -28,7 +28,14 @@ dotnet restore tests\PzlEv.Tests.csproj >nul 2>&1
 if errorlevel 1 (
   echo UWAGA: pakiety testow ^(xUnit^) niedostepne w eFOSS - testy pominiete.
 ) else (
-  if not defined PZLEV_TEST_SQL echo UWAGA: brak zmiennej PZLEV_TEST_SQL - testy na bazie SQL pominiete ^(README.md^).
+  rem Testy SQL na zdalnej bazie TEST trwaja dlugo - kazdy test zaklada tabele migracjami. Wykonywane tylko
+  rem przy "build.cmd sql" albo z jawna zmienna PZLEV_TEST_SQL, np. lokalny SQL Server.
+  if /i "%~1"=="sql" (
+    echo Testy SQL: baza TEST z pzl-ev.json ^(konto AD^) - moga potrwac kilkadziesiat minut.
+  ) else if not defined PZLEV_TEST_SQL (
+    set PZLEV_SQL_TESTS=0
+    echo Testy SQL pominiete - uruchom "build.cmd sql", aby je wykonac ^(README.md^).
+  )
   dotnet test tests\PzlEv.Tests.csproj -c Release --no-restore || (echo Testy nie przeszly - publikacja przerwana. & exit /b 1)
 )
 

@@ -5,7 +5,8 @@ Excel i reguły walidacji. Słowniki zawierają wiedzę biznesową potrzebną do
 w dane raportowe.
 
 Powiązane: `docs/model-danych.md` (historia i przypięcie przez przebieg), `docs/mapowanie-ces-p1s.md`
-(korekty mapowania CES ↔ P1S – osobny mechanizm), `docs/funkcjonalnosc.md` (ekran Słowniki, kreator projektu).
+(raport mapowań CES ↔ P1S – rozstrzyganie; korekty mapowania – osobny mechanizm), `docs/funkcjonalnosc.md` (ekran
+Słowniki, kreator projektu).
 
 ---
 
@@ -13,14 +14,41 @@ Powiązane: `docs/model-danych.md` (historia i przypięcie przez przebieg), `doc
 
 - **Źródłem prawdy jest baza PZL-EV** (MS SQL, schemat `dict`). Edycja w aplikacji: tabela / formularz
   z polami typowanymi (data, liczba, wybór z listy); klucze WBS i numery zawsze jako tekst.
+- **Tabela słownika jak arkusz Excela** (ekran Słowniki i zakładka Słowniki projektu – ta sama tabela):
+  pisanie zastępuje zawartość komórki, Enter / Tab – następna komórka, Esc – cofnięcie; zaznaczanie komórek,
+  Ctrl+C / Ctrl+V – kopiowanie i wklejanie bloku (od bieżącej komórki, brakujące wiersze dopisywane), Delete –
+  wyczyszczenie zaznaczonych, Ctrl+D – wypełnienie w dół. Kolumna z listą wartości – lista z możliwością wpisania;
+  kolumna powiązana z innym słownikiem (np. CAM – słownik Osoby z HR) – lista z wyszukiwaniem po fragmencie USRID
+  albo imienia i nazwiska: zapisywany USRID, wyświetlane imię i nazwisko; wpisany lub wklejony USRID albo
+  jednoznaczne imię i nazwisko są rozpoznawane. Komórka z problemem jest podświetlona od razu po wpisaniu (czerwona
+  – ERROR: zły typ, pole wymagane, wartość spoza listy; żółta – WARNING: wartość spoza słownika powiązanego), opis
+  w podpowiedzi; pełna walidacja (duplikaty, reguły słownika) – przy zapisie. Ctrl+Z / „Cofnij” cofa ostatnie zmiany
+  tabeli (wpis, wklejenie, Delete, Ctrl+D, dodanie i usunięcie wierszy); „Usuń wiersze” / Ctrl+minus usuwa wiersze
+  zaznaczonych komórek; kliknięcie nagłówka sortuje (liczby według wartości). Komórka w trakcie edycji jest zatwierdzana
+  przed zapisem, zmianą słownika i wczytaniem z pliku.
+- **Wczytanie z pliku bez cichej utraty danych:** kolumna opcjonalna, której nie ma w pliku, zachowuje wartości słownika
+  (ostrzeżenie); kolumna spoza słownika – pominięta z ostrzeżeniem; plik, który usuwa ponad połowę wierszy –
+  ostrzeżenie; komunikaty wskazują wiersz pliku jak w Excelu („wiersz N w pliku”); błędy formuł (`#N/A` itd.) – ERROR;
+  liczby także w zapisie angielskim (`1,234.56`); kolumna powiązana (CAM) – imię i nazwisko zamieniane na USRID.
+  Słowniki „WP i CAM” i „Harmonogram i budżet”: wiersz z samym kluczem (szablon uzupełniony częściowo) jest pomijany.
+  Skoroszyt z kilkoma arkuszami bez arkusza słownika – błąd (nie pierwszy arkusz). Plik otwarty w Excelu można wczytać.
+- **Pobrany plik / szablon:** format całej kolumny (kolumny tekstowe – tekst, więc Excel nie usuwa zer wiodących i nie
+  zamienia kodów na daty także w nowych wierszach), autofiltr, zamrożony nagłówek, lista wyboru dla kolumn z listą
+  wartości, lista osób dla CAM (arkusz „Listy” na końcu skoroszytu), opis kolumny w komentarzu nagłówka. Szablon
+  słowników projektu dopisuje elementy P1S z zakresu bez WP i WP bez harmonogramu.
 - **Historia:** każda zmiana zapisuje kto, kiedy, poprzednią i nową wartość oraz okres obowiązywania
   (`docs/model-danych.md`, rozdz. 3).
 - **Walidacja przy zapisie** (rozdz. 5): ERROR nie pozwala zapisać (komunikat przy polu), WARNING wymaga
   potwierdzenia. Błędna wersja słownika nie powstaje.
-- **Excel jako format wymiany:** słowniki projektu i Cost Category można pobrać do Excela i wczytać ponownie.
-  Kolumny rozpoznawane po nagłówkach; podgląd różnic (+nowe / ~zmienione / −usunięte); ta sama walidacja co
-  przy zapisie w aplikacji; słownik z błędem ERROR nie zostaje zapisany. Numer zapisany w Excelu jako liczba
+- **Excel jako format wymiany:** słowniki globalne i słowniki projektu można pobrać do Excela i wczytać ponownie
+  (także CSV).
+  Wczytanie zastępuje całą zawartość słownika zawartością pliku – wiersze spoza pliku są usuwane (zamknięcie okresu,
+  historia zostaje). Kolumny rozpoznawane po nagłówkach; podgląd różnic (+nowe / ~zmienione / −usunięte; przy
+  dużych zmianach pierwsze 200 pozycji każdego rodzaju i liczba pozostałych); ta sama walidacja co przy zapisie
+  w aplikacji; słownik z błędem ERROR nie zostaje zapisany. Numer zapisany w Excelu jako liczba
   jest uzupełniany zerami do długości klucza (np. `51105550` → `0051105550`).
+- **Klucz bez względu na wielkość liter:** „e123” i „E123” to ten sam wiersz – w jednym słowniku to duplikat,
+  a wczytanie pliku z inną pisownią zmienia istniejący wiersz (historia zostaje), nie dodaje nowego.
 - **Równoczesna edycja:** zapis jest krótką transakcją; jeśli wiersz zmienił ktoś inny od chwili otwarcia,
   zapis jest odrzucany z komunikatem i trzeba go ponowić na aktualnych danych.
 - Przebieg czyta słowniki w stanie na swój znacznik stanu (`docs/model-danych.md`, rozdz. 4.2); zmiana
@@ -33,10 +61,11 @@ Powiązane: `docs/model-danych.md` (historia i przypięcie przez przebieg), `doc
 | Słownik | Zawartość | Klucz | Użycie |
 |---|---|---|---|
 | Kalendarz okresów | okres (`RRRR-MM`); tygodnie okresu (numer, od – do); oznaczenie tygodnia zamykającego okres | tydzień | przebieg: okres i czy zamyka okres (P0); nazwy plików |
-| Stawki wydziałów | `Department`, `Year`, `Labor Rate`, `Overhead` | `Department` + `Year` | łączenie źródeł – godziny na koszt (P3) |
+| Stawki wydziałów | `MPK` (miejsce powstawania kosztów), `Department` (opis MPK, opcjonalny), `Year`, `Labor Rate`, `Overhead` (opcjonalny) | `MPK` + `Year` | łączenie źródeł – godziny na koszt (P3) |
 | Kursy walut | waluta, okres, kurs (USD / PLN) | waluta + okres | przeliczenia walut (P3, P8) |
 | Cost Category | numer elementu kosztowego → Opis, Obszar, Cost Category (rozdz. 6) | numer elementu kosztowego | walidacja (P2), łączenie źródeł (P3) |
-| Osoby | lista osób pełniących funkcję CAM (imię i nazwisko, konto AD) | osoba | wybór CAM w słowniku „WP i CAM” |
+| Osoby | pracownicy z HR – „Wczytaj z HR” (PZLHRPROD `HR.ORG`, osoby z niepustym `USRID`; zawartość zastępowana po podglądzie różnic): USRID (numer znaczka, login), imię i nazwisko, imię, nazwisko, e-mail, MPK (`KOSTL`), dział (`SHORT`, `LONG`), stanowisko (`STEXT`), pion, manager, PERNR | USRID | wybór CAM w strukturze projektu i słowniku „WP i CAM” (zapisywany USRID) |
+| Raport mapowań CES ↔ P1S | raport mapowań SAP↔CES z `PZLPROD` – wszystkie kolumny pliku (`docs/mapowanie-ces-p1s.md`, rozdz. 2); wczytywany w całości nowym raportem | `src` + `pspnr` | mapowanie CES ↔ P1S (ekran Mapowanie, nakładka projektu, G2, P1, P3) |
 
 Definicje źródeł i ich prefiksy są konfiguracją importu – `docs/zrodla-danych.md`, rozdz. 2.
 
@@ -47,13 +76,18 @@ Definicje źródeł i ich prefiksy są konfiguracją importu – `docs/zrodla-da
 | Słownik | Zawartość | Klucz |
 |---|---|---|
 | WP i CAM | element P1S projektu → WP, CAM, Cost Category (Labor / Material / Subcontract – O24); powiązanie z nakładką przez `Legacy WBS` (`docs/performance-objectives.md`, rozdz. 4.1) | element P1S |
-| Harmonogram i budżet | WP → `BAC HOURS` (godziny), `BAC MATERIAL` (koszt materiałów), Planowany Start, Planowany Koniec – baseline projektu | WP |
+| Harmonogram i budżet | WP → `BAC HOURS` (godziny), `BAC MATERIAL` (koszt materiałów), Baseline Start, Baseline Koniec (RRRR-MM-DD; w plikach Excel rozpoznawane też dawne nagłówki „Planowany Start/Koniec”) – baseline projektu | WP |
 | Stawki CAS | stawki CAS projektu (zawartość – O37); do ustalenia słownik nie jest wczytywany, a projekt CAS jest niegotowy (ERROR) | do ustalenia |
 | Cost Category – zmiany w projekcie | zmiany i uzupełnienia słownika globalnego Cost Category dla projektu (rozdz. 6) | numer elementu kosztowego |
 | Wykluczenia | elementy pomijane na późniejszym etapie analizy: kombinacja `Cost Element`, `WBS Element`, `Partner object` (co najmniej jedno z trzech) + wymagany opis (rozdz. 7) – **opcjonalny** | kombinacja trzech pól |
 
 - Słowniki projektu powstają w kreatorze projektu z plików Excel (szablon z elementami projektu – jeden
-  plik z arkuszami albo osobne pliki / CSV) i są dalej utrzymywane w aplikacji (`docs/funkcjonalnosc.md`, F01, F03).
+  plik z arkuszami albo osobne pliki / CSV) i są dalej utrzymywane w aplikacji (`docs/funkcjonalnosc.md`, F01, F03):
+  na ekranie Projekt w zakładce Słowniki projektu – lista słowników i tabela wybranego słownika z edycją
+  w komórkach jak na ekranie Słowniki (dodaj / zmień / usuń wiersz, „Zapisz” z walidacją, „Odrzuć zmiany”, filtr)
+  oraz pobranie i wczytanie z Excela z podglądem różnic. „WP i CAM” oraz „Harmonogram i budżet” zmienia się też
+  w komórkach tabeli w zakładce Struktura – to te same słowniki (zapis od razu po zatwierdzeniu wiersza, z tą samą
+  walidacją i historią; `docs/performance-objectives.md`, rozdz. 4.2).
 - Harmonogram i budżet mogą się zmieniać w trakcie projektu – każda zmiana jest w historii, a przebieg liczy
   na stanie z chwili przypięcia.
 
@@ -85,14 +119,14 @@ Kontekst biznesowy typów – `readme.md`.
 | Czystość | spacje na początku / końcu i niełamliwe usuwane automatycznie | automatycznie |
 | Czystość | zapis podobny do istniejącej wartości | WARNING |
 | Klucz | brak duplikatów klucza; brak nakładających się okresów `ValidFrom`–`ValidTo`; `ValidFrom` ≤ `ValidTo` | ERROR |
-| Odwołania | wskazany element (projekt, WP, CAM, wydział) istnieje | ERROR |
+| Odwołania | wskazany element (projekt, WP, CAM, MPK) istnieje | ERROR |
 | Historia | kto i kiedy – uzupełnia aplikacja; zmiana i usunięcie tylko przez zamknięcie okresu | automatycznie |
 
 ### 5.2 WP i CAM
 
 | Reguła | Poziom |
 |---|---|
-| element P1S należy do projektu (równy `Legacy WBS` elementu nakładki albo pod nim) i nie należy do innego projektu | ERROR |
+| element P1S należy do projektu (kod P1S elementu nakładki – `Legacy WBS` albo cel mapowania – albo pod nim, także w `LOG.WBS`) i nie należy do innego projektu | ERROR |
 | jeden WP na element P1S | ERROR |
 | WP wymaga CAM | ERROR |
 | CAM wybierany z listy osób; przy wczytaniu z Excela CAM spoza listy osób | – / WARNING |
@@ -112,8 +146,9 @@ Kontekst biznesowy typów – `readme.md`.
 
 | Reguła | Poziom |
 |---|---|
-| para `Department` + `Year` unikalna | ERROR |
-| `Labor Rate` > 0, `Overhead` ≥ 0 | ERROR |
+| para `MPK` + `Year` unikalna (`Department` to tylko opis MPK) | ERROR |
+| `MPK` i `Labor Rate` wymagane; `Labor Rate` > 0 | ERROR |
+| `Overhead` opcjonalny; wypełniony – ≥ 0 | ERROR |
 
 ### 5.5 Cost Category
 
@@ -130,7 +165,18 @@ Kontekst biznesowy typów – `readme.md`.
 | opis wypełniony | ERROR |
 | powtórzona kombinacja `Cost Element` + `WBS Element` + `Partner object` | ERROR |
 
-Kontrole słowników względem danych przebiegu (np. wydział z kosztów bez stawki, numer elementu kosztowego bez
+### 5.7 Raport mapowań CES ↔ P1S
+
+| Reguła | Poziom |
+|---|---|
+| `src` = `SAP` albo `CES`; `pspnr` wypełniony | ERROR |
+| para `src` + `pspnr` unikalna | ERROR |
+| wiersz `src` = CES bez przypisania: brak elementu CES (`wbs_ces`, `wbs`) albo celu P1S (`pspnr_sap`, `wbs_sap`) i brak pary `project_ces` → `project_sap` | WARNING |
+
+Reguły rozstrzygania na zawartości raportu (kilka celów jednego elementu CES, cel spoza `LOG.WBS`) sprawdza ekran
+Mapowanie – `docs/mapowanie-ces-p1s.md`, rozdz. 10.
+
+Kontrole słowników względem danych przebiegu (np. MPK z kosztów bez stawki na dany rok, numer elementu kosztowego bez
 wpisu w Cost Category) – `docs/pipeline-fazy.md`, P2.
 
 ---
@@ -139,8 +185,18 @@ wpisu w Cost Category) – `docs/pipeline-fazy.md`, P2.
 
 - **Globalny** słownik: numer elementu kosztowego z kosztów rzeczywistych (`Cost Element` w raporcie ACTUALS –
   `docs/zrodla-danych.md`, rozdz. 4) → Opis, Obszar, Cost Category. Początkowa zawartość – załącznik A.
+- **„Rozliczeniowy”** (pole wyboru): cost element rozliczenia SAP (settlement, np. 0091902551 „PZL Invent Cost Set”).
+  Rozliczenie wychodzące (klasa obiektu partnera inna niż „Profit analysis”) jest pomijane w ACWP struktury projektu –
+  inaczej koszty elementu WBS rozliczanego co miesiąc sumują się do 0 (`docs/performance-objectives.md`, rozdz. 4.2).
+- **„Uzupełnij z ACTUALS”** (ekran Słowniki, Cost Category): dopisuje cost elementy z całego ostatniego importu ACTUALS
+  (wszystkie projekty), których w słowniku nie ma – numer i opis z danych; Cost Category i „Rozliczeniowy” uzupełnia
+  finansista. Podgląd przed zapisem jak przy wczytaniu z Excela; istniejące pozycje bez zmian, nic nie jest usuwane
+  (procedura `CAN_ActualsCostElements`, `docs/model-danych.md`, migracja 018).
 - **„Cost Category – zmiany w projekcie”** – opcjonalny słownik projektu; zmienia i dodaje pozycje, ma
   pierwszeństwo przed globalnym. **Słownik efektywny projektu = globalny + zmiany projektu.**
+- W zakładce Słowniki projektu tabela pokazuje słownik efektywny: pozycje globalne bez zmiany w projekcie mają stan
+  „globalny”. Zmiana takiej linii zapisuje się jako zmiana projektu (słownik globalny bez zmian); usunięcie zmiany
+  projektu przywraca pozycję globalną. Pozycji globalnej nie usuwa się w projekcie – tylko na ekranie Słowniki.
 - Numer elementu kosztowego z kosztów projektu bez wpisu w słowniku efektywnym naprawia się dodaniem pozycji
   w słowniku projektu.
 

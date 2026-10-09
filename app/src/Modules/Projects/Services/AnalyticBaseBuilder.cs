@@ -73,9 +73,9 @@ public static class AnalyticBaseBuilder
         return new AnalyticBase(rows, byCam, withoutWp, withoutBudget, allWps.Count, total.Hours, total.Material);
     }
 
-    private static bool HasBudget(DictRow? row) => row is not null && (row["BAC HOURS"] is not null || row["BAC MATERIAL"] is not null);
+    internal static bool HasBudget(DictRow? row) => row is not null && (row["BAC HOURS"] is not null || row["BAC MATERIAL"] is not null);
 
-    private static (decimal Hours, decimal Material, string? Start, string? Finish) Totals(IReadOnlyList<string> wps, IReadOnlyDictionary<string, DictRow> budgets)
+    internal static (decimal Hours, decimal Material, string? Start, string? Finish) Totals(IReadOnlyList<string> wps, IReadOnlyDictionary<string, DictRow> budgets)
     {
         decimal hours = 0, material = 0;
         string? start = null, finish = null;
@@ -85,9 +85,9 @@ public static class AnalyticBaseBuilder
                 continue;
             hours += Dec(b["BAC HOURS"]);
             material += Dec(b["BAC MATERIAL"]);
-            if (b["Planowany Start"] is { } s && (start is null || string.CompareOrdinal(s, start) < 0))
+            if (b["Baseline Start"] is { } s && (start is null || string.CompareOrdinal(s, start) < 0))
                 start = s;
-            if (b["Planowany Koniec"] is { } f && (finish is null || string.CompareOrdinal(f, finish) > 0))
+            if (b["Baseline Koniec"] is { } f && (finish is null || string.CompareOrdinal(f, finish) > 0))
                 finish = f;
         }
         return (hours, material, start, finish);

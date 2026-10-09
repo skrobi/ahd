@@ -5,6 +5,7 @@ using PzlEv.Modules.MasterData.Views;
 using PzlEv.Shared.Models;
 using PzlEv.Shared.Models.Pipeline;
 using PzlEv.Shared.Utils.Data;
+using PzlEv.Shared.Utils.Data.Sql;
 using PzlEv.Shared.Utils.Ui.Dialogs;
 using PzlEv.Shared.Utils.Ui.Modularity;
 
@@ -30,5 +31,9 @@ public sealed class MasterDataModule : IModule
     public void Initialize(AppServices services) => _store = new SqlDictionaryStore(services.Sql, services.Clock, services.User, GlobalDictionaries.Tables);
 
     public FrameworkElement CreateView(ModuleContext context) =>
-        new MasterDataView { DataContext = new MasterDataViewModel(new DictionaryService(_store!, context.Services.Journal), new FileDialogs()) };
+        new MasterDataView
+        {
+            DataContext = new MasterDataViewModel(new DictionaryService(_store!, context.Services.Journal), new FileDialogs(),
+                context.Services.PzlHrProd is { } hr ? new SqlHrSource(hr) : null, new SqlCostElementSource(context.Services.Sql)),
+        };
 }

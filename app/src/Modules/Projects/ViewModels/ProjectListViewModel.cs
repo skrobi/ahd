@@ -46,19 +46,10 @@ public sealed class ProjectListViewModel : ObservableObject
     {
         try
         {
-            var items = await Busy.Run("Wczytywanie projektów i ich gotowości…", () =>
-            {
-                var mapping = _service.Mapping();
-                return _service.Projects().Select(project =>
-                {
-                    var tree = _service.Objectives(project.Code);
-                    var ready = ProjectReadiness.IsReady(_service.Readiness(project, tree, mapping));
-                    return new ProjectListItem(project.Code, project.Name, ProjectTypes.Label(project.Type),
-                        $"{tree.ElementCount} el. · {tree.VirtualCount} węzłów",
-                        ready ? new Pill("ok", "gotowy") : new Pill("crit", "niegotowy"),
-                        "brak przebiegów", _service.Folders.PathOf(project.Code));
-                }).ToList();
-            });
+            // Sam odczyt projektów – nakładka, gotowość i mapowanie dopiero na ekranie projektu.
+            var items = await Busy.Run("Wczytywanie projektów…", () =>
+                _service.Projects().Select(project => new ProjectListItem(project.Code, project.Name, ProjectTypes.Label(project.Type),
+                    "brak przebiegów", _service.Folders.PathOf(project.Code))).ToList());
             Items.Clear();
             foreach (var item in items)
                 Items.Add(item);

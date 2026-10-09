@@ -37,35 +37,28 @@
                     <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
                         <Button Content="Pobierz do Excela" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding Export}" />
                         <Button Content="Wczytaj z Excela" Style="{StaticResource Btn}" Command="{Binding Import}" />
+                        <Button Content="Wczytaj z HR" Style="{StaticResource Btn}" Margin="8,0,0,0" Command="{Binding ImportFromHr}"
+                                Visibility="{Binding IsPersons, Converter={StaticResource BoolToVisibility}}"
+                                ToolTip="Pracownicy z PZLHRPROD (HR.ORG) – podgląd różnic przed zapisem; zawartość słownika zostaje zastąpiona" />
+                        <Button Content="Uzupełnij z ACTUALS" Style="{StaticResource Btn}" Margin="8,0,0,0" Command="{Binding FillFromActuals}"
+                                Visibility="{Binding IsCostCategory, Converter={StaticResource BoolToVisibility}}"
+                                ToolTip="Dopisuje cost elementy z całego ostatniego importu ACTUALS, których nie ma w słowniku (podgląd przed zapisem; nic nie jest usuwane) – Cost Category i „Rozliczeniowy” uzupełnia finansista" />
                     </StackPanel>
                     <StackPanel Orientation="Horizontal">
                         <Button Content="Dodaj wiersz" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding AddRow}" />
-                        <Button Content="Usuń wiersz" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding RemoveRow}" />
+                        <Button Content="Usuń wiersze" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding RemoveRow}" ToolTip="Usuwa wiersze zaznaczonych komórek (Ctrl+minus)" />
+                        <Button Content="Cofnij" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding Table.Undo}" ToolTip="Cofa ostatnią zmianę w tabeli (Ctrl+Z)" />
                         <Button Content="Odrzuć zmiany" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding Discard}" />
                         <Button Content="Zapisz" Style="{StaticResource BtnPrimary}" Command="{Binding Save}" />
                         <TextBlock Text="Filtr" VerticalAlignment="Center" Margin="16,0,6,0" Foreground="{StaticResource Muted}" />
-                        <TextBox Width="180" Style="{StaticResource Input}" Text="{Binding Filter, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBox Width="180" Style="{StaticResource Input}" Text="{Binding Table.Filter, UpdateSourceTrigger=PropertyChanged}" />
                     </StackPanel>
                 </DockPanel>
                 <partials:BusyBar DataContext="{Binding Busy}" />
                 <TextBlock Text="{Binding Status}" TextWrapping="Wrap" Margin="0,0,0,8" />
 
-                <!-- Wiersze słownika: kolumny budowane według opisu słownika (MasterDataView.xaml.cs) -->
-                <DataGrid x:Name="RowsGrid" Style="{StaticResource DataTable}" ItemsSource="{Binding RowsView}"
-                          SelectedItem="{Binding SelectedRow}" />
-                <TextBlock Text="* kolumna klucza" Style="{StaticResource MutedText}" FontSize="11" Margin="0,4,0,0" />
-
-                <!-- Wynik walidacji -->
-                <Border Style="{StaticResource Panel}" Margin="0,12,0,0"
-                        Visibility="{Binding HasIssues, Converter={StaticResource BoolToVisibility}}">
-                    <StackPanel>
-                        <TextBlock Text="Wynik walidacji" Style="{StaticResource H2}" FontSize="15" Margin="0,0,0,6" />
-                        <ItemsControl ItemsSource="{Binding Issues}" />
-                        <Button Content="Zapisz mimo ostrzeżeń" Style="{StaticResource BtnPrimary}" HorizontalAlignment="Left"
-                                Margin="0,8,0,0" Command="{Binding SaveWithWarnings}"
-                                Visibility="{Binding NeedsConfirmation, Converter={StaticResource BoolToVisibility}}" />
-                    </StackPanel>
-                </Border>
+                <!-- Wiersze słownika i wynik walidacji: wspólna tabela słownika (Shared/Views/Partials/DictionaryGrid) -->
+                <partials:DictionaryGrid DataContext="{Binding Table}" />
 
                 <!-- Podgląd wczytania z Excela -->
                 <Border Style="{StaticResource Panel}" Margin="0,12,0,0" BorderBrush="{StaticResource Accent}"

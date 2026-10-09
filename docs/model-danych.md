@@ -39,12 +39,12 @@ ZAMROŻENIE – przebieg zamykający okres
 |---|---|
 | `meta` | importy, wersje plików i ich treść, definicje źródeł, parsery, projekty, przebiegi, etapy, rewizje, problemy, dziennik zdarzeń, role, wersja aplikacji i schematu |
 | `can` | dane kanoniczne – jedna stała tabela `can.Row` ze slotami typowanymi dla wszystkich parserów (migracja 007) |
-| `dict` | słowniki globalne i projektu, korekty mapowania CES ↔ P1S – z historią |
+| `dict` | słowniki globalne (w tym raport mapowań CES ↔ P1S) i projektu, korekty mapowania CES ↔ P1S – z historią |
 | `ev` | koszt per WP, zaawansowanie, wyniki EV |
 
 Struktura P1S nie jest kopiowana do bazy PZL-EV – aplikacja (docelowo procedury) czyta ją z `PZLPROD` (rozdz. 3.4).
-Raport mapowań SAP↔CES trafia do bazy importem pliku Excel (parser `MAPOWANIA`, dane w `can.Row`) – każda
-wersja pliku zostaje (`docs/mapowanie-ces-p1s.md`, rozdz. 2).
+Raport mapowań SAP↔CES jest słownikiem globalnym `dict.MappingReport`, wczytywanym w całości z pliku Excel – każda
+zmiana zostaje w historii wierszy (`docs/mapowanie-ces-p1s.md`, rozdz. 2).
 
 **Nazwy w bazie:** warstwy z tabeli wyżej są częścią nazwy tabeli, a nie osobnymi schematami. Wszystkie obiekty są w
 jednym schemacie z konfiguracji, z sygnaturą przed nazwą: `[<Schema>].[<Sygnatura><WARSTWA>_<Nazwa>]`, np.
@@ -140,7 +140,7 @@ Rewizja to jedno obliczenie EV przebiegu (etap P8). Zapisuje:
 
 ### 4.4 Założenie o źródłach zewnętrznych
 
-Odtwarzalność opiera się na przyrostowości `PZLPROD.LOG.WBS` (rozdz. 3.4) i wersjach plików raportu mapowań.
+Odtwarzalność opiera się na przyrostowości `PZLPROD.LOG.WBS` (rozdz. 3.4) i historii słownika raportu mapowań.
 Zmiana istniejących wierszy w `LOG.WBS` nie jest wykrywana (`docs/architektura.md`, rozdz. 10).
 
 ---
@@ -223,12 +223,84 @@ istniejących parserów (kolejność pól, osobno dla rodzaju), przenosi dane `C
 liczby wierszy) i usuwa stare tabele; wiersze `STG_RawRow` przenosi do tabeli treści plików `META_SourceFileContent`
 (usuniętej migracją 008) i usuwa tabelę. Wymaga SQL Server 2016+ i poziomu zgodności bazy co najmniej 130 – skrypt sprawdza go na początku
 (Diagnostyka pokazuje wersję serwera i poziom zgodności). Zapytania raportów i grupowania czytają `CAN_Row` przez
-sloty parsera (`SqlCanonical`; docelowo widoki – F10.2).
+sloty parsera (`SqlCanonical`; docelowo widoki – F10.2; z zewnątrz – procedura `CAN_LatestImport`, migracja 011).
 
 **Migracja `sql/mssql/008_bez_tresci_plikow.sql`:** usuwa tabelę `META_SourceFileContent` z treścią plików (decyzja
 2026-10-03). Raport RABIT to zawsze pełne dane, a po udanym imporcie są one w `CAN_Row` – kopia pliku nie jest
 potrzebna. Wersje plików (`META_SourceFile`) i dane kanoniczne zostają; wpis w dzienniku podaje liczbę i rozmiar
 usuniętych treści.
+
+**Migracja `sql/mssql/009_raport_mapowan_slownik.sql`:** raport mapowań SAP↔CES jako słownik globalny – tabela
+`DICT_MappingReport` (wszystkie kolumny raportu jako tekst; kolumna pliku `project` → `ProjectDef`, bo `Project` to
+kolumna słowników projektu; bieżący klucz `src` + `pspnr` unikalny). Raport nie jest już importowany: definicje źródeł
+z parserem `MAPOWANIA` i sam parser są usuwane (zamknięta bieżąca wersja, historia zostaje), dane wcześniej
+zaimportowanych plików zostają w `CAN_Row`, ale mapowanie ich nie czyta – raport trzeba raz wczytać do słownika.
+
+**Migracja `sql/mssql/010_stawki_mpk.sql`:** stawki wydziałów według MPK (`docs/slowniki.md`, rozdz. 2, 5.4) –
+`DICT_DepartmentRate` dostaje kolumnę `CostCenter` (MPK, wymagana), `Department` (opis MPK) i `Overhead` dopuszczają
+brak wartości, unikalny klucz bieżących wersji: `Project` + `CostCenter` + `Year`. Istniejące wiersze dostają MPK
+z dotychczasowego `Department` (był kluczem); wpis w dzienniku podaje ich liczbę. Wymaga aplikacji 0.20.0.
+
+**Migracja `sql/mssql/011_ostatni_import_parsera.sql`:** procedura `[<Schema>].[<Sygnatura>CAN_LatestImport]` – ostatni
+import parsera dla raportów i narzędzi spoza aplikacji (Excel, Power BI, SQL). Zwraca dane kanoniczne parsera
+z najnowszej wersji każdego pliku źródłowego (lokalizacja + nazwa; największa data raportu `ModifiedAt`, potem czas
+importu; tylko wersje z utworzonymi danymi kanonicznymi): kolumny pliku `SourceCode`, `Location`, `FileName`,
+`ModifiedAt`, `ImportedAt`, `BatchId`, `FileId`, `RowNumber`, `ParserVersion` i pola bieżącej wersji parsera pod
+własnymi nazwami (sloty według `META_Parser.Fields`). Zapytanie składane jest przy wywołaniu, więc ta sama procedura
+obsługuje każdy parser, także dodany później – bez zakładania widoków (aplikacja i użytkownicy nie wykonują DDL).
+Parametry: `@Parser` (kod, np. `ACTUALS` – wszystkie jego źródła, `ACTUALS_PAF` i `ACTUALS_CES`), opcjonalnie
+`@SourceCode` (jedno źródło) i `@AsOf` (stan na moment – pliki zaimportowane do tej chwili). Nocny import w kilku
+partiach daje komplet: każdy plik w wersji z ostatniej partii, która go przyniosła; plik, którego RABIT nie
+wygenerował ponownie, zostaje w poprzedniej wersji (O38); w trakcie importu wynik łączy pliki nowe i poprzednie
+(kolumny `ImportedAt`, `BatchId`). Procedura działa z prawami wywołującego: potrzebny `EXECUTE` (migracja nadaje go roli
+`pzl_ev_user`, gdy rola istnieje) i `SELECT` na `META_Parser`, `META_SourceDefinition`, `META_SourceFile`, `CAN_Row`
+– jak aplikacja dziś. `EXECUTE AS OWNER` nie jest używane: właścicielem schematu bywa grupa AD, której nie da się
+„wykonać jako” (błąd 15517 przy migracji). Przykład:
+`EXEC [FINOP].[PZLEV_CAN_LatestImport] @Parser = 'ACTUALS', @SourceCode = 'ACTUALS_CES';`. Wymaga aplikacji 0.21.0.
+
+**Migracja `sql/mssql/012_ostatni_import_projektu.sql`:** `CAN_LatestImport` dostaje parametr `@Project` (kod
+projektu PZL-EV) – tylko wiersze, których `Project definition` jest w nakładce Performance Objectives projektu
+(bieżące wersje; parser musi mieć pole `ProjectDefinition`). Pełny zrzut ACTUALS (ok. 1,5 mln wierszy, 35 kolumn) to
+minuty samego przesyłania i wyświetlania; dane jednego projektu – sekunda. Przykład:
+`EXEC [FINOP].[PZLEV_CAN_LatestImport] @Parser = 'ACTUALS', @Project = 'M28';`. Wymaga aplikacji 0.23.0.
+
+**Migracja `sql/mssql/013_raport_kosztow_projektu.sql`:** funkcja `CAN_LatestFiles(@Parser, @SourceCode, @AsOf)` –
+najnowsza wersja każdego pliku parsera (wspólna dla `CAN_LatestImport` i raportów) – oraz procedura
+**`REP_ProjectCosts @Project, @Value = 'ValueObjCrcy'`** – raport kosztów projektu z ostatniego importu ACTUALS:
+- wiersz: `Project definition` z nakładki projektu × `Cost Element` – tylko elementy z kosztami projektu, bez wierszy
+  pasujących do słownika projektu „Wykluczenia” (każde wypełnione pole wykluczenia musi się zgadzać);
+- kolumny: `Grouping` (nazwa korzenia nakładki nad Project definition), `Project definition`, `Project definition
+  description` (nazwa elementu nakładki = Project definition), `Cost Element`, `Cost Elem. Descr.` i `Cost grouping`
+  (słownik Cost Category: zmiany projektu przed globalnym; opis bez wpisu – z danych), `Period MM/RRRR` (ostatni okres
+  w danych ACTUALS), kolumny lat projektu od najnowszego;
+- kwota: pole `@Value` parsera ACTUALS – domyślnie `ValueObjCrcy` (waluta obiektu, PLN), np. `ValueRepCur`.
+Pomiar: 1,5 mln wierszy ACTUALS – raport projektu w ok. 0,2–0,7 s. Ekran Projekt, zakładka Wskaźniki: „Raport kosztów
+(Excel)”. Przykład: `EXEC [FINOP].[PZLEV_REP_ProjectCosts] @Project = 'M28';`.
+
+**Migracja `sql/mssql/014_definicje_projektu.sql`:** Project definition projektu (`CAN_LatestImport @Project`,
+`REP_ProjectCosts`) to Project definition **i WBS element** węzłów nakładki – element CES dodany ręcznie nie ma
+Project definition, a najwyższy element CES to sam Project definition (np. `4D06WP`). Wcześniej projekt z takim
+elementem dawał pusty wynik. Wymaga aplikacji 0.23.1.
+
+**Migracja `sql/mssql/015_osoby_z_hr.sql`:** `DICT_Person` dostaje kolumny z HR (`FirstName`, `LastName`, `Email`,
+`CostCenter`, `DepartmentShort`, `DepartmentName`, `Position`, `Division`, `IsManager`, `Pernr`); kluczem jest USRID
+(dotychczasowa kolumna `AdAccount`). Słownik Osoby wczytuje się z PZLHRPROD (`HR.ORG`). Wymaga aplikacji 0.24.0.
+
+**Migracja `sql/mssql/016_koszty_po_elementach.sql`:** procedura `REP_ProjectCostsByElement @Project, @Value =
+'ValueObjCrcy'` – koszt rzeczywisty (ACWP) projektu po WBS elemencie CES: suma kwoty z ostatniego importu ACTUALS
+(`CAN_LatestFiles`; zrzut zawsze zawiera całość, więc to koszt narastająco), Project definition projektu jak
+w `REP_ProjectCosts`, bez wykluczeń projektu; wiersz bez WBS elementu – pod Project definition. Kolumna ACWP tabeli
+struktury (`docs/performance-objectives.md`, rozdz. 4.2). Wymaga aplikacji 0.28.0.
+
+**Migracja `sql/mssql/017_cost_element_rozliczeniowy.sql`:** `DICT_CostCategory.IsSettlement` – znacznik
+„Rozliczeniowy” (cost element rozliczenia SAP, np. 0091902551 „PZL Invent Cost Set”). `REP_ProjectCostsByElement`
+pomija rozliczenie wychodzące: wiersze z cost elementem rozliczeniowym (słownik efektywny projektu), których klasa
+obiektu partnera nie jest „Profit analysis”; rozliczenie przychodzące („Profit analysis”) zostaje w ACWP. Bez tego
+suma zrzutu na elemencie WBS rozliczanym co miesiąc wynosi 0. Wymaga aplikacji 0.29.0.
+
+**Migracja `sql/mssql/018_cost_elementy_z_actuals.sql`:** procedura `CAN_ActualsCostElements @Value` – cost elementy
+całego ostatniego importu ACTUALS (nazwa z danych, liczba wierszy, suma kwoty) dla „Uzupełnij z ACTUALS” w słowniku
+Cost Category (`docs/slowniki.md`, rozdz. 6).
 
 Aplikacja zapisuje dziś do tabel importu, konfiguracji importu, słowników globalnych, korekt mapowania, dziennika i problemów;
 tabele projektów i słowników projektu czekają na moduły F4. Blokada importu – plik na dysku sieciowym

@@ -14,10 +14,10 @@ public sealed class MappingResolverTests
     private static readonly DateTimeOffset At = new(2026, 10, 3, 9, 0, 0, TimeSpan.FromHours(2));
 
     // raport: element 2DI473001001 → PSPNR 1003 (w Excelu bez zer wiodących); projekt 2DI473 → AC-I39.1.01
-    private static readonly ReportInfo Report = new(1, "MAPOWANIA_01.xlsx", At,
+    private static readonly ReportInfo Report = new(At, "PZL\\anowak",
     [
-        new ReportEntry(1, "SAP", "2DI473001001", "2DI473", "1003", "AC-I39.1.01.01", "AC-I39.1.01"),
-        new ReportEntry(2, "CES", "2DI473001099", "2DI473", "1002", "", "AC-I39.1.01"),
+        new ReportEntry(1, "SAP", "1003", "2DI473001001", "2DI473", "1003", "AC-I39.1.01.01", "AC-I39.1.01"),
+        new ReportEntry(2, "CES", "60002", "2DI473001099", "2DI473", "1002", "", "AC-I39.1.01"),
     ]);
 
     private static readonly CesElement[] Elements =
@@ -44,7 +44,7 @@ public sealed class MappingResolverTests
         Assert.Equal((MappingStatuses.Report, "00001003", "AC-I39.1.01.01"), (report.Status, report.TargetPspnr, report.TargetWbs));
         var inherited = Of(resolution, "2DI473001002");
         Assert.Equal((MappingStatuses.Inherited, "00001002", "AC-I39.1.01"), (inherited.Status, inherited.TargetPspnr, inherited.TargetWbs));
-        Assert.Equal("projekt CES 2DI473 → AC-I39.1.01 (raport mapowań, wiersz 1)", inherited.Origin);
+        Assert.Equal("projekt CES 2DI473 → AC-I39.1.01 (raport mapowań, wiersz SAP 1003)", inherited.Origin);
         var overridden = Of(resolution, "4D03GZ000041");
         Assert.Equal((MappingStatuses.Override, "MC-00.001"), (overridden.Status, overridden.TargetWbs));
         var unmapped = Of(resolution, "4D03GZ000001");
@@ -78,7 +78,7 @@ public sealed class MappingResolverTests
     {
         var report = Report with
         {
-            Entries = [.. Report.Entries, new ReportEntry(3, "SAP", "2DI473001001", "2DI473", "2001", "MC-00.001", "AC-I39.1.01")],
+            Entries = [.. Report.Entries, new ReportEntry(3, "SAP", "2001", "2DI473001001", "2DI473", "2001", "MC-00.001", "AC-I39.1.01")],
         };
 
         var resolution = MappingResolver.Resolve(Elements, report, [], P1sSample.Elements, latestBatchId: 2);
@@ -94,7 +94,7 @@ public sealed class MappingResolverTests
     [Fact]
     public void Target_outside_log_wbs_is_a_warning_and_without_pzlprod_codes_come_from_report()
     {
-        var report = Report with { Entries = [new ReportEntry(1, "SAP", "2DI473001001", "2DI473", "7777", "AC-X.1", "")] };
+        var report = Report with { Entries = [new ReportEntry(1, "SAP", "7777", "2DI473001001", "2DI473", "7777", "AC-X.1", "")] };
 
         var withP1s = MappingResolver.Resolve(Elements, report, [], P1sSample.Elements, latestBatchId: 2);
         Assert.Contains(withP1s.Issues, i => i.Level == CheckLevel.Warning && i.Message.StartsWith("Cel P1S AC-X.1 nie istnieje w LOG.WBS"));
