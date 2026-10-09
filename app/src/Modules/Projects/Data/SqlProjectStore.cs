@@ -1,6 +1,7 @@
 using Dapper;
 using Microsoft.Data.SqlClient;
 using PzlEv.Modules.Projects.Models;
+using PzlEv.Shared.Models.Db;
 using PzlEv.Shared.Models.Dictionaries;
 using PzlEv.Shared.Utils.Data;
 using PzlEv.Shared.Utils.Data.Sql;
@@ -252,5 +253,17 @@ public sealed class SqlProjectStore(SqlDatabase db, IClock clock, ICurrentUser u
         return connection.Query<(string WbsElement, decimal? Amount)>(db.Table("rep.ProjectCostsByElement"), new { Project = code, Value = value },
                 commandType: System.Data.CommandType.StoredProcedure, commandTimeout: 600)
             .ToDictionary(r => r.WbsElement, r => r.Amount ?? 0, StringComparer.OrdinalIgnoreCase);
+    }
+
+    public IReadOnlyList<ActualsFile> ActualsFiles()
+    {
+        using var connection = db.Open();
+        return connection.Query<ActualsFile>(
+            $"SELECT f.FileName, f.ModifiedAt AS ReportAt, f.ImportedAt, s.ModifiedAt AS SeenReportAt, s.CheckedAt " +
+            $"FROM {db.Table("can.LatestFiles")}('ACTUALS', NULL, NULL) f " +
+            $"OUTER APPLY (SELECT TOP (1) x.ModifiedAt, b.StartedAt AS CheckedAt FROM {db.Table("meta.SourceFileSeen")} x " +
+            $"  JOIN {db.Table("meta.ImportBatch")} b ON b.BatchId = x.BatchId " +
+            $"  WHERE x.Location = f.Location AND x.FileName = f.FileName AND x.Decision IN @decisions ORDER BY x.Id DESC) s",
+            new { decisions = new[] { FileDecisions.Imported, FileDecisions.Skipped, FileDecisions.Duplicate } }).ToList();
     }
 }
