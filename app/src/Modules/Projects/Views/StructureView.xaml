@@ -45,6 +45,19 @@
         </DataTemplate>
     </UserControl.Resources>
     <StackPanel>
+        <!-- Wynik ostatniej operacji na komórkach (wklejenie, Delete) – nad tabelą; pod tabelą nic (tabela do dołu okna).
+             Skróty i opis kolumn – przycisk „?” na pasku nad tabelą (StructureHelpWindow). -->
+        <TextBlock Text="{Binding Notice}" Foreground="{StaticResource Info}" Margin="0,0,0,4" TextWrapping="Wrap">
+            <TextBlock.Style>
+                <Style TargetType="TextBlock">
+                    <Style.Triggers>
+                        <Trigger Property="Text" Value="">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                        </Trigger>
+                    </Style.Triggers>
+                </Style>
+            </TextBlock.Style>
+        </TextBlock>
         <!-- Zaznaczanie komórek jak w Excelu (tylko ta tabela – styl DataTable i edytor Performance Objectives bez zmian). -->
         <DataGrid x:Name="RowsGrid" Style="{StaticResource DataTable}" ItemsSource="{Binding Rows}"
                   MinHeight="320" FrozenColumnCount="1" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto"
@@ -67,12 +80,5 @@
                 </Style>
             </DataGrid.RowStyle>
         </DataGrid>
-        <TextBlock Text="{Binding Notice}" Foreground="{StaticResource Info}" Margin="0,4,0,0" TextWrapping="Wrap" />
-        <!-- Opis kolumn w grupach (StructureColumns) – to samo co podpowiedź nagłówka -->
-        <Expander Header="Opis kolumn" Margin="0,6,0,0">
-            <StackPanel x:Name="ColumnHelp" Margin="8,4,0,0" />
-        </Expander>
-        <TextBlock Style="{StaticResource MutedText}" FontSize="11" Margin="0,4,0,0" TextWrapping="Wrap"
-                   Text="Jak w Excelu: pisanie zastępuje komórkę, Enter / Tab – dalej (zapis wiersza od razu), Esc – cofnij wiersz, Ctrl+C / Ctrl+V – kopiuj / wklej blok (jedna komórka wypełnia zaznaczenie; komórki, których nie można zmienić, są pomijane), Delete – wyczyść (bez WP), Ctrl+D – wypełnij w dół, Ctrl+Z – cofnij wklejenie / Delete / Ctrl+D, Alt+→ / Alt+← – rozwiń / zwiń wiersz, CAM – wpisz fragment USRID albo nazwiska · podświetlenie: czerwone – błąd, żółte – ostrzeżenie; wiersz żółty – niezapisany" />
     </StackPanel>
 </UserControl>

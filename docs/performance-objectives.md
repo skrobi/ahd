@@ -100,7 +100,7 @@ i budżetem (`StructureBuilder`).
 - **Kolumny w grupach** (`StructureColumns`) – jedna struktura WBS dla perspektywy operacyjnej (godziny) i finansowej
   (koszty); grupy zwijane jak grupowanie kolumn w Excelu („−” nad pierwszą kolumną grupy, zwinięta grupa – kolumna
   „+ Grupa”); Schedule, Operational EV i Financial EV domyślnie zwinięte. Opis każdej kolumny – podpowiedź nagłówka
-  i „Opis kolumn” pod tabelą. Kolumny z danych (PZLPROD, ACTUALS, wyliczone) – tylko do odczytu (nagłówek kursywą).
+  i okno „Skróty i opis kolumn” (przycisk „?” nad tabelą). Kolumny z danych (PZLPROD, ACTUALS, wyliczone) – tylko do odczytu (nagłówek kursywą).
 
   | Grupa | Kolumny |
   |---|---|
@@ -117,9 +117,10 @@ i budżetem (`StructureBuilder`).
   i ACWP – na nadrzędnym.
   Dane produkcyjne są czytane na żywo (`IPzlProdSource.Production`, zakres P1S projektu zamiast filtra programu) przy
   otwarciu projektu, „Odśwież mapowanie i koszty” i po zmianie Legacy WBS; chwila odczytu – w nagłówku ekranu
-  („Produkcja (PZLPROD) …”). Kolumny mają stałą szerokość – przy kolejnych kolumnach tabela przewija się w poziomie. Tabela sięga dołu okna
-  (wysokość dopasowana do okna, przy zwiniętym menu – szersza); nad nią daty danych RABIT i produkcji – osobna linia pod
-  nagłówkiem projektu.
+  („Produkcja (PZLPROD) …”). Kolumny mają stałą szerokość – przy kolejnych kolumnach tabela przewija się w poziomie. Tabela kończy się na dole okna (wysokość
+  dopasowana do okna, strona bez przewijania – wiersze przewija tabela; przy zwiniętym menu – szersza); komunikat
+  o wklejeniu – nad tabelą, skróty klawiszowe i opis kolumn – okno „?”; nad tabelą daty danych RABIT i produkcji – osobna
+  linia pod nagłówkiem projektu.
 - **WP** to znacznik elementu P1S (wiersz z kodem P1S), który wskażą finansiści: zaznaczony element jest pakietem pracy
   i ma mieć koszty i budżet. Kodem nowego WP jest kod elementu P1S (WP z wcześniej wczytanego słownika zachowuje swój
   kod). WP nie jest osobnym poziomem drzewa.

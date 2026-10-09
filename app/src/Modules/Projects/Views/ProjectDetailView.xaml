@@ -112,6 +112,9 @@
                                 <Button Content="&#xE711;" Style="{StaticResource BtnIcon}" Command="{Binding Structure.RevertChanges}"
                                         AutomationProperties.Name="Odrzuć niezapisane"
                                         ToolTip="Odrzuć niezapisane – cofa zmiany wierszy, których nie udało się zapisać" />
+                                <Button Content="&#xE897;" Style="{StaticResource BtnIcon}" Margin="12,0,0,0" Click="OnStructureHelp"
+                                        AutomationProperties.Name="Skróty i opis kolumn"
+                                        ToolTip="Skróty i opis kolumn – obsługa tabeli jak w Excelu i wyjaśnienie każdej kolumny (osobne okno)" />
                             </StackPanel>
                         </DockPanel>
                         <views:StructureView DataContext="{Binding Structure}" />
