@@ -240,9 +240,10 @@ public sealed class ProjectStoreAndServiceTests : IDisposable
         Assert.Equal([new LookupOption("e123456", "e123456")], ProjectService.PersonOptions(_service.PersonLookups(), _service.Rows(ProjectDictionaries.WpCam, "M28")));   // CAM spoza słownika Osoby
 
         Assert.True(_service.SaveStructureEdit("M28", inputs, Row("4D06WP000001"),
-            new Dictionary<string, string?> { [StructureEdits.BacHours] = "12,5", [StructureEdits.Start] = "2026-01-05" }).Saved);
+            new Dictionary<string, string?> { [StructureEdits.BacHours] = "12,5", [StructureEdits.Bac] = "15 000,50", [StructureEdits.Start] = "2026-01-05" }).Saved);
         var budget = Assert.Single(_service.Rows(ProjectDictionaries.ScheduleBudget, "M28"));
-        Assert.Equal(("AC-CAB.6.38.01", "12.5", "2026-01-05"), (budget["WP"], budget["BAC HOURS"], budget["Baseline Start"]));
+        Assert.Equal(("AC-CAB.6.38.01", "12.5", "15000.5", "2026-01-05"), (budget["WP"], budget["BAC HOURS"], budget["BAC"], budget["Baseline Start"]));
+        Assert.Equal(15000.5m, Row("4D06WP000001").Bac);
         Assert.Equal(12.5m, Row("4D06WP000001").BacHours);
 
         var negative = _service.SaveStructureEdit("M28", inputs, Row("4D06WP000001"), new Dictionary<string, string?> { [StructureEdits.BacHours] = "-1" });

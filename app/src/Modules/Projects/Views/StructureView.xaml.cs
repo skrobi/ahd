@@ -32,6 +32,7 @@ public partial class StructureView : UserControl
     [
         (StructureEdits.BacHours, "BAC HOURS", 100, false, true),
         (StructureEdits.BacMaterial, "BAC MATERIAL", 110, false, true),
+        (StructureEdits.Bac, "BAC", 110, false, true),
         (StructureEdits.Start, "Baseline Start", 110, true, false),
         (StructureEdits.Finish, "Baseline Koniec", 110, true, false),
     ];

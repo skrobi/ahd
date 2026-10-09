@@ -73,7 +73,11 @@ public static class AnalyticBaseBuilder
         return new AnalyticBase(rows, byCam, withoutWp, withoutBudget, allWps.Count, total.Hours, total.Material);
     }
 
-    internal static bool HasBudget(DictRow? row) => row is not null && (row["BAC HOURS"] is not null || row["BAC MATERIAL"] is not null);
+    internal static bool HasBudget(DictRow? row) => row is not null && (row["BAC HOURS"] is not null || row["BAC MATERIAL"] is not null || row["BAC"] is not null);
+
+    /// <summary>Budżet kosztowy (BAC) WP – suma.</summary>
+    internal static decimal Bac(IEnumerable<string> wps, IReadOnlyDictionary<string, DictRow> budgets) =>
+        wps.Sum(wp => budgets.GetValueOrDefault(wp) is { } b ? Dec(b["BAC"]) : 0);
 
     internal static (decimal Hours, decimal Material, string? Start, string? Finish) Totals(IReadOnlyList<string> wps, IReadOnlyDictionary<string, DictRow> budgets)
     {

@@ -110,6 +110,12 @@ public sealed class ProjectDictionariesTests
         Assert.True(HasError(Validate(ProjectDictionaries.ScheduleBudget, Plan("WP-1", "abc", null)), "oczekiwano liczby"));
         Assert.True(HasError(Validate(ProjectDictionaries.ScheduleBudget, Plan("WP-1", "1", null, "31.13.2026")), "oczekiwano daty"));
         Assert.Contains(Validate(ProjectDictionaries.ScheduleBudget, Plan("WP-2", null, null)), i => i.Level == CheckLevel.Warning && i.Message.Contains("bez budżetu"));
+        // BAC – budżet kosztowy: ujemny – ERROR; sam BAC to budżet WP (bez ostrzeżenia).
+        var bacOnly = Plan("WP-2", null, null);
+        bacOnly["BAC"] = "15000";
+        Assert.Empty(Validate(ProjectDictionaries.ScheduleBudget, bacOnly));
+        bacOnly["BAC"] = "-1";
+        Assert.True(HasError(Validate(ProjectDictionaries.ScheduleBudget, bacOnly), "BAC – budżet nie może być ujemny"));
 
         var spec = ProjectDictionaries.For(ProjectDictionaries.ScheduleBudget, Context with { Wps = null });
         Assert.Contains(DictionaryValidator.Validate(spec, [new DictRow(null, null, Plan("WP-9", "1", null))]),

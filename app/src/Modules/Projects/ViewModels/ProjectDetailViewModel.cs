@@ -267,6 +267,7 @@ public sealed class ProjectDetailViewModel : ObservableObject
         Kpis.Clear();
         Kpis.Add(new KpiTile("BAC HOURS", Amount(summary.BacHours), "budżet godzin – Harmonogram i budżet"));
         Kpis.Add(new KpiTile("BAC MATERIAL", Amount(summary.BacMaterial), "budżet materiałów"));
+        Kpis.Add(new KpiTile("BAC", Amount(summary.Bac), "budżet kosztowy – Harmonogram i budżet"));
         Kpis.Add(new KpiTile("WP / CAM", $"{summary.Wps} / {summary.Cams}", "pakiety pracy i ich CAM w strukturze"));
         Kpis.Add(new KpiTile("Okres", summary.Start is null && summary.Finish is null ? "—" : $"{summary.Start ?? "?"} – {summary.Finish ?? "?"}", "planowany start i koniec"));
         Kpis.Add(new KpiTile("Braki", $"{summary.ElementsWithoutWp} / {summary.WpsWithoutBudget}", "elementy CES bez WP / WP bez budżetu"));
@@ -330,7 +331,7 @@ public sealed class ProjectDetailViewModel : ObservableObject
     private bool ConfirmWpRemoval(StructureRowViewModel row)
     {
         if (!row.Changes.TryGetValue(StructureEdits.Wp, out var flag) || StructureEdits.IsChecked(flag) || row.Row.Wp is not { } wp
-            || row.Row.OwnsBudget is false || (row.Row.BacHours == 0 && row.Row.BacMaterial == 0 && row.Row.Start is null && row.Row.Finish is null))
+            || row.Row.OwnsBudget is false || (row.Row.BacHours == 0 && row.Row.BacMaterial == 0 && row.Row.Bac == 0 && row.Row.Start is null && row.Row.Finish is null))
             return true;
         if (_dialogs.Confirm("Odznaczenie WP",
                 $"Odznaczenie WP {wp} („{row.Row.Name}”) usunie jego przypisanie (CAM, Cost Category) oraz harmonogram i budżet WP. Kontynuować?"))

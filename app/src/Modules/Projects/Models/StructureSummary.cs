@@ -17,4 +17,5 @@ public sealed record StructureSummary(
     decimal Acwp = 0,
     decimal AcwpWithoutWp = 0,
     decimal AcwpOutside = 0,
-    bool HasCosts = false);
+    bool HasCosts = false,
+    decimal Bac = 0);

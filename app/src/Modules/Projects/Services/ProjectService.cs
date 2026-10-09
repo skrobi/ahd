@@ -290,7 +290,7 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
             {
                 var planned = rows.Select(r => r["WP"]).OfType<string>().ToHashSet(StringComparer.OrdinalIgnoreCase);
                 data = data.Concat(Rows(ProjectDictionaries.WpCam, code).Select(r => r["WP"]).OfType<string>().Distinct(StringComparer.OrdinalIgnoreCase)
-                    .Where(wp => !planned.Contains(wp)).Select(wp => (IReadOnlyList<object?>)new object?[] { wp, null, null, null, null }));
+                    .Where(wp => !planned.Contains(wp)).Select(wp => (IReadOnlyList<object?>)new object?[] { wp, null, null, null, null, null }));
             }
             var columns = _dictionaries.ExcelColumns(spec);
             // Cost Category „WP i CAM” – lista kategorii projektu (słownik projektu – poza listami słowników globalnych).
@@ -371,7 +371,7 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
         }
 
         var wpChanges = changes.Where(c => StructureEdits.WpCamColumns.Contains(c.Key)).ToDictionary(c => c.Key, c => c.Value);
-        var wp = row.Wp;
+        var wp = row.BudgetWp;   // budżet wiersza: jego WP albo jedyny WP pod nim
         if (wpChanges.Count > 0)
         {
             if (element is null)

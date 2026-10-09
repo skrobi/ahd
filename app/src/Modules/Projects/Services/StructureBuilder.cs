@@ -194,7 +194,7 @@ public static class StructureBuilder
             var acwp = item.Kind == GridRowKind.Objective ? item.Cost : wps.Sum(w => wpCost.GetValueOrDefault(w));
             rows.Add(new StructureRow(item.Id, parentId, depth, item.Kind, item.NodeKey, item.IsVirtual, item.Name, item.WbsElement, item.P1s,
                 item.Note, item.IsGreyed, assignment?["WP"], assignment?["CAM"], assignment?["Cost Category"], wps, hours, material, start, finish,
-                gap, item.Children.Count > 0, acwp));
+                gap, item.Children.Count > 0, acwp, AnalyticBaseBuilder.Bac(wps, budgets)));
             foreach (var child in item.Children)
                 Emit(child, item.Id, depth + 1);
         }
@@ -214,7 +214,8 @@ public static class StructureBuilder
             roots.Sum(r => r.Cost),
             withoutWp,
             costOf.Where(c => !used.Contains(c.Key)).Sum(c => c.Value),
-            costs is not null);
+            costs is not null,
+            AnalyticBaseBuilder.Bac(all, budgets));
         return new ProjectStructure(rows, summary);
     }
 }

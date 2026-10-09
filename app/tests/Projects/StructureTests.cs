@@ -36,8 +36,8 @@ public sealed class StructureTests
 
     private static DictRow Wp(string element, string wp, string cam = "Anna Nowak") => Row(("Element P1S", element), ("WP", wp), ("CAM", cam), ("Cost Category", null));
 
-    private static DictRow Budget(string wp, string? hours, string? material = null, string? start = null, string? end = null) =>
-        Row(("WP", wp), ("BAC HOURS", hours), ("BAC MATERIAL", material), ("Baseline Start", start), ("Baseline Koniec", end));
+    private static DictRow Budget(string wp, string? hours, string? material = null, string? start = null, string? end = null, string? bac = null) =>
+        Row(("WP", wp), ("BAC HOURS", hours), ("BAC MATERIAL", material), ("BAC", bac), ("Baseline Start", start), ("Baseline Koniec", end));
 
     private static StructureRow Of(ProjectStructure structure, string idOrWbs) =>
         structure.Rows.Single(r => r.WbsElement == idOrWbs || r.Id == idOrWbs);
@@ -90,9 +90,10 @@ public sealed class StructureTests
     public void Wp_budget_and_gaps_roll_up_subtree()
     {
         DictRow[] wpCam = [Wp("XYZ-1", "WP-1"), Wp("AC-CAB.6.38.01", "WP-2"), Wp("AC-CAB.6.38.03.01.05", "WP-3"), Wp("ZZZ", "WP-4")];
-        DictRow[] schedule = [Budget("WP-1", "10", "100", "2026-01-01", "2026-06-30"), Budget("WP-2", "5", null, "2025-12-01", "2026-03-31")];
+        DictRow[] schedule = [Budget("WP-1", "10", "100", "2026-01-01", "2026-06-30", "1000"), Budget("WP-2", "5", null, "2025-12-01", "2026-03-31", "250.5")];
 
         var structure = ProjectService.Structure(Objectives(), Inputs(), wpCam, schedule);
+        Assert.Equal((1000m, 1250.5m, 1250.5m), (Of(structure, "p1s:XYZ-1").Bac, Of(structure, "4D06WP.RA").Bac, structure.Summary.Bac));   // BAC – suma poddrzewa
 
         var leaf = Of(structure, "p1s:XYZ-1");
         Assert.Equal(("WP-1", "Anna Nowak", 10m, 100m, true), (leaf.Wp, leaf.Cam, leaf.BacHours, leaf.BacMaterial, leaf.OwnsBudget));
@@ -148,10 +149,16 @@ public sealed class StructureTests
         Assert.True(StructureEdits.CanEdit(node, StructureEdits.P1s));
         Assert.True(StructureEdits.CanEdit(node, StructureEdits.Wp));
         Assert.True(StructureEdits.CanEdit(leaf, StructureEdits.CostCategory));
-        Assert.False(StructureEdits.CanEdit(node, StructureEdits.BacHours));   // suma poddrzewa
+        Assert.True(StructureEdits.CanEdit(node, StructureEdits.BacHours));   // jeden WP w poddrzewie (WP-1)
+        var two = ProjectService.Structure(Objectives(), Inputs(), [Wp("XYZ-1", "WP-1"), Wp("AC-CAB.6.38.01", "WP-2")], []);
+        Assert.False(StructureEdits.CanEdit(Of(two, "4D06WP.RA"), StructureEdits.BacHours));   // suma kilku WP
         Assert.False(StructureEdits.CanEdit(leaf, StructureEdits.Name));
         Assert.True(StructureEdits.CanEdit(leaf, StructureEdits.BacHours));
-        Assert.False(StructureEdits.CanEdit(Of(structure, "p1s:AC-CAB.6.38.07"), StructureEdits.Start));   // bez własnego WP
+        // Wiersz bez własnego WP z jednym WP pod sobą – budżet i daty edytowalne (zmiana trafia do tego WP).
+        var parent = Of(structure, "p1s:AC-CAB.6.38.07");
+        Assert.Equal(("WP-1", true, true), (parent.BudgetWp, StructureEdits.CanEdit(parent, StructureEdits.Start), StructureEdits.CanEdit(parent, StructureEdits.Bac)));
+        Assert.True(StructureEdits.CanEdit(leaf, StructureEdits.Bac));
+        Assert.False(StructureEdits.CanEdit(Of(ProjectService.Structure(Objectives(), Inputs(), [], []), "p1s:AC-CAB.6.38.07"), StructureEdits.Start));   // bez WP w poddrzewie
         // WP zaznaczany w tym wierszu (wklejenie WP z budżetem): budżet edytowalny, gdy w poddrzewie nie ma innych WP.
         var empty = ProjectService.Structure(Objectives(), Inputs(), [], []);
         Assert.True(StructureEdits.CanEditWithNewWp(Of(empty, "p1s:AC-CAB.6.38.07"), StructureEdits.Start));
@@ -191,8 +198,8 @@ public sealed class StructureTests
         Assert.Equal(1L, Assert.Single(removed).RowId);
 
         DictRow[] schedule = [Budget("WP-1", "10", "5") with { RowId = 3, Version = 1 }];
-        var (budget, _) = StructureEdits.Schedule(schedule, "wp-1", new Dictionary<string, string?> { [StructureEdits.BacHours] = "12,5" });
-        Assert.Equal(("12,5", "5"), (budget[0]["BAC HOURS"], budget[0]["BAC MATERIAL"]));
+        var (budget, _) = StructureEdits.Schedule(schedule, "wp-1", new Dictionary<string, string?> { [StructureEdits.BacHours] = "12,5", [StructureEdits.Bac] = "900" });
+        Assert.Equal(("12,5", "5", "900"), (budget[0]["BAC HOURS"], budget[0]["BAC MATERIAL"], budget[0]["BAC"]));
 
         var (renamed, kept) = StructureEdits.ScheduleAfterWpChange(schedule, "WP-1", "WP-9");
         Assert.Equal(("WP-9", "10"), (renamed[0]["WP"], renamed[0]["BAC HOURS"]));
