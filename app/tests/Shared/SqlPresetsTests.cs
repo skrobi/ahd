@@ -81,7 +81,7 @@ public sealed class SqlPresetsTests : IDisposable
         var own = new Dictionary<string, string?> { ["Numer elementu kosztowego"] = "0051105550", ["Opis"] = "własny", ["Obszar"] = null, ["Cost Category"] = "Inna" };
         Assert.True(_dictionaries.Save(GlobalDictionaries.CostCategory, null, [new RowChange(RowChangeKind.Added, null, null, spec.KeyOf(own), own)]).Success);
 
-        Assert.Equal(["002_dane_startowe.sql"], SqlMigrations.Apply(_database.Sql));
+        Assert.Equal(["002_dane_startowe.sql", "023_dane_produkcji.sql"], SqlMigrations.Apply(_database.Sql));
 
         var paf = _sources.Definitions().Single(d => d.Code == "ACTUALS_PAF");
         Assert.Equal(("moja definicja", 1), (paf.ReportType, paf.Version));

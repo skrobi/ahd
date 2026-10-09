@@ -249,6 +249,29 @@ public sealed class StructureTests
     }
 
     [Fact]
+    public void Virtual_p1s_element_is_under_its_parent_with_own_production_and_dates()
+    {
+        DictRow[] virtuals = [Row(("Element wirtualny", "XYZ-1.PAINT"), ("Element nadrzędny", "XYZ-1"), ("Nazwa", "Paint"), ("SWBS", "Hangar"), ("CPLGR", "W20"), ("ARBPL", null))];
+        DictRow[] wpCam = [Wp("XYZ-1.PAINT", "WP-P")];
+        var production = new ProductionData(new Dictionary<string, ProductionValues>
+        {
+            ["102"] = new("102", 5, 40, 30, 100, null, new DateOnly(2026, 1, 5), new DateOnly(2026, 2, 25)),
+            [ProductionData.VirtualKey("XYZ-1.PAINT")] = new("102", 4, 55, 22, null, "XYZ-1.PAINT", new DateOnly(2026, 3, 5), null),
+        }, DateTimeOffset.Now);
+        var structure = StructureBuilder.Build(Objectives(), ProjectService.Resolve(Objectives(), Inputs()), Inputs().P1s, wpCam, [],
+            production: production, virtualP1s: virtuals);
+
+        var paint = Of(structure, "p1s:XYZ-1.PAINT");
+        Assert.Equal((Of(structure, "p1s:XYZ-1").Id, true, "Paint", "WP-P"), (paint.ParentId, paint.IsVirtual, paint.Name, paint.Wp));
+        Assert.Contains("CPLGR = W20", paint.Note);
+        Assert.Equal((55m, 22m, 4m, "2026-03-05", (string?)null), (paint.OpsBacHours, paint.EvHours, paint.AcHours, paint.ActualStart, paint.ActualFinish));
+        var parent = Of(structure, "p1s:XYZ-1");
+        Assert.Equal((95m, 52m, 9m, 100m), (parent.OpsBacHours, parent.EvHours, parent.AcHours, parent.ActualMaterial));   // element + Paint
+        Assert.Equal(("2026-01-05", (string?)null), (parent.ActualStart, parent.ActualFinish));                             // Paint otwarty – bez końca
+        Assert.Single(structure.Rows, r => r.P1s == "XYZ-1.PAINT");                                                           // WP na elemencie wirtualnym – bez duplikatu
+    }
+
+    [Fact]
     public void Structure_export_has_whole_tree_with_all_columns()
     {
         DictRow[] wpCam = [Row(("Element P1S", "XYZ-1"), ("WP", "WP-1"), ("CAM", "e123456"), ("Cost Category", "Production"))];

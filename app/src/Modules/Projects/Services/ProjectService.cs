@@ -347,26 +347,46 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
 
     /// <summary>Struktura z mapowaniem już rozstrzygniętym (Resolve) – rozstrzyganie raz na odczyt ekranu.</summary>
     public static ProjectStructure Structure(PoTree tree, MappingInputs inputs, IReadOnlyDictionary<long, MappingResult> resolved, IReadOnlyList<DictRow> wpCam,
-        IReadOnlyList<DictRow> schedule, IReadOnlyDictionary<string, decimal>? costs = null, ProductionData? production = null) =>
-        StructureBuilder.Build(tree, resolved, inputs.P1s, wpCam, schedule, costs, production);
+        IReadOnlyList<DictRow> schedule, IReadOnlyDictionary<string, decimal>? costs = null, ProductionData? production = null,
+        IReadOnlyList<DictRow>? virtualP1s = null) =>
+        StructureBuilder.Build(tree, resolved, inputs.P1s, wpCam, schedule, costs, production, virtualP1s: virtualP1s);
 
     /// <summary>
-    /// Dane produkcyjne projektu na żywo z PZLPROD (Operational EV, materiały dostarczone): elementy P1S zakresu projektu
-    /// (Legacy WBS i cele mapowania z poddrzewami LOG.WBS) → PSPNR → vAHDD / vAPD. Bez PZLPROD albo błąd odczytu –
-    /// dane puste z powodem (struktura działa bez kolumn produkcyjnych).
+    /// Dane produkcyjne projektu na żywo z PZLPROD (Operational EV, daty rzeczywiste, materiały dostarczone): elementy P1S
+    /// zakresu projektu (Legacy WBS i cele mapowania z poddrzewami LOG.WBS) → PSPNR → sql/pzlprod/produkcja.sql; elementy
+    /// wirtualne P1S (słownik projektu – virtualP1s; null – czytany) z regułami na PSPNR elementu nadrzędnego; parametry ze
+    /// słowników globalnych „Wskaźniki DJK” i „Parametry produkcji”. Bez PZLPROD albo błąd odczytu – dane puste z powodem
+    /// (struktura działa bez kolumn produkcyjnych).
     /// </summary>
-    public ProductionData Production(PoTree tree, MappingInputs inputs, IReadOnlyDictionary<long, MappingResult> resolved)
+    public ProductionData Production(string code, PoTree tree, MappingInputs inputs, IReadOnlyDictionary<long, MappingResult> resolved,
+        IReadOnlyList<DictRow>? virtualP1s = null)
     {
         var now = DateTimeOffset.Now;
         if (pzlProd is null || inputs.P1s is null)
             return ProductionData.Unavailable(inputs.P1sError ?? "Brak połączenia z PZLPROD (pzl-ev.json, PzlProd)", now);
         var byCode = inputs.P1s.GroupBy(e => MappingKeys.Key(e.WbsElement)).ToDictionary(g => g.Key, g => g.First().Pspnr);
         var pspnrs = ObjectivesMapping.Scope(tree, resolved, inputs).Elements()
-            .Select(code => byCode.GetValueOrDefault(MappingKeys.Key(code))).OfType<string>().Distinct().ToList();
+            .Select(element => byCode.GetValueOrDefault(MappingKeys.Key(element))).OfType<string>().Distinct().ToList();
+        var notes = new List<string>();
+        var rules = new List<VirtualRule>();
+        foreach (var row in (virtualP1s ?? Rows(ProjectDictionaries.VirtualP1s, code)).Where(r => r["Element wirtualny"] is not null && r["Element nadrzędny"] is not null))
+        {
+            if (byCode.GetValueOrDefault(MappingKeys.Key(row["Element nadrzędny"])) is { } pspnr)
+                rules.Add(new VirtualRule(row["Element wirtualny"]!, pspnr, row["SWBS"], row["CPLGR"], row["ARBPL"]));
+            else
+                notes.Add($"element wirtualny {row["Element wirtualny"]} – element nadrzędny {row["Element nadrzędny"]} nie istnieje w LOG.WBS (bez godzin)");
+        }
+        var parameters = GlobalDictionaries.ProductionParametersFrom(
+            _dictionaries.Load(GlobalDictionaries.Get(GlobalDictionaries.DjkRates)), _dictionaries.Load(GlobalDictionaries.Get(GlobalDictionaries.ProductionParameters)));
+        if (parameters.IsDefault)
+            notes.Add("słownik „Wskaźniki DJK” albo „Parametry produkcji” pusty – wartości raportu S70MR (DJK W2–W4 10%, W5 15%, W6 20%; 12 mies.; DOST, WYD; ÷ (1 + Z_CLO))");
         try
         {
-            var values = pzlProd.Production(pspnrs);
-            return new ProductionData(values.GroupBy(v => MappingKeys.Key(v.Pspnr)).ToDictionary(g => g.Key, g => g.First()), now);
+            var values = pzlProd.Production(pspnrs, rules, parameters);
+            return new ProductionData(values
+                    .GroupBy(v => v.VirtualCode is { } virtualCode ? ProductionData.VirtualKey(MappingKeys.Key(virtualCode)) : MappingKeys.Key(v.Pspnr))
+                    .ToDictionary(g => g.Key, g => g.First()),
+                now, Note: notes.Count == 0 ? null : string.Join("; ", notes));
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {

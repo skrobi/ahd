@@ -44,21 +44,34 @@ public static class StructureBuilder
     }
 
     /// <summary>Suma wartości produkcyjnych (null – żaden element nie ma danych).</summary>
-    private readonly record struct ProductionSum(decimal? Ac, decimal? Bac, decimal? Ev, decimal? Material)
+    /// <summary>
+    /// Suma wartości produkcyjnych (null – żaden element nie ma danych); daty rzeczywiste: start – najwcześniejszy, koniec –
+    /// najpóźniejszy, gdy żaden element z godzinami nie jest otwarty (Open – element bez daty końca).
+    /// </summary>
+    private readonly record struct ProductionSum(decimal? Ac, decimal? Bac, decimal? Ev, decimal? Material, DateOnly? Start, DateOnly? Finish, bool Open)
     {
         public ProductionSum Add(ProductionValues? v) => v is null ? this
-            : new(Plus(Ac, v.AcHours), Plus(Bac, v.BacHours), Plus(Ev, v.EvHours), Plus(Material, v.ActualMaterial));
+            : new(Plus(Ac, v.AcHours), Plus(Bac, v.BacHours), Plus(Ev, v.EvHours), Plus(Material, v.ActualMaterial), Min(Start, v.ActualStart),
+                Max(Finish, v.ActualFinish), Open || (v.ActualFinish is null && (v.AcHours is not null || v.BacHours is not null)));
 
-        public ProductionSum Add(ProductionSum v) => new(Plus(Ac, v.Ac), Plus(Bac, v.Bac), Plus(Ev, v.Ev), Plus(Material, v.Material));
+        public ProductionSum Add(ProductionSum v) => new(Plus(Ac, v.Ac), Plus(Bac, v.Bac), Plus(Ev, v.Ev), Plus(Material, v.Material),
+            Min(Start, v.Start), Max(Finish, v.Finish), Open || v.Open);
+
+        public DateOnly? ActualFinish => Open ? null : Finish;
 
         private static decimal? Plus(decimal? a, decimal? b) => a is null ? b : b is null ? a : a + b;
+
+        private static DateOnly? Min(DateOnly? a, DateOnly? b) => a is null ? b : b is null ? a : a < b ? a : b;
+
+        private static DateOnly? Max(DateOnly? a, DateOnly? b) => a is null ? b : b is null ? a : a > b ? a : b;
     }
 
     /// <param name="production">Wartości produkcyjne z PZLPROD (Operational EV, materiały) – null: kolumny puste.</param>
     /// <param name="statusDate">Dzień stanu dla PV (domyślnie dziś).</param>
+    /// <param name="virtualP1s">Elementy wirtualne P1S (słownik projektu) – wiersze pod elementem nadrzędnym.</param>
     public static ProjectStructure Build(PoTree tree, IReadOnlyDictionary<long, MappingResult> mapping, IReadOnlyList<P1sElement>? p1s,
         IReadOnlyList<DictRow> wpCam, IReadOnlyList<DictRow> schedule, IReadOnlyDictionary<string, decimal>? costs = null,
-        ProductionData? production = null, DateOnly? statusDate = null)
+        ProductionData? production = null, DateOnly? statusDate = null, IReadOnlyList<DictRow>? virtualP1s = null)
     {
         var today = statusDate ?? DateOnly.FromDateTime(DateTime.Today);
         var productionOf = (production?.ByPspnr ?? new Dictionary<string, ProductionValues>())
@@ -132,23 +145,39 @@ public static class StructureBuilder
 
         var roots = ChildrenOf(null).Select(Objective).ToList();
 
-        // Przypisania „WP i CAM” do elementów, których nie ma w drzewie: pod najdłuższy pasujący kod albo poza strukturą.
+        // Elementy wirtualne P1S (np. Paint): pod elementem nadrzędnym (bez niego – najdłuższy pasujący kod albo poza strukturą).
         Item? outside = null;
+        Item Outside() => outside ??= new Item
+        {
+            Id = OutsideId, Kind = GridRowKind.P1s, HasCode = false, Name = "Elementy P1S spoza struktury",
+            Note = "przypisania „WP i CAM” do elementów spoza nakładki i LOG.WBS",
+        };
+        foreach (var row in (virtualP1s ?? []).Where(r => r["Element wirtualny"] is not null).OrderBy(r => r["Element wirtualny"], StringComparer.OrdinalIgnoreCase))
+        {
+            var code = row["Element wirtualny"]!;
+            var key = MappingKeys.Key(code);
+            if (withCode.ContainsKey(key))
+                continue;
+            var rule = string.Join(", ", new[] { ("SWBS", row["SWBS"]), ("CPLGR", row["CPLGR"]), ("ARBPL", row["ARBPL"]) }
+                .Where(r => r.Item2 is not null).Select(r => $"{r.Item1} = {r.Item2}"));
+            var item = new Item
+            {
+                Id = $"p1s:{key}", Kind = GridRowKind.P1s, Name = row["Nazwa"] ?? code, P1s = code, IsVirtual = true,
+                Note = $"element wirtualny P1S – operacje vAHDD elementu {row["Element nadrzędny"]}: {rule}",
+            };
+            var parent = withCode.GetValueOrDefault(MappingKeys.Key(row["Element nadrzędny"])) ?? LongestPrefix(code, withCode) ?? Outside();
+            withCode[key] = item;
+            parent.Children.Add(item);
+        }
+
+        // Przypisania „WP i CAM” do elementów, których nie ma w drzewie: pod najdłuższy pasujący kod albo poza strukturą.
         foreach (var (key, row) in assignments.OrderBy(a => a.Value["Element P1S"], StringComparer.OrdinalIgnoreCase))
         {
             if (withCode.ContainsKey(key))
                 continue;
             var element = row["Element P1S"]!;
             var parent = LongestPrefix(element, withCode);
-            if (parent is null)
-            {
-                outside ??= new Item
-                {
-                    Id = OutsideId, Kind = GridRowKind.P1s, HasCode = false, Name = "Elementy P1S spoza struktury",
-                    Note = "przypisania „WP i CAM” do elementów spoza nakładki i LOG.WBS",
-                };
-                parent = outside;
-            }
+            parent ??= Outside();
             var item = new Item { Id = $"p1s:{key}", Kind = GridRowKind.P1s, Name = element, P1s = element, Note = "spoza LOG.WBS" };
             withCode[key] = item;
             parent.Children.Add(item);
@@ -204,7 +233,9 @@ public static class StructureBuilder
         var wpProduction = new Dictionary<string, ProductionSum>(StringComparer.OrdinalIgnoreCase);
         ProductionSum Produce(Item item)
         {
-            if (item.P1s is not null && byCode.GetValueOrDefault(MappingKeys.Key(item.P1s)) is { } element)
+            if (item is { Kind: GridRowKind.P1s, IsVirtual: true, P1s: { } virtualCode })
+                item.OwnProduction = productionOf.GetValueOrDefault(MappingKeys.Key(ProductionData.VirtualKey(MappingKeys.Key(virtualCode))));
+            else if (item.P1s is not null && byCode.GetValueOrDefault(MappingKeys.Key(item.P1s)) is { } element)
                 item.OwnProduction = productionOf.GetValueOrDefault(MappingKeys.Key(element.Pspnr));
             item.Production = item.Children.Aggregate(new ProductionSum().Add(item.OwnProduction), (sum, child) => sum.Add(Produce(child)));
             if (item.P1s is not null && assignments.GetValueOrDefault(MappingKeys.Key(item.P1s))?["WP"] is { } ownWp)
@@ -240,7 +271,7 @@ public static class StructureBuilder
             var acwp = item.Kind == GridRowKind.Objective ? item.Cost : wps.Sum(w => wpCost.GetValueOrDefault(w));
             rows.Add(new StructureRow(item.Id, parentId, depth, item.Kind, item.NodeKey, item.IsVirtual, item.Name, item.WbsElement, item.P1s,
                 item.Note, item.IsGreyed, assignment?["WP"], assignment?["CAM"], assignment?["Cost Category"], wps, hours, material, start, finish,
-                gap, item.Children.Count > 0, acwp, AnalyticBaseBuilder.Bac(wps, budgets), null, null,
+                gap, item.Children.Count > 0, acwp, AnalyticBaseBuilder.Bac(wps, budgets), Date(item.Production.Start), Date(item.Production.ActualFinish),
                 item.Production.Bac, Sum(wps, PvHours), item.Production.Ev, item.Production.Ac, item.Production.Material, Sum(wps, PvCost), Sum(wps, EvCost)));
             foreach (var child in item.Children)
                 Emit(child, item.Id, depth + 1);
@@ -265,6 +296,8 @@ public static class StructureBuilder
             AnalyticBaseBuilder.Bac(all, budgets));
         return new ProjectStructure(rows, summary);
     }
+
+    private static string? Date(DateOnly? value) => value?.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
 
     /// <summary>Wiersz o najdłuższym kodzie P1S, który jest prefiksem elementu do kropki (A.B.C → A.B, potem A).</summary>
     private static Item? LongestPrefix(string element, IReadOnlyDictionary<string, Item> withCode)

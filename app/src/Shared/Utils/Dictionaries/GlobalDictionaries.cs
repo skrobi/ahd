@@ -1,4 +1,5 @@
 using PzlEv.Shared.Models.Hr;
+using PzlEv.Shared.Models.PzlProd;
 using System.Globalization;
 using System.Text.RegularExpressions;
 using PzlEv.Shared.Models.Dictionaries;
@@ -16,6 +17,13 @@ public static partial class GlobalDictionaries
     public const string CostCategory = "cost-category";
     public const string Persons = "persons";
     public const string MappingReport = "mapping-report";
+    public const string DjkRates = "djk-rates";
+    public const string ProductionParameters = "production-parameters";
+
+    /// <summary>Parametry słownika „Parametry produkcji” (kolumna Parametr).</summary>
+    public const string ProductivityMonths = "Okno produktywności IPT (mies.)";
+    public const string DeliveredStatuses = "Statusy materiałów dostarczonych";
+    public const string DivideByZClo = "Wartość materiałów ÷ (1 + Z_CLO)";
 
     /// <summary>
     /// Kolumny raportu mapowań SAP↔CES (docs/mapowanie-ces-p1s.md, rozdz. 2) – nazwy jak w nagłówku pliku, w bazie
@@ -129,6 +137,32 @@ public static partial class GlobalDictionaries
             })],
             Rules = MappingReportRules,
         },
+        new()
+        {
+            Code = DjkRates,
+            Name = "Wskaźniki DJK",
+            Description = "Godziny jakości DJK doliczane do godzin produkcji: udział godzin TECH / TECH_PON według prefiksu grupy stanowisk (IPT, np. W2, W51 – najdłuższy pasujący prefiks). Odczyt danych produkcyjnych struktury projektu (vAHDD).",
+            Columns =
+            [
+                new("Grupa stanowisk", ColumnType.Text, Key: true),
+                new("Udział DJK", ColumnType.Decimal, Required: true),
+                new("Opis", ColumnType.Text),
+            ],
+            Rules = DjkRules,
+        },
+        new()
+        {
+            Code = ProductionParameters,
+            Name = "Parametry produkcji",
+            Description = "Parametry odczytu danych produkcyjnych z PZLPROD (struktura projektu): okno produktywności IPT w miesiącach, statusy vAPD liczone jako dostarczone (po przecinku), dzielenie wartości materiałów przez (1 + Z_CLO) – tak / nie.",
+            Columns =
+            [
+                new("Parametr", ColumnType.Choice, Key: true, Choices: [ProductivityMonths, DeliveredStatuses, DivideByZClo]),
+                new("Wartość", ColumnType.Text, Required: true),
+                new("Opis", ColumnType.Text),
+            ],
+            Rules = ProductionParameterRules,
+        },
     ];
 
     public static DictionarySpec Get(string code) => All.First(s => s.Code == code);
@@ -151,6 +185,8 @@ public static partial class GlobalDictionaries
             ("Pion", "Division"), ("Manager", "IsManager"), ("PERNR", "Pernr"),
         ]),
         new(Get(MappingReport), "dict.MappingReport", MappingReportColumns),
+        new(Get(DjkRates), "dict.DjkRate", [("Grupa stanowisk", "WorkCenterGroup"), ("Udział DJK", "Share"), ("Opis", "Description")]),
+        new(Get(ProductionParameters), "dict.ProductionParameter", [("Parametr", "Name"), ("Wartość", "Value"), ("Opis", "Description")]),
     ];
 
     private static IEnumerable<Issue> CalendarRules(IReadOnlyList<DictRow> rows)
@@ -223,6 +259,71 @@ public static partial class GlobalDictionaries
                 yield return Issue.Error("Kurs musi być większy od 0", at);
         }
     }
+
+    /// <summary>„Wskaźniki DJK”: udział 0–1; prefiks zawarty w innym (W5 i W51) – ostrzeżenie (liczy się najdłuższy).</summary>
+    private static IEnumerable<Issue> DjkRules(IReadOnlyList<DictRow> rows)
+    {
+        var prefixes = rows.Select(r => r["Grupa stanowisk"]).OfType<string>().ToList();
+        for (var i = 0; i < rows.Count; i++)
+        {
+            var at = DictionaryValidator.RowElement(i);
+            if (Dec(rows[i]["Udział DJK"]) is { } share && (share < 0 || share > 1))
+                yield return Issue.Error("Udział DJK – wartość od 0 do 1 (np. 0,15 = 15%)", at);
+            if (rows[i]["Grupa stanowisk"] is { } prefix && prefixes.Any(p => p.Length > prefix.Length && p.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)))
+                yield return Issue.Warning($"Grupa {prefix} jest prefiksem innej grupy – dla dłuższej liczy się jej udział", at);
+        }
+    }
+
+    /// <summary>„Parametry produkcji”: okno 1–120 miesięcy, statusy niepuste, Z_CLO – tak / nie.</summary>
+    private static IEnumerable<Issue> ProductionParameterRules(IReadOnlyList<DictRow> rows)
+    {
+        for (var i = 0; i < rows.Count; i++)
+        {
+            var at = DictionaryValidator.RowElement(i);
+            var value = rows[i]["Wartość"];
+            switch (rows[i]["Parametr"])
+            {
+                case ProductivityMonths when Int(value) is not (>= 1 and <= 120):
+                    yield return Issue.Error($"{ProductivityMonths} – liczba miesięcy od 1 do 120", at);
+                    break;
+                case DeliveredStatuses when Statuses(value).Count == 0:
+                    yield return Issue.Error($"{DeliveredStatuses} – podaj statusy po przecinku (np. DOST, WYD)", at);
+                    break;
+                case DivideByZClo when YesNo(value) is null:
+                    yield return Issue.Error($"{DivideByZClo} – tak albo nie", at);
+                    break;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Parametry odczytu produkcji ze słowników „Wskaźniki DJK” i „Parametry produkcji”; pusty słownik – wartości raportu
+    /// S70MR (ProductionParameters.Default, IsDefault – informacja na ekranie).
+    /// </summary>
+    public static Models.PzlProd.ProductionParameters ProductionParametersFrom(IReadOnlyList<DictRow> djk, IReadOnlyList<DictRow> parameters)
+    {
+        var defaults = Models.PzlProd.ProductionParameters.Default;
+        string? Value(string name) => parameters.FirstOrDefault(r => r["Parametr"] == name)?["Wartość"];
+        var shares = djk.Where(r => r["Grupa stanowisk"] is not null && Dec(r["Udział DJK"]) is not null)
+            .Select(r => (r["Grupa stanowisk"]!.Trim(), Dec(r["Udział DJK"])!.Value)).ToList();
+        var statuses = Statuses(Value(DeliveredStatuses));
+        return new Models.PzlProd.ProductionParameters(
+            djk.Count > 0 ? shares : defaults.Djk,
+            Int(Value(ProductivityMonths)) ?? defaults.ProductivityMonths,
+            statuses.Count > 0 ? statuses : defaults.DeliveredStatuses,
+            YesNo(Value(DivideByZClo)) ?? defaults.DivideByZClo,
+            IsDefault: djk.Count == 0 || parameters.Count == 0);
+    }
+
+    private static IReadOnlyList<string> Statuses(string? value) =>
+        (value ?? "").Split([',', ';', ' '], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Select(s => s.ToUpperInvariant()).Distinct().ToList();
+
+    private static bool? YesNo(string? value) => value?.Trim().ToLowerInvariant() switch
+    {
+        "tak" or "t" or "1" or "true" or "yes" => true,
+        "nie" or "n" or "0" or "false" or "no" => false,
+        _ => null,
+    };
 
     private static IEnumerable<Issue> CostCategoryRules(IReadOnlyList<DictRow> rows)
     {

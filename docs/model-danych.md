@@ -184,8 +184,8 @@ Bez metodologii EV; kolejne tabele dochodzą kolejnymi migracjami.
 | `CAN_Row` (007) | dane kanoniczne wszystkich parserów: `FileId`, `RowNumber`, `ParserId`, `ParserVersion` i sloty T01–T40 (`NVARCHAR(400)`), L01–L05 (`NVARCHAR(4000)`), N01–N20 (`DECIMAL(28,8)`), I01–I10 (`INT`), D01–D10 (`DATE`); indeks klastrowy kolumnowy (clustered columnstore) – kompresja i szybkie grupowanie milionów wierszy |
 | `META_Journal`, `META_Problem` | dziennik zdarzeń (`meta.Zdarzenie`) i problemy (otwarte / rozwiązane: `ResolvedAt`, `ResolvedBy`, `Resolution` – migracja 006) |
 | `META_Project`, `META_PerformanceObjective` | projekty (kod, nazwa, typ SAC / CAS / WEWNETRZNY) i nakładka Performance Objectives z historią |
-| `DICT_Calendar`, `DICT_DepartmentRate`, `DICT_FxRate`, `DICT_CostCategory`, `DICT_Person` | słowniki globalne – tabela z typowanymi kolumnami na słownik; `Project` NULL = globalny (w Cost Category `Project` = zmiany w projekcie) |
-| `DICT_WpCam`, `DICT_ScheduleBudget`, `DICT_WbsCategory`, `DICT_Exclusion` | słowniki projektu (F4.3; `DICT_WbsCategory` – Kategorie WBS, migracja 019); „Cost Category – zmiany w projekcie” – `DICT_CostCategory` z kodem projektu; Stawki CAS – po ustaleniu zawartości (O37) |
+| `DICT_Calendar`, `DICT_DepartmentRate`, `DICT_FxRate`, `DICT_CostCategory`, `DICT_Person`, `DICT_DjkRate`, `DICT_ProductionParameter` | słowniki globalne – tabela z typowanymi kolumnami na słownik; `Project` NULL = globalny (w Cost Category `Project` = zmiany w projekcie) |
+| `DICT_WpCam`, `DICT_ScheduleBudget`, `DICT_WbsCategory`, `DICT_VirtualP1s`, `DICT_Exclusion` | słowniki projektu (F4.3; `DICT_WbsCategory` – Kategorie WBS, migracja 019; `DICT_VirtualP1s` – Elementy wirtualne P1S, migracja 022); „Cost Category – zmiany w projekcie” – `DICT_CostCategory` z kodem projektu; Stawki CAS – po ustaleniu zawartości (O37) |
 
 **Dane startowe – migracja `sql/mssql/002_dane_startowe.sql`:** definicje źródeł `ACTUALS_PAF` i `ACTUALS_CES`
 (parser ACTUALS, układ kolumn – `docs/zrodla-danych.md`, rozdz. 4), aktywna lokalizacja RABIT E456659, kalendarz
@@ -311,6 +311,10 @@ BAC HOURS i BAC MATERIAL. Wymaga aplikacji 0.32.0.
 
 **Migracja `sql/mssql/021_cam_opcjonalny.sql`:** `DICT_WpCam.Cam` dopuszcza NULL – WP wskazuje się najpierw, CAM
 uzupełnia później (gotowość projektu blokuje przebieg z WP bez CAM). Wymaga aplikacji 0.34.0.
+
+**Migracje `sql/mssql/022_produkcja_slowniki.sql`, `023_dane_produkcji.sql`:** słowniki globalne „Wskaźniki DJK”
+(`DICT_DjkRate`) i „Parametry produkcji” (`DICT_ProductionParameter`) z danymi startowymi raportu S70MR (023 – dane startowe,
+dopisuje brakujące pozycje) oraz słownik projektu „Elementy wirtualne P1S” (`DICT_VirtualP1s`). Wymaga aplikacji 0.38.0.
 
 Aplikacja zapisuje dziś do tabel importu, konfiguracji importu, słowników globalnych, korekt mapowania, dziennika i problemów;
 tabele projektów i słowników projektu czekają na moduły F4. Blokada importu – plik na dysku sieciowym

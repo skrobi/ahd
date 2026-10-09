@@ -15,8 +15,9 @@ public interface IPzlProdSource
     PzlProdCheck Check();
 
     /// <summary>
-    /// Godziny (LOG.vAHDD, produktywność LOG.vAHDD_PL_CPI, DJK) i materiały dostarczone (LOG.vAPD) elementów P1S o podanych
-    /// PSPNR (zakres projektu) – zsumowane po PSPNR (ProductionValues).
+    /// Godziny i daty rzeczywiste (LOG.vAHDD, produktywność LOG.vAHDD_PL_CPI, DJK) i materiały dostarczone (LOG.vAPD) elementów
+    /// P1S o podanych PSPNR (zakres projektu) – po PSPNR, a operacje zgodne z regułą elementu wirtualnego – po elemencie
+    /// wirtualnym (ProductionValues). Zapytanie: sql/pzlprod/produkcja.sql.
     /// </summary>
-    IReadOnlyList<ProductionValues> Production(IReadOnlyCollection<string> pspnrs);
+    IReadOnlyList<ProductionValues> Production(IReadOnlyCollection<string> pspnrs, IReadOnlyCollection<VirtualRule> rules, ProductionParameters parameters);
 }
