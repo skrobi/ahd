@@ -24,7 +24,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <LangVersion>latest</LangVersion>
     <RootNamespace>PzlEv</RootNamespace>
-    <Version>0.39.0</Version>
+    <Version>0.39.1</Version>
     <AssemblyName>PZL-EV</AssemblyName>
 
     <!-- Model uruchomienia: jeden plik, self-contained, bez instalacji .NET. -->

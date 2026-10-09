@@ -43,7 +43,6 @@ public partial class StructureView : UserControl
     {
         InitializeComponent();
         BuildColumns();
-        BuildColumnHelp();
         // Wysokość tabeli – do dołu okna (zamiast stałej): przy zmianie rozmiaru okna, zwinięciu menu, pokazaniu zakładki.
         Loaded += (_, _) =>
         {
@@ -56,6 +55,7 @@ public partial class StructureView : UserControl
             Dispatcher.BeginInvoke(FitHeight, DispatcherPriority.Loaded);
         };
         RowsGrid.IsVisibleChanged += (_, _) => Dispatcher.BeginInvoke(FitHeight, DispatcherPriority.Loaded);
+        LayoutUpdated += (_, _) => FitHeight();   // zmiana wysokości elementów nad tabelą (komunikat, pasek „Trwa…”)
         DataContextChanged += (_, e) =>
         {
             if (e.OldValue is StructureViewModel old)
@@ -82,15 +82,17 @@ public partial class StructureView : UserControl
     private void OnHostSizeChanged(object sender, SizeChangedEventArgs e) => FitHeight();
 
     /// <summary>
-    /// Tabela sięga dołu widocznej części strony (przewijana strona – pod tabelą podpowiedzi i „Opis kolumn”); kolumny
-    /// rozciągają się z szerokością okna (DataGrid w pełnej szerokości strony).
+    /// Tabela kończy się na dole okna – strona bez przewijania (pod tabelą nic; skróty i opis kolumn w oknie „?”); wiersze
+    /// przewija sama tabela. Kolumny rozciągają się z szerokością okna (DataGrid w pełnej szerokości strony).
     /// </summary>
     private void FitHeight()
     {
         if (_host is null || !RowsGrid.IsVisible)
             return;
         var top = RowsGrid.TranslatePoint(new Point(0, 0), _host).Y + _host.VerticalOffset;
-        RowsGrid.Height = Math.Max(RowsGrid.MinHeight, _host.ViewportHeight - top - 16);
+        var height = Math.Max(RowsGrid.MinHeight, Math.Floor(_host.ViewportHeight - top - _host.Padding.Bottom - 4));
+        if (Math.Abs(RowsGrid.Height - height) > 1 || double.IsNaN(RowsGrid.Height))
+            RowsGrid.Height = height;
     }
 
     private static T? FindAncestor<T>(DependencyObject child) where T : DependencyObject
@@ -144,25 +146,6 @@ public partial class StructureView : UserControl
             CellTemplate = (DataTemplate)Resources["GapCell"],
         });
         ApplyGroups();
-    }
-
-    /// <summary>„Opis kolumn” pod tabelą: grupy z opisem i kolumny z wyjaśnieniem (kolumny z danych – tylko do odczytu).</summary>
-    private void BuildColumnHelp()
-    {
-        foreach (var group in StructureColumns.Groups)
-        {
-            ColumnHelp.Children.Add(new TextBlock
-            {
-                Text = $"{group.Name} – {group.Description}{(group.Collapsed ? " (domyślnie zwinięta)" : "")}",
-                FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 6, 0, 2), TextWrapping = TextWrapping.Wrap,
-            });
-            foreach (var column in StructureColumns.All.Where(c => c.Group == group.Name))
-                ColumnHelp.Children.Add(new TextBlock
-                {
-                    Text = $"• {column.Header}: {column.Description}{(column.FromView ? " [tylko do odczytu]" : "")}",
-                    Margin = new Thickness(12, 0, 0, 1), TextWrapping = TextWrapping.Wrap, FontSize = 12,
-                });
-        }
     }
 
     private DataGridColumn Create(StructureColumns.Column definition)
