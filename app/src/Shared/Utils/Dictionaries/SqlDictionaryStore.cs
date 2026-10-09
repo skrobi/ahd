@@ -76,30 +76,36 @@ public sealed class SqlDictionaryStore(SqlDatabase db, IClock clock, ICurrentUse
                 if (duplicate is not null)
                     return StoreResult.Rejected($"Klucz {duplicate.Key} już istnieje w słowniku – odśwież dane.");
 
-                // 2. Zapis: najpierw zamknięcie wersji (zwalnia klucze), potem nowe wersje.
+                // 2. Zapis paczkami (mało zapytań przy wielu wierszach – wklejenie, kilka WP naraz): najpierw zamknięcie wersji
+                //    (zwalnia klucze), potem nowe wersje – wielowierszowy INSERT, identyfikatory nowych wierszy jednym
+                //    wywołaniem sekwencji. Paczki mieszczą się w limicie 2100 parametrów zapytania.
                 var now = clock.Now;
-                foreach (var change in changes.Where(c => c.Kind != RowChangeKind.Added))
+                foreach (var ids in changes.Where(c => c.Kind != RowChangeKind.Added).Select(c => c.RowId!.Value).Chunk(1000))
                 {
-                    connection.Execute($"UPDATE {table} SET SupersededAt = @now, SupersededBy = @user WHERE RowId = @rowId AND SupersededAt IS NULL",
-                        new { now, user = user.Account, rowId = change.RowId }, transaction);
+                    connection.Execute($"UPDATE {table} SET SupersededAt = @now, SupersededBy = @user WHERE RowId IN @ids AND SupersededAt IS NULL",
+                        new { now, user = user.Account, ids }, transaction);
                 }
                 var columns = string.Join(", ", map.Columns.Select(c => c.Column));
-                var values = string.Join(", ", map.Columns.Select((_, i) => $"@v{i}"));
-                foreach (var change in changes.Where(c => c.Kind != RowChangeKind.Removed))
+                var written = changes.Where(c => c.Kind != RowChangeKind.Removed).ToList();
+                var newIds = new Queue<long>(db.NextLogicalIds(connection, transaction, written.Count(c => c.Kind == RowChangeKind.Added)));
+                foreach (var chunk in written.Chunk(Math.Max(1, Math.Min(1000, 2000 / (map.Columns.Count + 2)))))
                 {
-                    var parameters = new DynamicParameters(new
+                    var parameters = new DynamicParameters(new { project, now, user = user.Account });
+                    var rows = new List<string>(chunk.Length);
+                    for (var r = 0; r < chunk.Length; r++)
                     {
-                        rowId = change.Kind == RowChangeKind.Added ? db.NextLogicalId(connection, transaction) : change.RowId!.Value,
-                        version = change.Kind == RowChangeKind.Added ? 1 : current[change.RowId!.Value].Version + 1,
-                        project, now, user = user.Account,
-                    });
-                    for (var i = 0; i < map.Columns.Count; i++)
-                    {
-                        var column = spec.Column(map.Columns[i].Spec)!;
-                        parameters.Add($"v{i}", ToDb(column, change.Values?.GetValueOrDefault(column.Name)));
+                        var change = chunk[r];
+                        parameters.Add($"r{r}", change.Kind == RowChangeKind.Added ? newIds.Dequeue() : change.RowId!.Value);
+                        parameters.Add($"n{r}", change.Kind == RowChangeKind.Added ? 1 : current[change.RowId!.Value].Version + 1);
+                        for (var i = 0; i < map.Columns.Count; i++)
+                        {
+                            var column = spec.Column(map.Columns[i].Spec)!;
+                            parameters.Add($"v{r}_{i}", ToDb(column, change.Values?.GetValueOrDefault(column.Name)));
+                        }
+                        rows.Add($"(@r{r}, @n{r}, @project, {string.Join(", ", map.Columns.Select((_, i) => $"@v{r}_{i}"))}, @now, @user)");
                     }
                     connection.Execute(
-                        $"INSERT INTO {table} (RowId, Version, Project, {columns}, RecordedAt, RecordedBy) VALUES (@rowId, @version, @project, {values}, @now, @user)",
+                        $"INSERT INTO {table} (RowId, Version, Project, {columns}, RecordedAt, RecordedBy) VALUES {string.Join(", ", rows)}",
                         parameters, transaction);
                 }
                 return new StoreResult(true, null,

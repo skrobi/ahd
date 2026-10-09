@@ -148,9 +148,11 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
     }
 
     /// <summary>Kategorie ze słownika „Kategorie WBS” projektu (kolumna Cost Category w „WP i CAM” i strukturze).</summary>
-    public IReadOnlyList<LookupOption> CategoryLookups(string code) =>
-        Rows(ProjectDictionaries.WbsCategories, code)
-            .Where(r => r["Cost Category"] is not null)
+    public IReadOnlyList<LookupOption> CategoryLookups(string code) => CategoryLookups(Rows(ProjectDictionaries.WbsCategories, code));
+
+    /// <summary>Kategorie z wierszy słownika „Kategorie WBS” już wczytanych.</summary>
+    public static IReadOnlyList<LookupOption> CategoryLookups(IEnumerable<DictRow> rows) =>
+        rows.Where(r => r["Cost Category"] is not null)
             .Select(r => new LookupOption(r["Cost Category"]!, r["Cost Category"]!))
             .OrderBy(o => o.Value, StringComparer.CurrentCulture)
             .ToList();
@@ -234,13 +236,31 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
     /// Wiersze słownika projektu do edycji w tabeli: Cost Category – zmiany projektu i pozycje globalne
     /// (ProjectDictionaries.WithGlobal), pozostałe – wiersze projektu.
     /// </summary>
-    public IReadOnlyList<(DictRow Row, bool Inherited)> EditableRows(string dictionary, string code)
+    public IReadOnlyList<(DictRow Row, bool Inherited)> EditableRows(string dictionary, string code) => EditableRows(dictionary, Rows(dictionary, code));
+
+    /// <summary>Jak EditableRows(dictionary, code), z wierszami projektu już wczytanymi (bez ponownego odczytu).</summary>
+    public IReadOnlyList<(DictRow Row, bool Inherited)> EditableRows(string dictionary, IReadOnlyList<DictRow> rows)
     {
         if (dictionary != GlobalDictionaries.CostCategory)
-            return Rows(dictionary, code).Select(r => (r, false)).ToList();
+            return rows.Select(r => (r, false)).ToList();
         var spec = ProjectDictionaries.Base(dictionary);
-        return ProjectDictionaries.WithGlobal(spec, _dictionaries.Load(spec), Rows(dictionary, code));
+        return ProjectDictionaries.WithGlobal(spec, _dictionaries.Load(spec), rows);
     }
+
+    /// <summary>
+    /// Bieżące wiersze słownika projektu i jego ostatnia zmiana jednym odczytem (ekran projektu – liczba wierszy,
+    /// „ostatnia zmiana”, struktura i gotowość korzystają z tego samego odczytu).
+    /// </summary>
+    public (IReadOnlyList<DictRow> Rows, string LastChange) DictionaryState(string dictionary, string code)
+    {
+        var current = dictionaries.Current(dictionary, code);
+        var last = current.MaxBy(r => r.RecordedAt);
+        return (current.Select(r => new DictRow(r.RowId, r.Version, r.Values)).ToList(),
+            last is null ? "" : $"{last.RecordedAt:yyyy-MM-dd HH:mm} · {last.RecordedBy}");
+    }
+
+    /// <summary>Kontrole folderów projektu (gotowość) – dysk sieciowy, czytane rzadko (ekran projektu trzyma wynik).</summary>
+    public (Issue Structure, Issue CamAccess) FolderChecks(string code) => (folders.CheckStructure(code), folders.CamAccessWarning(code));
 
     /// <summary>Arkusz słownika w skoroszycie (nazwa jak w szablonie); null – plik bez takiego arkusza albo CSV.</summary>
     public static string? FindSheet(string path, ProjectDictionaryItem item) =>
@@ -323,7 +343,12 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
     /// <summary>Struktura projektu: nakładka z rozwinięciem P1S, WP, CAM, budżet i daty (StructureBuilder).</summary>
     public static ProjectStructure Structure(PoTree tree, MappingInputs inputs, IReadOnlyList<DictRow> wpCam, IReadOnlyList<DictRow> schedule,
         IReadOnlyDictionary<string, decimal>? costs = null) =>
-        StructureBuilder.Build(tree, Resolve(tree, inputs), inputs.P1s, wpCam, schedule, costs);
+        Structure(tree, inputs, Resolve(tree, inputs), wpCam, schedule, costs);
+
+    /// <summary>Struktura z mapowaniem już rozstrzygniętym (Resolve) – rozstrzyganie raz na odczyt ekranu.</summary>
+    public static ProjectStructure Structure(PoTree tree, MappingInputs inputs, IReadOnlyDictionary<long, MappingResult> resolved, IReadOnlyList<DictRow> wpCam,
+        IReadOnlyList<DictRow> schedule, IReadOnlyDictionary<string, decimal>? costs = null) =>
+        StructureBuilder.Build(tree, resolved, inputs.P1s, wpCam, schedule, costs);
 
     /// <summary>Nagłówki arkusza „Struktura” (ExportStructure).</summary>
     public static readonly IReadOnlyList<string> StructureHeaders =
@@ -447,6 +472,122 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
     }
 
     /// <summary>
+    /// Zapis wsadowy zmian wierszy tabeli struktury (kolejka wierszy zatwierdzonych w tym czasie – kilka WP, wklejenie
+    /// bloku, Delete, Ctrl+D): WP, CAM, Cost Category, budżet i daty wszystkich wierszy są nakładane po kolei na słowniki
+    /// wczytane raz i zapisywane jednym zapisem na słownik (jedna transakcja, jeden wpis w dzienniku); kontekst walidacji
+    /// liczony raz. Nazwa i Legacy WBS (nakładka) – każdy wiersz osobno (SaveStructureEdit). Paczka z błędem (ERROR) albo
+    /// konfliktem – zapis wiersz po wierszu: poprawne wiersze zapisują się, błędne zostają z komunikatem.
+    /// </summary>
+    public IReadOnlyList<StructureEditResult> SaveStructureEdits(string code, MappingInputs inputs, IReadOnlyList<StructureEdit> edits)
+    {
+        var overlay = edits.Where(e => e.Changes.ContainsKey(StructureEdits.Name) || e.Changes.ContainsKey(StructureEdits.P1s)).ToList();
+        var results = new List<StructureEditResult>();
+        var batch = edits.Except(overlay).ToList();
+        if (batch.Count > 0)
+            results.AddRange(SaveDictionaryEdits(code, inputs, batch));
+        foreach (var edit in overlay)
+        {
+            var (saved, message) = SaveStructureEdit(code, inputs, edit.Row, edit.Changes);
+            results.Add(new StructureEditResult(edit.Id, saved, message));
+        }
+        return results;
+    }
+
+    private List<StructureEditResult> SaveDictionaryEdits(string code, MappingInputs inputs, IReadOnlyList<StructureEdit> edits)
+    {
+        var tree = store.Objectives(code);
+        var context = Context(code, tree, null, inputs);
+        var wpCamBefore = Rows(ProjectDictionaries.WpCam, code);
+        var scheduleBefore = Rows(ProjectDictionaries.ScheduleBudget, code);
+        var (wpCam, schedule) = (wpCamBefore.ToList(), scheduleBefore.ToList());
+        var (wpRemoved, scheduleRemoved) = (new List<DictRow>(), new List<DictRow>());
+        var results = new List<StructureEditResult>();
+        var applied = new List<(StructureEdit Edit, string? Wp, bool Budget)>();
+        var (wpTouched, scheduleTouched) = (false, false);
+        foreach (var edit in edits)
+        {
+            var wpChanges = edit.Changes.Where(c => StructureEdits.WpCamColumns.Contains(c.Key)).ToDictionary(c => c.Key, c => c.Value);
+            var budgetChanges = edit.Changes.Where(c => StructureEdits.ScheduleColumns.Contains(c.Key)).ToDictionary(c => c.Key, c => c.Value);
+            var element = edit.Row.P1s;
+            var wp = edit.Row.BudgetWp;
+            if (wpChanges.Count > 0)
+            {
+                if (element is null)
+                {
+                    results.Add(new StructureEditResult(edit.Id, false, "Wiersz nie ma kodu P1S – WP przypisuje się do elementu P1S."));
+                    continue;
+                }
+                (wpCam, var removed) = StructureEdits.WpCam(wpCam, element, wpChanges);
+                wpRemoved.AddRange(removed);
+                wpTouched = true;
+                wp = wpCam.FirstOrDefault(r => MappingKeys.Key(r["Element P1S"]) == MappingKeys.Key(element))?["WP"];
+                if (edit.Row.Wp is { } oldWp && !string.Equals(oldWp, wp, StringComparison.OrdinalIgnoreCase)
+                    && !wpCam.Any(r => string.Equals(r["WP"], oldWp, StringComparison.OrdinalIgnoreCase)))
+                {
+                    (schedule, var gone) = StructureEdits.ScheduleAfterWpChange(schedule, oldWp, wp);
+                    scheduleRemoved.AddRange(gone);
+                    scheduleTouched = true;
+                }
+            }
+            var budget = budgetChanges.Count > 0 && !(wp is null && budgetChanges.Values.All(string.IsNullOrWhiteSpace));
+            if (budget && wp is null)
+            {
+                results.Add(new StructureEditResult(edit.Id, false, "Budżet i daty wymagają WP w wierszu – zaznacz WP."));
+                continue;
+            }
+            if (budget)
+            {
+                (schedule, var removed) = StructureEdits.Schedule(schedule, wp!, budgetChanges);
+                scheduleRemoved.AddRange(removed);
+                scheduleTouched = true;
+            }
+            applied.Add((edit, wp, budget));
+        }
+        if (applied.Count == 0)
+            return results;
+
+        if (wpTouched)
+        {
+            var spec = ProjectDictionaries.For(ProjectDictionaries.WpCam, context);
+            var outcome = _dictionaries.Save(spec, wpCam, wpRemoved, confirmWarnings: true, code, _dictionaries.KnownErrors(spec, wpCamBefore));
+            if (outcome.Status is not (SaveStatus.Saved or SaveStatus.NoChanges))
+            {
+                // Paczka odrzucona – nic nie zapisano: wiersz po wierszu, żeby poprawne wiersze się zapisały.
+                foreach (var (edit, _, _) in applied)
+                {
+                    var (saved, message) = SaveStructureEdit(code, inputs, edit.Row, edit.Changes);
+                    results.Add(new StructureEditResult(edit.Id, saved, message));
+                }
+                return results;
+            }
+        }
+        if (scheduleTouched)
+        {
+            var spec = ProjectDictionaries.For(ProjectDictionaries.ScheduleBudget,
+                context with { Wps = wpCam.Select(r => r["WP"]).OfType<string>().ToHashSet(StringComparer.OrdinalIgnoreCase) });
+            var outcome = _dictionaries.Save(spec, schedule, scheduleRemoved, confirmWarnings: true, code, _dictionaries.KnownErrors(spec, scheduleBefore));
+            if (outcome.Status is not (SaveStatus.Saved or SaveStatus.NoChanges))
+            {
+                // „WP i CAM” zapisane; budżet i daty wiersz po wierszu (WP wiersza – po zapisie paczki).
+                foreach (var (edit, wp, budget) in applied)
+                {
+                    if (!budget)
+                    {
+                        results.Add(new StructureEditResult(edit.Id, true, "Zapisano."));
+                        continue;
+                    }
+                    var budgetOnly = edit.Changes.Where(c => StructureEdits.ScheduleColumns.Contains(c.Key)).ToDictionary(c => c.Key, c => c.Value);
+                    var (saved, message) = SaveStructureEdit(code, inputs, edit.Row with { Wp = wp, Wps = [wp!] }, budgetOnly);
+                    results.Add(new StructureEditResult(edit.Id, saved, message));
+                }
+                return results;
+            }
+        }
+        results.AddRange(applied.Select(a => new StructureEditResult(a.Edit.Id, true, "Zapisano.")));
+        return results;
+    }
+
+    /// <summary>
     /// Zapis stanu słownika projektu (edycja w zakładce „Słowniki projektu”, zmiana w tabeli struktury) z regułami
     /// projektu; working – wiersze projektu po edycji, removed – usunięte.
     /// </summary>
@@ -487,16 +628,24 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
 
     // ---------- gotowość, baza analityczna ----------
 
-    public List<Issue> Readiness(ProjectInfo project, PoTree tree, MappingInputs inputs)
+    public List<Issue> Readiness(ProjectInfo project, PoTree tree, MappingInputs inputs) =>
+        Readiness(project, tree, inputs, Resolve(tree, inputs),
+            ProjectDictionaries.Items.Where(i => i.Stored).ToDictionary(i => i.Code, i => Rows(i.Code, project.Code)), Persons(), FolderChecks(project.Code));
+
+    /// <summary>
+    /// Gotowość z danymi już wczytanymi (ekran projektu): rozstrzygnięte mapowanie, wiersze słowników projektu (kod →
+    /// wiersze), USRID osób, wynik kontroli folderów – bez ponownych odczytów z bazy i dysku sieciowego.
+    /// </summary>
+    public static List<Issue> Readiness(ProjectInfo project, PoTree tree, MappingInputs inputs, IReadOnlyDictionary<long, MappingResult> resolved,
+        IReadOnlyDictionary<string, IReadOnlyList<DictRow>> dictionaries, IReadOnlySet<string> persons, (Issue Structure, Issue CamAccess) folderChecks)
     {
-        var counts = ProjectDictionaries.Items.Where(i => i.Stored).ToDictionary(i => i.Code, i => Rows(i.Code, project.Code).Count);
-        var persons = Persons();
-        var wpCam = Rows(ProjectDictionaries.WpCam, project.Code);
+        var counts = dictionaries.ToDictionary(d => d.Key, d => d.Value.Count);
+        var wpCam = dictionaries.GetValueOrDefault(ProjectDictionaries.WpCam) ?? [];
         var withoutCam = wpCam.Where(r => r["WP"] is not null && r["CAM"] is null).Select(r => r["WP"]!).Distinct(StringComparer.OrdinalIgnoreCase).Order().ToList();
         var camsOutside = wpCam.Select(r => r["CAM"]).OfType<string>()
             .Where(c => !persons.Contains(c)).Distinct(StringComparer.OrdinalIgnoreCase).Order().ToList();
-        return ProjectReadiness.Check(project.Type, tree, counts, camsOutside, ObjectivesMapping.Check(tree, Resolve(tree, inputs), inputs),
-            folders.CheckStructure(project.Code), folders.CamAccessWarning(project.Code), withoutCam);
+        return ProjectReadiness.Check(project.Type, tree, counts, camsOutside, ObjectivesMapping.Check(tree, resolved, inputs),
+            folderChecks.Structure, folderChecks.CamAccess, withoutCam);
     }
 
     public static AnalyticBase Analytic(PoTree tree, IReadOnlyList<DictRow> wpCam, IReadOnlyList<DictRow> schedule, MappingInputs inputs)

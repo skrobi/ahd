@@ -158,7 +158,8 @@ public sealed class ProjectStoreAndServiceTests : IDisposable
     [SqlFact]
     public void Create_with_all_dictionaries_from_one_workbook()
     {
-        var files = ProjectDictionaries.ForType(ProjectTypes.Sac).Where(i => i.Stored)
+        // Kategorie WBS – słownik opcjonalny, którego arkusza nie ma w skoroszycie testowym (wczytuje się tylko podane pliki).
+        var files = ProjectDictionaries.ForType(ProjectTypes.Sac).Where(i => i.Stored && i.Code != ProjectDictionaries.WbsCategories)
             .Select(i => (i.Code, Sheet: ProjectService.FindSheet(Dictionaries, i)))
             .ToDictionary(x => x.Code, x => (Dictionaries, x.Sheet));
         Assert.All(files.Values, f => Assert.NotNull(f.Sheet));
@@ -214,7 +215,7 @@ public sealed class ProjectStoreAndServiceTests : IDisposable
         _service.ExportDictionaries(path, "", ProjectTypes.Internal, Objectives(), MappingInputs.None);
 
         var sheets = PzlEv.Shared.Utils.Files.TabularFileReader.SheetNames(path);
-        Assert.Equal(["WP i CAM", "Harmonogram i budżet", "Cost Category projektu", "Wykluczenia"], sheets);
+        Assert.Equal(["WP i CAM", "Harmonogram i budżet", "Kategorie WBS", "Cost Category projektu", "Wykluczenia"], sheets);
         var wp = PzlEv.Shared.Utils.Files.TabularFileReader.Read(path, "WP i CAM");
         Assert.Equal(["AC-CAB", "AC-CAB.6.38", "AC-CAB.6.38.01", "AC-CAB.6.38.02", "AC-CAB.6.38.03", "AC-CAB.6.38.03.01"], wp.Rows.Select(r => r[0]));
     }
@@ -395,6 +396,50 @@ public sealed class ProjectStoreAndServiceTests : IDisposable
     }
 
     [SqlFact]
+    public void Structure_edits_of_many_rows_are_saved_together_and_invalid_rows_do_not_block_valid_ones()
+    {
+        Assert.True(_store.Create("M28", "M28", ProjectTypes.Internal, Objectives()).Success);
+        var inputs = _service.Mapping();
+        ProjectStructure Read() => ProjectService.Structure(_store.Objectives("M28"), inputs,
+            _service.Rows(ProjectDictionaries.WpCam, "M28"), _service.Rows(ProjectDictionaries.ScheduleBudget, "M28"));
+        // Liście z kodem P1S bez WP – żaden nie leży pod innym (każdy WP ma własny budżet).
+        var free = Read().Rows.Where(r => r.P1s is not null && r.Wps.Count == 0 && !r.HasChildren).Take(3).ToList();
+        Assert.True(free.Count >= 2);
+
+        // Kilka WP zaznaczonych naraz (bez CAM) – jeden zapis „WP i CAM”.
+        var marked = _service.SaveStructureEdits("M28", inputs,
+            free.Select(r => new StructureEdit(r.Id, r, new Dictionary<string, string?> { [StructureEdits.Wp] = "true" })).ToList());
+        Assert.All(marked, r => Assert.True(r.Saved, r.Message));
+        var wpCam = _service.Rows(ProjectDictionaries.WpCam, "M28");
+        Assert.Equal(free.Count, wpCam.Count);
+        Assert.All(wpCam, r => Assert.Null(r["CAM"]));
+        Assert.Equal(free.Count, wpCam.Select(r => r.RowId).Distinct().Count());   // identyfikatory z jednego zakresu sekwencji
+
+        // Budżet w paczce: poprawny wiersz zapisany, błędny (ujemny) – odrzucony z komunikatem, nie blokuje poprawnego.
+        var rows = Read().Rows;
+        var (a, b) = (rows.Single(r => r.Id == free[0].Id), rows.Single(r => r.Id == free[1].Id));
+        var budget = _service.SaveStructureEdits("M28", inputs,
+        [
+            new StructureEdit(a.Id, a, new Dictionary<string, string?> { [StructureEdits.BacHours] = "10", [StructureEdits.Bac] = "1000" }),
+            new StructureEdit(b.Id, b, new Dictionary<string, string?> { [StructureEdits.BacHours] = "-1" }),
+        ]);
+        Assert.True(budget.Single(r => r.Id == a.Id).Saved);
+        var rejected = budget.Single(r => r.Id == b.Id);
+        Assert.False(rejected.Saved);
+        Assert.Contains("ujemny", rejected.Message);
+        var schedule = Assert.Single(_service.Rows(ProjectDictionaries.ScheduleBudget, "M28"));
+        Assert.Equal((a.BudgetWp ?? a.P1s, "10", "1000"), (schedule["WP"], schedule["BAC HOURS"], schedule["BAC"]));
+
+        // Odznaczenie kilku WP naraz – przypisania i harmonogram usunięte jednym zapisem na słownik.
+        rows = Read().Rows;
+        var unmarked = _service.SaveStructureEdits("M28", inputs,
+            free.Select(f => rows.Single(r => r.Id == f.Id)).Select(r => new StructureEdit(r.Id, r, new Dictionary<string, string?> { [StructureEdits.Wp] = "false" })).ToList());
+        Assert.All(unmarked, r => Assert.True(r.Saved, r.Message));
+        Assert.Empty(_service.Rows(ProjectDictionaries.WpCam, "M28"));
+        Assert.Empty(_service.Rows(ProjectDictionaries.ScheduleBudget, "M28"));
+    }
+
+    [SqlFact]
     public void Structure_edit_is_not_blocked_by_existing_errors_and_legacy_wbs_with_wp_uses_new_code()
     {
         Assert.True(_store.Create("M28", "M28", ProjectTypes.Internal, Objectives()).Success);
@@ -407,10 +452,15 @@ public sealed class ProjectStoreAndServiceTests : IDisposable
         Assert.Equal(SaveStatus.Saved, dictionaries.Save(ProjectDictionaries.Base(ProjectDictionaries.WpCam),
             [new DictRow(null, null, new Dictionary<string, string?> { ["Element P1S"] = "XX-POZA.1", ["WP"] = "WP-X", ["CAM"] = "e1", ["Cost Category"] = null })], [], true, "M28").Status);
 
-        // Istniejący błąd innego wiersza nie blokuje zmiany; nowy błąd (WP bez CAM) – nadal blokuje.
-        var missing = _service.SaveStructureEdit("M28", inputs, Row("4D06WP000001"), new Dictionary<string, string?> { [StructureEdits.Wp] = "true" });
-        Assert.False(missing.Saved);
-        Assert.Contains("CAM", missing.Message);
+        // Istniejący błąd innego wiersza nie blokuje zmiany; nowy błąd (element P1S innego projektu) – nadal blokuje.
+        Assert.True(_store.Create("S70I", "S70I", ProjectTypes.Internal, new PoTree()).Success);
+        Assert.Equal(SaveStatus.Saved, dictionaries.Save(ProjectDictionaries.Base(ProjectDictionaries.WpCam),
+            [new DictRow(null, null, new Dictionary<string, string?> { ["Element P1S"] = "AC-CAB.6.38.01", ["WP"] = "WP-S", ["CAM"] = "e1", ["Cost Category"] = null })], [], true, "S70I").Status);
+        var owned = _service.SaveStructureEdit("M28", inputs, Row("4D06WP000001"), new Dictionary<string, string?> { [StructureEdits.Wp] = "true" });
+        Assert.False(owned.Saved);
+        Assert.Contains("należy do projektu S70I", owned.Message);
+        Assert.Equal(SaveStatus.Saved, dictionaries.Save(ProjectDictionaries.Base(ProjectDictionaries.WpCam), [],
+            dictionaries.Load(ProjectDictionaries.Base(ProjectDictionaries.WpCam), "S70I"), true, "S70I").Status);
         var assigned = _service.SaveStructureEdit("M28", inputs, Row("4D06WP000001"),
             new Dictionary<string, string?> { [StructureEdits.Wp] = "true", [StructureEdits.Cam] = "e123456" });
         Assert.True(assigned.Saved, assigned.Message);

@@ -57,6 +57,9 @@ public static class StructureBuilder
         var primary = codes.Values.Where(c => c.Count > 0).Select(c => MappingKeys.Key(c[0])).ToHashSet();
         var placed = new HashSet<string>();
         var withCode = new Dictionary<string, Item>();
+        // Dzieci węzłów nakładki jednym przebiegiem (PoTree.Children przegląda wszystkie węzły przy każdym wywołaniu).
+        var nodesOf = tree.Nodes.ToLookup(n => n.ParentKey);
+        IEnumerable<PoNode> ChildrenOf(long? key) => nodesOf[key].OrderBy(n => n.SortOrder);
 
         Item P1sItem(string code, string? note)
         {
@@ -99,7 +102,7 @@ public static class StructureBuilder
             };
             if (item.P1s is not null)
                 withCode.TryAdd(MappingKeys.Key(item.P1s), item);
-            foreach (var child in tree.Children(node.Key))
+            foreach (var child in ChildrenOf(node.Key))
                 item.Children.Add(Objective(child));
             if (item.P1s is not null)
                 Expand(item);
@@ -108,7 +111,7 @@ public static class StructureBuilder
             return item;
         }
 
-        var roots = tree.Children(null).Select(Objective).ToList();
+        var roots = ChildrenOf(null).Select(Objective).ToList();
 
         // Przypisania „WP i CAM” do elementów, których nie ma w drzewie: pod najdłuższy pasujący kod albo poza strukturą.
         Item? outside = null;
@@ -117,8 +120,7 @@ public static class StructureBuilder
             if (withCode.ContainsKey(key))
                 continue;
             var element = row["Element P1S"]!;
-            var parent = withCode.Values.Where(i => i.P1s is not null && element.StartsWith(i.P1s + ".", StringComparison.OrdinalIgnoreCase))
-                .MaxBy(i => i.P1s!.Length);
+            var parent = LongestPrefix(element, withCode);
             if (parent is null)
             {
                 outside ??= new Item
@@ -219,5 +221,16 @@ public static class StructureBuilder
             costs is not null,
             AnalyticBaseBuilder.Bac(all, budgets));
         return new ProjectStructure(rows, summary);
+    }
+
+    /// <summary>Wiersz o najdłuższym kodzie P1S, który jest prefiksem elementu do kropki (A.B.C → A.B, potem A).</summary>
+    private static Item? LongestPrefix(string element, IReadOnlyDictionary<string, Item> withCode)
+    {
+        for (var dot = element.LastIndexOf('.'); dot > 0; dot = element.LastIndexOf('.', dot - 1))
+        {
+            if (withCode.TryGetValue(MappingKeys.Key(element[..dot]), out var item) && item.P1s is not null)
+                return item;
+        }
+        return null;
     }
 }
