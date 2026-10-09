@@ -47,10 +47,10 @@
     <StackPanel>
         <!-- Zaznaczanie komórek jak w Excelu (tylko ta tabela – styl DataTable i edytor Performance Objectives bez zmian). -->
         <DataGrid x:Name="RowsGrid" Style="{StaticResource DataTable}" ItemsSource="{Binding Rows}"
-                  MaxHeight="640" FrozenColumnCount="1" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto"
+                  MinHeight="320" FrozenColumnCount="1" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto"
                   CanUserSortColumns="False" CanUserReorderColumns="False" SelectionUnit="Cell" SelectionMode="Extended"
                   ClipboardCopyMode="ExcludeHeader"
-                  EnableRowVirtualization="True" EnableColumnVirtualization="True"
+                  EnableRowVirtualization="True" EnableColumnVirtualization="False"
                   VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling"
                   BeginningEdit="OnBeginningEdit" PreparingCellForEdit="OnPreparingCellForEdit" CellEditEnding="OnCellEditEnding"
                   RowEditEnding="OnRowEditEnding" CurrentCellChanged="OnCurrentCellChanged" PreviewKeyDown="OnPreviewKeyDown"
