@@ -8,7 +8,7 @@ namespace PzlEv.Modules.Projects.Services;
 
 /// <summary>
 /// Struktura projektu (docs/performance-objectives.md, rozdz. 4.2): drzewo nakładki, a pod każdym węzłem – elementy
-/// P1S rozwinięte z LOG.WBS spod jego kodów P1S (Legacy WBS; cel mapowania CES ↔ P1S, gdy jest inny – osobny wiersz).
+/// P1S rozwinięte z LOG.WBS spod jego kodów P1S (Legacy WBS).
 /// Rozwinięcie zatrzymuje się na kodzie innego węzła nakładki (ten element jest pod swoim węzłem), każdy element P1S
 /// występuje raz. Elementy „WP i CAM” spoza LOG.WBS (np. bez PZLPROD) trafiają pod wiersz o najdłuższym pasującym
 /// kodzie (kod + kropka), a bez niego – do grupy „spoza struktury”. WP, CAM i budżet z słowników projektu; sumy
@@ -82,7 +82,7 @@ public static class StructureBuilder
         var byCode = (p1s ?? []).GroupBy(e => MappingKeys.Key(e.WbsElement)).ToDictionary(g => g.Key, g => g.First());
         var children = (p1s ?? []).Where(e => e.Parent.Length > 0).GroupBy(e => MappingKeys.Key(e.Parent))
             .ToDictionary(g => g.Key, g => g.OrderBy(e => e.WbsElement, StringComparer.OrdinalIgnoreCase).ToList());
-        // Kody węzłów: element CES – Legacy WBS i cel mapowania; węzeł wirtualny – Legacy WBS (wydzielenie ELEMENT_P1S.NAZWA.CPLGR).
+        // Kody węzłów: element CES – Legacy WBS; węzeł wirtualny – Legacy WBS (wydzielenie ELEMENT_P1S.NAZWA.CPLGR).
         var codes = tree.Nodes.Where(n => !n.IsVirtual || !string.IsNullOrWhiteSpace(n.LegacyWbs))
             .ToDictionary(n => n.Key, n => ObjectivesMapping.CodesOf(n));
         // Kody węzłów nakładki: na nich zatrzymuje się rozwinięcie innego węzła.
@@ -145,8 +145,6 @@ public static class StructureBuilder
                 item.Children.Add(Objective(child));
             if (item.P1s is not null)
                 Expand(item);
-            foreach (var extra in nodeCodes.Skip(1).Where(c => !primary.Contains(MappingKeys.Key(c)) && !placed.Contains(MappingKeys.Key(c))))
-                item.Children.Add(P1sItem(extra, "cel mapowania CES ↔ P1S"));
             return item;
         }
 
@@ -261,7 +259,7 @@ public static class StructureBuilder
             var (hours, material, start, finish) = AnalyticBaseBuilder.Totals(shown, budgets);
             string? gap = null;
             if (item.Kind == GridRowKind.Objective && !item.IsVirtual && wps.Count == 0)
-                gap = item.HasCode ? "element nakładki bez WP" : "brak kodu P1S (Legacy WBS ani mapowania) – bez WP";
+                gap = item.HasCode ? "element nakładki bez WP" : "brak kodu P1S (Legacy WBS) – bez WP";
             else if (wps.Any(w => !AnalyticBaseBuilder.HasBudget(budgets.GetValueOrDefault(w))))
                 gap = "WP bez budżetu";
             if (item.SplitError)

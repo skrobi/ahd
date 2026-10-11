@@ -31,7 +31,7 @@ public sealed class ProjectDetailViewModel : ObservableObject
     private P1sInputs _mapping = P1sInputs.None;
     private PoTree _saved = new();
     private IReadOnlyDictionary<string, string> _owners = new Dictionary<string, string>();
-    // Dane zmieniające się rzadko – czytane przy otwarciu projektu i „Odśwież mapowanie i koszty” (nie po każdym zapisie):
+    // Dane zmieniające się rzadko – czytane przy otwarciu projektu i „Odśwież P1S i koszty” (nie po każdym zapisie):
     // osoby (słownik Osoby), elementy CES nakładek innych projektów, kontrola folderów na dysku sieciowym.
     private IReadOnlyList<LookupOption>? _persons;
     private bool _ownersLoaded;
@@ -44,7 +44,7 @@ public sealed class ProjectDetailViewModel : ObservableObject
     private readonly Queue<StructureRowViewModel> _commits = new();
     private bool _committing;
     private int _reloads;
-    /// <summary>ACWP po elemencie CES (ostatni import ACTUALS) – czytany przy otwarciu i „Odśwież mapowanie i koszty”, nie po każdym zapisie.</summary>
+    /// <summary>ACWP po elemencie CES (ostatni import ACTUALS) – czytany przy otwarciu i „Odśwież P1S i koszty”, nie po każdym zapisie.</summary>
     private IReadOnlyDictionary<string, decimal>? _costs;
     private (ProjectStructure Structure, IReadOnlyList<LookupOption> Persons)? _structure;   // ostatnio wczytana – eksport do Excela
     private string? _costsError;
@@ -109,7 +109,7 @@ public sealed class ProjectDetailViewModel : ObservableObject
 
     public string ProductionDetails => _production is null ? ""
         : (_production.Error ?? $"Operational EV i Actual Material odczytane na żywo z PZLPROD (LOG.vAHDD, LOG.vAPD) o {_production.ReadAt:yyyy-MM-dd HH:mm} – " +
-            $"elementów z danymi: {_production.ByPspnr.Count}. Ponowny odczyt: „Odśwież mapowanie i koszty”.")
+            $"elementów z danymi: {_production.ByPspnr.Count}. Ponowny odczyt: „Odśwież P1S i koszty”.")
           + (_production.Note is { } note ? $"\nUwaga: {note}" : "")
           + "\nZapytanie: sql/pzlprod/produkcja.sql; parametry – słowniki „Wskaźniki DJK” i „Parametry produkcji”; wydzielenia (np. Paint) – węzły wirtualne nakładki z kodem P1S ELEMENT_P1S.NAZWA.CPLGR.";
 
@@ -212,7 +212,7 @@ public sealed class ProjectDetailViewModel : ObservableObject
     public ICommand CreateFolders { get; }
     public ICommand RefreshMapping { get; }
 
-    /// <summary>Stan projektu z bazy w jednym odczycie w tle: nakładka, mapowanie, gotowość, słowniki, struktura.</summary>
+    /// <summary>Stan projektu z bazy w jednym odczycie w tle: nakładka, struktura P1S, gotowość, słowniki, struktura.</summary>
     private sealed record Snapshot(PoTree Tree, P1sInputs Mapping, IReadOnlyDictionary<string, string> Owners, List<Issue> Readiness,
         IReadOnlyDictionary<string, (int Rows, string LastChange)> Dictionaries, ProjectStructure Structure, IReadOnlyList<LookupOption> Persons,
         IReadOnlyList<LookupOption> Categories,
@@ -223,8 +223,8 @@ public sealed class ProjectDetailViewModel : ObservableObject
     /// <summary>
     /// Wczytuje stan projektu w tle (struktura zachowuje rozwinięcie i zaznaczenie). Tabela wybranego słownika – tylko
     /// bez niezapisanych zmian, chyba że discard (Odrzuć zmiany). Każdy słownik projektu jest czytany raz (wiersze, liczba,
-    /// ostatnia zmiana, struktura, gotowość i tabela z tego samego odczytu), mapowanie rozstrzygane raz; osoby, nakładki
-    /// innych projektów, foldery i koszty – z pamięci, ponownie przy refreshMapping („Odśwież mapowanie i koszty”).
+    /// ostatnia zmiana, struktura, gotowość i tabela z tego samego odczytu); osoby, nakładki
+    /// innych projektów, foldery i koszty – z pamięci, ponownie przy refreshMapping („Odśwież P1S i koszty”).
     /// </summary>
     private async Task Reload(bool refreshMapping, bool discard = false, IReadOnlySet<string>? saved = null)
     {
@@ -294,7 +294,7 @@ public sealed class ProjectDetailViewModel : ObservableObject
             IsReady = ProjectReadiness.IsReady(snapshot.Readiness);
             ReadinessPill = IsReady ? new Pill("ok", "gotowy do przebiegu") : new Pill("crit", "niegotowy – przebieg zablokowany");
             if (refreshMapping)
-                Status = _costsError is null ? "Odświeżono mapowanie CES ↔ P1S i koszty (ostatni import ACTUALS)." : $"Odświeżono mapowanie CES ↔ P1S; {_costsError}";
+                Status = _costsError is null ? "Odświeżono strukturę P1S i koszty (ostatni import ACTUALS)." : $"Odświeżono strukturę P1S; {_costsError}";
         });
     }
 

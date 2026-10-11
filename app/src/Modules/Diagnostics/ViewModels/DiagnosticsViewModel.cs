@@ -34,7 +34,7 @@ public sealed class DiagnosticsViewModel : ObservableObject
         Migrate = new AsyncRelayCommand(DoMigrate, () => !_migrating);
         CheckPzlProd = new AsyncRelayCommand(DoCheckPzlProd, () => !_checkingPzlProd && services.PzlProd is not null);
         PzlProd = services.Config.PzlProd?.Describe ?? "brak sekcji PzlProd w pzl-ev.json";
-        _pzlProdStatus = services.PzlProd is null ? MappingNoPzlProd : "";
+        _pzlProdStatus = services.PzlProd is null ? NoPzlProd : "";
         Environment = services.Config.Environment;
         Database = services.DataDescription;
         NetworkRoot = services.Config.NetworkRoot;
@@ -76,7 +76,7 @@ public sealed class DiagnosticsViewModel : ObservableObject
 
     public ICommand CheckPzlProd { get; }
 
-    private const string MappingNoPzlProd = "Dodaj sekcję PzlProd w pzl-ev.json (Server, Database, Schema) – bez niej Słowniki i projekty nie pokażą struktury P1S.";
+    private const string NoPzlProd = "Dodaj sekcję PzlProd w pzl-ev.json (Server, Database, Schema) – bez niej Słowniki i projekty nie pokażą struktury P1S.";
 
     private async Task DoCheckPzlProd()
     {

@@ -5,7 +5,7 @@ kontrole, efekt, przekazanie; statusy, kontrole jakości danych (problemy), wsp�
 przebiegu.
 
 Powiązane: `docs/model-danych.md` (przebieg, znacznik stanu, rewizja), `docs/zrodla-danych.md` (źródła),
-`docs/slowniki.md`, `docs/mapowanie-ces-p1s.md`, `docs/ev-obliczenia.md`, `docs/funkcjonalnosc.md` (ekrany).
+`docs/slowniki.md`, `docs/performance-objectives.md`, `docs/ev-obliczenia.md`, `docs/funkcjonalnosc.md` (ekrany).
 
 ---
 
@@ -17,7 +17,7 @@ Każda faza i każdy etap mają ten sam kształt:
 
 | Element | Znaczenie |
 |---|---|
-| **Wejście** | wyłącznie dane utrwalone w bazie: wyniki wcześniejszych etapów, importy, słowniki i mapowanie w stanie na znacznik stanu przebiegu – nigdy „z pamięci” poprzedniego kroku |
+| **Wejście** | wyłącznie dane utrwalone w bazie: wyniki wcześniejszych etapów, importy, słowniki i nakładka Performance Objectives w stanie na znacznik stanu przebiegu – nigdy „z pamięci” poprzedniego kroku |
 | **Bramka wejścia** | warunki, bez których etap nie ruszy |
 | **Przetwarzanie** | dane – procedury i widoki bazy; obliczenie EV – silnik w aplikacji (`docs/architektura.md`, rozdz. 6) |
 | **Wyjście** | tabele w bazie i ewentualne pliki; każdy rekord ma identyfikator pochodzenia (import, przebieg, rewizja) |
@@ -46,7 +46,7 @@ Etapy komunikują się przez bazę, więc mogą je wykonywać różne osoby, w r
 
 ### 1.3 Problemy (kontrola jakości danych)
 
-Każda kontrola – przy imporcie, mapowaniu, w etapach przebiegu i w silniku EVM – zapisuje wynik w jednej
+Każda kontrola – przy imporcie, w etapach przebiegu i w silniku EVM – zapisuje wynik w jednej
 tabeli problemów (`meta.Problem`).
 
 | Poziom | Znaczenie | Skutek |
@@ -55,11 +55,10 @@ tabeli problemów (`meta.Problem`).
 | WARNING | ostrzeżenie | nie blokuje; widoczne w raporcie przebiegu i na pulpicie |
 | ERROR | błąd blokujący | blokuje bramkę etapu do czasu poprawy |
 
-- Problem zawiera: poziom, kontrolę, obszar (import, mapowanie, słownik, etap przebiegu), element, opis,
+- Problem zawiera: poziom, kontrolę, obszar (import, słownik, etap przebiegu), element, opis,
   akcję naprawczą (przejście do właściwego ekranu z filtrem na problem) i stan (otwarty / rozwiązany – kto, kiedy, jak).
 - **Rozwiązanie problemu:** automatycznie, gdy przyczyna zniknęła – zakończony import zamyka problemy wcześniejszych
-  importów (ocenia wszystkie pliki od nowa; przerwany niczego nie zamyka), G2 zamyka problem elementu CES, który ma
-  przypisanie albo nie ma kosztu – albo ręcznie: „Rozwiązane” na Pulpicie (wpis w dzienniku).
+  importów (ocenia wszystkie pliki od nowa; przerwany niczego nie zamyka) – albo ręcznie: „Rozwiązane” na Pulpicie (wpis w dzienniku).
 - Pulpit „Wymaga uwagi” pokazuje otwarte problemy wszystkich obszarów (błędy najpierw) i etapy wymagające akcji –
   użytkownik widzi, co wymaga działania, a nie techniczny stan etapów.
 - Walidacja przy zapisie słowników używa tych samych poziomów, ale błędny zapis jest od razu odrzucany
@@ -82,7 +81,7 @@ tabeli problemów (`meta.Problem`).
 ```mermaid
 flowchart TD
   subgraph G["Fazy globalne – bez projektu, w dowolnym momencie"]
-    G1["G1 Import źródeł<br/>(WebDAV / folder → baza)"] --> G2["G2 Rozstrzygnięcie mapowania<br/>(nowe elementy CES)"]
+    G1["G1 Import źródeł<br/>(WebDAV / folder → baza)"]
     G3["G3 Utrzymanie słowników"]
   end
   subgraph P["Przebieg tygodniowy projektu"]
@@ -98,14 +97,12 @@ flowchart TD
     P9 --> Z["Z Zamknięcie okresu<br/>(tylko przebieg zamykający)"]
   end
   G1 --> P1
-  G2 --> P1
   G3 --> P1
 ```
 
 | Faza | Zasięg | Kto | Kiedy |
 |---|---|---|---|
 | G1 Import źródeł | globalna | Analityk | w dowolnym momencie; co najmniej tak często, jak RABIT nadpisuje pliki (O31) |
-| G2 Rozstrzygnięcie mapowania | globalna | automatycznie po G1; korekty – Analityk | po G1 |
 | G3 Utrzymanie słowników | globalna | Analityk | w dowolnym momencie |
 | P0–P9, Z | projekt | Analityk prowadzący przebieg (może go przejąć inny Analityk) | co tydzień |
 
@@ -123,7 +120,7 @@ flowchart TD
 | **Pochodzenie** | Każda wersja pliku i każdy wiersz: import (kto, kiedy), lokalizacja, hash, kod źródła, data raportu (data modyfikacji w RABIT). |
 | **Kontrole** | `docs/zrodla-danych.md`, rozdz. 8. |
 | **Efekt** | `meta.ImportBatch`, `meta.SourceFile`, `meta.SourceFileSeen`, `can.Row` (sam plik nie jest przechowywany); problemy importu. Historia importów widoczna dla wszystkich. |
-| **Przekazanie** | G2 (nowe elementy CES), P1 (dane projektu). |
+| **Przekazanie** | P1 (dane projektu). |
 
 Decyzja dla pliku:
 
@@ -134,18 +131,6 @@ Decyzja dla pliku:
 | duplikat | ten sam hash jest już w bazie (także pod inną nazwą) – komunikat podaje, kto i kiedy go zaimportował |
 | nierozpoznany | brak pasującego prefiksu – plik nie jest importowany |
 | błąd | np. uszkodzony plik albo przekroczony limit WebDAV |
-
-### G2. Rozstrzygnięcie mapowania CES ↔ P1S
-
-| | |
-|---|---|
-| **Cel** | Dla każdego elementu WBS CES z danych znać jego element P1S (globalnie) i wychwycić elementy bez przypisania. |
-| **Wejście** | Elementy CES z nowych wersji plików (G1); raport mapowań (słownik globalny – bieżący stan); korekty; drzewo P1S (PZLPROD). |
-| **Działanie** | Automatycznie po imporcie – kolejność rozstrzygania według `docs/mapowanie-ces-p1s.md`, rozdz. 5. Lista nowych elementów z wynikiem (`INHERITED`, `UNMAPPED`). Do czasu silnika etapów (F0.6) – przy otwarciu ekranu Mapowanie i „Odśwież” (`docs/mapowanie-ces-p1s.md`, rozdz. 9). |
-| **Kontrole** | Element `UNMAPPED` z kosztem → WARNING w rejestrze problemów (raz na import). |
-| **Akcje** | Korekta na ekranie Mapowanie CES ↔ P1S. |
-| **Efekt** | Stan mapowania (wyliczany z raportu i korekt, nie zapisywany). |
-| **Przekazanie** | P1 i P3 czytają mapowanie w stanie na znacznik stanu przebiegu. |
 
 ### G3. Utrzymanie słowników
 
@@ -200,8 +185,8 @@ Kalendarz okresów wyznacza wariant przebiegu:
 | | |
 |---|---|
 | **Cel** | Ustalić, na jakich danych liczy przebieg. |
-| **Działanie** | Aplikacja pokazuje, co zmieniło się od poprzedniego przebiegu projektu: nowe wersje plików i datę ostatniego importu, zmiany słowników i korekt mapowania (kto, kiedy). **Przypnij** zapisuje znacznik stanu (`docs/model-danych.md`, rozdz. 4.2). Procedury wybierają dane projektu: wiersze elementów z zakresu projektu (nakładka Performance Objectives – `docs/performance-objectives.md`) w okresie przebiegu (koszt okresu i narastająco – O30). Sposób przypisania kosztów i zaawansowania do węzłów nakładki – O45. |
-| **Kontrole** | pliki nierozpoznane od ostatniego importu (WARNING); ostatni import starszy niż próg świeżości (O29; WARNING); elementy `UNMAPPED` z kosztem (WARNING; rozstrzygane w P3). |
+| **Działanie** | Aplikacja pokazuje, co zmieniło się od poprzedniego przebiegu projektu: nowe wersje plików i datę ostatniego importu, zmiany słowników (kto, kiedy). **Przypnij** zapisuje znacznik stanu (`docs/model-danych.md`, rozdz. 4.2). Procedury wybierają dane projektu: wiersze elementów z zakresu projektu (nakładka Performance Objectives – `docs/performance-objectives.md`) w okresie przebiegu (koszt okresu i narastająco – O30). Sposób przypisania kosztów i zaawansowania do węzłów nakładki – O45. |
+| **Kontrole** | pliki nierozpoznane od ostatniego importu (WARNING); ostatni import starszy niż próg świeżości (O29; WARNING). |
 | **Efekt** | Znacznik stanu w przebiegu; zestawienie danych projektu (liczba wierszy, koszt). |
 | **Przekazanie** | P2–P9 pracują wyłącznie na stanie ze znacznika. |
 
@@ -212,7 +197,7 @@ Kalendarz okresów wyznacza wariant przebiegu:
 | **Cel** | Nie dopuścić niespójnych danych i słowników do obliczeń. |
 | **Działanie** | Poprawność samych słowników zapewnia walidacja przy zapisie (`docs/slowniki.md`, rozdz. 5), a plików – import (`docs/zrodla-danych.md`, rozdz. 8). Tu: spójność danych projektu ze słownikami i okresem. |
 | **Kontrole** | MPK z kosztów bez stawki na dany rok – stawki wydziałów (klucz MPK + rok) albo, w CAS, stawki CAS (ERROR); numer elementu kosztowego bez wpisu w efektywnym słowniku Cost Category (ERROR – O25; naprawa: pozycja w słowniku projektu); numer bez kategorii (WARNING); WP bez budżetu (WARNING); daty księgowania niezgodne z okresem przebiegu według znaczenia okresu w definicji źródła (ERROR); duplikaty wierszy między częściami źródła (ERROR). |
-| **Przy ERROR** | **Popraw w aplikacji** (ekran Słowniki albo Mapowanie z filtrem na problem) → **Przypnij ponownie** (P1) i waliduj. |
+| **Przy ERROR** | **Popraw w aplikacji** (ekran Słowniki z filtrem na problem) → **Przypnij ponownie** (P1) i waliduj. |
 | **Efekt** | Problemy przebiegu; WARNING trafiają do raportu przebiegu. |
 | **Przekazanie** | P3 rusza tylko bez ERROR. |
 
@@ -221,9 +206,9 @@ Kalendarz okresów wyznacza wariant przebiegu:
 | | |
 |---|---|
 | **Cel** | Jeden spójny obraz kosztów projektu: koszt rzeczywisty (ACWP) przypisany do WP, CAM i kategorii kosztów, w walucie wyniku. |
-| **Działanie** | Procedury w bazie (logika – O14): element CES → element P1S (mapowanie) → WP (słownik „WP i CAM”); przeliczenie godzin na koszt według stawek wydziałów (MPK + rok) albo stawek CAS (typ projektu); przeliczenie waluty według kursów. Podsumowanie: koszt okresu, liczba zmapowanych elementów, liczba WP, suma kontrolna. |
+| **Działanie** | Procedury w bazie (logika – O14): element CES → węzeł nakładki Performance Objectives → element P1S (`Legacy WBS` węzła i elementy `LOG.WBS` pod nim – `docs/performance-objectives.md`, rozdz. 4.1) → WP (słownik „WP i CAM”); przeliczenie godzin na koszt według stawek wydziałów (MPK + rok) albo stawek CAS (typ projektu); przeliczenie waluty według kursów. Podsumowanie: koszt okresu, liczba elementów przypisanych do WP, liczba WP, suma kontrolna. |
 | **Kontrole** | suma kontrolna: koszt po połączeniu = koszt danych projektu (ERROR). **Elementy bez przypisania:** element CES z kosztem spoza nakładki projektu, element z zaawansowaniem bez WP – WARNING w środku okresu, ERROR w przebiegu zamykającym (O33). |
-| **Akcje** | **Przypisz** – korekta mapowania (ekran Mapowanie) albo słownik „WP i CAM” → przypnij ponownie (P1). **Kontynuuj bez tych elementów** – tylko w środku okresu; decyzja w dzienniku, wartość poza EV pokazana w raporcie przebiegu. |
+| **Akcje** | **Przypisz** – nakładka Performance Objectives (element CES, `Legacy WBS`) albo słownik „WP i CAM” → przypnij ponownie (P1). **Kontynuuj bez tych elementów** – tylko w środku okresu; decyzja w dzienniku, wartość poza EV pokazana w raporcie przebiegu. |
 | **Efekt** | `ev.KosztWP` (przebieg, WP, okres, kwoty, pochodzenie) i raport pokrycia. |
 | **Przekazanie** | P4; P8 (ACWP). |
 
@@ -293,7 +278,7 @@ Kalendarz okresów wyznacza wariant przebiegu:
 
 | Zdarzenie | Zachowanie |
 |---|---|
-| **Zmiana po przypięciu** – nowe wersje plików, zmiany słowników lub korekt mapowania | Baner w przebiegu: co się zmieniło, kto, kiedy, liczba zmian. **Kontynuuj na przypiętym stanie** – decyzja w dzienniku, baner znika dla tych zmian. **Przypnij ponownie** – nowy znacznik stanu (P1); etapy od P2 – Nieaktualne. |
+| **Zmiana po przypięciu** – nowe wersje plików, zmiany słowników | Baner w przebiegu: co się zmieniło, kto, kiedy, liczba zmian. **Kontynuuj na przypiętym stanie** – decyzja w dzienniku, baner znika dla tych zmian. **Przypnij ponownie** – nowy znacznik stanu (P1); etapy od P2 – Nieaktualne. |
 | **Kontynuacja przez inną osobę** | Każdy Analityk może wykonać dowolną akcję w dowolnym przebiegu. Ekran przebiegu pokazuje, kto ostatnio pracował; każda akcja jest w dzienniku z kontem AD. |
 
 Zamrożonego przebiegu zmiany nie dotyczą.
@@ -304,8 +289,7 @@ Zamrożonego przebiegu zmiany nie dotyczą.
 
 | Z → Do | Nośnik | Identyfikator łączący |
 |---|---|---|
-| G1 → G2, P1 | wersje plików, dane kanoniczne | hash SHA-256, import, kod źródła |
-| G2 → P1, P3 | stan mapowania (raport + korekty) | element CES, znacznik stanu |
+| G1 → P1 | wersje plików, dane kanoniczne | hash SHA-256, import, kod źródła |
 | G3 → P1 | słowniki | znacznik stanu |
 | P1 → P2–P9 | znacznik stanu, dane projektu | przebieg, znacznik stanu |
 | P2 → P3 | problemy | przebieg |
@@ -324,5 +308,5 @@ Zamrożonego przebiegu zmiany nie dotyczą.
 | O14 | Logika łączenia źródeł (P3) – do przedstawienia przez zespół |
 | O29 | Próg świeżości importu przed przypięciem (ile dni od ostatniego importu) |
 | O31 | Harmonogram importu względem harmonogramu RABIT (RABIT nadpisuje pliki – wersja pośrednia bez importu przepada); import uruchamiany harmonogramem zadań Windows? |
-| O33 | Element `UNMAPPED` z kosztem w przebiegu zamykającym: czy dopuścić zamknięcie (koszt liczony na poziomie projektu CES), czy – jak dziś – wymagać przypisania? Rekomendacja: wymagać przypisania |
+| O33 | Element CES z kosztem bez przypisania (spoza nakładki albo bez WP) w przebiegu zamykającym: czy dopuścić zamknięcie, czy wymagać przypisania (ERROR – P3)? Rekomendacja: wymagać przypisania |
 | O34 | CAM nie odesłał pliku w przebiegu zamykającym: blokada etapu (dziś) czy przyjęcie wartości z produkcji z oznaczeniem pochodzenia? |

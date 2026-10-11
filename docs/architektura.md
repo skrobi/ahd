@@ -23,7 +23,7 @@ Powiązane: `docs/model-danych.md` (dane i wersjonowanie), `docs/pipeline-fazy.m
 
 Kierunek **wstępny** – do potwierdzenia testem na stanowisku PZL (O6, aplikacja `app/`).
 
-**Bez SQLite.** Wszystkie słowniki, mapowania, konfiguracja, definicje źródeł, wersje reguł, użytkownicy i role,
+**Bez SQLite.** Wszystkie słowniki, konfiguracja, definicje źródeł, wersje reguł, użytkownicy i role,
 zakresy uprawnień oraz historia zmian są w bazie MS SQL; aplikacja nie ma lokalnej bazy ani bazy plikowej
 na dysku sieciowym.
 
@@ -63,7 +63,7 @@ na dysku sieciowym.
  ┌──────────────────────────────┐            ┌────────────────────────────────────┐
  │ PZL-EV.exe (WPF)             │  konto AD  │ MS SQL – baza PZL_EV (TEST / PROD) │
  │  – ekrany według roli        │◄──────────►│  procedury i widoki                │
- │  – orkiestracja etapów       │            │  importy, słowniki, mapowanie,     │
+ │  – orkiestracja etapów       │            │  importy, słowniki, projekty,      │
  │  – import i walidacja        │            │  przebiegi, rewizje, wyniki,       │
  │  – silnik EVM                │            │  problemy, dziennik                │
  │  – pliki Excel               │            └─────────────────┬──────────────────┘
@@ -108,7 +108,7 @@ Każdy moduł jest folderem `Modules/<Folder>/` i właścicielem swoich ekranów
 | Shell (powłoka, nie moduł) | `Shell/` | okno, nagłówek, menu, nawigacja, lista modułów | – | `docs/funkcjonalnosc.md`, rozdz. 2 |
 | Pulpit | `Dashboard` | pulpit, „Wymaga uwagi”, ostatnie zdarzenia (F07) | – | `docs/funkcjonalnosc.md` |
 | Import | `Import` | pobranie i załadowanie plików, parsery źródeł (F05) | G1 | `docs/zrodla-danych.md` |
-| Master Data | `MasterData` | ekran Słowniki – słowniki globalne (F03); mechanizm słowników jest wspólny (`Shared/Utils/Dictionaries`) | G3 | `docs/slowniki.md` |
+| Master Data | `MasterData` | ekran Słowniki – słowniki globalne (F03), struktura P1S z `PZLPROD` (tylko odczyt); mechanizm słowników jest wspólny (`Shared/Utils/Dictionaries`) | G3 | `docs/slowniki.md`, `docs/zrodla-danych.md` |
 | Projects | `Projects` | projekty, kreator, Performance Objectives, słowniki projektu, gotowość, foldery projektu (F01, F02) | – | `docs/performance-objectives.md` |
 | Runs | `Runs` | przebiegi, ekran przebiegu, przypięcie stanu, walidacja, zamknięcie (F06) | P0, P1, P2, Z | `docs/pipeline-fazy.md`, `docs/model-danych.md` |
 | Reconciliation | `Reconciliation` | łączenie źródeł, pliki dla finansów | P3, P4 | `docs/pipeline-fazy.md` |
@@ -116,6 +116,7 @@ Każdy moduł jest folderem `Modules/<Folder>/` i właścicielem swoich ekranów
 | EVM Engine | `Evm` | obliczenia EV | P8 | `docs/ev-obliczenia.md` |
 | Export | `Export` | pliki wynikowe, plik dla Cobra | P9 | `docs/funkcjonalnosc.md`, rozdz. 4 |
 | Administration | `Administration` | definicje źródeł, lokalizacje RABIT, role (F08) | – | `docs/zrodla-danych.md`, `docs/uprawnienia.md` |
+| Diagnostyka | `Diagnostics` | test stosu (runtime, pakiety, ścieżka, konto), połączenie z `PZLPROD`, migracje bazy | – | rozdz. 8, `app/README.md` |
 
 Kontrola jakości (`meta.Problem`) i dziennik zdarzeń nie są modułami – to mechanizmy wspólne (`Shared`),
 z których korzysta każdy moduł; pokazują je Pulpit i ekran Przebiegu.
@@ -124,7 +125,7 @@ z których korzysta każdy moduł; pokazują je Pulpit i ekran Przebiegu.
 
 Jeden projekt, moduły jako foldery; przestrzeń nazw odpowiada ścieżce folderu (`PzlEv.Modules.Dashboard.ViewModels`
 ↔ `Modules/Dashboard/ViewModels/`). Wzorzec pokazuje kod `app/src/` – moduły z pełnym ekranem
-(Pulpit, Słowniki, Import, Projekty, Administracja) i ekrany zastępcze z przypisanymi etapami dla pozostałych.
+(Pulpit, Słowniki, Import, Projekty, Administracja, Diagnostyka) i ekrany zastępcze z przypisanymi etapami dla pozostałych.
 
 ```text
 App.xaml(.cs)                      start: konfiguracja → usługi wspólne → moduły → powłoka; logowanie
@@ -140,9 +141,9 @@ Shared/
   Utils/Config/                    konfiguracja pzl-ev.json
   Utils/Data/                      baza MS SQL (Sql/: połączenie, migracje, dziennik, problemy), czas, użytkownik, blokady operacji, usługi wspólne
   Utils/Files/                     Excel, CSV/TXT, liczby polskie, daty, sygnatura kolumn, SHA-256
-  Utils/Mapping/                   rozstrzyganie mapowania CES ↔ P1S (reguły, klucze, magazyn raportu i korekt) – używają go moduły Mapowanie i Projekty, później przebiegi (P1, P3)
+  Utils/Mapping/                   klucze porównań kodów elementów P1S / CES (`MappingKeys`: bez spacji i wielkości liter, numery bez zer wiodących)
   Utils/Dictionaries/              mechanizm słowników (walidacja, zapis z historią, wymiana przez Excel, magazyn SQL) i słowniki globalne – używają go moduły Słowniki i Projekty
-  Models/                          modele wspólne, klucze modułów, wynik kontroli (Issue), kontrakt etapu (Pipeline), opisy słowników (Dictionaries), modele mapowania (Mapping)
+  Models/                          modele wspólne, klucze modułów, wynik kontroli (Issue), kontrakt etapu (Pipeline), opisy słowników (Dictionaries), modele `PZLPROD` – struktura P1S i dane produkcji (PzlProd), pracownicy HR (Hr)
   Models/Db/                       wiersze tabel schematu (meta, stg, can, dict) – wspólne jak schemat bazy
   Models/Sources/                  parsery i układy kolumn źródeł (kontrakt danych)
   Views/Templates/                 wygląd całej aplikacji: paleta, style, tabele, układ strony
@@ -165,7 +166,7 @@ modułu i `Shared/Models`; Excel, File Connectors, SQL Access – `Shared/Utils`
 **Warstwa danych.** Aplikacja pracuje wyłącznie na bazie MS SQL środowiska (`pzl-ev.json`, rozdz. 8). Moduł korzysta
 z danych przez swój magazyn `Data/I<Moduł>Store` (kontrakt odpowiadający procedurom i widokom) w implementacji
 `Data/Sql<Moduł>Store`; wiersze tabel – `Shared/Models/Db`. Moduły wymieniają dane przez wspólne tabele, nie przez
-swoje typy. Wersji danych w pamięci nie ma (usunięta 2026-10-02 z aplikacji i z testów); Pulpit także czyta
+swoje typy. Aplikacja i testy nie mają wersji danych w pamięci; Pulpit także czyta
 wyłącznie z bazy (`Dashboard/Data/SqlDashboardData`).
 
 **Testy** (`app/tests`, xUnit, `net10.0`): projekt kompiluje pliki logiki aplikacji – wszystko poza `Views`,
@@ -181,7 +182,7 @@ baza to sekcja TEST z `pzl-ev.json` (konto AD, jak aplikacja) albo zmienna `PZLE
 **Responsywność:** odczyt i zapis w bazie, PZLPROD, pliki Excel i dysk sieciowy nie wykonują się w wątku okna.
 Ekran uruchamia je przez `BusyState` (`Shared/Utils/Ui/Mvvm`) – praca w tle, pasek „Trwa: … (n s)” (`BusyBar`),
 kursor „praca w tle”, polecenia ekranu nieaktywne do końca operacji; wynik wraca do wątku okna. Dane duże i rzadko
-zmieniane (raport mapowań, LOG.WBS) są czytane raz na sesję, z przyciskiem odświeżenia; kontrole wywoływane przy
+zmieniane (struktura P1S z `LOG.WBS`) są czytane raz na sesję, z przyciskiem odświeżenia; kontrole wywoływane przy
 każdej edycji działają na danych w pamięci (zapis sprawdza je ponownie w bazie).
 
 **Kontrakt etapu** (`Shared/Models/Pipeline`): `StageDescriptor` (kod, nazwa, krok, zakres, czy wymaga
@@ -248,7 +249,7 @@ decyzji (P4, P6, Z) albo z wynikiem ERROR.
 - **Konfiguracja środowiska:** plik `pzl-ev.json` obok `PZL-EV.exe` – przełącznik `Env` (`TEST` / `PROD`) i sekcja
   `Environments.<Env>`: `NetworkRoot` (korzeń folderów środowiska, rozdz. 7), `Sql` (serwer, baza, schemat,
   sygnatura tabel – logowanie kontem AD) i `PzlProd` (struktura P1S: serwer `splmcd03`, baza `PZLPROD`, schemat
-  `LOG` – tylko odczyt kontem AD; sekcja opcjonalna – bez niej ekran Mapowanie pokazuje, czego brakuje). Plik jest wymagany – wzór z opisem ustawień `app/pzl-ev.json` kopiowany
+  `LOG` – tylko odczyt kontem AD; sekcja opcjonalna – bez niej gotowość projektu (kontrola „Strona P1S”), okno „Struktura P1S (PZLPROD)” na ekranie Słowniki i Diagnostyka pokazują, czego brakuje). Plik jest wymagany – wzór z opisem ustawień `app/pzl-ev.json` kopiowany
   obok exe przy budowie; brak pliku albo pola = komunikat przy starcie (`app/README.md`). TEST: `pzltestdb.intl.lmco.com`, baza `PZLTEST`, schemat `FINOP`, sygnatura `PZLEV_`.
 - **TEST** – developer; osobna baza i osobny korzeń folderów.
 - **PROD** – wdraża administrator (IT).
@@ -279,10 +280,10 @@ decyzji (P4, P6, Z) albo z wynikiem ERROR.
 
 | Obszar | Wymaganie |
 |---|---|
-| Wydajność | import plików ACTUALS z milionami wierszy w czasie akceptowalnym dla przebiegu tygodniowego – plik pobierany na dysk lokalny, odczyt strumieniowy (wiersz po wierszu, także Excel – bez modelu dokumentu), jeden przebieg z parsowaniem równolegle z ładowaniem wsadowym do `CAN_Row` (indeks kolumnowy), bez podglądu danych; pamięć stała (ok. 0,3 GB niezależnie od rozmiaru pliku). Pomiar bez pobierania (SQL Server 2022 lokalnie): CSV 87 MB / 560 tys. wierszy – 10 s; Excel 67 MB / 1 mln wierszy – 21 s (wcześniejszy odczyt ClosedXML: 102 s i 5,9 GB pamięci samego odczytu) |
+| Wydajność | import plików ACTUALS z milionami wierszy w czasie akceptowalnym dla przebiegu tygodniowego – plik pobierany na dysk lokalny, odczyt strumieniowy (wiersz po wierszu, także Excel – bez modelu dokumentu), jeden przebieg z parsowaniem równolegle z ładowaniem wsadowym do `CAN_Row` (indeks kolumnowy), bez podglądu danych; pamięć stała (ok. 0,3 GB niezależnie od rozmiaru pliku). Pomiar bez pobierania (SQL Server 2022 lokalnie): CSV 87 MB / 560 tys. wierszy – 10 s; Excel 67 MB / 1 mln wierszy – 21 s |
 | Wydajność – ekran projektu | edycja struktury zapisywana wsadowo (jeden zapis na słownik niezależnie od liczby wierszy; zamknięcie wersji jednym `UPDATE … IN`, identyfikatory nowych wierszy jednym `sp_sequence_get_range`, wielowierszowy `INSERT`); odświeżenie po zapisie czyta każdy słownik projektu raz, dane referencyjne (osoby, nakładki innych projektów, foldery na dysku sieciowym) – raz na otwarcie ekranu i przy „Odśwież” (`docs/performance-objectives.md`, rozdz. 4.2) |
 | Odtwarzalność | każdy wynik EV odtwarzalny ze znacznika stanu i wersji silnika (`docs/model-danych.md`, rozdz. 4) |
-| Audyt | każda akcja z użytkownikiem AD i czasem; historia słowników i korekt |
+| Audyt | każda akcja z użytkownikiem AD i czasem; historia słowników |
 | Spójność | ta sama wersja silnika EV u wszystkich (kontrola minimalnej wersji aplikacji) |
 | Odporność | przerwana operacja nie zostawia częściowych danych (transakcje, idempotentny import) |
 | Utrzymanie | definicje źródeł, lokalizacje RABIT, reguły walidacji źródeł i kalendarz okresów konfigurowane w aplikacji, bez zmiany kodu |
@@ -297,16 +298,16 @@ decyzji (P4, P6, Z) albo z wynikiem ERROR.
 | 2 | Uruchamianie pliku exe zablokowane (AppLocker, antywirus) | test przed decyzją o formie dystrybucji (O6); podpis kodu; alternatywnie instalacja zarządzana przez IT |
 | 3 | Przebiegi trwające dni | trwały stan w bazie, kontynuacja przez inną osobę, unieważnianie etapów |
 | 4 | Zmiana słowników lub nowe importy w trakcie przebiegu | znacznik stanu, decyzja „kontynuuj / przypnij ponownie” w dzienniku |
-| 5 | Zmiana istniejących wierszy w `PZLPROD` (założenie przyrostowości) | odczyt bez kopiowania; zmiana `LOG.WBS` nie jest wykrywana i może zmienić wynik odtworzenia rewizji; raport mapowań jest słownikiem z historią wierszy |
+| 5 | Zmiana istniejących wierszy w `PZLPROD` (założenie przyrostowości) | odczyt bez kopiowania; zmiana `LOG.WBS` nie jest wykrywana i może zmienić wynik odtworzenia rewizji |
 | 6 | Nieaktualne dane produkcyjne (`vAHDD`) | kontrola świeżości w P0 |
 | 7 | Mieszanie źródeł zaawansowania | zapis pochodzenia; w przebiegu zamykającym wyłącznie CAM |
-| 8 | Nowe elementy SAP bez przypisania | wykrywanie po imporcie i w P3; blokada w przebiegu zamykającym |
+| 8 | Nowe elementy SAP bez przypisania | gotowość projektu (element nakładki bez `Legacy WBS` – WARNING) i P3; blokada w przebiegu zamykającym |
 | 9 | Pliki CAM zmienione poza polami lub z innego przebiegu | identyfikator i blokady w szablonie, kontrola przy imporcie |
 | 10 | Excel zmienia typy (WBS jako liczba, daty, zera wiodące) | walidacja typów; CSV z RABIT, jeśli dostępny |
 | 11 | Reguły procesu omijane przez bezpośrednie połączenie z bazą | reguły w procedurach, brak praw do tabel |
 | 12 | Różne litery dysków | ścieżki UNC, w bazie ścieżki względne |
 | 13 | Etykiety poufności / szyfrowanie plików | do weryfikacji z IT |
-| 14 | Przyrost danych w bazie (wiersze importów co tydzień – wszystko zostaje, O32) | kompresja kolumnowa `CAN_Row`; sam plik nie jest przechowywany (`docs/model-danych.md`, rozdz. 5.1) |
+| 14 | Przyrost danych w bazie (wiersze importów co tydzień – dane wszystkich wersji plików zostają) | kompresja kolumnowa `CAN_Row`; sam plik nie jest przechowywany (`docs/model-danych.md`, rozdz. 5.1) |
 | 15 | Wsparcie .NET 10 LTS kończy się w listopadzie 2028 | przejście na kolejną wersję LTS przed tym terminem |
 
 ---

@@ -80,18 +80,18 @@ public sealed class SqlDashboardDataTests : IDisposable
     {
         Use();
         _app.Problems.Add("Import", "plik", Issue.Warning("ACTUALS_PAF_01.xlsx: plik nierozpoznany", "RABIT"), ImportBatchRow.ProblemReference(7));
-        _app.Problems.Add("Mapowanie", "element bez przypisania", Issue.Error("Nowy element CES bez przypisania", "4D03GZ000001"), "g2:7");
+        _app.Problems.Add("Projekty", "element bez WP", Issue.Error("Element CES z kosztem bez WP", "4D03GZ000001"), "p:7");
 
         var attention = _data.Attention();
 
-        Assert.Equal([new Pill("crit", "Mapowanie"), new Pill("warn", "Import #7")], attention.Select(a => a.Tag));
-        Assert.Equal("4D03GZ000001: Nowy element CES bez przypisania", attention[0].Text);
+        Assert.Equal([new Pill("crit", "Projekty"), new Pill("warn", "Import #7")], attention.Select(a => a.Tag));
+        Assert.Equal("4D03GZ000001: Element CES z kosztem bez WP", attention[0].Text);
 
         _data.Resolve(attention[0].ProblemId);
 
         Assert.Equal("Import #7", Assert.Single(_data.Attention()).Tag.Text);
-        var closed = _app.Problems.ByReference("g2:7").Single();
+        var closed = _app.Problems.ByReference("p:7").Single();
         Assert.Equal((true, _services.User.Account, "oznaczony jako rozwiązany na Pulpicie"), (closed.Resolved, closed.ResolvedBy, closed.Resolution));
-        Assert.Contains(_app.Journal.Recent(5), e => e.Message == $"Problem #{closed.Id} (Mapowanie) oznaczony jako rozwiązany: Nowy element CES bez przypisania");
+        Assert.Contains(_app.Journal.Recent(5), e => e.Message == $"Problem #{closed.Id} (Projekty) oznaczony jako rozwiązany: Element CES z kosztem bez WP");
     }
 }

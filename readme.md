@@ -23,7 +23,6 @@ Każda reguła jest opisana w jednym dokumencie; pozostałe dokumenty do niego o
 | `docs/zrodla-danych.md` | źródła danych i definicja źródła (kontrakt danych): RABIT, raport kosztów CES, struktura P1S i drzewo, zaawansowanie z produkcji, pliki CAM |
 | `docs/slowniki.md` | słowniki globalne i projektu, typ projektu a słowniki, wymiana przez Excel, reguły walidacji, Cost Category |
 | `docs/performance-objectives.md` | nakładka kontraktu CES wyznaczająca zakres projektu i oś raportowania wykonania |
-| `docs/mapowanie-ces-p1s.md` | globalne przypisanie elementów CES do P1S: raport mapowań, dziedziczenie, korekty, statusy, widok |
 | `docs/pipeline-fazy.md` | przepływ: fazy globalne i etapy przebiegu tygodniowego; statusy, problemy (ERROR / WARNING), współbieżność |
 | `docs/ev-obliczenia.md` | silnik EVM (kontrakt EVM): dane wejściowe, wskaźniki, poziomy agregacji, kwestie do ustalenia z Finansami |
 | `docs/uprawnienia.md` | konto AD, role, zakres danych (kontrakt RBAC) |
@@ -31,7 +30,7 @@ Każda reguła jest opisana w jednym dokumencie; pozostałe dokumenty do niego o
 | `app/` | aplikacja PZL-EV (C#/.NET 10 + WPF): kod w strukturze modułów (`docs/architektura.md`, rozdz. 5.3), testy, budowa `build.cmd`; dane w bazie MS SQL (`app/pzl-ev.json`) |
 | `tasks/` | plan budowy: fazy i zadania (kontrakt implementacyjny – `CLAUDE.md`, rozdz. 9) |
 | `sql/mssql/` | migracje bazy MS SQL (`NNN_*.sql`) – wbudowane w aplikację (`docs/architektura.md`, rozdz. 8) |
-| `prototyp/*.html` | klikalne prototypy na danych przykładowych; pokazują wcześniejszy stan koncepcji – obowiązuje dokumentacja |
+| `prototyp/*.html` | klikalne prototypy koncepcji na danych przykładowych; nie odpowiadają aplikacji – obowiązuje dokumentacja |
 | `dependencies.csv`, `resolved_objects.csv`, `export_log.txt` | eksport metadanych obiektów SQL z `splmcd03` (`PZLPROD.LOG`, `PZL_SAP`) |
 
 ---
@@ -44,11 +43,10 @@ Każda reguła jest opisana w jednym dokumencie; pozostałe dokumenty do niego o
 | Zakres projektu | nakładka Performance Objectives – struktura kontraktu CES wyznaczająca elementy projektu | `docs/performance-objectives.md` |
 | Performance Objectives | nadrzędna struktura kontraktu CES, oś raportowania wykonania; wirtualne węzły | `docs/performance-objectives.md` |
 | CES / P1S | SAP finansowy (koszty) / SAP produkcyjny (struktura, zaawansowanie) | `docs/zrodla-danych.md` |
-| Projekt CES / `PROJORG` | projekt w SAP CES / projekt w SAP P1S (korzeń drzewa P1S) – nie mylić z projektem PZL-EV | `docs/mapowanie-ces-p1s.md` |
+| Projekt CES / `PROJORG` | projekt w SAP CES / projekt w SAP P1S (korzeń drzewa P1S) – nie mylić z projektem PZL-EV | `docs/zrodla-danych.md`, rozdz. 5 |
 | RABIT | narzędzie SAP zrzucające wyniki raportów na SharePoint | `docs/zrodla-danych.md`, rozdz. 3 |
 | Definicja źródła | formalny opis raportu źródłowego: schemat, ziarno, klucz, znaczenie kolumn i okresu, waluta, walidacja, wersja parsera | `docs/zrodla-danych.md`, rozdz. 2 |
 | WP / CAM | Work Package / Cost Account Manager – osoba odpowiedzialna za WP | `docs/slowniki.md`, rozdz. 3 |
-| Raport mapowań, korekta | przypisania CES ↔ P1S (eksport z `PZLPROD`, słownik globalny wczytywany z Excela) / zmiana przypisania wprowadzona w PZL-EV | `docs/mapowanie-ces-p1s.md` |
 | Przebieg | przetworzenie jednego projektu za jeden tydzień | `docs/pipeline-fazy.md`, rozdz. 4 |
 | Przebieg zamykający | przebieg w tygodniu oznaczonym w kalendarzu okresów jako zamknięcie okresu: zaawansowanie od CAM, zamrożenie | `docs/pipeline-fazy.md`, rozdz. 4 |
 | Znacznik stanu | moment, w którego stanie przebieg czyta dane i słowniki (przypięcie) | `docs/model-danych.md`, rozdz. 4.2 |

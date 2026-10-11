@@ -4,8 +4,7 @@ Zakres: nakładka **Performance Objectives** – nadrzędna struktura kontraktu 
 zakres projektu PZL-EV i oś raportowania wykonania (nie tylko po elemencie kosztowym). Tworzona przy zakładaniu
 projektu, edytowalna.
 
-Powiązane: `docs/funkcjonalnosc.md` (F01 – kreator projektu), `docs/mapowanie-ces-p1s.md` (globalne mapowanie,
-czytane przy budowie nakładki), `docs/zrodla-danych.md` (struktura CES, drzewo P1S), `docs/slowniki.md`
+Powiązane: `docs/funkcjonalnosc.md` (F01 – kreator projektu), `docs/zrodla-danych.md` (struktura CES, drzewo P1S), `docs/slowniki.md`
 (słownik „WP i CAM” – osobny), `docs/model-danych.md` (encja, przypięcie przez przebieg).
 
 ---
@@ -13,7 +12,7 @@ czytane przy budowie nakładki), `docs/zrodla-danych.md` (struktura CES, drzewo 
 ## 1. Czym jest Performance Objectives
 
 - **Struktura kontraktu** – hierarchiczne drzewo elementów WBS CES (poziomy 1..n), po którym raportuje się
-  wykonanie kontraktu. Zastępuje wcześniejszy wybór zakresu z drzewa P1S.
+  wykonanie kontraktu.
 - **Wyznacza zakres projektu PZL-EV** – elementy objęte nakładką to elementy projektu. Koszty i zaawansowanie
   są do nich przypisywane na późniejszym etapie (rozdz. 6).
 - **Edytowalna** – strukturę SAP można zmieniać i **grupować elementy PSP we własnych, wirtualnych węzłach**
@@ -21,21 +20,15 @@ czytane przy budowie nakładki), `docs/zrodla-danych.md` (struktura CES, drzewo 
 
 ---
 
-## 2. Kotwica CES i powiązanie z P1S
+## 2. Kotwica CES i strona P1S
 
 - Kotwicą jest **CES**. Kluczem elementu jest kolumna **`WBS element`** (element PSP CES, np. `4D06WP`,
   `4D06WP.RA`, `4D06WP000001`); `Project definition` to projekt CES (np. `4D06WP`).
-- Wskazanie elementu CES **pociąga całe jego poddrzewo z globalnego mapowania** (`docs/mapowanie-ces-p1s.md`).
-  Strona **P1S wchodzi do drzewa jako dodatkowe zadania / informacja**, nie jako osobny zakres:
-  - cel P1S z mapowania – element CES nakładki rozstrzygany tymi samymi regułami co ekran Mapowanie (korekta
-    elementu → raport → dziedziczenie z projektu CES; projekt CES elementu z kolumny `Project definition`, a dla
-    elementu dodanego ręcznie – najbliższego elementu nad nim) – status (`REPORT`, `OVERRIDE`, `INHERITED`, `UNMAPPED`) i cel przy elemencie,
-  - kolumna `Legacy WBS` z Excela (np. `AC-CAB.6.38`),
-  - poddrzewa celu i `Legacy WBS` z `LOG.WBS` (PZLPROD, po `PARENT`) – P1S bywa rozbudowane głębiej niż `Legacy WBS`;
-    element należy do najbliższego kodu węzła nad nim (decyzja 2026-10-08: mapowanie zostaje obok `Legacy WBS`,
-    dopóki nie okaże się, że sam `Legacy WBS` wystarcza).
-- Mapowanie CES ↔ P1S jest **globalne i administracyjne** – budowa nakładki tylko je **czyta**; nakładka nie
-  zmienia mapowania, a mapowanie nie zależy od projektu.
+- Strona **P1S wchodzi do drzewa jako dodatkowe zadania / informacja**, nie jako osobny zakres
+  (`ObjectivesMapping`):
+  - kolumna `Legacy WBS` z Excela (np. `AC-CAB.6.38`) – kod P1S węzła,
+  - poddrzewa `Legacy WBS` z `LOG.WBS` (PZLPROD, po `PARENT`, odczyt na żywo) – P1S bywa rozbudowane głębiej niż
+    `Legacy WBS`; element należy do najbliższego kodu węzła nad nim.
 
 ---
 
@@ -69,22 +62,22 @@ czytane przy budowie nakładki), `docs/zrodla-danych.md` (struktura CES, drzewo 
 
 | Pojęcie | Relacja |
 |---|---|
-| Mapowanie CES ↔ P1S | globalne; czytane przy budowie nakładki, bez wpływu na projekt (rozdz. 2) |
+| Struktura P1S (`LOG.WBS`) | czytana na żywo z PZLPROD; poddrzewa pod `Legacy WBS` węzłów (rozdz. 2) |
 | Słownik „WP i CAM” | **osobny** (`docs/slowniki.md`, rozdz. 3); powiązanie z węzłem nakładki przez `Legacy WBS` (rozdz. 4.1) |
-| Zakres projektu | wyznaczany przez nakładkę (zastępuje drzewo P1S jako mechanizm zakresu) |
+| Zakres projektu | wyznaczany przez nakładkę |
 | Koszty i zaawansowanie | przypisywane do węzłów nakładki na późniejszym etapie, z plików (rozdz. 6) |
 
 ### 4.1 Powiązanie nakładki z WP
 
-- Kody P1S węzła nakładki: `Legacy WBS` i cel z mapowania (rozdz. 2). Zakres projektu po stronie P1S to kody
-  P1S elementów nakładki i elementy `LOG.WBS` pod nimi (pod celami mapowania i pod `Legacy WBS`). Element P1S należy
+- Kod P1S węzła nakładki: `Legacy WBS` (rozdz. 2). Zakres projektu po stronie P1S to kody
+  P1S elementów nakładki i elementy `LOG.WBS` pod nimi. Element P1S należy
   do projektu, gdy jest jednym z tych kodów, leży pod nim w `LOG.WBS` (należy do najbliższego kodu nad nim) albo
   jego kod zaczyna się od kodu z kropką (np. `AC-CAB.6.38.01` pod `AC-CAB.6.38`).
 - WP ze słownika „WP i CAM” podpina się pod węzeł nakładki, którego kod P1S obejmuje element (najdłuższy pasujący
   kod; przy kilku węzłach z tym kodem – pod najgłębszy). Węzeł wirtualny ma WP swoich elementów; sumy węzła obejmują jego poddrzewo, każdy WP liczony raz.
 - Element nakładki, pod którym nie ma żadnego WP, jest brakiem w bazie analitycznej (kreator, krok 5).
-- Element CES bez celu mapowania (`UNMAPPED`) i bez `Legacy WBS` nie ma kodu P1S – WARNING w gotowości projektu
-  (`docs/funkcjonalnosc.md`, F02); brak raportu mapowań albo PZLPROD – WARNING z powodem.
+- Element CES bez `Legacy WBS` nie ma kodu P1S – WARNING „Strona P1S” w gotowości projektu
+  (`docs/funkcjonalnosc.md`, F02); brak PZLPROD – WARNING z powodem (zakres P1S bez poddrzew `LOG.WBS`).
 
 ### 4.2 Struktura projektu (ekran Projekt)
 
@@ -92,8 +85,7 @@ Zakładka **Struktura** ekranu Projekt to tabela-drzewo na wzór Deltek Cobra: n
 i budżetem (`StructureBuilder`).
 
 - **Wiersze:** węzły nakładki, a pod każdym – elementy P1S rozwinięte z `LOG.WBS` spod jego kodu (rozdz. 4.1).
-  Wiersz węzła pokazuje pierwszy kod P1S (`Legacy WBS`, a bez niego cel mapowania); cel mapowania inny niż
-  `Legacy WBS` to osobny wiersz „cel mapowania CES ↔ P1S” pod węzłem. Rozwinięcie zatrzymuje się na kodzie innego
+  Wiersz węzła pokazuje jego kod P1S (`Legacy WBS`). Rozwinięcie zatrzymuje się na kodzie innego
   węzła (ten element jest pod swoim węzłem), więc każdy element P1S występuje raz. Element ze słownika „WP i CAM”,
   którego nie ma w `LOG.WBS` (np. bez PZLPROD), jest pod wierszem o najdłuższym pasującym kodzie, a bez niego –
   w grupie „Elementy P1S spoza struktury”.
@@ -125,23 +117,23 @@ i budżetem (`StructureBuilder`).
   zostają na elemencie. SWBS nie jest brany pod uwagę. Kod niezgodny z konwencją – brak „kod wydzielenia” w kolumnie Braki,
   powód w podpowiedzi nazwy i w nagłówku „Produkcja (PZLPROD)”. Godziny wydzielane są tylko z operacji samego elementu
   (PSPNR) – operacje elementów pod nim w `LOG.WBS` wydziela się kodem z ich elementem.
-  Dane produkcyjne są czytane na żywo (`IPzlProdSource.Production`, zakres P1S projektu zamiast filtra programu) przy
-  otwarciu projektu, „Odśwież mapowanie i koszty” i po zmianie Legacy WBS; chwila odczytu – w nagłówku ekranu
+  Dane produkcyjne są czytane na żywo (`IPzlProdSource.Production`, filtr – zakres P1S projektu) przy
+  otwarciu projektu, „Odśwież P1S i koszty” i po zmianie Legacy WBS; chwila odczytu – w nagłówku ekranu
   („Produkcja (PZLPROD) …”). Kolumny mają stałą szerokość – przy kolejnych kolumnach tabela przewija się w poziomie. Tabela kończy się na dole okna (wysokość
   dopasowana do okna, strona bez przewijania – wiersze przewija tabela; przy zwiniętym menu – szersza); komunikat
   o wklejeniu – nad tabelą, skróty klawiszowe i opis kolumn – okno „?”; nad tabelą daty danych RABIT i produkcji – osobna
   linia pod nagłówkiem projektu.
 - **WP** to znacznik elementu P1S (wiersz z kodem P1S), który wskażą finansiści: zaznaczony element jest pakietem pracy
-  i ma mieć koszty i budżet. Kodem nowego WP jest kod elementu P1S (WP z wcześniej wczytanego słownika zachowuje swój
+  i ma mieć koszty i budżet. Kodem nowego WP jest kod elementu P1S (WP zapisany już w słowniku zachowuje swój
   kod). WP nie jest osobnym poziomem drzewa.
 - **CAM** wybiera się z listy osób z wyszukiwaniem po fragmencie USRID albo imienia i nazwiska (słownik Osoby wczytywany
   z HR – `docs/slowniki.md`, rozdz. 2; ta sama lista co w tabeli słownika): zapisywany jest USRID, wyświetlane imię
-  i nazwisko. CAM wpisany wcześniej spoza słownika jest na liście pod swoją wartością.
+  i nazwisko. CAM zapisany spoza słownika jest na liście pod swoją wartością.
 - **Cost Category** – kategoria WP jako rodzaj kosztu (np. Production, Programs), żeby raportować nie tylko po elementach
   WBS, ale i po kategoriach (wiele WP w jednej kategorii). Wybiera się ją z listy słownika projektu „Kategorie WBS”
   (`docs/slowniki.md`, rozdz. 3 – edycja w zakładce Słowniki projektu); zapisywana w „WP i CAM” przy WP elementu (wybór
   kategorii w wierszu bez WP zaznacza WP, odznaczenie WP ją usuwa). To nie jest globalny słownik Cost Category (numer
-  elementu kosztowego). Kategoria wpisana wcześniej spoza słownika (np. Labor / Material / Subcontract) jest na liście
+  elementu kosztowego). Kategoria zapisana spoza słownika (np. Labor / Material / Subcontract) jest na liście
   pod swoją wartością; zapis takiej kategorii – WARNING.
 - **Sumy:** budżet i daty wiersza obejmują poddrzewo, każdy WP liczony raz; braki – element nakładki bez WP,
   WP bez budżetu.
@@ -153,14 +145,14 @@ i budżetem (`StructureBuilder`).
   węzłem („koszt niejednoznaczny” – reguła rozdziału to O45) – koszt bez przypisania, w kolumnie Braki. Wiersz węzła
   pokazuje koszt elementów CES swojego poddrzewa, wiersz elementu P1S – koszt przypisany do WP poddrzewa. Koszt
   elementu CES projektu, którego nie ma w nakładce – „spoza nakładki”. Kafelki ACWP i „Koszt bez WP” w zakładce
-  Wskaźniki. Koszty są czytane przy otwarciu projektu i „Odśwież mapowanie i koszty” (nie po każdym zapisie wiersza).
+  Wskaźniki. Koszty są czytane przy otwarciu projektu i „Odśwież P1S i koszty” (nie po każdym zapisie wiersza).
   **Z kiedy są dane** – w nagłówku ekranu projektu: „Dane RABIT z … · import … · sprawdzone …” – data raportu w RABIT
   (modyfikacja pliku ACTUALS), data importu i ostatniego pobrania z RABIT; podpowiedź – każdy plik osobno. Ponowne
   pobranie raportu z tą samą treścią (import „pominięty” / „duplikat”) nie zmienia danych, ale przesuwa datę „dane z” na
   nowszy raport – wiadomo, że dane są aktualne na tę datę (`CAN_LatestFiles` + `META_SourceFileSeen`).
   To podgląd – formalny koszt WP liczy przebieg (P3, `ev.KosztWP`).
 - **Pasek nad tabelą** – ikony z opisem w podpowiedzi: edycja Performance Objectives, dołożenie z Excela (eksport SAP),
-  pobranie struktury do Excela, rozwiń / zwiń wszystko, odświeżenie mapowania i kosztów, cofnięcie wklejenia, odrzucenie
+  pobranie struktury do Excela, rozwiń / zwiń wszystko, odświeżenie P1S i kosztów, cofnięcie wklejenia, odrzucenie
   niezapisanych zmian.
 - **Struktura do Excela** – arkusz „Struktura”: całe drzewo (także zwinięte wiersze) w kolejności tabeli, nazwa wcięta
   według poziomu, kolumny Poziom, Rodzaj, Element CES, P1S, WP, CAM (USRID oraz imię i nazwisko), Cost Category, WP
@@ -174,8 +166,8 @@ i budżetem (`StructureBuilder`).
   BAC HOURS, BAC MATERIAL, BAC, Baseline Start, Baseline Koniec wiersza z jednym WP w poddrzewie – własnym albo jedynym
   pod nim (np. węzeł nakładki nad elementem P1S z WP) → „Harmonogram i budżet” tego WP (klucz – WP); wiersz z kilkoma WP
   w poddrzewie pokazuje sumę i nie jest edytowalny. Walidacja jak przy zapisie słownika: ERROR blokuje zapis (zmiany zostają w wierszu, komunikat
-  nad tabelą), WARNING nie wstrzymuje. Błąd, który słownik miał już wcześniej w innym wierszu (np. element poza zakresem
-  po odświeżeniu mapowania), nie blokuje zmiany – jest ostrzeżeniem. Zmiana `Legacy WBS` razem z WP / CAM w jednym
+  nad tabelą), WARNING nie wstrzymuje. Błąd, który słownik ma już w innym wierszu (np. element poza zakresem
+  po odświeżeniu P1S), nie blokuje zmiany – jest ostrzeżeniem. Zmiana `Legacy WBS` razem z WP / CAM w jednym
   wierszu przypisuje WP do nowego kodu P1S. Kolumny zablokowane do edycji – lista `StructureEdits.Locked` (do ustalenia).
 - **Jak w Excelu:** zaznaczanie komórek, pisanie zastępuje zawartość komórki, Ctrl+C / Ctrl+V – kopiowanie i wklejanie
   bloku od bieżącej komórki (jedna komórka wypełnia zaznaczenie, wiersz nagłówków pomijany, komórki, których w danym
@@ -190,8 +182,8 @@ i budżetem (`StructureBuilder`).
   (`ProjectService.SaveStructureEdits`); nazwa i `Legacy WBS` – wiersz po wierszu. Paczka z błędem (ERROR) albo konfliktem
   jest zapisywana wiersz po wierszu – poprawne wiersze się zapisują, błędne zostają żółte z komunikatem. Po serii – jedno
   odświeżenie danych projektu (każdy słownik czytany raz; osoby, nakładki innych projektów, foldery i koszty – z pamięci
-  ekranu, ponownie przy „Odśwież mapowanie i koszty”). Pomiar (SQL Server lokalnie, 4 wiersze): zapis 48 → 11 zapytań,
-  odświeżenie 23 → 6 zapytań; liczba zapytań zapisu nie rośnie z liczbą wierszy. Edycja w toku jest zatwierdzana przy
+  ekranu, ponownie przy „Odśwież P1S i koszty”). Pomiar (SQL Server lokalnie, 4 wiersze): zapis – 11 zapytań,
+  odświeżenie – 6 zapytań; liczba zapytań zapisu nie rośnie z liczbą wierszy. Edycja w toku jest zatwierdzana przy
   wyjściu z tabeli (przycisk, inna zakładka). Wiersz z niezapisanymi zmianami (zapis w toku albo nieudany) jest żółty
   i zachowuje zmiany po odświeżeniu; powrót do listy i edycja Performance Objectives czekają na zapis. Odznaczenie WP
   z budżetem lub datami wymaga potwierdzenia (usuwa harmonogram WP).
@@ -239,4 +231,3 @@ tworzenia i utrzymania projektu.
 | # | Kwestia |
 |---|---|
 | O45 | Przypisywanie kosztów i zaawansowania do węzłów nakładki (z plików) – późniejszy etap |
-| ~~O47~~ | Odświeżenie z SAP – **rozstrzygnięte (2026-10-08):** „Dołóż z Excela” dokłada nowe elementy i zachowuje węzły wirtualne i zmiany; podmiana z Excela w edytorze – świadomie bez nich (rozdz. 3) |

@@ -89,7 +89,7 @@ public static partial class GlobalDictionaries
         {
             Code = Persons,
             Name = "Osoby",
-            Description = "Pracownicy z HR (PZLHRPROD, HR.ORG – „Wczytaj z HR”): USRID (numer znaczka, login) → imię i nazwisko, MPK, dział, stanowisko. CAM w strukturze projektu wybiera się z tej listy (zapisywany USRID).",
+            Description = "Pracownicy z HR (PZLHRPROD, HR.ORG – „Dodaj z HR”): USRID (numer znaczka, login) → imię i nazwisko, MPK, dział, stanowisko. CAM w strukturze projektu wybiera się z tej listy (zapisywany USRID).",
             Columns =
             [
                 new("USRID", ColumnType.Text, Key: true, Aliases: ["Konto AD"]),
