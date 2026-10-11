@@ -55,9 +55,8 @@ Nie twórz równoległych implementacji tej samej funkcjonalności. Przestrzegaj
 
 W szczególności:
 
-- `architecture.md` — architektura i przepływ ,
+- `architektura.md` — architektura i przepływ,
 - `funkcjonalnosc.md` — funkcjonalności założeniowe,
-- `mapowanie-ces-p1s.md` — sposób mapowania,
 - `pipeline-fazy.md` - przepływ etapów w ramach uruchomionego przepływu 
 
 
