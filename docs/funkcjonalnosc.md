@@ -26,7 +26,7 @@ Menu modułów po lewej zwija się do ikon („☰” u góry menu; nazwa moduł
 
 | Ekran | Zawartość | Główne akcje |
 |---|---|---|
-| **Pulpit** | karty projektów ze stanem bieżącego przebiegu, „Wymaga uwagi”, ostatnie zdarzenia (F07) | przejście do projektu / przebiegu, nowy projekt |
+| **Pulpit** | karty faz globalnych (Import RABIT, Źródła danych, Słowniki globalne), „Wymaga uwagi”, ostatnie zdarzenia (F07) | klik w kartę – przejście do sekcji (Import / Administracja / Słowniki), „Odśwież” |
 | **Import** | import źródeł, historia importów, decyzje dla plików (F05) | importuj |
 | **Projekty** | lista projektów: kod, nazwa, typ, aktywny przebieg, folder – sam odczyt projektów (nakładka, gotowość i mapowanie – na ekranie projektu) | nowy projekt |
 | **Projekt** | zakładki: Wskaźniki (sumy projektu, miejsce na wskaźniki EV, gotowość F02 zwinięta; znacznik gotowości i data danych RABIT w nagłówku), Struktura (nakładka z rozwinięciem P1S, WP, CAM, Cost Category, budżet i daty – `docs/performance-objectives.md`, rozdz. 4.2), Słowniki projektu, Przebiegi, Foldery | edycja w komórkach struktury (zapis od razu); dołożenie elementów z kolejnego eksportu SAP; raport kosztów projektu do Excela (`docs/model-danych.md`, migracja 013); struktura do Excela; nowy przebieg; edycja słowników projektu w tabeli (Cost Category – pozycje globalne i zmiany projektu, `docs/slowniki.md`, rozdz. 6); pobierz / wczytaj słowniki z Excela |
@@ -123,11 +123,13 @@ Ekran opisany w `docs/mapowanie-ces-p1s.md`, rozdz. 11; reguły – tamże.
 
 ### F07. Pulpit i dziennik
 
+- **Karty faz globalnych** – Import RABIT, Źródła danych, Słowniki globalne; klik w kartę przechodzi do sekcji
+  (Import RABIT / Administracja / Słowniki). Na Pulpicie jest tylko akcja „Odśwież”; listy projektów nie ma (moduł Projekty).
 - **„Wymaga uwagi”** – otwarte problemy (`docs/pipeline-fazy.md`, rozdz. 1.3) i etapy wymagające akcji, m.in.:
   brak przebiegu w bieżącym tygodniu, etapy z błędem, pliki czekające na potwierdzenie, zmiany po przypięciu,
   projekty niegotowe, elementy `UNMAPPED` z kosztem, pliki nierozpoznane. Przy problemie – „Rozwiązane”
   (ręczne zamknięcie z wpisem w dzienniku); problem znika też sam, gdy przyczyna zniknie.
-- **„Ostatnie zdarzenia”** – przekrój dzienników wszystkich przebiegów.
+- **„Ostatnie zdarzenia”** – przekrój dzienników wszystkich przebiegów: do 60 najnowszych wpisów, po 6 na stronę (‹ ›), treść skrócona do jednej linii (pełna w podpowiedzi).
 - Dziennik przebiegu: czas, użytkownik, opis – od najnowszego.
 
 ### F08. Administracja
