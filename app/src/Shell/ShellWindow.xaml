@@ -42,12 +42,13 @@
                         <Style.Triggers>
                             <DataTrigger Binding="{Binding NavCollapsed}" Value="True">
                                 <Setter Property="Width" Value="60" />
+                                <Setter Property="Padding" Value="6,10" />
                             </DataTrigger>
                         </Style.Triggers>
                     </Style>
                 </Border.Style>
                 <DockPanel>
-                    <Button DockPanel.Dock="Top" Style="{StaticResource NavBtn}" HorizontalAlignment="Left" Margin="0,0,0,8"
+                    <Button DockPanel.Dock="Top" Style="{StaticResource NavBtn}" HorizontalAlignment="Left" Margin="0,0,0,8" Padding="14,8"
                             Command="{Binding ToggleNav}" ToolTip="Zwiń / rozwiń menu" AutomationProperties.Name="Zwiń / rozwiń menu">
                         <TextBlock Text="&#xE700;" FontFamily="{StaticResource FIcon}" FontSize="16" />
                     </Button>
@@ -67,13 +68,34 @@
                     <ItemsControl ItemsSource="{Binding Nav}">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
-                                <Button Style="{StaticResource NavBtn}" HorizontalAlignment="Stretch" ToolTip="{Binding Label}"
+                                <Button HorizontalAlignment="Stretch" ToolTip="{Binding Label}" ToolTipService.InitialShowDelay="200"
                                         AutomationProperties.Name="{Binding Label}"
                                         Command="{Binding DataContext.Navigate, RelativeSource={RelativeSource AncestorType=Window}}"
                                         CommandParameter="{Binding Key}">
+                                    <!-- Zwinięte menu: przycisk 48 px, ikona 20 px na środku (padding 14), bez odstępu za ikoną -->
+                                    <Button.Style>
+                                        <Style TargetType="Button" BasedOn="{StaticResource NavBtn}">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding DataContext.NavCollapsed, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
+                                                    <Setter Property="Padding" Value="14,8" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Button.Style>
                                     <DockPanel>
                                         <TextBlock DockPanel.Dock="Left" Text="{Binding Icon}" FontFamily="{StaticResource FIcon}" FontSize="16"
-                                                   Width="20" Margin="0,0,10,0" VerticalAlignment="Center" />
+                                                   Width="20" TextAlignment="Center" VerticalAlignment="Center">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Margin" Value="0,0,10,0" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding DataContext.NavCollapsed, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
+                                                            <Setter Property="Margin" Value="0" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
                                         <Border DockPanel.Dock="Right">
                                             <Border.Style>
                                                 <Style TargetType="Border" BasedOn="{StaticResource CountBadge}">
