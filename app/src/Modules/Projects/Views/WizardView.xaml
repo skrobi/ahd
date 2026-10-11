@@ -5,8 +5,7 @@
              xmlns:views="clr-namespace:PzlEv.Modules.Projects.Views">
     <!-- Kreator projektu (DataContext: WizardViewModel) – docs/funkcjonalnosc.md, F01. -->
     <StackPanel>
-        <partials:PageHeader Eyebrow="Projekty / nowy" Title="Nowy projekt"
-                             Subtitle="Kreator rejestruje projekt, buduje strukturę Performance Objectives (CES), wczytuje słowniki projektu z Excela i tworzy foldery." />
+        <partials:PageHeader Title="Nowy projekt" />
         <partials:BusyBar DataContext="{Binding Busy}" />
 
         <!-- Kroki -->
@@ -48,7 +47,6 @@
                             <TextBlock Text="Kod projektu" Style="{StaticResource MutedText}" />
                             <TextBox Style="{StaticResource Input}" FontFamily="{StaticResource FMono}" CharacterCasing="Upper"
                                      Text="{Binding Code, UpdateSourceTrigger=PropertyChanged}" MaxLength="20" />
-                            <TextBlock Text="Unikalny; używany w nazwach folderów, plików i przebiegów." Style="{StaticResource MutedText}" FontSize="11" TextWrapping="Wrap" />
                         </StackPanel>
                         <StackPanel Grid.Column="1">
                             <TextBlock Text="Nazwa" Style="{StaticResource MutedText}" />
@@ -66,7 +64,6 @@
                             <DataTemplate>
                                 <StackPanel Width="250" Margin="4">
                                     <TextBlock Text="{Binding Label}" FontWeight="SemiBold" />
-                                    <TextBlock Text="{Binding Description}" Style="{StaticResource MutedText}" TextWrapping="Wrap" />
                                 </StackPanel>
                             </DataTemplate>
                         </ListBox.ItemTemplate>
@@ -77,15 +74,11 @@
 
                 <!-- 2. Performance Objectives -->
                 <StackPanel Visibility="{Binding IsStep2, Converter={StaticResource BoolToVisibility}}">
-                    <TextBlock TextWrapping="Wrap" Margin="0,0,0,10"
-                               Text="Performance Objectives – nadrzędna struktura kontraktu po stronie CES, po której raportuje się wykonanie. Wyznacza zakres projektu. Kotwicą jest CES (WBS element); strona P1S wchodzi do drzewa przez kolumnę Legacy WBS. Strukturę można zmieniać i grupować elementy we własnych, wirtualnych węzłach. Wczytaj eksport struktury WBS z SAP (.xlsx) albo zbuduj ją ręcznie." />
                     <views:PoEditorView DataContext="{Binding Objectives}" />
                 </StackPanel>
 
                 <!-- 3. Słowniki projektu -->
                 <StackPanel Visibility="{Binding IsStep3, Converter={StaticResource BoolToVisibility}}">
-                    <TextBlock TextWrapping="Wrap" Margin="0,0,0,8"
-                               Text="Słowniki projektu wczytujesz z Excela: jeden skoroszyt z arkuszami jak w szablonie albo osobne pliki / CSV. Szablon ma w arkuszu „WP i CAM” elementy P1S z zakresu (Legacy WBS nakładki) – uzupełnij WP, CAM, budżet i daty. Słownik z błędem ERROR nie zostanie zapisany. Po utworzeniu projektu słowniki zmieniasz na ekranie projektu – każda zmiana zostaje w historii." />
                     <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
                         <Button Content="Pobierz szablon Excel" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding DownloadTemplate}" />
                         <Button Content="Wczytaj skoroszyt (wszystkie arkusze)" Style="{StaticResource BtnPrimary}" Command="{Binding LoadWorkbook}" />
@@ -98,7 +91,6 @@
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
                     <TextBlock Text="Słowniki globalne" Style="{StaticResource H2}" FontSize="15" Margin="0,8,0,2" />
-                    <TextBlock Text="Przypinane razem ze słownikami projektu w każdym przebiegu; zmiana na ekranie Słowniki." Style="{StaticResource MutedText}" Margin="0,0,0,6" />
                     <DataGrid Style="{StaticResource DataTable}" ItemsSource="{Binding GlobalDictionaries}" IsReadOnly="True">
                         <DataGrid.Columns>
                             <DataGridTextColumn Header="Słownik" Binding="{Binding Name}" Width="*" />

@@ -6,7 +6,6 @@
         FocusManager.FocusedElement="{Binding ElementName=SearchBox}">
     <!-- Szukanie pracowników PZLHRPROD i lista osób do dodania (DataContext: PersonPickerViewModel) -->
     <DockPanel Margin="16">
-        <TextBlock DockPanel.Dock="Top" Text="{Binding Hint}" Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="0,0,0,8" />
         <TextBox x:Name="SearchBox" DockPanel.Dock="Top" Style="{StaticResource Input}" Margin="0,0,0,10"
                  Text="{Binding Search, UpdateSourceTrigger=PropertyChanged, Delay=200}" />
         <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">

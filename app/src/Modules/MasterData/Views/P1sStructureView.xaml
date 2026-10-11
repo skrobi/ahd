@@ -17,8 +17,6 @@
     </UserControl.Resources>
     <StackPanel>
         <TextBlock Text="Struktura P1S (PZLPROD)" Style="{StaticResource H2}" />
-        <TextBlock Text="Z_KAT_ZBIORCZA → Z_KATEGORIA → Z_OPIS → PROJORG → elementy. Tylko do odczytu; elementy nieaktywne i usunięte – kursywą."
-                   Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="0,2,0,10" />
         <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
             <Button Content="Odśwież" Style="{StaticResource Btn}" Command="{Binding Refresh}" />
             <TextBlock Text="Szukaj" VerticalAlignment="Center" Margin="16,0,6,0" Foreground="{StaticResource Muted}" />

@@ -20,7 +20,6 @@
                             </Style>
                         </TextBlock.Style>
                     </TextBlock>
-                    <TextBlock Text="{Binding Hint}" Style="{StaticResource MutedText}" FontSize="11" TextWrapping="Wrap" />
                 </StackPanel>
             </Border>
         </DataTemplate>
@@ -185,8 +184,6 @@
                     <StackPanel Grid.Column="1">
                         <!-- Stan słownika, wczytanie z Excela z podglądem różnic -->
                         <views:DictionaryPanelView DataContext="{Binding SelectedDictionary}" />
-                        <TextBlock Text="{Binding Table.Spec.Description}" Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="0,0,0,4" />
-                        <TextBlock Text="{Binding DictionaryHint}" Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="0,0,0,8" />
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
                             <Button Content="Dodaj wiersz" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding AddDictionaryRow}" />
                             <Button Content="Usuń wiersze" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding RemoveDictionaryRow}" ToolTip="Usuwa wiersze zaznaczonych komórek (Ctrl+minus)" />

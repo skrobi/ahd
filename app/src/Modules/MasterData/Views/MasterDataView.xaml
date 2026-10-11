@@ -4,8 +4,7 @@
              xmlns:partials="clr-namespace:PzlEv.Shared.Views.Partials"
              xmlns:views="clr-namespace:PzlEv.Modules.MasterData.Views">
     <StackPanel>
-        <partials:PageHeader Eyebrow="Słowniki globalne" Title="Słowniki"
-                             Subtitle="Edycja z historią i walidacją przy zapisie (ERROR blokuje, WARNING wymaga potwierdzenia). Wymiana przez Excel: pobierz, zmień, wczytaj z podglądem różnic." />
+        <partials:PageHeader Title="Słowniki" />
 
         <Grid>
             <Grid.ColumnDefinitions>
@@ -39,7 +38,6 @@
 
             <StackPanel Grid.Column="1" Visibility="{Binding ShowDictionary, Converter={StaticResource BoolToVisibility}}">
                 <TextBlock Text="{Binding Spec.Name}" Style="{StaticResource H2}" />
-                <TextBlock Text="{Binding Spec.Description}" Style="{StaticResource MutedText}" Margin="0,2,0,10" />
 
                 <!-- Akcje -->
                 <DockPanel Margin="0,0,0,8">
