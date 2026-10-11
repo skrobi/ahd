@@ -16,7 +16,6 @@ public static partial class GlobalDictionaries
     public const string FxRates = "fx-rates";
     public const string CostCategory = "cost-category";
     public const string Persons = "persons";
-    public const string MappingReport = "mapping-report";
     public const string DjkRates = "djk-rates";
     public const string ProductionParameters = "production-parameters";
 
@@ -24,22 +23,6 @@ public static partial class GlobalDictionaries
     public const string ProductivityMonths = "Okno produktywności IPT (mies.)";
     public const string DeliveredStatuses = "Statusy materiałów dostarczonych";
     public const string DivideByZClo = "Wartość materiałów ÷ (1 + Z_CLO)";
-
-    /// <summary>
-    /// Kolumny raportu mapowań SAP↔CES (docs/mapowanie-ces-p1s.md, rozdz. 2) – nazwy jak w nagłówku pliku, w bazie
-    /// kolumny DICT_MappingReport (project → ProjectDef – Project to kolumna słowników projektu). Rozstrzyganie czyta
-    /// src, pspnr, pspnr_sap, project_sap, project_ces, wbs, wbs_sap, wbs_ces; pozostałe kolumny są przechowywane, żeby
-    /// słownik można było pobrać do Excela w pełnym układzie.
-    /// </summary>
-    public static readonly IReadOnlyList<(string Name, string Column)> MappingReportColumns =
-    [
-        ("src", "Src"), ("pspnr", "Pspnr"), ("pspnr_sap", "PspnrSap"), ("pspnr_ces", "PspnrCes"), ("pspnr_parent", "PspnrParent"),
-        ("project", "ProjectDef"), ("project_sap", "ProjectSap"), ("project_sap_org", "ProjectSapOrg"), ("project_ces", "ProjectCes"),
-        ("wbs", "Wbs"), ("wbs_sap", "WbsSap"), ("wbs_ces", "WbsCes"), ("wbs_desc", "WbsDesc"), ("wbs_desc_sap", "WbsDescSap"),
-        ("wbs_desc_ces", "WbsDescCes"), ("prctr", "Prctr"), ("prctr_sap", "PrctrSap"), ("prctr_ces", "PrctrCes"), ("lvl", "Lvl"),
-        ("lvl_sap", "LvlSap"), ("lvl_ces", "LvlCes"), ("perf_obg", "PerfObg"), ("techs", "Techs"), ("sales_order_typ", "SalesOrderTyp"),
-        ("sales_order", "SalesOrder"), ("sales_order_pos", "SalesOrderPos"), ("matnr", "Matnr"), ("network", "Network"),
-    ];
 
     public static IReadOnlyList<DictionarySpec> All { get; } =
     [
@@ -125,20 +108,6 @@ public static partial class GlobalDictionaries
         },
         new()
         {
-            Code = MappingReport,
-            Name = "Raport mapowań CES ↔ P1S",
-            Description = "Raport mapowań SAP↔CES (eksport z PZLPROD) – źródło przypisań elementów CES do P1S (ekran Mapowanie). " +
-                          "Wczytanie z Excela zastępuje cały słownik zawartością pliku: wiersze spoza pliku są usuwane (historia zostaje).",
-            Columns = [.. MappingReportColumns.Select(c => c.Name switch
-            {
-                "src" => new DictColumn(c.Name, ColumnType.Choice, Key: true, Choices: ["SAP", "CES"]),
-                "pspnr" => new DictColumn(c.Name, ColumnType.Text, Key: true),
-                _ => new DictColumn(c.Name, ColumnType.Text),
-            })],
-            Rules = MappingReportRules,
-        },
-        new()
-        {
             Code = DjkRates,
             Name = "Wskaźniki DJK",
             Description = "Godziny jakości DJK doliczane do godzin produkcji: udział godzin TECH / TECH_PON według prefiksu grupy stanowisk (IPT, np. W2, W51 – najdłuższy pasujący prefiks). Odczyt danych produkcyjnych struktury projektu (vAHDD).",
@@ -184,7 +153,6 @@ public static partial class GlobalDictionaries
             ("MPK", "CostCenter"), ("Dział", "DepartmentShort"), ("Dział – pełna nazwa", "DepartmentName"), ("Stanowisko", "Position"),
             ("Pion", "Division"), ("Manager", "IsManager"), ("PERNR", "Pernr"),
         ]),
-        new(Get(MappingReport), "dict.MappingReport", MappingReportColumns),
         new(Get(DjkRates), "dict.DjkRate", [("Grupa stanowisk", "WorkCenterGroup"), ("Udział DJK", "Share"), ("Opis", "Description")]),
         new(Get(ProductionParameters), "dict.ProductionParameter", [("Parametr", "Name"), ("Wartość", "Value"), ("Opis", "Description")]),
     ];
@@ -334,25 +302,6 @@ public static partial class GlobalDictionaries
                 yield return Issue.Error($"Numer '{number}' dłuższy niż 10 znaków", at);
             if (rows[i]["Cost Category"] is null)
                 yield return Issue.Warning($"Numer {rows[i]["Numer elementu kosztowego"]} bez Cost Category", at);
-        }
-    }
-
-    /// <summary>
-    /// Wiersz raportu mapowań bez przypisania (rozstrzyganie go pominie): brak elementu CES (wbs_ces, a w wierszu CES – wbs)
-    /// albo celu P1S (pspnr_sap / wbs_sap, a w wierszu SAP – pspnr / wbs) i brak pary project_ces → project_sap.
-    /// </summary>
-    private static IEnumerable<Issue> MappingReportRules(IReadOnlyList<DictRow> rows)
-    {
-        for (var i = 0; i < rows.Count; i++)
-        {
-            var row = rows[i];
-            var ces = row["src"] == "CES";
-            var element = row["wbs_ces"] ?? (ces ? row["wbs"] : null);
-            var target = row["pspnr_sap"] ?? row["wbs_sap"] ?? (ces ? null : row["pspnr"] ?? row["wbs"]);
-            var project = row["project_ces"] is not null && row["project_sap"] is not null;
-            if (ces && (element is null || target is null) && !project)
-                yield return Issue.Warning($"Wiersz CES {row["pspnr"]} bez przypisania (brak wbs_ces / wbs albo pspnr_sap / wbs_sap i pary project_ces → project_sap)",
-                    DictionaryValidator.RowElement(i));
         }
     }
 

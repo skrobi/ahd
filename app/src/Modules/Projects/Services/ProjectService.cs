@@ -8,7 +8,6 @@ using PzlEv.Shared.Utils.Data;
 using PzlEv.Shared.Utils.Dictionaries;
 using PzlEv.Shared.Utils.Files;
 using PzlEv.Shared.Utils.Mapping;
-using PzlEv.Shared.Models.Mapping;
 using PzlEv.Shared.Models.PzlProd;
 
 namespace PzlEv.Modules.Projects.Services;
@@ -18,13 +17,13 @@ namespace PzlEv.Modules.Projects.Services;
 /// projektu i folderami; utrzymanie nakładki i słowników projektu; gotowość; baza analityczna i eksport do Excela.
 /// </summary>
 public sealed class ProjectService(IProjectStore store, IDictionaryStore dictionaries, IJournal journal, ProjectFolders folders,
-    IMappingStore mapping, IPzlProdSource? pzlProd)
+    IPzlProdSource? pzlProd)
 {
     private const string Area = "Projekty";
 
     private readonly DictionaryService _dictionaries = new(dictionaries, journal);
     private readonly object _mappingLock = new();
-    private MappingInputs? _mapping;
+    private P1sInputs? _mapping;
 
     public ProjectFolders Folders => folders;
 
@@ -179,11 +178,10 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
     // ---------- mapowanie CES ↔ P1S (strona P1S nakładki) ----------
 
     /// <summary>
-    /// Dane mapowania z bazy PZL-EV i PZLPROD (PZLPROD niedostępny – bez struktury P1S, powód w P1sError). Czytane raz
-    /// na sesję (raport mapowań i LOG.WBS są duże, a zmieniają się rzadko); refresh – ponowny odczyt („Odśwież mapowanie”).
-    /// Elementy CES z kosztów nie są potrzebne: projekt CES elementu pochodzi z nakładki (ObjectivesMapping).
+    /// Struktura P1S z PZLPROD (niedostępny – bez struktury P1S, powód w P1sError). Czytana raz na sesję (LOG.WBS jest
+    /// duża, a zmienia się rzadko); refresh – ponowny odczyt („Odśwież P1S i koszty”).
     /// </summary>
-    public MappingInputs Mapping(bool refresh = false)
+    public P1sInputs Mapping(bool refresh = false)
     {
         lock (_mappingLock)
         {
@@ -193,7 +191,7 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
         }
     }
 
-    private MappingInputs LoadMapping()
+    private P1sInputs LoadMapping()
     {
         IReadOnlyList<P1sElement>? p1s = null;
         string? error = pzlProd is null ? "Brak połączenia z PZLPROD (pzl-ev.json, PzlProd)" : null;
@@ -208,15 +206,13 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
                 error = $"Odczyt PZLPROD (LOG.WBS) nieudany: {ex.Message}";
             }
         }
-        return new MappingInputs(mapping.Report(), mapping.ActiveCorrections(), p1s, error);
+        return new P1sInputs(p1s, error);
     }
 
-    public static IReadOnlyDictionary<long, MappingResult> Resolve(PoTree tree, MappingInputs inputs) => ObjectivesMapping.Resolve(tree, inputs);
-
-    public static P1sScope Scope(PoTree tree, MappingInputs inputs) => ObjectivesMapping.Scope(tree, Resolve(tree, inputs), inputs);
+    public static P1sScope Scope(PoTree tree, P1sInputs inputs) => ObjectivesMapping.Scope(tree, inputs);
 
     /// <param name="wpCam">Wiersze „WP i CAM” do sprawdzenia harmonogramu (null – słownika nie wczytano).</param>
-    public ProjectDictionaryContext Context(string code, PoTree tree, IEnumerable<DictRow>? wpCam, MappingInputs inputs) =>
+    public ProjectDictionaryContext Context(string code, PoTree tree, IEnumerable<DictRow>? wpCam, P1sInputs inputs) =>
         new(Scope(tree, inputs),
             store.P1sOwners(code),
             Persons(),
@@ -290,7 +286,7 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
     /// Słowniki projektu do Excela – arkusz na słownik; szablon do uzupełnienia: „WP i CAM” z elementami P1S z zakresu
     /// bez WP, „Harmonogram i budżet” z WP bez harmonogramu.
     /// </summary>
-    public void ExportDictionaries(string path, string code, string type, PoTree tree, MappingInputs inputs)
+    public void ExportDictionaries(string path, string code, string type, PoTree tree, P1sInputs inputs)
     {
         var sheets = new List<(string, IReadOnlyList<ExcelTableWriter.ExcelColumn>, IEnumerable<IReadOnlyList<object?>>)>();
         foreach (var item in ProjectDictionaries.ForType(type).Where(i => i.Stored))
@@ -341,29 +337,24 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
     // ---------- struktura projektu (ekran Projekt) ----------
 
     /// <summary>Struktura projektu: nakładka z rozwinięciem P1S, WP, CAM, budżet i daty (StructureBuilder).</summary>
-    public static ProjectStructure Structure(PoTree tree, MappingInputs inputs, IReadOnlyList<DictRow> wpCam, IReadOnlyList<DictRow> schedule,
-        IReadOnlyDictionary<string, decimal>? costs = null) =>
-        Structure(tree, inputs, Resolve(tree, inputs), wpCam, schedule, costs);
-
-    /// <summary>Struktura z mapowaniem już rozstrzygniętym (Resolve) – rozstrzyganie raz na odczyt ekranu.</summary>
-    public static ProjectStructure Structure(PoTree tree, MappingInputs inputs, IReadOnlyDictionary<long, MappingResult> resolved, IReadOnlyList<DictRow> wpCam,
-        IReadOnlyList<DictRow> schedule, IReadOnlyDictionary<string, decimal>? costs = null, ProductionData? production = null) =>
-        StructureBuilder.Build(tree, resolved, inputs.P1s, wpCam, schedule, costs, production);
+    public static ProjectStructure Structure(PoTree tree, P1sInputs inputs, IReadOnlyList<DictRow> wpCam, IReadOnlyList<DictRow> schedule,
+        IReadOnlyDictionary<string, decimal>? costs = null, ProductionData? production = null) =>
+        StructureBuilder.Build(tree, inputs.P1s, wpCam, schedule, costs, production);
 
     /// <summary>
     /// Dane produkcyjne projektu na żywo z PZLPROD (Operational EV, daty rzeczywiste, materiały dostarczone): elementy P1S
-    /// zakresu projektu (Legacy WBS i cele mapowania z poddrzewami LOG.WBS) → PSPNR → sql/pzlprod/produkcja.sql; wydzielenia –
+    /// zakresu projektu (Legacy WBS z poddrzewami LOG.WBS) → PSPNR → sql/pzlprod/produkcja.sql; wydzielenia –
     /// węzły wirtualne nakładki z kodem ELEMENT_P1S.NAZWA.CPLGR (ProductionSplit) – reguła na PSPNR elementu; parametry ze
     /// słowników globalnych „Wskaźniki DJK” i „Parametry produkcji”. Bez PZLPROD albo błąd odczytu – dane puste z powodem
     /// (struktura działa bez kolumn produkcyjnych).
     /// </summary>
-    public ProductionData Production(PoTree tree, MappingInputs inputs, IReadOnlyDictionary<long, MappingResult> resolved)
+    public ProductionData Production(PoTree tree, P1sInputs inputs)
     {
         var now = DateTimeOffset.Now;
         if (pzlProd is null || inputs.P1s is null)
             return ProductionData.Unavailable(inputs.P1sError ?? "Brak połączenia z PZLPROD (pzl-ev.json, PzlProd)", now);
         var index = ProductionSplit.Index(inputs.P1s);
-        var pspnrs = ObjectivesMapping.Scope(tree, resolved, inputs).Elements()
+        var pspnrs = ObjectivesMapping.Scope(tree, inputs).Elements()
             .Select(element => index.GetValueOrDefault(MappingKeys.Key(element))?.Pspnr).OfType<string>().Distinct().ToList();
         var notes = new List<string>();
         var rules = new List<VirtualRule>();
@@ -451,7 +442,7 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
     /// (klucz – WP wiersza). Ostrzeżenia nie wstrzymują zapisu (są w komunikacie), ERROR – tak. Zmiana WP przenosi budżet
     /// starego WP, jeśli ten nie jest już przypisany do innego elementu (StructureEdits.ScheduleAfterWpChange).
     /// </summary>
-    public (bool Saved, string Message) SaveStructureEdit(string code, MappingInputs inputs, StructureRow row, IReadOnlyDictionary<string, string?> changes)
+    public (bool Saved, string Message) SaveStructureEdit(string code, P1sInputs inputs, StructureRow row, IReadOnlyDictionary<string, string?> changes)
     {
         var messages = new List<string>();
         var tree = store.Objectives(code);
@@ -535,7 +526,7 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
     /// liczony raz. Nazwa i Legacy WBS (nakładka) – każdy wiersz osobno (SaveStructureEdit). Paczka z błędem (ERROR) albo
     /// konfliktem – zapis wiersz po wierszu: poprawne wiersze zapisują się, błędne zostają z komunikatem.
     /// </summary>
-    public IReadOnlyList<StructureEditResult> SaveStructureEdits(string code, MappingInputs inputs, IReadOnlyList<StructureEdit> edits)
+    public IReadOnlyList<StructureEditResult> SaveStructureEdits(string code, P1sInputs inputs, IReadOnlyList<StructureEdit> edits)
     {
         var overlay = edits.Where(e => e.Changes.ContainsKey(StructureEdits.Name) || e.Changes.ContainsKey(StructureEdits.P1s)).ToList();
         var results = new List<StructureEditResult>();
@@ -550,7 +541,7 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
         return results;
     }
 
-    private List<StructureEditResult> SaveDictionaryEdits(string code, MappingInputs inputs, IReadOnlyList<StructureEdit> edits)
+    private List<StructureEditResult> SaveDictionaryEdits(string code, P1sInputs inputs, IReadOnlyList<StructureEdit> edits)
     {
         var tree = store.Objectives(code);
         var context = Context(code, tree, null, inputs);
@@ -685,15 +676,15 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
 
     // ---------- gotowość, baza analityczna ----------
 
-    public List<Issue> Readiness(ProjectInfo project, PoTree tree, MappingInputs inputs) =>
-        Readiness(project, tree, inputs, Resolve(tree, inputs),
+    public List<Issue> Readiness(ProjectInfo project, PoTree tree, P1sInputs inputs) =>
+        Readiness(project, tree, inputs,
             ProjectDictionaries.Items.Where(i => i.Stored).ToDictionary(i => i.Code, i => Rows(i.Code, project.Code)), Persons(), FolderChecks(project.Code));
 
     /// <summary>
-    /// Gotowość z danymi już wczytanymi (ekran projektu): rozstrzygnięte mapowanie, wiersze słowników projektu (kod →
+    /// Gotowość z danymi już wczytanymi (ekran projektu): struktura P1S, wiersze słowników projektu (kod →
     /// wiersze), USRID osób, wynik kontroli folderów – bez ponownych odczytów z bazy i dysku sieciowego.
     /// </summary>
-    public static List<Issue> Readiness(ProjectInfo project, PoTree tree, MappingInputs inputs, IReadOnlyDictionary<long, MappingResult> resolved,
+    public static List<Issue> Readiness(ProjectInfo project, PoTree tree, P1sInputs inputs,
         IReadOnlyDictionary<string, IReadOnlyList<DictRow>> dictionaries, IReadOnlySet<string> persons, (Issue Structure, Issue CamAccess) folderChecks)
     {
         var counts = dictionaries.ToDictionary(d => d.Key, d => d.Value.Count);
@@ -701,22 +692,19 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
         var withoutCam = wpCam.Where(r => r["WP"] is not null && r["CAM"] is null).Select(r => r["WP"]!).Distinct(StringComparer.OrdinalIgnoreCase).Order().ToList();
         var camsOutside = wpCam.Select(r => r["CAM"]).OfType<string>()
             .Where(c => !persons.Contains(c)).Distinct(StringComparer.OrdinalIgnoreCase).Order().ToList();
-        return ProjectReadiness.Check(project.Type, tree, counts, camsOutside, ObjectivesMapping.Check(tree, resolved, inputs),
+        return ProjectReadiness.Check(project.Type, tree, counts, camsOutside, ObjectivesMapping.Check(tree, inputs),
             folderChecks.Structure, folderChecks.CamAccess, withoutCam);
     }
 
-    public static AnalyticBase Analytic(PoTree tree, IReadOnlyList<DictRow> wpCam, IReadOnlyList<DictRow> schedule, MappingInputs inputs)
-    {
-        var resolved = Resolve(tree, inputs);
-        return AnalyticBaseBuilder.Build(tree, wpCam, schedule, n => ObjectivesMapping.CodesOf(n, resolved), ObjectivesMapping.Scope(tree, resolved, inputs));
-    }
+    public static AnalyticBase Analytic(PoTree tree, IReadOnlyList<DictRow> wpCam, IReadOnlyList<DictRow> schedule, P1sInputs inputs)
+        => AnalyticBaseBuilder.Build(tree, wpCam, schedule, ObjectivesMapping.CodesOf, ObjectivesMapping.Scope(tree, inputs));
 
     public void ExportAnalytic(string path, string code, AnalyticBase analytic)
     {
         ExcelTableWriter.WriteSheets(path,
         [
             ("Baza analityczna",
-                ["Poziom", "Nazwa", "Element CES", "P1S (Legacy WBS, mapowanie)", "Węzeł wirtualny", "WP", "CAM", "BAC HOURS", "BAC MATERIAL", "Start", "Koniec", "Braki"],
+                ["Poziom", "Nazwa", "Element CES", "P1S (Legacy WBS)", "Węzeł wirtualny", "WP", "CAM", "BAC HOURS", "BAC MATERIAL", "Start", "Koniec", "Braki"],
                 analytic.Rows.Select(r => (IReadOnlyList<object?>)new object?[]
                 {
                     r.Depth + 1, new string(' ', r.Depth * 2) + r.Name, r.WbsElement, r.P1s, r.IsVirtual, string.Join(", ", r.Wps), string.Join(", ", r.Cams),
@@ -784,7 +772,7 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
     }
 
     /// <summary>Podglądy słowników z plików: najpierw „WP i CAM” (jego WP sprawdza harmonogram).</summary>
-    public Dictionary<string, ImportPreview> PreviewAll(string code, PoTree tree, IReadOnlyDictionary<string, (string Path, string? Sheet)> files, MappingInputs inputs)
+    public Dictionary<string, ImportPreview> PreviewAll(string code, PoTree tree, IReadOnlyDictionary<string, (string Path, string? Sheet)> files, P1sInputs inputs)
     {
         var result = new Dictionary<string, ImportPreview>();
         var withoutWp = Context(code, tree, null, inputs);

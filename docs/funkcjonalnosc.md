@@ -34,7 +34,7 @@ Menu modułów po lewej zwija się do ikon („☰” u góry menu; nazwa moduł
 | **Przebiegi** | wszystkie przebiegi wszystkich projektów: tydzień, czy zamykający, stan, osoba | przejście do przebiegu |
 | **Przebieg** | kroki i etapy (F06), panel wybranego etapu, znacznik stanu, problemy, rewizje, dziennik | akcje etapów |
 | **Słowniki** | słowniki globalne i projektu: tabela z filtrowaniem, historia zmian (F03) | dodaj / edytuj / zamknij ważność wiersza; pobierz / wczytaj Excel |
-| **Mapowanie CES ↔ P1S** | dwa drzewa, statusy, węzeł „Nieprzypisane” (F04) | korekta elementu / projektu CES, usunięcie korekty, historia |
+| ~~Mapowanie CES ↔ P1S~~ | wycofane (0.41.0) – strona P1S z Legacy WBS; drzewo P1S w Słownikach | — |
 | **Administracja** | definicje źródeł, parsery, lokalizacje RABIT, role i grupy AD (F08) | dodaj / zmień |
 
 Nagłówek aplikacji – `docs/architektura.md`, rozdz. 3.
@@ -98,7 +98,7 @@ Lista kontrolna na ekranie projektu:
   (`docs/mapowanie-ces-p1s.md`, rozdz. 2); ekran Mapowanie tylko z niego czyta.
 - Przebiegi z wcześniejszym znacznikiem stanu pokazują zmianę (`docs/pipeline-fazy.md`, rozdz. 5).
 
-### F04. Mapowanie CES ↔ P1S
+### F04. Mapowanie CES ↔ P1S (wycofane 0.41.0 – `docs/mapowanie-ces-p1s.md`)
 
 Ekran opisany w `docs/mapowanie-ces-p1s.md`, rozdz. 11; reguły – tamże.
 

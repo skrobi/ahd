@@ -7,7 +7,6 @@ using PzlEv.Shared.Models;
 using PzlEv.Shared.Utils.Data;
 using PzlEv.Shared.Utils.Data.Sql;
 using PzlEv.Shared.Utils.Dictionaries;
-using PzlEv.Shared.Utils.Mapping;
 using PzlEv.Shared.Utils.Ui.Dialogs;
 using PzlEv.Shared.Utils.Ui.Modularity;
 
@@ -32,7 +31,6 @@ public sealed class ProjectsModule : IModule
             new SqlDictionaryStore(services.Sql, services.Clock, services.User, [.. GlobalDictionaries.Tables, .. ProjectDictionaries.Tables]),
             services.Journal,
             new ProjectFolders(services.Config.ProjectsFolder),
-            new SqlMappingStore(services.Sql, services.Clock, services.User),
             services.PzlProd is null ? null : new SqlPzlProdSource(services.PzlProd));
 
     public FrameworkElement CreateView(ModuleContext context) =>

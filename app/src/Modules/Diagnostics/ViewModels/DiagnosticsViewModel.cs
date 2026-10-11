@@ -76,7 +76,7 @@ public sealed class DiagnosticsViewModel : ObservableObject
 
     public ICommand CheckPzlProd { get; }
 
-    private const string MappingNoPzlProd = "Dodaj sekcję PzlProd w pzl-ev.json (Server, Database, Schema) – bez niej ekran Mapowanie nie pokaże struktury P1S.";
+    private const string MappingNoPzlProd = "Dodaj sekcję PzlProd w pzl-ev.json (Server, Database, Schema) – bez niej Słowniki i projekty nie pokażą struktury P1S.";
 
     private async Task DoCheckPzlProd()
     {

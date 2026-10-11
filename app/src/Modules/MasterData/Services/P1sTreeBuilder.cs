@@ -1,9 +1,8 @@
 using PzlEv.Shared.Utils.Mapping;
-using PzlEv.Modules.Mapping.Models;
-using PzlEv.Shared.Models.Mapping;
+using PzlEv.Modules.MasterData.Models;
 using PzlEv.Shared.Models.PzlProd;
 
-namespace PzlEv.Modules.Mapping.Services;
+namespace PzlEv.Modules.MasterData.Services;
 
 /// <summary>
 /// Drzewo P1S (docs/zrodla-danych.md, rozdz. 5.3): Z_KAT_ZBIORCZA → Z_KATEGORIA → Z_OPIS → PROJORG → elementy wg PARENT.

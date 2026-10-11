@@ -3,7 +3,6 @@ using System.IO;
 using System.Windows.Input;
 using PzlEv.Modules.Projects.Models;
 using PzlEv.Shared.Models;
-using PzlEv.Shared.Models.Mapping;
 using PzlEv.Shared.Utils.Ui.Dialogs;
 using PzlEv.Shared.Utils.Ui.Mvvm;
 using Serilog;
@@ -60,7 +59,6 @@ public sealed class PoEditorViewModel : ObservableObject
     public PoTree Tree => _tree;
 
     /// <summary>Strona P1S z mapowania dla elementów nakładki (ustawia ekran nadrzędny; domyślnie – brak).</summary>
-    public Func<PoTree, IReadOnlyDictionary<long, MappingResult>> ResolveMapping { get; set; } = _ => new Dictionary<long, MappingResult>();
 
     /// <summary>Źródło mapowania (raport, korekty, PZLPROD) do pokazania nad tabelą.</summary>
     public string MappingInfo { get => _mappingInfo; set => SetProperty(ref _mappingInfo, value); }
@@ -214,9 +212,8 @@ public sealed class PoEditorViewModel : ObservableObject
     private void Rebuild(long? selectKey)
     {
         Rows.Clear();
-        var mapping = ResolveMapping(_tree);
         foreach (var (node, depth) in _tree.Flatten())
-            Rows.Add(new PoRowViewModel(node, depth, mapping.GetValueOrDefault(node.Key)));
+            Rows.Add(new PoRowViewModel(node, depth));
         Selected = Rows.FirstOrDefault(r => r.Key == selectKey);
         Validate();
         OnPropertyChanged(nameof(Summary));

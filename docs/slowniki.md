@@ -65,7 +65,6 @@ Słowniki, kreator projektu).
 | Kursy walut | waluta, okres, kurs (USD / PLN) | waluta + okres | przeliczenia walut (P3, P8) |
 | Cost Category | numer elementu kosztowego → Opis, Obszar, Cost Category (rozdz. 6) | numer elementu kosztowego | walidacja (P2), łączenie źródeł (P3) |
 | Osoby | pracownicy z HR – „Wczytaj z HR” (PZLHRPROD `HR.ORG`, osoby z niepustym `USRID`; zawartość zastępowana po podglądzie różnic): USRID (numer znaczka, login), imię i nazwisko, imię, nazwisko, e-mail, MPK (`KOSTL`), dział (`SHORT`, `LONG`), stanowisko (`STEXT`), pion, manager, PERNR | USRID | wybór CAM w strukturze projektu i słowniku „WP i CAM” (zapisywany USRID) |
-| Raport mapowań CES ↔ P1S | raport mapowań SAP↔CES z `PZLPROD` – wszystkie kolumny pliku (`docs/mapowanie-ces-p1s.md`, rozdz. 2); wczytywany w całości nowym raportem | `src` + `pspnr` | mapowanie CES ↔ P1S (ekran Mapowanie, nakładka projektu, G2, P1, P3) |
 | Wskaźniki DJK | prefiks grupy stanowisk (IPT, np. `W2`, `W51`) → `Udział DJK` (0–1) – godziny jakości doliczane do godzin TECH / TECH_PON; liczy się najdłuższy pasujący prefiks; dane startowe (migracja 023): W2–W4 10%, W5 15%, W6 20% | grupa stanowisk | Operational EV struktury projektu (`docs/zrodla-danych.md`, rozdz. 6) |
 | Parametry produkcji | `Okno produktywności IPT (mies.)` (12), `Statusy materiałów dostarczonych` (DOST, WYD), `Wartość materiałów ÷ (1 + Z_CLO)` (tak); puste słowniki – wartości raportu S70MR (informacja na ekranie projektu) | parametr | odczyt danych produkcyjnych (`sql/pzlprod/produkcja.sql`) |
 
@@ -170,7 +169,11 @@ Kontekst biznesowy typów – `readme.md`.
 | opis wypełniony | ERROR |
 | powtórzona kombinacja `Cost Element` + `WBS Element` + `Partner object` | ERROR |
 
-### 5.7 Raport mapowań CES ↔ P1S
+### 5.7 Raport mapowań CES ↔ P1S (wycofany 0.41.0)
+
+Słownik usunięty z aplikacji. W Słownikach jest za to przycisk „Struktura P1S (PZLPROD)” – drzewo LOG.WBS
+(Z_KAT_ZBIORCZA → Z_KATEGORIA → Z_OPIS → PROJORG → elementy) z wyszukiwarką, tylko do odczytu.
+
 
 | Reguła | Poziom |
 |---|---|

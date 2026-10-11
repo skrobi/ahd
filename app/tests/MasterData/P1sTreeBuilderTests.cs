@@ -1,9 +1,9 @@
-using PzlEv.Modules.Mapping.Services;
+using PzlEv.Modules.MasterData.Services;
 using PzlEv.Shared.Utils.Mapping;
 using PzlEv.Tests.TestSupport;
 using Xunit;
 
-namespace PzlEv.Tests.Mapping;
+namespace PzlEv.Tests.MasterData;
 
 /// <summary>Drzewo P1S (docs/zrodla-danych.md, rozdz. 5.3) na małej strukturze LOG.WBS.</summary>
 public sealed class P1sTreeBuilderTests
