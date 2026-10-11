@@ -133,10 +133,11 @@ public sealed class ProjectDetailViewModel : ObservableObject
 
     public bool IsViewingStructure => !_isEditingObjectives;
 
-    public ObservableCollection<KpiTile> Kpis { get; } = [];
+    /// <summary>Wskaźniki w grupach jak w tabeli struktury: Operational EV, Materials, Financial EV.</summary>
+    public ObservableCollection<KpiGroup> Kpis { get; } = [];
 
     /// <summary>Wskaźniki EV – liczone w przebiegach (docs/ev-obliczenia.md); do tego czasu kafelki bez wartości.</summary>
-    public IReadOnlyList<KpiTile> EvKpis { get; } =
+    private static readonly IReadOnlyList<KpiTile> EvKpis =
         new[] { "BCWS", "BCWP", "CPI", "SPI", "EAC" }.Select(k => new KpiTile(k, "—", "po obliczeniu EV w przebiegu", Pending: true)).ToList();
 
     public ObservableCollection<Issue> Readiness { get; } = [];
@@ -331,17 +332,20 @@ public sealed class ProjectDetailViewModel : ObservableObject
     {
         static string Amount(decimal value) => PzlEv.Shared.Utils.Files.PolishNumber.ToDisplay(value);
         Kpis.Clear();
-        Kpis.Add(new KpiTile("BAC HOURS", Amount(summary.BacHours), "budżet godzin – Harmonogram i budżet"));
-        Kpis.Add(new KpiTile("BAC MATERIAL", Amount(summary.BacMaterial), "budżet materiałów"));
-        Kpis.Add(new KpiTile("BAC", Amount(summary.Bac), "budżet kosztowy – Harmonogram i budżet"));
-        Kpis.Add(new KpiTile("WP / CAM", $"{summary.Wps} / {summary.Cams}", "pakiety pracy i ich CAM w strukturze"));
-        Kpis.Add(new KpiTile("Okres", summary.Start is null && summary.Finish is null ? "—" : $"{summary.Start ?? "?"} – {summary.Finish ?? "?"}", "planowany start i koniec"));
-        Kpis.Add(new KpiTile("Braki", $"{summary.ElementsWithoutWp} / {summary.WpsWithoutBudget}", "elementy CES bez WP / WP bez budżetu"));
-        Kpis.Add(_costsError is null
-            ? new KpiTile("ACWP", Amount(summary.Acwp), "koszt rzeczywisty narastająco (PLN) – ostatni import ACTUALS, bez wykluczeń")
-            : new KpiTile("ACWP", "—", _costsError, Pending: true));
-        Kpis.Add(new KpiTile("Koszt bez WP", Amount(summary.AcwpWithoutWp + summary.AcwpOutside),
-            $"bez przypisania do WP: {Amount(summary.AcwpWithoutWp)} (brak WP / kilka WP – O45); elementy CES spoza nakładki: {Amount(summary.AcwpOutside)}"));
+        Kpis.Add(new KpiGroup(StructureColumns.OperationalEv,
+            [new KpiTile("BAC HOURS", Amount(summary.BacHours), "budżet godzin – Harmonogram i budżet")]));
+        Kpis.Add(new KpiGroup(StructureColumns.Materials,
+            [new KpiTile("BAC MATERIAL", Amount(summary.BacMaterial), "budżet materiałów")]));
+        Kpis.Add(new KpiGroup(StructureColumns.FinancialEv,
+        [
+            new KpiTile("BAC", Amount(summary.Bac), "budżet kosztowy – Harmonogram i budżet"),
+            _costsError is null
+                ? new KpiTile("ACWP", Amount(summary.Acwp), "koszt rzeczywisty narastająco (PLN) – ostatni import ACTUALS, bez wykluczeń")
+                : new KpiTile("ACWP", "—", _costsError, Pending: true),
+            new KpiTile("Koszt bez WP", Amount(summary.AcwpWithoutWp + summary.AcwpOutside),
+                $"bez przypisania do WP: {Amount(summary.AcwpWithoutWp)} (brak WP / kilka WP – O45); elementy CES spoza nakładki: {Amount(summary.AcwpOutside)}"),
+            .. EvKpis,
+        ]));
     }
 
     /// <summary>Czas zbierania zmian przed zapisem – kilka kliknięć WP albo Enter w kolejnych wierszach idzie jednym zapisem.</summary>

@@ -3,8 +3,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:partials="clr-namespace:PzlEv.Shared.Views.Partials">
     <StackPanel>
-        <partials:PageHeader Eyebrow="Projekty" Title="Projekty"
-                             Subtitle="Projekt = struktura kontraktu Performance Objectives po stronie CES. Mapowanie CES ↔ P1S jest globalne i nie zależy od projektu.">
+        <partials:PageHeader Title="Projekty">
             <partials:PageHeader.Actions>
                 <StackPanel Orientation="Horizontal">
                     <Button Content="Odśwież" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding Refresh}" />
@@ -21,11 +20,11 @@
                   MouseDoubleClick="OnDoubleClick">
             <DataGrid.Columns>
                 <DataGridTextColumn Header="Kod" Binding="{Binding Code}" FontWeight="SemiBold" />
-                <DataGridTextColumn Header="Nazwa" Binding="{Binding Name}" Width="*" />
+                <DataGridTextColumn Header="Nazwa" Binding="{Binding Name}" Width="2*" MinWidth="160" />
                 <DataGridTextColumn Header="Typ" Binding="{Binding Type}" />
                 <DataGridTextColumn Header="Aktywny przebieg" Binding="{Binding ActiveRun}" />
-                <DataGridTextColumn Header="Folder" Binding="{Binding Folder}" />
-                <DataGridTemplateColumn>
+                <DataGridTextColumn Header="Folder" Binding="{Binding Folder}" Width="3*" MinWidth="160" />
+                <DataGridTemplateColumn Width="Auto" MinWidth="80">
                     <DataGridTemplateColumn.CellTemplate>
                         <DataTemplate>
                             <Button Content="Otwórz" Style="{StaticResource Btn}" Padding="8,2" Margin="4,2"
