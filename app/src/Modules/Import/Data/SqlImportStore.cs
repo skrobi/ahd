@@ -11,8 +11,9 @@ namespace PzlEv.Modules.Import.Data;
 
 /// <summary>
 /// Import w bazie: META_ImportBatch, META_SourceFile, META_SourceFileSeen i dane kanoniczne (CAN_Row – sloty pól
-/// parsera). Wersja pliku zapisywana w jednej transakcji: dane kanoniczne strumieniowo (SqlBulkCopy) z kontrolą
-/// przepływu w bazie. Treść pliku nie jest przechowywana – dane są w CAN_Row (migracja 008).
+/// parsera). Wersja pliku zapisywana krótkimi transakcjami: wpis „w toku”, dane kanoniczne strumieniowo paczkami
+/// (SqlBulkCopy, każda paczka zatwierdzana osobno), kontrola przepływu w bazie i stan „utworzone”; błąd – wiersze
+/// i wpis pliku usuwane. Odczyty innych sesji nie czekają na cały plik. Treść pliku nie jest przechowywana.
 /// </summary>
 public sealed class SqlImportStore(SqlDatabase db) : IImportStore
 {
@@ -32,7 +33,7 @@ public sealed class SqlImportStore(SqlDatabase db) : IImportStore
 
     private const string SeenColumns = "Id, BatchId, Location, FileName, Size, ModifiedAt, Sha256, Decision, SourceCode, DataRows, Description";
 
-    /// <summary>Czas na zapis i kontrolę dużego pliku (miliony wierszy) w jednej transakcji.</summary>
+    /// <summary>Czas na kontrolę i usunięcie danych dużego pliku (miliony wierszy).</summary>
     private const int LongTimeout = 1800;
 
     public IReadOnlyList<SourceDefinitionRow> ActiveDefinitions()
@@ -64,11 +65,23 @@ public sealed class SqlImportStore(SqlDatabase db) : IImportStore
             new { at, user, machine, appVersion, status = ImportBatchStatus.Running });
     }
 
-    public void AbandonRunning(DateTimeOffset at)
+    public void AbandonRunning(DateTimeOffset at, Func<long, bool> isAlive)
     {
         using var connection = db.Open();
-        connection.Execute($"UPDATE {_batches} SET Status = @abandoned, FinishedAt = @at WHERE Status = @running",
-            new { at, abandoned = ImportBatchStatus.Abandoned, running = ImportBatchStatus.Running });
+        var dead = connection.Query<long>($"SELECT BatchId FROM {_batches} WHERE Status = @running", new { running = ImportBatchStatus.Running })
+            .Where(id => !isAlive(id)).ToList();
+        if (dead.Count > 0)
+            connection.Execute($"UPDATE {_batches} SET Status = @abandoned, FinishedAt = @at WHERE BatchId IN @dead AND Status = @running",
+                new { at, dead, abandoned = ImportBatchStatus.Abandoned, running = ImportBatchStatus.Running });
+        // Pliki „w toku” importów, które już nie trwają (awaria aplikacji w trakcie zapisu) – usuwane, wracają do importu.
+        var orphans = connection.Query<long>(
+            $"""
+            SELECT f.FileId FROM {_files} f JOIN {_batches} b ON b.BatchId = f.BatchId
+            WHERE f.CanonicalStatus = @inProgress AND b.Status <> @running
+            """,
+            new { inProgress = CanonicalStatuses.InProgress, running = ImportBatchStatus.Running }).ToList();
+        foreach (var fileId in orphans)
+            Discard(fileId);
     }
 
     public SourceFileSeenRow? LastSettled(string location, string fileName)
@@ -92,60 +105,73 @@ public sealed class SqlImportStore(SqlDatabase db) : IImportStore
 
     public StoredFile? StoreFile(SourceFileRow file, CanonicalData? canonical, Action<string>? stage = null)
     {
+        using var connection = db.Open();
+        long id;
         try
         {
-            return db.InTransaction<StoredFile?>((connection, transaction) =>
-            {
-                var id = connection.ExecuteScalar<long>(
-                    $"""
-                    INSERT INTO {_files} (Sha256, Location, FileName, SourceCode, Size, ModifiedAt, FileType, Sheet, Encoding, Delimiter, Columns, Signature,
-                        DataRows, BatchId, ImportedAt, ImportedBy, CanonicalStatus, CanonicalRows, ParserVersion)
-                    OUTPUT INSERTED.FileId
-                    VALUES (@Sha256, @Location, @FileName, @SourceCode, @Size, @ModifiedAt, @FileType, @Sheet, @Encoding, @Delimiter, @Columns, @Signature,
-                        @RowCount, @BatchId, @ImportedAt, @ImportedBy, @CanonicalStatus, @CanonicalRows, @ParserVersion)
-                    """,
-                    new
-                    {
-                        file.Sha256, file.Location, file.FileName, file.SourceCode, file.Size, file.ModifiedAt, file.FileType, file.Sheet, file.Encoding,
-                        file.Delimiter, Columns = SqlJson.Write(file.Columns), file.Signature, file.RowCount, file.BatchId, file.ImportedAt, file.ImportedBy,
-                        CanonicalStatus = canonical is null ? file.CanonicalStatus : "utworzone",
-                        CanonicalRows = canonical is null ? file.CanonicalRows : 0,
-                        ParserVersion = canonical?.Parser.Version ?? file.ParserVersion,
-                    },
-                    transaction);
-
-                var stored = new StoredFile(id, 0, new Dictionary<string, decimal>());
-                if (canonical is not null)
+            // 1) wersja pliku – „w toku” przy danych kanonicznych (odczyty biorą tylko pliki „utworzone”)
+            id = connection.ExecuteScalar<long>(
+                $"""
+                INSERT INTO {_files} (Sha256, Location, FileName, SourceCode, Size, ModifiedAt, FileType, Sheet, Encoding, Delimiter, Columns, Signature,
+                    DataRows, BatchId, ImportedAt, ImportedBy, CanonicalStatus, CanonicalRows, ParserVersion)
+                OUTPUT INSERTED.FileId
+                VALUES (@Sha256, @Location, @FileName, @SourceCode, @Size, @ModifiedAt, @FileType, @Sheet, @Encoding, @Delimiter, @Columns, @Signature,
+                    @RowCount, @BatchId, @ImportedAt, @ImportedBy, @CanonicalStatus, @CanonicalRows, @ParserVersion)
+                """,
+                new
                 {
-                    var parserId = canonical.Parser.ParserId;
-                    var version = canonical.Parser.Version;
-                    SqlBulk.Insert(connection, transaction, _canonical, SqlCanonical.BulkColumns(canonical.Fields),
-                        canonical.Rows.Select(r => (object?[])[id, r.RowNumber, parserId, version, .. r.Values]));
-                    var totals = canonical.Totals();   // błędy treści pliku – wyjątek, transakcja wycofana
-                    stage?.Invoke("kontrola w bazie (liczba wierszy i sumy)");
-                    stored = Verify(connection, transaction, id, canonical, totals);
-                    connection.Execute($"UPDATE {_files} SET DataRows = @rows, CanonicalRows = @rows WHERE FileId = @id",
-                        new { id, rows = totals.Rows }, transaction);
-                }
-
-                stage?.Invoke("zatwierdzanie zapisu");
-                return stored;
-            });
+                    file.Sha256, file.Location, file.FileName, file.SourceCode, file.Size, file.ModifiedAt, file.FileType, file.Sheet, file.Encoding,
+                    file.Delimiter, Columns = SqlJson.Write(file.Columns), file.Signature, file.RowCount, file.BatchId, file.ImportedAt, file.ImportedBy,
+                    CanonicalStatus = canonical is null ? file.CanonicalStatus : CanonicalStatuses.InProgress,
+                    CanonicalRows = canonical is null ? file.CanonicalRows : 0,
+                    ParserVersion = canonical?.Parser.Version ?? file.ParserVersion,
+                });
         }
         catch (SqlException ex) when (SqlDatabase.IsDuplicateKey(ex))
         {
             return null;   // ta sama treść zapisana w międzyczasie (np. przez inną osobę)
         }
+        if (canonical is null)
+            return new StoredFile(id, 0, new Dictionary<string, decimal>());
+
+        try
+        {
+            // 2) wiersze paczkami zatwierdzanymi osobno; 3) kontrola w bazie; 4) „utworzone” – plik widoczny dla odczytów
+            var parserId = canonical.Parser.ParserId;
+            var version = canonical.Parser.Version;
+            SqlBulk.InsertInBatches(connection, _canonical, SqlCanonical.BulkColumns(canonical.Fields),
+                canonical.Rows.Select(r => (object?[])[id, r.RowNumber, parserId, version, .. r.Values]));
+            var totals = canonical.Totals();   // błędy treści pliku – wyjątek, wiersze pliku usuwane
+            stage?.Invoke("kontrola w bazie (liczba wierszy i sumy)");
+            var stored = Verify(connection, id, canonical, totals);
+            stage?.Invoke("zatwierdzanie zapisu");
+            connection.Execute($"UPDATE {_files} SET DataRows = @rows, CanonicalRows = @rows, CanonicalStatus = @created WHERE FileId = @id",
+                new { id, rows = totals.Rows, created = CanonicalStatuses.Created });
+            return stored;
+        }
+        catch
+        {
+            Discard(id);
+            throw;
+        }
+    }
+
+    /// <summary>Wersja pliku z niedokończonym zapisem: wiersze CAN_Row i wpis pliku usuwane (plik wraca do importu).</summary>
+    private void Discard(long fileId)
+    {
+        using var connection = db.Open();
+        connection.Execute($"DELETE FROM {_canonical} WHERE FileId = @fileId; DELETE FROM {_files} WHERE FileId = @fileId",
+            new { fileId }, commandTimeout: LongTimeout);
     }
 
     /// <summary>Kontrola przepływu w bazie: liczba wierszy i sumy pól liczbowych pliku w CAN_Row = odczytane z pliku.</summary>
-    private StoredFile Verify(SqlConnection connection, SqlTransaction transaction, long fileId, CanonicalData canonical, CanonicalTotals totals)
+    private StoredFile Verify(SqlConnection connection, long fileId, CanonicalData canonical, CanonicalTotals totals)
     {
         var decimals = canonical.Fields.Where(f => f.Type == FieldTypes.Decimal).ToList();
         var sums = string.Concat(decimals.Select((f, i) => $", ISNULL(SUM({SqlCanonical.Slot(f)}), 0) AS S{i}"));
         var row = (IDictionary<string, object>)connection.QuerySingle(
             $"SELECT COUNT_BIG(*) AS Rows{sums} FROM {_canonical} WHERE FileId = @fileId AND ParserId = @parserId",
-            new { fileId, parserId = canonical.Parser.ParserId }, transaction, LongTimeout);
+            new { fileId, parserId = canonical.Parser.ParserId }, commandTimeout: LongTimeout);
         var count = Convert.ToInt32(row["Rows"], CultureInfo.InvariantCulture);
         var stored = decimals.Select((f, i) => (f.Field, Sum: Convert.ToDecimal(row[$"S{i}"], CultureInfo.InvariantCulture)))
             .ToDictionary(s => s.Field, s => s.Sum);

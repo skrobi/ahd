@@ -30,6 +30,8 @@ public sealed class ImportService(IImportStore store, AppServices services, Func
     public const int DeadlockAttempts = 3;
 
     public const string Area = "Import";
+
+    /// <summary>Blokada pełnego importu (wszystkie źródła) – jeden naraz; import źródeł projektu jej nie bierze.</summary>
     public const string LockName = "import";
     public const string WillImport = "zostanie zaimportowany";
     public const string WillSkip = "zostanie pominięty – bez zmian od ostatniego importu";
@@ -43,8 +45,18 @@ public sealed class ImportService(IImportStore store, AppServices services, Func
     /// <summary>Pobieranie plików bieżącego importu (Run).</summary>
     private FileDownloader _downloader = null!;
 
-    /// <summary>Kto teraz importuje (blokada wspólna dla wszystkich użytkowników); null – nikt.</summary>
+    /// <summary>Kto teraz wykonuje pełny import (blokada wspólna dla wszystkich użytkowników); null – nikt.</summary>
     public LockHolder? RunningImport() => services.Locks.Holder(LockName);
+
+    /// <summary>Blokada trwającego importu (wpis „w toku” w historii) – wolna po zakończeniu albo awarii aplikacji.</summary>
+    public static string BatchLock(long batchId) => $"import-batch-{batchId}";
+
+    /// <summary>
+    /// Blokada pliku (lokalizacja + nazwa) na czas jego importu – dwa importy (pełny i źródeł projektu albo dwóch
+    /// projektów) nie zapisują tego samego pliku jednocześnie; różne pliki importują się równolegle.
+    /// </summary>
+    public static string FileLock(string location, string fileName) =>
+        "import-file-" + FileHash.Sha256(System.Text.Encoding.UTF8.GetBytes($"{location}|{fileName}".ToUpperInvariant()))[..16];
 
     public IReadOnlyList<ImportLocation> Locations() =>
         store.ActiveLocations().Select(l => new ImportLocation(l.Name, WebDavPath.ToUnc(l.Path), false, l.Path))
@@ -144,20 +156,28 @@ public sealed class ImportService(IImportStore store, AppServices services, Func
             Logger.Information("Import #{Batch}: rozwiązane problemy wcześniejszych importów: {Count}", batchId, resolved);
     }
 
-    public ImportRunResult Run(IProgress<ImportProgress>? progress = null, CancellationToken cancellation = default)
+    /// <param name="sources">Kody definicji źródeł do importu (import źródeł projektu); null – pełny import wszystkich źródeł.</param>
+    public ImportRunResult Run(IProgress<ImportProgress>? progress = null, CancellationToken cancellation = default, IReadOnlySet<string>? sources = null)
     {
-        using var lease = services.Locks.TryAcquire(LockName, out var holder);
-        if (lease is null)
+        IDisposable? lease = null;
+        if (sources is null)
         {
-            var busy = $"Import nie rozpoczęty – trwa import: {holder!.Text}.";
-            Logger.Warning(busy);
-            return new ImportRunResult(0, [], [Issue.Warning(busy, "import")], false) { NotStarted = busy };
+            lease = services.Locks.TryAcquire(LockName, out var holder);
+            if (lease is null)
+            {
+                var busy = $"Import nie rozpoczęty – trwa import: {holder!.Text}.";
+                Logger.Warning(busy);
+                return new ImportRunResult(0, [], [Issue.Warning(busy, "import")], false) { NotStarted = busy };
+            }
         }
+        using var full = lease;
 
-        store.AbandonRunning(services.Clock.Now);
+        store.AbandonRunning(services.Clock.Now, id => services.Locks.Holder(BatchLock(id)) is not null);
         var definitions = store.ActiveDefinitions();
         var batchId = store.BeginBatch(services.Clock.Now, services.User.Account, Environment.MachineName, services.AppVersion);
-        services.Journal.Add(Area, $"Import #{batchId} rozpoczęty ({services.User.Account}, {Environment.MachineName})");
+        using var alive = services.Locks.TryAcquire(BatchLock(batchId), out _);
+        var scope = sources is null ? "" : $" – źródła: {string.Join(", ", sources.Order())}";
+        services.Journal.Add(Area, $"Import #{batchId} rozpoczęty ({services.User.Account}, {Environment.MachineName}){scope}");
         Logger.Information("Import #{Batch} start – {User} na {Machine}, wersja {Version}", batchId, services.User.Account, Environment.MachineName, services.AppVersion);
         progress?.Report(new ImportProgress($"Import #{batchId} rozpoczęty…", BatchId: batchId));
         LogDefinitions(definitions);
@@ -214,6 +234,8 @@ public sealed class ImportService(IImportStore store, AppServices services, Func
                     cancelled = true;
                     break;
                 }
+                if (sources is not null && !sources.Contains(SourceMatcher.Match(file.Name, definitions)?.Code ?? ""))
+                    continue;   // import źródeł projektu – pozostałe pliki nie są jego sprawą
                 var label = $"[{results.Count + 1}] {location.Name} / {file.Name}";
                 FileResult result;
                 using (var stage = new StageReporter(text => progress?.Report(new ImportProgress($"{label}: {text}", null, location.Name, file.Name, text))))
@@ -246,8 +268,8 @@ public sealed class ImportService(IImportStore store, AppServices services, Func
             Count(FileDecisions.Duplicate), Count(FileDecisions.Unrecognized), Count(FileDecisions.Error), status);
 
         var run = new ImportRunResult(batchId, results, issues, cancelled);
-        services.Journal.Add(Area, $"Import #{batchId}: {run.Summary}");
-        if (!cancelled)
+        services.Journal.Add(Area, $"Import #{batchId}{scope}: {run.Summary}");
+        if (!cancelled && sources is null)
             ResolveEarlierProblems(batchId, reference);
         Logger.Information("Import #{Batch} koniec: {Summary}", batchId, run.Summary);
         return run;
@@ -283,7 +305,14 @@ public sealed class ImportService(IImportStore store, AppServices services, Func
             else
             {
                 sourceCode = definition.Code;
-                (decision, description, sha, rows) = ImportContent(batchId, location, file, modified, definition, problem, stage, cancellation);
+                using var fileLease = services.Locks.TryAcquire(FileLock(location.Path, file.Name), out var holder);
+                if (fileLease is null)
+                {
+                    decision = FileDecisions.Skipped;
+                    description = $"importuje go teraz inny import: {holder?.Text ?? "?"}";
+                }
+                else
+                    (decision, description, sha, rows) = ImportContent(batchId, location, file, modified, definition, problem, stage, cancellation);
             }
         }
         catch (Exception ex) when (ex is not OperationCanceledException and not OutOfMemoryException && !cancellation.IsCancellationRequested)
