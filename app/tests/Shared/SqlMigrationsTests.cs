@@ -28,9 +28,9 @@ public sealed class SqlMigrationsTests
     public void Scripts_are_embedded_numbered_and_parameterised()
     {
         var scripts = SqlMigrations.All();
-        Assert.Equal([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24], scripts.Select(s => s.Number));
+        Assert.Equal([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25], scripts.Select(s => s.Number));
         Assert.Equal([false, true, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, true, false], scripts.Select(s => s.IsPresets));   // 002_dane_startowe, 023_dane_produkcji – dane startowe
-        Assert.Equal(24, SqlMigrations.Required);
+        Assert.Equal(25, SqlMigrations.Required);
 
         var batches = SqlMigrations.Batches(scripts[0].Text, "FINOP", "PZLEV_").ToList();
         Assert.True(batches.Count > 5);
@@ -51,7 +51,7 @@ public sealed class SqlMigrationsTests
         Assert.Empty(SqlMigrations.Pending(database.Sql));
         var status = SqlMigrations.Status(database.Sql);
         Assert.All(status, s => Assert.NotNull(s.AppliedAt));
-        Assert.Equal(24, SqlMigrations.CurrentVersion(database.Sql));
+        Assert.Equal(25, SqlMigrations.CurrentVersion(database.Sql));
         using var connection = database.Sql.Open();
         var tables = connection.Query<string>(
             "SELECT t.name FROM sys.tables t JOIN sys.schemas s ON s.schema_id = t.schema_id WHERE s.name = @schema AND LEFT(t.name, LEN(@prefix)) = @prefix",
@@ -59,11 +59,12 @@ public sealed class SqlMigrationsTests
         // 20 z migracji 001 + META_Parser (004) + CAN_MappingReport, DICT_MappingCorrection (005)
         // + CAN_Row, META_SourceFileContent – CAN_Actuals, CAN_MappingReport, STG_RawRow (007) – META_SourceFileContent (008)
         // + DICT_MappingReport (009) + DICT_WbsCategory (019) + DICT_DjkRate, DICT_ProductionParameter (022)
-        Assert.Equal(25, tables.Count);
+        // – DICT_MappingReport, DICT_MappingCorrection (025)
+        Assert.Equal(23, tables.Count);
         Assert.DoesNotContain(tables, t => t.EndsWith("CAN_Actuals") || t.EndsWith("CAN_MappingReport") || t.EndsWith("STG_RawRow") || t.EndsWith("SourceFileContent"));
         Assert.Contains(database.Sql.Settings.TablePrefix + "META_PerformanceObjective", tables);
         Assert.Contains(database.Sql.Settings.TablePrefix + "DICT_ScheduleBudget", tables);
-        Assert.Contains(database.Sql.Settings.TablePrefix + "DICT_MappingReport", tables);
+        Assert.DoesNotContain(tables, t => t.EndsWith("DICT_MappingReport") || t.EndsWith("DICT_MappingCorrection"));
 
         // 004: parser ACTUALS w bazie (układ pliku z 2026-10); 007: pola mają sloty w CAN_Row
         var parsers = new SqlSourceConfigStore(database.Sql, new TestServices().Clock, new TestUser()).Parsers();
