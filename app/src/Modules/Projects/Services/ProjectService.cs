@@ -347,34 +347,32 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
 
     /// <summary>Struktura z mapowaniem już rozstrzygniętym (Resolve) – rozstrzyganie raz na odczyt ekranu.</summary>
     public static ProjectStructure Structure(PoTree tree, MappingInputs inputs, IReadOnlyDictionary<long, MappingResult> resolved, IReadOnlyList<DictRow> wpCam,
-        IReadOnlyList<DictRow> schedule, IReadOnlyDictionary<string, decimal>? costs = null, ProductionData? production = null,
-        IReadOnlyList<DictRow>? virtualP1s = null) =>
-        StructureBuilder.Build(tree, resolved, inputs.P1s, wpCam, schedule, costs, production, virtualP1s: virtualP1s);
+        IReadOnlyList<DictRow> schedule, IReadOnlyDictionary<string, decimal>? costs = null, ProductionData? production = null) =>
+        StructureBuilder.Build(tree, resolved, inputs.P1s, wpCam, schedule, costs, production);
 
     /// <summary>
     /// Dane produkcyjne projektu na żywo z PZLPROD (Operational EV, daty rzeczywiste, materiały dostarczone): elementy P1S
-    /// zakresu projektu (Legacy WBS i cele mapowania z poddrzewami LOG.WBS) → PSPNR → sql/pzlprod/produkcja.sql; elementy
-    /// wirtualne P1S (słownik projektu – virtualP1s; null – czytany) z regułami na PSPNR elementu nadrzędnego; parametry ze
+    /// zakresu projektu (Legacy WBS i cele mapowania z poddrzewami LOG.WBS) → PSPNR → sql/pzlprod/produkcja.sql; wydzielenia –
+    /// węzły wirtualne nakładki z kodem ELEMENT_P1S.NAZWA.CPLGR (ProductionSplit) – reguła na PSPNR elementu; parametry ze
     /// słowników globalnych „Wskaźniki DJK” i „Parametry produkcji”. Bez PZLPROD albo błąd odczytu – dane puste z powodem
     /// (struktura działa bez kolumn produkcyjnych).
     /// </summary>
-    public ProductionData Production(string code, PoTree tree, MappingInputs inputs, IReadOnlyDictionary<long, MappingResult> resolved,
-        IReadOnlyList<DictRow>? virtualP1s = null)
+    public ProductionData Production(PoTree tree, MappingInputs inputs, IReadOnlyDictionary<long, MappingResult> resolved)
     {
         var now = DateTimeOffset.Now;
         if (pzlProd is null || inputs.P1s is null)
             return ProductionData.Unavailable(inputs.P1sError ?? "Brak połączenia z PZLPROD (pzl-ev.json, PzlProd)", now);
-        var byCode = inputs.P1s.GroupBy(e => MappingKeys.Key(e.WbsElement)).ToDictionary(g => g.Key, g => g.First().Pspnr);
+        var index = ProductionSplit.Index(inputs.P1s);
         var pspnrs = ObjectivesMapping.Scope(tree, resolved, inputs).Elements()
-            .Select(element => byCode.GetValueOrDefault(MappingKeys.Key(element))).OfType<string>().Distinct().ToList();
+            .Select(element => index.GetValueOrDefault(MappingKeys.Key(element))?.Pspnr).OfType<string>().Distinct().ToList();
         var notes = new List<string>();
         var rules = new List<VirtualRule>();
-        foreach (var row in (virtualP1s ?? Rows(ProjectDictionaries.VirtualP1s, code)).Where(r => r["Element wirtualny"] is not null && r["Element nadrzędny"] is not null))
+        foreach (var node in tree.Nodes.Where(n => n.IsVirtual && !string.IsNullOrWhiteSpace(n.LegacyWbs)))
         {
-            if (byCode.GetValueOrDefault(MappingKeys.Key(row["Element nadrzędny"])) is { } pspnr)
-                rules.Add(new VirtualRule(row["Element wirtualny"]!, pspnr, row["SWBS"], row["CPLGR"], row["ARBPL"]));
-            else
-                notes.Add($"element wirtualny {row["Element wirtualny"]} – element nadrzędny {row["Element nadrzędny"]} nie istnieje w LOG.WBS (bez godzin)");
+            if (ProductionSplit.Parse(node.LegacyWbs, index) is { } split)
+                rules.Add(new VirtualRule(split.Code, split.Pspnr, null, split.Cplgr, null));
+            else if (!index.ContainsKey(MappingKeys.Key(node.LegacyWbs)))
+                notes.Add($"węzeł „{node.Name}” – kod {node.LegacyWbs} nie jest wydzieleniem ELEMENT_P1S.NAZWA.CPLGR (element z LOG.WBS) – bez godzin");
         }
         var parameters = GlobalDictionaries.ProductionParametersFrom(
             _dictionaries.Load(GlobalDictionaries.Get(GlobalDictionaries.DjkRates)), _dictionaries.Load(GlobalDictionaries.Get(GlobalDictionaries.ProductionParameters)));

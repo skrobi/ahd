@@ -254,20 +254,20 @@ Z_KAT_ZBIORCZA
   programu (`Z_OPIS`, `SERNR_LO`) zastąpionym zakresem P1S projektu. Logika jest rozdzielona na trzy warstwy:
   - **zapytanie** – plik `sql/pzlprod/produkcja.sql` (wbudowany w aplikację, wykonuje `SqlPzlProdSource.Production`);
     nazwy widoków `$(vAHDD)`, `$(vAHDD_PL_CPI)`, `$(vAPD)` z konfiguracji; dane wejściowe w tabelach tymczasowych sesji
-    (bez praw zapisu w PZLPROD): `#pspnr` (zakres projektu), `#rule` (elementy wirtualne), `#djk`, `#delivered`;
+    (bez praw zapisu w PZLPROD): `#pspnr` (zakres projektu), `#rule` (wydzielenia), `#djk`, `#delivered`;
   - **parametry** – słowniki globalne „Wskaźniki DJK” i „Parametry produkcji” (`docs/slowniki.md`, rozdz. 2);
-  - **elementy wirtualne** (np. Paint) – słownik projektu „Elementy wirtualne P1S” (`docs/slowniki.md`, rozdz. 3).
+  - **wydzielenia** (np. Paint) – węzły wirtualne nakładki z kodem P1S `ELEMENT_P1S.NAZWA.CPLGR`, reguła: CPLGR operacji
+    zaczyna się od CPLGR kodu (`docs/performance-objectives.md`, rozdz. 4.2).
 - Ziarno `vAHDD`: operacja (`VORNR`) zlecenia (`AUFNR`) pod elementem (`PSPNR`, `WBS_ELEMENT`); `CPLGR` – grupa stanowisk
   (zwykle = `IPT`), `ARBPL` – stanowisko, `SWBS` – podział (np. Cabin, Hangar), `VERWE` – MFG / QUAL (operacje kontroli DJK).
-- Wynik po elemencie (PSPNR, a operacje zgodne z regułą elementu wirtualnego – po elemencie wirtualnym, odjęte od
-  nadrzędnego):
+- Wynik po elemencie (PSPNR, a operacje zgodne z regułą wydzielenia – po wydzieleniu, odjęte od elementu):
   - AC = Σ `CATS`; BAC = Σ `TECH` ÷ produktywność IPT + DJK; EV = Σ `TECH_PON` ÷ produktywność IPT + DJK;
     produktywność IPT = Σ `CzTechPon` ÷ Σ `CzRzecz` z `LOG.vAHDD_PL_CPI` w oknie z „Parametry produkcji” (brak – 1);
     DJK = udział z „Wskaźniki DJK” (najdłuższy prefiks `IPT`) × godziny TECH / TECH_PON – idzie za stanowiskiem (DJK od W20
     Paint – w Paint); operacje kontroli (`CPLGR` DJK, `VERWE` QUAL) – własne godziny w swoim elemencie;
   - Actual Start = najwcześniejszy `GSTRI` (rzeczywisty start zlecenia); Actual Finish = najpóźniejszy `LTRMI`, gdy wszystkie
-    operacje elementu mają `STAT` = DONE, inaczej puste; element wirtualny – `DATA_REAL` jego operacji;
-  - materiały `LOG.vAPD` (po PSPNR, na elemencie nadrzędnym): Σ `NETWR_USD` [÷ (1 + `Z_CLO`)] statusów dostarczonych, USD.
+    operacje elementu mają `STAT` = DONE, inaczej puste; wydzielenie – `DATA_REAL` jego operacji;
+  - materiały `LOG.vAPD` (po PSPNR, na elemencie – nie na wydzieleniu): Σ `NETWR_USD` [÷ (1 + `Z_CLO`)] statusów dostarczonych, USD.
 - Raport S70MR liczy jednocześnie operacje kontroli DJK i DJK procentowe od godzin W2–W6 – przeniesione bez zmian, do
   potwierdzenia z autorem raportu (czy kontrola nie jest liczona podwójnie). TEMPO (`extCES.TEMPO1464`) – poza strukturą.
 

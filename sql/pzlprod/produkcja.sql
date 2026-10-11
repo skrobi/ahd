@@ -4,9 +4,10 @@
 
    Wejście (aplikacja zakłada i wypełnia w tej samej sesji połączenia, bez praw zapisu w PZLPROD):
      #pspnr     (PSPNR BIGINT)                                   – elementy P1S zakresu projektu (LOG.WBS)
-     #rule      (Code, PSPNR, SWBS, CPLGR, ARBPL)                – elementy wirtualne P1S (słownik projektu „Elementy wirtualne P1S”):
-                                                                   operacja elementu PSPNR zgodna z regułą (NULL = dowolne) należy
-                                                                   do elementu wirtualnego Code (kilka reguł – pierwsza wg Code)
+     #rule      (Code, PSPNR, SWBS, CPLGR, ARBPL)                – wydzielenia: węzły wirtualne nakładki z kodem ELEMENT_P1S.NAZWA.CPLGR
+                                                                   (np. AC-R39.1.18.03.25.PAINT.W20); operacja elementu PSPNR, której
+                                                                   CPLGR zaczyna się od CPLGR reguły (SWBS, ARBPL – NULL = dowolne),
+                                                                   należy do wydzielenia Code (kilka – najdłuższy CPLGR, potem Code)
      #djk       (Prefix, Share)                                  – udział godzin jakości DJK wg prefiksu grupy stanowisk (IPT)
                                                                    (słownik „Wskaźniki DJK”; najdłuższy pasujący prefiks)
      #delivered (Status)                                         – statusy vAPD liczone jako dostarczone („Parametry produkcji”)
@@ -14,11 +15,11 @@
      @divideZClo BIT                                             – wartość materiałów ÷ (1 + Z_CLO) („Parametry produkcji”)
    Nazwy widoków: $(vAHDD), $(vAHDD_PL_CPI), $(vAPD) – podstawiane z konfiguracji (pzl-ev.json, PzlProd, schemat LOG).
 
-   Wynik 1 – godziny i daty po elemencie (PSPNR; VirtualCode – element wirtualny, inaczej NULL):
+   Wynik 1 – godziny i daty po elemencie (PSPNR; VirtualCode – wydzielenie, inaczej NULL):
      AC = CATS; BAC = TECH ÷ produktywność IPT + DJK × TECH; EV = TECH_PON ÷ produktywność IPT + DJK × TECH_PON;
      produktywność IPT = Σ CzTechPon ÷ Σ CzRzecz z vAHDD_PL_CPI w oknie @months (brak – 1);
-     Actual Start = MIN(GSTRI) (element wirtualny – MIN(DATA_REAL) jego operacji);
-     Actual Finish = MAX(LTRMI) (wirtualny – MAX(DATA_REAL)), gdy wszystkie operacje mają STAT = 'DONE', inaczej NULL.
+     Actual Start = MIN(GSTRI) (wydzielenie – MIN(DATA_REAL) jego operacji);
+     Actual Finish = MAX(LTRMI) (wydzielenie – MAX(DATA_REAL)), gdy wszystkie operacje mają STAT = 'DONE', inaczej NULL.
    Wynik 2 – materiały po PSPNR (vAPD): wartość dostarczona Σ NETWR_USD [÷ (1 + Z_CLO)] dla statusów #delivered (USD). */
 
 WITH Produktywnosc AS (
@@ -38,9 +39,9 @@ A AS (
         FROM #rule x
         WHERE x.PSPNR = p.PSPNR
           AND (x.SWBS IS NULL OR x.SWBS = a.SWBS)
-          AND (x.CPLGR IS NULL OR x.CPLGR = a.CPLGR)
+          AND (x.CPLGR IS NULL OR a.CPLGR LIKE x.CPLGR + '%')
           AND (x.ARBPL IS NULL OR x.ARBPL = a.ARBPL)
-        ORDER BY x.Code) r)
+        ORDER BY LEN(x.CPLGR) DESC, x.Code) r)
 SELECT CAST(A.PSPNR AS NVARCHAR(50)) AS Pspnr, A.VirtualCode,
        CAST(SUM(A.CATS) AS DECIMAL(28,8)) AS AcHours,
        CAST(SUM(A.TECH / ISNULL(P.Factor, 1)) + SUM(ISNULL(K.Share, 0) * A.TECH) AS DECIMAL(28,8)) AS BacHours,

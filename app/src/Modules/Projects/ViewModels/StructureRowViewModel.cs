@@ -31,8 +31,8 @@ public sealed class StructureRowViewModel(StructureRow row) : INotifyPropertyCha
 
     public bool IsVirtual => row.IsVirtual;
 
-    /// <summary>Znacznik przy nazwie: węzeł wirtualny nakładki albo element wirtualny P1S (np. Paint).</summary>
-    public string VirtualTag => IsObjective ? "węzeł" : "wirtualny";
+    /// <summary>Znacznik przy nazwie węzła wirtualnego: z kodem P1S – wydzielenie godzin (np. Paint), bez kodu – węzeł grupujący.</summary>
+    public string VirtualTag => row.P1s is null ? "węzeł" : "wydzielenie";
 
     public bool IsGreyed => row.IsGreyed;
 

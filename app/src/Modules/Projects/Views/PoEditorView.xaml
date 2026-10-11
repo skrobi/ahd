@@ -74,14 +74,15 @@
                         <TextBox Style="{StaticResource Input}" FontFamily="{StaticResource FMono}" Text="{Binding EditWbs, UpdateSourceTrigger=PropertyChanged}" />
                     </StackPanel>
                     <StackPanel Grid.Column="2">
-                        <TextBlock Text="P1S (Legacy WBS)" Style="{StaticResource MutedText}" />
+                        <TextBlock Text="P1S (Legacy WBS)" Style="{StaticResource MutedText}"
+                                   ToolTip="Element CES – Legacy WBS. Węzeł wirtualny – wydzielenie godzin: ELEMENT_P1S.NAZWA.CPLGR, np. AC-R39.1.18.03.25.PAINT.W20 (operacje grupy stanowisk W20 elementu AC-R39.1.18.03.25)" />
                         <TextBox Style="{StaticResource Input}" FontFamily="{StaticResource FMono}" Text="{Binding EditLegacy, UpdateSourceTrigger=PropertyChanged}" />
                     </StackPanel>
                 </Grid>
                 <WrapPanel Margin="0,8,0,0">
                     <Button Content="Zmień zaznaczony" Style="{StaticResource Btn}" Margin="0,0,8,4" Command="{Binding ApplyEdit}" />
                     <Button Content="+ węzeł wirtualny" Style="{StaticResource Btn}" Margin="0,0,8,4" Command="{Binding AddVirtual}"
-                            ToolTip="Węzeł raportowy bez odpowiednika w SAP – grupuje elementy" />
+                            ToolTip="Węzeł raportowy bez odpowiednika w SAP – grupuje elementy; z kodem P1S ELEMENT_P1S.NAZWA.CPLGR – wydziela godziny grupy stanowisk z elementu P1S (np. …25.PAINT.W20)" />
                     <Button Content="+ element CES" Style="{StaticResource Btn}" Margin="0,0,16,4" Command="{Binding AddElement}"
                             ToolTip="Element CES dodany ręcznie (wymaga WBS element)" />
                     <Button Content="↑" Style="{StaticResource Btn}" Margin="0,0,4,4" Command="{Binding Up}" ToolTip="Wyżej wśród rodzeństwa" />

@@ -2,8 +2,6 @@
    - DICT_DjkRate – „Wskaźniki DJK” (globalny): udział godzin jakości DJK według prefiksu grupy stanowisk (IPT).
    - DICT_ProductionParameter – „Parametry produkcji” (globalny): okno produktywności IPT, statusy materiałów
      dostarczonych (vAPD), dzielenie wartości materiałów przez (1 + Z_CLO).
-   - DICT_VirtualP1s – „Elementy wirtualne P1S” (projektu): element spoza LOG.WBS (np. Paint) wydzielony z elementu
-     nadrzędnego regułą operacji vAHDD (SWBS, CPLGR, ARBPL).
    Dane startowe parametrów – migracja 023. Skrypt jest idempotentny. Uruchomienie: aplikacja (Diagnostyka → Migracja
    albo pytanie przy starcie); ręcznie:
        sqlcmd -S pzltestdb.intl.lmco.com -d PZLTEST -E -f 65001 -v Schema=FINOP Prefix=PZLEV_ -i 022_produkcja_slowniki.sql */
@@ -44,26 +42,6 @@ CREATE TABLE [$(Schema)].[$(Prefix)DICT_ProductionParameter] (
 GO
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'UX_$(Prefix)DICT_ProductionParameter_Key' AND object_id = OBJECT_ID(N'[$(Schema)].[$(Prefix)DICT_ProductionParameter]'))
 CREATE UNIQUE INDEX [UX_$(Prefix)DICT_ProductionParameter_Key] ON [$(Schema)].[$(Prefix)DICT_ProductionParameter] (Project, Name) WHERE SupersededAt IS NULL;
-GO
-
-IF OBJECT_ID(N'[$(Schema)].[$(Prefix)DICT_VirtualP1s]') IS NULL
-CREATE TABLE [$(Schema)].[$(Prefix)DICT_VirtualP1s] (
-    Id BIGINT IDENTITY(1,1) NOT NULL CONSTRAINT [PK_$(Prefix)DICT_VirtualP1s] PRIMARY KEY,
-    RowId BIGINT NOT NULL, Version INT NOT NULL, Project VARCHAR(20) NOT NULL,
-    Code             NVARCHAR(100)     NOT NULL,
-    Parent           NVARCHAR(100)     NOT NULL,
-    Name             NVARCHAR(200)     NOT NULL,
-    Swbs             NVARCHAR(100)     NULL,
-    Cplgr            NVARCHAR(100)     NULL,
-    Arbpl            NVARCHAR(100)     NULL,
-    RecordedAt DATETIMEOFFSET(7) NOT NULL, RecordedBy NVARCHAR(128) NOT NULL,
-    SupersededAt DATETIMEOFFSET(7) NULL, SupersededBy NVARCHAR(128) NULL,
-    DbLogin NVARCHAR(128) NOT NULL CONSTRAINT [DF_$(Prefix)DICT_VirtualP1s_Login] DEFAULT ORIGINAL_LOGIN(),
-    CONSTRAINT [UQ_$(Prefix)DICT_VirtualP1s_Version] UNIQUE (RowId, Version)
-);
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'UX_$(Prefix)DICT_VirtualP1s_Key' AND object_id = OBJECT_ID(N'[$(Schema)].[$(Prefix)DICT_VirtualP1s]'))
-CREATE UNIQUE INDEX [UX_$(Prefix)DICT_VirtualP1s_Key] ON [$(Schema)].[$(Prefix)DICT_VirtualP1s] (Project, Code) WHERE SupersededAt IS NULL;
 GO
 
 IF NOT EXISTS (SELECT 1 FROM [$(Schema)].[$(Prefix)META_SchemaVersion] WHERE Version = 22)

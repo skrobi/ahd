@@ -37,6 +37,7 @@ public static class StructureBuilder
         public List<Item> Children { get; } = [];
         public HashSet<string> Wps { get; } = new(StringComparer.OrdinalIgnoreCase);
         public decimal OwnCost { get; set; }
+        public bool SplitError { get; init; }
         public ProductionValues? OwnProduction { get; set; }
         public ProductionSum Production { get; set; }
         public decimal Cost { get; set; }
@@ -68,10 +69,9 @@ public static class StructureBuilder
 
     /// <param name="production">Wartości produkcyjne z PZLPROD (Operational EV, materiały) – null: kolumny puste.</param>
     /// <param name="statusDate">Dzień stanu dla PV (domyślnie dziś).</param>
-    /// <param name="virtualP1s">Elementy wirtualne P1S (słownik projektu) – wiersze pod elementem nadrzędnym.</param>
     public static ProjectStructure Build(PoTree tree, IReadOnlyDictionary<long, MappingResult> mapping, IReadOnlyList<P1sElement>? p1s,
         IReadOnlyList<DictRow> wpCam, IReadOnlyList<DictRow> schedule, IReadOnlyDictionary<string, decimal>? costs = null,
-        ProductionData? production = null, DateOnly? statusDate = null, IReadOnlyList<DictRow>? virtualP1s = null)
+        ProductionData? production = null, DateOnly? statusDate = null)
     {
         var today = statusDate ?? DateOnly.FromDateTime(DateTime.Today);
         var productionOf = (production?.ByPspnr ?? new Dictionary<string, ProductionValues>())
@@ -83,7 +83,9 @@ public static class StructureBuilder
         var byCode = (p1s ?? []).GroupBy(e => MappingKeys.Key(e.WbsElement)).ToDictionary(g => g.Key, g => g.First());
         var children = (p1s ?? []).Where(e => e.Parent.Length > 0).GroupBy(e => MappingKeys.Key(e.Parent))
             .ToDictionary(g => g.Key, g => g.OrderBy(e => e.WbsElement, StringComparer.OrdinalIgnoreCase).ToList());
-        var codes = tree.Nodes.Where(n => !n.IsVirtual).ToDictionary(n => n.Key, n => ObjectivesMapping.CodesOf(n, mapping));
+        // Kody węzłów: element CES – Legacy WBS i cel mapowania; węzeł wirtualny – Legacy WBS (wydzielenie ELEMENT_P1S.NAZWA.CPLGR).
+        var codes = tree.Nodes.Where(n => !n.IsVirtual || !string.IsNullOrWhiteSpace(n.LegacyWbs))
+            .ToDictionary(n => n.Key, n => ObjectivesMapping.CodesOf(n, mapping));
         // Kody węzłów nakładki: na nich zatrzymuje się rozwinięcie innego węzła.
         var anchors = codes.Values.SelectMany(c => c).Select(MappingKeys.Key).ToHashSet();
         var primary = codes.Values.Where(c => c.Count > 0).Select(c => MappingKeys.Key(c[0])).ToHashSet();
@@ -126,8 +128,14 @@ public static class StructureBuilder
         Item Objective(PoNode node)
         {
             var nodeCodes = codes.GetValueOrDefault(node.Key) ?? [];
+            var split = node.IsVirtual && nodeCodes.Count > 0 ? ProductionSplit.Parse(nodeCodes[0], byCode) : null;
             var item = new Item
             {
+                Note = split is not null ? ProductionSplit.Describe(split)
+                    : node.IsVirtual && nodeCodes.Count > 0 && byCode.Count > 0 && !byCode.ContainsKey(MappingKeys.Key(nodeCodes[0]))
+                        ? $"kod {nodeCodes[0]} – wydzielenie zapisuje się jako ELEMENT_P1S.NAZWA.CPLGR (element z LOG.WBS), np. AC-R39.1.18.03.25.PAINT.W20"
+                        : null,
+                SplitError = node.IsVirtual && nodeCodes.Count > 0 && split is null && byCode.Count > 0 && !byCode.ContainsKey(MappingKeys.Key(nodeCodes[0])),
                 Id = $"po:{node.Key}", Kind = GridRowKind.Objective, NodeKey = node.Key, IsVirtual = node.IsVirtual, HasCode = nodeCodes.Count > 0,
                 Name = node.Name, WbsElement = node.WbsElement, P1s = nodeCodes.Count > 0 ? nodeCodes[0] : null,
                 IsGreyed = nodeCodes.Count > 0 && byCode.GetValueOrDefault(MappingKeys.Key(nodeCodes[0])) is { IsGreyed: true },
@@ -145,30 +153,12 @@ public static class StructureBuilder
 
         var roots = ChildrenOf(null).Select(Objective).ToList();
 
-        // Elementy wirtualne P1S (np. Paint): pod elementem nadrzędnym (bez niego – najdłuższy pasujący kod albo poza strukturą).
         Item? outside = null;
         Item Outside() => outside ??= new Item
         {
             Id = OutsideId, Kind = GridRowKind.P1s, HasCode = false, Name = "Elementy P1S spoza struktury",
             Note = "przypisania „WP i CAM” do elementów spoza nakładki i LOG.WBS",
         };
-        foreach (var row in (virtualP1s ?? []).Where(r => r["Element wirtualny"] is not null).OrderBy(r => r["Element wirtualny"], StringComparer.OrdinalIgnoreCase))
-        {
-            var code = row["Element wirtualny"]!;
-            var key = MappingKeys.Key(code);
-            if (withCode.ContainsKey(key))
-                continue;
-            var rule = string.Join(", ", new[] { ("SWBS", row["SWBS"]), ("CPLGR", row["CPLGR"]), ("ARBPL", row["ARBPL"]) }
-                .Where(r => r.Item2 is not null).Select(r => $"{r.Item1} = {r.Item2}"));
-            var item = new Item
-            {
-                Id = $"p1s:{key}", Kind = GridRowKind.P1s, Name = row["Nazwa"] ?? code, P1s = code, IsVirtual = true,
-                Note = $"element wirtualny P1S – operacje vAHDD elementu {row["Element nadrzędny"]}: {rule}",
-            };
-            var parent = withCode.GetValueOrDefault(MappingKeys.Key(row["Element nadrzędny"])) ?? LongestPrefix(code, withCode) ?? Outside();
-            withCode[key] = item;
-            parent.Children.Add(item);
-        }
 
         // Przypisania „WP i CAM” do elementów, których nie ma w drzewie: pod najdłuższy pasujący kod albo poza strukturą.
         foreach (var (key, row) in assignments.OrderBy(a => a.Value["Element P1S"], StringComparer.OrdinalIgnoreCase))
@@ -228,22 +218,28 @@ public static class StructureBuilder
         foreach (var root in roots)
             Assign(root);
 
-        // Produkcja (PZLPROD): element P1S wiersza → PSPNR → wartości; sumy poddrzewa (każdy element P1S jest raz w drzewie).
-        // WP: wartości poddrzewa wiersza z własnym WP – podstawa PV Hours, EV Cost.
+        // Produkcja (PZLPROD): element P1S wiersza → PSPNR → wartości (wydzielenie – węzeł wirtualny z kodem
+        // ELEMENT_P1S.NAZWA.CPLGR – własne wartości, odjęte od elementu); sumy poddrzewa (każdy element raz w drzewie).
+        // WP: wartości elementów przypisane do najbliższego WP w górę drzewa (własnego albo przodka) – WP zagnieżdżony
+        // (np. wydzielenie z własnym CAM) ma swoje godziny, WP nadrzędny – resztę; podstawa PV Hours, EV Cost.
+        // Kilka węzłów z tym samym kodem – wartości elementu liczone raz, w najgłębszym (jak przypisanie WP do węzła).
         var wpProduction = new Dictionary<string, ProductionSum>(StringComparer.OrdinalIgnoreCase);
-        ProductionSum Produce(Item item)
+        var counted = new HashSet<string>();
+        ProductionSum Produce(Item item, string? inheritedWp)
         {
-            if (item is { Kind: GridRowKind.P1s, IsVirtual: true, P1s: { } virtualCode })
-                item.OwnProduction = productionOf.GetValueOrDefault(MappingKeys.Key(ProductionData.VirtualKey(MappingKeys.Key(virtualCode))));
-            else if (item.P1s is not null && byCode.GetValueOrDefault(MappingKeys.Key(item.P1s)) is { } element)
-                item.OwnProduction = productionOf.GetValueOrDefault(MappingKeys.Key(element.Pspnr));
-            item.Production = item.Children.Aggregate(new ProductionSum().Add(item.OwnProduction), (sum, child) => sum.Add(Produce(child)));
-            if (item.P1s is not null && assignments.GetValueOrDefault(MappingKeys.Key(item.P1s))?["WP"] is { } ownWp)
-                wpProduction[ownWp] = item.Production;
+            var wp = (item.P1s is null ? null : assignments.GetValueOrDefault(MappingKeys.Key(item.P1s))?["WP"]) ?? inheritedWp;
+            var children = item.Children.Aggregate(new ProductionSum(), (sum, child) => sum.Add(Produce(child, wp)));
+            var key = item is { IsVirtual: true, P1s: { } virtualCode } ? MappingKeys.Key(ProductionData.VirtualKey(MappingKeys.Key(virtualCode)))
+                : item.P1s is not null && byCode.GetValueOrDefault(MappingKeys.Key(item.P1s)) is { } element ? MappingKeys.Key(element.Pspnr) : null;
+            if (key is not null && counted.Add(key))
+                item.OwnProduction = productionOf.GetValueOrDefault(key);
+            if (wp is not null)
+                wpProduction[wp] = wpProduction.GetValueOrDefault(wp).Add(item.OwnProduction);
+            item.Production = children.Add(item.OwnProduction);
             return item.Production;
         }
         foreach (var root in roots)
-            Produce(root);
+            Produce(root, null);
         decimal? Elapsed(string wp) => budgets.GetValueOrDefault(wp) is { } b ? EarnedValue.Elapsed(b["Baseline Start"], b["Baseline Koniec"], today) : null;
         decimal? Sum(IEnumerable<string> wps, Func<string, decimal?> value) =>
             wps.Select(value).Aggregate((decimal?)null, (sum, v) => v is null ? sum : (sum ?? 0) + v);
@@ -258,12 +254,19 @@ public static class StructureBuilder
         {
             var assignment = item.P1s is null ? null : assignments.GetValueOrDefault(MappingKeys.Key(item.P1s));
             var wps = item.Wps.Order(StringComparer.OrdinalIgnoreCase).ToList();
-            var (hours, material, start, finish) = AnalyticBaseBuilder.Totals(wps, budgets);
+            // Wiersz z własnym WP pokazuje ten WP (budżet, daty, godziny przypisane do WP, PV / EV); bez własnego WP – sumy WP
+            // i elementów poddrzewa.
+            var ownWp = assignment?["WP"];
+            List<string> shown = ownWp is not null ? [ownWp] : wps;
+            var ops = ownWp is not null ? wpProduction.GetValueOrDefault(ownWp) : item.Production;
+            var (hours, material, start, finish) = AnalyticBaseBuilder.Totals(shown, budgets);
             string? gap = null;
             if (item.Kind == GridRowKind.Objective && !item.IsVirtual && wps.Count == 0)
                 gap = item.HasCode ? "element nakładki bez WP" : "brak kodu P1S (Legacy WBS ani mapowania) – bez WP";
             else if (wps.Any(w => !AnalyticBaseBuilder.HasBudget(budgets.GetValueOrDefault(w))))
                 gap = "WP bez budżetu";
+            if (item.SplitError)
+                gap = gap is null ? "kod wydzielenia: ELEMENT_P1S.NAZWA.CPLGR" : $"{gap}; kod wydzielenia: ELEMENT_P1S.NAZWA.CPLGR";
             if (assignment?["WP"] is not null && assignment["CAM"] is null)
                 gap = gap is null ? "WP bez CAM" : $"{gap}; WP bez CAM";
             if (item.CostGap is { } costGap)
@@ -271,8 +274,8 @@ public static class StructureBuilder
             var acwp = item.Kind == GridRowKind.Objective ? item.Cost : wps.Sum(w => wpCost.GetValueOrDefault(w));
             rows.Add(new StructureRow(item.Id, parentId, depth, item.Kind, item.NodeKey, item.IsVirtual, item.Name, item.WbsElement, item.P1s,
                 item.Note, item.IsGreyed, assignment?["WP"], assignment?["CAM"], assignment?["Cost Category"], wps, hours, material, start, finish,
-                gap, item.Children.Count > 0, acwp, AnalyticBaseBuilder.Bac(wps, budgets), Date(item.Production.Start), Date(item.Production.ActualFinish),
-                item.Production.Bac, Sum(wps, PvHours), item.Production.Ev, item.Production.Ac, item.Production.Material, Sum(wps, PvCost), Sum(wps, EvCost)));
+                gap, item.Children.Count > 0, acwp, AnalyticBaseBuilder.Bac(shown, budgets), Date(ops.Start), Date(ops.ActualFinish),
+                ops.Bac, Sum(shown, PvHours), ops.Ev, ops.Ac, ops.Material, Sum(shown, PvCost), Sum(shown, EvCost)));
             foreach (var child in item.Children)
                 Emit(child, item.Id, depth + 1);
         }
