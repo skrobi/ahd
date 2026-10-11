@@ -3,8 +3,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:partials="clr-namespace:PzlEv.Shared.Views.Partials">
     <StackPanel>
-        <partials:PageHeader Eyebrow="Faza globalna G1" Title="Import RABIT"
-                             Subtitle="Importuj: logowanie do SharePoint, lista plików pasujących do definicji, import. Każda nowa wersja raportu trafia do bazy jako dane kanoniczne z pochodzeniem (sam plik nie jest przechowywany); dane wcześniejszych wersji zostają do porównań. Błąd jednego pliku nie zatrzymuje pozostałych.">
+        <partials:PageHeader Title="Import RABIT">
             <partials:PageHeader.Actions>
                 <StackPanel Orientation="Horizontal">
                     <Button Content="Odśwież" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding Refresh}" />
@@ -32,33 +31,26 @@
                         <DataTemplate>
                             <DockPanel Margin="0,2">
                                 <TextBlock DockPanel.Dock="Left" Width="160" Text="{Binding Name}" FontWeight="Medium" />
-                                <TextBlock Text="{Binding Path}" Style="{StaticResource MonoText}" TextWrapping="Wrap" />
+                                <TextBlock Style="{StaticResource MonoText}" TextWrapping="Wrap">
+                                    <Hyperlink Click="OpenPath" ToolTip="Otwórz lokalizację"><Run Text="{Binding Path, Mode=OneWay}" /></Hyperlink>
+                                </TextBlock>
                             </DockPanel>
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
-                <TextBlock Text="{Binding DefinitionsText}" Style="{StaticResource MutedText}" Margin="0,6,0,0" TextWrapping="Wrap" />
-                <TextBlock Text="{Binding ManualFolderText}" Style="{StaticResource MutedText}" Margin="0,2,0,0" TextWrapping="Wrap" />
-                <TextBlock Text="{Binding LogText}" Style="{StaticResource MutedText}" Margin="0,2,0,0" TextWrapping="Wrap" />
             </StackPanel>
         </Border>
 
-        <!-- Stan importu: rozpoczęty / nie rozpoczęty / zakończony -->
-        <TextBlock Text="{Binding Summary}" FontWeight="SemiBold" Margin="0,0,0,4" TextWrapping="Wrap" />
-        <TextBlock Text="{Binding Progress}" Style="{StaticResource MonoText}" Margin="0,0,0,8" TextWrapping="Wrap" />
-
-        <!-- Pliki: po sprawdzeniu „zostanie zaimportowany”, w trakcie importu – status na bieżąco -->
-        <Border Style="{StaticResource Panel}" Margin="0,0,0,12"
-                Visibility="{Binding HasFiles, Converter={StaticResource BoolToVisibility}}">
+        <!-- Stan importu w jednym oknie: logowanie do SharePoint, postęp, wynik sprawdzenia źródeł, problemy importu -->
+        <Border Background="{StaticResource AccentSoft}" BorderBrush="{StaticResource Accent}" BorderThickness="1"
+                CornerRadius="10" Padding="16,12" Margin="0,0,0,12">
             <StackPanel>
-                <DockPanel Margin="0,0,0,6">
-                    <CheckBox DockPanel.Dock="Right" Content="Pokaż wszystkie pliki" IsChecked="{Binding ShowAllFiles}" VerticalAlignment="Center" />
-                    <TextBlock Text="Pliki pasujące do definicji" Style="{StaticResource H2}" FontSize="15" />
-                </DockPanel>
-                <ItemsControl ItemsSource="{Binding LocationChecks}">
+                <TextBlock Text="{Binding Summary}" FontWeight="SemiBold" TextWrapping="Wrap" />
+                <TextBlock Text="{Binding Progress}" Style="{StaticResource MonoText}" Margin="0,2,0,0" TextWrapping="Wrap" />
+                <ItemsControl ItemsSource="{Binding LocationChecks}" Margin="0,6,0,0">
                     <ItemsControl.ItemTemplate>
                         <DataTemplate>
-                            <StackPanel Margin="0,2,0,6">
+                            <StackPanel Margin="0,2,0,4">
                                 <DockPanel>
                                     <TextBlock DockPanel.Dock="Left" Width="160" Text="{Binding Name}" FontWeight="Medium" />
                                     <TextBlock Text="{Binding Status}" TextWrapping="Wrap" />
@@ -69,7 +61,22 @@
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
-                <DataGrid Style="{StaticResource DataTable}" ItemsSource="{Binding Files}" IsReadOnly="True" MaxHeight="360" Margin="0,6,0,0">
+                <StackPanel Margin="0,8,0,0" Visibility="{Binding HasIssues, Converter={StaticResource BoolToVisibility}}">
+                    <TextBlock Text="Problemy importu" FontWeight="SemiBold" Margin="0,0,0,4" />
+                    <ItemsControl ItemsSource="{Binding Issues}" />
+                </StackPanel>
+            </StackPanel>
+        </Border>
+
+        <!-- Pliki: po sprawdzeniu „zostanie zaimportowany”, w trakcie importu – status na bieżąco -->
+        <Border Style="{StaticResource Panel}" Margin="0,0,0,12"
+                Visibility="{Binding HasFiles, Converter={StaticResource BoolToVisibility}}">
+            <StackPanel>
+                <DockPanel Margin="0,0,0,6">
+                    <CheckBox DockPanel.Dock="Right" Content="Pokaż wszystkie pliki" IsChecked="{Binding ShowAllFiles}" VerticalAlignment="Center" />
+                    <TextBlock Text="Pliki pasujące do definicji" Style="{StaticResource H2}" FontSize="15" />
+                </DockPanel>
+                <DataGrid Style="{StaticResource DataTable}" ItemsSource="{Binding Files}" IsReadOnly="True" MaxHeight="360">
                     <DataGrid.Columns>
                         <DataGridTextColumn Header="Lokalizacja" Binding="{Binding Location}" />
                         <DataGridTextColumn Header="Plik" Binding="{Binding FileName}" />
@@ -79,14 +86,6 @@
                         <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="*" />
                     </DataGrid.Columns>
                 </DataGrid>
-            </StackPanel>
-        </Border>
-
-        <Border Style="{StaticResource Panel}" Margin="0,0,0,12"
-                Visibility="{Binding HasIssues, Converter={StaticResource BoolToVisibility}}">
-            <StackPanel>
-                <TextBlock Text="Problemy importu" Style="{StaticResource H2}" FontSize="15" Margin="0,0,0,6" />
-                <ItemsControl ItemsSource="{Binding Issues}" />
             </StackPanel>
         </Border>
 
