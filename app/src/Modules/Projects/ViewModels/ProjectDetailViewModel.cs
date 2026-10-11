@@ -4,6 +4,7 @@ using System.Windows.Input;
 using PzlEv.Modules.Projects.Models;
 using PzlEv.Modules.Projects.Services;
 using PzlEv.Shared.Models;
+using PzlEv.Shared.Models.Db;
 using PzlEv.Shared.Models.Dictionaries;
 using PzlEv.Shared.Models.Pipeline;
 using PzlEv.Shared.Models.PzlProd;
@@ -30,6 +31,8 @@ public sealed class ProjectDetailViewModel : ObservableObject
     private readonly IFileDialogs _dialogs;
     private string _status = "";
     private Pill _readiness = new("muted", "");
+    private RunPinRow? _selectedPin;
+    private string _runProgress = "";
     private P1sInputs _mapping = P1sInputs.None;
     private PoTree _saved = new();
     private IReadOnlyDictionary<string, string> _owners = new Dictionary<string, string>();
@@ -74,6 +77,15 @@ public sealed class ProjectDetailViewModel : ObservableObject
         CreateFolders = new AsyncRelayCommand(DoCreateFolders, () => !Busy.IsBusy);
         RefreshMapping = new AsyncRelayCommand(() => { Structure.CommitEdits(); return Reload(refreshMapping: true); }, () => !Busy.IsBusy);
         ImportSources = new AsyncRelayCommand(DoImportSources, () => !Busy.IsBusy && _service.Imports is not null);
+        StartRun = new AsyncRelayCommand(DoStartRun, () => _service.Runs is { } r && !r.IsRunning(Code));
+        if (_service.Runs is { } launcher)
+        {
+            launcher.Progress += OnRunProgress;
+            launcher.Finished += OnRunFinished;
+            if (launcher.IsRunning(Code))
+                RunProgress = "Przebieg trwa…";
+            _ = LoadRuns();
+        }
         foreach (var item in ProjectDictionaries.ForType(project.Type))
         {
             var panel = new DictionaryPanelViewModel(item, project.Type);
@@ -185,7 +197,81 @@ public sealed class ProjectDetailViewModel : ObservableObject
 
     public string ItRequest => _service.Folders.ItRequest(Code);
 
-    public string Runs => "Brak przebiegów. Przebiegi (Nowy przebieg, historia) powstaną w kolejnym etapie – docs/pipeline-fazy.md.";
+    /// <summary>Uruchomienia przebiegów projektu (od najnowszego) – zakładka Przebiegi.</summary>
+    public ObservableCollection<RunPinRow> RunPins { get; } = [];
+
+    /// <summary>Wyniki kontroli wybranego uruchomienia (błędy i ostrzeżenia przed informacjami).</summary>
+    public ObservableCollection<RunIssueRow> RunIssues { get; } = [];
+
+    public RunPinRow? SelectedPin
+    {
+        get => _selectedPin;
+        set
+        {
+            if (SetProperty(ref _selectedPin, value))
+                _ = LoadIssues(value);
+        }
+    }
+
+    /// <summary>Postęp przebiegu w tle (pusty – przebieg nie trwa).</summary>
+    public string RunProgress { get => _runProgress; private set => SetProperty(ref _runProgress, value); }
+
+    /// <summary>„Uruchom przebieg” – w tle; wynik w zakładce Przebiegi, na liście projektów i w powiadomieniu.</summary>
+    public ICommand StartRun { get; }
+
+    private async Task DoStartRun()
+    {
+        if (_service.Runs is not { } runs)
+            return;
+        var refused = await runs.Start(Code);
+        RunProgress = refused ?? "Przebieg uruchomiony…";
+        if (refused is null)
+            Status = "Przebieg liczy się w tle – możesz dalej pracować; po zakończeniu pojawi się powiadomienie i e-mail.";
+    }
+
+    private void OnRunProgress(string project, string text)
+    {
+        if (string.Equals(project, Code, StringComparison.OrdinalIgnoreCase))
+            RunProgress = text;
+    }
+
+    private void OnRunFinished(string project)
+    {
+        if (!string.Equals(project, Code, StringComparison.OrdinalIgnoreCase))
+            return;
+        RunProgress = "";
+        CommandManager.InvalidateRequerySuggested();   // „Uruchom przebieg” znów dostępny
+        _ = LoadRuns();
+    }
+
+    private async Task LoadRuns()
+    {
+        if (_service.Runs is not { } runs)
+            return;
+        await Try(async () =>
+        {
+            var pins = await Task.Run(() => runs.Pins(Code, 20));
+            RunPins.Clear();
+            foreach (var pin in pins)
+                RunPins.Add(pin);
+            SelectedPin = RunPins.FirstOrDefault();
+        });
+    }
+
+    private async Task LoadIssues(RunPinRow? pin)
+    {
+        RunIssues.Clear();
+        if (pin is null || _service.Runs is not { } runs)
+            return;
+        await Try(async () =>
+        {
+            var issues = await Task.Run(() => runs.Issues(pin.PinId));
+            if (!ReferenceEquals(pin, _selectedPin))
+                return;
+            foreach (var issue in issues.OrderBy(i => i.Level == CheckLevel.Error ? 0 : i.Level == CheckLevel.Warning ? 1 : 2).ThenBy(i => i.Id))
+                RunIssues.Add(issue);
+        });
+    }
 
     public ICommand Back { get; }
     public ICommand AddFromExcel { get; }

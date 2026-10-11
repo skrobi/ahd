@@ -3,6 +3,7 @@ using System.Windows.Input;
 using PzlEv.Modules.Projects.Models;
 using PzlEv.Modules.Projects.Services;
 using PzlEv.Shared.Models;
+using PzlEv.Shared.Models.Db;
 using PzlEv.Shared.Utils.Ui.Mvvm;
 using Serilog;
 
@@ -25,6 +26,8 @@ public sealed class ProjectListViewModel : ObservableObject
         NewProject = new RelayCommand(_ => newProject(), _ => !Busy.IsBusy);
         Open = new RelayCommand(p => open(((ProjectListItem)p!).Code), p => p is ProjectListItem && !Busy.IsBusy);
         Refresh = new AsyncRelayCommand(Reload, () => !Busy.IsBusy);
+        if (_service.Runs is { } runs)
+            runs.Finished += project => _ = Reload();   // zakończony przebieg – stan na liście od razu
         _ = Reload();
     }
 
@@ -48,8 +51,16 @@ public sealed class ProjectListViewModel : ObservableObject
         {
             // Sam odczyt projektów – nakładka, gotowość i mapowanie dopiero na ekranie projektu.
             var items = await Busy.Run("Wczytywanie projektów…", () =>
-                _service.Projects().Select(project => new ProjectListItem(project.Code, project.Name, ProjectTypes.Label(project.Type),
-                    "brak przebiegów", _service.Folders.PathOf(project.Code))).ToList());
+            {
+                var runs = _service.Runs?.Latest() ?? new Dictionary<string, RunPinRow>();
+                return _service.Projects().Select(project => runs.GetValueOrDefault(project.Code) is { } run
+                    ? new ProjectListItem(project.Code, project.Name, ProjectTypes.Label(project.Type),
+                        $"{run.Label} ({(run.FinishedAt ?? run.StartedAt).ToLocalTime():yyyy-MM-dd HH:mm})", _service.Folders.PathOf(project.Code),
+                        run.Status == RunStatuses.Running ? "w toku" : $"błędy {run.Errors} · ostrzeżenia {run.Warnings}",
+                        run.Status == RunStatuses.Running ? "muted" : run.Errors > 0 || run.Status is RunStatuses.Failed or RunStatuses.Abandoned ? "crit" : run.Warnings > 0 ? "warn" : "ok",
+                        run.Summary ?? "")
+                    : new ProjectListItem(project.Code, project.Name, ProjectTypes.Label(project.Type), "brak przebiegów", _service.Folders.PathOf(project.Code))).ToList();
+            });
             Items.Clear();
             foreach (var item in items)
                 Items.Add(item);

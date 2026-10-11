@@ -10,4 +10,8 @@ public static class DbTables
     public const string SourceFileSeen = "meta.SourceFileSeen";
     public const string Parser = "meta.Parser";
     public const string CanonicalRow = "can.Row";
+    public const string Run = "meta.Run";
+    public const string RunPin = "meta.RunPin";
+    public const string RunBalance = "run.Balance";
+    public const string RunIssue = "run.Issue";
 }
