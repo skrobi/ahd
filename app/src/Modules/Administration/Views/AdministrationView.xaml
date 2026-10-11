@@ -14,8 +14,7 @@
     </UserControl.Resources>
 
     <StackPanel>
-        <partials:PageHeader Eyebrow="Konfiguracja importu" Title="Administracja"
-                             Subtitle="Definicje źródeł (rozpoznanie pliku po prefiksie i parser), parsery (układ kolumn pliku, typy, pola wymagane – tabela danych kanonicznych) i lokalizacje RABIT. Zmiany mają historię." />
+        <partials:PageHeader Title="Administracja" />
 
         <partials:BusyBar DataContext="{Binding Busy}" />
         <TextBlock Text="{Binding Status}" TextWrapping="Wrap" Margin="0,0,0,8" />
@@ -99,8 +98,6 @@
                     <Button DockPanel.Dock="Right" Content="Nowy parser" Style="{StaticResource Btn}" Command="{Binding NewParser}" />
                     <TextBlock Text="Parsery" Style="{StaticResource H2}" />
                 </DockPanel>
-                <TextBlock Style="{StaticResource MutedText}" Margin="0,0,0,8" TextWrapping="Wrap"
-                           Text="Parser opisuje układ pliku: każde pole to kolumna w pliku (typ, wymagane) i slot w stałej tabeli danych kanonicznych CAN_Row. Brak kolumny parsera w pliku = błąd importu; kolumny pliku spoza parsera zostają tylko w treści pliku. Nowe pole dostaje wolny slot; slot pola usuniętego z parsera zostaje zajęty (dane zapisanych plików). Zapis nie zmienia tabel w bazie." />
                 <DataGrid Style="{StaticResource DataTable}" ItemsSource="{Binding Parsers}" SelectedItem="{Binding Selected}"
                           IsReadOnly="True" MaxHeight="160">
                     <DataGrid.Columns>
@@ -229,8 +226,6 @@
                     <Button DockPanel.Dock="Right" Content="Nowa lokalizacja" Style="{StaticResource Btn}" Command="{Binding NewLocation}" />
                     <TextBlock Text="Lokalizacje RABIT" Style="{StaticResource H2}" />
                 </DockPanel>
-                <TextBlock Style="{StaticResource MutedText}" Margin="0,0,0,8"
-                           Text="Foldery SharePoint czytane przez WebDAV (ścieżka UNC, np. \\serwer@SSL\DavWWWRoot\sites\…). Import czyta też zawsze folder Do_importu środowiska." />
                 <DataGrid Style="{StaticResource DataTable}" ItemsSource="{Binding Locations}" SelectedItem="{Binding SelectedLocation}"
                           IsReadOnly="True" MaxHeight="180">
                     <DataGrid.Columns>

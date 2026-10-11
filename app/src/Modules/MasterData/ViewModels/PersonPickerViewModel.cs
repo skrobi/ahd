@@ -54,8 +54,6 @@ public sealed class PersonPickerViewModel : ObservableObject
 
     public string QueueText => $"Do dodania: {Queue.Count}";
 
-    public string Hint => $"Pracownicy PZLHRPROD: {_persons.Count}. Szukaj po numerze znaczka (USRID), PERNR, imieniu i nazwisku, e-mailu albo dziale.";
-
     public ICommand Add { get; }
 
     public ICommand Remove { get; }

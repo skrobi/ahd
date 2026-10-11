@@ -72,7 +72,7 @@
                         </Border>
                         <TextBlock Text="Wymaga uwagi – otwarte problemy" Style="{StaticResource H2}" />
                     </DockPanel>
-                    <TextBlock Text="Brak otwartych ostrzeżeń i błędów. Problem znika sam, gdy przyczyna zniknie (kolejny import, przypisanie elementu), albo po „Rozwiązane”."
+                    <TextBlock Text="Brak otwartych problemów."
                                Style="{StaticResource MutedText}" TextWrapping="Wrap"
                                Visibility="{Binding NoAttention, Converter={StaticResource BoolToVisibility}}" />
                     <ScrollViewer MaxHeight="420" VerticalScrollBarVisibility="Auto">

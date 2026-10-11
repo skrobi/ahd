@@ -9,6 +9,6 @@ public sealed record P1sInputs(IReadOnlyList<P1sElement>? P1s, string? P1sError)
 {
     public static P1sInputs None { get; } = new(null, null);
 
-    /// <summary>Opis źródła do pokazania przy nakładce.</summary>
-    public string Describe => P1sError is null ? "Strona P1S: Legacy WBS z Performance Objectives i LOG.WBS (PZLPROD)." : $"{P1sError} – bez poddrzew LOG.WBS.";
+    /// <summary>Powód braku struktury P1S do pokazania przy nakładce (pusty – dostępna).</summary>
+    public string Describe => P1sError is null ? "" : $"{P1sError} – bez poddrzew LOG.WBS.";
 }

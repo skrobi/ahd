@@ -10,13 +10,11 @@
                 <Button Content="Wyczyść" Style="{StaticResource Btn}" Command="{Binding Clear}" />
             </StackPanel>
         </DockPanel>
-        <TextBlock Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="0,0,0,8"
-                   Text="Tabela kontraktu: Nazwa · Element CES (WBS element – klucz) · P1S z Excela (Legacy WBS). Przeciągnij wiersz za uchwyt ⋮⋮ na inny wiersz, aby go tam przenieść, albo na pasek „korzeń”, aby odpiąć. Zaznacz wiersz, aby zmienić nazwę, przesunąć go albo dodać pod nim węzeł." />
 
         <TextBlock Text="{Binding MappingInfo}" Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="0,0,0,8" />
         <Border x:Name="RootDrop" AllowDrop="True" Drop="OnDropRoot" DragOver="OnDragOver" Background="{StaticResource Surface2}"
                 BorderBrush="{StaticResource Line}" BorderThickness="1" Padding="8,4" Margin="0,0,0,2">
-            <TextBlock Text="⤒ korzeń – upuść tutaj wiersz, aby przenieść go na najwyższy poziom" Style="{StaticResource MutedText}" />
+            <TextBlock Text="⤒ korzeń" ToolTip="Upuść tutaj wiersz, aby przenieść go na najwyższy poziom" Style="{StaticResource MutedText}" />
         </Border>
         <DataGrid x:Name="NodesGrid" Style="{StaticResource DataTable}" ItemsSource="{Binding Rows}" SelectedItem="{Binding Selected}"
                   IsReadOnly="True" AllowDrop="True" Drop="OnDropRow" DragOver="OnDragOver">

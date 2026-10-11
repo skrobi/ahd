@@ -165,25 +165,12 @@ public sealed class ProjectDetailViewModel : ObservableObject
             }
             _selectedDictionary = value;
             OnPropertyChanged();
-            OnPropertyChanged(nameof(DictionaryHint));
             _ = Reload(refreshMapping: false);
         }
     }
 
     /// <summary>Wiersze wybranego słownika projektu – edycja w komórkach (wspólna tabela słownika).</summary>
     public DictionaryTableViewModel Table { get; } = new();
-
-    public string DictionaryHint => _selectedDictionary?.Item.Code switch
-    {
-        ProjectDictionaries.WpCam or ProjectDictionaries.ScheduleBudget =>
-            "Ten sam słownik zmieniasz w zakładce Struktura (WP, CAM, Cost Category, budżet, daty) – zmiana w jednym miejscu jest widoczna w drugim.",
-        ProjectDictionaries.WbsCategories =>
-            "Kategorie elementów WBS tego projektu (np. Production, Programs) – do wyboru w kolumnie Cost Category w zakładce Struktura i w słowniku „WP i CAM”.",
-        PzlEv.Shared.Utils.Dictionaries.GlobalDictionaries.CostCategory =>
-            "Pozycje ze słownika globalnego mają stan „globalny”. Zmiana wiersza zapisuje zmianę tylko dla tego projektu; usunięcie zmiany projektu przywraca wartość globalną.",
-        ProjectDictionaries.CasRates => "Zawartość słownika nie jest jeszcze ustalona (O37) – brak danych do edycji.",
-        _ => "Dodawaj, zmieniaj i usuwaj wiersze, potem „Zapisz” (ERROR blokuje zapis, WARNING wymaga potwierdzenia).",
-    };
 
     public Pill ReadinessPill { get => _readiness; private set => SetProperty(ref _readiness, value); }
 
