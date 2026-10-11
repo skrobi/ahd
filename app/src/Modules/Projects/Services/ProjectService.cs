@@ -17,7 +17,7 @@ namespace PzlEv.Modules.Projects.Services;
 /// projektu i folderami; utrzymanie nakładki i słowników projektu; gotowość; baza analityczna i eksport do Excela.
 /// </summary>
 public sealed class ProjectService(IProjectStore store, IDictionaryStore dictionaries, IJournal journal, ProjectFolders folders,
-    IPzlProdSource? pzlProd, Func<ISourceImport?>? imports = null)
+    IPzlProdSource? pzlProd, Func<ISourceImport?>? imports = null, Func<IRunLauncher?>? runs = null)
 {
     private const string Area = "Projekty";
 
@@ -188,6 +188,9 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
     /// <summary>Kody definicji ze słownika „Źródła danych” projektu.</summary>
     public IReadOnlySet<string> ProjectSources(string code) =>
         Rows(ProjectDictionaries.Sources, code).Select(r => r["Definicja źródła"]).OfType<string>().ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Przebiegi projektów (kontrakt modułu Przebiegi); null – moduł niedostępny.</summary>
+    public IRunLauncher? Runs => runs?.Invoke();
 
     /// <summary>Import źródeł projektu (kontrakt modułu Import); null – moduł Import niedostępny.</summary>
     public ISourceImport? Imports => imports?.Invoke();

@@ -318,6 +318,13 @@ rozdz. 2). Wymaga aplikacji 0.41.0.
 **Migracja `sql/mssql/026_zrodla_projektu.sql`:** tabela `DICT_ProjectSource` – słownik projektu „Źródła danych”
 (definicje źródeł importowane dla projektu, `docs/slowniki.md`, rozdz. 3). Wymaga aplikacji 0.42.0.
 
+**Migracja `sql/mssql/027_przebiegi.sql`:** przebiegi projektu – `META_Run` (projekt + tydzień, kod
+`R-<Projekt>-<RRRR-MM>-T<NN>`, jeden na projekt i tydzień), `META_RunPin` (kolejne uruchomienia: kto, kiedy, stan,
+import, liczba wierszy, koszt brutto, saldo, błędy, ostrzeżenia), `RUN_Balance` (dane ACTUALS projektu w chwili
+przypięcia: element WBS × cost element × rok × okres × rozliczenie wychodzące × waluta obiektu – wiersze, kwota,
+najpóźniejsze `Created on`), `RUN_Issue` (wyniki kontroli) i procedura `RUN_PinBalance @Project, @PinId`
+(`docs/pipeline-fazy.md`, rozdz. 4.1). Wymaga aplikacji 0.43.0.
+
 `META_SourceFile.CanonicalStatus`: „utworzone” – dane kanoniczne zapisane i sprawdzone (widoczne dla odczytów),
 „w toku” – zapis wierszy trwa (odczyty pomijają plik; po awarii wpis i wiersze są usuwane), inna wartość – powód
 braku danych (źródło bez parsera).

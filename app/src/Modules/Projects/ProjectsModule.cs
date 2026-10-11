@@ -32,7 +32,8 @@ public sealed class ProjectsModule : IModule
             services.Journal,
             new ProjectFolders(services.Config.ProjectsFolder),
             services.PzlProd is null ? null : new SqlPzlProdSource(services.PzlProd),
-            () => services.Contracts.Get<ISourceImport>());
+            () => services.Contracts.Get<ISourceImport>(),
+            () => services.Contracts.Get<IRunLauncher>());
 
     public FrameworkElement CreateView(ModuleContext context) =>
         new ProjectsView { DataContext = new ProjectsViewModel(_service!, new FileDialogs()) };

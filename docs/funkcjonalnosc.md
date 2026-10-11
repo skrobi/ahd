@@ -28,7 +28,7 @@ Menu modułów po lewej (Pulpit, Import RABIT, Słowniki, Projekty, Przebiegi, A
 |---|---|---|
 | **Pulpit** | karty faz globalnych (Import RABIT, Źródła danych, Słowniki globalne), „Wymaga uwagi”, ostatnie zdarzenia (F07) | klik w kartę – przejście do sekcji (Import / Administracja / Słowniki), „Odśwież” |
 | **Import RABIT** | import źródeł, historia importów, decyzje dla plików (F05) | importuj |
-| **Projekty** | lista projektów: kod, nazwa, typ, aktywny przebieg, folder – sam odczyt projektów (nakładka i gotowość – na ekranie projektu) | nowy projekt |
+| **Projekty** | lista projektów: kod, nazwa, typ, ostatni przebieg (kod, numer uruchomienia, stan, data), problemy przebiegu (liczba błędów i ostrzeżeń, kolor; podsumowanie w podpowiedzi), folder – sam odczyt projektów (nakładka i gotowość – na ekranie projektu) | nowy projekt |
 | **Projekt** | zakładki: Wskaźniki (wskaźniki projektu w grupach Operational EV, Materials, Financial EV; gotowość F02 zwinięta; znacznik gotowości i data danych RABIT w nagłówku), Struktura (nakładka z rozwinięciem P1S, WP, CAM, Cost Category, budżet i daty – `docs/performance-objectives.md`, rozdz. 4.2), Raporty, Słowniki projektu, Przebiegi, Foldery | edycja w komórkach struktury (zapis od razu); dołożenie elementów z kolejnego eksportu SAP; Raport kosztów (Excel) na zakładce Raporty (`docs/model-danych.md`, migracja 013); struktura do Excela; import źródeł projektu (F05); nowy przebieg; edycja słowników projektu w tabeli (Cost Category – pozycje globalne i zmiany projektu, `docs/slowniki.md`, rozdz. 6); pobierz / wczytaj słowniki z Excela |
 | **Kreator projektu** | 5 kroków (F01) | utwórz projekt |
 | **Przebiegi** | wszystkie przebiegi wszystkich projektów: tydzień, czy zamykający, stan, osoba | przejście do przebiegu |
@@ -118,7 +118,13 @@ Lista kontrolna na ekranie projektu:
 
 ### F06. Przebieg
 
-- **Nowy przebieg** na stronie projektu (`docs/pipeline-fazy.md`, P0).
+- **Uruchom przebieg** na stronie projektu – przebieg liczy się w tle aplikacji (analityk pracuje dalej; aplikacja musi
+  być otwarta do końca przebiegu): import źródeł projektu, przypięcie danych ACTUALS projektu, kontrole danych
+  (`docs/pipeline-fazy.md`, rozdz. 4.1). Przebieg = projekt + tydzień; kolejne uruchomienie w tym samym tygodniu to
+  nowe przypięcie tego przebiegu. Jeden przebieg projektu naraz (blokada `run-<Projekt>`, także między komputerami).
+- Po zakończeniu: powiadomienie systemowe Windows i e-mail przez Outlook użytkownika (adres ze słownika Osoby,
+  bez niego – konto Outlooka) z listą błędów i ostrzeżeń; stan na liście projektów i w zakładce **Przebiegi**
+  projektu (uruchomienia i wyniki kontroli wybranego uruchomienia).
 - Ekran przebiegu: kroki (Przygotowanie przebiegu, Walidacja, Uzgodnienie, Przegląd finansów, Zaawansowanie,
   Obliczenie i przegląd, Publikacja, Zamrożenie) z etapami P0–P9 i Z (`docs/pipeline-fazy.md`, rozdz. 4);
   panel wybranego etapu z jego akcją; znacznik stanu i zmiany po przypięciu; problemy; rewizje EV; dziennik.

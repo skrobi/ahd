@@ -174,6 +174,30 @@ Kalendarz okresów wyznacza wariant przebiegu:
 | P9 Publikacja | Publikacja | tak | tak | pliki zapisane |
 | Z Zamknięcie okresu | Zamrożenie | – | tak | zatwierdzenie |
 
+### 4.1 Kontrole danych przebiegu (wdrożone: P0, P1, kontrole ACTUALS)
+
+„Uruchom przebieg” (ekran projektu) wykonuje w tle: tydzień z kalendarza okresów i przebieg `R-<Projekt>-<RRRR-MM>-T<NN>`
+(kolejne uruchomienie w tym tygodniu – nowe przypięcie, numer #N) → import źródeł projektu (słownik „Źródła danych”,
+`docs/zrodla-danych.md`, rozdz. 2) → przypięcie: dane ACTUALS projektu z ostatniego importu (`RUN_PinBalance`,
+`docs/model-danych.md`, migracja 027) → kontrole wobec ostatniego zakończonego uruchomienia wcześniejszego tygodnia.
+Kwoty – waluta obiektu (PLN, `Value in Obj. Crcy`); tolerancja zaokrągleń 1,00. Okresy zamknięte – okresy SAP przed
+bieżącym okresem kalendarza, a w pierwszych 7 dniach okresu – przed poprzednim (rozliczenie poprzedniego okresu trwa);
+okresy 13–16 liczone jak 12.
+
+| Kontrola | Poziom | Opis |
+|---|---|---|
+| Liczba danych | ERROR / WARNING | wierszy mniej niż w poprzednim przebiegu (zrzut jest narastający) – ERROR; koszt brutto (bez rozliczenia wychodzącego) mniejszy – WARNING |
+| Odchylenia raport do raportu | informacja | 10 największych zmian kosztu brutto po elemencie WBS i po cost elemencie |
+| Nowe cost elementy | ERROR / informacja | cost element spoza słownika Cost Category (efektywnego dla projektu) – ERROR; pierwszy raz w projekcie – informacja |
+| Netowanie projektu do 0 | ERROR / WARNING | suma wszystkich wierszy projektu w okresach zamkniętych ≠ 0 – ERROR i 10 elementów WBS z największym saldem: koszt, rozliczenie, przyczyna (brak rozliczenia – reguła rozliczenia, element statystyczny albo brak cost elementu „Rozliczeniowy” w słowniku; rozliczenie niepełne; rozliczenie większe niż koszt), ostatni okres z ruchem, główne cost elementy; koszt utworzony (`Created on`) po rozliczeniu elementu w tym okresie – WARNING |
+| Zmiany w zamkniętych okresach | WARNING | saldo elementu WBS w zamkniętym okresie inne niż w poprzednim przebiegu |
+| Jakość danych | WARNING | ujemny koszt elementu WBS narastająco (storno po rozliczeniu), wiersze w okresach późniejszych niż bieżący, waluta obiektu inna niż PLN, wiersze bez elementu WBS |
+
+Wynik: stan uruchomienia („zakończony”, „zakończony z ostrzeżeniami”, „zakończony z błędami”, „przerwany błędem”;
+uruchomienie bez działającej aplikacji – „przerwany (brak zakończenia)”), wyniki kontroli, dziennik, powiadomienia
+(`docs/funkcjonalnosc.md`, F06). Kontrole wymagające danych spoza zrzutu ACTUALS (typ wartości / linie statystyczne,
+odbiorca rozliczenia, suma kontrolna z SAP) – O50.
+
 ### P0. Uruchomienie
 
 | | |
@@ -314,3 +338,4 @@ Zamrożonego przebiegu zmiany nie dotyczą.
 | O31 | Harmonogram importu względem harmonogramu RABIT (RABIT nadpisuje pliki – wersja pośrednia bez importu przepada); import uruchamiany harmonogramem zadań Windows? |
 | O33 | Element CES z kosztem bez przypisania (spoza nakładki albo bez WP) w przebiegu zamykającym: czy dopuścić zamknięcie, czy wymagać przypisania (ERROR – P3)? Rekomendacja: wymagać przypisania |
 | O34 | CAM nie odesłał pliku w przebiegu zamykającym: blokada etapu (dziś) czy przyjęcie wartości z produkcji z oznaczeniem pochodzenia? |
+| O50 | Kontrole przebiegu wymagające kolumn spoza zrzutu ACTUALS: typ wartości (linie statystyczne nie są rozliczane – projekt z nimi nie zbilansuje się do 0), numer dokumentu CO i pozycja (stały klucz porównania przebiegów), odbiorca rozliczenia (PA, centrum kosztów, środek trwały w budowie), suma kontrolna projektu i okresu z niezależnego raportu SAP |
