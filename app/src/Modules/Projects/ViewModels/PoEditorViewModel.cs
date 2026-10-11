@@ -80,7 +80,7 @@ public sealed class PoEditorViewModel : ObservableObject
                 return;
             EditName = value?.Node.Name ?? "";
             EditWbs = value is { IsVirtual: false } ? value.Node.WbsElement ?? "" : "";
-            EditLegacy = value is { IsVirtual: false } ? value.Node.LegacyWbs ?? "" : "";
+            EditLegacy = value?.Node.LegacyWbs ?? "";   // węzeł wirtualny – kod wydzielenia ELEMENT_P1S.NAZWA.CPLGR
             OnPropertyChanged(nameof(SelectionText));
         }
     }
@@ -187,10 +187,8 @@ public sealed class PoEditorViewModel : ObservableObject
         {
             node.Name = EditName.Trim();
             if (!node.IsVirtual)
-            {
                 node.WbsElement = EditWbs.Trim().Length > 0 ? EditWbs.Trim() : null;
-                node.LegacyWbs = EditLegacy.Trim().Length > 0 ? EditLegacy.Trim() : null;
-            }
+            node.LegacyWbs = EditLegacy.Trim().Length > 0 ? EditLegacy.Trim() : null;
         }, "Zmieniono węzeł.");
     }
 

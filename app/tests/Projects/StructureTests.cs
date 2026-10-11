@@ -163,8 +163,8 @@ public sealed class StructureTests
         var empty = ProjectService.Structure(Objectives(), Inputs(), [], []);
         Assert.True(StructureEdits.CanEditWithNewWp(Of(empty, "p1s:AC-CAB.6.38.07"), StructureEdits.Start));
         Assert.False(StructureEdits.CanEditWithNewWp(Of(empty, "p1s:AC-CAB.6.38.07"), StructureEdits.Cam));
-        Assert.False(StructureEdits.CanEditWithNewWp(Of(structure, "p1s:AC-CAB.6.38.07"), StructureEdits.Start));   // WP-1 niżej (XYZ-1)
-        Assert.False(StructureEdits.CanEditWithNewWp(node, StructureEdits.BacHours));   // WP w poddrzewie
+        // WP niżej nie przeszkadza – nowy WP wiersza ma własny budżet (np. węzeł spinający nad wydzieleniami).
+        Assert.True(StructureEdits.CanEditWithNewWp(Of(structure, "p1s:AC-CAB.6.38.07"), StructureEdits.Start));   // WP-1 niżej (XYZ-1)
         Assert.False(StructureEdits.CanEditWithNewWp(leaf, StructureEdits.BacHours));   // ma już WP
     }
 
@@ -249,26 +249,63 @@ public sealed class StructureTests
     }
 
     [Fact]
-    public void Virtual_p1s_element_is_under_its_parent_with_own_production_and_dates()
+    public void Split_code_names_the_element_and_the_work_center_group()
     {
-        DictRow[] virtuals = [Row(("Element wirtualny", "XYZ-1.PAINT"), ("Element nadrzędny", "XYZ-1"), ("Nazwa", "Paint"), ("SWBS", "Hangar"), ("CPLGR", "W20"), ("ARBPL", null))];
-        DictRow[] wpCam = [Wp("XYZ-1.PAINT", "WP-P")];
+        var index = ProductionSplit.Index(Inputs().P1s);
+        var split = ProductionSplit.Parse("AC-CAB.6.38.07.PAINT.W20", index)!;
+        Assert.Equal(("AC-CAB.6.38.07", "101", "PAINT", "W20"), (split.Element, split.Pspnr, split.Name, split.Cplgr));
+        Assert.Equal("XYZ-1", ProductionSplit.Parse("xyz-1.QUALITY.DJ", index)!.Element);   // wielkość liter bez znaczenia
+        Assert.Null(ProductionSplit.Parse("AC-CAB.6.38.07", index));                         // element LOG.WBS – nie wydzielenie
+        Assert.Null(ProductionSplit.Parse("AC-CAB.6.38.07.PAINT", index));                   // brak CPLGR
+        Assert.Null(ProductionSplit.Parse("AC-CAB.6.38.07.PAINT.W20.X", index));             // za dużo członów
+        Assert.Null(ProductionSplit.Parse("ZZZ.PAINT.W20", index));                          // element spoza LOG.WBS
+    }
+
+    [Fact]
+    public void Split_node_has_own_hours_wp_and_budget_and_parent_wp_keeps_the_rest()
+    {
+        // WP-R na AC-CAB.6.38 (węzeł 4D06WP.RA – „spinający”), pod nim węzeł wirtualny Paint z kodem wydzielenia i własnym WP.
+        var tree = Objectives();
+        var paintNode = tree.AddVirtual(tree.Nodes.Single(n => n.WbsElement == "4D06WP.RA").Key, "Paint");
+        paintNode.LegacyWbs = "AC-CAB.6.38.PAINT.W20";
+        DictRow[] wpCam = [Wp("AC-CAB.6.38", "WP-R"), Wp("AC-CAB.6.38.PAINT.W20", "WP-P", cam: "e777")];
+        DictRow[] schedule = [Budget("WP-R", "100", null, null, null, "1000"), Budget("WP-P", "50", null, null, null, "500")];
         var production = new ProductionData(new Dictionary<string, ProductionValues>
         {
-            ["102"] = new("102", 5, 40, 30, 100, null, new DateOnly(2026, 1, 5), new DateOnly(2026, 2, 25)),
-            [ProductionData.VirtualKey("XYZ-1.PAINT")] = new("102", 4, 55, 22, null, "XYZ-1.PAINT", new DateOnly(2026, 3, 5), null),
+            ["100"] = new("100", 6, 60, 30, 100, null, new DateOnly(2026, 1, 5), new DateOnly(2026, 2, 25)),            // AC-CAB.6.38 bez Paint
+            ["102"] = new("102", 4, 40, 20, null, null, new DateOnly(2026, 1, 10), new DateOnly(2026, 2, 20)),           // XYZ-1 – pod WP-R
+            [ProductionData.VirtualKey("AC-CAB.6.38.PAINT.W20")] = new("100", 5, 55, 22, null, "AC-CAB.6.38.PAINT.W20", new DateOnly(2026, 3, 5), null),
         }, DateTimeOffset.Now);
-        var structure = StructureBuilder.Build(Objectives(), ProjectService.Resolve(Objectives(), Inputs()), Inputs().P1s, wpCam, [],
-            production: production, virtualP1s: virtuals);
+        var structure = StructureBuilder.Build(tree, ProjectService.Resolve(tree, Inputs()), Inputs().P1s, wpCam, schedule, production: production);
 
-        var paint = Of(structure, "p1s:XYZ-1.PAINT");
-        Assert.Equal((Of(structure, "p1s:XYZ-1").Id, true, "Paint", "WP-P"), (paint.ParentId, paint.IsVirtual, paint.Name, paint.Wp));
-        Assert.Contains("CPLGR = W20", paint.Note);
-        Assert.Equal((55m, 22m, 4m, "2026-03-05", (string?)null), (paint.OpsBacHours, paint.EvHours, paint.AcHours, paint.ActualStart, paint.ActualFinish));
-        var parent = Of(structure, "p1s:XYZ-1");
-        Assert.Equal((95m, 52m, 9m, 100m), (parent.OpsBacHours, parent.EvHours, parent.AcHours, parent.ActualMaterial));   // element + Paint
-        Assert.Equal(("2026-01-05", (string?)null), (parent.ActualStart, parent.ActualFinish));                             // Paint otwarty – bez końca
-        Assert.Single(structure.Rows, r => r.P1s == "XYZ-1.PAINT");                                                           // WP na elemencie wirtualnym – bez duplikatu
+        var paint = Of(structure, $"po:{paintNode.Key}");
+        Assert.Equal((true, "AC-CAB.6.38.PAINT.W20", "WP-P", "e777"), (paint.IsVirtual, paint.P1s, paint.Wp, paint.Cam));
+        Assert.Contains("wydzielenie z AC-CAB.6.38", paint.Note);
+        Assert.Equal((55m, 22m, 5m, "2026-03-05", (string?)null), (paint.OpsBacHours, paint.EvHours, paint.AcHours, paint.ActualStart, paint.ActualFinish));
+        Assert.Equal((50m, 500m, "WP-P"), (paint.BacHours, paint.Bac, paint.BudgetWp));
+
+        // WP spinający: własne godziny i budżet (bez Paint, z XYZ-1 bez WP), edytowalny mimo WP-P pod nim.
+        var ra = Of(structure, "4D06WP.RA");
+        Assert.Equal((100m, 50m, 10m, 100m), (ra.OpsBacHours, ra.EvHours, ra.AcHours, ra.ActualMaterial));
+        Assert.Equal((100m, 1000m, "WP-R"), (ra.BacHours, ra.Bac, ra.BudgetWp));
+        Assert.Equal(["WP-P", "WP-R"], ra.Wps);
+        Assert.True(StructureEdits.CanEdit(ra, StructureEdits.Bac));
+        Assert.Equal(200m, paint.EvCost);   // 500 × 22/55
+        Assert.Equal(500m, ra.EvCost);      // 1000 × 50/100
+
+        // Węzeł wyżej bez własnego WP – suma obu WP i całego poddrzewa.
+        var root = Of(structure, "4D06WP");
+        Assert.Equal((155m, 150m, 1500m), (root.OpsBacHours, root.BacHours, root.Bac));
+    }
+
+    [Fact]
+    public void Split_code_outside_log_wbs_is_a_gap()
+    {
+        var tree = Objectives();
+        var node = tree.AddVirtual(null, "Zły kod");
+        node.LegacyWbs = "AC-CAB.6.38.PAINT";
+        var structure = ProjectService.Structure(tree, Inputs(), [], []);
+        Assert.Contains("kod wydzielenia", Of(structure, $"po:{node.Key}").Gap);
     }
 
     [Fact]

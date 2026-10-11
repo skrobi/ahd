@@ -110,11 +110,21 @@ i budżetem (`StructureBuilder`).
   | Materials | BAC Material („Harmonogram i budżet”), Actual Material (vAPD: dostarczone / wydane, USD bez narzutu Z_CLO) |
   | Financial EV | BAC Hours baseline i BAC Cost („Harmonogram i budżet”), PV Cost (BAC Cost × udział dni roboczych baseline), EV Cost (BAC Cost × EV Hours ÷ BAC Hours AHD, najwyżej BAC Cost), ACWP |
 
-  Wartości z PZLPROD to suma elementów P1S poddrzewa wiersza (każdy element raz); PV i EV kosztowe – suma WP poddrzewa.
-  **Elementy wirtualne P1S** (np. Paint – słownik projektu „Elementy wirtualne P1S”): wiersz pod elementem nadrzędnym
-  (znacznik „wirtualny”, reguła w podpowiedzi nazwy); godziny i daty operacji zgodnych z regułą, odjęte od nadrzędnego
-  (suma nadrzędnego z poddrzewem bez zmian); WP, CAM, Cost Category, budżet i daty – jak na elemencie P1S; materiały
-  i ACWP – na nadrzędnym.
+  **Wiersz z własnym WP** pokazuje ten WP: budżet i daty (edytowalne, także gdy pod nim są inne WP), godziny z PZLPROD
+  przypisane do WP oraz PV / EV. Godziny elementu trafiają do najbliższego WP w górę drzewa (własnego albo przodka) – WP
+  zagnieżdżony (np. wydzielenie z własnym CAM) ma swoje godziny, WP nadrzędny („spinający”) – resztę, bez podwójnego
+  liczenia. **Wiersz bez własnego WP** – sumy WP i elementów poddrzewa (każdy element raz; kilka węzłów z tym samym kodem –
+  w najgłębszym).
+  **Wydzielenia godzin** (np. malowanie, kontrola, obróbka z jednego elementu P1S): węzeł wirtualny nakładki (edycja
+  Performance Objectives – „+ węzeł wirtualny”, albo kolumna Legacy Element w wierszu węzła) z kodem P1S
+  `ELEMENT_P1S.NAZWA.CPLGR`, np. `AC-R39.1.18.03.25.PAINT.W20`, `AC-R39.1.18.03.25.QUALITY.DJ`,
+  `ELEMENT.MACHINING.W30` (nazwa węzła np. „Produkcja CNC”). Element – najdłuższy prefiks kodu, który jest w `LOG.WBS`;
+  za nim nazwa i CPLGR (grupa stanowisk, prefiks – `W5` obejmuje W51, W52…; kilka wydzieleń jednego elementu – najdłuższy
+  pasujący CPLGR). Operacje `vAHDD` elementu z tą grupą stanowisk (z DJK stanowiska) należą do węzła i są odejmowane od
+  elementu – reszta zostaje na elemencie. Węzeł ma WP, CAM, Cost Category, budżet i daty jak element P1S; materiały i ACWP
+  zostają na elemencie. SWBS nie jest brany pod uwagę. Kod niezgodny z konwencją – brak „kod wydzielenia” w kolumnie Braki,
+  powód w podpowiedzi nazwy i w nagłówku „Produkcja (PZLPROD)”. Godziny wydzielane są tylko z operacji samego elementu
+  (PSPNR) – operacje elementów pod nim w `LOG.WBS` wydziela się kodem z ich elementem.
   Dane produkcyjne są czytane na żywo (`IPzlProdSource.Production`, zakres P1S projektu zamiast filtra programu) przy
   otwarciu projektu, „Odśwież mapowanie i koszty” i po zmianie Legacy WBS; chwila odczytu – w nagłówku ekranu
   („Produkcja (PZLPROD) …”). Kolumny mają stałą szerokość – przy kolejnych kolumnach tabela przewija się w poziomie. Tabela kończy się na dole okna (wysokość

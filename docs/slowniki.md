@@ -79,7 +79,6 @@ Definicje źródeł i ich prefiksy są konfiguracją importu – `docs/zrodla-da
 |---|---|---|
 | WP i CAM | element P1S projektu → WP, CAM, Cost Category (kategoria ze słownika „Kategorie WBS” projektu); powiązanie z nakładką przez `Legacy WBS` (`docs/performance-objectives.md`, rozdz. 4.1) | element P1S |
 | Harmonogram i budżet | WP → `BAC HOURS` (godziny), `BAC MATERIAL` (koszt materiałów), `BAC` (budżet kosztowy WP – kwota), Baseline Start, Baseline Koniec (RRRR-MM-DD; w plikach Excel rozpoznawane też dawne nagłówki „Planowany Start/Koniec”) – baseline projektu | WP |
-| Elementy wirtualne P1S | element spoza `LOG.WBS` (np. Paint) wydzielony z elementu nadrzędnego regułą operacji `vAHDD`: `Element wirtualny` (kod nadrzędnego + kropka + nazwa, np. `AC-CAB.6.38.07.PAINT`), `Element nadrzędny`, `Nazwa`, `SWBS`, `CPLGR` (grupa stanowisk), `ARBPL` (stanowisko) – puste = dowolne; godziny operacji zgodnych z regułą (z DJK stanowiska) należą do elementu wirtualnego i są odejmowane od nadrzędnego, materiały i ACWP zostają na nadrzędnym; w strukturze – wiersz pod nadrzędnym (WP, CAM, budżet jak element P1S) – **opcjonalny**, dodawany ręcznie | Element wirtualny |
 | Kategorie WBS | kategorie elementów WBS indywidualne dla projektu: `Cost Category` (np. Production, Programs), `Opis` – lista wyboru kolumny Cost Category w strukturze projektu i w „WP i CAM”; raport po kategoriach (wiele elementów WBS w jednej kategorii); inne niż globalny słownik Cost Category (numer elementu kosztowego) – **opcjonalny** | Cost Category |
 | Stawki CAS | stawki CAS projektu (zawartość – O37); do ustalenia słownik nie jest wczytywany, a projekt CAS jest niegotowy (ERROR) | do ustalenia |
 | Cost Category – zmiany w projekcie | zmiany i uzupełnienia słownika globalnego Cost Category dla projektu (rozdz. 6) | numer elementu kosztowego |
@@ -182,13 +181,13 @@ Kontekst biznesowy typów – `readme.md`.
 Reguły rozstrzygania na zawartości raportu (kilka celów jednego elementu CES, cel spoza `LOG.WBS`) sprawdza ekran
 Mapowanie – `docs/mapowanie-ces-p1s.md`, rozdz. 10.
 
-### 5.9 Elementy wirtualne P1S i parametry produkcji
+### 5.9 Parametry produkcji
+
+Wydzielenia godzin z elementu P1S (np. Paint) to węzły wirtualne nakładki z kodem `ELEMENT_P1S.NAZWA.CPLGR`, nie słownik –
+`docs/performance-objectives.md`, rozdz. 4.2.
 
 | Reguła | Poziom |
 |---|---|
-| element nadrzędny w zakresie projektu; kod elementu wirtualnego = kod nadrzędnego + kropka + nazwa | ERROR |
-| reguła – co najmniej jedno z `SWBS`, `CPLGR`, `ARBPL` | ERROR |
-| element nadrzędny spoza `LOG.WBS` – element w strukturze bez godzin (uwaga przy danych produkcyjnych) | informacja |
 | „Wskaźniki DJK”: udział od 0 do 1; prefiks zawarty w innym (W5 i W51) | ERROR / WARNING |
 | „Parametry produkcji”: okno 1–120 miesięcy; statusy niepuste; Z_CLO – tak / nie | ERROR |
 

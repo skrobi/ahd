@@ -51,7 +51,7 @@ public sealed class PzlProdProductionTests : IDisposable
         _database.Dispose();
     }
 
-    private static readonly VirtualRule Paint = new("AC-CAB.6.38.07.PAINT", "101", "Hangar", "W20", null);
+    private static readonly VirtualRule Paint = new("AC-CAB.6.38.07.PAINT.W20", "101", null, "W20", null);
 
     [SqlFact]
     public void Hours_use_ipt_productivity_and_djk_dates_and_delivered_materials()
@@ -79,6 +79,18 @@ public sealed class PzlProdProductionTests : IDisposable
         var parent = Assert.Single(values, v => v.VirtualCode is null);
         Assert.Equal((15m, 150m, 66m, 150m), (parent.AcHours, parent.BacHours, parent.EvHours, parent.ActualMaterial));          // bez operacji Paint
         Assert.Equal((new DateOnly(2026, 1, 5), new DateOnly(2026, 2, 25)), (parent.ActualStart, parent.ActualFinish));        // wszystkie DONE – koniec LTRMI
+    }
+
+    [SqlFact]
+    public void Split_cplgr_is_a_prefix_and_the_longest_rule_wins()
+    {
+        // MACHINING.W5 – W51 (i inne W5x); FORMING.W51 – dłuższy prefiks wygrywa dla W51.
+        var values = new SqlPzlProdSource(_prod).Production(["101"],
+            [new("E.MACHINING.W", "101", null, "W", null), new("E.ASSEMBLY.W51", "101", null, "W51", null)], ProductionParameters.Default);
+
+        Assert.Equal(140m, values.Single(v => v.VirtualCode == "E.ASSEMBLY.W51").BacHours);   // W51: 100/0,8 + 15%
+        Assert.Equal(55m, values.Single(v => v.VirtualCode == "E.MACHINING.W").BacHours);     // W20: 50 + 10%
+        Assert.Equal(10m, values.Single(v => v.VirtualCode is null).BacHours);                // reszta – X10
     }
 
     [SqlFact]

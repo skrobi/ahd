@@ -101,18 +101,6 @@ public sealed class ProjectDictionariesTests
     }
 
     [Fact]
-    public void Virtual_p1s_element_lies_under_parent_in_scope_and_has_a_rule()
-    {
-        static Dictionary<string, string?> Virtual(string code, string parent, string? swbs, string? cplgr, string? arbpl = null) =>
-            new() { ["Element wirtualny"] = code, ["Element nadrzędny"] = parent, ["Nazwa"] = "Paint", ["SWBS"] = swbs, ["CPLGR"] = cplgr, ["ARBPL"] = arbpl };
-        Assert.Empty(Validate(ProjectDictionaries.VirtualP1s, Virtual("AC-CAB.6.38.03.PAINT", "AC-CAB.6.38.03", "Hangar", "W20")));
-        Assert.True(HasError(Validate(ProjectDictionaries.VirtualP1s, Virtual("AC-CAB.7.PAINT", "AC-CAB.7", "Hangar", "W20")), "poza zakresem"));
-        Assert.True(HasError(Validate(ProjectDictionaries.VirtualP1s, Virtual("PAINT-1", "AC-CAB.6.38", "Hangar", "W20")), "zacznij od kodu nadrzędnego"));
-        Assert.True(HasError(Validate(ProjectDictionaries.VirtualP1s, Virtual("AC-CAB.6.38.P", "AC-CAB.6.38", null, null)), "co najmniej jedno"));
-        Assert.Contains(ProjectDictionaries.Tables, t => t.Spec.Code == ProjectDictionaries.VirtualP1s);
-    }
-
-    [Fact]
     public void Production_parameters_rules_and_reading()
     {
         var djkSpec = GlobalDictionaries.Get(GlobalDictionaries.DjkRates);

@@ -1,20 +1,20 @@
 namespace PzlEv.Shared.Models.PzlProd;
 
 /// <summary>
-/// Wartości produkcyjne elementu P1S (PSPNR) albo elementu wirtualnego (VirtualCode – np. Paint wydzielony regułą) z PZLPROD –
+/// Wartości produkcyjne elementu P1S (PSPNR) albo wydzielenia (VirtualCode – np. AC-R39.1.18.03.25.PAINT.W20) z PZLPROD –
 /// odczyt na żywo (docs/zrodla-danych.md, rozdz. 6; docs/performance-objectives.md, rozdz. 4.2): godziny z LOG.vAHDD
 /// przeliczone przez produktywność IPT (LOG.vAHDD_PL_CPI) z godzinami jakości DJK (% godzin TECH według stanowiska –
 /// słownik „Wskaźniki DJK”): BacHours = TECH / produktywność + DJK, EvHours = TECH_PON / produktywność + DJK, AcHours = CATS;
-/// ActualStart – najwcześniejszy rzeczywisty start zlecenia (GSTRI; element wirtualny – DATA_REAL operacji), ActualFinish –
-/// najpóźniejszy rzeczywisty koniec (LTRMI; wirtualny – DATA_REAL), gdy wszystkie zlecenia zamknięte (STAT = DONE);
-/// materiały z LOG.vAPD (element P1S, nie wirtualny): ActualMaterial – wartość dostarczona (statusy z „Parametry produkcji”).
+/// ActualStart – najwcześniejszy rzeczywisty start zlecenia (GSTRI; wydzielenie – DATA_REAL operacji), ActualFinish –
+/// najpóźniejszy rzeczywisty koniec (LTRMI; wydzielenie – DATA_REAL), gdy wszystkie zlecenia zamknięte (STAT = DONE);
+/// materiały z LOG.vAPD (element P1S, nie wydzielenie): ActualMaterial – wartość dostarczona (statusy z „Parametry produkcji”).
 /// </summary>
 public sealed record ProductionValues(string Pspnr, decimal? AcHours, decimal? BacHours, decimal? EvHours, decimal? ActualMaterial,
     string? VirtualCode = null, DateOnly? ActualStart = null, DateOnly? ActualFinish = null);
 
 /// <summary>
-/// Element wirtualny P1S projektu (słownik „Elementy wirtualne P1S”) z PSPNR elementu nadrzędnego: operacje vAHDD elementu
-/// nadrzędnego zgodne z regułą (Swbs, Cplgr, Arbpl – puste = dowolne) należą do elementu wirtualnego.
+/// Wydzielenie godzin z elementu P1S (węzeł wirtualny nakładki z kodem ELEMENT_P1S.NAZWA.CPLGR) z PSPNR elementu: operacje
+/// vAHDD elementu zgodne z regułą (Cplgr – prefiks grupy stanowisk; Swbs, Arbpl – puste = dowolne) należą do wydzielenia.
 /// </summary>
 public sealed record VirtualRule(string Code, string Pspnr, string? Swbs, string? Cplgr, string? Arbpl);
 
@@ -31,7 +31,7 @@ public sealed record ProductionParameters(IReadOnlyList<(string Prefix, decimal 
 }
 
 /// <summary>
-/// Dane produkcyjne projektu: wartości po kluczu (Key – PSPNR elementu P1S albo VirtualKey elementu wirtualnego), chwila
+/// Dane produkcyjne projektu: wartości po kluczu (Key – PSPNR elementu P1S albo VirtualKey wydzielenia), chwila
 /// odczytu i błąd (PZLPROD niedostępny, brak widoku) – ekran działa dalej bez kolumn produkcyjnych; Note – uwagi (np.
 /// parametry domyślne, element nadrzędny spoza LOG.WBS).
 /// </summary>
@@ -39,6 +39,6 @@ public sealed record ProductionData(IReadOnlyDictionary<string, ProductionValues
 {
     public static ProductionData Unavailable(string error, DateTimeOffset at) => new(new Dictionary<string, ProductionValues>(), at, error);
 
-    /// <summary>Klucz elementu wirtualnego w ByPspnr (kod – MappingKeys.Key).</summary>
+    /// <summary>Klucz wydzielenia w ByPspnr (kod – MappingKeys.Key).</summary>
     public static string VirtualKey(string code) => "v:" + code;
 }

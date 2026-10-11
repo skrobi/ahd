@@ -33,7 +33,8 @@ public static class StructureEdits
 
     /// <summary>
     /// Czy komórkę można zmienić: nazwa i Legacy WBS – węzeł nakładki; WP, CAM, Cost Category – wiersz z kodem P1S;
-    /// budżet i daty – wiersz z jednym WP w poddrzewie (własnym albo jedynym pod nim – StructureRow.BudgetWp).
+    /// budżet i daty – wiersz z własnym WP albo z jednym WP w poddrzewie (StructureRow.BudgetWp); kod P1S – węzeł nakładki
+    /// (element CES – Legacy WBS, węzeł wirtualny – kod wydzielenia ELEMENT_P1S.NAZWA.CPLGR).
     /// </summary>
     public static bool CanEdit(StructureRow row, string column)
     {
@@ -42,7 +43,7 @@ public static class StructureEdits
         return column switch
         {
             Name => row.Kind == GridRowKind.Objective,
-            P1s => row is { Kind: GridRowKind.Objective, IsVirtual: false },
+            P1s => row.Kind == GridRowKind.Objective,   // węzeł wirtualny – kod wydzielenia ELEMENT_P1S.NAZWA.CPLGR
             Wp or Cam or CostCategory => row.P1s is not null,
             BacHours or BacMaterial or Bac or Start or Finish => row.BudgetWp is not null,
             _ => false,
@@ -51,10 +52,10 @@ public static class StructureEdits
 
     /// <summary>
     /// Budżet i daty wiersza, w którym WP jest właśnie zaznaczany (wklejenie WP z budżetem za jednym razem): wiersz
-    /// z kodem P1S, bez WP i bez WP w poddrzewie – po zapisie jego sumy to jego własny WP.
+    /// z kodem P1S bez własnego WP – po zapisie budżet i daty wiersza to jego własny WP.
     /// </summary>
     public static bool CanEditWithNewWp(StructureRow row, string column) =>
-        !Locked.Contains(column) && ScheduleColumns.Contains(column) && row is { P1s: not null, Wp: null, Wps.Count: 0 };
+        !Locked.Contains(column) && ScheduleColumns.Contains(column) && row is { P1s: not null, Wp: null };
 
     /// <summary>Nazwa kolumny słownika dla kolumny tabeli.</summary>
     public static string DictionaryColumn(string column) => column switch

@@ -10,7 +10,7 @@ namespace PzlEv.Modules.Projects.Models;
 /// Operational EV (z PZLPROD na żywo, null – brak danych): OpsBacHours, EvHours, AcHours – suma elementów P1S poddrzewa
 /// (vAHDD); PvHours – BAC Hours WP poddrzewa rozłożone liniowo na dni robocze baseline do dnia stanu. ActualMaterial –
 /// materiały dostarczone (vAPD). Financial EV: PvCost = BAC Cost × udział dni roboczych baseline, EvCost = BAC Cost ×
-/// (EV Hours / BAC Hours) WP. ActualStart / ActualFinish – vAHDD (GSTRI, LTRMI; element wirtualny – DATA_REAL); koniec, gdy wszystkie zlecenia zamknięte.
+/// (EV Hours / BAC Hours) WP. ActualStart / ActualFinish – vAHDD (GSTRI, LTRMI; wydzielenie – DATA_REAL); koniec, gdy wszystkie zlecenia zamknięte.
 /// </summary>
 public sealed record StructureRow(
     string Id,
@@ -46,12 +46,12 @@ public sealed record StructureRow(
     decimal? PvCost = null,
     decimal? EvCost = null)
 {
-    /// <summary>Budżet i daty wiersza to wartości jego własnego WP (bez innych WP w poddrzewie).</summary>
-    public bool OwnsBudget => Wp is not null && Wps.Count == 1 && string.Equals(Wps[0], Wp, StringComparison.OrdinalIgnoreCase);
+    /// <summary>Budżet i daty wiersza to wartości jego własnego WP (także gdy pod nim są inne WP – np. wydzielenia).</summary>
+    public bool OwnsBudget => Wp is not null;
 
     /// <summary>
-    /// WP, którego budżet i daty pokazuje wiersz i do którego trafia ich zmiana: jedyny WP poddrzewa – własny WP wiersza
-    /// albo jedyny WP pod nim (np. węzeł nakładki nad elementem P1S z WP). Kilka WP w poddrzewie (suma) – null.
+    /// WP, którego budżet i daty pokazuje wiersz i do którego trafia ich zmiana: własny WP wiersza, a bez niego – jedyny WP
+    /// poddrzewa (np. węzeł nakładki nad elementem P1S z WP). Bez własnego WP i z kilkoma WP w poddrzewie (suma) – null.
     /// </summary>
-    public string? BudgetWp => Wps.Count == 1 ? Wps[0] : null;
+    public string? BudgetWp => Wp ?? (Wps.Count == 1 ? Wps[0] : null);
 }

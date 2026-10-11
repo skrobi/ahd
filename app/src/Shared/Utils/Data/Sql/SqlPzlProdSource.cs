@@ -70,9 +70,9 @@ public sealed class SqlPzlProdSource(SqlDatabase db) : IPzlProdSource
     }
 
     /// <summary>
-    /// Odczyt na żywo zakresu projektu – zapytanie sql/pzlprod/produkcja.sql (wbudowane): PSPNR, reguły elementów wirtualnych
+    /// Odczyt na żywo zakresu projektu – zapytanie sql/pzlprod/produkcja.sql (wbudowane): PSPNR, reguły wydzieleń
     /// i parametry do tabel tymczasowych sesji (bez praw zapisu w PZLPROD), wynik – godziny i daty po elemencie (P1S albo
-    /// wirtualny) i materiały po PSPNR (docs/zrodla-danych.md, rozdz. 6).
+    /// wydzielenie) i materiały po PSPNR (docs/zrodla-danych.md, rozdz. 6).
     /// </summary>
     public IReadOnlyList<ProductionValues> Production(IReadOnlyCollection<string> pspnrs, IReadOnlyCollection<VirtualRule> rules, ProductionParameters parameters)
     {
