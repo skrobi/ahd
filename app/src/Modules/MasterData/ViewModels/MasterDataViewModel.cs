@@ -26,11 +26,20 @@ public sealed class MasterDataViewModel : ObservableObject
     private ImportPreview? _preview;
     private readonly IHrSource? _hr;
     private readonly ICostElementSource? _costElements;
+    private bool _showP1s;
 
     /// <param name="hr">Pracownicy z PZLHRPROD (słownik Osoby); null – brak sekcji PzlHrProd w pzl-ev.json.</param>
     /// <param name="costElements">Cost elementy ostatniego importu ACTUALS – „Uzupełnij z ACTUALS” w Cost Category.</param>
-    public MasterDataViewModel(DictionaryService service, IFileDialogs dialogs, IHrSource? hr = null, ICostElementSource? costElements = null)
+    /// <param name="pzlProd">Struktura P1S (LOG.WBS) do podglądu; null – brak sekcji PzlProd w pzl-ev.json.</param>
+    public MasterDataViewModel(DictionaryService service, IFileDialogs dialogs, IHrSource? hr = null, ICostElementSource? costElements = null,
+        IPzlProdSource? pzlProd = null)
     {
+        P1s = new P1sStructureViewModel(pzlProd);
+        OpenP1s = new RelayCommand(_ =>
+        {
+            ShowP1s = true;
+            P1s.EnsureLoaded();
+        });
         _service = service;
         _dialogs = dialogs;
         _hr = hr;
@@ -93,6 +102,8 @@ public sealed class MasterDataViewModel : ObservableObject
         get => _selectedDictionary;
         set
         {
+            if (value is not null)
+                ShowP1s = false;
             if (value is null || ReferenceEquals(value, _selectedDictionary))
                 return;
             Table.CommitEdits();
@@ -111,6 +122,23 @@ public sealed class MasterDataViewModel : ObservableObject
             _ = Reload("");
         }
     }
+
+    /// <summary>Struktura P1S z PZLPROD – podgląd tylko do odczytu zamiast tabeli słownika.</summary>
+    public P1sStructureViewModel P1s { get; }
+
+    public ICommand OpenP1s { get; }
+
+    public bool ShowP1s
+    {
+        get => _showP1s;
+        private set
+        {
+            if (SetProperty(ref _showP1s, value))
+                OnPropertyChanged(nameof(ShowDictionary));
+        }
+    }
+
+    public bool ShowDictionary => !ShowP1s;
 
     public string Status
     {
@@ -333,7 +361,7 @@ public sealed class MasterDataViewModel : ObservableObject
         });
     }
 
-    /// <summary>Pierwsze linie zmian danego rodzaju – pełne wczytanie dużego słownika (raport mapowań) to tysiące wierszy.</summary>
+    /// <summary>Pierwsze linie zmian danego rodzaju – pełne wczytanie dużego słownika to tysiące wierszy.</summary>
     private void AddPreviewLines(string sign, IReadOnlyList<string> lines)
     {
         foreach (var line in lines.Take(PreviewLimit))

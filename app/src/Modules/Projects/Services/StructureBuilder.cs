@@ -1,6 +1,5 @@
 using PzlEv.Modules.Projects.Models;
 using PzlEv.Shared.Models.Dictionaries;
-using PzlEv.Shared.Models.Mapping;
 using PzlEv.Shared.Models.PzlProd;
 using PzlEv.Shared.Utils.Files;
 using PzlEv.Shared.Utils.Mapping;
@@ -69,7 +68,7 @@ public static class StructureBuilder
 
     /// <param name="production">Wartości produkcyjne z PZLPROD (Operational EV, materiały) – null: kolumny puste.</param>
     /// <param name="statusDate">Dzień stanu dla PV (domyślnie dziś).</param>
-    public static ProjectStructure Build(PoTree tree, IReadOnlyDictionary<long, MappingResult> mapping, IReadOnlyList<P1sElement>? p1s,
+    public static ProjectStructure Build(PoTree tree, IReadOnlyList<P1sElement>? p1s,
         IReadOnlyList<DictRow> wpCam, IReadOnlyList<DictRow> schedule, IReadOnlyDictionary<string, decimal>? costs = null,
         ProductionData? production = null, DateOnly? statusDate = null)
     {
@@ -85,7 +84,7 @@ public static class StructureBuilder
             .ToDictionary(g => g.Key, g => g.OrderBy(e => e.WbsElement, StringComparer.OrdinalIgnoreCase).ToList());
         // Kody węzłów: element CES – Legacy WBS i cel mapowania; węzeł wirtualny – Legacy WBS (wydzielenie ELEMENT_P1S.NAZWA.CPLGR).
         var codes = tree.Nodes.Where(n => !n.IsVirtual || !string.IsNullOrWhiteSpace(n.LegacyWbs))
-            .ToDictionary(n => n.Key, n => ObjectivesMapping.CodesOf(n, mapping));
+            .ToDictionary(n => n.Key, n => ObjectivesMapping.CodesOf(n));
         // Kody węzłów nakładki: na nich zatrzymuje się rozwinięcie innego węzła.
         var anchors = codes.Values.SelectMany(c => c).Select(MappingKeys.Key).ToHashSet();
         var primary = codes.Values.Where(c => c.Count > 0).Select(c => MappingKeys.Key(c[0])).ToHashSet();

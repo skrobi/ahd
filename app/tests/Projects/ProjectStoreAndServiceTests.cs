@@ -7,7 +7,6 @@ using PzlEv.Shared.Utils.Data;
 using PzlEv.Shared.Utils.Data.Sql;
 using PzlEv.Shared.Utils.Dictionaries;
 using PzlEv.Shared.Utils.Files;
-using PzlEv.Shared.Utils.Mapping;
 using PzlEv.Tests.TestSupport;
 using Xunit;
 
@@ -32,7 +31,7 @@ public sealed class ProjectStoreAndServiceTests : IDisposable
         _store = new SqlProjectStore(_database.Sql, _services.Clock, _services.User);
         _dictionaries = new SqlDictionaryStore(_database.Sql, _services.Clock, _services.User, [.. GlobalDictionaries.Tables, .. ProjectDictionaries.Tables]);
         _service = new ProjectService(_store, _dictionaries, new SqlJournal(_database.Sql, _services.Clock, _services.User),
-            new ProjectFolders(Path.Combine(_root, "Projekty")), new SqlMappingStore(_database.Sql, _services.Clock, _services.User), null);
+            new ProjectFolders(Path.Combine(_root, "Projekty")), null);
     }
 
     public void Dispose()
@@ -199,11 +198,11 @@ public sealed class ProjectStoreAndServiceTests : IDisposable
     }
 
     [SqlFact]
-    public void Mapping_inputs_are_read_once_per_session_until_refresh()
+    public void P1s_inputs_are_read_once_per_session_until_refresh()
     {
         var first = _service.Mapping();
 
-        Assert.Same(first, _service.Mapping());              // kolejne ekrany nie czytają raportu i PZLPROD ponownie
+        Assert.Same(first, _service.Mapping());              // kolejne ekrany nie czytają PZLPROD ponownie
         Assert.NotSame(first, _service.Mapping(refresh: true));
         Assert.Equal("Brak połączenia z PZLPROD (pzl-ev.json, PzlProd)", first.P1sError);
     }
@@ -212,7 +211,7 @@ public sealed class ProjectStoreAndServiceTests : IDisposable
     public void Template_contains_scope_elements_and_reads_back()
     {
         var path = Path.Combine(_root, "szablon.xlsx");
-        _service.ExportDictionaries(path, "", ProjectTypes.Internal, Objectives(), MappingInputs.None);
+        _service.ExportDictionaries(path, "", ProjectTypes.Internal, Objectives(), P1sInputs.None);
 
         var sheets = PzlEv.Shared.Utils.Files.TabularFileReader.SheetNames(path);
         Assert.Equal(["WP i CAM", "Harmonogram i budżet", "Kategorie WBS", "Cost Category projektu", "Wykluczenia"], sheets);

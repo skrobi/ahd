@@ -10,5 +10,4 @@ public static class DbTables
     public const string SourceFileSeen = "meta.SourceFileSeen";
     public const string Parser = "meta.Parser";
     public const string CanonicalRow = "can.Row";
-    public const string MappingCorrection = "dict.MappingCorrection";
 }

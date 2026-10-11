@@ -9,7 +9,6 @@ public sealed record NavItem(string Key, string Label, string? Badge)
     {
         ModuleKeys.Dashboard => "",
         ModuleKeys.Import => "",
-        ModuleKeys.Mapping => "",
         ModuleKeys.Projects => "",
         ModuleKeys.Runs => "",
         ModuleKeys.MasterData => "",

@@ -28,7 +28,7 @@ public sealed class ProjectDetailViewModel : ObservableObject
     private readonly IFileDialogs _dialogs;
     private string _status = "";
     private Pill _readiness = new("muted", "");
-    private MappingInputs _mapping = MappingInputs.None;
+    private P1sInputs _mapping = P1sInputs.None;
     private PoTree _saved = new();
     private IReadOnlyDictionary<string, string> _owners = new Dictionary<string, string>();
     // Dane zmieniające się rzadko – czytane przy otwarciu projektu i „Odśwież mapowanie i koszty” (nie po każdym zapisie):
@@ -60,7 +60,6 @@ public sealed class ProjectDetailViewModel : ObservableObject
         // Edycja nakładki tym samym edytorem co w kreatorze (przeciąganie, przesuwanie, usuwanie, węzły wirtualne);
         // „Wczytaj Excel” podmienia strukturę (elementy o tym samym WBS element zachowują historię).
         Objectives = new PoEditorViewModel(dialogs, busy, service.ReadObjectives, tree => ObjectivesValidator.Validate(tree, _owners), ProjectService.Refresh);
-        Objectives.ResolveMapping = tree => ProjectService.Resolve(tree, _mapping);
         EditObjectives = new RelayCommand(_ => { if (StructureSettled("edycją Performance Objectives")) StartEditObjectives(); }, _ => !IsEditingObjectives && !Busy.IsBusy);
         SaveObjectives = new AsyncRelayCommand(DoSaveObjectives, () => IsEditingObjectives && Objectives.IsDirty && !Busy.IsBusy);
         CancelObjectives = new RelayCommand(_ => { IsEditingObjectives = false; Status = Objectives.IsDirty ? "Zmiany Performance Objectives odrzucone." : ""; },
@@ -214,7 +213,7 @@ public sealed class ProjectDetailViewModel : ObservableObject
     public ICommand RefreshMapping { get; }
 
     /// <summary>Stan projektu z bazy w jednym odczycie w tle: nakładka, mapowanie, gotowość, słowniki, struktura.</summary>
-    private sealed record Snapshot(PoTree Tree, MappingInputs Mapping, IReadOnlyDictionary<string, string> Owners, List<Issue> Readiness,
+    private sealed record Snapshot(PoTree Tree, P1sInputs Mapping, IReadOnlyDictionary<string, string> Owners, List<Issue> Readiness,
         IReadOnlyDictionary<string, (int Rows, string LastChange)> Dictionaries, ProjectStructure Structure, IReadOnlyList<LookupOption> Persons,
         IReadOnlyList<LookupOption> Categories,
         IReadOnlyList<(DictRow Row, bool Inherited)>? Table, IReadOnlyDictionary<string, IReadOnlyList<LookupOption>> Lookups,
@@ -240,21 +239,20 @@ public sealed class ProjectDetailViewModel : ObservableObject
         var cachedProduction = refreshMapping ? null : _production;
         await Try(async () =>
         {
-            var snapshot = await Busy.Run(refreshMapping ? "Odświeżanie mapowania CES ↔ P1S i struktury projektu…" : "Wczytywanie projektu, mapowania i struktury…", () =>
+            var snapshot = await Busy.Run(refreshMapping ? "Odświeżanie struktury P1S, kosztów i struktury projektu…" : "Wczytywanie projektu i struktury…", () =>
             {
                 var tree = _service.Objectives(Code);
                 var mapping = _service.Mapping(refreshMapping);
-                var resolved = ProjectService.Resolve(tree, mapping);
                 var states = codes.ToDictionary(c => c, c => _service.DictionaryState(c, Code));
                 var rows = states.ToDictionary(s => s.Key, s => s.Value.Rows);
                 var wpCam = rows.GetValueOrDefault(ProjectDictionaries.WpCam) ?? [];
                 var (costs, costsError) = refreshMapping || _costs is null ? ReadCosts() : (_costs, _costsError);
-                var production = cachedProduction ?? _service.Production(tree, mapping, resolved);
-                var structure = ProjectService.Structure(tree, mapping, resolved, wpCam, rows.GetValueOrDefault(ProjectDictionaries.ScheduleBudget) ?? [], costs, production);
+                var production = cachedProduction ?? _service.Production(tree, mapping);
+                var structure = ProjectService.Structure(tree, mapping, wpCam, rows.GetValueOrDefault(ProjectDictionaries.ScheduleBudget) ?? [], costs, production);
                 var persons = cachedPersons ?? _service.PersonLookups();
                 var folderChecks = cachedFolders ?? _service.FolderChecks(Code);
                 var categories = ProjectService.CategoryLookups(rows.GetValueOrDefault(ProjectDictionaries.WbsCategories) ?? []);
-                var readiness = ProjectService.Readiness(Project, tree, mapping, resolved, rows,
+                var readiness = ProjectService.Readiness(Project, tree, mapping, rows,
                     persons.Select(p => p.Value).ToHashSet(StringComparer.OrdinalIgnoreCase), folderChecks);
                 return new Snapshot(tree, mapping, cachedOwners ?? _service.WbsOwners(Code), readiness,
                     states.ToDictionary(s => s.Key, s => (s.Value.Rows.Count, s.Value.LastChange)), structure, ProjectService.PersonOptions(persons, wpCam),

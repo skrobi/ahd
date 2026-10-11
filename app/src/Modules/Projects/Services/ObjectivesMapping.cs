@@ -1,69 +1,31 @@
 using PzlEv.Modules.Projects.Models;
 using PzlEv.Shared.Models;
-using PzlEv.Shared.Models.Mapping;
 using PzlEv.Shared.Utils.Mapping;
 
 namespace PzlEv.Modules.Projects.Services;
 
 /// <summary>
-/// Strona P1S nakładki z globalnego mapowania (docs/performance-objectives.md, rozdz. 2): element CES nakładki
-/// rozstrzygany tymi samymi regułami co ekran Mapowanie (korekta elementu, raport, dziedziczenie z projektu CES).
-/// Projekt CES elementu – kolumna Project definition, a gdy jej brak (element dodany ręcznie) – najbliższego elementu
-/// nad nim w nakładce. Nakładka tylko czyta mapowanie.
+/// Strona P1S nakładki (docs/performance-objectives.md, rozdz. 2): kody P1S węzłów to Legacy WBS z Performance
+/// Objectives; zakres P1S projektu – te kody i poddrzewa LOG.WBS pod nimi (PZLPROD).
 /// </summary>
 public static class ObjectivesMapping
 {
-    /// <summary>Wynik mapowania elementów CES nakładki: klucz węzła → wynik.</summary>
-    public static IReadOnlyDictionary<long, MappingResult> Resolve(PoTree tree, MappingInputs inputs)
-    {
-        var nodes = tree.Nodes.Where(n => !n.IsVirtual && !string.IsNullOrWhiteSpace(n.WbsElement)).ToList();
-        var elements = nodes
-            .GroupBy(n => MappingKeys.Key(n.WbsElement))
-            .Select(g => new CesElement(g.First().WbsElement!, ProjectOf(tree, g.First()), false, 0, 0))
-            .ToList();
-        var results = MappingResolver.Resolve(elements, inputs.Report, inputs.Corrections, inputs.P1s, null).Results
-            .GroupBy(r => MappingKeys.Key(r.CesElement)).ToDictionary(g => g.Key, g => g.First());
-        return nodes
-            .Where(n => results.ContainsKey(MappingKeys.Key(n.WbsElement)))
-            .ToDictionary(n => n.Key, n => results[MappingKeys.Key(n.WbsElement)]);
-    }
-
-    /// <summary>Projekt CES elementu: Project definition, a bez niej – najbliższego elementu nad nim.</summary>
-    private static string ProjectOf(PoTree tree, PoNode node)
-    {
-        for (PoNode? n = node; n is not null; n = n.ParentKey is { } p ? tree.Find(p) : null)
-        {
-            if (!string.IsNullOrWhiteSpace(n.ProjectDefinition))
-                return n.ProjectDefinition;
-        }
-        return "";
-    }
-
-    /// <summary>Kody P1S węzła: Legacy WBS z Excela i cel z mapowania.</summary>
-    public static IReadOnlyList<string> CodesOf(PoNode node, IReadOnlyDictionary<long, MappingResult> mapping)
-    {
-        var codes = new List<string>(2);
-        if (node.LegacyWbs is { Length: > 0 } legacy)
-            codes.Add(legacy);
-        if (mapping.TryGetValue(node.Key, out var result) && result.IsMapped && result.Target.Length > 0
-            && !codes.Contains(result.Target, StringComparer.OrdinalIgnoreCase))
-            codes.Add(result.Target);
-        return codes;
-    }
+    /// <summary>Kody P1S węzła: Legacy WBS z Performance Objectives.</summary>
+    public static IReadOnlyList<string> CodesOf(PoNode node) =>
+        node.LegacyWbs is { Length: > 0 } legacy ? [legacy] : [];
 
     /// <summary>
-    /// Zakres P1S projektu: kody węzłów i elementy LOG.WBS pod nimi (poddrzewa wg PARENT) – pod celami mapowania i pod
-    /// Legacy WBS (P1S bywa rozbudowane głębiej niż Legacy WBS z Excela).
+    /// Zakres P1S projektu: kody węzłów i elementy LOG.WBS pod nimi (poddrzewa wg PARENT) – pod Legacy WBS
+    /// (P1S bywa rozbudowane głębiej niż Legacy WBS z Excela).
     /// </summary>
-    public static P1sScope Scope(PoTree tree, IReadOnlyDictionary<long, MappingResult> mapping, MappingInputs inputs)
+    public static P1sScope Scope(PoTree tree, P1sInputs inputs)
     {
-        var roots = tree.Nodes.Where(n => !n.IsVirtual).SelectMany(n => CodesOf(n, mapping)).ToList();
+        var roots = tree.Nodes.Where(n => !n.IsVirtual).SelectMany(CodesOf).ToList();
         var below = new List<(string, string)>();
         if (inputs.P1s is { } p1s)
         {
-            // Element LOG.WBS należy do najbliższego kodu węzła nad nim (wspinaczka po PARENT): cel mapowania albo Legacy WBS.
-            var targets = mapping.Values.Where(r => r.IsMapped && r.TargetPspnr.Length > 0)
-                .GroupBy(r => MappingKeys.Key(r.TargetPspnr)).ToDictionary(g => g.Key, g => g.First().Target);
+            // Element LOG.WBS należy do najbliższego kodu węzła nad nim (wspinaczka po PARENT).
+            var targets = new Dictionary<string, string>();
             var byCode = p1s.GroupBy(e => MappingKeys.Key(e.WbsElement)).ToDictionary(g => g.Key, g => g.First());
             foreach (var code in roots)
             {
@@ -90,20 +52,17 @@ public static class ObjectivesMapping
     }
 
     /// <summary>
-    /// Kontrola gotowości – strona P1S nakładki: element CES bez celu mapowania i bez Legacy WBS nie ma kodu P1S, więc
-    /// nie podepnie się do niego żaden WP (WARNING); brak raportu mapowań albo PZLPROD – WARNING z powodem.
+    /// Kontrola gotowości – strona P1S nakładki: element CES bez Legacy WBS nie ma kodu P1S, więc nie podepnie się do
+    /// niego żaden WP (WARNING); brak PZLPROD – WARNING z powodem.
     /// </summary>
-    public static Issue Check(PoTree tree, IReadOnlyDictionary<long, MappingResult> mapping, MappingInputs inputs)
+    public static Issue Check(PoTree tree, P1sInputs inputs)
     {
         var elements = tree.Nodes.Where(n => !n.IsVirtual && !string.IsNullOrWhiteSpace(n.WbsElement)).ToList();
-        var withoutCode = elements.Where(n => CodesOf(n, mapping).Count == 0).Select(n => n.WbsElement!).ToList();
-        var mapped = elements.Count(n => mapping.TryGetValue(n.Key, out var r) && r.IsMapped);
+        var withoutCode = elements.Where(n => CodesOf(n).Count == 0).Select(n => n.WbsElement!).ToList();
         if (withoutCode.Count > 0)
-            return Issue.Warning($"Elementy nakładki bez strony P1S (UNMAPPED i bez Legacy WBS) – nie podepnie się do nich WP: {string.Join(", ", withoutCode.Take(10))}{(withoutCode.Count > 10 ? "…" : "")}", "Mapowanie CES ↔ P1S");
-        if (inputs.Report is null && inputs.Corrections.Count == 0)
-            return Issue.Warning("Słownik „Raport mapowań CES ↔ P1S” jest pusty – strona P1S tylko z Legacy WBS", "Mapowanie CES ↔ P1S");
+            return Issue.Warning($"Elementy nakładki bez Legacy WBS – nie podepnie się do nich WP: {string.Join(", ", withoutCode.Take(10))}{(withoutCode.Count > 10 ? "…" : "")}", "Strona P1S");
         if (inputs.P1sError is not null)
-            return Issue.Warning($"{inputs.P1sError} – zakres P1S bez poddrzew LOG.WBS", "Mapowanie CES ↔ P1S");
-        return new Issue(Shared.Models.Pipeline.CheckLevel.Pass, $"Strona P1S: {mapped} z {elements.Count} elementów z celem mapowania CES ↔ P1S");
+            return Issue.Warning($"{inputs.P1sError} – zakres P1S bez poddrzew LOG.WBS", "Strona P1S");
+        return new Issue(Shared.Models.Pipeline.CheckLevel.Pass, $"Strona P1S: {elements.Count - withoutCode.Count} z {elements.Count} elementów z Legacy WBS");
     }
 }

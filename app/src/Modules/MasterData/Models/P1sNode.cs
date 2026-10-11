@@ -1,6 +1,6 @@
 using PzlEv.Shared.Models.PzlProd;
 
-namespace PzlEv.Modules.Mapping.Models;
+namespace PzlEv.Modules.MasterData.Models;
 
 /// <summary>
 /// Węzeł drzewa P1S (docs/zrodla-danych.md, rozdz. 5.3): poziom kategorii (Z_KAT_ZBIORCZA, Z_KATEGORIA, Z_OPIS),

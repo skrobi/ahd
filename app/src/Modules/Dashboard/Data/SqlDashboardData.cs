@@ -85,7 +85,7 @@ public sealed class SqlDashboardData(AppServices services) : IDashboardDataSourc
         services.Journal.Add("Pulpit", $"Problem #{problemId} ({problem.Area}) oznaczony jako rozwiązany: {problem.Message}");
     }
 
-    /// <summary>Skąd problem: import (numer), mapowanie (G2) albo obszar.</summary>
+    /// <summary>Skąd problem: import (numer) albo obszar.</summary>
     private static string Source(ProblemRecord problem) =>
         problem.Reference is { } reference && reference.StartsWith(ImportBatchRow.ProblemReferencePrefix, StringComparison.Ordinal)
             ? $"Import #{reference[ImportBatchRow.ProblemReferencePrefix.Length..]}"

@@ -1,7 +1,6 @@
 using PzlEv.Modules.Projects.Models;
 using PzlEv.Modules.Projects.Services;
 using PzlEv.Shared.Models.Dictionaries;
-using PzlEv.Shared.Models.Mapping;
 using PzlEv.Shared.Models.PzlProd;
 using PzlEv.Tests.TestSupport;
 using Xunit;
@@ -17,18 +16,9 @@ public sealed class StructureTests
         new(pspnr, parent, null, wbs, "AC-CAB", "AC-CAB", "kabina", name, "", "", "", "", "X", "");
 
     /// <summary>
-    /// Raport: 4D06WP.RA → AC-CAB.6.38; korekta 4D06WP000004 → AC-CAB.9.01. LOG.WBS: AC-CAB → AC-CAB.6.38 →
-    /// AC-CAB.6.38.07 („montaż”) → XYZ-1; AC-CAB → AC-CAB.9.01.
+    /// LOG.WBS: AC-CAB → AC-CAB.6.38 → AC-CAB.6.38.07 („montaż”) → XYZ-1; AC-CAB → AC-CAB.9.01.
     /// </summary>
-    private static MappingInputs Inputs(bool withReport = true) => new(
-        withReport
-            ? new ReportInfo(DateTimeOffset.Now, "PZL\\anowak",
-                [new ReportEntry(2, "CES", "70002", "4D06WP.RA", "4D06WP", "100", "AC-CAB.6.38", "")])
-            : null,
-        withReport
-            ? [new CorrectionRow(1, 10, 1, CorrectionKinds.Element, "4D06WP000004", "200", "AC-CAB.9.01", null, "zmiana", DateTime.Today, null,
-                DateTimeOffset.Now, "PZL\\anowak", null, null)]
-            : [],
+    private static P1sInputs Inputs() => new(
         [P1s("1", "", "AC-CAB"), P1s("100", "1", "AC-CAB.6.38"), P1s("101", "100", "AC-CAB.6.38.07", "montaż"), P1s("102", "101", "XYZ-1"), P1s("200", "1", "AC-CAB.9.01")],
         null);
 
@@ -57,23 +47,20 @@ public sealed class StructureTests
         Assert.Equal((GridRowKind.P1s, "montaż", 3), (assembly.Kind, assembly.Name, assembly.Depth));
         Assert.Equal(["XYZ-1"], ChildrenOf(structure, assembly));
         Assert.DoesNotContain("AC-CAB.6.38.07", ChildrenOf(structure, Of(structure, "4D06WP.RA")));
-        // AC-CAB ma w LOG.WBS dzieci AC-CAB.6.38 i AC-CAB.9.01 – oba są kodami węzłów nakładki, więc nie powtarzają się pod korzeniem.
-        Assert.DoesNotContain(structure.Rows, r => r.ParentId == Of(structure, "4D06WP").Id && r.Kind == GridRowKind.P1s);
-        // Cel mapowania inny niż Legacy WBS – osobny wiersz pod węzłem.
-        var target = Of(structure, "p1s:AC-CAB.9.01");
-        Assert.Equal((Of(structure, "4D06WP000004").Id, "cel mapowania CES ↔ P1S"), (target.ParentId, target.Note));
+        // AC-CAB.6.38 jest kodem węzła nakładki – nie powtarza się pod korzeniem; AC-CAB.9.01 (bez węzła) – zwykły element pod AC-CAB.
+        Assert.Equal(["AC-CAB.9.01"], structure.Rows.Where(r => r.ParentId == Of(structure, "4D06WP").Id && r.Kind == GridRowKind.P1s).Select(r => r.P1s));
         Assert.Single(structure.Rows, r => r.P1s == "XYZ-1");
         Assert.Equal("AC-CAB.6.38.03.01", Of(structure, "4D06WP000004").P1s);   // wiersz węzła – Legacy WBS
     }
 
     [Fact]
-    public void Legacy_wbs_alone_expands_without_mapping_report()
+    public void Legacy_wbs_expands_p1s_subtrees()
     {
-        var structure = ProjectService.Structure(Objectives(), Inputs(withReport: false), [], []);
+        var structure = ProjectService.Structure(Objectives(), Inputs(), [], []);
 
         Assert.Contains("AC-CAB.6.38.07", ChildrenOf(structure, Of(structure, "4D06WP.01")));
         Assert.Contains("AC-CAB.9.01", ChildrenOf(structure, Of(structure, "4D06WP")));   // bez korekty – zwykły element pod AC-CAB
-        Assert.Equal("AC-CAB.6.38", ProjectService.Scope(Objectives(), Inputs(withReport: false)).RootOf("XYZ-1"));
+        Assert.Equal("AC-CAB.6.38", ProjectService.Scope(Objectives(), Inputs()).RootOf("XYZ-1"));
     }
 
     [Fact]
@@ -83,7 +70,7 @@ public sealed class StructureTests
         var parent = tree.AddElement(null, "4D06WP.RA", "kabina", "AC-CAB.6.38");
         tree.AddElement(parent.Key, "4D06WP000001", "montaż", "AC-CAB.6.38.07");
 
-        Assert.Equal("AC-CAB.6.38.07", ProjectService.Scope(tree, Inputs(withReport: false)).RootOf("XYZ-1"));
+        Assert.Equal("AC-CAB.6.38.07", ProjectService.Scope(tree, Inputs()).RootOf("XYZ-1"));
     }
 
     [Fact]
@@ -233,7 +220,7 @@ public sealed class StructureTests
             ["101"] = new("101", AcHours: 10, BacHours: 60, EvHours: 20, ActualMaterial: 500),
             ["102"] = new("102", AcHours: 5, BacHours: 40, EvHours: 30, ActualMaterial: null),
         }, DateTimeOffset.Now);
-        var structure = StructureBuilder.Build(Objectives(), ProjectService.Resolve(Objectives(), Inputs()), Inputs().P1s, wpCam, schedule,
+        var structure = StructureBuilder.Build(Objectives(), Inputs().P1s, wpCam, schedule,
             production: production, statusDate: new DateOnly(2026, 10, 11));
 
         var leaf = Of(structure, "p1s:XYZ-1");
@@ -245,7 +232,7 @@ public sealed class StructureTests
         Assert.Equal(5000m, wp.EvCost);     // BAC Cost × EV/BAC = 10 000 × 50/100
         Assert.Equal((100m, 50m, 5000m), (Of(structure, "4D06WP.RA").OpsBacHours, Of(structure, "4D06WP.RA").PvHours, Of(structure, "4D06WP.RA").EvCost));
         Assert.Null(Of(structure, "4D06WP000002").OpsBacHours);   // element bez danych produkcyjnych – puste, nie 0
-        Assert.Null(StructureBuilder.Build(Objectives(), ProjectService.Resolve(Objectives(), Inputs()), Inputs().P1s, wpCam, schedule).Rows.First().PvHours);
+        Assert.Null(StructureBuilder.Build(Objectives(), Inputs().P1s, wpCam, schedule).Rows.First().PvHours);
     }
 
     [Fact]
@@ -276,7 +263,7 @@ public sealed class StructureTests
             ["102"] = new("102", 4, 40, 20, null, null, new DateOnly(2026, 1, 10), new DateOnly(2026, 2, 20)),           // XYZ-1 – pod WP-R
             [ProductionData.VirtualKey("AC-CAB.6.38.PAINT.W20")] = new("100", 5, 55, 22, null, "AC-CAB.6.38.PAINT.W20", new DateOnly(2026, 3, 5), null),
         }, DateTimeOffset.Now);
-        var structure = StructureBuilder.Build(tree, ProjectService.Resolve(tree, Inputs()), Inputs().P1s, wpCam, schedule, production: production);
+        var structure = StructureBuilder.Build(tree, Inputs().P1s, wpCam, schedule, production: production);
 
         var paint = Of(structure, $"po:{paintNode.Key}");
         Assert.Equal((true, "AC-CAB.6.38.PAINT.W20", "WP-P", "e777"), (paint.IsVirtual, paint.P1s, paint.Wp, paint.Cam));

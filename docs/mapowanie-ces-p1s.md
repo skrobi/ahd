@@ -1,5 +1,10 @@
 # PZL-EV – Mapowanie CES ↔ P1S
 
+> **Wycofane (0.41.0).** Ekran Mapowanie, słownik „Raport mapowań CES ↔ P1S”, korekty i rozstrzyganie (G2) usunięte
+> z aplikacji: strona P1S projektu pochodzi wyłącznie z Legacy WBS w Performance Objectives i poddrzew LOG.WBS
+> (`docs/performance-objectives.md`). Drzewo „Struktura P1S” (PZLPROD) – podgląd tylko do odczytu w Słownikach.
+> Tabele `DICT_MappingReport` i `DICT_MappingCorrection` zostają w bazie (bez użycia). Dokument poniżej – historyczny.
+
 Zakres: przypisanie elementów WBS z SAP CES (koszty) do elementów WBS z SAP P1S (produkcja) – źródło prawdy,
 dziedziczenie, korekty, kolejność rozstrzygania, statusy, model danych, widok i reguły walidacji.
 

@@ -108,7 +108,6 @@ Każdy moduł jest folderem `Modules/<Folder>/` i właścicielem swoich ekranów
 | Shell (powłoka, nie moduł) | `Shell/` | okno, nagłówek, menu, nawigacja, lista modułów | – | `docs/funkcjonalnosc.md`, rozdz. 2 |
 | Pulpit | `Dashboard` | pulpit, „Wymaga uwagi”, ostatnie zdarzenia (F07) | – | `docs/funkcjonalnosc.md` |
 | Import | `Import` | pobranie i załadowanie plików, parsery źródeł (F05) | G1 | `docs/zrodla-danych.md` |
-| Mapping | `Mapping` | ekran Mapowanie CES ↔ P1S, korekty, drzewo P1S (F04); rozstrzyganie mapowania jest wspólne (`Shared/Utils/Mapping`) | G2 | `docs/mapowanie-ces-p1s.md` |
 | Master Data | `MasterData` | ekran Słowniki – słowniki globalne (F03); mechanizm słowników jest wspólny (`Shared/Utils/Dictionaries`) | G3 | `docs/slowniki.md` |
 | Projects | `Projects` | projekty, kreator, Performance Objectives, słowniki projektu, gotowość, foldery projektu (F01, F02) | – | `docs/performance-objectives.md` |
 | Runs | `Runs` | przebiegi, ekran przebiegu, przypięcie stanu, walidacja, zamknięcie (F06) | P0, P1, P2, Z | `docs/pipeline-fazy.md`, `docs/model-danych.md` |
