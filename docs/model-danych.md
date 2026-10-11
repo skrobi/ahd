@@ -14,13 +14,13 @@ Wszystkie dane PZL-EV są w centralnej bazie MS SQL. Oryginalne pliki źródłow
 źródłem historii są dane zapisane w bazie.
 
 ```text
-ŹRÓDŁA – RABIT (SAP CES), PZLPROD (struktura P1S, raport mapowań, zaawansowanie z produkcji), pliki CAM
+ŹRÓDŁA – RABIT (SAP CES), PZLPROD (struktura P1S, zaawansowanie z produkcji), pliki CAM
   ↓ import (pipeline G1)
 SUROWE – wiersze plików bez zmian, z pochodzeniem                                   stg
   ↓ parser według definicji źródła
 KANONICZNE – dane typowane według definicji źródła                                  can
   ↓
-SŁOWNIKI, MAPOWANIE, HARMONOGRAM I BUDŻET                                           dict
+SŁOWNIKI, HARMONOGRAM I BUDŻET                                                      dict
   ↓ przypięcie stanu (P1)
 PRZEBIEG – koszt per WP, zaawansowanie z pochodzeniem, problemy                     ev, meta
   ↓ silnik EVM (aplikacja)
@@ -39,12 +39,12 @@ ZAMROŻENIE – przebieg zamykający okres
 |---|---|
 | `meta` | importy, wersje plików i ich treść, definicje źródeł, parsery, projekty, przebiegi, etapy, rewizje, problemy, dziennik zdarzeń, role, wersja aplikacji i schematu |
 | `can` | dane kanoniczne – jedna stała tabela `can.Row` ze slotami typowanymi dla wszystkich parserów (migracja 007) |
-| `dict` | słowniki globalne (w tym raport mapowań CES ↔ P1S) i projektu, korekty mapowania CES ↔ P1S – z historią |
+| `dict` | słowniki globalne i projektu – z historią |
 | `ev` | koszt per WP, zaawansowanie, wyniki EV |
 
 Struktura P1S nie jest kopiowana do bazy PZL-EV – aplikacja (docelowo procedury) czyta ją z `PZLPROD` (rozdz. 3.4).
-Raport mapowań SAP↔CES jest słownikiem globalnym `dict.MappingReport`, wczytywanym w całości z pliku Excel – każda
-zmiana zostaje w historii wierszy (`docs/mapowanie-ces-p1s.md`, rozdz. 2).
+Strona P1S projektu to `Legacy WBS` węzłów nakładki Performance Objectives i poddrzewa `LOG.WBS` pod nimi
+(`docs/performance-objectives.md`, rozdz. 2).
 
 **Nazwy w bazie:** warstwy z tabeli wyżej są częścią nazwy tabeli, a nie osobnymi schematami. Wszystkie obiekty są w
 jednym schemacie z konfiguracji, z sygnaturą przed nazwą: `[<Schema>].[<Sygnatura><WARSTWA>_<Nazwa>]`, np.
@@ -67,7 +67,7 @@ w historii z informacją, kto i kiedy go zastąpił.
 
 | Oś | Znaczenie | Kto ustala |
 |---|---|---|
-| **biznesowa** | `ValidFrom` / `ValidTo` – od kiedy do kiedy obowiązuje wartość (np. stawka na rok, korekta mapowania) | użytkownik |
+| **biznesowa** | `ValidFrom` / `ValidTo` – od kiedy do kiedy obowiązuje wartość (np. stawka na rok) | użytkownik |
 | **techniczna** | moment zapisu i moment zastąpienia wpisu (kto, kiedy) | baza – tabele temporalne SQL Server albo kolumny zapisu / zastąpienia |
 
 - Zmiana obowiązującej wartości = zamknięcie `ValidTo` starego wpisu i nowy wpis.
@@ -80,7 +80,6 @@ w historii z informacją, kto i kiedy go zastąpił.
 | Dane | Sposób |
 |---|---|
 | Słowniki globalne i projektu, w tym harmonogram i budżet | historia na obu osiach (rozdz. 3.2) |
-| Korekty mapowania CES ↔ P1S | historia na obu osiach (`docs/mapowanie-ces-p1s.md`, rozdz. 8) |
 | Nakładka Performance Objectives, zakres projektu i definicje źródeł | historia na osi technicznej |
 | Pliki źródłowe | każda nowa treść pliku (hash SHA-256) to nowa wersja z czasem importu; tylko dopisywanie |
 | Dane kanoniczne | oznaczone wersją parsera; ponowne przetworzenie nowym parserem tworzy nową wersję danych z czasem zapisu |
@@ -88,8 +87,7 @@ w historii z informacją, kto i kiedy go zastąpił.
 
 ### 3.4 Źródła zewnętrzne
 
-- `PZLPROD.LOG.WBS` jest **przyrostowy** (wiersze tylko dochodzą) – czytany bezpośrednio, bez kopiowania. Raport
-  mapowań SAP↔CES jest importowany jako wersje pliku (historia w bazie, mapowanie czyta najnowszą).
+- `PZLPROD.LOG.WBS` jest **przyrostowy** (wiersze tylko dochodzą) – czytany bezpośrednio, bez kopiowania.
 - Zaawansowanie z produkcji jest pobierane w etapie P5 i zapisywane w przebiegu (`ev.Zaawansowanie`) –
   tylko dla WP projektu. Od tego momentu jest danymi przebiegu.
 
@@ -114,8 +112,7 @@ Znacznik stanu to moment zapisany w przebiegu w etapie P1. Przebieg czyta wszyst
 - najnowszą wersję każdego pliku źródłowego (lokalizacja + nazwa) zaimportowaną do tego momentu, w wersji kanonicznej
   obowiązującej w tym momencie,
 - słowniki globalne i słowniki projektu (w tym harmonogram i budżet),
-- nakładkę Performance Objectives (zakres projektu),
-- korekty mapowania CES ↔ P1S.
+- nakładkę Performance Objectives (zakres projektu, w tym `Legacy WBS`).
 
 Ponowne przypięcie zapisuje nowy znacznik (`docs/pipeline-fazy.md`, rozdz. 5).
 
@@ -134,13 +131,13 @@ Rewizja to jedno obliczenie EV przebiegu (etap P8). Zapisuje:
 
 - Ponowne obliczenie tworzy nową rewizję; poprzednie zostają.
 - **Odtwarzalność:** ten sam znacznik stanu i ta sama wersja silnika dają ten sam wynik. Zmiana słowników,
-  mapowania, budżetu czy harmonogramu po obliczeniu nie zmienia zapisanych rewizji.
+  nakładki, budżetu czy harmonogramu po obliczeniu nie zmienia zapisanych rewizji.
 - **Zamrożenie:** zatwierdzony przebieg zamykający okres jest tylko do odczytu; jego zatwierdzona rewizja jest
   formalnym wynikiem okresu i podstawą porównań kolejnych okresów.
 
 ### 4.4 Założenie o źródłach zewnętrznych
 
-Odtwarzalność opiera się na przyrostowości `PZLPROD.LOG.WBS` (rozdz. 3.4) i historii słownika raportu mapowań.
+Odtwarzalność opiera się na przyrostowości `PZLPROD.LOG.WBS` (rozdz. 3.4).
 Zmiana istniejących wierszy w `LOG.WBS` nie jest wykrywana (`docs/architektura.md`, rozdz. 10).
 
 ---
@@ -155,7 +152,7 @@ Zmiana istniejących wierszy w `LOG.WBS` nie jest wykrywana (`docs/architektura.
 | `meta.SourceFileSeen` | decyzja dla każdego pliku w każdym imporcie (`docs/pipeline-fazy.md`, G1) |
 | `meta.SourceDefinition` | definicja źródła (`docs/zrodla-danych.md`, rozdz. 2) |
 | `can.Row` | dane kanoniczne wszystkich parserów: wersja pliku, numer wiersza, parser i jego wersja, sloty typowane; pole parsera ma stały slot (`meta.Parser`). Koszty rzeczywiste – parser `ACTUALS` (wspólny dla źródeł `ACTUALS_*`, odróżnianych wersją pliku). Wszystkie wersje plików zostają: najnowsza – dane bieżące dla użytkowników, starsze – do porównań |
-| `dict.*` | słowniki (`docs/slowniki.md`) i korekty mapowania (`docs/mapowanie-ces-p1s.md`, rozdz. 8). Wiersz słownika ma identyfikator wiersza logicznego i kolejne wersje (kto i kiedy zapisał, kto i kiedy zastąpił); w MS SQL – osobna tabela z typowanymi kolumnami na słownik (rozdz. 5.1) |
+| `dict.*` | słowniki (`docs/slowniki.md`). Wiersz słownika ma identyfikator wiersza logicznego i kolejne wersje (kto i kiedy zapisał, kto i kiedy zastąpił); w MS SQL – osobna tabela z typowanymi kolumnami na słownik (rozdz. 5.1) |
 | `meta.Projekt` | kod, nazwa, typ (SAC / CAS / wewnętrzny) |
 | `meta.PerformanceObjective` | węzły nakładki kontraktu projektu: element WBS CES, poziom, rodzic, wirtualny węzeł, atrybuty, historia (`docs/performance-objectives.md`) – wyznacza zakres projektu |
 | `meta.Przebieg` | projekt, tydzień, okres, czy zamykający, znacznik stanu, status, zamrożenie |
@@ -179,7 +176,6 @@ Bez metodologii EV; kolejne tabele dochodzą kolejnymi migracjami.
 | `META_SchemaVersion`, sekwencja `META_LogicalId` | wersja schematu i minimalna wersja aplikacji; identyfikatory wierszy logicznych |
 | `META_SourceDefinition`, `META_SourceLocation` | definicje źródeł (kod, prefiks, typ raportu, parser, aktywna) i lokalizacje RABIT z historią |
 | `META_Parser` (004) | parsery i ich pola (kolumna w pliku, typ, długość, wymagane, slot w `CAN_Row` – 007) z historią |
-| `DICT_MappingCorrection` (005) | korekty mapowania CES ↔ P1S (elementu i projektu CES): cel P1S, poprzednie przypisanie, uzasadnienie, `ValidFrom` / `ValidTo`, historia wersji (`docs/mapowanie-ces-p1s.md`, rozdz. 8) |
 | `META_ImportBatch`, `META_SourceFile`, `META_SourceFileSeen` | importy, wersje plików (SHA-256), decyzje dla plików |
 | `CAN_Row` (007) | dane kanoniczne wszystkich parserów: `FileId`, `RowNumber`, `ParserId`, `ParserVersion` i sloty T01–T40 (`NVARCHAR(400)`), L01–L05 (`NVARCHAR(4000)`), N01–N20 (`DECIMAL(28,8)`), I01–I10 (`INT`), D01–D10 (`DATE`); indeks klastrowy kolumnowy (clustered columnstore) – kompresja i szybkie grupowanie milionów wierszy |
 | `META_Journal`, `META_Problem` | dziennik zdarzeń (`meta.Zdarzenie`) i problemy (otwarte / rozwiązane: `ResolvedAt`, `ResolvedBy`, `Resolution` – migracja 006) |
@@ -194,23 +190,21 @@ okresów 2026–2027 (tygodnie ISO, okres według czwartku, ostatni tydzień okr
 
 **Migracja `sql/mssql/003_usuniecie_plikow_niezgodnych.sql`:** usuwa wersje plików (`META_SourceFile`) zapisane do
 wersji aplikacji 0.11 mimo niezgodności z definicją źródła (układ kolumn, typy wartości) wraz z ich wierszami
-surowymi albo treścią i danymi kanonicznymi (gdy baza jest już po migracji 007); historia decyzji (`META_SourceFileSeen`) zostaje. Od wersji 0.12 taki plik nie trafia do bazy
+surowymi albo treścią i danymi kanonicznymi (gdy baza jest już po migracji 007); historia decyzji (`META_SourceFileSeen`) zostaje. Plik niezgodny z definicją źródła nie trafia do bazy
 (`docs/zrodla-danych.md`, rozdz. 2).
 
 **Migracja `sql/mssql/004_parsery.sql`:** tabela `META_Parser` (parser pilnuje układu pliku: kolumna w pliku, pole,
 typ, wymagane), `CAN_Actuals` jako tabela parsera ACTUALS (kolumny pól dopuszczają NULL; nowe pola
 `OriginalOrderNumber`, `Item`, `PurchaseOrderNumber`, `InvoiceNumber`) i parser ACTUALS w układzie raportu z 2026-10
 (`docs/zrodla-danych.md`, rozdz. 4). Kolumny `Columns`, `Signature`, `ParserVersion` definicji źródła dopuszczają
-NULL i nie są już używane – definicja wskazuje tylko parser. Od migracji 007 tabela `CAN_Actuals` nie istnieje
-(dane w `CAN_Row`).
+NULL – definicja wskazuje parser. Tabelę `CAN_Actuals` usuwa migracja 007 (dane w `CAN_Row`).
 
-**Migracja `sql/mssql/005_mapowanie_ces_p1s.sql`:** parser `MAPOWANIA` z tabelą `CAN_MappingReport` (od 007 – `CAN_Row`; raport
-mapowań importowany z Excela; definicję źródła z prefiksem nazwy pliku dodaje się w Administracji) i tabela korekt
-`DICT_MappingCorrection` (bieżąca korekta elementu albo projektu CES – unikalna wśród wersji bez `SupersededAt`
-i `ValidTo`; usunięcie korekty to nowa wersja z `ValidTo`).
+**Migracja `sql/mssql/005_mapowanie_ces_p1s.sql`:** parser `MAPOWANIA` z tabelą `CAN_MappingReport` (raport mapowań
+CES ↔ P1S z Excela) i tabela korekt mapowania `DICT_MappingCorrection`. Tabelę `CAN_MappingReport` usuwa migracja 007,
+parser – 009, `DICT_MappingCorrection` – 025.
 
 **Migracja `sql/mssql/006_problemy_rozwiazywanie.sql`:** kto, kiedy i jak rozwiązał problem (automatycznie – kolejny
-import, przypisanie elementu CES; ręcznie – Pulpit), indeks otwartych problemów; problemy importów wcześniejszych niż
+import; ręcznie – Pulpit), indeks otwartych problemów; problemy importów wcześniejszych niż
 ostatni zakończony import – rozwiązane (`docs/pipeline-fazy.md`, rozdz. 1.3).
 
 **Migracja `sql/mssql/007_sloty_danych_kanonicznych.sql`:** dane kanoniczne w jednej stałej tabeli `CAN_Row`, bo
@@ -225,21 +219,19 @@ liczby wierszy) i usuwa stare tabele; wiersze `STG_RawRow` przenosi do tabeli tr
 (Diagnostyka pokazuje wersję serwera i poziom zgodności). Zapytania raportów i grupowania czytają `CAN_Row` przez
 sloty parsera (`SqlCanonical`; docelowo widoki – F10.2; z zewnątrz – procedura `CAN_LatestImport`, migracja 011).
 
-**Migracja `sql/mssql/008_bez_tresci_plikow.sql`:** usuwa tabelę `META_SourceFileContent` z treścią plików (decyzja
-2026-10-03). Raport RABIT to zawsze pełne dane, a po udanym imporcie są one w `CAN_Row` – kopia pliku nie jest
+**Migracja `sql/mssql/008_bez_tresci_plikow.sql`:** usuwa tabelę `META_SourceFileContent` z treścią plików.
+Raport RABIT to zawsze pełne dane, a po udanym imporcie są one w `CAN_Row` – kopia pliku nie jest
 potrzebna. Wersje plików (`META_SourceFile`) i dane kanoniczne zostają; wpis w dzienniku podaje liczbę i rozmiar
 usuniętych treści.
 
-**Migracja `sql/mssql/009_raport_mapowan_slownik.sql`:** raport mapowań SAP↔CES jako słownik globalny – tabela
-`DICT_MappingReport` (wszystkie kolumny raportu jako tekst; kolumna pliku `project` → `ProjectDef`, bo `Project` to
-kolumna słowników projektu; bieżący klucz `src` + `pspnr` unikalny). Raport nie jest już importowany: definicje źródeł
-z parserem `MAPOWANIA` i sam parser są usuwane (zamknięta bieżąca wersja, historia zostaje), dane wcześniej
-zaimportowanych plików zostają w `CAN_Row`, ale mapowanie ich nie czyta – raport trzeba raz wczytać do słownika.
+**Migracja `sql/mssql/009_raport_mapowan_slownik.sql`:** tabela `DICT_MappingReport` (słownik globalny raportu mapowań
+CES ↔ P1S); zamyka bieżące wersje definicji źródeł z parserem `MAPOWANIA` i samego parsera (historia zostaje).
+Tabelę `DICT_MappingReport` usuwa migracja 025.
 
 **Migracja `sql/mssql/010_stawki_mpk.sql`:** stawki wydziałów według MPK (`docs/slowniki.md`, rozdz. 2, 5.4) –
 `DICT_DepartmentRate` dostaje kolumnę `CostCenter` (MPK, wymagana), `Department` (opis MPK) i `Overhead` dopuszczają
-brak wartości, unikalny klucz bieżących wersji: `Project` + `CostCenter` + `Year`. Istniejące wiersze dostają MPK
-z dotychczasowego `Department` (był kluczem); wpis w dzienniku podaje ich liczbę. Wymaga aplikacji 0.20.0.
+brak wartości, unikalny klucz bieżących wersji: `Project` + `CostCenter` + `Year`. Migracja przepisuje MPK
+istniejących wierszy z kolumny `Department`; wpis w dzienniku podaje ich liczbę. Wymaga aplikacji 0.20.0.
 
 **Migracja `sql/mssql/011_ostatni_import_parsera.sql`:** procedura `[<Schema>].[<Sygnatura>CAN_LatestImport]` – ostatni
 import parsera dla raportów i narzędzi spoza aplikacji (Excel, Power BI, SQL). Zwraca dane kanoniczne parsera
@@ -254,7 +246,7 @@ partiach daje komplet: każdy plik w wersji z ostatniej partii, która go przyni
 wygenerował ponownie, zostaje w poprzedniej wersji (O38); w trakcie importu wynik łączy pliki nowe i poprzednie
 (kolumny `ImportedAt`, `BatchId`). Procedura działa z prawami wywołującego: potrzebny `EXECUTE` (migracja nadaje go roli
 `pzl_ev_user`, gdy rola istnieje) i `SELECT` na `META_Parser`, `META_SourceDefinition`, `META_SourceFile`, `CAN_Row`
-– jak aplikacja dziś. `EXECUTE AS OWNER` nie jest używane: właścicielem schematu bywa grupa AD, której nie da się
+– jak aplikacja. `EXECUTE AS OWNER` nie jest używane: właścicielem schematu bywa grupa AD, której nie da się
 „wykonać jako” (błąd 15517 przy migracji). Przykład:
 `EXEC [FINOP].[PZLEV_CAN_LatestImport] @Parser = 'ACTUALS', @SourceCode = 'ACTUALS_CES';`. Wymaga aplikacji 0.21.0.
 
@@ -274,17 +266,16 @@ najnowsza wersja każdego pliku parsera (wspólna dla `CAN_LatestImport` i rapor
   (słownik Cost Category: zmiany projektu przed globalnym; opis bez wpisu – z danych), `Period MM/RRRR` (ostatni okres
   w danych ACTUALS), kolumny lat projektu od najnowszego;
 - kwota: pole `@Value` parsera ACTUALS – domyślnie `ValueObjCrcy` (waluta obiektu, PLN), np. `ValueRepCur`.
-Pomiar: 1,5 mln wierszy ACTUALS – raport projektu w ok. 0,2–0,7 s. Ekran Projekt, zakładka Wskaźniki: „Raport kosztów
+Pomiar: 1,5 mln wierszy ACTUALS – raport projektu w ok. 0,2–0,7 s. Ekran Projekt, zakładka Raporty: „Raport kosztów
 (Excel)”. Przykład: `EXEC [FINOP].[PZLEV_REP_ProjectCosts] @Project = 'M28';`.
 
 **Migracja `sql/mssql/014_definicje_projektu.sql`:** Project definition projektu (`CAN_LatestImport @Project`,
 `REP_ProjectCosts`) to Project definition **i WBS element** węzłów nakładki – element CES dodany ręcznie nie ma
-Project definition, a najwyższy element CES to sam Project definition (np. `4D06WP`). Wcześniej projekt z takim
-elementem dawał pusty wynik. Wymaga aplikacji 0.23.1.
+Project definition, a najwyższy element CES to sam Project definition (np. `4D06WP`). Wymaga aplikacji 0.23.1.
 
 **Migracja `sql/mssql/015_osoby_z_hr.sql`:** `DICT_Person` dostaje kolumny z HR (`FirstName`, `LastName`, `Email`,
 `CostCenter`, `DepartmentShort`, `DepartmentName`, `Position`, `Division`, `IsManager`, `Pernr`); kluczem jest USRID
-(dotychczasowa kolumna `AdAccount`). Słownik Osoby wczytuje się z PZLHRPROD (`HR.ORG`). Wymaga aplikacji 0.24.0.
+(kolumna `AdAccount`). Osoby dodaje się z PZLHRPROD (`HR.ORG`) – „Dodaj z HR” (`docs/funkcjonalnosc.md`, F03). Wymaga aplikacji 0.24.0.
 
 **Migracja `sql/mssql/016_koszty_po_elementach.sql`:** procedura `REP_ProjectCostsByElement @Project, @Value =
 'ValueObjCrcy'` – koszt rzeczywisty (ACWP) projektu po WBS elemencie CES: suma kwoty z ostatniego importu ACTUALS
@@ -317,17 +308,14 @@ uzupełnia później (gotowość projektu blokuje przebieg z WP bez CAM). Wymaga
 dopisuje brakujące pozycje). Wymaga aplikacji 0.38.0.
 
 **Migracja `sql/mssql/024_bez_slownika_elementow_wirtualnych.sql`:** usuwa pustą tabelę `DICT_VirtualP1s` (słownik
-„Elementy wirtualne P1S” z 0.38.0) – wydzielenia godzin to węzły wirtualne nakładki z kodem `ELEMENT_P1S.NAZWA.CPLGR`;
+„Elementy wirtualne P1S”) – wydzielenia godzin to węzły wirtualne nakładki z kodem `ELEMENT_P1S.NAZWA.CPLGR`;
 tabela z wpisami zostaje (do przeniesienia ręcznie). Wymaga aplikacji 0.40.0.
 
-Aplikacja zapisuje dziś do tabel importu, konfiguracji importu, słowników globalnych, korekt mapowania, dziennika i problemów;
-tabele projektów i słowników projektu czekają na moduły F4. Blokada importu – plik na dysku sieciowym
+**Migracja `sql/mssql/025_bez_mapowania_ces_p1s.sql`:** usuwa tabele `DICT_MappingReport` i `DICT_MappingCorrection` –
+strona P1S projektu to `Legacy WBS` z Performance Objectives i poddrzewa `LOG.WBS` (`docs/performance-objectives.md`,
+rozdz. 2). Wymaga aplikacji 0.41.0.
+
+Aplikacja zapisuje do tabel importu, konfiguracji importu, słowników globalnych i projektu, projektów i nakładki
+Performance Objectives, dziennika i problemów. Blokada importu – plik na dysku sieciowym
 (`docs/pipeline-fazy.md`, rozdz. 1.3), `sp_getapplock` razem z procedurami (F10.2).
 
----
-
-## 6. Otwarte kwestie
-
-| # | Kwestia |
-|---|---|
-| ~~O32~~ | Retencja – **rozstrzygnięte (2026-10-03):** dane wszystkich wersji plików zostają w bazie (`CAN_Row` z kompresją kolumnową; sam plik nie jest przechowywany – migracja 008); użytkownicy pracują na najnowszej wersji, starsze służą do porównań |

@@ -13,7 +13,7 @@ public static class ProjectReadiness
     /// <param name="dictionaryRows">Liczba bieżących wierszy słowników projektu (kod słownika → liczba).</param>
     /// <param name="camsOutsidePersons">CAM ze słownika „WP i CAM” spoza słownika Osoby.</param>
     /// <param name="wpsWithoutCam">WP ze słownika „WP i CAM” bez CAM (zapis dozwolony – uzupełnia się później).</param>
-    /// <param name="p1sSide">Strona P1S nakładki z mapowania CES ↔ P1S (ObjectivesMapping.Check).</param>
+    /// <param name="p1sSide">Strona P1S nakładki – Legacy WBS i PZLPROD (ObjectivesMapping.Check).</param>
     public static List<Issue> Check(string type, PoTree objectives, IReadOnlyDictionary<string, int> dictionaryRows,
         IReadOnlyCollection<string> camsOutsidePersons, Issue p1sSide, Issue folderStructure, Issue camAccess, IReadOnlyCollection<string>? wpsWithoutCam = null)
     {

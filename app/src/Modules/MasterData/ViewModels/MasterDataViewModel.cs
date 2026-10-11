@@ -170,7 +170,7 @@ public sealed class MasterDataViewModel : ObservableObject
     /// <summary>Wybrany słownik Cost Category – „Uzupełnij z ACTUALS”.</summary>
     public bool IsCostCategory => Spec?.Code == GlobalDictionaries.CostCategory;
 
-    /// <summary>Wybrany słownik Osoby – „Wczytaj z HR”.</summary>
+    /// <summary>Wybrany słownik Osoby – „Dodaj z HR”.</summary>
     public bool IsPersons => Spec?.Code == GlobalDictionaries.Persons;
 
     private async Task Reload(string status)

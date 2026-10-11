@@ -4,9 +4,8 @@ Zakres: słowniki globalne i słowniki projektu – zawartość, zależność od
 Excel i reguły walidacji. Słowniki zawierają wiedzę biznesową potrzebną do przekształcenia danych źródłowych
 w dane raportowe.
 
-Powiązane: `docs/model-danych.md` (historia i przypięcie przez przebieg), `docs/mapowanie-ces-p1s.md`
-(raport mapowań CES ↔ P1S – rozstrzyganie; korekty mapowania – osobny mechanizm), `docs/funkcjonalnosc.md` (ekran
-Słowniki, kreator projektu).
+Powiązane: `docs/model-danych.md` (historia i przypięcie przez przebieg), `docs/funkcjonalnosc.md` (ekran
+Słowniki, kreator projektu), `docs/zrodla-danych.md` (struktura P1S).
 
 ---
 
@@ -70,6 +69,9 @@ Słowniki, kreator projektu).
 
 Definicje źródeł i ich prefiksy są konfiguracją importu – `docs/zrodla-danych.md`, rozdz. 2.
 
+Na ekranie Słowniki przycisk **„Struktura P1S (PZLPROD)”** otwiera drzewo `LOG.WBS` (Z_KAT_ZBIORCZA → Z_KATEGORIA →
+Z_OPIS → PROJORG → elementy) z wyszukiwarką – tylko do odczytu, to nie jest słownik (`docs/zrodla-danych.md`, rozdz. 5.3).
+
 ---
 
 ## 3. Słowniki projektu
@@ -77,7 +79,7 @@ Definicje źródeł i ich prefiksy są konfiguracją importu – `docs/zrodla-da
 | Słownik | Zawartość | Klucz |
 |---|---|---|
 | WP i CAM | element P1S projektu → WP, CAM, Cost Category (kategoria ze słownika „Kategorie WBS” projektu); powiązanie z nakładką przez `Legacy WBS` (`docs/performance-objectives.md`, rozdz. 4.1) | element P1S |
-| Harmonogram i budżet | WP → `BAC HOURS` (godziny), `BAC MATERIAL` (koszt materiałów), `BAC` (budżet kosztowy WP – kwota), Baseline Start, Baseline Koniec (RRRR-MM-DD; w plikach Excel rozpoznawane też dawne nagłówki „Planowany Start/Koniec”) – baseline projektu | WP |
+| Harmonogram i budżet | WP → `BAC HOURS` (godziny), `BAC MATERIAL` (koszt materiałów), `BAC` (budżet kosztowy WP – kwota), Baseline Start, Baseline Koniec (RRRR-MM-DD; w plikach Excel rozpoznawane też nagłówki „Planowany Start/Koniec”) – baseline projektu | WP |
 | Kategorie WBS | kategorie elementów WBS indywidualne dla projektu: `Cost Category` (np. Production, Programs), `Opis` – lista wyboru kolumny Cost Category w strukturze projektu i w „WP i CAM”; raport po kategoriach (wiele elementów WBS w jednej kategorii); inne niż globalny słownik Cost Category (numer elementu kosztowego) – **opcjonalny** | Cost Category |
 | Stawki CAS | stawki CAS projektu (zawartość – O37); do ustalenia słownik nie jest wczytywany, a projekt CAS jest niegotowy (ERROR) | do ustalenia |
 | Cost Category – zmiany w projekcie | zmiany i uzupełnienia słownika globalnego Cost Category dla projektu (rozdz. 6) | numer elementu kosztowego |
@@ -129,7 +131,7 @@ Kontekst biznesowy typów – `readme.md`.
 
 | Reguła | Poziom |
 |---|---|
-| element P1S należy do projektu (kod P1S elementu nakładki – `Legacy WBS` albo cel mapowania – albo pod nim, także w `LOG.WBS`) i nie należy do innego projektu | ERROR |
+| element P1S należy do projektu (kod P1S elementu nakładki – `Legacy WBS` – albo pod nim, także w `LOG.WBS`) i nie należy do innego projektu | ERROR |
 | jeden WP na element P1S | ERROR |
 | WP bez CAM – zapis dozwolony (najpierw wskazuje się WP, CAM uzupełnia się później); w strukturze brak „WP bez CAM”; gotowość projektu – ERROR (blokuje przebieg) | WARNING |
 | CAM wybierany z listy osób; przy wczytaniu z Excela CAM spoza listy osób | – / WARNING |
@@ -169,22 +171,7 @@ Kontekst biznesowy typów – `readme.md`.
 | opis wypełniony | ERROR |
 | powtórzona kombinacja `Cost Element` + `WBS Element` + `Partner object` | ERROR |
 
-### 5.7 Raport mapowań CES ↔ P1S (wycofany 0.41.0)
-
-Słownik usunięty z aplikacji. W Słownikach jest za to przycisk „Struktura P1S (PZLPROD)” – drzewo LOG.WBS
-(Z_KAT_ZBIORCZA → Z_KATEGORIA → Z_OPIS → PROJORG → elementy) z wyszukiwarką, tylko do odczytu.
-
-
-| Reguła | Poziom |
-|---|---|
-| `src` = `SAP` albo `CES`; `pspnr` wypełniony | ERROR |
-| para `src` + `pspnr` unikalna | ERROR |
-| wiersz `src` = CES bez przypisania: brak elementu CES (`wbs_ces`, `wbs`) albo celu P1S (`pspnr_sap`, `wbs_sap`) i brak pary `project_ces` → `project_sap` | WARNING |
-
-Reguły rozstrzygania na zawartości raportu (kilka celów jednego elementu CES, cel spoza `LOG.WBS`) sprawdza ekran
-Mapowanie – `docs/mapowanie-ces-p1s.md`, rozdz. 10.
-
-### 5.9 Parametry produkcji
+### 5.7 Parametry produkcji
 
 Wydzielenia godzin z elementu P1S (np. Paint) to węzły wirtualne nakładki z kodem `ELEMENT_P1S.NAZWA.CPLGR`, nie słownik –
 `docs/performance-objectives.md`, rozdz. 4.2.
