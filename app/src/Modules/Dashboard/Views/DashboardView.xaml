@@ -5,14 +5,16 @@
 
     <!-- Pigułki (Pill) i kropki etapów (StageDot) rysują szablony wspólne z Shared/Views/Partials/Partials.xaml. -->
     <StackPanel>
-        <partials:PageHeader Eyebrow="{Binding Eyebrow}" Title="Pulpit"
-                             Subtitle="Stan z bazy środowiska: import RABIT, źródła, słowniki globalne i dziennik zdarzeń. Kliknij kartę, aby przejść do sekcji.">
-            <partials:PageHeader.Actions>
-                <StackPanel Orientation="Horizontal">
-                    <Button Content="Odśwież" Style="{StaticResource Btn}" Command="{Binding Refresh}" />
-                </StackPanel>
-            </partials:PageHeader.Actions>
-        </partials:PageHeader>
+        <!-- Nagłówek Pulpitu: tydzień i okres z kalendarza okresów jako kluczowa informacja -->
+        <DockPanel Margin="0,0,0,20">
+            <Button DockPanel.Dock="Right" VerticalAlignment="Top" Content="Odśwież" Style="{StaticResource Btn}"
+                    Command="{Binding Refresh}" />
+            <StackPanel>
+                <TextBlock Text="Pulpit" Style="{StaticResource H1}" Margin="0,0,0,6" />
+                <TextBlock Text="{Binding Eyebrow}" FontSize="22" FontWeight="SemiBold"
+                           Foreground="{StaticResource Accent}" TextWrapping="Wrap" />
+            </StackPanel>
+        </DockPanel>
         <partials:BusyBar DataContext="{Binding Busy}" />
 
         <!-- Błąd odczytu z bazy -->
