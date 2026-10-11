@@ -6,12 +6,10 @@
     <!-- Pigułki (Pill) i kropki etapów (StageDot) rysują szablony wspólne z Shared/Views/Partials/Partials.xaml. -->
     <StackPanel>
         <partials:PageHeader Eyebrow="{Binding Eyebrow}" Title="Pulpit"
-                             Subtitle="Stan z bazy środowiska: import RABIT, źródła, słowniki globalne, projekty i dziennik zdarzeń.">
+                             Subtitle="Stan z bazy środowiska: import RABIT, źródła, słowniki globalne i dziennik zdarzeń. Kliknij kartę, aby przejść do sekcji.">
             <partials:PageHeader.Actions>
                 <StackPanel Orientation="Horizontal">
-                    <Button Content="Odśwież" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding Refresh}" />
-                    <Button Content="Import RABIT" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding OpenImport}" />
-                    <Button Content="Nowy projekt" Style="{StaticResource BtnPrimary}" Command="{Binding NewProject}" />
+                    <Button Content="Odśwież" Style="{StaticResource Btn}" Command="{Binding Refresh}" />
                 </StackPanel>
             </partials:PageHeader.Actions>
         </partials:PageHeader>
@@ -23,14 +21,19 @@
             <TextBlock Text="{Binding Error}" Foreground="{StaticResource Crit}" FontWeight="SemiBold" TextWrapping="Wrap" />
         </Border>
 
-        <!-- Karty faz globalnych -->
+        <!-- Karty faz globalnych – klik przechodzi do sekcji (GlobalCard.ModuleKey) -->
         <ItemsControl ItemsSource="{Binding GlobalCards}" Margin="0,0,0,20">
             <ItemsControl.ItemsPanel>
                 <ItemsPanelTemplate><UniformGrid Columns="3" /></ItemsPanelTemplate>
             </ItemsControl.ItemsPanel>
             <ItemsControl.ItemTemplate>
                 <DataTemplate>
-                    <Border Style="{StaticResource Panel}" Margin="0,0,12,0">
+                    <Border Style="{StaticResource Panel}" Margin="0,0,12,0" Cursor="Hand"
+                            ToolTip="Kliknij, aby przejść do sekcji">
+                        <Border.InputBindings>
+                            <MouseBinding MouseAction="LeftClick" CommandParameter="{Binding}"
+                                          Command="{Binding DataContext.OpenCard, RelativeSource={RelativeSource AncestorType=UserControl}}" />
+                        </Border.InputBindings>
                         <StackPanel>
                             <DockPanel Margin="0,0,0,6">
                                 <Border DockPanel.Dock="Right" Style="{StaticResource Tag}">
@@ -45,44 +48,6 @@
                                     <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
                                 </ItemsControl.ItemsPanel>
                             </ItemsControl>
-                        </StackPanel>
-                    </Border>
-                </DataTemplate>
-            </ItemsControl.ItemTemplate>
-        </ItemsControl>
-
-        <!-- Karty projektów (META_Project); przebiegów jeszcze nie ma w bazie -->
-        <Border Style="{StaticResource Panel}" Margin="0,0,0,20"
-                Visibility="{Binding NoProjects, Converter={StaticResource BoolToVisibility}}">
-            <TextBlock Text="Brak projektów w bazie." Style="{StaticResource MutedText}" />
-        </Border>
-        <ItemsControl ItemsSource="{Binding ZakresCards}" Margin="0,0,0,20">
-            <ItemsControl.ItemsPanel>
-                <ItemsPanelTemplate><UniformGrid Columns="3" /></ItemsPanelTemplate>
-            </ItemsControl.ItemsPanel>
-            <ItemsControl.ItemTemplate>
-                <DataTemplate>
-                    <Border Style="{StaticResource Panel}" Margin="0,0,12,0">
-                        <StackPanel>
-                            <DockPanel Margin="0,0,0,4">
-                                <Border DockPanel.Dock="Right" Style="{StaticResource Tag}">
-                                    <TextBlock Text="{Binding TypeLabel}" FontSize="11" Foreground="{StaticResource Muted}" />
-                                </Border>
-                                <TextBlock Text="{Binding Code}" FontWeight="SemiBold" FontSize="15" />
-                            </DockPanel>
-                            <TextBlock Text="{Binding Name}" Style="{StaticResource MutedText}" Margin="0,0,0,6" />
-                            <ContentControl Content="{Binding ScopeWarning}" />
-                            <DockPanel Margin="0,4,0,6">
-                                <ContentControl DockPanel.Dock="Right" Content="{Binding RunStatus}" />
-                                <TextBlock Text="{Binding RunId}" Style="{StaticResource MonoText}" FontSize="12" />
-                            </DockPanel>
-                            <ItemsControl ItemsSource="{Binding Dots}" Margin="0,0,0,6">
-                                <ItemsControl.ItemsPanel>
-                                    <ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate>
-                                </ItemsControl.ItemsPanel>
-                            </ItemsControl>
-                            <TextBlock Text="{Binding RunLine}" TextWrapping="Wrap" />
-                            <TextBlock Text="{Binding LastBy}" Style="{StaticResource MutedText}" FontSize="12" Margin="0,2,0,0" />
                         </StackPanel>
                     </Border>
                 </DataTemplate>
@@ -136,18 +101,28 @@
 
             <Border Grid.Column="1" Style="{StaticResource Panel}">
                 <StackPanel>
-                    <TextBlock Text="Ostatnie zdarzenia" Style="{StaticResource H2}" Margin="0,0,0,10" />
+                    <DockPanel Margin="0,0,0,10">
+                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                            <Button Content="‹" Style="{StaticResource Btn}" Padding="8,1" Command="{Binding PrevEvents}" ToolTip="Nowsze" />
+                            <TextBlock Text="{Binding EventPageLabel}" FontFamily="{StaticResource FMono}" FontSize="12"
+                                       Foreground="{StaticResource Muted}" VerticalAlignment="Center" Margin="8,0" />
+                            <Button Content="›" Style="{StaticResource Btn}" Padding="8,1" Command="{Binding NextEvents}" ToolTip="Starsze" />
+                        </StackPanel>
+                        <TextBlock Text="Ostatnie zdarzenia" Style="{StaticResource H2}" />
+                    </DockPanel>
                     <TextBlock Text="Brak wpisów w dzienniku." Style="{StaticResource MutedText}"
                                Visibility="{Binding NoEvents, Converter={StaticResource BoolToVisibility}}" />
-                    <ItemsControl ItemsSource="{Binding Events}">
+                    <ItemsControl ItemsSource="{Binding PagedEvents}">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
-                                <StackPanel Margin="0,0,0,8">
-                                    <TextBlock FontSize="11" Foreground="{StaticResource Muted}" FontFamily="{StaticResource FMono}">
-                                        <Run Text="{Binding When, Mode=OneWay}" /><Run Text=" · " /><Run Text="{Binding Where, Mode=OneWay}" /><Run Text=" · " /><Run Text="{Binding Who, Mode=OneWay}" />
-                                    </TextBlock>
-                                    <TextBlock Text="{Binding Message}" TextWrapping="Wrap" />
-                                </StackPanel>
+                                <Border BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1" Padding="0,4">
+                                    <StackPanel>
+                                        <TextBlock FontSize="11" Foreground="{StaticResource Muted}" FontFamily="{StaticResource FMono}">
+                                            <Run Text="{Binding When, Mode=OneWay}" /><Run Text=" · " /><Run Text="{Binding Where, Mode=OneWay}" /><Run Text=" · " /><Run Text="{Binding Who, Mode=OneWay}" />
+                                        </TextBlock>
+                                        <TextBlock Text="{Binding Message}" TextTrimming="CharacterEllipsis" ToolTip="{Binding Message}" />
+                                    </StackPanel>
+                                </Border>
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>

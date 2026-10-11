@@ -8,7 +8,7 @@ using Serilog;
 
 namespace PzlEv.Modules.Dashboard.ViewModels;
 
-/// <summary>Pulpit (F07): fazy globalne, projekty, „Wymaga uwagi”, ostatnie zdarzenia – z bazy; „Odśwież” czyta ponownie.</summary>
+/// <summary>Pulpit (F07): klikalne karty faz globalnych, „Wymaga uwagi”, ostatnie zdarzenia (stronicowane) – z bazy; „Odśwież” czyta ponownie.</summary>
 public sealed class DashboardViewModel : ObservableObject
 {
     private static readonly ILogger Logger = Log.ForContext("Module", "dashboard");
@@ -17,15 +17,23 @@ public sealed class DashboardViewModel : ObservableObject
     private string _eyebrow = "";
     private string? _error;
     private IReadOnlyList<GlobalCard> _globalCards = [];
-    private IReadOnlyList<ZakresCard> _zakresCards = [];
     private IReadOnlyList<AttentionItem> _attention = [];
     private IReadOnlyList<EventItem> _events = [];
+    private int _eventPage;
+
+    /// <summary>Liczba zdarzeń na stronę listy „Ostatnie zdarzenia”.</summary>
+    public const int EventsPerPage = 6;
 
     public DashboardViewModel(IDashboardDataSource data, INavigator navigator)
     {
         _data = data;
-        OpenImport = new RelayCommand(_ => navigator.NavigateTo(ModuleKeys.Import));
-        NewProject = new RelayCommand(_ => navigator.NavigateTo(ModuleKeys.Projects));
+        OpenCard = new RelayCommand(p =>
+        {
+            if (p is GlobalCard { ModuleKey: { } key })
+                navigator.NavigateTo(key);
+        });
+        PrevEvents = new RelayCommand(_ => EventPage--, _ => EventPage > 0);
+        NextEvents = new RelayCommand(_ => EventPage++, _ => EventPage < EventPageCount - 1);
         Refresh = new AsyncRelayCommand(Load, () => !Busy.IsBusy);
         ResolveProblem = new RelayCommand(p => _ = Resolve(p as AttentionItem), _ => !Busy.IsBusy);
         _ = Load();
@@ -51,16 +59,6 @@ public sealed class DashboardViewModel : ObservableObject
 
     public IReadOnlyList<GlobalCard> GlobalCards { get => _globalCards; private set => SetProperty(ref _globalCards, value); }
 
-    public IReadOnlyList<ZakresCard> ZakresCards
-    {
-        get => _zakresCards;
-        private set
-        {
-            if (SetProperty(ref _zakresCards, value))
-                OnPropertyChanged(nameof(NoProjects));
-        }
-    }
-
     public IReadOnlyList<AttentionItem> Attention
     {
         get => _attention;
@@ -80,21 +78,48 @@ public sealed class DashboardViewModel : ObservableObject
         private set
         {
             if (SetProperty(ref _events, value))
+            {
                 OnPropertyChanged(nameof(NoEvents));
+                _eventPage = -1;
+                EventPage = 0;
+            }
         }
     }
 
-    public int AttentionCount => Attention.Count;
+    /// <summary>Bieżąca strona zdarzeń (od 0).</summary>
+    public int EventPage
+    {
+        get => _eventPage;
+        private set
+        {
+            var page = Math.Clamp(value, 0, EventPageCount - 1);
+            if (SetProperty(ref _eventPage, page))
+            {
+                OnPropertyChanged(nameof(PagedEvents));
+                OnPropertyChanged(nameof(EventPageLabel));
+                CommandManager.InvalidateRequerySuggested();
+            }
+        }
+    }
 
-    public bool NoProjects => ZakresCards.Count == 0;
+    public int EventPageCount => Math.Max(1, (Events.Count + EventsPerPage - 1) / EventsPerPage);
+
+    public IReadOnlyList<EventItem> PagedEvents => Events.Skip(EventPage * EventsPerPage).Take(EventsPerPage).ToList();
+
+    public string EventPageLabel => $"{EventPage + 1} / {EventPageCount}";
+
+    public int AttentionCount => Attention.Count;
 
     public bool NoAttention => Attention.Count == 0;
 
     public bool NoEvents => Events.Count == 0;
 
-    public ICommand OpenImport { get; }
+    /// <summary>Klik w kartę fazy globalnej – przejście do modułu karty.</summary>
+    public ICommand OpenCard { get; }
 
-    public ICommand NewProject { get; }
+    public ICommand PrevEvents { get; }
+
+    public ICommand NextEvents { get; }
 
     public ICommand Refresh { get; }
 
@@ -122,11 +147,10 @@ public sealed class DashboardViewModel : ObservableObject
     {
         try
         {
-            var (eyebrow, global, projects, attention, events) = await Busy.Run("Wczytywanie pulpitu…",
-                () => (_data.Eyebrow, _data.GlobalCards(), _data.ZakresCards(), _data.Attention(), _data.Events()));
+            var (eyebrow, global, attention, events) = await Busy.Run("Wczytywanie pulpitu…",
+                () => (_data.Eyebrow, _data.GlobalCards(), _data.Attention(), _data.Events()));
             Eyebrow = eyebrow;
             GlobalCards = global;
-            ZakresCards = projects;
             Attention = attention;
             Events = events;
             Error = null;

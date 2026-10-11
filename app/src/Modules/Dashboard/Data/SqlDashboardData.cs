@@ -48,7 +48,12 @@ public sealed class SqlDashboardData(AppServices services) : IDashboardDataSourc
     public IReadOnlyList<GlobalCard> GlobalCards()
     {
         using var connection = services.Sql.Open();
-        return [ImportCard(LastBatch(connection)), SourcesCard(connection), DictionariesCard(connection)];
+        return
+        [
+            ImportCard(LastBatch(connection)) with { ModuleKey = ModuleKeys.Import },
+            SourcesCard(connection) with { ModuleKey = ModuleKeys.Administration },
+            DictionariesCard(connection) with { ModuleKey = ModuleKeys.MasterData },
+        ];
     }
 
     public IReadOnlyList<ZakresCard> ZakresCards()
@@ -87,7 +92,7 @@ public sealed class SqlDashboardData(AppServices services) : IDashboardDataSourc
             : problem.Area;
 
     public IReadOnlyList<EventItem> Events() =>
-        services.Journal.Recent(15)
+        services.Journal.Recent(60)
             .Select(e => new EventItem(e.At.ToLocalTime().ToString("dd.MM HH:mm", Pl), e.Scope ?? e.Area, e.User, e.Message))
             .ToList();
 
