@@ -194,35 +194,8 @@ public sealed class ImportViewModel : ObservableObject
         row.Status = progress.Status;
     }
 
-    /// <summary>
-    /// Logowanie do bramy SharePoint każdej aktywnej lokalizacji (jak Office – MS-OFBA; bez niego strona folderu
-    /// w oknie aplikacji). Bez lokalizacji SharePoint – nic do zrobienia. false – logowanie anulowane.
-    /// </summary>
-    private async Task<bool> LoginToSharePoint()
-    {
-        var addresses = _service.Locations().Where(l => !l.IsManualFolder)
-            .Select(l => SharePointAddress.Parse(l.ConfiguredPath))
-            .OfType<SharePointAddress>()
-            .DistinctBy(a => a.Origin, StringComparer.OrdinalIgnoreCase)
-            .ToList();
-        foreach (var address in addresses)
-        {
-            Progress = $"Logowanie do SharePoint ({address.Host})…";
-            var request = await Task.Run(() =>
-            {
-                using var login = new SharePointLogin();
-                return login.Prepare(address);
-            });
-            if (!_login.Login(request))
-            {
-                Logger.Information("Logowanie SharePoint {Host} anulowane", address.Host);
-                Progress = "";
-                return false;
-            }
-        }
-        Progress = "";
-        return true;
-    }
+    /// <summary>Logowanie do SharePoint lokalizacji (SharePointSignIn); false – anulowane.</summary>
+    private Task<bool> LoginToSharePoint() => SharePointSignIn.Run(_service, _login, text => Progress = text);
 
     /// <summary>Sprawdzenie źródeł (bez importu); null – przerwane błędem (opis w Progress).</summary>
     private async Task<SourcesCheckResult?> CheckSources()

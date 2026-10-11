@@ -5,7 +5,7 @@ using Microsoft.Data.SqlClient;
 namespace PzlEv.Shared.Utils.Data.Sql;
 
 /// <summary>
-/// Wsadowy zapis wierszy (SqlBulkCopy) – w pamięci najwyżej jedna paczka (miliony wierszy raportu).
+/// Wsadowy zapis wierszy (SqlBulkCopy) strumieniowo – wiersze nie są gromadzone w pamięci (miliony wierszy raportu).
 /// Paczki po 102 400 wierszy trafiają do indeksu kolumnowego od razu jako skompresowane grupy wierszy.
 /// </summary>
 public static class SqlBulk
@@ -13,34 +13,19 @@ public static class SqlBulk
     public const int BatchSize = 102_400;
 
     /// <summary>
-    /// Zapis paczkami po BatchSize wierszy: paczka jest najpierw zbierana w pamięci (czytanie i parsowanie pliku nie trzyma
-    /// blokad), potem zapisywana i zatwierdzana osobno – odczyty innych sesji czekają najwyżej na zapis jednej paczki.
-    /// Przy błędzie zatwierdzone paczki zostają – wywołujący je usuwa.
+    /// Zapis strumieniowy paczkami po BatchSize wierszy, każda paczka zatwierdzana osobno (SqlBulkCopy, wewnętrzna
+    /// transakcja paczki): odczyty innych sesji czekają najwyżej na jedną paczkę (jej czytanie z pliku i zapis), a nie
+    /// na cały plik; w pamięci nic nie jest gromadzone. Przy błędzie zatwierdzone paczki zostają – wywołujący je usuwa.
     /// </summary>
     public static long InsertInBatches(SqlConnection connection, string table, IReadOnlyList<(string Name, Type Type)> columns, IEnumerable<object?[]> rows)
     {
-        long count = 0;
-        var batch = new List<object?[]>(BatchSize);
-        foreach (var row in rows)
+        using var copy = new SqlBulkCopy(connection, SqlBulkCopyOptions.UseInternalTransaction, null)
         {
-            batch.Add(row);
-            if (batch.Count == BatchSize)
-            {
-                count += Write(connection, table, columns, batch);
-                batch.Clear();
-            }
-        }
-        if (batch.Count > 0)
-            count += Write(connection, table, columns, batch);
-        return count;
-    }
-
-    private static long Write(SqlConnection connection, string table, IReadOnlyList<(string Name, Type Type)> columns, IReadOnlyList<object?[]> rows)
-    {
-        using var copy = new SqlBulkCopy(connection, SqlBulkCopyOptions.UseInternalTransaction, null);
-        copy.DestinationTableName = table;
-        copy.BulkCopyTimeout = 0;
-        copy.BatchSize = rows.Count;
+            DestinationTableName = table,
+            BulkCopyTimeout = 0,
+            BatchSize = BatchSize,
+            EnableStreaming = true,
+        };
         foreach (var (name, _) in columns)
             copy.ColumnMappings.Add(name, name);
         using var reader = new RowReader(columns, rows);

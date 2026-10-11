@@ -80,14 +80,22 @@ i utrzymywaną na ekranie Administracja (`docs/funkcjonalnosc.md`, F08).
      import widziałby je ponownie jako nowe pliki);
   2. *sprawdzanie pliku* – duplikat (ten sam SHA-256), nagłówek, kolumny parsera;
   3. *odczyt i zapis wierszy* – jeden przebieg pliku (CSV albo Excel – odczyt strumieniowy, wiersz po wierszu):
-     wiersze są parsowane w osobnym wątku i jednocześnie zapisywane wsadowo do `CAN_Row` w jednej transakcji. Błąd
-     wartości, puste pole wymagane albo niezgodne sumy kwot (z kolumn pliku i z wartości pól) wycofują zapis;
-  4. *kontrola w bazie* – liczba wierszy i sumy kwot po zapisie = odczytane z pliku (niezgodność wycofuje cały zapis),
-     zatwierdzenie; plik lokalny jest potem usuwany.
+     wpis pliku w `META_SourceFile` ze stanem danych „w toku” (osobna, krótka transakcja), wiersze parsowane
+     w osobnym wątku i zapisywane strumieniowo do `CAN_Row` paczkami po 102 400 wierszy, każda paczka zatwierdzana
+     osobno. Błąd wartości, puste pole wymagane albo niezgodne sumy kwot (z kolumn pliku
+     i z wartości pól) – wiersze pliku i jego wpis są usuwane;
+  4. *kontrola w bazie* – liczba wierszy i sumy kwot po zapisie = odczytane z pliku (niezgodność – wiersze i wpis
+     usuwane), stan danych „utworzone”; plik lokalny jest potem usuwany.
 
-  Liczby są zaokrąglane do 8 miejsc po przecinku. „Przerwij” działa także w trakcie pliku – jego zapis jest wycofany.
-  Gdy SQL Server wycofa zapis pliku jako ofiarę zakleszczenia z inną sesją (błąd 1205), import sam go powtarza (do
-  3 prób, plik czytany ponownie z dysku lokalnego; status: „ponowienie 2/3 po zakleszczeniu w bazie”, wpis w logu).
+  Odczyty danych kanonicznych (procedury i funkcje `CAN_*`, `REP_*`) biorą tylko pliki „utworzone”, więc plik w trakcie
+  zapisu jest dla nich niewidoczny, a odczyt czeka najwyżej na jedną paczkę (jej odczyt z pliku i zapis – ok. 2–3 s),
+  nie na cały plik. Różne pliki
+  importują się równolegle (indeks kolumnowy – każda sesja pisze do własnych grup wierszy); ten sam plik w dwóch
+  importach naraz chroni blokada pliku i unikalny SHA-256 (druga sesja – „pominięty” albo „duplikat”).
+  Liczby są zaokrąglane do 8 miejsc po przecinku. „Przerwij” działa także w trakcie pliku – jego wiersze i wpis są usuwane.
+  Gdy SQL Server wycofa zapis paczki jako ofiarę zakleszczenia z inną sesją (błąd 1205), import usuwa wiersze pliku
+  i powtarza zapis (do 3 prób, plik czytany ponownie z dysku lokalnego; status: „ponowienie 2/3 po zakleszczeniu
+  w bazie”, wpis w logu).
   Drugą sesję zakleszczenia pokazuje graf z sesji `system_health` (uprawnienie VIEW SERVER STATE):
 
   ```sql

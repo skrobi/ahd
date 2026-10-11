@@ -17,7 +17,7 @@ namespace PzlEv.Modules.Projects.Services;
 /// projektu i folderami; utrzymanie nakładki i słowników projektu; gotowość; baza analityczna i eksport do Excela.
 /// </summary>
 public sealed class ProjectService(IProjectStore store, IDictionaryStore dictionaries, IJournal journal, ProjectFolders folders,
-    IPzlProdSource? pzlProd)
+    IPzlProdSource? pzlProd, Func<ISourceImport?>? imports = null)
 {
     private const string Area = "Projekty";
 
@@ -172,8 +172,25 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
     /// Wartości słowników powiązanych do wyboru w tabeli słownika (DictColumn.Lookup): Osoby – USRID → imię i nazwisko
     /// (słownik Osoby wczytany z HR); Kategorie WBS – kategorie projektu.
     /// </summary>
-    public static IReadOnlyDictionary<string, IReadOnlyList<LookupOption>> Lookups(IReadOnlyList<LookupOption> persons, IReadOnlyList<LookupOption> categories) =>
-        new Dictionary<string, IReadOnlyList<LookupOption>> { [GlobalDictionaries.Persons] = persons, [ProjectDictionaries.WbsCategories] = categories };
+    public static IReadOnlyDictionary<string, IReadOnlyList<LookupOption>> Lookups(IReadOnlyList<LookupOption> persons, IReadOnlyList<LookupOption> categories,
+        IReadOnlyList<LookupOption>? sources = null) =>
+        new Dictionary<string, IReadOnlyList<LookupOption>>
+        {
+            [GlobalDictionaries.Persons] = persons, [ProjectDictionaries.WbsCategories] = categories, [ProjectDictionaries.Sources] = sources ?? [],
+        };
+
+    /// <summary>Aktywne definicje źródeł do wyboru w słowniku „Źródła danych” (kod → kod i prefiks plików).</summary>
+    public IReadOnlyList<LookupOption> SourceLookups() =>
+        (imports?.Invoke()?.Definitions() ?? [])
+            .Select(d => new LookupOption(d.Code, $"{d.Code} ({d.Prefix})"))
+            .ToList();
+
+    /// <summary>Kody definicji ze słownika „Źródła danych” projektu.</summary>
+    public IReadOnlySet<string> ProjectSources(string code) =>
+        Rows(ProjectDictionaries.Sources, code).Select(r => r["Definicja źródła"]).OfType<string>().ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Import źródeł projektu (kontrakt modułu Import); null – moduł Import niedostępny.</summary>
+    public ISourceImport? Imports => imports?.Invoke();
 
     // ---------- mapowanie CES ↔ P1S (strona P1S nakładki) ----------
 
@@ -217,7 +234,8 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
             store.P1sOwners(code),
             Persons(),
             wpCam?.Select(r => r["WP"]).OfType<string>().ToHashSet(StringComparer.OrdinalIgnoreCase),
-            Categories(code));
+            Categories(code),
+            imports?.Invoke() is null ? null : SourceLookups().Select(s => s.Value).ToHashSet(StringComparer.OrdinalIgnoreCase));
 
     /// <summary>Kategorie „Kategorie WBS” projektu do sprawdzenia Cost Category w „WP i CAM”; słownik pusty – null (bez kontroli).</summary>
     private IReadOnlySet<string>? Categories(string code)

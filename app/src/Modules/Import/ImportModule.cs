@@ -5,6 +5,7 @@ using PzlEv.Modules.Import.ViewModels;
 using PzlEv.Modules.Import.Views;
 using PzlEv.Shared.Models;
 using PzlEv.Shared.Models.Pipeline;
+using PzlEv.Shared.Utils.Data;
 using PzlEv.Shared.Utils.Ui.Modularity;
 
 namespace PzlEv.Modules.Import;
@@ -22,6 +23,10 @@ public sealed class ImportModule : IModule
     [
         new("G1", "Import źródeł", "Faza globalna", StageScope.Global, CanAutoRun: true),
     ];
+
+    /// <summary>Kontrakt ISourceImport dla innych modułów (import źródeł projektu).</summary>
+    public void Initialize(AppServices services) =>
+        services.Contracts.Register<ISourceImport>(new SourceImport(new ImportService(new SqlImportStore(services.Sql), services), new SharePointLoginDialog()));
 
     public FrameworkElement CreateView(ModuleContext context)
     {

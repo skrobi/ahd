@@ -13,4 +13,5 @@ public sealed record ProjectDictionaryContext(
     IReadOnlyDictionary<string, string> P1sOwners,
     IReadOnlySet<string> Persons,
     IReadOnlySet<string>? Wps,
-    IReadOnlySet<string>? Categories = null);
+    IReadOnlySet<string>? Categories = null,
+    IReadOnlySet<string>? Sources = null);

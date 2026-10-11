@@ -29,7 +29,7 @@ Menu modułów po lewej (Pulpit, Import RABIT, Słowniki, Projekty, Przebiegi, A
 | **Pulpit** | karty faz globalnych (Import RABIT, Źródła danych, Słowniki globalne), „Wymaga uwagi”, ostatnie zdarzenia (F07) | klik w kartę – przejście do sekcji (Import / Administracja / Słowniki), „Odśwież” |
 | **Import RABIT** | import źródeł, historia importów, decyzje dla plików (F05) | importuj |
 | **Projekty** | lista projektów: kod, nazwa, typ, aktywny przebieg, folder – sam odczyt projektów (nakładka i gotowość – na ekranie projektu) | nowy projekt |
-| **Projekt** | zakładki: Wskaźniki (wskaźniki projektu w grupach Operational EV, Materials, Financial EV; gotowość F02 zwinięta; znacznik gotowości i data danych RABIT w nagłówku), Struktura (nakładka z rozwinięciem P1S, WP, CAM, Cost Category, budżet i daty – `docs/performance-objectives.md`, rozdz. 4.2), Raporty, Słowniki projektu, Przebiegi, Foldery | edycja w komórkach struktury (zapis od razu); dołożenie elementów z kolejnego eksportu SAP; Raport kosztów (Excel) na zakładce Raporty (`docs/model-danych.md`, migracja 013); struktura do Excela; nowy przebieg; edycja słowników projektu w tabeli (Cost Category – pozycje globalne i zmiany projektu, `docs/slowniki.md`, rozdz. 6); pobierz / wczytaj słowniki z Excela |
+| **Projekt** | zakładki: Wskaźniki (wskaźniki projektu w grupach Operational EV, Materials, Financial EV; gotowość F02 zwinięta; znacznik gotowości i data danych RABIT w nagłówku), Struktura (nakładka z rozwinięciem P1S, WP, CAM, Cost Category, budżet i daty – `docs/performance-objectives.md`, rozdz. 4.2), Raporty, Słowniki projektu, Przebiegi, Foldery | edycja w komórkach struktury (zapis od razu); dołożenie elementów z kolejnego eksportu SAP; Raport kosztów (Excel) na zakładce Raporty (`docs/model-danych.md`, migracja 013); struktura do Excela; import źródeł projektu (F05); nowy przebieg; edycja słowników projektu w tabeli (Cost Category – pozycje globalne i zmiany projektu, `docs/slowniki.md`, rozdz. 6); pobierz / wczytaj słowniki z Excela |
 | **Kreator projektu** | 5 kroków (F01) | utwórz projekt |
 | **Przebiegi** | wszystkie przebiegi wszystkich projektów: tydzień, czy zamykający, stan, osoba | przejście do przebiegu |
 | **Przebieg** | kroki i etapy (F06), panel wybranego etapu, znacznik stanu, problemy, rewizje, dziennik | akcje etapów |
@@ -105,8 +105,12 @@ Lista kontrolna na ekranie projektu:
 
 - **Importuj** – import ze wszystkich aktywnych lokalizacji RABIT (WebDAV) i z folderu `Do_importu`
   (`docs/pipeline-fazy.md`, G1): logowanie do SharePoint (brama F5, jak Office), lista plików pasujących do
-  definicji z datami („zostanie zaimportowany”), import ze zmianą statusu każdego pliku. Tylko jedna osoba naraz –
-  druga widzi, kto importuje i od kiedy.
+  definicji z datami („zostanie zaimportowany”), import ze zmianą statusu każdego pliku. Pełny import – jedna osoba
+  naraz, druga widzi, kto importuje i od kiedy; importy źródeł projektów działają równolegle z nim
+  (`docs/pipeline-fazy.md`, rozdz. 1.4).
+- **Importuj źródła projektu** (ekran projektu, Struktura) – import plików definicji ze słownika projektu „Źródła
+  danych” (np. `ACTUALS_PROGRAM1` – pliki `ACTUALS_PROGRAM1_*`, parser `ACTUALS`); pozostałe pliki są pomijane. Plik
+  zapisuje się raz, wspólnie dla wszystkich projektów; po imporcie – ponowny odczyt kosztów i produkcji.
 - **Sprawdź źródła** – to samo bez importu.
 - Import zapisuje dane w bazie; plików z SharePoint nie kopiuje do `Do_importu` (folder na pliki pobrane ręcznie).
 - Wynik importu: decyzja dla każdego pliku, liczba wierszy, problemy.
