@@ -26,7 +26,7 @@
         </DataTemplate>
     </UserControl.Resources>
     <StackPanel>
-        <partials:PageHeader Eyebrow="Projekty / projekt" Title="{Binding Title}" Subtitle="{Binding Subtitle}">
+        <partials:PageHeader Title="{Binding Title}" Subtitle="{Binding Subtitle}">
             <partials:PageHeader.Actions>
                 <StackPanel Orientation="Horizontal">
                     <ContentControl Content="{Binding ReadinessPill}" VerticalAlignment="Center" Margin="0,0,12,0"
@@ -51,22 +51,27 @@
             <!-- Wskaźniki: sumy projektu teraz, wskaźniki EV po przebiegach; gotowość do przebiegu zwinięta -->
             <TabItem Header="Wskaźniki" Padding="12,4">
                 <StackPanel>
-                    <Button Content="Raport kosztów (Excel)" Style="{StaticResource Btn}" HorizontalAlignment="Left" Margin="0,0,0,12"
-                            Command="{Binding ExportCostReport}"
-                            ToolTip="Koszty ostatniego importu ACTUALS: Project definition × Cost Element, ostatni okres i lata (PLN), bez wykluczeń projektu" />
-                    <ItemsControl ItemsSource="{Binding Kpis}" ItemTemplate="{StaticResource Kpi}">
+                    <!-- Grupy wskaźników jak w tabeli struktury (Operational EV, Materials, Financial EV) -->
+                    <ItemsControl ItemsSource="{Binding Kpis}">
                         <ItemsControl.ItemsPanel>
                             <ItemsPanelTemplate>
                                 <WrapPanel />
                             </ItemsPanelTemplate>
                         </ItemsControl.ItemsPanel>
-                    </ItemsControl>
-                    <ItemsControl ItemsSource="{Binding EvKpis}" ItemTemplate="{StaticResource Kpi}">
-                        <ItemsControl.ItemsPanel>
-                            <ItemsPanelTemplate>
-                                <WrapPanel />
-                            </ItemsPanelTemplate>
-                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <StackPanel Margin="0,0,24,4">
+                                    <TextBlock Text="{Binding Name}" Style="{StaticResource H2}" FontSize="15" Margin="0,0,0,8" />
+                                    <ItemsControl ItemsSource="{Binding Tiles}" ItemTemplate="{StaticResource Kpi}">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate>
+                                                <WrapPanel />
+                                            </ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                    </ItemsControl>
+                                </StackPanel>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
                     </ItemsControl>
                     <Expander Margin="0,4,0,0">
                         <Expander.Header>
@@ -132,6 +137,22 @@
                         <views:PoEditorView DataContext="{Binding Objectives}" />
                     </StackPanel>
                 </StackPanel>
+            </TabItem>
+
+            <!-- Raporty: tabela – przycisk raportu po lewej, opis po prawej -->
+            <TabItem Header="Raporty" Padding="12,4">
+                <Border Style="{StaticResource Panel}" Padding="0">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="240" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Button Grid.Column="0" Content="Raport kosztów (Excel)" Style="{StaticResource Btn}" HorizontalAlignment="Left"
+                                VerticalAlignment="Center" Margin="12" Command="{Binding ExportCostReport}" />
+                        <TextBlock Grid.Column="1" VerticalAlignment="Center" Margin="0,12,12,12" TextWrapping="Wrap"
+                                   Text="Koszty ostatniego importu ACTUALS: Project definition × Cost Element, ostatni okres i lata (PLN), bez wykluczeń projektu." />
+                    </Grid>
+                </Border>
             </TabItem>
 
             <!-- Słowniki projektu: lista słowników i tabela wybranego słownika z edycją w komórkach (jak ekran Słowniki) -->
