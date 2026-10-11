@@ -2,6 +2,7 @@ using System.IO;
 using System.Collections.ObjectModel;
 using System.Windows.Input;
 using PzlEv.Shared.Models.Dictionaries;
+using PzlEv.Shared.Models.Hr;
 using PzlEv.Shared.Utils.Data;
 using PzlEv.Shared.Utils.Dictionaries;
 using PzlEv.Shared.Models;
@@ -27,6 +28,7 @@ public sealed class MasterDataViewModel : ObservableObject
     private readonly IHrSource? _hr;
     private readonly ICostElementSource? _costElements;
     private bool _showP1s;
+    private IReadOnlyList<HrPerson>? _hrPersons;
 
     /// <param name="hr">Pracownicy z PZLHRPROD (słownik Osoby); null – brak sekcji PzlHrProd w pzl-ev.json.</param>
     /// <param name="costElements">Cost elementy ostatniego importu ACTUALS – „Uzupełnij z ACTUALS” w Cost Category.</param>
@@ -303,7 +305,13 @@ public sealed class MasterDataViewModel : ObservableObject
         });
     }
 
-    /// <summary>Słownik Osoby z PZLHRPROD (HR.ORG): podgląd różnic jak przy wczytaniu z Excela – zawartość zastępowana.</summary>
+    /// <summary>Okno wyboru osób z HR (pracownicy, USRID już w słowniku) → wybrane; null – anulowano. Ustawia moduł.</summary>
+    public Func<IReadOnlyList<HrPerson>, IReadOnlySet<string>, IReadOnlyList<HrPerson>?> PickPersons { get; set; } = (_, _) => null;
+
+    /// <summary>
+    /// „Dodaj z HR” (słownik Osoby): okno szukania pracowników PZLHRPROD (HR.ORG), wybrane osoby trafiają do podglądu jak
+    /// przy wczytaniu z Excela – same nowe osoby, nic nie jest zmieniane ani usuwane.
+    /// </summary>
     private async Task DoImportFromHr()
     {
         if (_hr is null)
@@ -314,15 +322,24 @@ public sealed class MasterDataViewModel : ObservableObject
         Table.CommitEdits();
         if (HasPendingChanges)
         {
-            Status = "Masz niezapisane zmiany – zapisz albo odrzuć je przed wczytaniem z HR.";
+            Status = "Masz niezapisane zmiany – zapisz albo odrzuć je przed dodaniem osób z HR.";
             return;
         }
         var spec = Spec!;
         await Try(async () =>
         {
-            var preview = await Busy.Run("Wczytywanie pracowników z PZLHRPROD (HR.ORG)…", () =>
-                _service.PreviewRows(spec, GlobalDictionaries.PersonRows(_hr.Persons()), "PZLHRPROD HR.ORG"));
+            var (persons, current) = await Busy.Run("Wczytywanie pracowników z PZLHRPROD (HR.ORG)…", () =>
+                (_hrPersons ??= _hr.Persons(), _service.Load(spec)));
+            var existing = current.Select(r => r["USRID"]).OfType<string>().ToHashSet(StringComparer.OrdinalIgnoreCase);
+            if (PickPersons(persons, existing) is not { Count: > 0 } picked)
+            {
+                Status = "Nie wybrano osób do dodania.";
+                return;
+            }
+            var (rows, added) = GlobalDictionaries.PersonsWithAdded(current, picked);
+            var preview = await Busy.Run("Sprawdzanie osób do dodania…", () => _service.PreviewRows(spec, rows, "PZLHRPROD HR.ORG"));
             ShowPreview(preview, "Dane z HR");
+            Status = $"Nowe osoby z HR: {added} – sprawdź i zatwierdź wczytanie.";
         });
     }
 

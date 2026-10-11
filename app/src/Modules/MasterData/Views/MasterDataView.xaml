@@ -46,9 +46,9 @@
                     <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
                         <Button Content="Pobierz do Excela" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding Export}" />
                         <Button Content="Wczytaj z Excela" Style="{StaticResource Btn}" Command="{Binding Import}" />
-                        <Button Content="Wczytaj z HR" Style="{StaticResource Btn}" Margin="8,0,0,0" Command="{Binding ImportFromHr}"
+                        <Button Content="Dodaj z HR" Style="{StaticResource Btn}" Margin="8,0,0,0" Command="{Binding ImportFromHr}"
                                 Visibility="{Binding IsPersons, Converter={StaticResource BoolToVisibility}}"
-                                ToolTip="Pracownicy z PZLHRPROD (HR.ORG) – podgląd różnic przed zapisem; zawartość słownika zostaje zastąpiona" />
+                                ToolTip="Szukaj pracowników PZLHRPROD (numer znaczka / USRID, PERNR, imię i nazwisko, e-mail, dział) i dodaj wybranych – podgląd przed zapisem; nic nie jest usuwane" />
                         <Button Content="Uzupełnij z ACTUALS" Style="{StaticResource Btn}" Margin="8,0,0,0" Command="{Binding FillFromActuals}"
                                 Visibility="{Binding IsCostCategory, Converter={StaticResource BoolToVisibility}}"
                                 ToolTip="Dopisuje cost elementy z całego ostatniego importu ACTUALS, których nie ma w słowniku (podgląd przed zapisem; nic nie jest usuwane) – Cost Category i „Rozliczeniowy” uzupełnia finansista" />

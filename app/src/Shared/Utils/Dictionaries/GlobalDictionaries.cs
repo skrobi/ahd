@@ -378,5 +378,40 @@ public static partial class GlobalDictionaries
             }))
             .ToList();
 
+    /// <summary>
+    /// Osoby uzupełnione o wybranych pracowników z HR („Dodaj z HR”): bieżące wiersze bez zmian i nowe wiersze dla USRID,
+    /// których w słowniku nie ma – podgląd pokazuje same nowe osoby, nic nie jest usuwane.
+    /// </summary>
+    public static (IReadOnlyList<DictRow> Rows, int Added) PersonsWithAdded(IReadOnlyList<DictRow> current, IEnumerable<HrPerson> persons)
+    {
+        var known = current.Select(r => r["USRID"] ?? "").ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var rows = current.Select(r => new DictRow(null, null, r.Values)).ToList();
+        var added = PersonRows(persons).Where(r => known.Add(r["USRID"] ?? "")).ToList();
+        rows.AddRange(added);
+        return (rows, added.Count);
+    }
+
+    /// <summary>
+    /// Szukanie pracowników HR: każde słowo frazy musi wystąpić w którymś polu – USRID, PERNR (numer znaczka), imię,
+    /// nazwisko, „imię nazwisko” / „nazwisko imię”, e-mail, dział (skrót i pełna nazwa). Wielkość liter bez znaczenia.
+    /// </summary>
+    public static IReadOnlyList<HrPerson> SearchPersons(IEnumerable<HrPerson> persons, string text, int limit = 200)
+    {
+        var words = text.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (words.Length == 0 || words.Sum(w => w.Length) < 2)
+            return [];
+        return persons
+            .Where(p => p.Usrid.Length > 0)
+            .Where(p =>
+            {
+                string[] fields = [p.Usrid, p.Pernr, p.FirstName, p.LastName, p.FullName, $"{p.LastName} {p.FirstName}", p.Email, p.DepartmentShort, p.DepartmentName];
+                return words.All(w => fields.Any(f => f.Contains(w, StringComparison.CurrentCultureIgnoreCase)));
+            })
+            .GroupBy(p => p.Usrid, StringComparer.OrdinalIgnoreCase).Select(g => g.First())
+            .OrderBy(p => p.LastName, StringComparer.CurrentCulture).ThenBy(p => p.FirstName, StringComparer.CurrentCulture)
+            .Take(limit)
+            .ToList();
+    }
+
     private static string? Null(string value) => value.Length == 0 ? null : value;
 }

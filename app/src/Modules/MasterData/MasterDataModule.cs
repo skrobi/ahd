@@ -35,6 +35,9 @@ public sealed class MasterDataModule : IModule
         {
             DataContext = new MasterDataViewModel(new DictionaryService(_store!, context.Services.Journal), new FileDialogs(),
                 context.Services.PzlHrProd is { } hr ? new SqlHrSource(hr) : null, new SqlCostElementSource(context.Services.Sql),
-                context.Services.PzlProd is { } prod ? new SqlPzlProdSource(prod) : null),
+                context.Services.PzlProd is { } prod ? new SqlPzlProdSource(prod) : null)
+            {
+                PickPersons = PersonPickerWindow.Pick,
+            },
         };
 }
