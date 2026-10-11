@@ -107,6 +107,9 @@
                                         AutomationProperties.Name="Rozwiń wszystko" ToolTip="Rozwiń wszystko" />
                                 <Button Content="&#xE70E;" Style="{StaticResource BtnIcon}" Margin="0,0,12,0" Command="{Binding Structure.CollapseAll}"
                                         AutomationProperties.Name="Zwiń wszystko" ToolTip="Zwiń wszystko" />
+                                <Button Content="&#xE8B5;" Style="{StaticResource BtnIcon}" Command="{Binding ImportSources}"
+                                        AutomationProperties.Name="Importuj źródła projektu"
+                                        ToolTip="Importuj źródła projektu – pliki definicji ze słownika „Źródła danych” (tylko nowe wersje), potem odświeżenie kosztów i produkcji" />
                                 <Button Content="&#xE72C;" Style="{StaticResource BtnIcon}" Command="{Binding RefreshMapping}"
                                         AutomationProperties.Name="Odśwież P1S i koszty"
                                         ToolTip="Odśwież P1S i koszty – ponowny odczyt struktury P1S (PZLPROD), produkcji i kosztów ACWP z ostatniego importu ACTUALS" />

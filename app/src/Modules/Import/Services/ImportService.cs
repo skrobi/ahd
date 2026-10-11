@@ -58,6 +58,9 @@ public sealed class ImportService(IImportStore store, AppServices services, Func
     public static string FileLock(string location, string fileName) =>
         "import-file-" + FileHash.Sha256(System.Text.Encoding.UTF8.GetBytes($"{location}|{fileName}".ToUpperInvariant()))[..16];
 
+    /// <summary>Aktywne definicje źródeł (wybór źródeł projektu).</summary>
+    public IReadOnlyList<SourceDefinitionRow> Definitions() => store.ActiveDefinitions();
+
     public IReadOnlyList<ImportLocation> Locations() =>
         store.ActiveLocations().Select(l => new ImportLocation(l.Name, WebDavPath.ToUnc(l.Path), false, l.Path))
             .Append(new ImportLocation(ManualFolderName, services.Config.ImportFolder, true, services.Config.ImportFolder))

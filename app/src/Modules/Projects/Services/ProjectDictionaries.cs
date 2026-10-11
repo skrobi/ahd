@@ -19,6 +19,7 @@ public static class ProjectDictionaries
     public const string Exclusions = "exclusions";
     public const string CasRates = "cas-rates";
     public const string WbsCategories = "wbs-categories";
+    public const string Sources = "project-sources";
 
     private static readonly DictionarySpec WpCamSpec = new()
     {
@@ -64,6 +65,18 @@ public static class ProjectDictionaries
         ],
     };
 
+    private static readonly DictionarySpec SourcesSpec = new()
+    {
+        Code = Sources,
+        Name = "Źródła danych",
+        Description = "Definicje źródeł (Administracja) importowane dla projektu – „Importuj źródła projektu” importuje tylko ich pliki.",
+        Columns =
+        [
+            new("Definicja źródła", ColumnType.Text, Key: true, Lookup: Sources),
+            new("Opis", ColumnType.Text),
+        ],
+    };
+
     private static readonly DictionarySpec ExclusionsSpec = new()
     {
         Code = Exclusions,
@@ -88,6 +101,7 @@ public static class ProjectDictionaries
         new(WbsCategories, "Kategorie WBS", "Kategorie WBS", RequiredFor: [], Stored: true),
         new(GlobalDictionaries.CostCategory, "Cost Category – zmiany w projekcie", "Cost Category projektu", RequiredFor: [], Stored: true),
         new(Exclusions, "Wykluczenia", "Wykluczenia", RequiredFor: [], Stored: true),
+        new(Sources, "Źródła danych", "Źródła danych", RequiredFor: [], Stored: true),
     ];
 
     /// <summary>Słowniki projektu dla typu (Stawki CAS tylko dla CAS).</summary>
@@ -102,6 +116,7 @@ public static class ProjectDictionaries
             [("WP", "Wp"), ("BAC HOURS", "BacHours"), ("BAC MATERIAL", "BacMaterial"), ("BAC", "Bac"), ("Baseline Start", "PlannedStart"), ("Baseline Koniec", "PlannedEnd")]),
         new(WbsCategoriesSpec, "dict.WbsCategory", [("Cost Category", "Category"), ("Opis", "Description")]),
         new(ExclusionsSpec, "dict.Exclusion", [("Cost Element", "CostElement"), ("WBS Element", "WbsElement"), ("Partner object", "PartnerObject"), ("Opis", "Description")]),
+        new(SourcesSpec, "dict.ProjectSource", [("Definicja źródła", "SourceCode"), ("Opis", "Description")]),
     ];
 
     /// <summary>Opis słownika bez reguł projektu – odczyt i eksport.</summary>
@@ -117,6 +132,7 @@ public static class ProjectDictionaries
         ScheduleBudget => With(ScheduleBudgetSpec, rows => ScheduleBudgetRules(rows, context)),
         Exclusions => With(ExclusionsSpec, ExclusionRules),
         WbsCategories => WbsCategoriesSpec,
+        Sources => With(SourcesSpec, rows => SourceRules(rows, context)),
         GlobalDictionaries.CostCategory => GlobalDictionaries.Get(GlobalDictionaries.CostCategory),
         _ => throw new NotSupportedException($"Słownik {code} nie jest zapisywany w bazie"),
     };
@@ -187,6 +203,17 @@ public static class ProjectDictionaries
                 yield return Issue.Warning($"WP {row["WP"]} bez budżetu (BAC HOURS, BAC MATERIAL i BAC puste)", at);
             if (row["Baseline Start"] is { } start && row["Baseline Koniec"] is { } end && string.CompareOrdinal(start, end) > 0)
                 yield return Issue.Error("Baseline Start jest późniejszy niż Baseline Koniec", at);
+        }
+    }
+
+    /// <summary>Definicja źródła musi być aktywną definicją z Administracji (context.Sources; null – bez kontroli).</summary>
+    private static IEnumerable<Issue> SourceRules(IReadOnlyList<DictRow> rows, ProjectDictionaryContext context)
+    {
+        for (var i = 0; i < rows.Count; i++)
+        {
+            if (rows[i]["Definicja źródła"] is { } code && context.Sources is { } sources && !sources.Contains(code))
+                yield return Issue.Warning($"Definicja źródła {code} nie istnieje albo jest nieaktywna (Administracja) – jej pliki nie zostaną zaimportowane",
+                    DictionaryValidator.RowElement(i));
         }
     }
 

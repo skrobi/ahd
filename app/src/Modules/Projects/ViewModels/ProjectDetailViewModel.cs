@@ -5,7 +5,9 @@ using PzlEv.Modules.Projects.Models;
 using PzlEv.Modules.Projects.Services;
 using PzlEv.Shared.Models;
 using PzlEv.Shared.Models.Dictionaries;
+using PzlEv.Shared.Models.Pipeline;
 using PzlEv.Shared.Models.PzlProd;
+using PzlEv.Shared.Utils.Data;
 using PzlEv.Shared.Utils.Ui.Dialogs;
 using PzlEv.Shared.Utils.Ui.Dictionaries;
 using PzlEv.Shared.Utils.Ui.Mvvm;
@@ -71,6 +73,7 @@ public sealed class ProjectDetailViewModel : ObservableObject
         ExportDictionaries = new AsyncRelayCommand(DoExportDictionaries, () => !Busy.IsBusy);
         CreateFolders = new AsyncRelayCommand(DoCreateFolders, () => !Busy.IsBusy);
         RefreshMapping = new AsyncRelayCommand(() => { Structure.CommitEdits(); return Reload(refreshMapping: true); }, () => !Busy.IsBusy);
+        ImportSources = new AsyncRelayCommand(DoImportSources, () => !Busy.IsBusy && _service.Imports is not null);
         foreach (var item in ProjectDictionaries.ForType(project.Type))
         {
             var panel = new DictionaryPanelViewModel(item, project.Type);
@@ -199,6 +202,9 @@ public sealed class ProjectDetailViewModel : ObservableObject
     public ICommand CreateFolders { get; }
     public ICommand RefreshMapping { get; }
 
+    /// <summary>„Importuj źródła projektu” – pliki definicji ze słownika „Źródła danych”, potem odświeżenie kosztów.</summary>
+    public ICommand ImportSources { get; }
+
     /// <summary>Stan projektu z bazy w jednym odczycie w tle: nakładka, struktura P1S, gotowość, słowniki, struktura.</summary>
     private sealed record Snapshot(PoTree Tree, P1sInputs Mapping, IReadOnlyDictionary<string, string> Owners, List<Issue> Readiness,
         IReadOnlyDictionary<string, (int Rows, string LastChange)> Dictionaries, ProjectStructure Structure, IReadOnlyList<LookupOption> Persons,
@@ -245,7 +251,7 @@ public sealed class ProjectDetailViewModel : ObservableObject
                     states.ToDictionary(s => s.Key, s => (s.Value.Rows.Count, s.Value.LastChange)), structure, ProjectService.PersonOptions(persons, wpCam),
                     ProjectService.CategoryOptions(categories, wpCam),
                     table is null ? null : _service.EditableRows(table, rows.TryGetValue(table, out var tableRows) ? tableRows : _service.Rows(table, Code)),
-                    ProjectService.Lookups(persons, categories), costs, costsError, persons, folderChecks, cachedActuals ?? ReadActuals(), production);
+                    ProjectService.Lookups(persons, categories, _service.SourceLookups()), costs, costsError, persons, folderChecks, cachedActuals ?? ReadActuals(), production);
             });
             if (version != _reloads)
                 return;   // w międzyczasie ruszyło nowsze odświeżenie – starszy wynik pomijany
@@ -623,6 +629,36 @@ public sealed class ProjectDetailViewModel : ObservableObject
             await Reload(refreshMapping: false);
             Status = created.Count == 0 ? "Wszystkie foldery projektu istnieją." : $"Utworzono foldery: {string.Join(", ", created)}.";
         });
+    }
+
+    /// <summary>
+    /// Import plików definicji źródeł projektu (słownik „Źródła danych”): logowanie do SharePoint, import wspólny
+    /// z innymi projektami (plik zapisuje się raz), potem ponowny odczyt struktury P1S i kosztów.
+    /// </summary>
+    private async Task DoImportSources()
+    {
+        Structure.CommitEdits();
+        var import = _service.Imports!;
+        IReadOnlySet<string> sources = new HashSet<string>();
+        await Try(async () => sources = await Busy.Run("Odczyt źródeł projektu…", () => _service.ProjectSources(Code)));
+        if (sources.Count == 0)
+        {
+            Status = "Projekt nie ma źródeł danych – dodaj definicje źródeł w słowniku projektu „Źródła danych”.";
+            return;
+        }
+        if (!await import.SignIn())
+        {
+            Status = "Import nie rozpoczęty – logowanie do SharePoint anulowane.";
+            return;
+        }
+        SourceImportResult? result = null;
+        await Try(async () => result = await Busy.Run($"Import źródeł projektu ({string.Join(", ", sources.Order())})…",
+            () => import.Import(sources, null, CancellationToken.None)));
+        if (result is null)
+            return;
+        await Reload(refreshMapping: true);
+        var errors = result.Issues.Where(i => i.Level == CheckLevel.Error).Select(i => i.Message).Take(3).ToList();
+        Status = $"Import źródeł projektu #{result.BatchId}: {result.Summary}" + (errors.Count > 0 ? $" – {string.Join("; ", errors)}" : "");
     }
 
     private async Task Try(Func<Task> action)

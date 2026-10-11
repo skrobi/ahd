@@ -160,7 +160,9 @@ modułu i `Shared/Models`; Excel, File Connectors, SQL Access – `Shared/Utils`
 - `Shared` nie zna modułów ani `Shell`,
 - `Shell` zna konkretne moduły tylko w `ModuleCatalog.cs`; poza nim – wyłącznie kontrakt `IModule`,
 - moduły komunikują się przez bazę (etapy – `docs/pipeline-fazy.md`, rozdz. 1.1), nawigację po kluczu
-  (`INavigator`, `ModuleKeys`) albo kontrakt w `Shared`,
+  (`INavigator`, `ModuleKeys`) albo kontrakt w `Shared`: moduł rejestruje implementację w `Initialize`
+  (`AppServices.Contracts`), inny pobiera ją przy użyciu – np. `ISourceImport` (moduł Import) dla „Importuj źródła
+  projektu” (moduł Projekty),
 - silnik EVM zależy wyłącznie od modeli (rozdz. 5.1).
 
 **Warstwa danych.** Aplikacja pracuje wyłącznie na bazie MS SQL środowiska (`pzl-ev.json`, rozdz. 8). Moduł korzysta
@@ -229,7 +231,7 @@ decyzji (P4, P6, Z) albo z wynikiem ERROR.
 ```text
 \\serwer\udział\PZL-EV\                 korzeń środowiska (osobny dla TEST i PROD)
 ├── 00_Global\RABIT\Do_importu\         pliki RABIT pobrane ręcznie (powyżej limitu WebDAV)
-├── 00_Global\RABIT\import.lock         blokada importu (docelowo sp_getapplock – F10.2)
+├── 00_Global\RABIT\*.lock              blokady importu: pełny import, pliki, trwające importy (docs/pipeline-fazy.md, rozdz. 1.4)
 └── Projekty\<Projekt>\
     ├── Finanse\<RRRR-MM>\              pliki dla finansów (P4)
     ├── CAM\<RRRR-MM>\Wyslane\          pliki dla CAM (P6, przebieg zamykający)

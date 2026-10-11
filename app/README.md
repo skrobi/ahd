@@ -61,7 +61,8 @@ zmieni). Brak pliku albo błąd w nim = komunikat przy starcie z nazwą pola –
 - `014_definicje_projektu.sql` – Project definition projektu także z WBS elementu węzłów nakładki;
 - `015_osoby_z_hr.sql` – słownik Osoby z HR: kolumny imię, nazwisko, e-mail, MPK, dział, stanowisko, pion, manager, PERNR;
 - `016`–`024` – kolejne zmiany schematu i danych startowych (opis w `docs/model-danych.md`);
-- `025_bez_mapowania_ces_p1s.sql` – usuwa tabele `DICT_MappingReport` i `DICT_MappingCorrection`.
+- `025_bez_mapowania_ces_p1s.sql` – usuwa tabele `DICT_MappingReport` i `DICT_MappingCorrection`;
+- `026_zrodla_projektu.sql` – słownik projektu „Źródła danych” (`DICT_ProjectSource`).
 
 Migracje wykonuje przycisk **Diagnostyka → Migracja** – uruchamia po kolei skrypty, których numeru nie ma
 w `META_SchemaVersion`, a wykonane pomija. Lista na tym ekranie pokazuje, które skrypty są wykonane (kiedy, kto)

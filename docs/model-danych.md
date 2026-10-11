@@ -315,7 +315,14 @@ tabela z wpisami zostaje (do przeniesienia ręcznie). Wymaga aplikacji 0.40.0.
 strona P1S projektu to `Legacy WBS` z Performance Objectives i poddrzewa `LOG.WBS` (`docs/performance-objectives.md`,
 rozdz. 2). Wymaga aplikacji 0.41.0.
 
+**Migracja `sql/mssql/026_zrodla_projektu.sql`:** tabela `DICT_ProjectSource` – słownik projektu „Źródła danych”
+(definicje źródeł importowane dla projektu, `docs/slowniki.md`, rozdz. 3). Wymaga aplikacji 0.42.0.
+
+`META_SourceFile.CanonicalStatus`: „utworzone” – dane kanoniczne zapisane i sprawdzone (widoczne dla odczytów),
+„w toku” – zapis wierszy trwa (odczyty pomijają plik; po awarii wpis i wiersze są usuwane), inna wartość – powód
+braku danych (źródło bez parsera).
+
 Aplikacja zapisuje do tabel importu, konfiguracji importu, słowników globalnych i projektu, projektów i nakładki
-Performance Objectives, dziennika i problemów. Blokada importu – plik na dysku sieciowym
-(`docs/pipeline-fazy.md`, rozdz. 1.3), `sp_getapplock` razem z procedurami (F10.2).
+Performance Objectives, dziennika i problemów. Blokady importu – pliki na dysku sieciowym
+(`docs/pipeline-fazy.md`, rozdz. 1.4).
 
