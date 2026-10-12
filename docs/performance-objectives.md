@@ -50,8 +50,12 @@ Powiązane: `docs/funkcjonalnosc.md` (F01 – kreator projektu), `docs/zrodla-da
   - w tabeli struktury zmienia się nazwę węzła i `Legacy WBS` (zapis od razu, z historią).
 - **Element CES należy do co najwyżej jednej nakładki** (jednego projektu) – element z nakładki innego projektu
   jest odrzucany przy wczytaniu i zapisie (ERROR z kodem projektu, który go ma).
-- **Elementy w strukturze:** przenoszenie z poddrzewem (przeciągnięcie na inny węzeł albo na korzeń, zmiana kolejności,
-  poziom wyżej); usunięcie węzła przenosi jego elementy poziom wyżej. Level jest przeliczany z głębokości drzewa.
+- **Elementy w strukturze:** przenoszenie z poddrzewem (przeciągnięcie na inny węzeł albo na korzeń, zmiana kolejności:
+  wyżej / niżej / na początek / na koniec rodzeństwa, poziom wyżej); usunięcie węzła przenosi jego elementy poziom
+  wyżej. Level jest przeliczany z głębokości drzewa. W edytorze: zwijanie węzłów (▸ / ▾, „Zwiń wszystko”, „Rozwiń
+  wszystko”), zaznaczenie kilku wierszy (Ctrl / Shift) i menu prawego przycisku myszy – „Przenieś do” (najwyższy poziom
+  albo węzeł wirtualny; zaznaczone trafiają na koniec jego elementów w kolejności drzewa), „Grupuj w nowy węzeł” (nowy
+  węzeł wirtualny w miejscu pierwszego zaznaczonego z zaznaczonymi jako elementami), kolejność, zwijanie.
 - Nakładka należy do projektu i ma historię zmian (`docs/model-danych.md`, rozdz. 3). Przebieg czyta ją
   w stanie na swój znacznik stanu (`docs/model-danych.md`, rozdz. 4.2).
 - Nie jest to automatyczny import RABIT – to ręczny Excel eksportowany z SAP.

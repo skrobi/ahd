@@ -117,6 +117,66 @@ public sealed class PoTree
         return true;
     }
 
+    /// <summary>Przenosi węzeł na początek (first) albo koniec rodzeństwa.</summary>
+    public bool ShiftToEdge(long key, bool first)
+    {
+        if (Find(key) is not { } node)
+            return false;
+        var siblings = Children(node.ParentKey).Where(n => n.Key != key).ToList();
+        if (siblings.Count == 0)
+            return false;
+        siblings.Insert(first ? 0 : siblings.Count, node);
+        for (var i = 0; i < siblings.Count; i++)
+            siblings[i].SortOrder = i;
+        return true;
+    }
+
+    /// <summary>
+    /// Węzły do przeniesienia razem: bez nieistniejących i bez potomków innych podanych węzłów (przenoszą się
+    /// z przodkiem), w kolejności drzewa.
+    /// </summary>
+    public IReadOnlyList<long> Tops(IEnumerable<long> keys)
+    {
+        var set = keys.ToHashSet();
+        bool UnderOther(PoNode node)
+        {
+            for (var parent = node.ParentKey; parent is { } p; parent = Find(p)?.ParentKey)
+                if (set.Contains(p))
+                    return true;
+            return false;
+        }
+        return Flatten().Select(x => x.Node).Where(n => set.Contains(n.Key) && !UnderOther(n)).Select(n => n.Key).ToList();
+    }
+
+    /// <summary>Przenosi węzły (z poddrzewami) na koniec dzieci nowego rodzica w kolejności drzewa; zwraca liczbę przeniesionych.</summary>
+    public int MoveAll(IEnumerable<long> keys, long? newParentKey) =>
+        Tops(keys).Count(key => Move(key, newParentKey));
+
+    /// <summary>
+    /// Nowy węzeł wirtualny w miejscu pierwszego z węzłów (ten sam rodzic, ta sama pozycja) z tymi węzłami jako
+    /// dziećmi w kolejności drzewa; null – brak węzłów.
+    /// </summary>
+    public PoNode? Group(IEnumerable<long> keys, string name)
+    {
+        var tops = Tops(keys);
+        if (tops.Count == 0)
+            return null;
+        var first = Find(tops[0])!;
+        var group = AddVirtual(first.ParentKey, name);
+        var siblings = Children(first.ParentKey).Where(n => n.Key != group.Key).ToList();
+        siblings.Insert(siblings.IndexOf(first), group);
+        for (var i = 0; i < siblings.Count; i++)
+            siblings[i].SortOrder = i;
+        for (var i = 0; i < tops.Count; i++)
+        {
+            var node = Find(tops[i])!;
+            node.ParentKey = group.Key;
+            node.SortOrder = i;
+        }
+        Renumber();
+        return group;
+    }
+
     /// <summary>Przenosi węzeł poziom wyżej – za swojego rodzica.</summary>
     public bool Outdent(long key)
     {

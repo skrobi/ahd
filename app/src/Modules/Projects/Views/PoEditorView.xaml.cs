@@ -6,7 +6,11 @@ using PzlEv.Modules.Projects.ViewModels;
 
 namespace PzlEv.Modules.Projects.Views;
 
-/// <summary>Przeciąganie wierszy nakładki: uchwyt ⋮⋮ → wiersz (staje się jego dzieckiem) albo pasek korzenia.</summary>
+/// <summary>
+/// Przeciąganie wierszy nakładki: uchwyt ⋮⋮ → wiersz (staje się jego dzieckiem) albo pasek korzenia. Zwijanie dzieci (▸ / ▾),
+/// zaznaczenie kilku wierszy (Ctrl / Shift) i menu prawego przycisku: „Przenieś do” (najwyższy poziom, węzły wirtualne),
+/// „Grupuj w nowy węzeł”, kolejność, zwijanie.
+/// </summary>
 public partial class PoEditorView : UserControl
 {
     private const string Format = "pzl-ev/po-node";
@@ -56,6 +60,62 @@ public partial class PoEditorView : UserControl
             vm.Move((long)e.Data.GetData(Format)!, null);
         e.Handled = true;
     }
+
+    private void OnToggle(object sender, MouseButtonEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.DataContext is PoRowViewModel { HasChildren: true } row && DataContext is PoEditorViewModel vm)
+        {
+            vm.Toggle(row);
+            e.Handled = true;
+        }
+    }
+
+    private void OnSelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (DataContext is PoEditorViewModel vm)
+            vm.SelectedRows = NodesGrid.SelectedItems.OfType<PoRowViewModel>().ToList();
+    }
+
+    /// <summary>Prawy przycisk na niezaznaczonym wierszu – zaznacza tylko ten wiersz (na zaznaczonym – zaznaczenie zostaje).</summary>
+    private void OnRightButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (FindRow(e.OriginalSource as DependencyObject) is { IsSelected: false } row)
+        {
+            NodesGrid.SelectedItems.Clear();
+            row.IsSelected = true;
+        }
+    }
+
+    private void OnContextMenuOpening(object sender, ContextMenuEventArgs e)
+    {
+        if (DataContext is not PoEditorViewModel vm || NodesGrid.ContextMenu is not { } menu || vm.SelectedKeys.Count == 0)
+        {
+            e.Handled = true;
+            return;
+        }
+        menu.Items.Clear();
+        var count = vm.SelectedKeys.Count;
+        var moveTo = new MenuItem { Header = count > 1 ? $"Przenieś do ({count})" : "Przenieś do" };
+        foreach (var (key, label) in vm.MoveTargets())
+        {
+            var item = new MenuItem { Header = label };
+            item.Click += (_, _) => vm.MoveSelectedTo(key);
+            moveTo.Items.Add(item);
+        }
+        menu.Items.Add(moveTo);
+        menu.Items.Add(Command(count > 1 ? $"Grupuj w nowy węzeł ({count})" : "Grupuj w nowy węzeł", vm.GroupSelected));
+        menu.Items.Add(new Separator());
+        menu.Items.Add(Command("Wyżej", vm.Up));
+        menu.Items.Add(Command("Niżej", vm.Down));
+        menu.Items.Add(Command("Na początek", vm.Top));
+        menu.Items.Add(Command("Na koniec", vm.Bottom));
+        menu.Items.Add(Command("Poziom wyżej", vm.Outdent));
+        menu.Items.Add(new Separator());
+        menu.Items.Add(Command("Zwiń wszystko", vm.CollapseAll));
+        menu.Items.Add(Command("Rozwiń wszystko", vm.ExpandAll));
+    }
+
+    private static MenuItem Command(string header, ICommand command) => new() { Header = header, Command = command };
 
     private static DataGridRow? FindRow(DependencyObject? element)
     {
