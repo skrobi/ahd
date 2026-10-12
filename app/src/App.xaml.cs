@@ -36,6 +36,7 @@ public partial class App : Application
         var version = Assembly.GetExecutingAssembly().GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "?";
         version = version.Split('+')[0];
         Log.Information("PZL-EV {Version} start. BaseDirectory={BaseDirectory}", version, AppContext.BaseDirectory);
+        SqlProfiler.Start(TimeSpan.FromMilliseconds(200));   // zapytania SQL dłuższe niż 200 ms – do logu
 
         try
         {

@@ -328,27 +328,34 @@ public sealed class ProjectDetailViewModel : ObservableObject, IDisposable
         var cachedProduction = refreshMapping ? null : _production;
         await Try(async () =>
         {
+            var steps = new StepTimer();
             var snapshot = await Busy.Run(refreshMapping ? "Odświeżanie struktury P1S, kosztów i struktury projektu…" : "Wczytywanie projektu i struktury…", () =>
             {
-                var tree = _service.Objectives(Code);
-                var mapping = _service.Mapping(refreshMapping);
-                var states = codes.ToDictionary(c => c, c => _service.DictionaryState(c, Code));
+                var tree = steps.Time("nakładka Performance Objectives", () => _service.Objectives(Code));
+                var mapping = steps.Time("struktura P1S (PZLPROD LOG.WBS)", () => _service.Mapping(refreshMapping));
+                var states = steps.Time("słowniki projektu", () => codes.ToDictionary(c => c, c => _service.DictionaryState(c, Code)));
                 var rows = states.ToDictionary(s => s.Key, s => s.Value.Rows);
                 var wpCam = rows.GetValueOrDefault(ProjectDictionaries.WpCam) ?? [];
-                var (costs, costsError) = refreshMapping || _costs is null ? ReadCosts() : (_costs, _costsError);
-                var production = cachedProduction ?? _service.Production(tree, mapping);
-                var structure = ProjectService.Structure(tree, mapping, wpCam, rows.GetValueOrDefault(ProjectDictionaries.ScheduleBudget) ?? [], costs, production);
-                var persons = cachedPersons ?? _service.PersonLookups();
-                var folderChecks = cachedFolders ?? _service.FolderChecks(Code);
+                var (costs, costsError) = refreshMapping || _costs is null ? steps.Time("koszty ACWP (ACTUALS)", ReadCosts) : (_costs, _costsError);
+                var production = cachedProduction ?? steps.Time("produkcja (PZLPROD vAHDD, vAPD)", () => _service.Production(tree, mapping));
+                var structure = steps.Time("budowa struktury", () =>
+                    ProjectService.Structure(tree, mapping, wpCam, rows.GetValueOrDefault(ProjectDictionaries.ScheduleBudget) ?? [], costs, production));
+                var persons = cachedPersons ?? steps.Time("osoby", _service.PersonLookups);
+                var folderChecks = cachedFolders ?? steps.Time("foldery (dysk sieciowy)", () => _service.FolderChecks(Code));
                 var categories = ProjectService.CategoryLookups(rows.GetValueOrDefault(ProjectDictionaries.WbsCategories) ?? []);
-                var readiness = ProjectService.Readiness(Project, tree, mapping, rows,
-                    persons.Select(p => p.Value).ToHashSet(StringComparer.OrdinalIgnoreCase), folderChecks);
-                return new Snapshot(tree, mapping, cachedOwners ?? _service.WbsOwners(Code), readiness,
+                var readiness = steps.Time("gotowość", () => ProjectService.Readiness(Project, tree, mapping, rows,
+                    persons.Select(p => p.Value).ToHashSet(StringComparer.OrdinalIgnoreCase), folderChecks));
+                var owners = cachedOwners ?? steps.Time("nakładki innych projektów", () => _service.WbsOwners(Code));
+                var editable = table is null ? null : steps.Time("tabela słownika", () =>
+                    _service.EditableRows(table, rows.TryGetValue(table, out var tableRows) ? tableRows : _service.Rows(table, Code)));
+                var sources = steps.Time("definicje źródeł", _service.SourceLookups);
+                var actuals = cachedActuals ?? steps.Time("data danych ACTUALS", ReadActuals);
+                return new Snapshot(tree, mapping, owners, readiness,
                     states.ToDictionary(s => s.Key, s => (s.Value.Rows.Count, s.Value.LastChange)), structure, ProjectService.PersonOptions(persons, wpCam),
-                    ProjectService.CategoryOptions(categories, wpCam),
-                    table is null ? null : _service.EditableRows(table, rows.TryGetValue(table, out var tableRows) ? tableRows : _service.Rows(table, Code)),
-                    ProjectService.Lookups(persons, categories, _service.SourceLookups()), costs, costsError, persons, folderChecks, cachedActuals ?? ReadActuals(), production);
+                    ProjectService.CategoryOptions(categories, wpCam), editable,
+                    ProjectService.Lookups(persons, categories, sources), costs, costsError, persons, folderChecks, actuals, production);
             });
+            Logger.Information("Projekt {Code}: wczytanie {Steps}", Code, steps.Summary);
             if (version != _reloads)
                 return;   // w międzyczasie ruszyło nowsze odświeżenie – starszy wynik pomijany
             _saved = snapshot.Tree;
