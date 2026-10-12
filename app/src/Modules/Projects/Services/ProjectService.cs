@@ -449,12 +449,45 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
         });
     }
 
+    /// <summary>
+    /// Kolumny arkusza „Struktura”: format kolumny; kolumny czytane przy wczytaniu (StructureImport.Inputs) wyróżnione,
+    /// z opisem w komentarzu; CAM – lista osób (arkusz „Listy”).
+    /// </summary>
+    public static IReadOnlyList<ExcelTableWriter.ExcelColumn> StructureSheetColumns(IReadOnlyList<LookupOption> persons) =>
+        StructureHeaders.Select(header => header switch
+        {
+            "Poziom" => new ExcelTableWriter.ExcelColumn(header, ExcelTableWriter.Kind.Integer),
+            StructureImport.WpHeader => new(header, Note: "Do uzupełnienia: wpisz cokolwiek (np. x) przy elemencie P1S, który jest WP – kod WP = kod elementu. Pusta komórka – bez zmiany.", Input: true),
+            StructureImport.CamHeader => new(header, Note: "Do uzupełnienia: numer znaczka (USRID) CAM – lista w arkuszu „Listy”. Pusta komórka – bez zmiany.",
+                Lookup: persons.Select(p => (p.Value, p.Label)).ToList(), Input: true),
+            StructureImport.CategoryHeader => new(header, Note: "Do uzupełnienia: kategoria ze słownika „Kategorie WBS” projektu. Pusta komórka – bez zmiany.", Input: true),
+            StructureImport.StartHeader or StructureImport.FinishHeader => new(header, ExcelTableWriter.Kind.Date,
+                Note: "Do uzupełnienia w wierszu z WP (RRRR-MM-DD); w wierszach bez WP – suma poddrzewa, nie jest wczytywana.", Input: true),
+            StructureImport.BacHoursHeader or StructureImport.BacMaterialHeader or StructureImport.BacHeader => new(header, ExcelTableWriter.Kind.Number,
+                Note: "Do uzupełnienia w wierszu z WP; w wierszach bez WP – suma poddrzewa, nie jest wczytywana.", Input: true),
+            "Actual Start" or "Actual Finish" => new(header, ExcelTableWriter.Kind.Date),
+            "BAC Hours" or "PV Hours" or "EV Hours" or "AC Hours" or "Actual Material" or "PV Cost" or "EV Cost" or "ACWP" => new(header, ExcelTableWriter.Kind.Number),
+            _ => new ExcelTableWriter.ExcelColumn(header),
+        }).ToList();
+
     /// <summary>Struktura projektu do Excela – arkusz „Struktura” (StructureRows); zwraca liczbę wierszy.</summary>
     public int ExportStructure(string path, string code, ProjectStructure structure, IReadOnlyList<LookupOption> persons)
     {
-        ExcelTableWriter.WriteSheets(path, [("Struktura", StructureHeaders, StructureRows(structure, persons))]);
+        ExcelTableWriter.WriteTemplate(path, [("Struktura", StructureSheetColumns(persons), StructureRows(structure, persons))]);
         journal.Add(Area, $"{code}: struktura projektu pobrana do Excela ({structure.Rows.Count} wierszy)", code);
         return structure.Rows.Count;
+    }
+
+    /// <summary>
+    /// Zmiany z arkusza „Struktura” uzupełnionego w Excelu (StructureImport) wobec bieżącej struktury i „Harmonogramu
+    /// i budżetu” projektu – do potwierdzenia i zapisu (SaveStructureEdits).
+    /// </summary>
+    public StructureImportResult ReadStructureFile(string path, string code, ProjectStructure structure)
+    {
+        var sheet = TabularFileReader.ExcelExtensions.Contains(Path.GetExtension(path))
+            ? TabularFileReader.SheetNames(path).FirstOrDefault(s => s.Equals("Struktura", StringComparison.OrdinalIgnoreCase))
+            : null;
+        return StructureImport.Read(TabularFileReader.Read(path, sheet), structure, Rows(ProjectDictionaries.ScheduleBudget, code));
     }
 
     /// <summary>ACWP po elemencie CES z ostatniego importu ACTUALS (pole kwoty z „Parametrów projektu”) – kolumna ACWP struktury.</summary>

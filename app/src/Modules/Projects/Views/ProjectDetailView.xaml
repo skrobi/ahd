@@ -121,9 +121,12 @@
                                 <Button Content="&#xE710;" Style="{StaticResource BtnIcon}" Command="{Binding AddFromExcel}"
                                         AutomationProperties.Name="Dołóż z Excela (eksport SAP)"
                                         ToolTip="Dołóż z Excela (eksport SAP) – dokłada elementy, których projekt jeszcze nie ma (np. kolejne Project definition); istniejąca struktura zostaje bez zmian" />
-                                <Button Content="&#xE896;" Style="{StaticResource BtnIcon}" Margin="0,0,12,0" Command="{Binding ExportStructure}"
+                                <Button Content="&#xE896;" Style="{StaticResource BtnIcon}" Command="{Binding ExportStructure}"
                                         AutomationProperties.Name="Pobierz strukturę do Excela"
-                                        ToolTip="Pobierz strukturę do Excela – całe drzewo (także zwinięte wiersze) ze wszystkimi kolumnami: WP, CAM, Cost Category, budżet, daty, ACWP, braki" />
+                                        ToolTip="Pobierz strukturę do Excela – całe drzewo (także zwinięte wiersze) ze wszystkimi kolumnami: WP, CAM, Cost Category, budżet, daty, ACWP, braki; kolumny do uzupełnienia wyróżnione na żółto" />
+                                <Button Content="&#xE898;" Style="{StaticResource BtnIcon}" Margin="0,0,12,0" Command="{Binding ImportStructure}"
+                                        AutomationProperties.Name="Wczytaj strukturę z Excela"
+                                        ToolTip="Wczytaj strukturę z Excela – pobrany arkusz „Struktura” uzupełniony ręcznie: WP, CAM (numer znaczka), Cost Category, Baseline Start / Finish, BAC Hours baseline, BAC Material, BAC Cost; puste komórki bez zmiany, przed zapisem podsumowanie" />
                                 <Button Content="&#xE70D;" Style="{StaticResource BtnIcon}" Command="{Binding Structure.ExpandAll}"
                                         AutomationProperties.Name="Rozwiń wszystko" ToolTip="Rozwiń wszystko" />
                                 <Button Content="&#xE70E;" Style="{StaticResource BtnIcon}" Margin="0,0,12,0" Command="{Binding Structure.CollapseAll}"

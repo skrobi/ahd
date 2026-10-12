@@ -15,9 +15,12 @@ public static class ExcelTableWriter
     /// <summary>Rodzaj kolumny szablonu – format całej kolumny.</summary>
     public enum Kind { Text, Number, Integer, Date }
 
-    /// <summary>Kolumna szablonu: nagłówek, format, wartości do wyboru (lista), opis (komentarz nagłówka).</summary>
+    /// <summary>
+    /// Kolumna szablonu: nagłówek, format, wartości do wyboru (lista), opis (komentarz nagłówka); Input – kolumna do
+    /// uzupełnienia (nagłówek wyróżniony kolorem).
+    /// </summary>
     public sealed record ExcelColumn(string Header, Kind Kind = Kind.Text, IReadOnlyList<string>? Choices = null, string? Note = null,
-        IReadOnlyList<(string Value, string Label)>? Lookup = null);
+        IReadOnlyList<(string Value, string Label)>? Lookup = null, bool Input = false);
 
     /// <summary>Wiersze, w które można wpisać dane z listą wyboru i formatem kolumny (poza wierszami z danymi).</summary>
     private const int TemplateRows = 2000;
@@ -44,6 +47,8 @@ public static class ExcelTableWriter
                 };
                 if (column.Note is { } note)
                     ws.Cell(1, c + 1).CreateComment().AddText(note);
+                if (column.Input)
+                    ws.Cell(1, c + 1).Style.Fill.BackgroundColor = XLColor.FromHtml("#FFF2CC");
                 if (column.Choices is { Count: > 0 } choices && string.Join(",", choices).Length < 250)
                 {
                     var validation = range.CreateDataValidation();

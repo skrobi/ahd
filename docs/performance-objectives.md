@@ -160,12 +160,22 @@ i budżetem (`StructureBuilder`).
   nowszy raport – wiadomo, że dane są aktualne na tę datę (`CAN_LatestFiles` + `META_SourceFileSeen`).
   To podgląd – formalny koszt WP liczy przebieg (P3, `ev.KosztWP`).
 - **Pasek nad tabelą** – ikony z opisem w podpowiedzi: edycja Performance Objectives, dołożenie z Excela (eksport SAP),
-  pobranie struktury do Excela, rozwiń / zwiń wszystko, odświeżenie P1S i kosztów, cofnięcie wklejenia, odrzucenie
+  pobranie struktury do Excela, wczytanie struktury z Excela, rozwiń / zwiń wszystko, odświeżenie P1S i kosztów, cofnięcie wklejenia, odrzucenie
   niezapisanych zmian.
 - **Struktura do Excela** – arkusz „Struktura”: całe drzewo (także zwinięte wiersze) w kolejności tabeli, nazwa wcięta
   według poziomu, kolumny Poziom, Rodzaj, Element CES, P1S, WP, CAM (USRID oraz imię i nazwisko), Cost Category, WP
   w poddrzewie, BAC HOURS, BAC MATERIAL, BAC, Baseline Start, Baseline Koniec, ACWP, Braki, Uwagi (wartości jak w tabeli –
   sumy poddrzewa). Eksportowany jest stan zapisany; przy niezapisanych zmianach – najpierw zapis albo „Odrzuć niezapisane”.
+  Kolumny do uzupełnienia mają żółty nagłówek z opisem w komentarzu: WP, CAM (lista osób w arkuszu „Listy”), Cost
+  Category, Baseline Start, Baseline Finish, BAC Hours baseline, BAC Material, BAC Cost.
+- **Struktura z Excela** – „Wczytaj strukturę z Excela”: arkusz „Struktura” pobrany z aplikacji i uzupełniony ręcznie.
+  Wiersz pliku → wiersz struktury po `Legacy Element (P1S)`; czytane są tylko kolumny do uzupełnienia: WP (niepusta
+  komórka – element jest WP, kod WP = kod elementu), CAM (USRID), Cost Category, a w wierszu z WP (własnym albo
+  zaznaczonym w pliku) – budżet i daty WP. Pusta komórka – bez zmiany (czyszczenie – w tabeli); pozostałe kolumny (sumy
+  poddrzewa, AHD, ACTUALS) są pomijane. Pomijane z ostrzeżeniem: element P1S spoza struktury, budżet w wierszu bez WP;
+  z błędem: niepoprawna liczba lub data, ten sam WP z innym budżetem w dwóch wierszach. Przed zapisem – podsumowanie
+  (nowe WP, CAM, Cost Category, budżet i daty WP, pominięte) do potwierdzenia; zapis jak edycja w komórkach (jeden zapis
+  na słownik, wiersz z błędem nie blokuje pozostałych).
 - **Edycja w komórkach** (zapis od razu po zatwierdzeniu wiersza – Enter albo przejście do innego wiersza, bez
   osobnego „Zapisz”; Esc cofa): nazwa i `Legacy WBS` węzła → nakładka; WP, CAM i Cost Category wiersza z kodem P1S → „WP i CAM”
   (klucz – kod P1S; zaznaczenie WP albo wybór CAM tworzy przypisanie, odznaczenie WP je usuwa razem z budżetem WP, jeśli

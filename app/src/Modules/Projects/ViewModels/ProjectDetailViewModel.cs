@@ -75,6 +75,7 @@ public sealed class ProjectDetailViewModel : ObservableObject, IDisposable
         AddFromExcel = new AsyncRelayCommand(DoAddFromExcel, () => !Busy.IsBusy);
         ExportCostReport = new AsyncRelayCommand(DoExportCostReport, () => !Busy.IsBusy);
         ExportStructure = new AsyncRelayCommand(DoExportStructure, () => _structure is not null && !Busy.IsBusy);
+        ImportStructure = new AsyncRelayCommand(DoImportStructure, () => _structure is not null && !Busy.IsBusy);
         ExportDictionaries = new AsyncRelayCommand(DoExportDictionaries, () => !Busy.IsBusy);
         CreateFolders = new AsyncRelayCommand(DoCreateFolders, () => !Busy.IsBusy);
         RefreshMapping = new AsyncRelayCommand(() => { Structure.CommitEdits(); return Reload(refreshMapping: true); }, () => !Busy.IsBusy);
@@ -345,6 +346,9 @@ public sealed class ProjectDetailViewModel : ObservableObject, IDisposable
     public ICommand CancelObjectives { get; }
     public ICommand ExportCostReport { get; }
     public ICommand ExportStructure { get; }
+
+    /// <summary>„Wczytaj strukturę z Excela” – WP, CAM, Cost Category, budżet i daty z arkusza „Struktura” uzupełnionego ręcznie.</summary>
+    public ICommand ImportStructure { get; }
     public ICommand ExportDictionaries { get; }
     public ICommand AddDictionaryRow { get; }
     public ICommand RemoveDictionaryRow { get; }
@@ -662,6 +666,50 @@ public sealed class ProjectDetailViewModel : ObservableObject, IDisposable
         {
             var rows = await Busy.Run("Zapisywanie struktury projektu do Excela…", () => _service.ExportStructure(path, Code, current.Structure, current.Persons));
             Status = $"Zapisano {path} – {rows} wierszy struktury.";
+        });
+    }
+
+    /// <summary>
+    /// Wczytanie arkusza „Struktura” uzupełnionego w Excelu (StructureImport): podsumowanie zmian i problemów pliku do
+    /// potwierdzenia, potem zapis jak edycja w tabeli struktury (SaveStructureEdits) i odświeżenie projektu.
+    /// </summary>
+    private async Task DoImportStructure()
+    {
+        if (!StructureSettled("wczytaniem struktury z Excela") || _structure is not { } current)
+            return;
+        var path = _dialogs.OpenExcel($"Wczytaj strukturę projektu {Code} z Excela (arkusz „Struktura” pobrany z aplikacji)");
+        if (path is null)
+            return;
+        await Try(async () =>
+        {
+            var file = await Busy.Run("Odczyt pliku struktury…", () => _service.ReadStructureFile(path, Code, current.Structure));
+            var problems = file.Issues.OrderBy(i => i.Level == CheckLevel.Error ? 0 : 1)
+                .Select(i => $"• {(i.Level == CheckLevel.Error ? "BŁĄD" : "UWAGA")} {i.Element}: {i.Message}").ToList();
+            var shown = string.Join("\n", problems.Take(10)) + (problems.Count > 10 ? $"\n… (+{problems.Count - 10})" : "");
+            if (file.Edits.Count == 0)
+            {
+                Status = problems.Count == 0 ? $"{Path.GetFileName(path)}: brak zmian względem projektu." : $"{Path.GetFileName(path)}: brak zmian do zapisu – {problems[0]}";
+                return;
+            }
+            var budget = file.Edits.Count(e => e.Changes.Keys.Any(StructureEdits.ScheduleColumns.Contains));
+            var message = $"Plik {Path.GetFileName(path)} ({file.FileRows} wierszy) – zmiany w {file.Edits.Count} wierszach struktury:\n"
+                          + $"• nowe WP: {file.Count(StructureEdits.Wp)}\n• CAM: {file.Count(StructureEdits.Cam)}\n• Cost Category: {file.Count(StructureEdits.CostCategory)}\n"
+                          + $"• budżet i daty WP: {budget}\n\nPuste komórki – bez zmiany."
+                          + (problems.Count > 0 ? $"\n\nPominięte ({problems.Count}):\n{shown}" : "")
+                          + "\n\nZapisać zmiany?";
+            if (!_dialogs.Confirm("Wczytaj strukturę z Excela", message))
+            {
+                Status = "Wczytanie struktury anulowane – bez zmian.";
+                return;
+            }
+            var mapping = _mapping;
+            var results = await Busy.Run($"Zapisywanie zmian z pliku ({file.Edits.Count} wierszy)…", () => _service.SaveStructureEdits(Code, mapping, file.Edits));
+            var failures = results.Where(r => !r.Saved).Select(r => $"{r.Id}: {r.Message}").ToList();
+            _production = null;
+            await Reload(refreshMapping: false);
+            Status = failures.Count == 0
+                ? $"Wczytano strukturę z {Path.GetFileName(path)}: zapisano {results.Count} wierszy{(problems.Count > 0 ? $", pominięto {problems.Count}" : "")}."
+                : $"Zapisano {results.Count - failures.Count} z {results.Count} wierszy; nie zapisano: {string.Join(" · ", failures.Take(3))}{(failures.Count > 3 ? " …" : "")}";
         });
     }
 
