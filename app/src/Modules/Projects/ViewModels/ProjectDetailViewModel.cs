@@ -326,18 +326,23 @@ public sealed class ProjectDetailViewModel : ObservableObject, IDisposable
         var cachedOwners = refreshMapping || !_ownersLoaded ? null : _owners;
         var cachedActuals = refreshMapping ? null : _actuals;
         var cachedProduction = refreshMapping ? null : _production;
+        (IReadOnlyDictionary<string, decimal> Costs, string? Error)? cachedCosts = _costs is null ? null : (_costs, _costsError);
         await Try(async () =>
         {
             var steps = new StepTimer();
             var snapshot = await Busy.Run(refreshMapping ? "Odświeżanie struktury P1S, kosztów i struktury projektu…" : "Wczytywanie projektu i struktury…", () =>
             {
+                // koszty (PZLTEST) – równolegle z odczytami PZLPROD (struktura P1S, potem produkcja)
+                var costsRead = refreshMapping || cachedCosts is null
+                    ? Task.Run(() => steps.Time("koszty ACWP (ACTUALS)", ReadCosts))
+                    : Task.FromResult(cachedCosts.Value);
                 var tree = steps.Time("nakładka Performance Objectives", () => _service.Objectives(Code));
                 var mapping = steps.Time("struktura P1S (PZLPROD LOG.WBS)", () => _service.Mapping(refreshMapping));
                 var states = steps.Time("słowniki projektu", () => codes.ToDictionary(c => c, c => _service.DictionaryState(c, Code)));
                 var rows = states.ToDictionary(s => s.Key, s => s.Value.Rows);
                 var wpCam = rows.GetValueOrDefault(ProjectDictionaries.WpCam) ?? [];
-                var (costs, costsError) = refreshMapping || _costs is null ? steps.Time("koszty ACWP (ACTUALS)", ReadCosts) : (_costs, _costsError);
                 var production = cachedProduction ?? steps.Time("produkcja (PZLPROD vAHDD, vAPD)", () => _service.Production(tree, mapping));
+                var (costs, costsError) = costsRead.GetAwaiter().GetResult();
                 var structure = steps.Time("budowa struktury", () =>
                     ProjectService.Structure(tree, mapping, wpCam, rows.GetValueOrDefault(ProjectDictionaries.ScheduleBudget) ?? [], costs, production));
                 var persons = cachedPersons ?? steps.Time("osoby", _service.PersonLookups);
