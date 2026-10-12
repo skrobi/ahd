@@ -615,6 +615,7 @@ public sealed class ProjectDetailViewModel : ObservableObject, IDisposable
 
     private async Task DoSaveObjectives()
     {
+        Objectives.CommitEdits();
         var tree = Objectives.Tree.Copy();
         await Try(async () =>
         {

@@ -9,7 +9,8 @@ namespace PzlEv.Modules.Projects.Views;
 /// <summary>
 /// Przeciąganie wierszy nakładki: uchwyt ⋮⋮ → wiersz (staje się jego dzieckiem) albo pasek korzenia. Zwijanie dzieci (▸ / ▾),
 /// zaznaczenie kilku wierszy (Ctrl / Shift) i menu prawego przycisku: „Przenieś do” (najwyższy poziom, węzły wirtualne),
-/// „Grupuj w nowy węzeł”, kolejność, zwijanie.
+/// „Grupuj w nowy węzeł”, kolejność, zwijanie. Edycja w komórkach: Nazwa (pole z wcięciem, zatwierdzane przy Enter
+/// / wyjściu z komórki), Element CES (bez węzłów wirtualnych), P1S; nowy węzeł – od razu edycja nazwy.
 /// </summary>
 public partial class PoEditorView : UserControl
 {
@@ -17,12 +18,81 @@ public partial class PoEditorView : UserControl
     private Point _start;
     private PoRowViewModel? _dragged;
 
-    public PoEditorView() => InitializeComponent();
+    public PoEditorView()
+    {
+        InitializeComponent();
+        DataContextChanged += (_, e) =>
+        {
+            if (e.OldValue is PoEditorViewModel old)
+            {
+                old.EditRequested -= BeginNameEdit;
+                old.CommitRequested -= CommitEdits;
+            }
+            if (e.NewValue is PoEditorViewModel vm)
+            {
+                vm.EditRequested += BeginNameEdit;
+                vm.CommitRequested += CommitEdits;
+            }
+        };
+    }
+
+    /// <summary>Edycja nazwy wiersza (nowy węzeł) – po wygenerowaniu wierszy tabeli.</summary>
+    private void BeginNameEdit(PoRowViewModel row) =>
+        Dispatcher.BeginInvoke(() =>
+        {
+            if (!NodesGrid.Items.Contains(row))
+                return;
+            NodesGrid.ScrollIntoView(row, NameColumn);
+            NodesGrid.CurrentCell = new DataGridCellInfo(row, NameColumn);
+            NodesGrid.BeginEdit();
+        }, System.Windows.Threading.DispatcherPriority.Background);
+
+    /// <summary>Przed przebudową wierszy (przycisk, menu, przeciągnięcie) i odczytem drzewa – edycja komórki zatwierdzona.</summary>
+    private void CommitEdits()
+    {
+        NodesGrid.CommitEdit(DataGridEditingUnit.Cell, exitEditingMode: true);
+        NodesGrid.CommitEdit(DataGridEditingUnit.Row, exitEditingMode: true);
+    }
+
+    /// <summary>Element CES węzła wirtualnego nie istnieje – bez edycji.</summary>
+    private void OnBeginningEdit(object sender, DataGridBeginningEditEventArgs e)
+    {
+        if (e.Column == WbsColumn && e.Row.Item is PoRowViewModel { IsVirtual: true })
+            e.Cancel = true;
+    }
+
+    /// <summary>Pole nazwy: kursor w polu, tekst zaznaczony (pisanie zastępuje nazwę).</summary>
+    private void OnNameBoxLoaded(object sender, RoutedEventArgs e)
+    {
+        if (sender is TextBox box)
+        {
+            box.Focus();
+            box.SelectAll();
+        }
+    }
+
+    /// <summary>Nazwa zapisuje się przy zatwierdzeniu komórki (Enter, wyjście z komórki); Esc – bez zmiany.</summary>
+    private void OnCellEditEnding(object sender, DataGridCellEditEndingEventArgs e)
+    {
+        if (e.EditAction == DataGridEditAction.Commit && e.Column == NameColumn && Find<TextBox>(e.EditingElement) is { } box)
+            box.GetBindingExpression(TextBox.TextProperty)?.UpdateSource();
+    }
+
+    private static T? Find<T>(DependencyObject? element) where T : DependencyObject
+    {
+        if (element is T found)
+            return found;
+        for (var i = 0; element is not null && i < VisualTreeHelper.GetChildrenCount(element); i++)
+            if (Find<T>(VisualTreeHelper.GetChild(element, i)) is { } child)
+                return child;
+        return null;
+    }
 
     private void OnGripDown(object sender, MouseButtonEventArgs e)
     {
         _start = e.GetPosition(this);
         _dragged = (sender as FrameworkElement)?.DataContext as PoRowViewModel;
+        e.Handled = true;   // uchwyt nie zaczyna edycji komórki nazwy
     }
 
     private void OnGripMove(object sender, MouseEventArgs e)
