@@ -18,6 +18,26 @@ public static partial class GlobalDictionaries
     public const string Persons = "persons";
     public const string DjkRates = "djk-rates";
     public const string ProductionParameters = "production-parameters";
+    public const string CasBurdenGroups = "cas-burden-groups";
+    public const string CasBurdenRates = "cas-burden-rates";
+
+    /// <summary>Kolumna słownika Cost Category z grupą narzutową CAS elementu kosztowego (raport kosztów CES).</summary>
+    public const string BurdenGroupColumn = "Grupa narzutowa CAS";
+
+    /// <summary>Kolumna słownika „Grupy narzutowe CAS”: koszt bazowy wchodzi do podstawy GS i G&amp;A (suche koszty materiałów – nie).</summary>
+    public const string BaseInGsGaColumn = "Koszt bazowy w podstawie GS i G&A";
+
+    /// <summary>
+    /// Pule narzutu CAS w kolejności kolumn raportu kosztów CES (arkusz finansów) z kolumną tabeli
+    /// DICT_CasBurdenGroup; 12 pul kosztu (TOTAL COST) i 5 pul FCCOM (TOTAL FCCOM).
+    /// </summary>
+    public static IReadOnlyList<(string Pool, string Column)> CasPools { get; } =
+    [
+        ("MFG Fringe", "MfgFringe"), ("MFG OH", "MfgOh"), ("ENG Fringe", "EngFringe"), ("ENG OH", "EngOh"), ("MTL Fringe", "MtlFringe"),
+        ("Material Handling (MTL)", "MtlHandling"), ("Miscellaneous Material Pool (MMP)", "Mmp"), ("General Services (GS)", "Gs"),
+        ("GS Fringe", "GsFringe"), ("MSV Fringe", "MsvFringe"), ("General & Administrative (GA)", "Ga"), ("Corporate Flowdowns (FD)", "Fd"),
+        ("FCCOM MFG", "FccomMfg"), ("FCCOM ENG", "FccomEng"), ("FCCOM MTL", "FccomMtl"), ("FCCOM GS", "FccomGs"), ("FCCOM G&A", "FccomGa"),
+    ];
 
     /// <summary>Parametry słownika „Parametry produkcji” (kolumna Parametr).</summary>
     public const string ProductivityMonths = "Okno produktywności IPT (mies.)";
@@ -82,6 +102,7 @@ public static partial class GlobalDictionaries
                 new("Obszar", ColumnType.Text, CheckSimilar: true),
                 new("Cost Category", ColumnType.Text, CheckSimilar: true),
                 new("Rozliczeniowy", ColumnType.Boolean),
+                new(BurdenGroupColumn, ColumnType.Text, CheckSimilar: true),
             ],
             Rules = CostCategoryRules,
         },
@@ -132,6 +153,37 @@ public static partial class GlobalDictionaries
             ],
             Rules = ProductionParameterRules,
         },
+        new()
+        {
+            Code = CasBurdenGroups,
+            Name = "Grupy narzutowe CAS",
+            Description = "Grupa narzutowa elementu kosztowego (kolumna „Grupa narzutowa CAS” słownika Cost Category) → pule narzutu CAS naliczane na jego koszt w raporcie kosztów CES. "
+                + "Podstawy pul są wspólne (kaskada arkusza finansów): Fringe, MTL Handling, MMP, FCCOM MTL – koszt bazowy; OH i FCCOM MFG / ENG – koszt + Fringe; "
+                + "GS – koszt + Fringe + OH + MTL Handling; G&A, FD – jak GS + GS. „Koszt bazowy w podstawie GS i G&A” = nie – GS i G&A liczone od samego MTL Handling (suche koszty materiałów i usług).",
+            Columns =
+            [
+                new("Grupa", ColumnType.Text, Key: true, CheckSimilar: true),
+                new("Opis", ColumnType.Text),
+                new(BaseInGsGaColumn, ColumnType.Boolean, Required: true),
+                .. CasPools.Select(p => new DictColumn(p.Pool, ColumnType.Boolean)),
+            ],
+        },
+        new()
+        {
+            Code = CasBurdenRates,
+            Name = "Wskaźniki narzutu CAS",
+            Description = "Wskaźnik puli narzutu CAS obowiązujący od – do (zwykle rok: 2026-01-01 – 2026-12-31; Do puste – bezterminowo). Raport kosztów CES bierze wskaźnik obowiązujący w okresie kolumny (okres, rok).",
+            Columns =
+            [
+                new("Pula", ColumnType.Choice, Key: true, Choices: CasPools.Select(p => p.Pool).ToList()),
+                new("Od", ColumnType.Date, Key: true),
+                new("Do", ColumnType.Date),
+                new("Wskaźnik", ColumnType.Decimal, Required: true),
+                new("Opis", ColumnType.Text),
+            ],
+            Validity = ("Od", "Do"),
+            Rules = CasRateRules,
+        },
     ];
 
     public static DictionarySpec Get(string code) => All.First(s => s.Code == code);
@@ -146,7 +198,7 @@ public static partial class GlobalDictionaries
         new(Get(FxRates), "dict.FxRate", [("Waluta", "Currency"), ("Okres", "Period"), ("Kurs", "Rate")]),
         new(Get(CostCategory), "dict.CostCategory",
             [("Numer elementu kosztowego", "CostElement"), ("Opis", "Description"), ("Obszar", "Area"), ("Cost Category", "CostCategory"),
-             ("Rozliczeniowy", "IsSettlement")]),
+             ("Rozliczeniowy", "IsSettlement"), (BurdenGroupColumn, "BurdenGroup")]),
         new(Get(Persons), "dict.Person",
         [
             ("USRID", "AdAccount"), ("Imię i nazwisko", "FullName"), ("Imię", "FirstName"), ("Nazwisko", "LastName"), ("E-mail", "Email"),
@@ -155,6 +207,9 @@ public static partial class GlobalDictionaries
         ]),
         new(Get(DjkRates), "dict.DjkRate", [("Grupa stanowisk", "WorkCenterGroup"), ("Udział DJK", "Share"), ("Opis", "Description")]),
         new(Get(ProductionParameters), "dict.ProductionParameter", [("Parametr", "Name"), ("Wartość", "Value"), ("Opis", "Description")]),
+        new(Get(CasBurdenGroups), "dict.CasBurdenGroup",
+            [("Grupa", "BurdenGroup"), ("Opis", "Description"), (BaseInGsGaColumn, "BaseInGsGa"), .. CasPools.Select(p => (p.Pool, p.Column))]),
+        new(Get(CasBurdenRates), "dict.CasBurdenRate", [("Pula", "Pool"), ("Od", "ValidFrom"), ("Do", "ValidTo"), ("Wskaźnik", "Rate"), ("Opis", "Description")]),
     ];
 
     private static IEnumerable<Issue> CalendarRules(IReadOnlyList<DictRow> rows)
@@ -242,6 +297,16 @@ public static partial class GlobalDictionaries
         }
     }
 
+    /// <summary>„Wskaźniki narzutu CAS”: wskaźnik nieujemny (okresy obowiązywania – DictionaryValidator, Validity).</summary>
+    private static IEnumerable<Issue> CasRateRules(IReadOnlyList<DictRow> rows)
+    {
+        for (var i = 0; i < rows.Count; i++)
+        {
+            if (Dec(rows[i]["Wskaźnik"]) is < 0)
+                yield return Issue.Error("Wskaźnik nie może być ujemny", DictionaryValidator.RowElement(i));
+        }
+    }
+
     /// <summary>„Parametry produkcji”: okno 1–120 miesięcy, statusy niepuste, Z_CLO – tak / nie.</summary>
     private static IEnumerable<Issue> ProductionParameterRules(IReadOnlyList<DictRow> rows)
     {
@@ -326,6 +391,7 @@ public static partial class GlobalDictionaries
             rows.Add(new DictRow(null, null, new Dictionary<string, string?>
             {
                 [number.Name] = element.CostElement, ["Opis"] = element.Name, ["Obszar"] = null, ["Cost Category"] = null, ["Rozliczeniowy"] = null,
+                [BurdenGroupColumn] = null,
             }));
             added++;
         }

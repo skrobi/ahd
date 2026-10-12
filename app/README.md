@@ -65,6 +65,9 @@ zmieni). Brak pliku albo błąd w nim = komunikat przy starcie z nazwą pola –
 - `026_zrodla_projektu.sql` – słownik projektu „Źródła danych” (`DICT_ProjectSource`);
 - `027_przebiegi.sql` – przebiegi projektu, uruchomienia, dane przypięte i wyniki kontroli, procedura `RUN_PinBalance`;
 - `028_konfiguracja_projektu.sql` – słownik projektu „Parametry projektu” (`DICT_ProjectSetting`), pole kwoty ACTUALS w przebiegu.
+- `029_narzuty_cas.sql` – narzuty CAS raportu kosztów CES: „Grupa narzutowa CAS” w Cost Category, słowniki „Grupy narzutowe CAS”
+  i „Wskaźniki narzutu CAS”;
+- `030_dane_narzuty_cas.sql` – dane startowe narzutów CAS z arkusza finansów (grupy, wskaźniki 2025–2026, grupa elementów kosztowych).
 
 Migracje wykonuje przycisk **Diagnostyka → Migracja** – uruchamia po kolei skrypty, których numeru nie ma
 w `META_SchemaVersion`, a wykonane pomija. Lista na tym ekranie pokazuje, które skrypty są wykonane (kiedy, kto)

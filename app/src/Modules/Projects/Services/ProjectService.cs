@@ -737,6 +737,29 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
         return rows.Count;
     }
 
+    /// <summary>
+    /// Raport kosztów CES do Excela (projekty CAS): raport kosztów z narzutami CAS w formułach – grupa narzutowa
+    /// z efektywnego słownika Cost Category projektu, pule ze słownika „Grupy narzutowe CAS”, wskaźniki ze „Wskaźników
+    /// narzutu CAS” (CasCostReport); arkusze „Wskaźniki” i „Uwagi” (braki mapowania i wskaźników). Zwraca liczbę wierszy i uwag.
+    /// </summary>
+    public (int Rows, int Notes) ExportCasCostReport(string path, string code)
+    {
+        var (columns, rows) = store.CostReport(code, ActualsAmount(code));
+        var mapping = EditableRows(GlobalDictionaries.CostCategory, code).Select(x => x.Row)
+            .Where(r => r["Numer elementu kosztowego"] is not null)
+            .GroupBy(r => r["Numer elementu kosztowego"]!, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.First()[GlobalDictionaries.BurdenGroupColumn], StringComparer.OrdinalIgnoreCase);
+        var result = CasCostReport.Build(columns, rows, mapping,
+            CasCostReport.GroupsFrom(_dictionaries.Load(GlobalDictionaries.Get(GlobalDictionaries.CasBurdenGroups))),
+            CasCostReport.RatesFrom(_dictionaries.Load(GlobalDictionaries.Get(GlobalDictionaries.CasBurdenRates))));
+        List<ExcelTableWriter.ReportSheet> sheets = [result.Report, result.Rates];
+        if (result.Notes.Count > 0)
+            sheets.Add(new ExcelTableWriter.ReportSheet("Uwagi", ["Uwaga"], result.Notes.Select(n => (IReadOnlyList<object?>)[n])));
+        ExcelTableWriter.WriteReport(path, sheets);
+        journal.Add(Area, $"{code}: raport kosztów CES pobrany do Excela ({rows.Count} wierszy, uwagi: {result.Notes.Count})", code);
+        return (rows.Count, result.Notes.Count);
+    }
+
     // ---------- gotowość, baza analityczna ----------
 
     public List<Issue> Readiness(ProjectInfo project, PoTree tree, P1sInputs inputs) =>

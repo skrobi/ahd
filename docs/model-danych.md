@@ -331,6 +331,16 @@ podaje `@Value` procedur `REP_ProjectCosts`, `REP_ProjectCostsByElement` i `RUN_
 `RUN_PinBalance @Project, @PinId, @Value` – kwota z pola `@Value`, waluta z pola waluty tej kwoty (`ObjectCurrency`,
 `ReportCurrency`, `TransactionCurrency`); `META_RunPin.AmountField` – pole kwoty użyte w przypięciu. Wymaga aplikacji 0.44.0.
 
+**Migracja `sql/mssql/029_narzuty_cas.sql`:** narzuty CAS raportu kosztów CES (`docs/slowniki.md`, rozdz. 6.1):
+`DICT_CostCategory.BurdenGroup` – „Grupa narzutowa CAS” elementu kosztowego; `DICT_CasBurdenGroup` – „Grupy narzutowe
+CAS” (grupa, opis, `BaseInGsGa` i kolumna `BIT` na każdą z 17 pul); `DICT_CasBurdenRate` – „Wskaźniki narzutu CAS”
+(pula, `ValidFrom`, `ValidTo`, `Rate DECIMAL(38,18)`; klucz projekt + pula + od). Raport liczy aplikacja
+(`CasCostReport`) z wyniku `REP_ProjectCosts` – bez nowej procedury. Wymaga aplikacji 0.46.0.
+
+**Migracja `sql/mssql/030_dane_narzuty_cas.sql`** (dane startowe): 10 grup narzutowych i wskaźniki 2025 i 2026 z arkusza
+finansów; grupa narzutowa elementów kosztowych arkusza w globalnym Cost Category – nowa wersja pozycji bez grupy
+(grupa ustawiona wcześniej zostaje).
+
 `META_SourceFile.CanonicalStatus`: „utworzone” – dane kanoniczne zapisane i sprawdzone (widoczne dla odczytów),
 „w toku” – zapis wierszy trwa (odczyty pomijają plik; po awarii wpis i wiersze są usuwane), inna wartość – powód
 braku danych (źródło bez parsera).
