@@ -226,7 +226,7 @@ public sealed class ProjectDetailViewModel : ObservableObject, IDisposable
         var refused = await runs.Start(Code);
         RunProgress = refused ?? "Przebieg uruchomiony…";
         if (refused is null)
-            Status = "Przebieg liczy się w tle – możesz dalej pracować; po zakończeniu pojawi się powiadomienie i e-mail.";
+            Status = "Przebieg liczy się w tle – możesz dalej pracować; po zakończeniu pojawi się powiadomienie.";
     }
 
     /// <summary>Odpięcie od zdarzeń przebiegów przy zmianie strony modułu.</summary>

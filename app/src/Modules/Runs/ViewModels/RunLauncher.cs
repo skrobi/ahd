@@ -10,9 +10,9 @@ namespace PzlEv.Modules.Runs.ViewModels;
 
 /// <summary>
 /// Kontrakt IRunLauncher: przebieg projektu w tle aplikacji (osobny wątek), postęp i zakończenie na wątku UI,
-/// po zakończeniu powiadomienie Windows i e-mail przez Outlook (adres ze słownika Osoby albo konto Outlooka).
+/// po zakończeniu powiadomienie Windows.
 /// </summary>
-public sealed class RunLauncher(RunService service, IRunStore store, AppServices services, Func<ISourceImport?> imports) : IRunLauncher
+public sealed class RunLauncher(RunService service, IRunStore store, Func<ISourceImport?> imports) : IRunLauncher
 {
     private readonly ConcurrentDictionary<string, bool> _running = new(StringComparer.OrdinalIgnoreCase);
 
@@ -56,7 +56,6 @@ public sealed class RunLauncher(RunService service, IRunStore store, AppServices
                 outcome = new RunOutcome(project, null, RunStatuses.Failed, 1, 0, ex.Message);
             }
             _running.TryRemove(project, out _);
-            Notify(outcome);
             dispatcher?.BeginInvoke(() =>
             {
                 WindowsNotification.Show($"PZL-EV – przebieg {outcome.Code ?? project}", outcome.Summary,
@@ -66,17 +65,5 @@ public sealed class RunLauncher(RunService service, IRunStore store, AppServices
         });
         Progress?.Invoke(project, "Przebieg uruchomiony…");
         return null;
-    }
-
-    /// <summary>E-mail o zakończeniu (w tle – Outlook potrafi chwilę odpowiadać).</summary>
-    private void Notify(RunOutcome outcome)
-    {
-        var usrid = services.User.Account.Split('\\').Last();
-        var issues = outcome.Code is null ? [] : store.Pins(outcome.Project, 1).FirstOrDefault() is { } pin ? store.Issues(pin.PinId) : [];
-        var body = $"Przebieg {outcome.Code ?? outcome.Project}: {outcome.Summary}\r\n\r\n" +
-                   string.Join("\r\n", issues.Where(i => i.Level != Shared.Models.Pipeline.CheckLevel.Pass)
-                       .Select(i => $"[{(i.Level == Shared.Models.Pipeline.CheckLevel.Error ? "BŁĄD" : "UWAGA")}] {i.CheckName}: {i.Message}").Take(30)) +
-                   "\r\n\r\nSzczegóły: PZL-EV → Projekty → " + outcome.Project + " → Przebiegi.";
-        OutlookMail.Send(store.Email(usrid), $"PZL-EV: przebieg {outcome.Code ?? outcome.Project} – {outcome.Status}", body);
     }
 }

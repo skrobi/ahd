@@ -156,10 +156,4 @@ public sealed class SqlRunStore(SqlDatabase db) : IRunStore
         return connection.Query<string>($"SELECT SourceCode FROM {db.Table("dict.ProjectSource")} WHERE Project = @project AND SupersededAt IS NULL", new { project })
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
     }
-
-    public string? Email(string usrid)
-    {
-        using var connection = db.Open();
-        return connection.QueryFirstOrDefault<string?>($"SELECT Email FROM {db.Table("dict.Person")} WHERE AdAccount = @usrid AND SupersededAt IS NULL", new { usrid });
-    }
 }
