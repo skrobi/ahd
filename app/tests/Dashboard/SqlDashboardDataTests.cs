@@ -79,17 +79,21 @@ public sealed class SqlDashboardDataTests : IDisposable
     public void Attention_lists_open_problems_of_all_areas_errors_first_and_resolve_closes_with_journal_entry()
     {
         Use();
-        _app.Problems.Add("Import", "plik", Issue.Warning("ACTUALS_PAF_01.xlsx: plik nierozpoznany", "RABIT"), ImportBatchRow.ProblemReference(7));
+        var imports = new SqlImportStore(_database!.Sql);
+        var older = imports.BeginBatch(_services.Clock.Now, "PZL\\x", "PC", "test");
+        var latest = imports.BeginBatch(_services.Clock.Now, "PZL\\x", "PC", "test");
+        _app.Problems.Add("Import", "plik", Issue.Error("ACTUALS_OLD.xlsx: błąd", "RABIT"), ImportBatchRow.ProblemReference(older));   // nieaktualny – wcześniejszy import
+        _app.Problems.Add("Import", "plik", Issue.Warning("ACTUALS_PAF_01.xlsx: plik nierozpoznany", "RABIT"), ImportBatchRow.ProblemReference(latest));
         _app.Problems.Add("Projekty", "element bez WP", Issue.Error("Element CES z kosztem bez WP", "4D03GZ000001"), "p:7");
 
         var attention = _data.Attention();
 
-        Assert.Equal([new Pill("crit", "Projekty"), new Pill("warn", "Import #7")], attention.Select(a => a.Tag));
+        Assert.Equal([new Pill("crit", "Projekty"), new Pill("warn", $"Import #{latest}")], attention.Select(a => a.Tag));
         Assert.Equal("4D03GZ000001: Element CES z kosztem bez WP", attention[0].Text);
 
         _data.Resolve(attention[0].ProblemId);
 
-        Assert.Equal("Import #7", Assert.Single(_data.Attention()).Tag.Text);
+        Assert.Equal($"Import #{latest}", Assert.Single(_data.Attention()).Tag.Text);
         var closed = _app.Problems.ByReference("p:7").Single();
         Assert.Equal((true, _services.User.Account, "oznaczony jako rozwiązany na Pulpicie"), (closed.Resolved, closed.ResolvedBy, closed.Resolution));
         Assert.Contains(_app.Journal.Recent(5), e => e.Message == $"Problem #{closed.Id} (Projekty) oznaczony jako rozwiązany: Element CES z kosztem bez WP");

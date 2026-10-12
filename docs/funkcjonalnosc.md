@@ -137,7 +137,9 @@ Lista kontrolna na ekranie projektu:
 - **„Wymaga uwagi”** – otwarte problemy (`docs/pipeline-fazy.md`, rozdz. 1.3) i etapy wymagające akcji, m.in.:
   brak przebiegu w bieżącym tygodniu, etapy z błędem, pliki czekające na potwierdzenie, zmiany po przypięciu,
   projekty niegotowe, pliki nierozpoznane. Przy problemie – „Rozwiązane”
-  (ręczne zamknięcie z wpisem w dzienniku); problem znika też sam, gdy przyczyna zniknie.
+  (ręczne zamknięcie z wpisem w dzienniku); problem znika też sam, gdy przyczyna zniknie. Problemy importu – tylko
+  z ostatniego importu (także trwającego); każdy import ocenia pliki od nowa, więc problemy wcześniejszych importów
+  nie są pokazywane.
 - **„Ostatnie zdarzenia”** – przekrój dzienników wszystkich przebiegów: do 60 najnowszych wpisów, po 6 na stronę (‹ ›), treść skrócona do jednej linii (pełna w podpowiedzi).
 - Dziennik przebiegu: czas, użytkownik, opis – od najnowszego.
 

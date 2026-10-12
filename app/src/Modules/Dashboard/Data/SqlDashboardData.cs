@@ -65,9 +65,18 @@ public sealed class SqlDashboardData(AppServices services) : IDashboardDataSourc
             .ToList();
     }
 
-    public IReadOnlyList<AttentionItem> Attention() =>
-        services.Problems.Open()
+    /// <summary>
+    /// Otwarte problemy (błędy najpierw); problemy importu – tylko ostatniego importu (także trwającego): problemy
+    /// wcześniejszych importów są nieaktualne, bo każdy import ocenia pliki od nowa.
+    /// </summary>
+    public IReadOnlyList<AttentionItem> Attention()
+    {
+        string? latest;
+        using (var connection = services.Sql.Open())
+            latest = LastBatch(connection) is { } batch ? ImportBatchRow.ProblemReference(batch.BatchId) : null;
+        return services.Problems.Open()
             .Where(p => p.Level != CheckLevel.Pass)
+            .Where(p => p.Reference is not { } reference || !reference.StartsWith(ImportBatchRow.ProblemReferencePrefix, StringComparison.Ordinal) || reference == latest)
             .OrderBy(p => p.Level == CheckLevel.Error ? 0 : 1)
             .ThenByDescending(p => p.Id)
             .Select(p => new AttentionItem(
@@ -76,6 +85,7 @@ public sealed class SqlDashboardData(AppServices services) : IDashboardDataSourc
                 p.Element is { Length: > 0 } element ? $"{element}: {p.Message}" : p.Message,
                 p.At.ToLocalTime().ToString("dd.MM HH:mm", Pl)))
             .ToList();
+    }
 
     public void Resolve(long problemId)
     {
