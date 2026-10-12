@@ -41,15 +41,26 @@
                         <Setter Property="Width" Value="210" />
                         <Style.Triggers>
                             <DataTrigger Binding="{Binding NavCollapsed}" Value="True">
-                                <Setter Property="Width" Value="60" />
-                                <Setter Property="Padding" Value="6,10" />
+                                <Setter Property="Width" Value="64" />
+                                <Setter Property="Padding" Value="8,10" />
                             </DataTrigger>
                         </Style.Triggers>
                     </Style>
                 </Border.Style>
                 <DockPanel>
-                    <Button DockPanel.Dock="Top" Style="{StaticResource NavBtn}" HorizontalAlignment="Left" Margin="0,0,0,8" Padding="14,8"
+                    <Button DockPanel.Dock="Top" HorizontalAlignment="Stretch" Margin="0,0,0,8"
                             Command="{Binding ToggleNav}" ToolTip="Zwiń / rozwiń menu" AutomationProperties.Name="Zwiń / rozwiń menu">
+                        <Button.Style>
+                            <Style TargetType="Button" BasedOn="{StaticResource NavBtn}">
+                                <Setter Property="Padding" Value="14,8" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding NavCollapsed}" Value="True">
+                                        <Setter Property="Padding" Value="0,8" />
+                                        <Setter Property="HorizontalContentAlignment" Value="Center" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
                         <TextBlock Text="&#xE700;" FontFamily="{StaticResource FIcon}" FontSize="16" />
                     </Button>
                     <StackPanel DockPanel.Dock="Bottom" Margin="12,8">
@@ -72,12 +83,13 @@
                                         AutomationProperties.Name="{Binding Label}"
                                         Command="{Binding DataContext.Navigate, RelativeSource={RelativeSource AncestorType=Window}}"
                                         CommandParameter="{Binding Key}">
-                                    <!-- Zwinięte menu: przycisk 48 px, ikona 20 px na środku (padding 14), bez odstępu za ikoną -->
+                                    <!-- Zwinięte menu: ikona wyśrodkowana, bez poziomych marginesów – nie jest przycinana przy skalowaniu ekranu -->
                                     <Button.Style>
                                         <Style TargetType="Button" BasedOn="{StaticResource NavBtn}">
                                             <Style.Triggers>
                                                 <DataTrigger Binding="{Binding DataContext.NavCollapsed, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
-                                                    <Setter Property="Padding" Value="14,8" />
+                                                    <Setter Property="Padding" Value="0,8" />
+                                                    <Setter Property="HorizontalContentAlignment" Value="Center" />
                                                 </DataTrigger>
                                             </Style.Triggers>
                                         </Style>
