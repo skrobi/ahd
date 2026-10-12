@@ -67,7 +67,7 @@ public static class StructureColumns
         new(StructureEdits.Bac, "BAC Cost", FinancialEv, "Budżet kosztowy WP (kwota) – „Harmonogram i budżet”."),
         new(PvCost, "PV Cost", FinancialEv, "Wartość planowana: BAC Cost × udział dni roboczych baseline, które minęły (stan na dziś).", FromView: true),
         new(EvCost, "EV Cost", FinancialEv, "Wartość wypracowana: BAC Cost × (EV Hours ÷ BAC Hours z AHD), najwyżej BAC Cost.", FromView: true),
-        new(Acwp, "ACWP", FinancialEv, "Koszt rzeczywisty narastająco (PLN) z ostatniego importu ACTUALS, bez wykluczeń i rozliczenia wychodzącego.", FromView: true),
+        new(Acwp, "ACWP", FinancialEv, "Koszt rzeczywisty narastająco z ostatniego importu ACTUALS (pole kwoty – Konfiguracja → „Parametry projektu”, domyślnie waluta obiektu – PLN), bez wykluczeń i rozliczenia wychodzącego.", FromView: true),
     ];
 
     public static Column Get(string key) => All.First(c => c.Key == key);

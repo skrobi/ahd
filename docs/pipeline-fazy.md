@@ -180,7 +180,8 @@ Kalendarz okresów wyznacza wariant przebiegu:
 (kolejne uruchomienie w tym tygodniu – nowe przypięcie, numer #N) → import źródeł projektu (słownik „Źródła danych”,
 `docs/zrodla-danych.md`, rozdz. 2) → przypięcie: dane ACTUALS projektu z ostatniego importu (`RUN_PinBalance`,
 `docs/model-danych.md`, migracja 027) → kontrole wobec ostatniego zakończonego uruchomienia wcześniejszego tygodnia.
-Kwoty – waluta obiektu (PLN, `Value in Obj. Crcy`); tolerancja zaokrągleń 1,00. Okresy zamknięte – okresy SAP przed
+Kwoty – pole kwoty ACTUALS projektu (słownik „Parametry projektu”, domyślnie waluta obiektu – PLN, `Value in Obj. Crcy`);
+pole inne niż w poprzednim przebiegu – WARNING i kontrole bez porównania z poprzednim przebiegiem; tolerancja zaokrągleń 1,00. Okresy zamknięte – okresy SAP przed
 bieżącym okresem kalendarza, a w pierwszych 7 dniach okresu – przed poprzednim (rozliczenie poprzedniego okresu trwa);
 okresy 13–16 liczone jak 12.
 
@@ -191,7 +192,7 @@ okresy 13–16 liczone jak 12.
 | Nowe cost elementy | ERROR / informacja | cost element spoza słownika Cost Category (efektywnego dla projektu) – ERROR; pierwszy raz w projekcie – informacja |
 | Netowanie projektu do 0 | ERROR / WARNING | suma wszystkich wierszy projektu w okresach zamkniętych ≠ 0 – ERROR i 10 elementów WBS z największym saldem: koszt, rozliczenie, przyczyna (brak rozliczenia – reguła rozliczenia, element statystyczny albo brak cost elementu „Rozliczeniowy” w słowniku; rozliczenie niepełne; rozliczenie większe niż koszt), ostatni okres z ruchem, główne cost elementy; koszt utworzony (`Created on`) po rozliczeniu elementu w tym okresie – WARNING |
 | Zmiany w zamkniętych okresach | WARNING | saldo elementu WBS w zamkniętym okresie inne niż w poprzednim przebiegu |
-| Jakość danych | WARNING | ujemny koszt elementu WBS narastająco (storno po rozliczeniu), wiersze w okresach późniejszych niż bieżący, waluta obiektu inna niż PLN, wiersze bez elementu WBS |
+| Jakość danych | WARNING | ujemny koszt elementu WBS narastająco (storno po rozliczeniu), wiersze w okresach późniejszych niż bieżący, waluta inna niż PLN (pole `ValueObjCrcy`) albo niż przeważająca waluta danych (inne pola kwoty), wiersze bez elementu WBS |
 
 Wynik: stan uruchomienia („zakończony”, „zakończony z ostrzeżeniami”, „zakończony z błędami”, „przerwany błędem”;
 uruchomienie bez działającej aplikacji – „przerwany (brak zakończenia)”), wyniki kontroli, dziennik, powiadomienia

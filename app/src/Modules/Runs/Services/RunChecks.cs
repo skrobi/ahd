@@ -10,7 +10,7 @@ public sealed record RunIssue(string Check, CheckLevel Level, string? Element, s
 
 /// <summary>
 /// Kontrole danych ACTUALS przebiegu (docs/pipeline-fazy.md, P2 – kontrole danych przebiegu): dane projektu w chwili
-/// przypięcia (current) wobec poprzedniego przebiegu (previous; null – pierwszy przebieg). Kwoty w walucie obiektu (PLN).
+/// przypięcia (current) wobec poprzedniego przebiegu (previous; null – pierwszy przebieg). Kwoty w walucie pola kwoty ACTUALS projektu.
 /// Okres zamknięty – rok i okres SAP przed closedBefore (okresy specjalne 13–16 liczone jak 12); today – okres bieżący
 /// (późniejsze są przyszłe).
 /// </summary>
@@ -35,7 +35,7 @@ public static class RunChecks
     public static decimal GrossCost(IEnumerable<RunBalanceRow> rows) => rows.Where(r => !r.IsSettlement).Sum(r => r.Amount);
 
     public static IReadOnlyList<RunIssue> Check(IReadOnlyList<RunBalanceRow> current, IReadOnlyList<RunBalanceRow>? previous,
-        IReadOnlySet<string> costElementsInDictionary, (int Year, int Period) closedBefore, (int Year, int Period) today, string objectCurrency = "PLN")
+        IReadOnlySet<string> costElementsInDictionary, (int Year, int Period) closedBefore, (int Year, int Period) today, string? currency = "PLN")
     {
         var issues = new List<RunIssue>();
         bool Closed(RunBalanceRow r) => (r.FiscalYear, Math.Min(r.Period, 12)).CompareTo(closedBefore) < 0;
@@ -135,10 +135,13 @@ public static class RunChecks
         if (future.Count > 0)
             issues.Add(new RunIssue(Quality, CheckLevel.Warning, null,
                 $"Wiersze w okresach przyszłych: {future.Sum(r => r.Rows)} ({string.Join(", ", future.Select(r => $"{r.FiscalYear}/{r.Period:00}").Distinct().Take(5))})", future.Sum(r => r.Amount)));
-        var currencies = current.Where(r => r.Currency.Length > 0 && !string.Equals(r.Currency, objectCurrency, StringComparison.OrdinalIgnoreCase)).ToList();
+        // waluta pola kwoty: podana (PLN – waluta obiektu) albo przeważająca w danych (inne pola kwoty)
+        var expected = currency ?? current.Where(r => r.Currency.Length > 0).GroupBy(r => r.Currency, StringComparer.OrdinalIgnoreCase)
+            .OrderByDescending(g => g.Sum(r => r.Rows)).Select(g => g.Key).FirstOrDefault();
+        var currencies = current.Where(r => r.Currency.Length > 0 && !string.Equals(r.Currency, expected, StringComparison.OrdinalIgnoreCase)).ToList();
         if (currencies.Count > 0)
             issues.Add(new RunIssue(Quality, CheckLevel.Warning, null,
-                $"Waluta obiektu inna niż {objectCurrency}: {string.Join(", ", currencies.Select(r => r.Currency).Distinct())} ({currencies.Sum(r => r.Rows)} wierszy) – saldo w różnych walutach"));
+                $"Waluta inna niż {expected}: {string.Join(", ", currencies.Select(r => r.Currency).Distinct())} ({currencies.Sum(r => r.Rows)} wierszy) – saldo w różnych walutach"));
         var noWbs = current.Where(r => r.WbsElement.Length == 0).ToList();
         if (noWbs.Count > 0)
             issues.Add(new RunIssue(Quality, CheckLevel.Warning, null, $"Wiersze bez elementu WBS: {noWbs.Sum(r => r.Rows)} (sieci, zlecenia przypisane do projektu)", noWbs.Sum(r => r.Amount)));

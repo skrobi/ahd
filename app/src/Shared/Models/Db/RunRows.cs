@@ -30,7 +30,8 @@ public sealed record RunPinRow(
     decimal? Balance,
     int Errors,
     int Warnings,
-    string? Summary)
+    string? Summary,
+    string? AmountField)
 {
     /// <summary>Opis na listę projektów: kod, numer uruchomienia, stan.</summary>
     public string Label => $"{Code} #{PinNo} – {Status}";

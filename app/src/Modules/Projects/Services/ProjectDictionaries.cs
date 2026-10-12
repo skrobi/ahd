@@ -20,6 +20,10 @@ public static class ProjectDictionaries
     public const string CasRates = "cas-rates";
     public const string WbsCategories = "wbs-categories";
     public const string Sources = "project-sources";
+    public const string Settings = "project-settings";
+
+    /// <summary>Słowniki pokazane w zakładce „Konfiguracja” projektu (pozostałe – „Słowniki projektu”).</summary>
+    public static IReadOnlySet<string> Configuration { get; } = new HashSet<string> { Sources, Settings };
 
     private static readonly DictionarySpec WpCamSpec = new()
     {
@@ -77,6 +81,20 @@ public static class ProjectDictionaries
         ],
     };
 
+    private static readonly DictionarySpec SettingsSpec = new()
+    {
+        Code = Settings,
+        Name = "Parametry projektu",
+        Description = $"Parametry projektu: {ProjectSettings.ActualsAmount} – pole kwoty parsera ACTUALS dla ACWP struktury, raportu kosztów i przebiegu "
+                      + "(ValueObjCrcy – waluta obiektu (PLN), ValueRepCur – waluta raportu, ValueTranCurr – waluta transakcji); brak wiersza – ValueObjCrcy.",
+        Columns =
+        [
+            new("Parametr", ColumnType.Choice, Key: true, Choices: [ProjectSettings.ActualsAmount]),
+            new("Wartość", ColumnType.Text, Required: true, Lookup: Settings),
+            new("Opis", ColumnType.Text),
+        ],
+    };
+
     private static readonly DictionarySpec ExclusionsSpec = new()
     {
         Code = Exclusions,
@@ -102,6 +120,7 @@ public static class ProjectDictionaries
         new(GlobalDictionaries.CostCategory, "Cost Category – zmiany w projekcie", "Cost Category projektu", RequiredFor: [], Stored: true),
         new(Exclusions, "Wykluczenia", "Wykluczenia", RequiredFor: [], Stored: true),
         new(Sources, "Źródła danych", "Źródła danych", RequiredFor: [], Stored: true),
+        new(Settings, "Parametry projektu", "Parametry projektu", RequiredFor: [], Stored: true),
     ];
 
     /// <summary>Słowniki projektu dla typu (Stawki CAS tylko dla CAS).</summary>
@@ -117,6 +136,7 @@ public static class ProjectDictionaries
         new(WbsCategoriesSpec, "dict.WbsCategory", [("Cost Category", "Category"), ("Opis", "Description")]),
         new(ExclusionsSpec, "dict.Exclusion", [("Cost Element", "CostElement"), ("WBS Element", "WbsElement"), ("Partner object", "PartnerObject"), ("Opis", "Description")]),
         new(SourcesSpec, "dict.ProjectSource", [("Definicja źródła", "SourceCode"), ("Opis", "Description")]),
+        new(SettingsSpec, "dict.ProjectSetting", [("Parametr", "Name"), ("Wartość", "Value"), ("Opis", "Description")]),
     ];
 
     /// <summary>Opis słownika bez reguł projektu – odczyt i eksport.</summary>
@@ -133,6 +153,7 @@ public static class ProjectDictionaries
         Exclusions => With(ExclusionsSpec, ExclusionRules),
         WbsCategories => WbsCategoriesSpec,
         Sources => With(SourcesSpec, rows => SourceRules(rows, context)),
+        Settings => With(SettingsSpec, SettingRules),
         GlobalDictionaries.CostCategory => GlobalDictionaries.Get(GlobalDictionaries.CostCategory),
         _ => throw new NotSupportedException($"Słownik {code} nie jest zapisywany w bazie"),
     };
@@ -216,6 +237,22 @@ public static class ProjectDictionaries
                     DictionaryValidator.RowElement(i));
         }
     }
+
+    /// <summary>„Parametry projektu”: pole kwoty ACTUALS – jedno z pól ProjectSettings.ActualsAmounts.</summary>
+    private static IEnumerable<Issue> SettingRules(IReadOnlyList<DictRow> rows)
+    {
+        for (var i = 0; i < rows.Count; i++)
+        {
+            if (rows[i]["Parametr"] == ProjectSettings.ActualsAmount && rows[i]["Wartość"] is { } value
+                && !ProjectSettings.ActualsAmounts.Any(a => string.Equals(a.Field, value, StringComparison.OrdinalIgnoreCase)))
+                yield return Issue.Error($"{ProjectSettings.ActualsAmount} – jedno z pól: {string.Join(", ", ProjectSettings.ActualsAmounts.Select(a => a.Field))}",
+                    DictionaryValidator.RowElement(i));
+        }
+    }
+
+    /// <summary>Pole kwoty ACTUALS z wierszy słownika „Parametry projektu” (brak – ValueObjCrcy).</summary>
+    public static string ActualsAmount(IEnumerable<DictRow> settings) =>
+        ProjectSettings.ActualsAmountOf(settings.FirstOrDefault(r => r["Parametr"] == ProjectSettings.ActualsAmount)?["Wartość"]);
 
     /// <summary>docs/slowniki.md, rozdz. 5.6 (powtórzona kombinacja – klucz słownika).</summary>
     private static IEnumerable<Issue> ExclusionRules(IReadOnlyList<DictRow> rows)

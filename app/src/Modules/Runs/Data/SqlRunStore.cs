@@ -1,5 +1,6 @@
 using Dapper;
 using PzlEv.Shared.Models.Db;
+using PzlEv.Shared.Models.Dictionaries;
 using PzlEv.Shared.Models.Pipeline;
 using PzlEv.Shared.Utils.Data.Sql;
 
@@ -17,7 +18,7 @@ public sealed class SqlRunStore(SqlDatabase db) : IRunStore
 
     private string PinColumns =>
         "p.PinId, p.RunId, r.Code, r.Project, p.PinNo, p.StartedAt, p.StartedBy, p.FinishedAt, p.Status, p.ImportBatchId, p.Rows, p.GrossCost, p.Balance, " +
-        "p.Errors, p.Warnings, p.Summary";
+        "p.Errors, p.Warnings, p.Summary, p.AmountField";
 
     private string PinFrom => $"{_pins} p JOIN {_runs} r ON r.RunId = p.RunId";
 
@@ -53,10 +54,10 @@ public sealed class SqlRunStore(SqlDatabase db) : IRunStore
             return connection.QuerySingle<RunPinRow>($"SELECT {PinColumns} FROM {PinFrom} WHERE p.PinId = @pinId", new { pinId }, transaction);
         });
 
-    public IReadOnlyList<RunBalanceRow> PinBalance(string project, long pinId)
+    public IReadOnlyList<RunBalanceRow> PinBalance(string project, long pinId, string amountField)
     {
         using (var connection = db.Open())
-            connection.Execute(db.Table("run.PinBalance"), new { Project = project, PinId = pinId },
+            connection.Execute(db.Table("run.PinBalance"), new { Project = project, PinId = pinId, Value = amountField },
                 commandType: System.Data.CommandType.StoredProcedure, commandTimeout: LongTimeout);
         return Balance(pinId);
     }
@@ -155,5 +156,13 @@ public sealed class SqlRunStore(SqlDatabase db) : IRunStore
         using var connection = db.Open();
         return connection.Query<string>($"SELECT SourceCode FROM {db.Table("dict.ProjectSource")} WHERE Project = @project AND SupersededAt IS NULL", new { project })
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
+    }
+
+    public string ActualsAmount(string project)
+    {
+        using var connection = db.Open();
+        return ProjectSettings.ActualsAmountOf(connection.QueryFirstOrDefault<string?>(
+            $"SELECT Value FROM {db.Table("dict.ProjectSetting")} WHERE Project = @project AND Name = @name AND SupersededAt IS NULL",
+            new { project, name = ProjectSettings.ActualsAmount }));
     }
 }
