@@ -11,7 +11,8 @@ namespace PzlEv.Modules.Projects.ViewModels;
 
 /// <summary>
 /// Edycja nakładki Performance Objectives (kreator, krok 2; ekran Projekt): wczytanie eksportu SAP, elementy CES
-/// i węzły wirtualne, zmiana nazw, przenoszenie (przeciąganie, strzałki, poziom wyżej), usuwanie.
+/// i węzły wirtualne, zmiana nazw, przenoszenie (przeciąganie, strzałki, na początek / koniec, poziom wyżej,
+/// „Przenieś do” i grupowanie kilku zaznaczonych), zwijanie drzewa, usuwanie.
 /// </summary>
 public sealed class PoEditorViewModel : ObservableObject
 {
@@ -30,6 +31,8 @@ public sealed class PoEditorViewModel : ObservableObject
     private string _status = "";
     private bool _isDirty;
     private string _mappingInfo = "";
+    private readonly HashSet<long> _collapsed = [];   // węzły zwinięte (dzieci ukryte w tabeli)
+    private IReadOnlyList<PoRowViewModel> _selectedRows = [];
 
     /// <param name="validate">Kontrola nakładki w pamięci (bez bazy – wywoływana po każdej zmianie).</param>
     /// <param name="fromImport">Nakładka po wczytaniu pliku: (bieżąca, wczytana) → wynik (kreator – wczytana; projekt – odświeżenie).</param>
@@ -47,6 +50,12 @@ public sealed class PoEditorViewModel : ObservableObject
         ApplyEdit = new RelayCommand(_ => DoApplyEdit(), _ => (_selected is not null) && !_busy.IsBusy);
         Up = new RelayCommand(_ => Change(() => _tree.Shift(_selected!.Key, -1), null), _ => (_selected is not null) && !_busy.IsBusy);
         Down = new RelayCommand(_ => Change(() => _tree.Shift(_selected!.Key, 1), null), _ => (_selected is not null) && !_busy.IsBusy);
+        Top = new RelayCommand(_ => Change(() => _tree.ShiftToEdge(_selected!.Key, first: true), null), _ => (_selected is not null) && !_busy.IsBusy);
+        Bottom = new RelayCommand(_ => Change(() => _tree.ShiftToEdge(_selected!.Key, first: false), null), _ => (_selected is not null) && !_busy.IsBusy);
+        GroupSelected = new RelayCommand(_ => DoGroup(), _ => SelectedKeys.Count > 0 && !_busy.IsBusy);
+        CollapseAll = new RelayCommand(_ => { _collapsed.UnionWith(_tree.Nodes.Where(n => _tree.Children(n.Key).Count > 0).Select(n => n.Key)); Rebuild(_selected?.Key); },
+            _ => _tree.Nodes.Count > 0);
+        ExpandAll = new RelayCommand(_ => { _collapsed.Clear(); Rebuild(_selected?.Key); }, _ => _collapsed.Count > 0);
         Outdent = new RelayCommand(_ => Change(() => _tree.Outdent(_selected!.Key), null), _ => (_selected?.Node.ParentKey is not null) && !_busy.IsBusy);
         Remove = new RelayCommand(_ => Change(() => _tree.Remove(_selected!.Key), "Usunięto węzeł – jego elementy przeszły poziom wyżej."), _ => (_selected is not null) && !_busy.IsBusy);
         Clear = new RelayCommand(_ => Change(_tree.Clear, "Wyczyszczono nakładkę."), _ => (_tree.Nodes.Count > 0) && !_busy.IsBusy);
@@ -83,7 +92,9 @@ public sealed class PoEditorViewModel : ObservableObject
         }
     }
 
-    public string SelectionText => _selected is null
+    public string SelectionText => _selectedRows.Count > 1
+        ? $"Zaznaczono {_selectedRows.Count} – prawy przycisk myszy: „Przenieś do” albo „Grupuj w nowy węzeł”."
+        : _selected is null
         ? "Nic nie zaznaczono – nowe węzły trafią do korzenia."
         : $"Zaznaczony: {_selected.Name}{(_selected.IsVirtual ? " (węzeł wirtualny)" : $" ({_selected.WbsElement})")} – nowe węzły trafią pod niego.";
 
@@ -111,6 +122,56 @@ public sealed class PoEditorViewModel : ObservableObject
     public ICommand ApplyEdit { get; }
     public ICommand Up { get; }
     public ICommand Down { get; }
+    public ICommand Top { get; }
+    public ICommand Bottom { get; }
+    public ICommand GroupSelected { get; }
+    public ICommand CollapseAll { get; }
+    public ICommand ExpandAll { get; }
+
+    /// <summary>Wiersze zaznaczone w tabeli (Ctrl / Shift – kilka); przenoszenie „Przenieś do” i grupowanie.</summary>
+    public IReadOnlyList<PoRowViewModel> SelectedRows
+    {
+        get => _selectedRows;
+        set { _selectedRows = value; OnPropertyChanged(nameof(SelectionText)); }
+    }
+
+    /// <summary>Klucze zaznaczonych wierszy (bez zaznaczenia wielu – wiersz wybrany).</summary>
+    public IReadOnlyList<long> SelectedKeys =>
+        _selectedRows.Count > 0 ? _selectedRows.Select(r => r.Key).ToList() : _selected is null ? [] : [_selected.Key];
+
+    /// <summary>
+    /// Cele „Przenieś do”: najwyższy poziom (null) i węzły wirtualne (z wcięciem), pod które można przenieść
+    /// wszystkie zaznaczone wiersze.
+    /// </summary>
+    public IReadOnlyList<(long? Key, string Label)> MoveTargets()
+    {
+        var keys = SelectedKeys;
+        var targets = new List<(long?, string)> { (null, "Najwyższy poziom") };
+        targets.AddRange(_tree.Flatten()
+            .Where(x => x.Node.IsVirtual && keys.All(k => _tree.CanMove(k, x.Node.Key)))
+            .Select(x => ((long?)x.Node.Key, new string(' ', x.Depth * 4) + x.Node.Name)));
+        return targets;
+    }
+
+    /// <summary>„Przenieś do”: zaznaczone wiersze (z poddrzewami) na koniec dzieci węzła (null – najwyższy poziom).</summary>
+    public void MoveSelectedTo(long? parentKey)
+    {
+        if (_busy.IsBusy)
+            return;
+        var keys = SelectedKeys;
+        var target = parentKey is { } k ? _tree.Find(k)?.Name : "najwyższy poziom";
+        var moved = 0;
+        Change(() => moved = _tree.MoveAll(keys, parentKey), null);
+        Status = moved == 0 ? $"Nic nie przeniesiono – zaznaczone są już w „{target}”." : $"Przeniesiono {moved} do „{target}”.";
+    }
+
+    /// <summary>Zwinięcie / rozwinięcie dzieci węzła.</summary>
+    public void Toggle(PoRowViewModel row)
+    {
+        if (!_collapsed.Remove(row.Key))
+            _collapsed.Add(row.Key);
+        Rebuild(_selected?.Key);
+    }
     public ICommand Outdent { get; }
     public ICommand Remove { get; }
     public ICommand Clear { get; }
@@ -173,6 +234,18 @@ public sealed class PoEditorViewModel : ObservableObject
         }
     }
 
+    /// <summary>Nowy węzeł wirtualny w miejscu pierwszego zaznaczonego, z zaznaczonymi jako dziećmi; zaznaczony – do nadania nazwy.</summary>
+    private void DoGroup()
+    {
+        var keys = SelectedKeys;
+        PoNode? group = null;
+        Change(() => group = _tree.Group(keys, "Nowy węzeł"), null);
+        if (group is null)
+            return;
+        Rebuild(group.Key);
+        Status = $"Zgrupowano {_tree.Children(group.Key).Count} w nowym węźle – wpisz nazwę i kliknij „Zmień zaznaczony”.";
+    }
+
     private void DoApplyEdit()
     {
         var node = _selected!.Node;
@@ -212,8 +285,18 @@ public sealed class PoEditorViewModel : ObservableObject
     private void Rebuild(long? selectKey)
     {
         Rows.Clear();
+        _collapsed.RemoveWhere(k => _tree.Find(k) is null);
+        var children = _tree.Nodes.Where(n => n.ParentKey is not null).GroupBy(n => n.ParentKey!.Value).ToDictionary(g => g.Key, g => g.Count());
+        var hiddenBelow = int.MaxValue;   // głębokość zwiniętego przodka – głębsze wiersze ukryte
         foreach (var (node, depth) in _tree.Flatten())
-            Rows.Add(new PoRowViewModel(node, depth));
+        {
+            if (depth > hiddenBelow)
+                continue;
+            var collapsed = _collapsed.Contains(node.Key) && children.ContainsKey(node.Key);
+            hiddenBelow = collapsed ? depth : int.MaxValue;
+            Rows.Add(new PoRowViewModel(node, depth, children.GetValueOrDefault(node.Key), collapsed));
+        }
+        _selectedRows = [];
         Selected = Rows.FirstOrDefault(r => r.Key == selectKey);
         Validate();
         OnPropertyChanged(nameof(Summary));
