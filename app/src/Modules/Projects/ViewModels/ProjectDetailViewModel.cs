@@ -74,6 +74,7 @@ public sealed class ProjectDetailViewModel : ObservableObject, IDisposable
         Back = new RelayCommand(_ => { if (StructureSettled("powrotem do listy")) back(); }, _ => !Busy.IsBusy);
         AddFromExcel = new AsyncRelayCommand(DoAddFromExcel, () => !Busy.IsBusy);
         ExportCostReport = new AsyncRelayCommand(DoExportCostReport, () => !Busy.IsBusy);
+        ExportCasCostReport = new AsyncRelayCommand(DoExportCasCostReport, () => !Busy.IsBusy);
         ExportStructure = new AsyncRelayCommand(DoExportStructure, () => _structure is not null && !Busy.IsBusy);
         ImportStructure = new AsyncRelayCommand(DoImportStructure, () => _structure is not null && !Busy.IsBusy);
         ExportDictionaries = new AsyncRelayCommand(DoExportDictionaries, () => !Busy.IsBusy);
@@ -345,6 +346,11 @@ public sealed class ProjectDetailViewModel : ObservableObject, IDisposable
     public ICommand SaveObjectives { get; }
     public ICommand CancelObjectives { get; }
     public ICommand ExportCostReport { get; }
+
+    /// <summary>Raport kosztów CES z narzutami CAS w formułach (zakładka Raporty – tylko projekty CAS).</summary>
+    public ICommand ExportCasCostReport { get; }
+
+    public bool IsCas => Project.Type == ProjectTypes.Cas;
     public ICommand ExportStructure { get; }
 
     /// <summary>„Wczytaj strukturę z Excela” – WP, CAM, Cost Category, budżet i daty z arkusza „Struktura” uzupełnionego ręcznie.</summary>
@@ -651,6 +657,20 @@ public sealed class ProjectDetailViewModel : ObservableObject, IDisposable
         {
             var rows = await Busy.Run("Raport kosztów – ostatni import ACTUALS projektu…", () => _service.ExportCostReport(path, Code));
             Status = $"Zapisano {path} – {rows} wierszy (Project definition × Cost Element).";
+        });
+    }
+
+    /// <summary>Raport kosztów CES do Excela: raport kosztów z narzutami CAS liczonymi formułami (ProjectService.ExportCasCostReport).</summary>
+    private async Task DoExportCasCostReport()
+    {
+        var path = _dialogs.SaveExcel("Raport kosztów CES", $"{Code}_koszty_CES.xlsx");
+        if (path is null)
+            return;
+        await Try(async () =>
+        {
+            var (rows, notes) = await Busy.Run("Raport kosztów CES – ostatni import ACTUALS i narzuty CAS…", () => _service.ExportCasCostReport(path, Code));
+            Status = $"Zapisano {path} – {rows} wierszy (Project definition × Cost Element)"
+                     + (notes > 0 ? $"; uwagi: {notes} (arkusz „Uwagi” – brak grupy narzutowej albo wskaźnika)." : ".");
         });
     }
 

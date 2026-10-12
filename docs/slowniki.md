@@ -62,7 +62,9 @@ Słowniki, kreator projektu), `docs/zrodla-danych.md` (struktura P1S).
 | Kalendarz okresów | okres (`RRRR-MM`); tygodnie okresu (numer, od – do); oznaczenie tygodnia zamykającego okres | tydzień | przebieg: okres i czy zamyka okres (P0); nazwy plików |
 | Stawki wydziałów | `MPK` (miejsce powstawania kosztów), `Department` (opis MPK, opcjonalny), `Year`, `Labor Rate`, `Overhead` (opcjonalny) | `MPK` + `Year` | łączenie źródeł – godziny na koszt (P3) |
 | Kursy walut | waluta, okres, kurs (USD / PLN) | waluta + okres | przeliczenia walut (P3, P8) |
-| Cost Category | numer elementu kosztowego → Opis, Obszar, Cost Category (rozdz. 6) | numer elementu kosztowego | walidacja (P2), łączenie źródeł (P3) |
+| Cost Category | numer elementu kosztowego → Opis, Obszar, Cost Category, Rozliczeniowy, Grupa narzutowa CAS (rozdz. 6) | numer elementu kosztowego | walidacja (P2), łączenie źródeł (P3), raport kosztów CES |
+| Grupy narzutowe CAS | grupa narzutowa → pule narzutu CAS naliczane na koszt elementu kosztowego (17 pól tak / nie) i `Koszt bazowy w podstawie GS i G&A` (rozdz. 6.1) | grupa | raport kosztów CES |
+| Wskaźniki narzutu CAS | pula → `Wskaźnik` obowiązujący `Od` – `Do` (zwykle rok; `Do` puste – bezterminowo) (rozdz. 6.1) | pula + `Od` | raport kosztów CES |
 | Osoby | pracownicy z HR – „Dodaj z HR” (PZLHRPROD `HR.ORG`, osoby z niepustym `USRID`): okno szukania po USRID, PERNR, imieniu i nazwisku, e-mailu, dziale; „Dodaj” przy wyniku odkłada osobę na listę, „Zatwierdź” – podgląd z samymi nowymi osobami (nic nie jest usuwane): USRID (numer znaczka, login), imię i nazwisko, imię, nazwisko, e-mail, MPK (`KOSTL`), dział (`SHORT`, `LONG`), stanowisko (`STEXT`), pion, manager, PERNR | USRID | wybór CAM w strukturze projektu i słowniku „WP i CAM” (zapisywany USRID) |
 | Wskaźniki DJK | prefiks grupy stanowisk (IPT, np. `W2`, `W51`) → `Udział DJK` (0–1) – godziny jakości doliczane do godzin TECH / TECH_PON; liczy się najdłuższy pasujący prefiks; dane startowe (migracja 023): W2–W4 10%, W5 15%, W6 20% | grupa stanowisk | Operational EV struktury projektu (`docs/zrodla-danych.md`, rozdz. 6) |
 | Parametry produkcji | `Okno produktywności IPT (mies.)` (12), `Statusy materiałów dostarczonych` (DOST, WYD), `Wartość materiałów ÷ (1 + Z_CLO)` (tak); puste słowniki – wartości raportu S70MR (informacja na ekranie projektu) | parametr | odczyt danych produkcyjnych (`sql/pzlprod/produkcja.sql`) |
@@ -166,6 +168,9 @@ Kontekst biznesowy typów – `readme.md`.
 | numer elementu kosztowego unikalny w słowniku (globalnym / zmianach projektu); zapisywany jako tekst – numer liczbowy uzupełniany zerami do 10 znaków | ERROR |
 | numer w słowniku bez Cost Category | WARNING |
 
+| „Grupa narzutowa CAS” spoza słownika „Grupy narzutowe CAS” albo pusta | uwaga w raporcie kosztów CES (wiersz bez narzutów) |
+| „Wskaźniki narzutu CAS”: pula z listy, `Od` wymagane, `Wskaźnik` ≥ 0; okresy `Od`–`Do` jednej puli bez nakładania | ERROR |
+
 ### 5.6 Wykluczenia
 
 | Reguła | Poziom |
@@ -215,6 +220,42 @@ wpisu w Cost Category) – `docs/pipeline-fazy.md`, P2.
 - Numer elementu kosztowego z kosztów projektu bez wpisu w słowniku efektywnym naprawia się dodaniem pozycji
   w słowniku projektu.
 
+### 6.1 Narzuty CAS – raport kosztów CES
+
+W projektach CAS na koszty Cost Elementów (także suche koszty – materiały, usługi, podróże) nakładane są narzuty CAS:
+te same wskaźniki dla wszystkich projektów, zmienne w czasie. Reguła odwzorowuje arkusz finansów (formuły narzutów
+po Cost Elementach dla lat 2025–2026):
+
+- **Mapowanie:** kolumna „Grupa narzutowa CAS” słownika Cost Category – globalnie, ze zmianą w projekcie jak pozostałe
+  kolumny (słownik efektywny). Grupy nie da się wywnioskować z Cost Category: np. „Engineering labor” to ENG labor
+  (ENG Fringe + ENG OH) albo ENG LL labor (praca leasingowana – bez ENG Fringe).
+- **Grupy narzutowe CAS** (dane startowe – migracja 030): MFG labor, ENG labor, ENG LL labor, MSV labor, GS labor,
+  MTL labor, Direct Materials, Direct Services, Travel, ODC (bez narzutów); grupa zaznacza naliczane pule.
+- **Pule** (kolejność kolumn raportu): MFG Fringe, MFG OH, ENG Fringe, ENG OH, MTL Fringe, Material Handling (MTL),
+  Miscellaneous Material Pool (MMP), General Services (GS), GS Fringe, MSV Fringe, General & Administrative (GA),
+  Corporate Flowdowns (FD) – sumowane w `TOTAL COST` z kosztem bazowym; FCCOM MFG, FCCOM ENG, FCCOM MTL, FCCOM GS,
+  FCCOM G&A – w `TOTAL FCCOM`.
+- **Podstawy pul** (wspólne dla grup – kaskada):
+
+| Pula | Podstawa |
+|---|---|
+| Fringe, Material Handling, MMP, FCCOM MTL | koszt bazowy |
+| MFG OH, FCCOM MFG / ENG OH, FCCOM ENG | koszt + MFG Fringe / koszt + ENG Fringe |
+| GS | koszt + Fringe (MFG, ENG, GS, MSV, MTL) + OH + Material Handling (bez MMP) |
+| FCCOM GS | jak GS; MTL Fringe tylko w grupie, która go nalicza |
+| G&A, FD, FCCOM G&A | podstawa GS + GS; MTL Fringe tylko w grupie, która go nalicza |
+| grupa z `Koszt bazowy w podstawie GS i G&A` = nie (Direct Materials, Direct Services) | GS, FCCOM GS – Material Handling; G&A, FD, FCCOM G&A – Material Handling + GS |
+
+- **Wskaźnik kolumny:** kolumna okresu (`Period MM/RRRR`) – wskaźnik obowiązujący w tym miesiącu; kolumna roku –
+  w ostatnim miesiącu roku z danymi (bieżący rok – do ostatniego okresu danych). Projekt z kosztami z kilku lat ma
+  blok na każdy rok, każdy z wskaźnikami swojego roku. Wskaźnik zmieniony w trakcie roku albo brak wskaźnika
+  naliczanej puli – uwaga w raporcie (arkusz „Uwagi”; brak wskaźnika = narzut 0).
+- **Raport** (ekran Projekt, zakładka Raporty, „Raport kosztów CES (Excel)” – projekty CAS): wiersze i kolumny kosztu
+  raportu kosztów (`docs/model-danych.md`, migracja 013) + kolumna „Grupa narzutowa CAS”, potem blok na każdą kolumnę
+  kosztu: 17 pul, `TOTAL COST …`, `TOTAL FCCOM …`. Narzuty to **formuły Excela** odwołujące się do kosztu wiersza
+  i wiersza wskaźników nad nagłówkiem – zmiana wskaźnika albo kosztu w pliku przelicza raport. Arkusz „Wskaźniki” –
+  użyte wskaźniki z okresem obowiązywania.
+
 ---
 
 ## 7. Wykluczenia
@@ -244,7 +285,7 @@ Wyklucza się po kombinacji trzech pól z raportu kosztów CES (`docs/zrodla-dan
 | O9 | Los istniejących tabel słownikowych w `PZLPROD.LOG` (`Stanowiska`, `LearningCurve`, `PeriodDates`, `EmployeesHist`) – do ustalenia z właścicielami |
 | O18 | Numeracja tygodni w kalendarzu okresów (ISO czy wewnętrzna) |
 | O25 | Numer elementu kosztowego bez wpisu w Cost Category: ERROR (dziś) czy WARNING? |
-| O37 | Jakie stawki CAS są wykorzystywane i w jakim układzie |
+| O37 | Jakie stawki CAS są wykorzystywane i w jakim układzie – narzuty CAS na koszty Cost Elementów: słowniki globalne (rozdz. 6.1); otwarte: słownik projektu „Stawki CAS” i przeliczenie w przebiegu |
 | O48 | Wykluczenia: na którym etapie analizy są stosowane i jak wykazywany jest wykluczony koszt |
 
 ## Załącznik A. Początkowa zawartość słownika Cost Category
