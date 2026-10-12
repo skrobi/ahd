@@ -52,7 +52,10 @@ Powiązane: `docs/funkcjonalnosc.md` (F01 – kreator projektu), `docs/zrodla-da
   jest odrzucany przy wczytaniu i zapisie (ERROR z kodem projektu, który go ma).
 - **Elementy w strukturze:** przenoszenie z poddrzewem (przeciągnięcie na inny węzeł albo na korzeń, zmiana kolejności:
   wyżej / niżej / na początek / na koniec rodzeństwa, poziom wyżej); usunięcie węzła przenosi jego elementy poziom
-  wyżej. Level jest przeliczany z głębokości drzewa. W edytorze: zwijanie węzłów (▸ / ▾, „Zwiń wszystko”, „Rozwiń
+  wyżej. Level jest przeliczany z głębokości drzewa. W edytorze: wszystkie polecenia na jednym pasku nad tabelą
+  (wczytaj Excel, wyczyść, + węzeł wirtualny, + element CES, grupuj, kolejność, usuń, zwiń / rozwiń); nazwa, Element CES
+  (bez węzłów wirtualnych) i P1S zmienia się w komórkach tabeli (dwuklik, F2 albo pisanie; Enter zatwierdza, Esc
+  anuluje; pusta nazwa – bez zmiany), nowy węzeł zaczyna od edycji nazwy; zwijanie węzłów (▸ / ▾, „Zwiń wszystko”, „Rozwiń
   wszystko”), zaznaczenie kilku wierszy (Ctrl / Shift) i menu prawego przycisku myszy – „Przenieś do” (najwyższy poziom
   albo węzeł wirtualny; zaznaczone trafiają na koniec jego elementów w kolejności drzewa), „Grupuj w nowy węzeł” (nowy
   węzeł wirtualny w miejscu pierwszego zaznaczonego z zaznaczonymi jako elementami), kolejność, zwijanie.

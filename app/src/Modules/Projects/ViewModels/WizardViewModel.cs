@@ -180,6 +180,7 @@ public sealed class WizardViewModel : ObservableObject
 
     private void GoTo(int step)
     {
+        Objectives.CommitEdits();
         _step = Math.Clamp(step, 0, StepTitles.Count - 1);
         Steps.Clear();
         for (var i = 0; i < StepTitles.Count; i++)
