@@ -122,8 +122,7 @@ Lista kontrolna na ekranie projektu:
   być otwarta do końca przebiegu): import źródeł projektu, przypięcie danych ACTUALS projektu, kontrole danych
   (`docs/pipeline-fazy.md`, rozdz. 4.1). Przebieg = projekt + tydzień; kolejne uruchomienie w tym samym tygodniu to
   nowe przypięcie tego przebiegu. Jeden przebieg projektu naraz (blokada `run-<Projekt>`, także między komputerami).
-- Po zakończeniu: powiadomienie systemowe Windows i e-mail przez Outlook użytkownika (adres ze słownika Osoby,
-  bez niego – konto Outlooka) z listą błędów i ostrzeżeń; stan na liście projektów i w zakładce **Przebiegi**
+- Po zakończeniu: powiadomienie systemowe Windows z liczbą błędów i ostrzeżeń; stan na liście projektów i w zakładce **Przebiegi**
   projektu (uruchomienia i wyniki kontroli wybranego uruchomienia).
 - Ekran przebiegu: kroki (Przygotowanie przebiegu, Walidacja, Uzgodnienie, Przegląd finansów, Zaawansowanie,
   Obliczenie i przegląd, Publikacja, Zamrożenie) z etapami P0–P9 i Z (`docs/pipeline-fazy.md`, rozdz. 4);

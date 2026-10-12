@@ -41,7 +41,4 @@ public interface IRunStore
 
     /// <summary>Definicje źródeł ze słownika projektu „Źródła danych”.</summary>
     IReadOnlySet<string> ProjectSources(string project);
-
-    /// <summary>E-mail osoby ze słownika Osoby (USRID); null – brak.</summary>
-    string? Email(string usrid);
 }

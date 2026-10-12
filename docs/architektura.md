@@ -163,7 +163,7 @@ modułu i `Shared/Models`; Excel, File Connectors, SQL Access – `Shared/Utils`
   (`INavigator`, `ModuleKeys`) albo kontrakt w `Shared`: moduł rejestruje implementację w `Initialize`
   (`AppServices.Contracts`), inny pobiera ją przy użyciu – np. `ISourceImport` (moduł Import) dla „Importuj źródła
   projektu” i przebiegu, `IRunLauncher` (moduł Przebiegi) dla „Uruchom przebieg” i listy projektów (moduł Projekty);
-  powiadomienia – `Shared/Utils/Ui/Notifications` (Windows, Outlook),
+  powiadomienia – `Shared/Utils/Ui/Notifications` (Windows),
 - silnik EVM zależy wyłącznie od modeli (rozdz. 5.1).
 
 **Warstwa danych.** Aplikacja pracuje wyłącznie na bazie MS SQL środowiska (`pzl-ev.json`, rozdz. 8). Moduł korzysta

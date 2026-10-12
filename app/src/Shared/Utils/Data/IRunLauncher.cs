@@ -5,7 +5,7 @@ namespace PzlEv.Shared.Utils.Data;
 /// <summary>
 /// Uruchomienie przebiegu projektu w tle – kontrakt modułu Przebiegi dla innych modułów (ekran projektu). Rejestruje
 /// go moduł Przebiegi (AppServices.Contracts). Wynik zapisuje się w bazie (meta.RunPin, run.Issue); po zakończeniu –
-/// powiadomienie Windows i e-mail (Outlook).
+/// powiadomienie Windows.
 /// </summary>
 public interface IRunLauncher
 {
