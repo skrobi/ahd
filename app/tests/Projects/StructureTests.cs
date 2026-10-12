@@ -1,7 +1,10 @@
+using ClosedXML.Excel;
 using PzlEv.Modules.Projects.Models;
 using PzlEv.Modules.Projects.Services;
 using PzlEv.Shared.Models.Dictionaries;
+using PzlEv.Shared.Models.Pipeline;
 using PzlEv.Shared.Models.PzlProd;
+using PzlEv.Shared.Utils.Files;
 using PzlEv.Tests.TestSupport;
 using Xunit;
 
@@ -315,6 +318,56 @@ public sealed class StructureTests
         // Wiersz bez WP w poddrzewie – budżet pusty (nie 0).
         var empty = rows[structure.Rows.ToList().FindIndex(r => r.Wps.Count == 0)];
         Assert.Null(empty[header.IndexOf("BAC Hours baseline")]);
+    }
+
+    /// <summary>Pobrana struktura uzupełniona w Excelu i wczytana: tylko wyróżnione kolumny, puste komórki bez zmiany.</summary>
+    [Fact]
+    public void Structure_file_filled_in_excel_gives_wp_cam_and_budget_changes()
+    {
+        DictRow[] wpCam = [Row(("Element P1S", "XYZ-1"), ("WP", "WP-1"), ("CAM", "e123456"), ("Cost Category", "Production"))];
+        DictRow[] schedule = [Budget("WP-1", "10", "100", "2026-01-01", "2026-06-30", "1000")];
+        var structure = ProjectService.Structure(Objectives(), Inputs(), wpCam, schedule);
+        var persons = new List<LookupOption> { new("e123456", "Anna Nowak"), new("e777", "Jan Kowalski") };
+        var path = Path.Combine(Directory.CreateTempSubdirectory("pzl-ev-structure-").FullName, "M28_struktura.xlsx");
+        ExcelTableWriter.WriteTemplate(path, [("Struktura", ProjectService.StructureSheetColumns(persons), ProjectService.StructureRows(structure, persons))]);
+        var other = structure.Rows.First(r => r.P1s is not null && r.Wp is null && r.P1s != "AC-CAB.9.01");
+
+        using (var workbook = new XLWorkbook(path))
+        {
+            var sheet = workbook.Worksheet("Struktura");
+            var header = ProjectService.StructureHeaders.ToList();
+            Assert.Equal(XLColor.FromHtml("#FFF2CC"), sheet.Cell(1, header.IndexOf("WP") + 1).Style.Fill.BackgroundColor);   // do uzupełnienia
+            IXLCell Cell(string p1s, string column) =>
+                sheet.Cell(sheet.RowsUsed().Single(r => r.Cell(header.IndexOf("Legacy Element (P1S)") + 1).GetString() == p1s).RowNumber(), header.IndexOf(column) + 1);
+            Cell("AC-CAB.9.01", "WP").Value = "x";                      // nowy WP z CAM, budżetem i datami
+            Cell("AC-CAB.9.01", "CAM").Value = "e777";
+            Cell("AC-CAB.9.01", "BAC Hours baseline").Value = 20;
+            Cell("AC-CAB.9.01", "BAC Cost").Value = "1 500,50";
+            Cell("AC-CAB.9.01", "Baseline Start").Value = new DateTime(2026, 2, 1);
+            Cell("XYZ-1", "BAC Hours baseline").Value = 12;             // zmiana budżetu istniejącego WP; reszta bez zmian
+            Cell("XYZ-1", "BAC Material").Value = "abc";                // błędna liczba – komórka pominięta
+            Cell(other.P1s!, "BAC Hours baseline").Value = 5;           // bez WP – pominięte
+            Cell(other.P1s!, "ACWP").Value = 999;                       // kolumna niewczytywana
+            var last = sheet.LastRowUsed()!.RowNumber() + 1;
+            sheet.Cell(last, header.IndexOf("Legacy Element (P1S)") + 1).Value = "NIE-MA";
+            sheet.Cell(last, header.IndexOf("WP") + 1).Value = "x";
+            workbook.Save();
+        }
+
+        var result = StructureImport.Read(TabularFileReader.Read(path, "Struktura"), structure, schedule);
+
+        var added = result.Edits.Single(e => e.Row.P1s == "AC-CAB.9.01").Changes;
+        Assert.Equal(("true", "e777", "20", "1500.5", "2026-02-01"),
+            (added[StructureEdits.Wp], added[StructureEdits.Cam], added[StructureEdits.BacHours], added[StructureEdits.Bac], added[StructureEdits.Start]));
+        Assert.False(added.ContainsKey(StructureEdits.Finish));      // pusta komórka – bez zmiany
+        var changed = result.Edits.Single(e => e.Row.P1s == "XYZ-1").Changes;
+        Assert.Equal(["BacHours"], changed.Keys);                    // CAM, Cost Category, pozostały budżet – bez zmian
+        Assert.Equal("12", changed[StructureEdits.BacHours]);
+        Assert.Equal(2, result.Edits.Count);
+        Assert.Contains(result.Issues, i => i.Level == CheckLevel.Error && i.Message.StartsWith("BAC Material „abc”"));
+        Assert.Contains(result.Issues, i => i.Level == CheckLevel.Warning && i.Message.StartsWith($"BAC Hours baseline przy elemencie {other.P1s} bez WP"));
+        Assert.Contains(result.Issues, i => i.Level == CheckLevel.Warning && i.Message.StartsWith("Elementu P1S NIE-MA nie ma w strukturze"));
+        Assert.Equal((1, 1), (result.Count(StructureEdits.Wp), result.Count(StructureEdits.Cam)));
     }
 
     [Fact]

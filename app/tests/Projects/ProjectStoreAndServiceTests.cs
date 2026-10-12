@@ -438,6 +438,42 @@ public sealed class ProjectStoreAndServiceTests : IDisposable
         Assert.Empty(_service.Rows(ProjectDictionaries.ScheduleBudget, "M28"));
     }
 
+    /// <summary>Struktura pobrana do Excela, uzupełniona (WP, budżet, daty) i wczytana jednym plikiem – zapis do obu słowników.</summary>
+    [SqlFact]
+    public void Structure_file_filled_in_excel_saves_wp_and_schedule()
+    {
+        Assert.True(_store.Create("M28", "M28", ProjectTypes.Internal, Objectives()).Success);
+        var inputs = _service.Mapping();
+        ProjectStructure Read() => ProjectService.Structure(_store.Objectives("M28"), inputs,
+            _service.Rows(ProjectDictionaries.WpCam, "M28"), _service.Rows(ProjectDictionaries.ScheduleBudget, "M28"));
+        var free = Read().Rows.Where(r => r.P1s is not null && r.Wps.Count == 0 && !r.HasChildren).Take(2).ToList();
+        Assert.Equal(2, free.Count);
+        var path = Path.Combine(_root, "M28_struktura.xlsx");
+        _service.ExportStructure(path, "M28", Read(), []);
+        using (var workbook = new ClosedXML.Excel.XLWorkbook(path))
+        {
+            var sheet = workbook.Worksheet("Struktura");
+            var header = ProjectService.StructureHeaders.ToList();
+            foreach (var (row, hours) in free.Zip(new[] { 10, 20 }))
+            {
+                var line = sheet.RowsUsed().Single(r => r.Cell(header.IndexOf("Legacy Element (P1S)") + 1).GetString() == row.P1s).RowNumber();
+                sheet.Cell(line, header.IndexOf("WP") + 1).Value = "x";
+                sheet.Cell(line, header.IndexOf("BAC Hours baseline") + 1).Value = hours;
+                sheet.Cell(line, header.IndexOf("Baseline Start") + 1).Value = new DateTime(2026, 3, 1);
+            }
+            workbook.Save();
+        }
+
+        var file = _service.ReadStructureFile(path, "M28", Read());
+        Assert.Equal(2, file.Edits.Count);
+        Assert.All(_service.SaveStructureEdits("M28", inputs, file.Edits), r => Assert.True(r.Saved, r.Message));
+
+        Assert.Equal(free.Select(r => r.P1s).Order(), _service.Rows(ProjectDictionaries.WpCam, "M28").Select(r => r["WP"]).Order());
+        var schedule = _service.Rows(ProjectDictionaries.ScheduleBudget, "M28").OrderBy(r => r["BAC HOURS"]).ToList();
+        Assert.Equal([("10", "2026-03-01"), ("20", "2026-03-01")], schedule.Select(r => (r["BAC HOURS"], r["Baseline Start"])));
+        Assert.Empty(_service.ReadStructureFile(path, "M28", Read()).Edits);   // ponowne wczytanie – bez zmian
+    }
+
     [SqlFact]
     public void Structure_edit_is_not_blocked_by_existing_errors_and_legacy_wbs_with_wp_uses_new_code()
     {
