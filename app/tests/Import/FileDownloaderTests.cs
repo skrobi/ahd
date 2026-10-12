@@ -54,7 +54,7 @@ public sealed class FileDownloaderTests : IDisposable
         using var downloader = new FileDownloader(Path.Combine(_root, "pobrane"));
 
         string folder;
-        using (var local = downloader.Download(new ImportLocation("Do_importu", file.DirectoryName!, true, file.DirectoryName!), file,
+        using (var local = downloader.Download(new ImportLocation("Do_importu", file.DirectoryName!, true, file.DirectoryName!), SourceFile.From(file),
                    (text, final) => details.Add((text, final)), CancellationToken.None))
         {
             Assert.Equal((FileDownloader.Copy, Sha(_content), (long)_content.Length), (local.Method, local.Sha256, local.Size));
@@ -74,7 +74,7 @@ public sealed class FileDownloaderTests : IDisposable
         var handler = new Handler(_ => new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(_content) });
         using var downloader = new FileDownloader(Path.Combine(_root, "pobrane"), handler, _ => "MRHSession=abc; FedAuth=xyz");
 
-        using var local = downloader.Download(SharePoint(file), file, (_, _) => { }, CancellationToken.None);
+        using var local = downloader.Download(SharePoint(file), SourceFile.From(file), (_, _) => { }, CancellationToken.None);
 
         Assert.Equal((FileDownloader.Https, Sha(_content)), (local.Method, local.Sha256));
         var request = Assert.Single(handler.Requests);
@@ -99,8 +99,8 @@ public sealed class FileDownloaderTests : IDisposable
         });
         using var downloader = new FileDownloader(Path.Combine(_root, "pobrane"), handler, _ => null);
 
-        using var local = downloader.Download(SharePoint(first), first, (_, _) => { }, CancellationToken.None);
-        using var next = downloader.Download(SharePoint(second), second, (_, _) => { }, CancellationToken.None);
+        using var local = downloader.Download(SharePoint(first), SourceFile.From(first), (_, _) => { }, CancellationToken.None);
+        using var next = downloader.Download(SharePoint(second), SourceFile.From(second), (_, _) => { }, CancellationToken.None);
 
         Assert.Equal((FileDownloader.Copy, Sha(_content)), (local.Method, local.Sha256));   // w aplikacji ścieżka UNC – WebDAV
         Assert.Equal(_content, File.ReadAllBytes(local.Path));
@@ -117,7 +117,7 @@ public sealed class FileDownloaderTests : IDisposable
         using var downloader = new FileDownloader(Path.Combine(_root, "pobrane"));
 
         Assert.ThrowsAny<OperationCanceledException>(() =>
-            downloader.Download(new ImportLocation("Do_importu", file.DirectoryName!, true, file.DirectoryName!), file, (_, _) => { }, cancel.Token));
+            downloader.Download(new ImportLocation("Do_importu", file.DirectoryName!, true, file.DirectoryName!), SourceFile.From(file), (_, _) => { }, cancel.Token));
 
         Assert.Empty(Directory.GetFileSystemEntries(Path.Combine(_root, "pobrane")));
     }

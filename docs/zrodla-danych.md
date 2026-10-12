@@ -147,8 +147,12 @@ i utrzymywaną na ekranie Administracja (`docs/funkcjonalnosc.md`, F08).
 - **Logowanie do bramy w aplikacji** – część **Importuj** i **Sprawdź źródła** (ekran Import, zawsze przed odczytem
   lokalizacji SharePoint): jak Office – protokół MS-OFBA (zapytanie z `X-FORMS_BASED_AUTH_ACCEPTED: t`, odpowiedź 403
   z adresem strony logowania i adresem powrotu); okno logowania na silniku przeglądarki Windows, który dzieli trwałe
-  ciasteczka z usługą WebClient – przy ważnej sesji zamyka się samo. Bez MS-OFBA okno otwiera stronę folderu.
-  Czy sesja z okna aplikacji wystarcza usłudze WebClient – do potwierdzenia na stanowisku.
+  ciasteczka WinINet procesu aplikacji – przy ważnej sesji zamyka się samo. Bez MS-OFBA okno otwiera stronę folderu.
+- **Lista plików SharePoint** – przez HTTPS z procesu aplikacji (WebDAV `PROPFIND`, `Depth: 1`) z kontem Windows
+  i ciasteczkami sesji bramy z okna logowania, tak jak pobieranie pliku (`SharePointListing`). Usługa WebClient
+  (ścieżka UNC) to osobny proces systemowy i widzi tylko trwałe ciasteczka – sesyjne ciasteczko bramy zapisuje trwale
+  dopiero Office (otwarcie pliku w Excelu); dlatego ścieżka UNC jest tylko zapasem, gdy lista przez HTTPS się nie uda
+  (powód w logu). **Sprawdź źródła** pokazuje przy lokalizacji, którą drogą odczytano listę (HTTPS albo WebDAV).
 - .NET zwraca na ścieżkach WebDAV nazwy plików z końcowym znakiem `\0` oraz wpisy „.” i „..”
   (dotnet/runtime#62429) – import czyści nazwy (`FolderEntries`).
 - Import czyta tylko główny folder lokalizacji (bez podfolderów). Gdy folder

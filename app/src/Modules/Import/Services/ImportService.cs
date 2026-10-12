@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.IO;
+using System.Net.Http;
 using PzlEv.Modules.Import.Data;
 using PzlEv.Modules.Import.Models;
 using PzlEv.Shared.Models;
@@ -18,7 +19,7 @@ namespace PzlEv.Modules.Import.Services;
 /// SHA-256), zaimportowany (wersja pliku + dane kanoniczne) albo błąd. Błąd pliku lub niedostępna lokalizacja
 /// nie zatrzymuje pozostałych. Kontrola przepływu: wiersze i sumy kwot kanonicznych = kolumny pliku (także w bazie po zapisie).
 /// </summary>
-public sealed class ImportService(IImportStore store, AppServices services, Func<FileDownloader>? downloader = null)
+public sealed class ImportService(IImportStore store, AppServices services, Func<FileDownloader>? downloader = null, Func<SharePointListing>? listing = null)
 {
     public const string StageDownload = "1/4 pobieranie na dysk";
     public const string StageCheck = "2/4 sprawdzanie pliku (duplikat, nagłówek, parser)";
@@ -85,10 +86,10 @@ public sealed class ImportService(IImportStore store, AppServices services, Func
         {
             try
             {
-                var (found, ignored, subfolders) = ListFiles(location);
+                var (found, ignored, subfolders, method) = ListFiles(location);
                 var matching = found.Where(f => SourceMatcher.Match(f.Name, definitions) is not null).ToList();
                 var newest = matching.Count > 0 ? $" (najnowszy z {matching.Max(f => f.LastWriteTime):yyyy-MM-dd HH:mm})" : "";
-                var status = $"dostęp OK: plików {found.Count}, pasujących do definicji {matching.Count}{newest}" +
+                var status = $"dostęp OK ({method}): plików {found.Count}, pasujących do definicji {matching.Count}{newest}" +
                              (ignored.Count > 0 ? $", pominiętych tymczasowych {ignored.Count}" : "") +
                              (subfolders.Count > 0 ? $", podfoldery (import ich nie czyta): {string.Join(", ", subfolders.Take(10))}" : "");
                 locations.Add(new LocationCheck(location.Name, location.ConfiguredPath, location.Path, true, status));
@@ -118,21 +119,46 @@ public sealed class ImportService(IImportStore store, AppServices services, Func
         return new SourcesCheckResult(locations, files);
     }
 
-    /// <summary>Pliki lokalizacji (bez podfolderów), pliki tymczasowe pominięte; zapis do logu. Brak dostępu = wyjątek.</summary>
-    private static (List<FileInfo> Files, List<string> Ignored, List<string> Subfolders) ListFiles(ImportLocation location)
+    /// <summary>
+    /// Pliki lokalizacji (bez podfolderów), pliki tymczasowe pominięte; zapis do logu. Brak dostępu = wyjątek.
+    /// SharePoint: najpierw lista przez HTTPS z sesją bramy z okna logowania (SharePointListing – bez usługi WebClient),
+    /// a gdy się nie uda – ścieżka UNC (WebDAV przez usługę WebClient).
+    /// </summary>
+    private (List<SourceFile> Files, List<string> Ignored, List<string> Subfolders, string Method) ListFiles(ImportLocation location)
     {
         Logger.Information("Lokalizacja {Location}: zapisana ścieżka {Configured}, czytana ścieżka {Path}", location.Name, location.ConfiguredPath, location.Path);
-        if (location.IsManualFolder)
-            Directory.CreateDirectory(location.Path);
-        var dir = new DirectoryInfo(location.Path);
-        if (!dir.Exists)
-            throw new DirectoryNotFoundException("folder nie istnieje albo brak dostępu (Directory.Exists = false)");
-        var (all, subfolders) = FolderEntries.List(dir.FullName);
+        List<SourceFile>? all = null;
+        List<string> subfolders = [];
+        var method = location.IsManualFolder ? "folder" : "WebDAV (usługa WebClient)";
+        if (!location.IsManualFolder && SharePointAddress.Parse(location.ConfiguredPath) is { } address)
+        {
+            try
+            {
+                using var reader = listing?.Invoke() ?? new SharePointListing();
+                (all, subfolders) = reader.List(address, location.Path);
+                method = "HTTPS (sesja z logowania w aplikacji)";
+            }
+            catch (Exception ex) when (ex is IOException or HttpRequestException or TaskCanceledException or System.Xml.XmlException)
+            {
+                Logger.Warning("Lokalizacja {Location}: lista przez HTTPS nieudana ({Error}) – odczyt ścieżki UNC (WebDAV)", location.Name, ex.Message);
+            }
+        }
+        if (all is null)
+        {
+            if (location.IsManualFolder)
+                Directory.CreateDirectory(location.Path);
+            var dir = new DirectoryInfo(location.Path);
+            if (!dir.Exists)
+                throw new DirectoryNotFoundException("folder nie istnieje albo brak dostępu (Directory.Exists = false)");
+            List<FileInfo> found;
+            (found, subfolders) = FolderEntries.List(dir.FullName);
+            all = found.Select(SourceFile.From).ToList();
+        }
         var ignored = all.Where(f => SourceMatcher.IsIgnored(f.Name)).Select(f => f.Name).ToList();
         var files = all.Where(f => !SourceMatcher.IsIgnored(f.Name)).ToList();
-        Logger.Information("Lokalizacja {Location}: plików {Count} ({Files}); pominięte tymczasowe: {Ignored}; podfoldery: {Subfolders}",
-            location.Name, files.Count, string.Join(", ", files.Select(f => f.Name)), string.Join(", ", ignored), string.Join(", ", subfolders));
-        return (files, ignored, subfolders);
+        Logger.Information("Lokalizacja {Location} ({Method}): plików {Count} ({Files}); pominięte tymczasowe: {Ignored}; podfoldery: {Subfolders}",
+            location.Name, method, files.Count, string.Join(", ", files.Select(f => f.Name)), string.Join(", ", ignored), string.Join(", ", subfolders));
+        return (files, ignored, subfolders, method);
     }
 
     private static void LogDefinitions(IReadOnlyList<SourceDefinitionRow> definitions) =>
@@ -212,10 +238,10 @@ public sealed class ImportService(IImportStore store, AppServices services, Func
                 break;
             }
 
-            List<FileInfo> files;
+            List<SourceFile> files;
             try
             {
-                (files, _, var subfolders) = ListFiles(location);
+                (files, _, var subfolders, _) = ListFiles(location);
                 if (files.Count == 0 && subfolders.Count > 0)
                     Problem("pliki w podfolderach", Issue.Warning(
                         $"Brak plików w folderze lokalizacji, są podfoldery: {string.Join(", ", subfolders.Take(10))} – import nie czyta podfolderów; wskaż w Administracji folder z plikami.",
@@ -278,7 +304,7 @@ public sealed class ImportService(IImportStore store, AppServices services, Func
         return run;
     }
 
-    private FileResult ImportFile(long batchId, ImportLocation location, FileInfo file, IReadOnlyList<SourceDefinitionRow> definitions,
+    private FileResult ImportFile(long batchId, ImportLocation location, SourceFile file, IReadOnlyList<SourceDefinitionRow> definitions,
         Action<string, Issue> problem, StageReporter stage, CancellationToken cancellation)
     {
         var modified = new DateTimeOffset(file.LastWriteTimeUtc, TimeSpan.Zero);
@@ -347,7 +373,7 @@ public sealed class ImportService(IImportStore store, AppServices services, Func
     /// 4) kontrola w bazie (liczba wierszy i sumy po zapisie) i zatwierdzenie; niezgodność wycofuje cały zapis.
     /// Treść pliku nie jest przechowywana – po imporcie plik lokalny jest usuwany, dane są w CAN_Row.
     /// </summary>
-    private (string Decision, string Description, string? Sha, int? Rows) ImportContent(long batchId, ImportLocation location, FileInfo file,
+    private (string Decision, string Description, string? Sha, int? Rows) ImportContent(long batchId, ImportLocation location, SourceFile file,
         DateTimeOffset modified, SourceDefinitionRow definition, Action<string, Issue> problem, StageReporter stage, CancellationToken cancellation)
     {
         if (!TabularFileReader.IsSupported(file.Name))
