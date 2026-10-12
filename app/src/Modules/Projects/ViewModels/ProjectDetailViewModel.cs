@@ -23,7 +23,7 @@ namespace PzlEv.Modules.Projects.ViewModels;
 /// (wybrany słownik w tabeli z edycją w komórkach jak na ekranie Słowniki; pobierz / wczytaj z Excela z podglądem
 /// różnic), Przebiegi, Foldery.
 /// </summary>
-public sealed class ProjectDetailViewModel : ObservableObject
+public sealed class ProjectDetailViewModel : ObservableObject, IDisposable
 {
     private static readonly ILogger Logger = Log.ForContext("Module", "projects");
 
@@ -227,6 +227,16 @@ public sealed class ProjectDetailViewModel : ObservableObject
         RunProgress = refused ?? "Przebieg uruchomiony…";
         if (refused is null)
             Status = "Przebieg liczy się w tle – możesz dalej pracować; po zakończeniu pojawi się powiadomienie i e-mail.";
+    }
+
+    /// <summary>Odpięcie od zdarzeń przebiegów przy zmianie strony modułu.</summary>
+    public void Dispose()
+    {
+        if (_service.Runs is { } runs)
+        {
+            runs.Progress -= OnRunProgress;
+            runs.Finished -= OnRunFinished;
+        }
     }
 
     private void OnRunProgress(string project, string text)

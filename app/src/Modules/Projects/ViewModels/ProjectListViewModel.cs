@@ -10,7 +10,7 @@ using Serilog;
 namespace PzlEv.Modules.Projects.ViewModels;
 
 /// <summary>Ekran Projekty: lista projektów (docs/funkcjonalnosc.md, rozdz. 2) i przejście do kreatora / projektu.</summary>
-public sealed class ProjectListViewModel : ObservableObject
+public sealed class ProjectListViewModel : ObservableObject, IDisposable
 {
     private static readonly ILogger Logger = Log.ForContext("Module", "projects");
 
@@ -27,7 +27,7 @@ public sealed class ProjectListViewModel : ObservableObject
         Open = new RelayCommand(p => open(((ProjectListItem)p!).Code), p => p is ProjectListItem && !Busy.IsBusy);
         Refresh = new AsyncRelayCommand(Reload, () => !Busy.IsBusy);
         if (_service.Runs is { } runs)
-            runs.Finished += project => _ = Reload();   // zakończony przebieg – stan na liście od razu
+            runs.Finished += OnRunFinished;   // zakończony przebieg – stan na liście od razu
         _ = Reload();
     }
 
@@ -44,6 +44,15 @@ public sealed class ProjectListViewModel : ObservableObject
     public ICommand NewProject { get; }
     public ICommand Open { get; }
     public ICommand Refresh { get; }
+
+    private void OnRunFinished(string project) => _ = Reload();
+
+    /// <summary>Odpięcie od zdarzeń przebiegów przy zmianie strony modułu.</summary>
+    public void Dispose()
+    {
+        if (_service.Runs is { } runs)
+            runs.Finished -= OnRunFinished;
+    }
 
     public async Task Reload()
     {

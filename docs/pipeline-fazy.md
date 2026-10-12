@@ -195,8 +195,9 @@ okresy 13–16 liczone jak 12.
 
 Wynik: stan uruchomienia („zakończony”, „zakończony z ostrzeżeniami”, „zakończony z błędami”, „przerwany błędem”;
 uruchomienie bez działającej aplikacji – „przerwany (brak zakończenia)”), wyniki kontroli, dziennik, powiadomienia
-(`docs/funkcjonalnosc.md`, F06). Kontrole wymagające danych spoza zrzutu ACTUALS (typ wartości / linie statystyczne,
-odbiorca rozliczenia, suma kontrolna z SAP) – O50.
+(`docs/funkcjonalnosc.md`, F06). Linie statystyczne (niewidoczne w zrzucie ACTUALS – brak
+typu wartości) nie są rozliczane: projekt z nimi nie netuje się do 0, a kontrola pokazuje saldo i jego wartość.
+Kontrole wymagające innych danych spoza zrzutu (odbiorca rozliczenia, suma kontrolna z SAP) – O50.
 
 ### P0. Uruchomienie
 
@@ -338,4 +339,4 @@ Zamrożonego przebiegu zmiany nie dotyczą.
 | O31 | Harmonogram importu względem harmonogramu RABIT (RABIT nadpisuje pliki – wersja pośrednia bez importu przepada); import uruchamiany harmonogramem zadań Windows? |
 | O33 | Element CES z kosztem bez przypisania (spoza nakładki albo bez WP) w przebiegu zamykającym: czy dopuścić zamknięcie, czy wymagać przypisania (ERROR – P3)? Rekomendacja: wymagać przypisania |
 | O34 | CAM nie odesłał pliku w przebiegu zamykającym: blokada etapu (dziś) czy przyjęcie wartości z produkcji z oznaczeniem pochodzenia? |
-| O50 | Kontrole przebiegu wymagające kolumn spoza zrzutu ACTUALS: typ wartości (linie statystyczne nie są rozliczane – projekt z nimi nie zbilansuje się do 0), numer dokumentu CO i pozycja (stały klucz porównania przebiegów), odbiorca rozliczenia (PA, centrum kosztów, środek trwały w budowie), suma kontrolna projektu i okresu z niezależnego raportu SAP |
+| O50 | Kontrole przebiegu wymagające kolumn spoza zrzutu ACTUALS: numer dokumentu CO i pozycja (stały klucz porównania przebiegów), odbiorca rozliczenia (PA, centrum kosztów, środek trwały w budowie), suma kontrolna projektu i okresu z niezależnego raportu SAP |
