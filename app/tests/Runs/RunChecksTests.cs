@@ -82,7 +82,7 @@ public sealed class RunChecksTests
         Assert.Equal(("A.1", -30m), (closed.Element, closed.Amount));
         var quality = Of(issues, RunChecks.Quality).Select(i => i.Message).ToList();
         Assert.Contains(quality, q => q.StartsWith("Wiersze w okresach przyszłych: 1 (2026/12)"));
-        Assert.Contains(quality, q => q.StartsWith("Waluta obiektu inna niż PLN: USD"));
+        Assert.Contains(quality, q => q.StartsWith("Waluta inna niż PLN: USD"));
         Assert.Contains(quality, q => q.StartsWith("Wiersze bez elementu WBS: 1"));
     }
 }

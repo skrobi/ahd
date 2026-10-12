@@ -63,7 +63,8 @@ zmieni). Brak pliku albo błąd w nim = komunikat przy starcie z nazwą pola –
 - `016`–`024` – kolejne zmiany schematu i danych startowych (opis w `docs/model-danych.md`);
 - `025_bez_mapowania_ces_p1s.sql` – usuwa tabele `DICT_MappingReport` i `DICT_MappingCorrection`;
 - `026_zrodla_projektu.sql` – słownik projektu „Źródła danych” (`DICT_ProjectSource`);
-- `027_przebiegi.sql` – przebiegi projektu, uruchomienia, dane przypięte i wyniki kontroli, procedura `RUN_PinBalance`.
+- `027_przebiegi.sql` – przebiegi projektu, uruchomienia, dane przypięte i wyniki kontroli, procedura `RUN_PinBalance`;
+- `028_konfiguracja_projektu.sql` – słownik projektu „Parametry projektu” (`DICT_ProjectSetting`), pole kwoty ACTUALS w przebiegu.
 
 Migracje wykonuje przycisk **Diagnostyka → Migracja** – uruchamia po kolei skrypty, których numeru nie ma
 w `META_SchemaVersion`, a wykonane pomija. Lista na tym ekranie pokazuje, które skrypty są wykonane (kiedy, kto)

@@ -85,10 +85,12 @@ Z_OPIS → PROJORG → elementy) z wyszukiwarką – tylko do odczytu, to nie je
 | Cost Category – zmiany w projekcie | zmiany i uzupełnienia słownika globalnego Cost Category dla projektu (rozdz. 6) | numer elementu kosztowego |
 | Wykluczenia | elementy pomijane na późniejszym etapie analizy: kombinacja `Cost Element`, `WBS Element`, `Partner object` (co najmniej jedno z trzech) + wymagany opis (rozdz. 7) – **opcjonalny** | kombinacja trzech pól |
 | Źródła danych | definicje źródeł (Administracja) importowane dla projektu – „Importuj źródła projektu” importuje tylko ich pliki: `Definicja źródła` (lista aktywnych definicji), `Opis`; definicja nieistniejąca albo nieaktywna – WARNING – **opcjonalny** | Definicja źródła |
+| Parametry projektu | `Parametr`, `Wartość`, `Opis`; parametr `Pole kwoty ACTUALS` – pole kwoty parsera ACTUALS dla ACWP struktury, raportu kosztów i przebiegu: `ValueObjCrcy` (waluta obiektu, PLN), `ValueRepCur` (waluta raportu), `ValueTranCurr` (waluta transakcji); inna wartość – ERROR; brak wiersza – `ValueObjCrcy` – **opcjonalny** | Parametr |
 
 - Słowniki projektu powstają w kreatorze projektu z plików Excel (szablon z elementami projektu – jeden
   plik z arkuszami albo osobne pliki / CSV) i są dalej utrzymywane w aplikacji (`docs/funkcjonalnosc.md`, F01, F03):
-  na ekranie Projekt w zakładce Słowniki projektu – lista słowników i tabela wybranego słownika z edycją
+  na ekranie Projekt w zakładce Słowniki projektu (Źródła danych i Parametry projektu – zakładka Konfiguracja, z listą
+  definicji źródeł projektu z Administracji tylko do odczytu) – lista słowników i tabela wybranego słownika z edycją
   w komórkach jak na ekranie Słowniki (dodaj / zmień / usuń wiersz, „Zapisz” z walidacją, „Odrzuć zmiany”, filtr)
   oraz pobranie i wczytanie z Excela z podglądem różnic (Cost Category w arkuszu „WP i CAM” – lista kategorii projektu
   w arkuszu „Listy”). „WP i CAM” oraz „Harmonogram i budżet” zmienia się też

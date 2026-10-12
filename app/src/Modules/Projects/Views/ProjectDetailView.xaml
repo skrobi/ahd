@@ -23,6 +23,23 @@
                 </StackPanel>
             </Border>
         </DataTemplate>
+        <!-- Tabela wybranego słownika projektu (DataContext: ProjectDetailViewModel) – zakładki „Słowniki projektu” i „Konfiguracja” -->
+        <DataTemplate x:Key="DictionaryEditor">
+            <StackPanel>
+                <!-- Stan słownika, wczytanie z Excela z podglądem różnic -->
+                <views:DictionaryPanelView DataContext="{Binding SelectedDictionary}" />
+                <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                    <Button Content="Dodaj wiersz" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding AddDictionaryRow}" />
+                    <Button Content="Usuń wiersze" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding RemoveDictionaryRow}" ToolTip="Usuwa wiersze zaznaczonych komórek (Ctrl+minus)" />
+                    <Button Content="Cofnij" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding Table.Undo}" ToolTip="Cofa ostatnią zmianę w tabeli (Ctrl+Z)" />
+                    <Button Content="Odrzuć zmiany" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding DiscardDictionary}" />
+                    <Button Content="Zapisz" Style="{StaticResource BtnPrimary}" Command="{Binding SaveDictionary}" />
+                    <TextBlock Text="Filtr" VerticalAlignment="Center" Margin="16,0,6,0" Foreground="{StaticResource Muted}" />
+                    <TextBox Width="180" Style="{StaticResource Input}" Text="{Binding Table.Filter, UpdateSourceTrigger=PropertyChanged}" />
+                </StackPanel>
+                <partials:DictionaryGrid DataContext="{Binding Table}" />
+            </StackPanel>
+        </DataTemplate>
     </UserControl.Resources>
     <StackPanel>
         <partials:PageHeader Title="{Binding Title}" Subtitle="{Binding Subtitle}">
@@ -162,7 +179,7 @@
             </TabItem>
 
             <!-- Słowniki projektu: lista słowników i tabela wybranego słownika z edycją w komórkach (jak ekran Słowniki) -->
-            <TabItem Header="Słowniki projektu" Padding="12,4">
+            <TabItem Header="Słowniki projektu" Padding="12,4" IsSelected="{Binding DictionaryTabOpen, Mode=OneWayToSource}">
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="260" />
@@ -171,7 +188,7 @@
 
                     <StackPanel Margin="0,0,16,0">
                         <Border Style="{StaticResource Panel}" Padding="8" VerticalAlignment="Top">
-                            <ListBox ItemsSource="{Binding Dictionaries}" SelectedItem="{Binding SelectedDictionary}"
+                            <ListBox ItemsSource="{Binding ProjectDictionaryList}" SelectedItem="{Binding SelectedProjectDictionary}"
                                      BorderThickness="0" Background="Transparent">
                                 <ListBox.ItemTemplate>
                                     <DataTemplate>
@@ -188,19 +205,44 @@
                                 ToolTip="Wszystkie słowniki projektu w jednym skoroszycie – popraw i wczytaj ponownie (przed zapisem zobaczysz różnice)" />
                     </StackPanel>
 
+                    <ContentControl Grid.Column="1" Content="{Binding}" ContentTemplate="{StaticResource DictionaryEditor}" />
+                </Grid>
+            </TabItem>
+
+            <!-- Konfiguracja: źródła danych projektu (definicje z Administracji) i parametry projektu -->
+            <TabItem Header="Konfiguracja" Padding="12,4" IsSelected="{Binding ConfigTabOpen, Mode=OneWayToSource}">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="260" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+
+                    <Border Style="{StaticResource Panel}" Padding="8" VerticalAlignment="Top" Margin="0,0,16,0">
+                        <ListBox ItemsSource="{Binding ConfigDictionaryList}" SelectedItem="{Binding SelectedConfigDictionary}"
+                                 BorderThickness="0" Background="Transparent">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate>
+                                    <StackPanel Width="220" Margin="0,4">
+                                        <TextBlock Text="{Binding Name}" FontWeight="Medium" TextWrapping="Wrap" />
+                                        <ContentControl Content="{Binding StatusPill}" HorizontalAlignment="Left" Margin="0,2,0,0" />
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                    </Border>
+
                     <StackPanel Grid.Column="1">
-                        <!-- Stan słownika, wczytanie z Excela z podglądem różnic -->
-                        <views:DictionaryPanelView DataContext="{Binding SelectedDictionary}" />
-                        <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
-                            <Button Content="Dodaj wiersz" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding AddDictionaryRow}" />
-                            <Button Content="Usuń wiersze" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding RemoveDictionaryRow}" ToolTip="Usuwa wiersze zaznaczonych komórek (Ctrl+minus)" />
-                            <Button Content="Cofnij" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding Table.Undo}" ToolTip="Cofa ostatnią zmianę w tabeli (Ctrl+Z)" />
-                            <Button Content="Odrzuć zmiany" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding DiscardDictionary}" />
-                            <Button Content="Zapisz" Style="{StaticResource BtnPrimary}" Command="{Binding SaveDictionary}" />
-                            <TextBlock Text="Filtr" VerticalAlignment="Center" Margin="16,0,6,0" Foreground="{StaticResource Muted}" />
-                            <TextBox Width="180" Style="{StaticResource Input}" Text="{Binding Table.Filter, UpdateSourceTrigger=PropertyChanged}" />
-                        </StackPanel>
-                        <partials:DictionaryGrid DataContext="{Binding Table}" />
+                        <ContentControl Content="{Binding}" ContentTemplate="{StaticResource DictionaryEditor}" />
+                        <TextBlock Text="Definicje źródeł projektu (Administracja)" Style="{StaticResource Eyebrow}" Margin="0,16,0,6" />
+                        <DataGrid Style="{StaticResource DataTable}" ItemsSource="{Binding SourceDefinitions}" IsReadOnly="True" HorizontalAlignment="Left" MinWidth="480">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Definicja" Binding="{Binding Code}" />
+                                <DataGridTextColumn Header="Prefiks pliku" Binding="{Binding Prefix}" />
+                                <DataGridTextColumn Header="Typ raportu" Binding="{Binding ReportType}" />
+                                <DataGridTextColumn Header="Parser" Binding="{Binding Parser}" />
+                                <DataGridCheckBoxColumn Header="Aktywna" Binding="{Binding Active}" />
+                            </DataGrid.Columns>
+                        </DataGrid>
                     </StackPanel>
                 </Grid>
             </TabItem>

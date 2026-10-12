@@ -15,8 +15,8 @@ public interface IRunStore
     /// <summary>Przebieg projektu w tygodniu (zakładany przy pierwszym uruchomieniu) i nowe uruchomienie „w toku”.</summary>
     RunPinRow StartPin(string project, CalendarWeek week, DateTimeOffset at, string user, string machine);
 
-    /// <summary>Dane ACTUALS projektu w chwili przypięcia (procedura RUN_PinBalance).</summary>
-    IReadOnlyList<RunBalanceRow> PinBalance(string project, long pinId);
+    /// <summary>Dane ACTUALS projektu w chwili przypięcia (procedura RUN_PinBalance); amountField – pole kwoty parsera ACTUALS.</summary>
+    IReadOnlyList<RunBalanceRow> PinBalance(string project, long pinId, string amountField);
 
     IReadOnlyList<RunBalanceRow> Balance(long pinId);
 
@@ -41,4 +41,7 @@ public interface IRunStore
 
     /// <summary>Definicje źródeł ze słownika projektu „Źródła danych”.</summary>
     IReadOnlySet<string> ProjectSources(string project);
+
+    /// <summary>Pole kwoty ACTUALS projektu – słownik „Parametry projektu” (brak – ValueObjCrcy).</summary>
+    string ActualsAmount(string project);
 }

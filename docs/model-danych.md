@@ -325,6 +325,12 @@ przypięcia: element WBS × cost element × rok × okres × rozliczenie wychodz�
 najpóźniejsze `Created on`), `RUN_Issue` (wyniki kontroli) i procedura `RUN_PinBalance @Project, @PinId`
 (`docs/pipeline-fazy.md`, rozdz. 4.1). Wymaga aplikacji 0.43.0.
 
+**Migracja `sql/mssql/028_konfiguracja_projektu.sql`:** tabela `DICT_ProjectSetting` – słownik projektu „Parametry
+projektu” (parametr → wartość; klucz projekt + parametr; `docs/slowniki.md`, rozdz. 3). Parametr „Pole kwoty ACTUALS”
+podaje `@Value` procedur `REP_ProjectCosts`, `REP_ProjectCostsByElement` i `RUN_PinBalance` (brak – `ValueObjCrcy`).
+`RUN_PinBalance @Project, @PinId, @Value` – kwota z pola `@Value`, waluta z pola waluty tej kwoty (`ObjectCurrency`,
+`ReportCurrency`, `TransactionCurrency`); `META_RunPin.AmountField` – pole kwoty użyte w przypięciu. Wymaga aplikacji 0.44.0.
+
 `META_SourceFile.CanonicalStatus`: „utworzone” – dane kanoniczne zapisane i sprawdzone (widoczne dla odczytów),
 „w toku” – zapis wierszy trwa (odczyty pomijają plik; po awarii wpis i wiersze są usuwane), inna wartość – powód
 braku danych (źródło bez parsera).

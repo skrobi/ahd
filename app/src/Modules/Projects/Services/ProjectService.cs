@@ -2,6 +2,7 @@ using System.IO;
 using PzlEv.Modules.Projects.Data;
 using PzlEv.Modules.Projects.Models;
 using PzlEv.Shared.Models;
+using PzlEv.Shared.Models.Db;
 using PzlEv.Shared.Models.Dictionaries;
 using PzlEv.Shared.Models.Pipeline;
 using PzlEv.Shared.Utils.Data;
@@ -170,20 +171,25 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
 
     /// <summary>
     /// Wartości słowników powiązanych do wyboru w tabeli słownika (DictColumn.Lookup): Osoby – USRID → imię i nazwisko
-    /// (słownik Osoby wczytany z HR); Kategorie WBS – kategorie projektu.
+    /// (słownik Osoby wczytany z HR); Kategorie WBS – kategorie projektu; Źródła danych – aktywne definicje źródeł;
+    /// Parametry projektu – pola kwoty ACTUALS.
     /// </summary>
     public static IReadOnlyDictionary<string, IReadOnlyList<LookupOption>> Lookups(IReadOnlyList<LookupOption> persons, IReadOnlyList<LookupOption> categories,
         IReadOnlyList<LookupOption>? sources = null) =>
         new Dictionary<string, IReadOnlyList<LookupOption>>
         {
             [GlobalDictionaries.Persons] = persons, [ProjectDictionaries.WbsCategories] = categories, [ProjectDictionaries.Sources] = sources ?? [],
+            [ProjectDictionaries.Settings] = ProjectSettings.ActualsAmounts.Select(a => new LookupOption(a.Field, $"{a.Field} – {a.Currency}")).ToList(),
         };
 
     /// <summary>Aktywne definicje źródeł do wyboru w słowniku „Źródła danych” (kod → kod i prefiks plików).</summary>
-    public IReadOnlyList<LookupOption> SourceLookups() =>
-        (imports?.Invoke()?.Definitions() ?? [])
-            .Select(d => new LookupOption(d.Code, $"{d.Code} ({d.Prefix})"))
-            .ToList();
+    public IReadOnlyList<LookupOption> SourceLookups() => SourceOptions(SourceDefinitions());
+
+    /// <summary>Aktywne definicje źródeł (Administracja; kontrakt modułu Import) – brak modułu Import: pusta lista.</summary>
+    public IReadOnlyList<SourceDefinitionRow> SourceDefinitions() => imports?.Invoke()?.Definitions() ?? [];
+
+    public static IReadOnlyList<LookupOption> SourceOptions(IEnumerable<SourceDefinitionRow> definitions) =>
+        definitions.Select(d => new LookupOption(d.Code, $"{d.Code} ({d.Prefix})")).ToList();
 
     /// <summary>Kody definicji ze słownika „Źródła danych” projektu.</summary>
     public IReadOnlySet<string> ProjectSources(string code) =>
@@ -451,8 +457,14 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
         return structure.Rows.Count;
     }
 
-    /// <summary>ACWP po elemencie CES z ostatniego importu ACTUALS (waluta obiektu – PLN) – kolumna ACWP struktury.</summary>
-    public IReadOnlyDictionary<string, decimal> CostsByElement(string code) => store.CostsByElement(code, DefaultCostValue);
+    /// <summary>ACWP po elemencie CES z ostatniego importu ACTUALS (pole kwoty z „Parametrów projektu”) – kolumna ACWP struktury.</summary>
+    public IReadOnlyDictionary<string, decimal> CostsByElement(string code) => CostsByElement(code, ActualsAmount(code));
+
+    /// <summary>ACWP po elemencie CES z podanego pola kwoty ACTUALS.</summary>
+    public IReadOnlyDictionary<string, decimal> CostsByElement(string code, string field) => store.CostsByElement(code, field);
+
+    /// <summary>Pole kwoty ACTUALS projektu – słownik „Parametry projektu” (brak – ValueObjCrcy).</summary>
+    public string ActualsAmount(string code) => ProjectDictionaries.ActualsAmount(Rows(ProjectDictionaries.Settings, code));
 
     /// <summary>Z kiedy są dane ACTUALS (data raportu w RABIT, import, ostatnie sprawdzenie) – nagłówek ekranu projektu.</summary>
     public ActualsFreshness ActualsFreshness() => new(store.ActualsFiles());
@@ -683,13 +695,10 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
 
     // ---------- raport kosztów ----------
 
-    /// <summary>Pole kwoty ACTUALS w raporcie kosztów – waluta obiektu (PLN).</summary>
-    public const string DefaultCostValue = "ValueObjCrcy";
-
-    /// <summary>Raport kosztów projektu do Excela (REP_ProjectCosts – ostatni import ACTUALS); zwraca liczbę wierszy.</summary>
-    public int ExportCostReport(string path, string code, string value = DefaultCostValue)
+    /// <summary>Raport kosztów projektu do Excela (REP_ProjectCosts – ostatni import ACTUALS, pole kwoty z „Parametrów projektu”); zwraca liczbę wierszy.</summary>
+    public int ExportCostReport(string path, string code)
     {
-        var (columns, rows) = store.CostReport(code, value);
+        var (columns, rows) = store.CostReport(code, ActualsAmount(code));
         ExcelTableWriter.WriteSheets(path, [("Koszty", columns, rows)]);
         journal.Add(Area, $"{code}: raport kosztów pobrany do Excela ({rows.Count} wierszy)", code);
         return rows.Count;

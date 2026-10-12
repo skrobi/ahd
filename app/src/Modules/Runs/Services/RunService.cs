@@ -1,5 +1,6 @@
 using PzlEv.Modules.Runs.Data;
 using PzlEv.Shared.Models.Db;
+using PzlEv.Shared.Models.Dictionaries;
 using PzlEv.Shared.Models.Pipeline;
 using PzlEv.Shared.Utils.Data;
 using Serilog;
@@ -82,16 +83,22 @@ public sealed class RunService(IRunStore store, AppServices services, Func<ISour
 
             // 2. Przypięcie stanu: dane ACTUALS projektu w chwili przebiegu.
             progress?.Report("Przypięcie danych projektu…");
-            var current = store.PinBalance(project, pin.PinId);
+            var amountField = store.ActualsAmount(project);
+            var current = store.PinBalance(project, pin.PinId, amountField);
             var previousPin = store.Previous(project, pin.RunId);
-            var previous = previousPin is null ? null : store.Balance(previousPin.PinId);
-            if (previousPin is not null)
+            var previousField = previousPin?.AmountField ?? ProjectSettings.DefaultActualsAmount;
+            var previous = previousPin is null || previousField != amountField ? null : store.Balance(previousPin.PinId);
+            if (previousPin is not null && previous is null)
+                issues.Add(new RunIssue(RunChecks.Volume, CheckLevel.Warning, null,
+                    $"Pole kwoty ACTUALS zmienione ({previousField} → {amountField}, „Parametry projektu”) – bez porównania z przebiegiem {previousPin.Code} #{previousPin.PinNo}"));
+            else if (previousPin is not null)
                 issues.Add(new RunIssue(RunChecks.Volume, CheckLevel.Pass, null, $"Porównanie z przebiegiem {previousPin.Code} #{previousPin.PinNo} ({previousPin.StartedAt.ToLocalTime():yyyy-MM-dd HH:mm})"));
 
             // 3. Kontrole danych.
             progress?.Report("Kontrole danych…");
             var (closedBefore, today) = Periods(week.Period, services.Clock.Now.Date);
-            issues.AddRange(RunChecks.Check(current, previous, store.CostElements(project), closedBefore, today));
+            issues.AddRange(RunChecks.Check(current, previous, store.CostElements(project), closedBefore, today,
+                amountField == ProjectSettings.DefaultActualsAmount ? "PLN" : null));
 
             var errors = issues.Count(i => i.Level == CheckLevel.Error);
             var warnings = issues.Count(i => i.Level == CheckLevel.Warning);
