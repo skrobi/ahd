@@ -46,7 +46,7 @@ public sealed class MasterDataViewModel : ObservableObject
         _dialogs = dialogs;
         _hr = hr;
         _costElements = costElements;
-        Dictionaries = GlobalDictionaries.All.Select(spec => new DictionaryItem(spec, 0)).ToList();
+        Dictionaries = GlobalDictionaries.All.Where(spec => !spec.Hidden).Select(spec => new DictionaryItem(spec, 0)).ToList();
         Table.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(DictionaryTableViewModel.SelectedRow))
@@ -170,11 +170,11 @@ public sealed class MasterDataViewModel : ObservableObject
     public ICommand FillFromActuals { get; }
     public ICommand EditFormulas { get; }
 
-    /// <summary>Wybrany słownik narzutów CAS (pule, grupy, formuły) – „Edytor formuł”.</summary>
-    public bool IsCasBurden => Spec?.Code is GlobalDictionaries.CasPools or GlobalDictionaries.CasBurdenGroups or GlobalDictionaries.CasBurdenFormulas;
+    /// <summary>Wybrany słownik narzutów CAS (pule, grupy, wskaźniki) – „Formuły narzutów”.</summary>
+    public bool IsCasBurden => Spec?.Code is GlobalDictionaries.CasPools or GlobalDictionaries.CasBurdenGroups or GlobalDictionaries.CasBurdenRates;
 
-    /// <summary>Okno edytora formuł grupy narzutowej (grupa do pokazania; true – zapisano). Ustawia moduł.</summary>
-    public Func<string?, bool> EditCasFormulas { get; set; } = _ => false;
+    /// <summary>Okno macierzy formuł narzutów CAS (true – zapisano). Ustawia moduł.</summary>
+    public Func<bool> EditCasFormulas { get; set; } = () => false;
 
     /// <summary>Wybrany słownik Cost Category – „Uzupełnij z ACTUALS”.</summary>
     public bool IsCostCategory => Spec?.Code == GlobalDictionaries.CostCategory;
@@ -190,10 +190,10 @@ public sealed class MasterDataViewModel : ObservableObject
             var item = _selectedDictionary!;
             try
             {
-                var rows = await Busy.Run($"Wczytywanie słownika „{spec.Name}”…", () => _service.Load(spec));
+                var (rows, lookups) = await Busy.Run($"Wczytywanie słownika „{spec.Name}”…", () => (_service.Load(spec), _service.Lookups(spec)));
                 if (!ReferenceEquals(item, _selectedDictionary))
                     return;   // w międzyczasie wybrano inny słownik
-                Table.Load(spec, rows);
+                Table.Load(spec, rows.Select(r => (r, false)), lookups);
                 item.Count = rows.Count;
             }
             catch (Exception ex) when (ex is not OutOfMemoryException)
@@ -315,20 +315,19 @@ public sealed class MasterDataViewModel : ObservableObject
     }
 
     /// <summary>
-    /// „Edytor formuł” (słowniki narzutów CAS): macierz pula × składnik podstawy wybranej grupy (zaznaczony wiersz grup
-    /// albo formuł); zapis w oknie – słownik „Formuły narzutów CAS”, po zamknięciu tabela jest odświeżana.
+    /// „Formuły narzutów” (słowniki narzutów CAS): okno macierzy grupy × pule z edytorem formuły z klocków; zapis w oknie,
+    /// po zamknięciu tabela jest odświeżana (nazwy pul i grup – z tabel słowników, formuły wskazują je identyfikatorem).
     /// </summary>
     private async Task DoEditFormulas()
     {
         Table.CommitEdits();
         if (HasPendingChanges)
         {
-            Status = "Masz niezapisane zmiany – zapisz albo odrzuć je przed otwarciem edytora formuł.";
+            Status = "Masz niezapisane zmiany – zapisz albo odrzuć je przed otwarciem formuł narzutów.";
             return;
         }
-        var group = Spec?.Column("Grupa") is { } column && Table.SelectedRow is { } row ? row[Spec.Columns.ToList().IndexOf(column)] : null;
-        if (EditCasFormulas(group))
-            await Reload("Formuły narzutów CAS zapisane w edytorze.");
+        if (EditCasFormulas())
+            await Reload("Formuły narzutów CAS zapisane.");
     }
 
     /// <summary>Okno wyboru osób z HR (pracownicy, USRID już w słowniku) → wybrane; null – anulowano. Ustawia moduł.</summary>
@@ -445,7 +444,9 @@ public sealed class MasterDataViewModel : ObservableObject
             for (var i = versions.Count - 1; i >= 0; i--)
             {
                 var v = versions[i];
-                var values = string.Join(" · ", spec.Columns.Select(c => $"{c.Name}: {ValueFormat.Display(c, v.Values.GetValueOrDefault(c.Name))}"));
+                var values = string.Join(" · ", spec.Columns.Select(c => $"{c.Name}: {(c.Lookup is not null && Table.Options(c) is { } options
+                    ? DictionaryCells.Display(v.Values.GetValueOrDefault(c.Name), options)
+                    : ValueFormat.Display(c, v.Values.GetValueOrDefault(c.Name)))}"));
                 var note = v.SupersededAt is null
                     ? "bieżąca"
                     : i == versions.Count - 1

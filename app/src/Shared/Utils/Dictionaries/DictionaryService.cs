@@ -40,6 +40,7 @@ public sealed class DictionaryService(IDictionaryStore store, IJournal journal)
                 ? Issue.Warning($"{i.Message} (błąd był już w słowniku – popraw go w zakładce Słowniki projektu)", i.Element)
                 : i).ToList();
 
+        issues.AddRange(ReferenceIssues(spec, removed));
         if (issues.Any(i => i.Level == CheckLevel.Error))
             return new SaveOutcome(SaveStatus.Rejected, issues, "Słownik ma błędy (ERROR) – nic nie zapisano.");
 
@@ -71,6 +72,25 @@ public sealed class DictionaryService(IDictionaryStore store, IJournal journal)
         return new SaveOutcome(SaveStatus.Saved, issues, $"Zapisano – {message}.");
     }
 
+    /// <summary>Usuwane wiersze wskazywane identyfikatorem w innych słownikach (DictionarySpec.ReferencedBy) – ERROR.</summary>
+    private IEnumerable<Issue> ReferenceIssues(DictionarySpec spec, IReadOnlyList<DictRow> removed)
+    {
+        var ids = removed.Where(r => r.RowId is not null).Select(r => (Id: r.RowId!.Value, Key: spec.KeyOf(r.Values))).ToList();
+        if (ids.Count == 0)
+            yield break;
+        foreach (var (dictionary, column, references) in spec.ReferencedBy)
+        {
+            var rows = store.CurrentAll(dictionary);
+            foreach (var (id, key) in ids)
+            {
+                var used = rows.Where(r => references(r.Values.GetValueOrDefault(column), id)).ToList();
+                if (used.Count > 0)
+                    yield return Issue.Error($"„{key}” jest używane w słowniku „{GlobalDictionaries.Get(dictionary).Name}” ({used.Count} "
+                        + $"{(used.Count == 1 ? "wiersz" : "wierszy")}{(used.Any(r => r.Project is not null) ? ", także w projektach" : "")}) – najpierw zmień tamte wiersze", key);
+            }
+        }
+    }
+
     /// <summary>Błędy (ERROR) bieżącego stanu słownika jako klucz wiersza + komunikat – do Save(knownErrors).</summary>
     public IReadOnlySet<string> KnownErrors(DictionarySpec spec, string? project = null) => KnownErrors(spec, Load(spec, project));
 
@@ -96,8 +116,9 @@ public sealed class DictionaryService(IDictionaryStore store, IJournal journal)
     public void Export(DictionarySpec spec, string path, string? project = null)
     {
         var rows = Load(spec, project);
+        var lookups = Lookups(spec);
         ExcelTableWriter.WriteTemplate(path, [(spec.Name, ExcelColumns(spec),
-            rows.Select(r => (IReadOnlyList<object?>)spec.Columns.Select(c => ValueFormat.ToExcel(c, r[c.Name])).ToList()))]);
+            rows.Select(r => (IReadOnlyList<object?>)spec.Columns.Select(c => ExcelValue(c, r[c.Name], lookups)).ToList()))]);
         journal.Add(Area, $"{spec.Name}: pobrano do Excela ({rows.Count} wierszy)", spec.Code);
     }
 
@@ -234,7 +255,7 @@ public sealed class DictionaryService(IDictionaryStore store, IJournal journal)
         var lookups = Lookups(spec);
         return spec.Columns.Select(c => new ExcelTableWriter.ExcelColumn(
             c.Name,
-            c.Key ? ExcelTableWriter.Kind.Text : c.Type switch
+            c.Key && c.Type != ColumnType.Date ? ExcelTableWriter.Kind.Text : c.Type switch   // data w kluczu (np. Od wskaźnika) – format daty
             {
                 ColumnType.Decimal => ExcelTableWriter.Kind.Number,
                 ColumnType.Integer => ExcelTableWriter.Kind.Integer,
@@ -243,8 +264,18 @@ public sealed class DictionaryService(IDictionaryStore store, IJournal journal)
             },
             c.Choices,
             ColumnNote(spec, c),
-            c.Lookup is { } code && lookups.TryGetValue(code, out var options) ? options.Select(o => (o.Value, o.Label)).ToList() : null)).ToList();
+            c.Lookup is { } code && lookups.TryGetValue(code, out var options)
+                ? options.Select(o => c.IdLookup ? (o.Label, o.Label) : (o.Value, o.Label)).ToList() : null)).ToList();
     }
+
+    /// <summary>
+    /// Wartość komórki w Excelu: kolumna z identyfikatorem wiersza słownika powiązanego (IdLookup) – nazwa pozycji
+    /// (przy wczytaniu zamieniana z powrotem na identyfikator), inna – ValueFormat.ToExcel.
+    /// </summary>
+    public static object? ExcelValue(DictColumn column, string? value, IReadOnlyDictionary<string, IReadOnlyList<LookupOption>> lookups) =>
+        column.IdLookup && column.Lookup is { } code && lookups.TryGetValue(code, out var options)
+            ? DictionaryCells.Display(value, options) is { Length: > 0 } label ? label : null
+            : ValueFormat.ToExcel(column, value);
 
     private static string ColumnNote(DictionarySpec spec, DictColumn column)
     {
@@ -262,8 +293,10 @@ public sealed class DictionaryService(IDictionaryStore store, IJournal journal)
             ColumnType.Choice => $"jedna z: {string.Join(", ", column.Choices ?? [])}",
             _ => "tekst",
         });
-        if (column.Lookup is { } code && GlobalDictionaries.All.Any(s => s.Code == code))
-            parts.Add($"wartość ze słownika {GlobalDictionaries.Get(code).Name} (arkusz „Listy”); imię i nazwisko zamieniane na USRID");
+        if (column.Lookup is { } code && column.IdLookup)
+            parts.Add($"nazwa ze słownika {GlobalDictionaries.Get(code).Name} (arkusz „Listy”)");
+        else if (column.Lookup is { } person && GlobalDictionaries.All.Any(s => s.Code == person))
+            parts.Add($"wartość ze słownika {GlobalDictionaries.Get(person).Name} (arkusz „Listy”); imię i nazwisko zamieniane na USRID");
         else if (column.Lookup is not null)
             parts.Add("wartość ze słownika projektu (arkusz „Listy”)");
         if (column.PadNumericTo is { } pad)
@@ -297,7 +330,11 @@ public sealed class DictionaryService(IDictionaryStore store, IJournal journal)
                 var resolved = DictionaryCells.Resolve(text, options);
                 values[column.Name] = resolved;
                 if (resolved is not null && options.Count(o => string.Equals(o.Label, resolved, StringComparison.OrdinalIgnoreCase)) > 1)
-                    issues.Add(Issue.Warning($"{column.Name}: '{resolved}' – kilka osób o tym opisie, wpisz USRID", DictionaryValidator.RowElement(i)));
+                    issues.Add(Issue.Warning(column.IdLookup
+                        ? $"{column.Name}: '{resolved}' – kilka pozycji o tej nazwie w słowniku {GlobalDictionaries.Get(column.Lookup!).Name}"
+                        : $"{column.Name}: '{resolved}' – kilka osób o tym opisie, wpisz USRID", DictionaryValidator.RowElement(i)));
+                else if (column.IdLookup && resolved is not null && CasBurden.Id(resolved) is null)
+                    issues.Add(Issue.Error($"{column.Name}: '{resolved}' – brak w słowniku {GlobalDictionaries.Get(column.Lookup!).Name}", DictionaryValidator.RowElement(i)));
             }
             result.Add(rows[i] with { Values = values });
         }

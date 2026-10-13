@@ -89,7 +89,7 @@ public static partial class GlobalDictionaries
                 new("Obszar", ColumnType.Text, CheckSimilar: true),
                 new("Cost Category", ColumnType.Text, CheckSimilar: true),
                 new("Rozliczeniowy", ColumnType.Boolean),
-                new(BurdenGroupColumn, ColumnType.Text, CheckSimilar: true),
+                new(BurdenGroupColumn, ColumnType.Text, Lookup: CasBurdenGroups, IdLookup: true),
             ],
             Rules = CostCategoryRules,
         },
@@ -144,7 +144,7 @@ public static partial class GlobalDictionaries
         {
             Code = CasPools,
             Name = "Pule narzutu CAS",
-            Description = "Pule narzutu CAS – kolumny raportu kosztów CES w kolejności „Kolejność”; Rodzaj: Koszt – w TOTAL COST, FCCOM – w TOTAL FCCOM. Nowa pula pojawia się w edytorze formuł, we wskaźnikach i w raporcie.",
+            Description = "Pule narzutu CAS – kolumny raportu kosztów CES w kolejności „Kolejność”; Rodzaj: Koszt – w TOTAL COST, FCCOM – w TOTAL FCCOM. Formuły, wskaźniki i raport wskazują pulę identyfikatorem – zmiana nazwy jest od razu widoczna wszędzie; puli używanej w formułach albo wskaźnikach nie można usunąć.",
             Columns =
             [
                 new("Pula", ColumnType.Text, Key: true, CheckSimilar: true),
@@ -153,42 +153,45 @@ public static partial class GlobalDictionaries
                 new("Opis", ColumnType.Text),
             ],
             Rules = CasPoolRules,
+            ReferencedBy = [(CasBurdenFormulas, "Pula", CasBurden.References), (CasBurdenFormulas, "Formuła", CasBurden.References), (CasBurdenRates, "Pula", CasBurden.References)],
         },
         new()
         {
             Code = CasBurdenGroups,
             Name = "Grupy narzutowe CAS",
-            Description = "Grupa narzutowa elementu kosztowego (kolumna „Grupa narzutowa CAS” słownika Cost Category). Pule naliczane w grupie i ich podstawy – słownik „Formuły narzutów CAS” (przycisk „Edytor formuł”).",
+            Description = "Grupa narzutowa elementu kosztowego (kolumna „Grupa narzutowa CAS” słownika Cost Category – zapisany identyfikator grupy, zmiana nazwy jest od razu widoczna). Pule naliczane w grupie i ich formuły – przycisk „Formuły narzutów” (macierz grup i pul, edytor formuły z klocków).",
             Columns =
             [
                 new("Grupa", ColumnType.Text, Key: true, CheckSimilar: true),
                 new("Opis", ColumnType.Text),
             ],
+            ReferencedBy = [(CostCategory, BurdenGroupColumn, CasBurden.References), (CasBurdenFormulas, "Grupa", CasBurden.References)],
         },
         new()
         {
             Code = CasBurdenFormulas,
             Name = "Formuły narzutów CAS",
-            Description = "Formuła puli w grupie narzutowej: narzut = (suma składników podstawy) × wskaźnik puli. Podstawa – „Base cost elements” (koszt bazowy kolumny) i pule połączone „ + ”. Wiersz = pula naliczana w grupie. Edycja w macierzy – „Edytor formuł”.",
+            Description = "Formuła puli w grupie narzutowej z klocków: Base cost elements (koszt bazowy kolumny), narzuty pul, wskaźniki pul, + − × ÷ ( ). Wiersz = pula naliczana w grupie. Edycja tylko w oknie „Formuły narzutów” (macierz grup i pul).",
             Columns =
             [
-                new("Grupa", ColumnType.Text, Key: true, CheckSimilar: true),
-                new("Pula", ColumnType.Text, Key: true, CheckSimilar: true),
-                new("Podstawa", ColumnType.Text, Required: true),
+                new("Grupa", ColumnType.Text, Key: true, Lookup: CasBurdenGroups, IdLookup: true),
+                new("Pula", ColumnType.Text, Key: true, Lookup: CasPools, IdLookup: true),
+                new("Formuła", ColumnType.Text, Required: true),
             ],
             Rules = CasBurden.FormulaRules,
+            Hidden = true,
         },
         new()
         {
             Code = CasBurdenRates,
             Name = "Wskaźniki narzutu CAS",
-            Description = "Wskaźnik puli narzutu CAS obowiązujący od – do (zwykle rok: 2026-01-01 – 2026-12-31; Do puste – bezterminowo). Raport kosztów CES bierze wskaźnik obowiązujący w okresie kolumny (okres, rok).",
+            Description = "Wskaźnik puli narzutu CAS obowiązujący od – do (zwykle rok: 2026-01-01 – 2026-12-31; Do puste – bezterminowo); pula z listy słownika „Pule narzutu CAS” (zapisany identyfikator – zmiana nazwy puli jest od razu widoczna). Raport kosztów CES bierze wskaźnik obowiązujący w okresie kolumny (okres, rok).",
             Columns =
             [
-                new("Pula", ColumnType.Text, Key: true, CheckSimilar: true),
+                new("Pula", ColumnType.Text, Key: true, Lookup: CasPools, IdLookup: true),
                 new("Od", ColumnType.Date, Key: true),
                 new("Do", ColumnType.Date),
-                new("Wskaźnik", ColumnType.Decimal, Required: true),
+                new("Wskaźnik", ColumnType.Decimal, Required: true, Decimals: 18),
                 new("Opis", ColumnType.Text),
             ],
             Validity = ("Od", "Do"),
@@ -208,7 +211,7 @@ public static partial class GlobalDictionaries
         new(Get(FxRates), "dict.FxRate", [("Waluta", "Currency"), ("Okres", "Period"), ("Kurs", "Rate")]),
         new(Get(CostCategory), "dict.CostCategory",
             [("Numer elementu kosztowego", "CostElement"), ("Opis", "Description"), ("Obszar", "Area"), ("Cost Category", "CostCategory"),
-             ("Rozliczeniowy", "IsSettlement"), (BurdenGroupColumn, "BurdenGroup")]),
+             ("Rozliczeniowy", "IsSettlement"), (BurdenGroupColumn, "BurdenGroupId")]),
         new(Get(Persons), "dict.Person",
         [
             ("USRID", "AdAccount"), ("Imię i nazwisko", "FullName"), ("Imię", "FirstName"), ("Nazwisko", "LastName"), ("E-mail", "Email"),
@@ -219,8 +222,8 @@ public static partial class GlobalDictionaries
         new(Get(ProductionParameters), "dict.ProductionParameter", [("Parametr", "Name"), ("Wartość", "Value"), ("Opis", "Description")]),
         new(Get(CasPools), "dict.CasPool", [("Pula", "Pool"), ("Kolejność", "SortOrder"), ("Rodzaj", "Kind"), ("Opis", "Description")]),
         new(Get(CasBurdenGroups), "dict.CasBurdenGroup", [("Grupa", "BurdenGroup"), ("Opis", "Description")]),
-        new(Get(CasBurdenFormulas), "dict.CasBurdenFormula", [("Grupa", "BurdenGroup"), ("Pula", "Pool"), ("Podstawa", "Basis")]),
-        new(Get(CasBurdenRates), "dict.CasBurdenRate", [("Pula", "Pool"), ("Od", "ValidFrom"), ("Do", "ValidTo"), ("Wskaźnik", "Rate"), ("Opis", "Description")]),
+        new(Get(CasBurdenFormulas), "dict.CasFormula", [("Grupa", "GroupId"), ("Pula", "PoolId"), ("Formuła", "Formula")]),
+        new(Get(CasBurdenRates), "dict.CasBurdenRate", [("Pula", "PoolId"), ("Od", "ValidFrom"), ("Do", "ValidTo"), ("Wskaźnik", "Rate"), ("Opis", "Description")]),
     ];
 
     private static IEnumerable<Issue> CalendarRules(IReadOnlyList<DictRow> rows)
@@ -432,6 +435,12 @@ public static partial class GlobalDictionaries
             .Select(r => new LookupOption(r["USRID"]!, r["Imię i nazwisko"] ?? r["USRID"]!))
             .OrderBy(o => o.Label, StringComparer.CurrentCulture)
             .ToList(),
+        // Pule i grupy narzutowe CAS: zapisywany identyfikator wiersza (RowId), wyświetlana nazwa.
+        CasPools => rows.Where(r => r.RowId is not null && r["Pula"] is not null)
+            .OrderBy(r => int.TryParse(r["Kolejność"], out var order) ? order : int.MaxValue)
+            .Select(r => new LookupOption(CasBurden.Ref(r.RowId!.Value), r["Pula"]!)).ToList(),
+        CasBurdenGroups => rows.Where(r => r.RowId is not null && r["Grupa"] is not null)
+            .Select(r => new LookupOption(CasBurden.Ref(r.RowId!.Value), r["Grupa"]!)).OrderBy(o => o.Label, StringComparer.CurrentCulture).ToList(),
         _ => rows.Select(r => Get(code).KeyOf(r.Values)).Distinct().Select(k => new LookupOption(k, k)).ToList(),
     };
 

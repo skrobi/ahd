@@ -20,13 +20,14 @@ using Xunit;
 namespace PzlEv.Tests.Projects;
 
 /// <summary>
-/// Raport kosztów CES (CasCostReport): formuły narzutów CAS jak w arkuszu finansów (testdata/Projekty/Narzuty_CAS_arkusz.xlsx,
-/// arkusz „Arkusz2”: wiersz 3 – kolumny, 4 – wskaźniki, 5 – nagłówek, dane od 6, opis od kolumny B), wskaźniki od – do,
-/// wiele lat, braki mapowania i wskaźników.
+/// Raport kosztów CES (CasCostReport) i formuły narzutów CAS z klocków: formuły jak w arkuszu finansów
+/// (testdata/Projekty/Narzuty_CAS_arkusz.xlsx, arkusz „Arkusz2”: wiersz 3 – kolumny, 4 – wskaźniki, 5 – nagłówek, dane od 6,
+/// opis od kolumny B), pule i grupy wskazywane identyfikatorem, wskaźniki od – do, wiele lat, braki mapowania i wskaźników,
+/// edycja klocków, zapętlenia, zmiana nazwy i blokada usunięcia używanej puli (baza).
 /// </summary>
 public sealed partial class CasCostReportTests : IDisposable
 {
-    /// <summary>Pule arkusza finansów w kolejności kolumn (dane startowe – migracja 032): 12 kosztu, 5 FCCOM.</summary>
+    /// <summary>Pule arkusza finansów w kolejności kolumn (dane startowe – migracja 034): 12 kosztu, 5 FCCOM; identyfikatory 1–17.</summary>
     public static IReadOnlyList<string> FinancePoolNames { get; } =
     [
         "MFG Fringe", "MFG OH", "ENG Fringe", "ENG OH", "MTL Fringe", "Material Handling (MTL)", "Miscellaneous Material Pool (MMP)", "General Services (GS)",
@@ -34,29 +35,98 @@ public sealed partial class CasCostReportTests : IDisposable
     ];
 
     public static IReadOnlyList<CasBurden.Pool> FinancePools { get; } =
-        FinancePoolNames.Select((p, i) => new CasBurden.Pool(p, (i + 1) * 10, p.StartsWith("FCCOM"))).ToList();
+        FinancePoolNames.Select((p, i) => new CasBurden.Pool(i + 1, p, (i + 1) * 10, p.StartsWith("FCCOM"))).ToList();
 
-    /// <summary>Formuły grup odczytane z arkusza finansów (dane startowe – migracja 032): grupa → pula → podstawa.</summary>
-    public static IReadOnlyDictionary<string, Dictionary<string, string>> FinanceFormulas { get; } = new Dictionary<string, Dictionary<string, string>>
-    {
-        ["GS labor"] = new Dictionary<string, string> { ["General Services (GS)"] = "Base cost elements + MFG Fringe + MFG OH + ENG Fringe + ENG OH + Material Handling (MTL) + GS Fringe + MSV Fringe + MTL Fringe", ["GS Fringe"] = "Base cost elements", ["General & Administrative (GA)"] = "Base cost elements + MFG Fringe + MFG OH + ENG Fringe + ENG OH + Material Handling (MTL) + General Services (GS) + GS Fringe + MSV Fringe", ["Corporate Flowdowns (FD)"] = "Base cost elements + MFG Fringe + MFG OH + ENG Fringe + ENG OH + Material Handling (MTL) + General Services (GS) + GS Fringe + MSV Fringe", ["FCCOM GS"] = "Base cost elements + MFG Fringe + MFG OH + ENG Fringe + ENG OH + Material Handling (MTL) + GS Fringe + MSV Fringe", ["FCCOM G&A"] = "Base cost elements + MFG Fringe + MFG OH + ENG Fringe + ENG OH + Material Handling (MTL) + General Services (GS) + GS Fringe + MSV Fringe" },
-        ["Direct Materials"] = new Dictionary<string, string> { ["Material Handling (MTL)"] = "Base cost elements", ["Miscellaneous Material Pool (MMP)"] = "Base cost elements", ["General Services (GS)"] = "Material Handling (MTL)", ["General & Administrative (GA)"] = "Material Handling (MTL) + General Services (GS)", ["Corporate Flowdowns (FD)"] = "Material Handling (MTL) + General Services (GS)", ["FCCOM MTL"] = "Base cost elements", ["FCCOM GS"] = "Material Handling (MTL)", ["FCCOM G&A"] = "Material Handling (MTL) + General Services (GS)" },
-        ["Direct Services"] = new Dictionary<string, string> { ["Material Handling (MTL)"] = "Base cost elements", ["General Services (GS)"] = "Material Handling (MTL)", ["General & Administrative (GA)"] = "Material Handling (MTL) + General Services (GS)", ["Corporate Flowdowns (FD)"] = "Material Handling (MTL) + General Services (GS)", ["FCCOM MTL"] = "Base cost elements", ["FCCOM GS"] = "Material Handling (MTL)", ["FCCOM G&A"] = "Material Handling (MTL) + General Services (GS)" },
-        ["Travel"] = new Dictionary<string, string> { ["General Services (GS)"] = "Base cost elements + MFG Fringe + MFG OH + ENG Fringe + ENG OH + Material Handling (MTL) + GS Fringe + MSV Fringe + MTL Fringe", ["General & Administrative (GA)"] = "Base cost elements + MFG Fringe + MFG OH + ENG Fringe + ENG OH + Material Handling (MTL) + General Services (GS) + GS Fringe + MSV Fringe", ["Corporate Flowdowns (FD)"] = "Base cost elements + MFG Fringe + MFG OH + ENG Fringe + ENG OH + Material Handling (MTL) + General Services (GS) + GS Fringe + MSV Fringe", ["FCCOM G&A"] = "Base cost elements + MFG Fringe + MFG OH + ENG Fringe + ENG OH + Material Handling (MTL) + General Services (GS) + GS Fringe + MSV Fringe" },
-        ["ODC"] = new Dictionary<string, string> {  },
-        ["MFG labor"] = new Dictionary<string, string> { ["MFG Fringe"] = "Base cost elements", ["MFG OH"] = "Base cost elements + MFG Fringe", ["General Services (GS)"] = "Base cost elements + MFG Fringe + MFG OH + ENG Fringe + ENG OH + Material Handling (MTL) + GS Fringe + MSV Fringe + MTL Fringe", ["General & Administrative (GA)"] = "Base cost elements + MFG Fringe + MFG OH + ENG Fringe + ENG OH + Material Handling (MTL) + General Services (GS) + GS Fringe + MSV Fringe", ["Corporate Flowdowns (FD)"] = "Base cost elements + MFG Fringe + MFG OH + ENG Fringe + ENG OH + Material Handling (MTL) + General Services (GS) + GS Fringe + MSV Fringe", ["FCCOM MFG"] = "Base cost elements + MFG Fringe", ["FCCOM GS"] = "Base cost elements + MFG Fringe + MFG OH + ENG Fringe + ENG OH + Material Handling (MTL) + GS Fringe + MSV Fringe", ["FCCOM G&A"] = "Base cost elements + MFG Fringe + MFG OH + ENG Fringe + ENG OH + Material Handling (MTL) + General Services (GS) + GS Fringe + MSV Fringe" },
-        ["ENG labor"] = new Dictionary<string, string> { ["ENG Fringe"] = "Base cost elements", ["ENG OH"] = "Base cost elements + ENG Fringe", ["General Services (GS)"] = "Base cost elements + MFG Fringe + MFG OH + ENG Fringe + ENG OH + Material Handling (MTL) + GS Fringe + MSV Fringe + MTL Fringe", ["General & Administrative (GA)"] = "Base cost elements + MFG Fringe + MFG OH + ENG Fringe + ENG OH + Material Handling (MTL) + General Services (GS) + GS Fringe + MSV Fringe", ["Corporate Flowdowns (FD)"] = "Base cost elements + MFG Fringe + MFG OH + ENG Fringe + ENG OH + Material Handling (MTL) + General Services (GS) + GS Fringe + MSV Fringe", ["FCCOM ENG"] = "Base cost elements + ENG Fringe", ["FCCOM GS"] = "Base cost elements + MFG Fringe + MFG OH + ENG Fringe + ENG OH + Material Handling (MTL) + GS Fringe + MSV Fringe", ["FCCOM G&A"] = "Base cost elements + MFG Fringe + MFG OH + ENG Fringe + ENG OH + Material Handling (MTL) + General Services (GS) + GS Fringe + MSV Fringe" },
-        ["ENG LL labor"] = new Dictionary<string, string> { ["ENG OH"] = "Base cost elements + ENG Fringe", ["General Services (GS)"] = "Base cost elements + MFG Fringe + MFG OH + ENG Fringe + ENG OH + Material Handling (MTL) + GS Fringe + MSV Fringe + MTL Fringe", ["General & Administrative (GA)"] = "Base cost elements + MFG Fringe + MFG OH + ENG Fringe + ENG OH + Material Handling (MTL) + General Services (GS) + GS Fringe + MSV Fringe", ["Corporate Flowdowns (FD)"] = "Base cost elements + MFG Fringe + MFG OH + ENG Fringe + ENG OH + Material Handling (MTL) + General Services (GS) + GS Fringe + MSV Fringe", ["FCCOM ENG"] = "Base cost elements + ENG Fringe", ["FCCOM GS"] = "Base cost elements + MFG Fringe + MFG OH + ENG Fringe + ENG OH + Material Handling (MTL) + GS Fringe + MSV Fringe", ["FCCOM G&A"] = "Base cost elements + MFG Fringe + MFG OH + ENG Fringe + ENG OH + Material Handling (MTL) + General Services (GS) + GS Fringe + MSV Fringe" },
-        ["MTL labor"] = new Dictionary<string, string> { ["MTL Fringe"] = "Base cost elements", ["General Services (GS)"] = "Base cost elements + MFG Fringe + MFG OH + ENG Fringe + ENG OH + Material Handling (MTL) + GS Fringe + MSV Fringe + MTL Fringe", ["General & Administrative (GA)"] = "Base cost elements + MFG Fringe + MFG OH + ENG Fringe + ENG OH + Material Handling (MTL) + General Services (GS) + GS Fringe + MSV Fringe + MTL Fringe", ["Corporate Flowdowns (FD)"] = "Base cost elements + MFG Fringe + MFG OH + ENG Fringe + ENG OH + Material Handling (MTL) + General Services (GS) + GS Fringe + MSV Fringe + MTL Fringe", ["FCCOM GS"] = "Base cost elements + MFG Fringe + MFG OH + ENG Fringe + ENG OH + Material Handling (MTL) + GS Fringe + MSV Fringe + MTL Fringe", ["FCCOM G&A"] = "Base cost elements + MFG Fringe + MFG OH + ENG Fringe + ENG OH + Material Handling (MTL) + General Services (GS) + GS Fringe + MSV Fringe + MTL Fringe" },
-        ["MSV labor"] = new Dictionary<string, string> { ["General Services (GS)"] = "Base cost elements + MFG Fringe + MFG OH + ENG Fringe + ENG OH + Material Handling (MTL) + GS Fringe + MSV Fringe + MTL Fringe", ["MSV Fringe"] = "Base cost elements", ["General & Administrative (GA)"] = "Base cost elements + MFG Fringe + MFG OH + ENG Fringe + ENG OH + Material Handling (MTL) + General Services (GS) + GS Fringe + MSV Fringe", ["Corporate Flowdowns (FD)"] = "Base cost elements + MFG Fringe + MFG OH + ENG Fringe + ENG OH + Material Handling (MTL) + General Services (GS) + GS Fringe + MSV Fringe", ["FCCOM GS"] = "Base cost elements + MFG Fringe + MFG OH + ENG Fringe + ENG OH + Material Handling (MTL) + GS Fringe + MSV Fringe", ["FCCOM G&A"] = "Base cost elements + MFG Fringe + MFG OH + ENG Fringe + ENG OH + Material Handling (MTL) + General Services (GS) + GS Fringe + MSV Fringe" },
-    };
+    /// <summary>
+    /// Formuły grup odczytane z arkusza finansów (dane startowe – migracja 034): grupa, pula, klocki z nazwą puli –
+    /// p{pula} (narzut), r{pula} (wskaźnik), base (koszt bazowy).
+    /// </summary>
+    public static IReadOnlyList<(string Group, string Pool, string Formula)> FinanceFormulas { get; } =
+    [
+        ("GS labor", "General Services (GS)", "( base + p{MFG Fringe} + p{MFG OH} + p{ENG Fringe} + p{ENG OH} + p{Material Handling (MTL)} + p{GS Fringe} + p{MSV Fringe} + p{MTL Fringe} ) * r{General Services (GS)}"),
+        ("GS labor", "GS Fringe", "base * r{GS Fringe}"),
+        ("GS labor", "General & Administrative (GA)", "( base + p{MFG Fringe} + p{MFG OH} + p{ENG Fringe} + p{ENG OH} + p{Material Handling (MTL)} + p{General Services (GS)} + p{GS Fringe} + p{MSV Fringe} ) * r{General & Administrative (GA)}"),
+        ("GS labor", "Corporate Flowdowns (FD)", "( base + p{MFG Fringe} + p{MFG OH} + p{ENG Fringe} + p{ENG OH} + p{Material Handling (MTL)} + p{General Services (GS)} + p{GS Fringe} + p{MSV Fringe} ) * r{Corporate Flowdowns (FD)}"),
+        ("GS labor", "FCCOM GS", "( base + p{MFG Fringe} + p{MFG OH} + p{ENG Fringe} + p{ENG OH} + p{Material Handling (MTL)} + p{GS Fringe} + p{MSV Fringe} ) * r{FCCOM GS}"),
+        ("GS labor", "FCCOM G&A", "( base + p{MFG Fringe} + p{MFG OH} + p{ENG Fringe} + p{ENG OH} + p{Material Handling (MTL)} + p{General Services (GS)} + p{GS Fringe} + p{MSV Fringe} ) * r{FCCOM G&A}"),
+        ("Direct Materials", "Material Handling (MTL)", "base * r{Material Handling (MTL)}"),
+        ("Direct Materials", "Miscellaneous Material Pool (MMP)", "base * r{Miscellaneous Material Pool (MMP)}"),
+        ("Direct Materials", "General Services (GS)", "p{Material Handling (MTL)} * r{General Services (GS)}"),
+        ("Direct Materials", "General & Administrative (GA)", "( p{Material Handling (MTL)} + p{General Services (GS)} ) * r{General & Administrative (GA)}"),
+        ("Direct Materials", "Corporate Flowdowns (FD)", "( p{Material Handling (MTL)} + p{General Services (GS)} ) * r{Corporate Flowdowns (FD)}"),
+        ("Direct Materials", "FCCOM MTL", "base * r{FCCOM MTL}"),
+        ("Direct Materials", "FCCOM GS", "p{Material Handling (MTL)} * r{FCCOM GS}"),
+        ("Direct Materials", "FCCOM G&A", "( p{Material Handling (MTL)} + p{General Services (GS)} ) * r{FCCOM G&A}"),
+        ("Direct Services", "Material Handling (MTL)", "base * r{Material Handling (MTL)}"),
+        ("Direct Services", "General Services (GS)", "p{Material Handling (MTL)} * r{General Services (GS)}"),
+        ("Direct Services", "General & Administrative (GA)", "( p{Material Handling (MTL)} + p{General Services (GS)} ) * r{General & Administrative (GA)}"),
+        ("Direct Services", "Corporate Flowdowns (FD)", "( p{Material Handling (MTL)} + p{General Services (GS)} ) * r{Corporate Flowdowns (FD)}"),
+        ("Direct Services", "FCCOM MTL", "base * r{FCCOM MTL}"),
+        ("Direct Services", "FCCOM GS", "p{Material Handling (MTL)} * r{FCCOM GS}"),
+        ("Direct Services", "FCCOM G&A", "( p{Material Handling (MTL)} + p{General Services (GS)} ) * r{FCCOM G&A}"),
+        ("Travel", "General Services (GS)", "( base + p{MFG Fringe} + p{MFG OH} + p{ENG Fringe} + p{ENG OH} + p{Material Handling (MTL)} + p{GS Fringe} + p{MSV Fringe} + p{MTL Fringe} ) * r{General Services (GS)}"),
+        ("Travel", "General & Administrative (GA)", "( base + p{MFG Fringe} + p{MFG OH} + p{ENG Fringe} + p{ENG OH} + p{Material Handling (MTL)} + p{General Services (GS)} + p{GS Fringe} + p{MSV Fringe} ) * r{General & Administrative (GA)}"),
+        ("Travel", "Corporate Flowdowns (FD)", "( base + p{MFG Fringe} + p{MFG OH} + p{ENG Fringe} + p{ENG OH} + p{Material Handling (MTL)} + p{General Services (GS)} + p{GS Fringe} + p{MSV Fringe} ) * r{Corporate Flowdowns (FD)}"),
+        ("Travel", "FCCOM G&A", "( base + p{MFG Fringe} + p{MFG OH} + p{ENG Fringe} + p{ENG OH} + p{Material Handling (MTL)} + p{General Services (GS)} + p{GS Fringe} + p{MSV Fringe} ) * r{FCCOM G&A}"),
+        ("MFG labor", "MFG Fringe", "base * r{MFG Fringe}"),
+        ("MFG labor", "MFG OH", "( base + p{MFG Fringe} ) * r{MFG OH}"),
+        ("MFG labor", "General Services (GS)", "( base + p{MFG Fringe} + p{MFG OH} + p{ENG Fringe} + p{ENG OH} + p{Material Handling (MTL)} + p{GS Fringe} + p{MSV Fringe} + p{MTL Fringe} ) * r{General Services (GS)}"),
+        ("MFG labor", "General & Administrative (GA)", "( base + p{MFG Fringe} + p{MFG OH} + p{ENG Fringe} + p{ENG OH} + p{Material Handling (MTL)} + p{General Services (GS)} + p{GS Fringe} + p{MSV Fringe} ) * r{General & Administrative (GA)}"),
+        ("MFG labor", "Corporate Flowdowns (FD)", "( base + p{MFG Fringe} + p{MFG OH} + p{ENG Fringe} + p{ENG OH} + p{Material Handling (MTL)} + p{General Services (GS)} + p{GS Fringe} + p{MSV Fringe} ) * r{Corporate Flowdowns (FD)}"),
+        ("MFG labor", "FCCOM MFG", "( base + p{MFG Fringe} ) * r{FCCOM MFG}"),
+        ("MFG labor", "FCCOM GS", "( base + p{MFG Fringe} + p{MFG OH} + p{ENG Fringe} + p{ENG OH} + p{Material Handling (MTL)} + p{GS Fringe} + p{MSV Fringe} ) * r{FCCOM GS}"),
+        ("MFG labor", "FCCOM G&A", "( base + p{MFG Fringe} + p{MFG OH} + p{ENG Fringe} + p{ENG OH} + p{Material Handling (MTL)} + p{General Services (GS)} + p{GS Fringe} + p{MSV Fringe} ) * r{FCCOM G&A}"),
+        ("ENG labor", "ENG Fringe", "base * r{ENG Fringe}"),
+        ("ENG labor", "ENG OH", "( base + p{ENG Fringe} ) * r{ENG OH}"),
+        ("ENG labor", "General Services (GS)", "( base + p{MFG Fringe} + p{MFG OH} + p{ENG Fringe} + p{ENG OH} + p{Material Handling (MTL)} + p{GS Fringe} + p{MSV Fringe} + p{MTL Fringe} ) * r{General Services (GS)}"),
+        ("ENG labor", "General & Administrative (GA)", "( base + p{MFG Fringe} + p{MFG OH} + p{ENG Fringe} + p{ENG OH} + p{Material Handling (MTL)} + p{General Services (GS)} + p{GS Fringe} + p{MSV Fringe} ) * r{General & Administrative (GA)}"),
+        ("ENG labor", "Corporate Flowdowns (FD)", "( base + p{MFG Fringe} + p{MFG OH} + p{ENG Fringe} + p{ENG OH} + p{Material Handling (MTL)} + p{General Services (GS)} + p{GS Fringe} + p{MSV Fringe} ) * r{Corporate Flowdowns (FD)}"),
+        ("ENG labor", "FCCOM ENG", "( base + p{ENG Fringe} ) * r{FCCOM ENG}"),
+        ("ENG labor", "FCCOM GS", "( base + p{MFG Fringe} + p{MFG OH} + p{ENG Fringe} + p{ENG OH} + p{Material Handling (MTL)} + p{GS Fringe} + p{MSV Fringe} ) * r{FCCOM GS}"),
+        ("ENG labor", "FCCOM G&A", "( base + p{MFG Fringe} + p{MFG OH} + p{ENG Fringe} + p{ENG OH} + p{Material Handling (MTL)} + p{General Services (GS)} + p{GS Fringe} + p{MSV Fringe} ) * r{FCCOM G&A}"),
+        ("ENG LL labor", "ENG OH", "( base + p{ENG Fringe} ) * r{ENG OH}"),
+        ("ENG LL labor", "General Services (GS)", "( base + p{MFG Fringe} + p{MFG OH} + p{ENG Fringe} + p{ENG OH} + p{Material Handling (MTL)} + p{GS Fringe} + p{MSV Fringe} + p{MTL Fringe} ) * r{General Services (GS)}"),
+        ("ENG LL labor", "General & Administrative (GA)", "( base + p{MFG Fringe} + p{MFG OH} + p{ENG Fringe} + p{ENG OH} + p{Material Handling (MTL)} + p{General Services (GS)} + p{GS Fringe} + p{MSV Fringe} ) * r{General & Administrative (GA)}"),
+        ("ENG LL labor", "Corporate Flowdowns (FD)", "( base + p{MFG Fringe} + p{MFG OH} + p{ENG Fringe} + p{ENG OH} + p{Material Handling (MTL)} + p{General Services (GS)} + p{GS Fringe} + p{MSV Fringe} ) * r{Corporate Flowdowns (FD)}"),
+        ("ENG LL labor", "FCCOM ENG", "( base + p{ENG Fringe} ) * r{FCCOM ENG}"),
+        ("ENG LL labor", "FCCOM GS", "( base + p{MFG Fringe} + p{MFG OH} + p{ENG Fringe} + p{ENG OH} + p{Material Handling (MTL)} + p{GS Fringe} + p{MSV Fringe} ) * r{FCCOM GS}"),
+        ("ENG LL labor", "FCCOM G&A", "( base + p{MFG Fringe} + p{MFG OH} + p{ENG Fringe} + p{ENG OH} + p{Material Handling (MTL)} + p{General Services (GS)} + p{GS Fringe} + p{MSV Fringe} ) * r{FCCOM G&A}"),
+        ("MTL labor", "MTL Fringe", "base * r{MTL Fringe}"),
+        ("MTL labor", "General Services (GS)", "( base + p{MFG Fringe} + p{MFG OH} + p{ENG Fringe} + p{ENG OH} + p{Material Handling (MTL)} + p{GS Fringe} + p{MSV Fringe} + p{MTL Fringe} ) * r{General Services (GS)}"),
+        ("MTL labor", "General & Administrative (GA)", "( base + p{MFG Fringe} + p{MFG OH} + p{ENG Fringe} + p{ENG OH} + p{Material Handling (MTL)} + p{General Services (GS)} + p{GS Fringe} + p{MSV Fringe} + p{MTL Fringe} ) * r{General & Administrative (GA)}"),
+        ("MTL labor", "Corporate Flowdowns (FD)", "( base + p{MFG Fringe} + p{MFG OH} + p{ENG Fringe} + p{ENG OH} + p{Material Handling (MTL)} + p{General Services (GS)} + p{GS Fringe} + p{MSV Fringe} + p{MTL Fringe} ) * r{Corporate Flowdowns (FD)}"),
+        ("MTL labor", "FCCOM GS", "( base + p{MFG Fringe} + p{MFG OH} + p{ENG Fringe} + p{ENG OH} + p{Material Handling (MTL)} + p{GS Fringe} + p{MSV Fringe} + p{MTL Fringe} ) * r{FCCOM GS}"),
+        ("MTL labor", "FCCOM G&A", "( base + p{MFG Fringe} + p{MFG OH} + p{ENG Fringe} + p{ENG OH} + p{Material Handling (MTL)} + p{General Services (GS)} + p{GS Fringe} + p{MSV Fringe} + p{MTL Fringe} ) * r{FCCOM G&A}"),
+        ("MSV labor", "General Services (GS)", "( base + p{MFG Fringe} + p{MFG OH} + p{ENG Fringe} + p{ENG OH} + p{Material Handling (MTL)} + p{GS Fringe} + p{MSV Fringe} + p{MTL Fringe} ) * r{General Services (GS)}"),
+        ("MSV labor", "MSV Fringe", "base * r{MSV Fringe}"),
+        ("MSV labor", "General & Administrative (GA)", "( base + p{MFG Fringe} + p{MFG OH} + p{ENG Fringe} + p{ENG OH} + p{Material Handling (MTL)} + p{General Services (GS)} + p{GS Fringe} + p{MSV Fringe} ) * r{General & Administrative (GA)}"),
+        ("MSV labor", "Corporate Flowdowns (FD)", "( base + p{MFG Fringe} + p{MFG OH} + p{ENG Fringe} + p{ENG OH} + p{Material Handling (MTL)} + p{General Services (GS)} + p{GS Fringe} + p{MSV Fringe} ) * r{Corporate Flowdowns (FD)}"),
+        ("MSV labor", "FCCOM GS", "( base + p{MFG Fringe} + p{MFG OH} + p{ENG Fringe} + p{ENG OH} + p{Material Handling (MTL)} + p{GS Fringe} + p{MSV Fringe} ) * r{FCCOM GS}"),
+        ("MSV labor", "FCCOM G&A", "( base + p{MFG Fringe} + p{MFG OH} + p{ENG Fringe} + p{ENG OH} + p{Material Handling (MTL)} + p{General Services (GS)} + p{GS Fringe} + p{MSV Fringe} ) * r{FCCOM G&A}"),
+    ];
 
-    public static IReadOnlyList<CasBurden.Group> FinanceGroups { get; } = FinanceFormulas
-        .Select(g => new CasBurden.Group(g.Key, null, g.Value.ToDictionary(f => f.Key, f => CasBurden.Parse(f.Value))))
+    /// <summary>Grupy arkusza finansów – identyfikatory 101–110.</summary>
+    public static IReadOnlyList<string> FinanceGroupNames { get; } =
+        ["MFG labor", "ENG labor", "ENG LL labor", "MSV labor", "GS labor", "MTL labor", "Direct Materials", "Direct Services", "Travel", "ODC"];
+
+    public static long GroupId(string name) => 101 + FinanceGroupNames.ToList().IndexOf(name);
+
+    public static long PoolId(string name) => 1 + FinancePoolNames.ToList().IndexOf(name);
+
+    /// <summary>Zapis klocków z nazwami pul (jak w migracji 034) → klocki z identyfikatorami.</summary>
+    public static IReadOnlyList<CasFormula.Token> Tokens(string formula, Func<string, long> id) =>
+        CasFormula.Parse(TokenName().Replace(formula, m => $"{m.Groups[1].Value}:{id(m.Groups[2].Value)}"))!;
+
+    [GeneratedRegex(@"([pr])\{([^}]+)\}")]
+    private static partial Regex TokenName();
+
+    public static IReadOnlyList<CasBurden.Group> FinanceGroups { get; } = FinanceGroupNames
+        .Select(g => new CasBurden.Group(GroupId(g), g, null, FinanceFormulas.Where(f => f.Group == g)
+            .ToDictionary(f => PoolId(f.Pool), f => Tokens(f.Formula, PoolId))))
         .ToList();
 
-    /// <summary>Grupa narzutowa elementów kosztowych arkusza finansów (dane startowe – migracja 030).</summary>
-    public static IReadOnlyDictionary<string, string?> FinanceMapping { get; } = new Dictionary<string, string?>
+    /// <summary>Grupa narzutowa elementów kosztowych arkusza finansów (dane startowe – migracja 034).</summary>
+    public static IReadOnlyDictionary<string, string> FinanceMappingNames { get; } = new Dictionary<string, string>
     {
         ["0096606550"] = "GS labor", ["0051105550"] = "Direct Materials", ["0051110550"] = "Direct Services", ["0057120550"] = "Travel",
         ["0057510550"] = "ODC", ["0057511550"] = "ODC", ["0057712550"] = "ODC", ["0057714550"] = "ODC",
@@ -66,6 +136,9 @@ public sealed partial class CasCostReportTests : IDisposable
         ["0094410550"] = "ENG labor", ["0094414550"] = "ENG labor", ["0094412550"] = "ENG labor", ["0094490550"] = "ENG LL labor",
         ["0096610550"] = "MTL labor", ["9441X550"] = "ENG labor", ["9229X550"] = "MSV labor", ["9660R550"] = "MSV labor",
     };
+
+    public static IReadOnlyDictionary<string, string?> FinanceMapping { get; } =
+        FinanceMappingNames.ToDictionary(m => m.Key, m => (string?)CasBurden.Ref(GroupId(m.Value)));
 
     private const int SheetHeaderRow = 5, SheetRateRow = 4, SheetFirstRow = 6, SheetLastColumn = 67;   // BO – TOTAL FCCOM 2025
 
@@ -90,8 +163,8 @@ public sealed partial class CasCostReportTests : IDisposable
         var rates = new List<CasCostReport.Rate>();
         for (var p = 0; p < FinancePoolNames.Count; p++)
         {
-            rates.Add(new CasCostReport.Rate(FinancePoolNames[p], new DateOnly(2026, 1, 1), new DateOnly(2026, 12, 31), (decimal)sheet.Cell(SheetRateRow, 30 + p).GetDouble()));
-            rates.Add(new CasCostReport.Rate(FinancePoolNames[p], new DateOnly(2025, 1, 1), new DateOnly(2025, 12, 31), (decimal)sheet.Cell(SheetRateRow, 49 + p).GetDouble()));
+            rates.Add(new CasCostReport.Rate(p + 1, new DateOnly(2026, 1, 1), new DateOnly(2026, 12, 31), (decimal)sheet.Cell(SheetRateRow, 30 + p).GetDouble()));
+            rates.Add(new CasCostReport.Rate(p + 1, new DateOnly(2025, 1, 1), new DateOnly(2025, 12, 31), (decimal)sheet.Cell(SheetRateRow, 49 + p).GetDouble()));
         }
         return (columns, rows, rates);
     }
@@ -186,12 +259,13 @@ public sealed partial class CasCostReportTests : IDisposable
     {
         List<string> columns = [.. Description, "Period 03/2027", "2027", "2026", "2025"];
         List<IReadOnlyList<object?>> rows = [["G", "P1", "Projekt", "0092210550", "Quality", "Manufacturing and QA labor", 100m, 300m, 1000m, 50m]];
+        long fringe = PoolId("MFG Fringe"), oh = PoolId("MFG OH");
         List<CasCostReport.Rate> rates =
         [
-            new("MFG Fringe", new DateOnly(2025, 1, 1), new DateOnly(2026, 6, 30), 0.5m),   // jeden wskaźnik na dwa lata
-            new("MFG Fringe", new DateOnly(2026, 7, 1), null, 0.7m),                        // od połowy 2026 bezterminowo
-            new("MFG OH", new DateOnly(2027, 1, 1), new DateOnly(2027, 12, 31), 2m),
-            new("MFG OH", new DateOnly(2028, 1, 1), null, 9m),                              // poza ostatnim okresem danych (03/2027)
+            new(fringe, new DateOnly(2025, 1, 1), new DateOnly(2026, 6, 30), 0.5m),   // jeden wskaźnik na dwa lata
+            new(fringe, new DateOnly(2026, 7, 1), null, 0.7m),                        // od połowy 2026 bezterminowo
+            new(oh, new DateOnly(2027, 1, 1), new DateOnly(2027, 12, 31), 2m),
+            new(oh, new DateOnly(2028, 1, 1), null, 9m),                              // poza ostatnim okresem danych (03/2027)
         ];
 
         var result = CasCostReport.Build(columns, rows, FinanceMapping, FinancePools, FinanceGroups, rates);
@@ -203,15 +277,14 @@ public sealed partial class CasCostReportTests : IDisposable
         Assert.Equal((0.7m, null), (Rate("2026", "MFG Fringe"), Rate("2026", "MFG OH")));
         Assert.Equal((0.5m, null), (Rate("2025", "MFG Fringe"), Rate("2025", "MFG OH")));
         Assert.Contains(result.Notes, n => n.StartsWith("2026: wskaźnik MFG Fringe zmienia się") && n.Contains("2026-07-01"));
-        Assert.Contains(result.Notes, n => n == "2026: brak wskaźnika MFG OH w słowniku „Wskaźniki narzutu CAS” – narzut liczony jako 0");
+        Assert.Contains(result.Notes, n => n == "2026: brak wskaźnika MFG OH w słowniku „Wskaźniki narzutu CAS” – liczony jako 0");
         Assert.Contains(result.Notes, n => n.StartsWith("2025: brak wskaźnika General Services (GS)"));
         Assert.DoesNotContain(result.Notes, n => n.Contains("MMP"));   // pula nienaliczana w żadnym wierszu – brak wskaźnika bez uwagi
 
         // Blok każdej kolumny kosztu ma własne formuły: MFG Fringe roku 2026 = koszt 2026 × wskaźnik bloku 2026.
-        var cost2026 = CasCostReport.Letter(10);
-        var fringe = Column(result, "2026", "MFG Fringe");
-        Assert.Equal($"={cost2026}{CasCostReport.FirstDataRow}*{CasCostReport.Letter(fringe)}${CasCostReport.RateRow}",
-            ((ExcelTableWriter.Formula)result.Report.Rows.Single()[fringe - 1]!).A1);
+        var column = Column(result, "2026", "MFG Fringe");
+        Assert.Equal($"={CasCostReport.Letter(10)}{CasCostReport.FirstDataRow}*{CasCostReport.Letter(column)}${CasCostReport.RateRow}",
+            ((ExcelTableWriter.Formula)result.Report.Rows.Single()[column - 1]!).A1);
         Assert.Equal(["Period 03/2027", "2027", "2026", "2025"], result.Report.Headers.Skip(7).Take(4));
         Assert.Equal(11 + 4 * 19, result.Report.Headers.Count);
     }
@@ -226,65 +299,92 @@ public sealed partial class CasCostReportTests : IDisposable
             ["G", "P1", "Projekt", "0099999999", "Nowy", null, 5m],
             ["G", "P1", "Projekt", "0057120550", "Travel", "Travel costs", 1m],
         ];
-        var mapping = new Dictionary<string, string?> { ["0051105550"] = "Direct Materials", ["0057120550"] = "Podróże" };
+        var mapping = new Dictionary<string, string?> { ["0051105550"] = CasBurden.Ref(GroupId("Direct Materials")), ["0057120550"] = "999" };
 
         var result = CasCostReport.Build(columns, rows, mapping, FinancePools, FinanceGroups, []);
 
         var formulas = result.Report.Rows.Select(r => r.OfType<ExcelTableWriter.Formula>().Select(f => f.A1).ToList()).ToList();
-        Assert.Equal("Direct Materials", result.Report.Rows.First()[6]);
+        Assert.Equal("Direct Materials", result.Report.Rows.First()[6]);   // nazwa grupy, nie identyfikator
         Assert.Equal(8 + 2, formulas[0].Count);   // pule materiałów + TOTAL COST, TOTAL FCCOM
         Assert.Contains("=N4*P$2", formulas[0]);   // GS materiałów – od Material Handling (N), wskaźnik GS w P2
         Assert.Equal(["=SUM(I5:T5)+H5", "=SUM(U5:Y5)"], formulas[1]);
         Assert.Equal(["=SUM(I6:T6)+H6", "=SUM(U6:Y6)"], formulas[2]);
         Assert.Contains(result.Notes, n => n.Contains("bez grupy narzutowej") && n.EndsWith(": 0099999999"));
-        Assert.Contains(result.Notes, n => n.Contains("spoza słownika") && n.EndsWith(": Podróże (0057120550)"));
+        Assert.Contains(result.Notes, n => n.Contains("grupą usuniętą") && n.EndsWith(": 0057120550"));
     }
 
     [Fact]
-    public void Dictionary_rows_are_read_as_pools_groups_formulas_and_rates()
+    public void Formula_blocks_are_validated_displayed_and_written_to_excel()
     {
-        DictRow Row(params (string Column, string? Value)[] values) => new(1, 1, values.ToDictionary(v => v.Column, v => v.Value));
+        var tokens = Tokens("( base + p{MFG Fringe} ) * r{MFG OH} - p{MFG Fringe} / ( r{MFG Fringe} )", PoolId);
+        var names = FinancePools.ToDictionary(p => p.Id, p => p.Name);
 
-        var pools = CasBurden.PoolsFrom(
+        Assert.Null(CasFormula.Error(tokens, names.Keys.ToHashSet()));
+        Assert.Equal("( base + p:1 ) * r:2 - p:1 / ( r:1 )", CasFormula.Serialize(tokens));
+        Assert.Equal(tokens, CasFormula.Parse(CasFormula.Serialize(tokens)));
+        Assert.Equal("(Base cost elements + MFG Fringe) × wskaźnik MFG OH − MFG Fringe ÷ (wskaźnik MFG Fringe)", CasFormula.Display(tokens, id => names[id]));
+        Assert.Equal("=(H4+K4)*L$2-K4/(K$2)", CasFormula.Excel(tokens, "H4", id => $"{(char)('J' + id)}4", id => $"{(char)('J' + id)}$2"));
+        Assert.Equal([1L], CasFormula.Pools(tokens));
+
+        string? Error(string formula) => CasFormula.Error(Tokens(formula, PoolId), names.Keys.ToHashSet());
+        Assert.Contains("pusta", Error(""));
+        Assert.Contains("Brak operatora", Error("base p{MFG OH}"));
+        Assert.Contains("zaczynać się od operatora", Error("* base"));
+        Assert.Contains("kończyć się operatorem", Error("base +"));
+        Assert.Contains("Dwa operatory", Error("base + * r{MFG OH}"));
+        Assert.Contains("Niedomknięte nawiasy", Error("( base + p{MFG Fringe} * r{MFG OH}"));
+        Assert.Contains("bez otwierającego", Error("base ) * r{MFG OH}"));
+        Assert.Contains("Pusty nawias", Error("base * ( )"));
+        Assert.Contains("usunięta", CasFormula.Error([CasFormula.Token.BaseCost, CasFormula.Token.Op('*'), CasFormula.Token.Rate(999)], names.Keys.ToHashSet()));
+        Assert.Null(CasFormula.Parse("base * x:1"));   // zapis nieczytelny
+    }
+
+    [Fact]
+    public void Builder_inserts_moves_and_removes_blocks_at_cursor()
+    {
+        long oh = PoolId("MFG OH"), fringe = PoolId("MFG Fringe");
+        var draft = new CasFormulaDraft(oh, CasFormula.Default(oh));   // base * r:OH, kursor na końcu
+
+        draft.MoveCursor(1);                                           // za „base”
+        draft.Insert(CasFormula.Token.Op('+'));
+        draft.Insert(CasFormula.Token.Pool(fringe));                   // base + p:Fringe * r:OH
+        draft.Insert(CasFormula.Token.Open, at: 0);                    // upuszczenie na początku
+        draft.Insert(CasFormula.Token.Close, at: 4);                   // ( base + p:Fringe ) * r:OH
+        Assert.Equal("( base + p:1 ) * r:2", CasFormula.Serialize(draft.Tokens));
+        Assert.Equal(5, draft.Cursor);
+        Assert.Null(draft.Error());
+
+        draft.Move(from: 3, to: 1);                                    // przeciągnięcie p:Fringe przed base
+        Assert.Equal("( p:1 base + ) * r:2", CasFormula.Serialize(draft.Tokens));
+        Assert.NotNull(draft.Error());
+        draft.Move(from: 1, to: 4);
+        Assert.Equal("( base + p:1 ) * r:2", CasFormula.Serialize(draft.Tokens));
+
+        draft.MoveCursor(99);
+        draft.Backspace();                                             // usuwa r:OH
+        draft.MoveCursor(0);
+        draft.Delete();                                                // usuwa „(”
+        Assert.Equal("base + p:1 ) *", CasFormula.Serialize(draft.Tokens));
+        draft.Replace([CasFormula.Token.Pool(oh)]);
+        Assert.Contains("nie może zależeć od niego samego", draft.Error());
+    }
+
+    [Fact]
+    public void Matrix_changes_replace_formulas_and_keep_versions()
+    {
+        DictRow Row(long id, long group, long pool, string formula) =>
+            new(id, 3, new Dictionary<string, string?> { ["Grupa"] = CasBurden.Ref(group), ["Pula"] = CasBurden.Ref(pool), ["Formuła"] = formula });
+        IReadOnlyList<DictRow> current = [Row(1, 101, 8, "base * r:8"), Row(2, 101, 12, "base * r:12"), Row(3, 110, 1, "base * r:1")];
+
+        var (working, removed) = CasBurden.Apply(current,
         [
-            Row(("Pula", "FCCOM G&A"), ("Kolejność", "170"), ("Rodzaj", "FCCOM")),
-            Row(("Pula", "MFG Fringe"), ("Kolejność", "10"), ("Rodzaj", "Koszt")),
+            new CasBurden.Change(101, 8, Tokens("( base + p{MFG Fringe} ) * r{General Services (GS)}", PoolId)),
+            new CasBurden.Change(101, 11, CasFormula.Default(11)),
+            new CasBurden.Change(101, 12, null),
         ]);
-        var groups = CasBurden.GroupsFrom(
-            [Row(("Grupa", "Travel"), ("Opis", "Podróże")), Row(("Grupa", "Pusta"), ("Opis", null))],
-            [
-                Row(("Grupa", "Travel"), ("Pula", "General Services (GS)"), ("Podstawa", "Base cost elements + MFG Fringe +  + MFG Fringe")),
-                Row(("Grupa", "Bez opisu"), ("Pula", "MFG Fringe"), ("Podstawa", "Base cost elements")),
-            ]);
-        var rates = CasCostReport.RatesFrom([Row(("Pula", "FCCOM G&A"), ("Od", "2026-01-01"), ("Do", null), ("Wskaźnik", "0.000057456819309837"))]);
 
-        Assert.Equal([new CasBurden.Pool("MFG Fringe", 10, false), new CasBurden.Pool("FCCOM G&A", 170, true)], pools);
-        Assert.Equal(["Travel", "Pusta", "Bez opisu"], groups.Select(g => g.Name));
-        Assert.Equal(["Base cost elements", "MFG Fringe"], groups[0].Formulas["General Services (GS)"]);   // bez pustych i powtórzeń
-        Assert.Empty(groups[1].Formulas);
-        Assert.Equal(new CasCostReport.Rate("FCCOM G&A", new DateOnly(2026, 1, 1), null, 0.000057456819309837m), rates.Single());
-    }
-
-    [Fact]
-    public void Editor_replaces_formulas_of_one_group_and_keeps_versions()
-    {
-        DictRow Row(long id, string group, string pool, string basis) =>
-            new(id, 3, new Dictionary<string, string?> { ["Grupa"] = group, ["Pula"] = pool, ["Podstawa"] = basis });
-        IReadOnlyList<DictRow> current =
-        [
-            Row(1, "Travel", "General Services (GS)", "Base cost elements"),
-            Row(2, "Travel", "Corporate Flowdowns (FD)", "Base cost elements"),
-            Row(3, "ODC", "MFG Fringe", "Base cost elements"),
-        ];
-
-        var (working, removed) = CasBurden.ReplaceGroup(current, "Travel", new Dictionary<string, IReadOnlyList<string>>
-        {
-            ["General Services (GS)"] = ["Base cost elements", "MFG Fringe"],
-            ["General & Administrative (GA)"] = ["Base cost elements", "General Services (GS)"],
-        });
-
-        Assert.Equal([(3L, 3), (1L, 3), (null, null)], working.Select(r => (r.RowId, r.Version)));   // ODC bez zmian, GS – ta sama wersja, G&A – nowy
-        Assert.Equal("Base cost elements + MFG Fringe", working[1]["Podstawa"]);
+        Assert.Equal([(1L, 3), (3L, 3), (null, null)], working.Select(r => (r.RowId, r.Version)));   // GS – ta sama wersja, G&A – nowy, ODC bez zmian
+        Assert.Equal("( base + p:1 ) * r:8", working[0]["Formuła"]);
         Assert.Equal(2L, removed.Single().RowId);   // FD odznaczona
         Assert.Empty(DictionaryValidator.Validate(GlobalDictionaries.Get(GlobalDictionaries.CasBurdenFormulas), working));
     }
@@ -293,22 +393,23 @@ public sealed partial class CasCostReportTests : IDisposable
     public void Formulas_depending_on_themselves_are_rejected()
     {
         var spec = GlobalDictionaries.Get(GlobalDictionaries.CasBurdenFormulas);
-        DictRow Row(string group, string pool, string? basis) =>
-            new(null, null, new Dictionary<string, string?> { ["Grupa"] = group, ["Pula"] = pool, ["Podstawa"] = basis });
+        DictRow Row(long group, string pool, string? formula) => new(null, null, new Dictionary<string, string?>
+        {
+            ["Grupa"] = CasBurden.Ref(group), ["Pula"] = CasBurden.Ref(PoolId(pool)), ["Formuła"] = formula is null ? null : CasFormula.Serialize(Tokens(formula, PoolId)),
+        });
 
         var issues = DictionaryValidator.Validate(spec,
         [
-            Row("A", "General Services (GS)", "Base cost elements + General & Administrative (GA)"),
-            Row("A", "General & Administrative (GA)", "General Services (GS)"),
-            Row("A", "MFG OH", "MFG OH"),
-            Row("A", "MFG Fringe", "Base cost elements"),
-            Row("B", "General Services (GS)", "General & Administrative (GA)"),   // w grupie B G&A nie zależy od GS
-            Row("B", "FD", null),
+            Row(1, "General Services (GS)", "( base + p{General & Administrative (GA)} ) * r{General Services (GS)}"),
+            Row(1, "General & Administrative (GA)", "p{General Services (GS)} * r{General & Administrative (GA)}"),
+            Row(1, "MFG OH", "p{MFG OH} * r{MFG OH}"),
+            Row(1, "MFG Fringe", "base * r{MFG Fringe}"),
+            Row(2, "General Services (GS)", "p{General & Administrative (GA)} * r{General Services (GS)}"),   // w grupie 2 G&A nie zależy od GS
+            Row(2, "Corporate Flowdowns (FD)", "base +"),
         ]);
 
-        Assert.Equal(["A / General & Administrative (GA)", "A / General Services (GS)", "A / MFG OH"],
-            issues.Where(i => i.Message.Contains("zapętlenie")).Select(i => i.Element));
-        Assert.Contains(issues, i => i.Level == CheckLevel.Error && i.Element == "wiersz 6");   // podstawa pusta
+        Assert.Equal(["grupa 1 / pula 2", "grupa 1 / pula 8", "grupa 1 / pula 11"], issues.Where(i => i.Message.Contains("zapętlenie")).Select(i => i.Element));
+        Assert.Contains(issues, i => i.Level == CheckLevel.Error && i.Element == "wiersz 6" && i.Message.Contains("kończyć się operatorem"));
     }
 
     [Fact]
@@ -316,12 +417,14 @@ public sealed partial class CasCostReportTests : IDisposable
     {
         List<string> columns = [.. Description, "2026"];
         List<IReadOnlyList<object?>> rows = [["G", "P1", "Projekt", "0092210550", "Quality", "Manufacturing and QA labor", 100m]];
-        // Nowa pula kosztu na końcu (po FCCOM) – TOTAL COST jako lista komórek; formuła w grupie z podstawą z innych pul.
-        List<CasBurden.Pool> pools = [.. FinancePools, new CasBurden.Pool("Nowa pula", 200, false)];
-        var groups = FinanceGroups.Select(g => g.Name != "MFG labor" ? g
-            : g with { Formulas = new Dictionary<string, IReadOnlyList<string>>(g.Formulas) { ["Nowa pula"] = ["MFG Fringe", "MFG OH"] } }).ToList();
+        // Nowa pula kosztu na końcu (po FCCOM) – TOTAL COST jako lista komórek; formuła w grupie z innych pul.
+        List<CasBurden.Pool> pools = [.. FinancePools, new CasBurden.Pool(50, "Nowa pula", 200, false)];
+        var groups = FinanceGroups.Select(g => g.Name != "MFG labor" ? g : g with
+        {
+            Formulas = new Dictionary<long, IReadOnlyList<CasFormula.Token>>(g.Formulas) { [50] = Tokens("( p{MFG Fringe} + p{MFG OH} ) * r{Nowa pula}", n => n == "Nowa pula" ? 50 : PoolId(n)) },
+        }).ToList();
 
-        var result = CasCostReport.Build(columns, rows, FinanceMapping, pools, groups, [new("Nowa pula", new DateOnly(2026, 1, 1), null, 0.1m)]);
+        var result = CasCostReport.Build(columns, rows, FinanceMapping, pools, groups, [new(50, new DateOnly(2026, 1, 1), null, 0.1m)]);
 
         // Kolumny: H – koszt 2026, I..Y – 17 pul, Z – Nowa pula, AA – TOTAL COST, AB – TOTAL FCCOM.
         Assert.Equal(["Nowa pula", "TOTAL COST 2026", "TOTAL FCCOM 2026"], result.Report.Headers.Skip(25).Take(3));
@@ -333,6 +436,52 @@ public sealed partial class CasCostReportTests : IDisposable
     }
 
     [Fact]
+    public void Renamed_pool_and_group_keep_their_formulas_because_ids_link_them()
+    {
+        List<string> columns = [.. Description, "2026"];
+        List<IReadOnlyList<object?>> rows = [["G", "P1", "Projekt", "0092210550", "Quality", "Manufacturing and QA labor", 100m]];
+        var pools = FinancePools.Select(p => p.Name == "MFG Fringe" ? p with { Name = "Fringe produkcji" } : p).ToList();
+        var groups = FinanceGroups.Select(g => g.Name == "MFG labor" ? g with { Name = "Robocizna produkcji" } : g).ToList();
+
+        var renamed = CasCostReport.Build(columns, rows, FinanceMapping, pools, groups, []);
+        var original = CasCostReport.Build(columns, rows, FinanceMapping, FinancePools, FinanceGroups, []);
+
+        Assert.Equal("Robocizna produkcji", renamed.Report.Rows.Single()[6]);
+        Assert.Equal("Fringe produkcji", renamed.Report.Headers[8]);
+        Assert.Equal(original.Report.Rows.Single().OfType<ExcelTableWriter.Formula>(), renamed.Report.Rows.Single().OfType<ExcelTableWriter.Formula>());
+        Assert.Contains(renamed.Notes, n => n.Contains("brak wskaźnika Fringe produkcji"));
+    }
+
+    [Fact]
+    public void Dictionary_rows_are_read_as_pools_groups_formulas_and_rates()
+    {
+        DictRow Row(long id, params (string Column, string? Value)[] values) => new(id, 1, values.ToDictionary(v => v.Column, v => v.Value));
+
+        var pools = CasBurden.PoolsFrom(
+        [
+            Row(17, ("Pula", "FCCOM G&A"), ("Kolejność", "170"), ("Rodzaj", "FCCOM")),
+            Row(1, ("Pula", "MFG Fringe"), ("Kolejność", "10"), ("Rodzaj", "Koszt")),
+        ]);
+        var groups = CasBurden.GroupsFrom(
+            [Row(109, ("Grupa", "Travel"), ("Opis", "Podróże")), Row(110, ("Grupa", "Pusta"), ("Opis", null))],
+            [
+                Row(1, ("Grupa", "109"), ("Pula", "8"), ("Formuła", "( base + p:1 ) * r:8")),
+                Row(2, ("Grupa", "109"), ("Pula", "11"), ("Formuła", "nieczytelna")),   // pominięta
+                Row(3, ("Grupa", "555"), ("Pula", "1"), ("Formuła", "base * r:1")),      // grupa spoza słownika grup
+            ]);
+        var rates = CasCostReport.RatesFrom([Row(5, ("Pula", "17"), ("Od", "2026-01-01"), ("Do", null), ("Wskaźnik", "0.000057456819309837"))]);
+
+        Assert.Equal([new CasBurden.Pool(1, "MFG Fringe", 10, false), new CasBurden.Pool(17, "FCCOM G&A", 170, true)], pools);
+        Assert.Equal(["Travel", "Pusta"], groups.Select(g => g.Name));
+        Assert.Equal("( base + p:1 ) * r:8", CasFormula.Serialize(groups[0].Formulas[8]));
+        Assert.Single(groups[0].Formulas);
+        Assert.Empty(groups[1].Formulas);
+        Assert.Equal(new CasCostReport.Rate(17, new DateOnly(2026, 1, 1), null, 0.000057456819309837m), rates.Single());
+        Assert.Equal([new LookupOption("1", "MFG Fringe"), new LookupOption("17", "FCCOM G&A")],
+            GlobalDictionaries.LookupOptions(GlobalDictionaries.CasPools, [Row(17, ("Pula", "FCCOM G&A"), ("Kolejność", "170")), Row(1, ("Pula", "MFG Fringe"), ("Kolejność", "10"))]));
+    }
+
+    [Fact]
     public void Rates_of_one_pool_must_not_overlap()
     {
         var spec = GlobalDictionaries.Get(GlobalDictionaries.CasBurdenRates);
@@ -341,10 +490,10 @@ public sealed partial class CasCostReportTests : IDisposable
 
         var issues = DictionaryValidator.Validate(spec,
         [
-            Row("MFG OH", "2025-01-01", "2025-12-31", "1.76"),
-            Row("MFG OH", "2025-07-01", null, "2.24"),
-            Row("MFG Fringe", "2025-01-01", null, "0.8"),
-            Row("ENG OH", "2026-01-01", null, "-0.1"),
+            Row("2", "2025-01-01", "2025-12-31", "1.76"),
+            Row("2", "2025-07-01", null, "2.24"),
+            Row("1", "2025-01-01", null, "0.8"),
+            Row("4", "2026-01-01", null, "-0.1"),
         ]);
 
         Assert.Contains(issues, i => i.Level == CheckLevel.Error && i.Message.Contains("nakłada się") && i.Element == "wiersz 2");
@@ -352,10 +501,6 @@ public sealed partial class CasCostReportTests : IDisposable
         Assert.DoesNotContain(issues, i => i.Element is "wiersz 1" or "wiersz 3");
     }
 
-    /// <summary>
-    /// Raport kosztów CES z bazy (ProjectService.ExportCasCostReport): koszty ostatniego importu ACTUALS, grupa z efektywnego
-    /// słownika Cost Category (zmiana projektu przed globalnym), grupy i wskaźniki 2026 z danych startowych (migracja 030).
-    /// </summary>
     [SqlFact]
     public void Ces_cost_report_of_project_uses_dictionaries_and_computes_burdens()
     {
@@ -374,9 +519,12 @@ public sealed partial class CasCostReportTests : IDisposable
         var tree = new PoTree();
         tree.AddElement(null, "2DI473", "PAF2", null);
         Assert.True(store.Create("PAF", "PAF", ProjectTypes.Cas, tree).Success);
+        var dictionaries = new DictionaryService(new SqlDictionaryStore(database.Sql, services.Clock, services.User, [.. GlobalDictionaries.Tables, .. ProjectDictionaries.Tables]), app.Journal);
+        var groupSpec = GlobalDictionaries.Get(GlobalDictionaries.CasBurdenGroups);
+        var odc = dictionaries.Load(groupSpec).Single(r => r["Grupa"] == "ODC").RowId!.Value;
         using (var connection = database.Sql.Open())   // zmiana projektu: podróże bez narzutów
-            connection.Execute($"INSERT INTO {database.Sql.Table("dict.CostCategory")} (RowId, Version, Project, CostElement, CostCategory, BurdenGroup, RecordedAt, RecordedBy) " +
-                               "VALUES (900001, 1, 'PAF', '0057120550', N'Travel costs', N'ODC', SYSDATETIMEOFFSET(), 'test')");
+            connection.Execute($"INSERT INTO {database.Sql.Table("dict.CostCategory")} (RowId, Version, Project, CostElement, CostCategory, BurdenGroupId, RecordedAt, RecordedBy) " +
+                               "VALUES (900001, 1, 'PAF', '0057120550', N'Travel costs', @odc, SYSDATETIMEOFFSET(), 'test')", new { odc = CasBurden.Ref(odc) });
         var path = Path.Combine(_folder, "PAF_koszty_CES.xlsx");
 
         Assert.Equal((4, 0), service.ExportCasCostReport(path, "PAF"));
@@ -406,6 +554,42 @@ public sealed partial class CasCostReportTests : IDisposable
         Assert.Equal((4800 + fringe) * Rate("MFG OH"), Value("0092212550", "MFG OH"), 6);
         Assert.Equal(2400 * Rate("ENG Fringe"), Value("0094410550", "ENG Fringe"), 6);
         Assert.Equal(17 * 2, report.Worksheet("Wskaźniki").RowsUsed().Count() - 1);
+
+        // Zmiana nazwy puli i grupy w słownikach – formuły, wskaźniki i mapowanie wskazują je identyfikatorem.
+        var poolSpec = GlobalDictionaries.Get(GlobalDictionaries.CasPools);
+        DictRow Renamed(DictRow row, string column, string name) => row with { Values = new Dictionary<string, string?>(row.Values) { [column] = name } };
+        var pools = dictionaries.Load(poolSpec);
+        Assert.Equal(SaveStatus.Saved, dictionaries.Save(poolSpec, pools.Select(r => r["Pula"] == "MFG Fringe" ? Renamed(r, "Pula", "Fringe produkcji") : r).ToList(), [], true).Status);
+        var groups = dictionaries.Load(groupSpec);
+        Assert.Equal(SaveStatus.Saved, dictionaries.Save(groupSpec, groups.Select(r => r["Grupa"] == "MFG labor" ? Renamed(r, "Grupa", "Robocizna produkcji") : r).ToList(), [], true).Status);
+        Assert.Equal((4, 0), service.ExportCasCostReport(path, "PAF"));
+        using (var renamed = new XLWorkbook(path))
+        {
+            var sheet = renamed.Worksheet("Koszty CES");
+            renamed.RecalculateAllFormulas();
+            Assert.Equal("Robocizna produkcji", sheet.Cell(rows["0092212550"], 7).GetString());
+            Assert.Equal(fringe, sheet.Cell(rows["0092212550"], Header(sheet, "2026", "Fringe produkcji")).CachedValue.GetNumber(), 6);
+        }
+
+        // Puli i grupy używanej w formułach, wskaźnikach albo Cost Category (także w projekcie) nie można usunąć.
+        var used = dictionaries.Save(poolSpec, dictionaries.Load(poolSpec).Where(r => r["Pula"] != "Fringe produkcji").ToList(),
+            dictionaries.Load(poolSpec).Where(r => r["Pula"] == "Fringe produkcji").ToList(), true);
+        Assert.Equal(SaveStatus.Rejected, used.Status);
+        Assert.Contains(used.Issues, i => i.Message.Contains("„Fringe produkcji” jest używane w słowniku „Formuły narzutów CAS”"));
+        Assert.Contains(used.Issues, i => i.Message.Contains("jest używane w słowniku „Wskaźniki narzutu CAS”"));
+        var odcRow = dictionaries.Load(groupSpec).Where(r => r["Grupa"] == "ODC").ToList();
+        var group = dictionaries.Save(groupSpec, dictionaries.Load(groupSpec).Except(odcRow).ToList(), odcRow, true);
+        Assert.Contains(group.Issues, i => i.Message.Contains("„ODC” jest używane w słowniku „Cost Category”") && i.Message.Contains("także w projektach"));
+
+        // Excel słownika wskaźników: nazwa puli zamiast identyfikatora; wczytanie zamienia nazwę z powrotem na identyfikator.
+        var rateSpec = GlobalDictionaries.Get(GlobalDictionaries.CasBurdenRates);
+        var excel = Path.Combine(_folder, "wskazniki.xlsx");
+        dictionaries.Export(rateSpec, excel);
+        using (var file = new XLWorkbook(excel))
+            Assert.Contains("Fringe produkcji", file.Worksheet(1).Column(1).CellsUsed().Select(c => c.GetString()));
+        var preview = dictionaries.PreviewImport(rateSpec, excel);
+        Assert.False(preview.HasErrors, string.Join("; ", preview.Issues.Select(i => $"{i.Message} ({i.Element})")));
+        Assert.False(preview.HasChanges, string.Join("; ", preview.Changed.Take(3)));
     }
 
     /// <summary>Kolumna puli w bloku kolumny kosztu (nazwa bloku w wierszu nad nagłówkiem).</summary>

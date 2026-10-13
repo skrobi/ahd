@@ -27,6 +27,12 @@ public sealed class SqlDictionaryStore(SqlDatabase db, IClock clock, ICurrentUse
         return Read(connection, null, dictionary, $"WHERE {ProjectFilter} AND SupersededAt IS NULL ORDER BY RowId", new { project });
     }
 
+    public IReadOnlyList<DictionaryEntryRow> CurrentAll(string dictionary)
+    {
+        using var connection = db.Open();
+        return Read(connection, null, dictionary, "WHERE SupersededAt IS NULL ORDER BY RowId", new { });
+    }
+
     public IReadOnlyList<DictionaryEntryRow> AsOf(string dictionary, DateTimeOffset moment, string? project = null)
     {
         using var connection = db.Open();

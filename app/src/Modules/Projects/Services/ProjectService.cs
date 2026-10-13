@@ -172,15 +172,20 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
     /// <summary>
     /// Wartości słowników powiązanych do wyboru w tabeli słownika (DictColumn.Lookup): Osoby – USRID → imię i nazwisko
     /// (słownik Osoby wczytany z HR); Kategorie WBS – kategorie projektu; Źródła danych – aktywne definicje źródeł;
-    /// Parametry projektu – pola kwoty ACTUALS.
+    /// Parametry projektu – pola kwoty ACTUALS; Cost Category – grupy narzutowe CAS (identyfikator → nazwa).
     /// </summary>
     public static IReadOnlyDictionary<string, IReadOnlyList<LookupOption>> Lookups(IReadOnlyList<LookupOption> persons, IReadOnlyList<LookupOption> categories,
-        IReadOnlyList<LookupOption>? sources = null) =>
+        IReadOnlyList<LookupOption>? sources = null, IReadOnlyList<LookupOption>? burdenGroups = null) =>
         new Dictionary<string, IReadOnlyList<LookupOption>>
         {
             [GlobalDictionaries.Persons] = persons, [ProjectDictionaries.WbsCategories] = categories, [ProjectDictionaries.Sources] = sources ?? [],
+            [GlobalDictionaries.CasBurdenGroups] = burdenGroups ?? [],
             [ProjectDictionaries.Settings] = ProjectSettings.ActualsAmounts.Select(a => new LookupOption(a.Field, $"{a.Field} – {a.Currency}")).ToList(),
         };
+
+    /// <summary>Grupy narzutowe CAS do wyboru w kolumnie „Grupa narzutowa CAS” Cost Category projektu (identyfikator → nazwa).</summary>
+    public IReadOnlyList<LookupOption> BurdenGroupLookups() =>
+        GlobalDictionaries.LookupOptions(GlobalDictionaries.CasBurdenGroups, _dictionaries.Load(GlobalDictionaries.Get(GlobalDictionaries.CasBurdenGroups)));
 
     /// <summary>Aktywne definicje źródeł do wyboru w słowniku „Źródła danych” (kod → kod i prefiks plików).</summary>
     public IReadOnlyList<LookupOption> SourceLookups() => SourceOptions(SourceDefinitions());
@@ -320,7 +325,8 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
         {
             var spec = ProjectDictionaries.Base(item.Code);
             var rows = code.Length > 0 ? Rows(item.Code, code) : [];
-            IEnumerable<IReadOnlyList<object?>> data = rows.Select(r => (IReadOnlyList<object?>)spec.Columns.Select(c => ValueFormat.ToExcel(c, r[c.Name])).ToList());
+            var lookups = _dictionaries.Lookups(spec);
+            IEnumerable<IReadOnlyList<object?>> data = rows.Select(r => (IReadOnlyList<object?>)spec.Columns.Select(c => DictionaryService.ExcelValue(c, r[c.Name], lookups)).ToList());
             // Szablon do uzupełnienia: elementy P1S z zakresu bez WP i WP bez harmonogramu (wiersze z samym kluczem
             // pomijane przy wczytaniu – SkipKeyOnlyRows).
             if (item.Code == ProjectDictionaries.WpCam)
@@ -347,7 +353,7 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
 
     /// <summary>Słowniki globalne z bieżącym stanem (krok „Słowniki projektu” kreatora): nazwa, wiersze, ostatnia zmiana.</summary>
     public IReadOnlyList<(string Name, int Rows, string LastChange)> GlobalState() =>
-        GlobalDictionaries.All.Select(spec =>
+        GlobalDictionaries.All.Where(spec => !spec.Hidden).Select(spec =>
         {
             var rows = dictionaries.Current(spec.Code);
             var last = rows.MaxBy(r => r.RecordedAt);
