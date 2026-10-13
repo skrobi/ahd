@@ -337,7 +337,7 @@ CAS” (od migracji 031 – grupa i opis); `DICT_CasBurdenRate` – „Wskaźnik
 (pula, `ValidFrom`, `ValidTo`, `Rate DECIMAL(38,18)`; klucz projekt + pula + od). Raport liczy aplikacja
 (`CasCostReport`) z wyniku `REP_ProjectCosts` – bez nowej procedury. Wymaga aplikacji 0.46.0.
 
-**Migracja `sql/mssql/030_dane_narzuty_cas.sql`** (dane startowe): 10 grup narzutowych (formuły – migracja 032) i wskaźniki 2025 i 2026 z arkusza
+**Migracja `sql/mssql/030_dane_narzuty_cas.sql`** (dane startowe; od 034 tylko zapis wersji): 10 grup narzutowych i wskaźniki 2025 i 2026 z arkusza
 finansów; grupa narzutowa elementów kosztowych arkusza w globalnym Cost Category – nowa wersja pozycji bez grupy
 (grupa ustawiona wcześniej zostaje).
 
@@ -346,8 +346,18 @@ finansów; grupa narzutowa elementów kosztowych arkusza w globalnym Cost Catego
 narzutów CAS” (grupa, pula, `Basis` – składniki połączone „ + ”; klucz projekt + grupa + pula); z `DICT_CasBurdenGroup`
 usunięte kolumny pul i `BaseInGsGa` (029) – zostają grupa i opis. Wymaga aplikacji 0.47.0.
 
-**Migracja `sql/mssql/032_dane_formuly_narzutow_cas.sql`** (dane startowe): 17 pul arkusza finansów i formuły 10 grup
-(składniki w kolejności z arkusza); formuły grupy tylko, gdy grupa nie ma jeszcze żadnej formuły.
+**Migracja `sql/mssql/032_dane_formuly_narzutow_cas.sql`** (dane startowe): wcześniej pule i formuły z nazwami; od 034
+tylko zapis wersji (dane startowe narzutów CAS – 034).
+
+**Migracja `sql/mssql/033_narzuty_cas_identyfikatory.sql`:** narzuty CAS powiązane identyfikatorem (RowId), nie nazwą:
+`DICT_CasBurdenRate.PoolId` zamiast `Pool`, `DICT_CostCategory.BurdenGroupId` zamiast `BurdenGroup` (nazwy przekształcone
+na identyfikatory – nazwa szukana także w historii wierszy; wskaźnik puli spoza słownika – zamknięty), `DICT_CasFormula`
+(grupa, pula, formuła z klocków: `base`, `p:<pula>`, `r:<pula>`, `+ - * / ( )`) zamiast `DICT_CasBurdenFormula`; wskaźniki
+zaokrąglone do 15 cyfr znaczących (jak w Excelu). Wymaga aplikacji 0.48.0.
+
+**Migracja `sql/mssql/034_dane_narzuty_cas.sql`** (dane startowe): 17 pul, 10 grup, wskaźniki 2025–2026, formuły grup
+i grupa narzutowa elementów kosztowych z arkusza finansów – pule i grupy dopasowane po nazwie bieżącej albo z historii
+(przemianowane przez użytkownika nie są dodawane ponownie); formuły grupy tylko, gdy grupa nie ma żadnej formuły.
 
 `META_SourceFile.CanonicalStatus`: „utworzone” – dane kanoniczne zapisane i sprawdzone (widoczne dla odczytów),
 „w toku” – zapis wierszy trwa (odczyty pomijają plik; po awarii wpis i wiersze są usuwane), inna wartość – powód

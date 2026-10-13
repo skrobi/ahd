@@ -40,7 +40,7 @@ public sealed class MasterDataModule : IModule
                 context.Services.PzlProd is { } prod ? new SqlPzlProdSource(prod) : null)
             {
                 PickPersons = PersonPickerWindow.Pick,
-                EditCasFormulas = group => CasFormulaEditorWindow.Edit(service, group),
+                EditCasFormulas = () => CasMatrixWindow.Edit(service),
             },
         };
     }

@@ -9,10 +9,10 @@ namespace PzlEv.Modules.Projects.Services;
 /// <summary>
 /// Raport kosztów CES (docs/slowniki.md, rozdz. 6.1): raport kosztów projektu (REP_ProjectCosts) z narzutami CAS
 /// liczonymi formułami Excela – po kolumnach kosztu bazowego (ostatni okres, lata) blok na każdą kolumnę: pule
-/// („Pule narzutu CAS”, w kolejności), TOTAL COST (koszt + pule rodzaju Koszt) i TOTAL FCCOM (pule FCCOM). Formuły
-/// puli w wierszu wyznacza grupa narzutowa elementu kosztowego (Cost Category → „Formuły narzutów CAS”): narzut =
-/// (suma składników podstawy – koszt bazowy kolumny i pule) × wskaźnik puli z wiersza wskaźników nad nagłówkiem
-/// („Wskaźniki narzutu CAS” obowiązujące w okresie kolumny; można go zmienić w pliku). Reguły podstaw są w słownikach.
+/// („Pule narzutu CAS”, w kolejności), TOTAL COST (koszt + pule rodzaju Koszt) i TOTAL FCCOM (pule FCCOM). Formułę puli
+/// w wierszu wyznacza grupa narzutowa elementu kosztowego (Cost Category → „Formuły narzutów CAS”): klocki formuły
+/// (CasFormula) zamieniane na komórki – koszt bazowy kolumny, narzut puli w bloku, wskaźnik puli z wiersza wskaźników
+/// nad nagłówkiem („Wskaźniki narzutu CAS” obowiązujące w okresie kolumny; można go zmienić w pliku).
 /// </summary>
 public static partial class CasCostReport
 {
@@ -27,8 +27,8 @@ public static partial class CasCostReport
     private const string AmountFormat = "#,##0.00";
     private const string RateFormat = "0.0000%";
 
-    /// <summary>Wskaźnik puli obowiązujący od – do (To null – bezterminowo).</summary>
-    public sealed record Rate(string Pool, DateOnly From, DateOnly? To, decimal Value);
+    /// <summary>Wskaźnik puli (identyfikator puli) obowiązujący od – do (To null – bezterminowo).</summary>
+    public sealed record Rate(long Pool, DateOnly From, DateOnly? To, decimal Value);
 
     /// <summary>Arkusz raportu i arkusze pomocnicze: użyte wskaźniki, uwagi (braki mapowania, formuł i wskaźników).</summary>
     public sealed record Result(ExcelTableWriter.ReportSheet Report, ExcelTableWriter.ReportSheet Rates, IReadOnlyList<string> Notes);
@@ -38,7 +38,7 @@ public static partial class CasCostReport
 
     /// <param name="columns">Nagłówki raportu kosztów (REP_ProjectCosts): 6 kolumn opisu, „Period MM/RRRR”, lata.</param>
     /// <param name="rows">Wiersze raportu kosztów.</param>
-    /// <param name="mapping">Grupa narzutowa elementu kosztowego (efektywny słownik Cost Category projektu).</param>
+    /// <param name="mapping">Identyfikator grupy narzutowej elementu kosztowego (efektywny słownik Cost Category projektu).</param>
     /// <param name="pools">Pule w kolejności kolumn (CasBurden.PoolsFrom).</param>
     /// <param name="groups">Grupy z formułami pul (CasBurden.GroupsFrom).</param>
     public static Result Build(IReadOnlyList<string> columns, IReadOnlyList<IReadOnlyList<object?>> rows, IReadOnlyDictionary<string, string?> mapping,
@@ -46,12 +46,13 @@ public static partial class CasCostReport
     {
         var notes = new List<string>();
         var blocks = Blocks(columns);
-        var byName = groups.GroupBy(g => g.Name, StringComparer.OrdinalIgnoreCase).ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
+        var byId = groups.ToDictionary(g => g.Id);
         var costElement = GlobalDictionaries.Get(GlobalDictionaries.CostCategory).Columns[0];
         string Key(string? value) => ValueFormat.TryNormalize(costElement, value, out var canonical, out _) ? canonical ?? "" : value ?? "";
         var groupOf = mapping.GroupBy(m => Key(m.Key), StringComparer.OrdinalIgnoreCase).ToDictionary(g => g.Key, g => g.First().Value, StringComparer.OrdinalIgnoreCase);
-        var index = pools.Select((p, i) => (p.Name, i)).GroupBy(x => x.Name, StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(g => g.Key, g => g.First().i, StringComparer.OrdinalIgnoreCase);
+        var index = pools.Select((p, i) => (p.Id, i)).ToDictionary(x => x.Id, x => x.i);
+        var names = pools.ToDictionary(p => p.Id, p => p.Name);
+        var known = pools.Select(p => p.Id).ToHashSet();
         var width = pools.Count + 2;
 
         // Kolumny: opis, grupa narzutowa, koszt bazowy bloków, bloki (pule, TOTAL COST, TOTAL FCCOM).
@@ -72,39 +73,28 @@ public static partial class CasCostReport
             rateRow.AddRange(Enumerable.Repeat<object?>(null, width));
         }
 
-        // Formuły grup: pule spoza słownika pul i zapętlenia – bez formuły, z uwagą.
-        var usable = new Dictionary<string, List<(int Pool, IReadOnlyList<int?> Basis)>>(StringComparer.OrdinalIgnoreCase);
-        var used = new HashSet<int>();
-        IReadOnlyList<(int Pool, IReadOnlyList<int?> Basis)> FormulasOf(CasBurden.Group group)
+        // Formuły grup: pula spoza słownika pul, formuła błędna albo zapętlona – bez narzutu, z uwagą.
+        var usable = new Dictionary<long, List<(int Pool, IReadOnlyList<CasFormula.Token> Tokens)>>();
+        var used = new HashSet<long>();
+        IReadOnlyList<(int Pool, IReadOnlyList<CasFormula.Token> Tokens)> FormulasOf(CasBurden.Group group)
         {
-            if (usable.TryGetValue(group.Name, out var ready))
+            if (usable.TryGetValue(group.Id, out var ready))
                 return ready;
             var cycles = CasBurden.Cycles(group.Formulas);
-            var list = new List<(int, IReadOnlyList<int?>)>();
-            foreach (var (pool, basis) in group.Formulas)
+            var list = new List<(int, IReadOnlyList<CasFormula.Token>)>();
+            foreach (var (pool, tokens) in group.Formulas)
             {
                 if (!index.TryGetValue(pool, out var p))
-                    notes.Add($"Grupa {group.Name}: pula {pool} spoza słownika „Pule narzutu CAS” – bez narzutu");
+                    notes.Add($"Grupa {group.Name}: formuła puli usuniętej ze słownika „Pule narzutu CAS” – pominięta");
+                else if (CasFormula.Error(tokens, known) is { } error)
+                    notes.Add($"Grupa {group.Name}, pula {names[pool]}: {error} – bez narzutu");
                 else if (cycles.Contains(pool))
-                    notes.Add($"Grupa {group.Name}: pula {pool} zależy od samej siebie (zapętlenie formuł) – bez narzutu");
+                    notes.Add($"Grupa {group.Name}: narzut puli {names[pool]} zależy od niego samego (zapętlenie formuł) – bez narzutu");
                 else
-                {
-                    var parts = new List<int?>();
-                    foreach (var component in basis)
-                    {
-                        if (string.Equals(component, CasBurden.Base, StringComparison.OrdinalIgnoreCase))
-                            parts.Add(null);
-                        else if (index.TryGetValue(component, out var c))
-                            parts.Add(c);
-                        else
-                            notes.Add($"Grupa {group.Name}, pula {pool}: składnik podstawy {component} spoza słownika „Pule narzutu CAS” – pominięty");
-                    }
-                    if (parts.Count > 0)
-                        list.Add((p, parts));
-                }
+                    list.Add((p, tokens));
             }
             list.Sort((x, y) => x.Item1.CompareTo(y.Item1));
-            return usable[group.Name] = list;
+            return usable[group.Id] = list;
         }
 
         var costPools = pools.Select((p, i) => (p, i)).Where(x => !x.p.IsFccom).Select(x => x.i).ToList();
@@ -117,31 +107,35 @@ public static partial class CasCostReport
             var source = rows[r];
             var excelRow = FirstDataRow + r;
             var element = source.Count > 3 ? source[3]?.ToString() : null;
-            var name = groupOf.GetValueOrDefault(Key(element));
-            IReadOnlyList<(int Pool, IReadOnlyList<int?> Basis)> formulas = [];
-            if (name is null)
+            var reference = groupOf.GetValueOrDefault(Key(element));
+            IReadOnlyList<(int Pool, IReadOnlyList<CasFormula.Token> Tokens)> formulas = [];
+            CasBurden.Group? group = null;
+            if (reference is null)
                 unmapped.Add(element ?? "(brak)");
-            else if (!byName.TryGetValue(name, out var group))
-                unknown.Add($"{name} ({element})");
+            else if (CasBurden.Id(reference) is not { } id || !byId.TryGetValue(id, out group))
+                unknown.Add(element ?? "(brak)");
             else
+            {
                 formulas = FormulasOf(group);
-            used.UnionWith(formulas.Select(f => f.Pool));
+                foreach (var (pool, tokens) in formulas)
+                {
+                    used.Add(pools[pool].Id);
+                    used.UnionWith(tokens.Where(t => t.Kind == CasFormula.Kind.Rate).Select(t => t.Id));
+                }
+            }
 
             var row = new object?[headers.Count];
             for (var c = 0; c < DescriptionColumns && c < source.Count; c++)
                 row[c] = source[c];
-            row[DescriptionColumns] = name;
+            row[DescriptionColumns] = group?.Name;
             for (var b = 0; b < blocks.Count; b++)
             {
                 row[Base(b) - 1] = DescriptionColumns + b < source.Count ? source[DescriptionColumns + b] : null;
                 string Cell(int column) => $"{Letter(column)}{excelRow}";
                 var cost = Cell(Base(b));
-                foreach (var (pool, basis) in formulas)
-                {
-                    var parts = basis.Select(c => c is { } p ? Cell(Pool(b, p)) : cost).ToList();
-                    var sum = parts.Count == 1 ? parts[0] : $"({string.Join("+", parts)})";
-                    row[Pool(b, pool) - 1] = new ExcelTableWriter.Formula($"={sum}*{Letter(Pool(b, pool))}${RateRow}", AmountFormat);
-                }
+                foreach (var (pool, tokens) in formulas)
+                    row[Pool(b, pool) - 1] = new ExcelTableWriter.Formula(
+                        CasFormula.Excel(tokens, cost, id => Cell(Pool(b, index[id])), id => $"{Letter(Pool(b, index[id]))}${RateRow}"), AmountFormat);
                 // TOTAL COST i TOTAL FCCOM – kolumny za ostatnią pulą (indeks wiersza od 0).
                 row[Pool(b, pools.Count) - 1] = new ExcelTableWriter.Formula(
                     costPools.Count == 0 ? $"={cost}" : $"=SUM({Range(costPools.Select(p => Pool(b, p)).ToList(), excelRow)})+{cost}", AmountFormat);
@@ -154,24 +148,24 @@ public static partial class CasCostReport
         var usedRates = new List<IReadOnlyList<object?>>();
         foreach (var (block, b) in blocks.Select((x, i) => (x, i)))
         {
-            foreach (var (pool, p) in pools.Select((x, i) => (x.Name, i)))
+            foreach (var (pool, p) in pools.Select((x, i) => (x, i)))
             {
-                var (rate, changes) = RateFor(rates, pool, block.Months);
+                var (rate, changes) = RateFor(rates, pool.Id, block.Months);
                 if (rate is not null)
                 {
                     rateRow[Pool(b, p) - 1] = new ExcelTableWriter.Formatted(rate.Value, RateFormat);
-                    usedRates.Add([block.Header, pool, new ExcelTableWriter.Formatted(rate.Value, RateFormat), rate.From, rate.To]);
-                    if (changes && used.Contains(p))
-                        notes.Add($"{block.Header}: wskaźnik {pool} zmienia się w trakcie okresu kolumny – użyty wskaźnik od {rate.From:yyyy-MM-dd} (ostatni miesiąc kolumny)");
+                    usedRates.Add([block.Header, pool.Name, new ExcelTableWriter.Formatted(rate.Value, RateFormat), rate.From, rate.To]);
+                    if (changes && used.Contains(pool.Id))
+                        notes.Add($"{block.Header}: wskaźnik {pool.Name} zmienia się w trakcie okresu kolumny – użyty wskaźnik od {rate.From:yyyy-MM-dd} (ostatni miesiąc kolumny)");
                 }
-                else if (used.Contains(p))
-                    notes.Add($"{block.Header}: brak wskaźnika {pool} w słowniku „Wskaźniki narzutu CAS” – narzut liczony jako 0");
+                else if (used.Contains(pool.Id))
+                    notes.Add($"{block.Header}: brak wskaźnika {pool.Name} w słowniku „Wskaźniki narzutu CAS” – liczony jako 0");
             }
         }
         if (unmapped.Count > 0)
             notes.Add($"Elementy kosztowe bez grupy narzutowej CAS (bez narzutów – uzupełnij „{GlobalDictionaries.BurdenGroupColumn}” w słowniku Cost Category): {string.Join(", ", unmapped)}");
         if (unknown.Count > 0)
-            notes.Add($"Grupy narzutowe spoza słownika „Grupy narzutowe CAS” (bez narzutów): {string.Join(", ", unknown)}");
+            notes.Add($"Elementy kosztowe z grupą usuniętą ze słownika „Grupy narzutowe CAS” (bez narzutów): {string.Join(", ", unknown)}");
 
         var report = new ExcelTableWriter.ReportSheet("Koszty CES", headers, data, [blockRow, rateRow], FrozenColumns: DescriptionColumns + 1);
         var rateSheet = new ExcelTableWriter.ReportSheet("Wskaźniki", ["Kolumna", "Pula", "Wskaźnik", "Od", "Do"], usedRates);
@@ -187,7 +181,8 @@ public static partial class CasCostReport
     /// <summary>Wskaźniki z wierszy słownika „Wskaźniki narzutu CAS” (zapis kanoniczny: daty RRRR-MM-DD, liczba z kropką).</summary>
     public static IReadOnlyList<Rate> RatesFrom(IEnumerable<DictRow> rows) =>
         rows.Where(r => r["Pula"] is not null && r["Od"] is not null && r["Wskaźnik"] is not null)
-            .Select(r => new Rate(r["Pula"]!, Date(r["Od"]!), r["Do"] is { } to ? Date(to) : null,
+            .Where(r => CasBurden.Id(r["Pula"]) is not null)
+            .Select(r => new Rate(CasBurden.Id(r["Pula"])!.Value, Date(r["Od"]!), r["Do"] is { } to ? Date(to) : null,
                 decimal.Parse(r["Wskaźnik"]!, NumberStyles.Number, CultureInfo.InvariantCulture)))
             .ToList();
 
@@ -197,10 +192,10 @@ public static partial class CasCostReport
     /// Wskaźnik puli dla miesięcy kolumny: wersja obowiązująca w ostatnim miesiącu, dla którego jakaś obowiązuje
     /// (w miesiącu kilka – najpóźniej rozpoczęta); changes – w miesiącach kolumny obowiązują różne wskaźniki.
     /// </summary>
-    private static (Rate? Rate, bool Changes) RateFor(IReadOnlyList<Rate> rates, string pool, IReadOnlyList<DateOnly> months)
+    private static (Rate? Rate, bool Changes) RateFor(IReadOnlyList<Rate> rates, long pool, IReadOnlyList<DateOnly> months)
     {
         var found = months.Select(m => rates
-                .Where(r => string.Equals(r.Pool, pool, StringComparison.OrdinalIgnoreCase) && r.From <= m.AddMonths(1).AddDays(-1) && (r.To is null || r.To >= m))
+                .Where(r => r.Pool == pool && r.From <= m.AddMonths(1).AddDays(-1) && (r.To is null || r.To >= m))
                 .MaxBy(r => r.From))
             .OfType<Rate>().ToList();
         return found.Count == 0 ? (null, false) : (found[^1], found.Select(r => r.Value).Distinct().Count() > 1);

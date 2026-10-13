@@ -1,3 +1,4 @@
+using System.Globalization;
 using PzlEv.Shared.Models;
 using PzlEv.Shared.Models.Dictionaries;
 
@@ -5,116 +6,133 @@ namespace PzlEv.Shared.Utils.Dictionaries;
 
 /// <summary>
 /// Narzuty CAS jako dane (docs/slowniki.md, rozdz. 6.1): pule („Pule narzutu CAS”), grupy („Grupy narzutowe CAS”)
-/// i formuły („Formuły narzutów CAS”: grupa + pula → podstawa). Narzut puli w grupie = (suma składników podstawy) ×
-/// wskaźnik puli; składnik to koszt bazowy („Base cost elements”) albo inna pula. Wspólne dla raportu kosztów CES
-/// i edytora formuł na ekranie Słowniki – reguły podstaw nie są w kodzie.
+/// i formuły („Formuły narzutów CAS”: grupa + pula → formuła z klocków – CasFormula). Grupy, pule, wskaźniki i mapowanie
+/// w Cost Category wskazują pulę / grupę identyfikatorem wiersza (RowId), nie nazwą: zmiana nazwy w słowniku pul albo
+/// grup jest od razu widoczna w formułach, wskaźnikach, Cost Category i raporcie. Reguł podstaw nie ma w kodzie.
 /// </summary>
 public static class CasBurden
 {
-    /// <summary>Składnik podstawy: koszt bazowy kolumny (raport kosztów).</summary>
+    /// <summary>Klocek kosztu bazowego kolumny raportu (okres, rok).</summary>
     public const string Base = "Base cost elements";
-
-    /// <summary>Separator składników podstawy w słowniku „Formuły narzutów CAS”.</summary>
-    public const string Separator = " + ";
 
     /// <summary>Rodzaj puli: suma w TOTAL COST albo w TOTAL FCCOM.</summary>
     public const string CostKind = "Koszt", FccomKind = "FCCOM";
 
-    /// <summary>Pula: nazwa (nagłówek kolumny), kolejność kolumny, rodzaj (FCCOM – TOTAL FCCOM, inaczej TOTAL COST).</summary>
-    public sealed record Pool(string Name, int Order, bool IsFccom);
+    /// <summary>Pula: identyfikator (RowId), nazwa (nagłówek kolumny), kolejność kolumny, rodzaj (FCCOM – TOTAL FCCOM).</summary>
+    public sealed record Pool(long Id, string Name, int Order, bool IsFccom);
 
-    /// <summary>Grupa narzutowa: pula naliczana → składniki podstawy (kolejność jak w słowniku).</summary>
-    public sealed record Group(string Name, string? Description, IReadOnlyDictionary<string, IReadOnlyList<string>> Formulas);
+    /// <summary>Grupa narzutowa: identyfikator, nazwa, opis; formuły – pula (identyfikator) → klocki.</summary>
+    public sealed record Group(long Id, string Name, string? Description, IReadOnlyDictionary<long, IReadOnlyList<CasFormula.Token>> Formulas);
 
-    /// <summary>Składniki podstawy z zapisu „A + B + C” (puste pominięte, bez powtórzeń).</summary>
-    public static IReadOnlyList<string> Parse(string? basis) =>
-        (basis ?? "").Split('+', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+    /// <summary>Identyfikator wiersza zapisany w kolumnie powiązanej (DictColumn.Lookup z IdLookup).</summary>
+    public static long? Id(string? value) => long.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out var id) ? id : null;
 
-    public static string Join(IEnumerable<string> components) => string.Join(Separator, components);
+    public static string Ref(long id) => id.ToString(CultureInfo.InvariantCulture);
 
-    /// <summary>Pule ze słownika „Pule narzutu CAS” w kolejności kolumn (Kolejność, potem nazwa).</summary>
+    /// <summary>Pule ze słownika „Pule narzutu CAS” w kolejności kolumn (Kolejność, potem nazwa); wiersze zapisane (z RowId).</summary>
     public static IReadOnlyList<Pool> PoolsFrom(IEnumerable<DictRow> rows) =>
-        rows.Where(r => r["Pula"] is not null)
-            .Select(r => new Pool(r["Pula"]!, int.TryParse(r["Kolejność"], out var order) ? order : int.MaxValue,
+        rows.Where(r => r.RowId is not null && r["Pula"] is not null)
+            .Select(r => new Pool(r.RowId!.Value, r["Pula"]!, int.TryParse(r["Kolejność"], out var order) ? order : int.MaxValue,
                 string.Equals(r["Rodzaj"], FccomKind, StringComparison.OrdinalIgnoreCase)))
             .OrderBy(p => p.Order).ThenBy(p => p.Name, StringComparer.OrdinalIgnoreCase)
             .ToList();
 
-    /// <summary>Grupy ze słowników „Grupy narzutowe CAS” i „Formuły narzutów CAS” (formuła grupy spoza słownika grup – też grupa).</summary>
+    /// <summary>Grupy ze słowników „Grupy narzutowe CAS” i „Formuły narzutów CAS”; formuła uszkodzona (zapis nieczytelny) – pominięta.</summary>
     public static IReadOnlyList<Group> GroupsFrom(IEnumerable<DictRow> groups, IEnumerable<DictRow> formulas)
     {
-        var byGroup = formulas.Where(r => r["Grupa"] is not null && r["Pula"] is not null)
-            .GroupBy(r => r["Grupa"]!, StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(g => g.Key, g => (IReadOnlyDictionary<string, IReadOnlyList<string>>)g
-                .ToDictionary(r => r["Pula"]!, r => Parse(r["Podstawa"]), StringComparer.OrdinalIgnoreCase), StringComparer.OrdinalIgnoreCase);
-        var described = groups.Where(r => r["Grupa"] is not null).ToList();
-        var known = described.Select(r => r["Grupa"]!).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        return described.Select(r => new Group(r["Grupa"]!, r["Opis"], byGroup.GetValueOrDefault(r["Grupa"]!) ?? Empty))
-            .Concat(byGroup.Where(g => !known.Contains(g.Key)).Select(g => new Group(g.Key, null, g.Value)))
+        var byGroup = formulas
+            .Select(r => (Group: Id(r["Grupa"]), Pool: Id(r["Pula"]), Tokens: CasFormula.Parse(r["Formuła"])))
+            .Where(f => f.Group is not null && f.Pool is not null && f.Tokens is not null)
+            .GroupBy(f => f.Group!.Value)
+            .ToDictionary(g => g.Key, g => (IReadOnlyDictionary<long, IReadOnlyList<CasFormula.Token>>)g
+                .GroupBy(f => f.Pool!.Value).ToDictionary(p => p.Key, p => p.First().Tokens!));
+        return groups.Where(r => r.RowId is not null && r["Grupa"] is not null)
+            .Select(r => new Group(r.RowId!.Value, r["Grupa"]!, r["Opis"], byGroup.GetValueOrDefault(r.RowId!.Value) ?? Empty))
             .ToList();
     }
 
-    private static readonly IReadOnlyDictionary<string, IReadOnlyList<string>> Empty = new Dictionary<string, IReadOnlyList<string>>();
+    private static readonly IReadOnlyDictionary<long, IReadOnlyList<CasFormula.Token>> Empty = new Dictionary<long, IReadOnlyList<CasFormula.Token>>();
 
-    /// <summary>Pule grupy w zapętleniu (pula zależna od samej siebie wprost albo przez inne pule podstawy).</summary>
-    public static IReadOnlySet<string> Cycles(IReadOnlyDictionary<string, IReadOnlyList<string>> formulas)
+    /// <summary>Pule grupy w zapętleniu (narzut puli zależy od niej samej wprost albo przez narzuty innych pul).</summary>
+    public static IReadOnlySet<long> Cycles(IReadOnlyDictionary<long, IReadOnlyList<CasFormula.Token>> formulas)
     {
-        var cyclic = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var cyclic = new HashSet<long>();
         foreach (var start in formulas.Keys)
         {
-            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            var stack = new Stack<string>(formulas[start]);
+            var seen = new HashSet<long>();
+            var stack = new Stack<long>(CasFormula.Pools(formulas[start]));
             while (stack.Count > 0)
             {
                 var next = stack.Pop();
-                if (string.Equals(next, start, StringComparison.OrdinalIgnoreCase))
+                if (next == start)
                 {
                     cyclic.Add(start);
                     break;
                 }
-                if (seen.Add(next) && formulas.TryGetValue(next, out var basis))
-                    foreach (var component in basis)
-                        stack.Push(component);
+                if (seen.Add(next) && formulas.TryGetValue(next, out var tokens))
+                    foreach (var pool in CasFormula.Pools(tokens))
+                        stack.Push(pool);
             }
         }
         return cyclic;
     }
 
-    /// <summary>„Formuły narzutów CAS”: podstawa niepusta, bez zapętlenia puli w grupie.</summary>
+    /// <summary>„Formuły narzutów CAS”: zapis czytelny, formuła poprawnie zbudowana, bez zapętlenia pul w grupie.</summary>
     public static IEnumerable<Issue> FormulaRules(IReadOnlyList<DictRow> rows)
     {
         for (var i = 0; i < rows.Count; i++)
         {
-            if (Parse(rows[i]["Podstawa"]).Count == 0)
-                yield return Issue.Error("Podstawa – wskaż co najmniej jeden składnik (Base cost elements albo pulę)", DictionaryValidator.RowElement(i));
+            var tokens = CasFormula.Parse(rows[i]["Formuła"]);
+            if (tokens is null)
+                yield return Issue.Error("Formuła nieczytelna – zbuduj ją w edytorze formuł", DictionaryValidator.RowElement(i));
+            else if (CasFormula.Error(tokens) is { } error)
+                yield return Issue.Error(error, DictionaryValidator.RowElement(i));
         }
-        foreach (var group in rows.Where(r => r["Grupa"] is not null && r["Pula"] is not null).GroupBy(r => r["Grupa"]!, StringComparer.OrdinalIgnoreCase))
+        foreach (var group in rows.Where(r => Id(r["Grupa"]) is not null && Id(r["Pula"]) is not null).GroupBy(r => Id(r["Grupa"])!.Value))
         {
-            var formulas = group.GroupBy(r => r["Pula"]!, StringComparer.OrdinalIgnoreCase)
-                .ToDictionary(g => g.Key, g => Parse(g.First()["Podstawa"]), StringComparer.OrdinalIgnoreCase);
-            foreach (var pool in Cycles(formulas).Order(StringComparer.OrdinalIgnoreCase))
-                yield return Issue.Error($"Pula {pool} zależy od samej siebie (zapętlenie formuł) – usuń ją z podstawy albo z podstaw pul, od których zależy", $"{group.Key} / {pool}");
+            var formulas = group.Select(r => (Pool: Id(r["Pula"])!.Value, Tokens: CasFormula.Parse(r["Formuła"])))
+                .Where(f => f.Tokens is not null).GroupBy(f => f.Pool).ToDictionary(f => f.Key, f => f.First().Tokens!);
+            foreach (var pool in Cycles(formulas).Order())
+                yield return Issue.Error("Narzut puli zależy od niego samego (zapętlenie formuł) – usuń klocek puli z formuły", $"grupa {group.Key} / pula {pool}");
         }
     }
 
+    /// <summary>Formuła grupy i puli w edycji macierzy: klocki albo null – pula nienaliczana (formuła do usunięcia).</summary>
+    public sealed record Change(long Group, long Pool, IReadOnlyList<CasFormula.Token>? Tokens);
+
     /// <summary>
-    /// Stan słownika „Formuły narzutów CAS” po edycji jednej grupy (edytor formuł): wiersze innych grup bez zmian,
-    /// wiersze grupy – formuły z edytora (istniejąca pula zachowuje RowId i wersję), pule odznaczone – removed.
+    /// Stan słownika „Formuły narzutów CAS” po zmianach z macierzy: istniejąca formuła zachowuje RowId i wersję (nowa
+    /// wersja przy zapisie), nowa – nowy wiersz, pula odznaczona – removed.
     /// </summary>
-    public static (IReadOnlyList<DictRow> Working, IReadOnlyList<DictRow> Removed) ReplaceGroup(IReadOnlyList<DictRow> current, string group,
-        IReadOnlyDictionary<string, IReadOnlyList<string>> formulas)
+    public static (IReadOnlyList<DictRow> Working, IReadOnlyList<DictRow> Removed) Apply(IReadOnlyList<DictRow> current, IEnumerable<Change> changes)
     {
-        bool Of(DictRow r) => string.Equals(r["Grupa"], group, StringComparison.OrdinalIgnoreCase);
-        var existing = current.Where(Of).Where(r => r["Pula"] is not null).GroupBy(r => r["Pula"]!, StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
-        var working = current.Where(r => !Of(r)).ToList();
-        foreach (var (pool, basis) in formulas)
+        var working = current.ToList();
+        var removed = new List<DictRow>();
+        foreach (var change in changes)
         {
-            var values = new Dictionary<string, string?> { ["Grupa"] = group, ["Pula"] = pool, ["Podstawa"] = Join(basis) };
-            working.Add(existing.TryGetValue(pool, out var row) ? new DictRow(row.RowId, row.Version, values) : new DictRow(null, null, values));
+            var index = working.FindIndex(r => Id(r["Grupa"]) == change.Group && Id(r["Pula"]) == change.Pool);
+            if (change.Tokens is null)
+            {
+                if (index >= 0)
+                {
+                    removed.Add(working[index]);
+                    working.RemoveAt(index);
+                }
+                continue;
+            }
+            var values = new Dictionary<string, string?>
+            {
+                ["Grupa"] = Ref(change.Group), ["Pula"] = Ref(change.Pool), ["Formuła"] = CasFormula.Serialize(change.Tokens),
+            };
+            if (index >= 0)
+                working[index] = new DictRow(working[index].RowId, working[index].Version, values);
+            else
+                working.Add(new DictRow(null, null, values));
         }
-        var removed = current.Where(Of).Where(r => r["Pula"] is null || !formulas.ContainsKey(r["Pula"]!)).ToList();
         return (working, removed);
     }
+
+    /// <summary>Wiersz słownika wskazuje usuwaną pulę albo grupę: identyfikator w kolumnie albo klocek formuły z pulą.</summary>
+    public static bool References(string? value, long id) =>
+        Id(value) == id || (CasFormula.Parse(value) is { } tokens && tokens.Any(t => t.Kind is CasFormula.Kind.Pool or CasFormula.Kind.Rate && t.Id == id));
 }

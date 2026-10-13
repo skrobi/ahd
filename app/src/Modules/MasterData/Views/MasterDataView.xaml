@@ -50,9 +50,9 @@
                         <Button Content="Uzupełnij z ACTUALS" Style="{StaticResource Btn}" Margin="8,0,0,0" Command="{Binding FillFromActuals}"
                                 Visibility="{Binding IsCostCategory, Converter={StaticResource BoolToVisibility}}"
                                 ToolTip="Dopisuje cost elementy z całego ostatniego importu ACTUALS, których nie ma w słowniku (podgląd przed zapisem; nic nie jest usuwane) – Cost Category i „Rozliczeniowy” uzupełnia finansista" />
-                        <Button Content="Edytor formuł" Style="{StaticResource Btn}" Margin="8,0,0,0" Command="{Binding EditFormulas}"
+                        <Button Content="Formuły narzutów" Style="{StaticResource Btn}" Margin="8,0,0,0" Command="{Binding EditFormulas}"
                                 Visibility="{Binding IsCasBurden, Converter={StaticResource BoolToVisibility}}"
-                                ToolTip="Macierz formuł grupy narzutowej: pule naliczane i składniki ich podstawy (Base cost elements, pule) – narzut = suma składników × wskaźnik puli" />
+                                ToolTip="Macierz grupy narzutowe × pule: zaznaczone pole – pula naliczana w grupie; kliknięcie otwiera edytor formuły z klocków" />
                     </StackPanel>
                     <StackPanel Orientation="Horizontal">
                         <Button Content="Dodaj wiersz" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding AddRow}" />
