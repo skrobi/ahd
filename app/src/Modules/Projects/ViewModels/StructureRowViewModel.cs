@@ -163,6 +163,7 @@ public sealed class StructureRowViewModel(StructureRow row) : INotifyPropertyCha
         StructureEdits.Finish => row.Finish,
         "WpCount" => row.Wps.Count == 0 ? null : row.Wps.Count.ToString(System.Globalization.CultureInfo.InvariantCulture),
         "Acwp" => Amount(row.Acwp),
+        StructureColumns.ActualDlh => Amount(row.ActualDlh),
         StructureColumns.ActualStart => row.ActualStart,
         StructureColumns.ActualFinish => row.ActualFinish,
         StructureColumns.OpsBacHours => Optional(row.OpsBacHours),

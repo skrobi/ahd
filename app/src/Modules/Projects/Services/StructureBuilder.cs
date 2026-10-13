@@ -16,6 +16,8 @@ namespace PzlEv.Modules.Projects.Services;
 /// Koszt rzeczywisty (costs – ACWP po elemencie CES z ostatniego importu ACTUALS): koszt elementu nakładki trafia do
 /// WP na jego kodzie P1S, a bez niego – do jedynego WP pod elementem; brak WP albo kilka WP – koszt bez przypisania
 /// (w brakach wiersza; reguła rozdziału – O45). Koszt elementu CES, którego nie ma w nakładce – „spoza nakładki”.
+/// Godziny rzeczywiste (dlh – Actual DLH, Total Quantity po elemencie CES z tego samego odczytu ACTUALS) – przypisywane
+/// do WP jak koszt.
 /// </summary>
 public static class StructureBuilder
 {
@@ -40,6 +42,8 @@ public static class StructureBuilder
         public ProductionValues? OwnProduction { get; set; }
         public ProductionSum Production { get; set; }
         public decimal Cost { get; set; }
+        public decimal OwnDlh { get; set; }
+        public decimal Dlh { get; set; }
         public string? CostGap { get; set; }
     }
 
@@ -68,9 +72,10 @@ public static class StructureBuilder
 
     /// <param name="production">Wartości produkcyjne z PZLPROD (Operational EV, materiały) – null: kolumny puste.</param>
     /// <param name="statusDate">Dzień stanu dla PV (domyślnie dziś).</param>
+    /// <param name="dlh">Actual DLH – godziny (Total Quantity) po elemencie CES z ostatniego importu ACTUALS; null – kolumna pusta.</param>
     public static ProjectStructure Build(PoTree tree, IReadOnlyList<P1sElement>? p1s,
         IReadOnlyList<DictRow> wpCam, IReadOnlyList<DictRow> schedule, IReadOnlyDictionary<string, decimal>? costs = null,
-        ProductionData? production = null, DateOnly? statusDate = null)
+        ProductionData? production = null, DateOnly? statusDate = null, IReadOnlyDictionary<string, decimal>? dlh = null)
     {
         var today = statusDate ?? DateOnly.FromDateTime(DateTime.Today);
         var productionOf = (production?.ByPspnr ?? new Dictionary<string, ProductionValues>())
@@ -186,22 +191,31 @@ public static class StructureBuilder
         foreach (var root in roots)
             Collect(root);
 
-        // Koszt rzeczywisty: element nakładki → WP na jego kodzie P1S albo jedyny WP pod nim; suma poddrzewa nakładki.
+        // Koszt rzeczywisty i Actual DLH: element nakładki → WP na jego kodzie P1S albo jedyny WP pod nim; suma poddrzewa nakładki.
         var costOf = costs is null ? new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase)
             : costs.ToDictionary(c => c.Key, c => c.Value, StringComparer.OrdinalIgnoreCase);
+        var dlhOf = dlh is null ? new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase)
+            : dlh.ToDictionary(c => c.Key, c => c.Value, StringComparer.OrdinalIgnoreCase);
         var wpCost = new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase);
+        var wpDlh = new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase);
         var used = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var withoutWp = 0m;
-        decimal Assign(Item item)
+        void Assign(Item item)
         {
-            if (item.Kind == GridRowKind.Objective && item.WbsElement is { } wbs && costOf.TryGetValue(wbs, out var amount) && used.Add(wbs) && amount != 0)
+            if (item.Kind == GridRowKind.Objective && item.WbsElement is { } wbs && (costOf.ContainsKey(wbs) || dlhOf.ContainsKey(wbs)) && used.Add(wbs))
             {
+                var amount = costOf.GetValueOrDefault(wbs);
+                var hours = dlhOf.GetValueOrDefault(wbs);
                 item.OwnCost = amount;
+                item.OwnDlh = hours;
                 var own = item.P1s is null ? null : assignments.GetValueOrDefault(MappingKeys.Key(item.P1s))?["WP"];
                 var target = own ?? (item.Wps.Count == 1 ? item.Wps.First() : null);
                 if (target is not null)
+                {
                     wpCost[target] = wpCost.GetValueOrDefault(target) + amount;
-                else
+                    wpDlh[target] = wpDlh.GetValueOrDefault(target) + hours;
+                }
+                else if (amount != 0)
                 {
                     withoutWp += amount;
                     item.CostGap = item.Wps.Count == 0
@@ -209,8 +223,10 @@ public static class StructureBuilder
                         : $"koszt niejednoznaczny ({PolishNumber.ToDisplay(amount)}) – {item.Wps.Count} WP pod elementem, reguła rozdziału O45";
                 }
             }
-            item.Cost = item.OwnCost + item.Children.Sum(Assign);
-            return item.Cost;
+            foreach (var child in item.Children)
+                Assign(child);
+            item.Cost = item.OwnCost + item.Children.Sum(c => c.Cost);
+            item.Dlh = item.OwnDlh + item.Children.Sum(c => c.Dlh);
         }
         foreach (var root in roots)
             Assign(root);
@@ -269,10 +285,11 @@ public static class StructureBuilder
             if (item.CostGap is { } costGap)
                 gap = gap is null ? costGap : $"{gap}; {costGap}";
             var acwp = item.Kind == GridRowKind.Objective ? item.Cost : wps.Sum(w => wpCost.GetValueOrDefault(w));
+            var actualDlh = item.Kind == GridRowKind.Objective ? item.Dlh : wps.Sum(w => wpDlh.GetValueOrDefault(w));
             rows.Add(new StructureRow(item.Id, parentId, depth, item.Kind, item.NodeKey, item.IsVirtual, item.Name, item.WbsElement, item.P1s,
                 item.Note, item.IsGreyed, assignment?["WP"], assignment?["CAM"], assignment?["Cost Category"], wps, hours, material, start, finish,
                 gap, item.Children.Count > 0, acwp, AnalyticBaseBuilder.Bac(shown, budgets), Date(ops.Start), Date(ops.ActualFinish),
-                ops.Bac, Sum(shown, PvHours), ops.Ev, ops.Ac, ops.Material, Sum(shown, PvCost), Sum(shown, EvCost)));
+                ops.Bac, Sum(shown, PvHours), ops.Ev, ops.Ac, ops.Material, Sum(shown, PvCost), Sum(shown, EvCost), actualDlh));
             foreach (var child in item.Children)
                 Emit(child, item.Id, depth + 1);
         }

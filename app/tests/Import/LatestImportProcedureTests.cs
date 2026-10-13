@@ -8,6 +8,7 @@ using PzlEv.Modules.Import.Data;
 using PzlEv.Modules.Import.Services;
 using PzlEv.Modules.Projects.Data;
 using PzlEv.Modules.Projects.Models;
+using PzlEv.Modules.Projects.Services;
 using PzlEv.Shared.Utils.Data;
 using PzlEv.Tests.TestSupport;
 using Xunit;
@@ -234,6 +235,10 @@ public sealed class LatestImportProcedureTests : IDisposable
         Assert.Equal(6054.51m, costs["2DI473001001"]);
         Assert.Equal(2400m, costs["2di473001002"]);
         Assert.Equal(50014, Assert.Throws<SqlException>(() => store.CostsByElement("M28", "Brak")).Number);
+
+        // Actual DLH struktury: ta sama procedura z polem godzin (Total Quantity) – te same wiersze co ACWP.
+        var hours = store.CostsByElement("M28", ProjectService.ActualsHours);
+        Assert.Equal((32m, 12m), (hours["2DI473001001"], hours["2DI473001002"]));
 
         // Migracja 017: cost element rozliczeniowy (Cost Category „Rozliczeniowy”) – rozliczenie wychodzące (klasa partnera
         // inna niż „Profit analysis”) pominięte; zmiana projektu w Cost Category ma pierwszeństwo przed globalnym.

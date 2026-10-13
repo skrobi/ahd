@@ -51,6 +51,7 @@ public sealed class ProjectDetailViewModel : ObservableObject, IDisposable
     private int _reloads;
     /// <summary>ACWP po elemencie CES (ostatni import ACTUALS) – czytany przy otwarciu i „Odśwież P1S i koszty”, nie po każdym zapisie.</summary>
     private IReadOnlyDictionary<string, decimal>? _costs;
+    private IReadOnlyDictionary<string, decimal>? _dlh;   // Actual DLH (Total Quantity) – czytane razem z kosztami
     private (ProjectStructure Structure, IReadOnlyList<LookupOption> Persons)? _structure;   // ostatnio wczytana – eksport do Excela
     private string? _costsError;
     private IReadOnlyList<SourceDefinitionRow> _sourceDefinitions = [];
@@ -386,7 +387,7 @@ public sealed class ProjectDetailViewModel : ObservableObject, IDisposable
         IReadOnlyDictionary<string, (int Rows, string LastChange)> Dictionaries, ProjectStructure Structure, IReadOnlyList<LookupOption> Persons,
         IReadOnlyList<LookupOption> Categories,
         IReadOnlyList<(DictRow Row, bool Inherited)>? Table, IReadOnlyDictionary<string, IReadOnlyList<LookupOption>> Lookups,
-        IReadOnlyDictionary<string, decimal> Costs, string? CostsError, string CostsField, IReadOnlyList<LookupOption> PersonLookups, (Issue Structure, Issue CamAccess) FolderChecks,
+        IReadOnlyDictionary<string, decimal> Costs, IReadOnlyDictionary<string, decimal> Dlh, string? CostsError, string CostsField, IReadOnlyList<LookupOption> PersonLookups, (Issue Structure, Issue CamAccess) FolderChecks,
         ActualsFreshness Actuals, ProductionData Production, IReadOnlyList<SourceDefinitionRow> SourceDefinitions);
 
     /// <summary>
@@ -406,7 +407,7 @@ public sealed class ProjectDetailViewModel : ObservableObject, IDisposable
         var cachedOwners = refreshMapping || !_ownersLoaded ? null : _owners;
         var cachedActuals = refreshMapping ? null : _actuals;
         var cachedProduction = refreshMapping ? null : _production;
-        (IReadOnlyDictionary<string, decimal> Costs, string? Error, string Field)? cachedCosts = _costs is null ? null : (_costs, _costsError, _costsField);
+        CostData? cachedCosts = _costs is null ? null : new CostData(_costs, _dlh ?? new Dictionary<string, decimal>(), _costsError, _costsField);
         await Try(async () =>
         {
             var steps = new StepTimer();
@@ -421,9 +422,9 @@ public sealed class ProjectDetailViewModel : ObservableObject, IDisposable
                 var rows = states.ToDictionary(s => s.Key, s => s.Value.Rows);
                 var wpCam = rows.GetValueOrDefault(ProjectDictionaries.WpCam) ?? [];
                 var production = cachedProduction ?? steps.Time("produkcja (PZLPROD vAHDD, vAPD)", () => _service.Production(tree, mapping));
-                var (costs, costsError, costsField) = costsRead.GetAwaiter().GetResult();
+                var (costs, dlh, costsError, costsField) = costsRead.GetAwaiter().GetResult();
                 var structure = steps.Time("budowa struktury", () =>
-                    ProjectService.Structure(tree, mapping, wpCam, rows.GetValueOrDefault(ProjectDictionaries.ScheduleBudget) ?? [], costs, production));
+                    ProjectService.Structure(tree, mapping, wpCam, rows.GetValueOrDefault(ProjectDictionaries.ScheduleBudget) ?? [], costs, production, dlh));
                 var persons = cachedPersons ?? steps.Time("osoby", _service.PersonLookups);
                 var folderChecks = cachedFolders ?? steps.Time("foldery (dysk sieciowy)", () => _service.FolderChecks(Code));
                 var categories = ProjectService.CategoryLookups(rows.GetValueOrDefault(ProjectDictionaries.WbsCategories) ?? []);
@@ -441,14 +442,14 @@ public sealed class ProjectDetailViewModel : ObservableObject, IDisposable
                 return new Snapshot(tree, mapping, owners, readiness,
                     states.ToDictionary(s => s.Key, s => (s.Value.Rows.Count, s.Value.LastChange)), structure, ProjectService.PersonOptions(persons, wpCam),
                     ProjectService.CategoryOptions(categories, wpCam), editable,
-                    ProjectService.Lookups(persons, categories, sources, burdenGroups), costs, costsError, costsField, persons, folderChecks, actuals, production,
+                    ProjectService.Lookups(persons, categories, sources, burdenGroups), costs, dlh, costsError, costsField, persons, folderChecks, actuals, production,
                     definitions.Where(d => projectSources.Contains(d.Code)).ToList());
             });
             Logger.Information("Projekt {Code}: wczytanie {Steps}", Code, steps.Summary);
             if (version != _reloads)
                 return;   // w międzyczasie ruszyło nowsze odświeżenie – starszy wynik pomijany
             _saved = snapshot.Tree;
-            (_costs, _costsError, _costsField) = (snapshot.Costs, snapshot.CostsError, snapshot.CostsField);
+            (_costs, _dlh, _costsError, _costsField) = (snapshot.Costs, snapshot.Dlh, snapshot.CostsError, snapshot.CostsField);
             _mapping = snapshot.Mapping;
             _owners = snapshot.Owners;
             _ownersLoaded = true;
@@ -498,12 +499,15 @@ public sealed class ProjectDetailViewModel : ObservableObject, IDisposable
         }
     }
 
+    /// <summary>ACWP i Actual DLH po elemencie CES, błąd odczytu kosztów i pole kwoty ACTUALS.</summary>
+    private sealed record CostData(IReadOnlyDictionary<string, decimal> Amounts, IReadOnlyDictionary<string, decimal> Dlh, string? Error, string Field);
+
     /// <summary>
-    /// ACWP po elemencie CES (w tle) z pola kwoty ACTUALS projektu; cached – koszty w pamięci, użyte przy tym samym polu.
-    /// Brak danych lub procedury – pusta lista i powód (struktura bez kosztów).
+    /// ACWP po elemencie CES (w tle) z pola kwoty ACTUALS projektu i Actual DLH (Total Quantity); cached – koszty w pamięci,
+    /// użyte przy tym samym polu. Brak danych lub procedury – pusta lista i powód (struktura bez kosztów); brak godzin –
+    /// kolumna Actual DLH pusta, ACWP bez zmian.
     /// </summary>
-    private (IReadOnlyDictionary<string, decimal> Costs, string? Error, string Field) ReadCosts(StepTimer steps,
-        (IReadOnlyDictionary<string, decimal> Costs, string? Error, string Field)? cached)
+    private CostData ReadCosts(StepTimer steps, CostData? cached)
     {
         var field = ProjectSettings.DefaultActualsAmount;
         try
@@ -511,12 +515,26 @@ public sealed class ProjectDetailViewModel : ObservableObject, IDisposable
             field = steps.Time("pole kwoty ACTUALS", () => _service.ActualsAmount(Code));
             if (cached is { } c && c.Field == field)
                 return c;
-            return (steps.Time("koszty ACWP (ACTUALS)", () => _service.CostsByElement(Code, field)), null, field);
+            var amounts = steps.Time("koszty ACWP (ACTUALS)", () => _service.CostsByElement(Code, field));
+            return new CostData(amounts, ReadDlh(steps), null, field);
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
             Logger.Warning(ex, "Koszty projektu {Code}", Code);
-            return (new Dictionary<string, decimal>(), $"koszty (ACWP) niedostępne: {ex.Message}", field);
+            return new CostData(new Dictionary<string, decimal>(), new Dictionary<string, decimal>(), $"koszty (ACWP) niedostępne: {ex.Message}", field);
+        }
+    }
+
+    private IReadOnlyDictionary<string, decimal> ReadDlh(StepTimer steps)
+    {
+        try
+        {
+            return steps.Time("godziny Actual DLH (ACTUALS)", () => _service.HoursByElement(Code));
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            Logger.Warning(ex, "Godziny Actual DLH projektu {Code}", Code);
+            return new Dictionary<string, decimal>();
         }
     }
 

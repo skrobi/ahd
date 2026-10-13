@@ -105,9 +105,9 @@ i budżetem (`StructureBuilder`).
   |---|---|
   | WBS Attributes | WBS Name (drzewo, zamrożona; poziom – wcięcie), CES Element i Legacy Element (P1S) (domyślnie schowane – „+” w nagłówku WBS Name), WP (checkbox), CAM (lista osób), Cost Category (lista kategorii projektu) |
   | Schedule | Baseline Start, Baseline Finish (RRRR-MM-DD, „Harmonogram i budżet”); Actual Start (najwcześniejszy `GSTRI` zleceń), Actual Finish (najpóźniejszy `LTRMI`, gdy wszystkie zlecenia zamknięte – inaczej puste); element wirtualny – `DATA_REAL` operacji |
-  | Operational EV | BAC Hours (AHD: TECH ÷ produktywność IPT z 12 mies. + DJK), PV Hours (BAC Hours AHD WP rozłożone liniowo na dni robocze pn–pt baseline, stan na dziś), EV Hours (TECH_PON ÷ produktywność + DJK), AC Hours (CATS) |
+  | Operational EV | TECH Hours (AHD: TECH ÷ produktywność IPT z 12 mies. + DJK), PV Hours (TECH Hours WP rozłożone liniowo na dni robocze pn–pt baseline, stan na dziś), EV Hours (TECH_PON ÷ produktywność + DJK), AC Hours (CATS) |
   | Materials | BAC Material („Harmonogram i budżet”), Actual Material (vAPD: dostarczone / wydane, USD bez narzutu Z_CLO) |
-  | Financial EV | BAC Hours baseline i BAC Cost („Harmonogram i budżet”), PV Cost (BAC Cost × udział dni roboczych baseline), EV Cost (BAC Cost × EV Hours ÷ BAC Hours AHD, najwyżej BAC Cost), ACWP |
+  | Financial EV | BAC Hours baseline i BAC Cost („Harmonogram i budżet”), PV Cost (BAC Cost × udział dni roboczych baseline), EV Cost (BAC Cost × EV Hours ÷ TECH Hours, najwyżej BAC Cost), ACWP, Actual DLH |
 
   **Wiersz z własnym WP** pokazuje ten WP: budżet i daty (edytowalne, także gdy pod nim są inne WP), godziny z PZLPROD
   przypisane do WP oraz PV / EV. Godziny elementu trafiają do najbliższego WP w górę drzewa (własnego albo przodka) – WP
@@ -161,12 +161,16 @@ i budżetem (`StructureBuilder`).
   pobranie raportu z tą samą treścią (import „pominięty” / „duplikat”) nie zmienia danych, ale przesuwa datę „dane z” na
   nowszy raport – wiadomo, że dane są aktualne na tę datę (`CAN_LatestFiles` + `META_SourceFileSeen`).
   To podgląd – formalny koszt WP liczy przebieg (P3, `ev.KosztWP`).
+- **Actual DLH** (tylko do odczytu): godziny rzeczywiste narastająco z ostatniego importu ACTUALS – kolumna „Total
+  Quantity” (pole parsera `TotalQuantity`), te same wiersze (bez wykluczeń i rozliczenia wychodzącego) i to samo
+  przypisanie do WP co ACWP (procedura `REP_ProjectCostsByElement` z polem godzin). Godziny elementu bez WP zostają
+  na węźle nakładki (bez osobnego braku). Brak pola godzin w parserze – kolumna pusta, ACWP bez zmian.
 - **Pasek nad tabelą** – ikony z opisem w podpowiedzi: edycja Performance Objectives, dołożenie z Excela (eksport SAP),
   pobranie struktury do Excela, wczytanie struktury z Excela, rozwiń / zwiń wszystko, odświeżenie P1S i kosztów, cofnięcie wklejenia, odrzucenie
   niezapisanych zmian.
 - **Struktura do Excela** – arkusz „Struktura”: całe drzewo (także zwinięte wiersze) w kolejności tabeli, nazwa wcięta
   według poziomu, kolumny Poziom, Rodzaj, Element CES, P1S, WP, CAM (USRID oraz imię i nazwisko), Cost Category, WP
-  w poddrzewie, BAC HOURS, BAC MATERIAL, BAC, Baseline Start, Baseline Koniec, ACWP, Braki, Uwagi (wartości jak w tabeli –
+  w poddrzewie, BAC HOURS, BAC MATERIAL, BAC, Baseline Start, Baseline Koniec, ACWP, Actual DLH, Braki, Uwagi (wartości jak w tabeli –
   sumy poddrzewa). Eksportowany jest stan zapisany; przy niezapisanych zmianach – najpierw zapis albo „Odrzuć niezapisane”.
   Kolumny do uzupełnienia mają żółty nagłówek z opisem w komentarzu: WP, CAM (lista osób w arkuszu „Listy”), Cost
   Category, Baseline Start, Baseline Finish, BAC Hours baseline, BAC Material, BAC Cost.

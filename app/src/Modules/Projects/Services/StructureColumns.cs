@@ -25,6 +25,7 @@ public static class StructureColumns
     public const string PvCost = "PvCost";
     public const string EvCost = "EvCost";
     public const string Acwp = "Acwp";
+    public const string ActualDlh = "ActualDlh";
     public const string WbsElement = "WbsElement";
 
     public sealed record Group(string Name, bool Collapsed, string Description);
@@ -55,7 +56,7 @@ public static class StructureColumns
         new(ActualStart, "Actual Start", Schedule, "Rzeczywisty start – najwcześniejszy rzeczywisty start zlecenia (vAHDD GSTRI); wydzielenie (np. Paint) – najwcześniejsza data wykonania jego operacji (DATA_REAL).", 110, Mono: true, Right: false, FromView: true),
         new(ActualFinish, "Actual Finish", Schedule, "Rzeczywisty koniec – najpóźniejszy rzeczywisty koniec zlecenia (vAHDD LTRMI; wydzielenie – DATA_REAL), gdy wszystkie zlecenia elementu są zamknięte (STAT = DONE); inaczej puste – element trwa.", 110, Mono: true, Right: false, FromView: true),
 
-        new(OpsBacHours, "BAC Hours", OperationalEv, "Budżet godzin z AHD (vAHDD): TECH ÷ produktywność IPT + godziny jakości DJK (słowniki „Parametry produkcji”, „Wskaźniki DJK”); może różnić się od BAC Hours baseline. Suma elementów P1S poddrzewa.", FromView: true),
+        new(OpsBacHours, "TECH Hours", OperationalEv, "Budżet godzin z AHD (vAHDD): TECH ÷ produktywność IPT + godziny jakości DJK (słowniki „Parametry produkcji”, „Wskaźniki DJK”); może różnić się od BAC Hours baseline. Suma elementów P1S poddrzewa.", FromView: true),
         new(PvHours, "PV Hours", OperationalEv, "Godziny do wypracowania wg harmonogramu baseline: BAC Hours (AHD) WP rozłożone liniowo na dni robocze (pn–pt) od Baseline Start do Baseline Finish, stan na dziś.", FromView: true),
         new(EvHours, "EV Hours", OperationalEv, "Godziny zarobione wg raportu AHD (vAHDD): TECH_PON ÷ produktywność IPT + DJK.", FromView: true),
         new(AcHours, "AC Hours", OperationalEv, "Godziny rzeczywiste – zaraportowane godziny CATS (vAHDD).", FromView: true),
@@ -68,6 +69,7 @@ public static class StructureColumns
         new(PvCost, "PV Cost", FinancialEv, "Wartość planowana: BAC Cost × udział dni roboczych baseline, które minęły (stan na dziś).", FromView: true),
         new(EvCost, "EV Cost", FinancialEv, "Wartość wypracowana: BAC Cost × (EV Hours ÷ BAC Hours z AHD), najwyżej BAC Cost.", FromView: true),
         new(Acwp, "ACWP", FinancialEv, "Koszt rzeczywisty narastająco z ostatniego importu ACTUALS (pole kwoty – Konfiguracja → „Parametry projektu”, domyślnie waluta obiektu – PLN), bez wykluczeń i rozliczenia wychodzącego.", FromView: true),
+        new(ActualDlh, "Actual DLH", FinancialEv, "Godziny rzeczywiste narastająco z ostatniego importu ACTUALS – kolumna „Total Quantity”; te same wiersze i przypisanie do WP co ACWP (bez wykluczeń i rozliczenia wychodzącego).", FromView: true),
     ];
 
     public static Column Get(string key) => All.First(c => c.Key == key);
