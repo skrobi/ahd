@@ -34,7 +34,8 @@ public sealed class SqlPresetsTests : IDisposable
 
     public void Dispose() => _database?.Dispose();
 
-    private static string Describe(CasCostReport.BurdenGroup g) => $"{g.Name}: {g.BaseInGsGa} {string.Join(", ", CasCostReport.Pools.Where(g.Pools.Contains))}";
+    private static string Describe(CasBurden.Group g) =>
+        $"{g.Name}: {string.Join("; ", g.Formulas.OrderBy(f => f.Key, StringComparer.Ordinal).Select(f => $"{f.Key} = {CasBurden.Join(f.Value)}"))}";
 
     [SqlFact]
     public void Presets_contain_actuals_sources_active_rabit_location_calendar_and_cost_category()
@@ -65,9 +66,12 @@ public sealed class SqlPresetsTests : IDisposable
         Assert.Equal("Manufacturing and QA LL labor", costCategory["9229D550"].Values["Cost Category"]);
         Assert.Empty(_dictionaries.Current(GlobalDictionaries.DepartmentRates));
 
-        // 030: narzuty CAS z arkusza finansów – grupy, wskaźniki 2025–2026, grupa elementów kosztowych (nowa wersja pozycji)
-        var groups = CasCostReport.GroupsFrom(_dictionaries.Current(GlobalDictionaries.CasBurdenGroups).Select(r => new DictRow(r.RowId, r.Version, r.Values)));
+        // 030, 032: narzuty CAS z arkusza finansów – pule, grupy i ich formuły, wskaźniki 2025–2026, grupa elementów kosztowych (nowa wersja pozycji)
+        IEnumerable<DictRow> Rows(string dictionary) => _dictionaries.Current(dictionary).Select(r => new DictRow(r.RowId, r.Version, r.Values));
+        Assert.Equal(CasCostReportTests.FinancePools, CasBurden.PoolsFrom(Rows(GlobalDictionaries.CasPools)));
+        var groups = CasBurden.GroupsFrom(Rows(GlobalDictionaries.CasBurdenGroups), Rows(GlobalDictionaries.CasBurdenFormulas));
         Assert.Equal(CasCostReportTests.FinanceGroups.Select(Describe).Order(), groups.Select(Describe).Order());
+        Assert.All(groups, g => Assert.NotNull(g.Description));
         var rates = CasCostReport.RatesFrom(_dictionaries.Current(GlobalDictionaries.CasBurdenRates).Select(r => new DictRow(r.RowId, r.Version, r.Values)));
         Assert.Equal(34, rates.Count);   // 17 pul × 2025, 2026; DECIMAL(38,18)
         Assert.Equal((new DateOnly(2026, 1, 1), (DateOnly?)new DateOnly(2026, 12, 31), 0.000057456819309837m),
@@ -102,7 +106,7 @@ public sealed class SqlPresetsTests : IDisposable
         };
         Assert.True(_dictionaries.Save(GlobalDictionaries.CostCategory, null, [new RowChange(RowChangeKind.Added, null, null, spec.KeyOf(own), own)]).Success);
 
-        Assert.Equal(["002_dane_startowe.sql", "023_dane_produkcji.sql", "030_dane_narzuty_cas.sql"], SqlMigrations.Apply(_database.Sql));
+        Assert.Equal(["002_dane_startowe.sql", "023_dane_produkcji.sql", "030_dane_narzuty_cas.sql", "032_dane_formuly_narzutow_cas.sql"], SqlMigrations.Apply(_database.Sql));
 
         var paf = _sources.Definitions().Single(d => d.Code == "ACTUALS_PAF");
         Assert.Equal(("moja definicja", 1), (paf.ReportType, paf.Version));

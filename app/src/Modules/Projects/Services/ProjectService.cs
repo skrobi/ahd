@@ -739,8 +739,8 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
 
     /// <summary>
     /// Raport kosztów CES do Excela (projekty CAS): raport kosztów z narzutami CAS w formułach – grupa narzutowa
-    /// z efektywnego słownika Cost Category projektu, pule ze słownika „Grupy narzutowe CAS”, wskaźniki ze „Wskaźników
-    /// narzutu CAS” (CasCostReport); arkusze „Wskaźniki” i „Uwagi” (braki mapowania i wskaźników). Zwraca liczbę wierszy i uwag.
+    /// z efektywnego słownika Cost Category projektu, pule i formuły ze słowników „Pule narzutu CAS”, „Grupy narzutowe CAS”
+    /// i „Formuły narzutów CAS”, wskaźniki ze „Wskaźników narzutu CAS” (CasCostReport); arkusze „Wskaźniki” i „Uwagi” (braki mapowania i wskaźników). Zwraca liczbę wierszy i uwag.
     /// </summary>
     public (int Rows, int Notes) ExportCasCostReport(string path, string code)
     {
@@ -749,9 +749,11 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
             .Where(r => r["Numer elementu kosztowego"] is not null)
             .GroupBy(r => r["Numer elementu kosztowego"]!, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(g => g.Key, g => g.First()[GlobalDictionaries.BurdenGroupColumn], StringComparer.OrdinalIgnoreCase);
+        IReadOnlyList<DictRow> Global(string dictionary) => _dictionaries.Load(GlobalDictionaries.Get(dictionary));
         var result = CasCostReport.Build(columns, rows, mapping,
-            CasCostReport.GroupsFrom(_dictionaries.Load(GlobalDictionaries.Get(GlobalDictionaries.CasBurdenGroups))),
-            CasCostReport.RatesFrom(_dictionaries.Load(GlobalDictionaries.Get(GlobalDictionaries.CasBurdenRates))));
+            CasBurden.PoolsFrom(Global(GlobalDictionaries.CasPools)),
+            CasBurden.GroupsFrom(Global(GlobalDictionaries.CasBurdenGroups), Global(GlobalDictionaries.CasBurdenFormulas)),
+            CasCostReport.RatesFrom(Global(GlobalDictionaries.CasBurdenRates)));
         List<ExcelTableWriter.ReportSheet> sheets = [result.Report, result.Rates];
         if (result.Notes.Count > 0)
             sheets.Add(new ExcelTableWriter.ReportSheet("Uwagi", ["Uwaga"], result.Notes.Select(n => (IReadOnlyList<object?>)[n])));

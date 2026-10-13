@@ -18,26 +18,13 @@ public static partial class GlobalDictionaries
     public const string Persons = "persons";
     public const string DjkRates = "djk-rates";
     public const string ProductionParameters = "production-parameters";
+    public const string CasPools = "cas-pools";
     public const string CasBurdenGroups = "cas-burden-groups";
+    public const string CasBurdenFormulas = "cas-burden-formulas";
     public const string CasBurdenRates = "cas-burden-rates";
 
     /// <summary>Kolumna słownika Cost Category z grupą narzutową CAS elementu kosztowego (raport kosztów CES).</summary>
     public const string BurdenGroupColumn = "Grupa narzutowa CAS";
-
-    /// <summary>Kolumna słownika „Grupy narzutowe CAS”: koszt bazowy wchodzi do podstawy GS i G&amp;A (suche koszty materiałów – nie).</summary>
-    public const string BaseInGsGaColumn = "Koszt bazowy w podstawie GS i G&A";
-
-    /// <summary>
-    /// Pule narzutu CAS w kolejności kolumn raportu kosztów CES (arkusz finansów) z kolumną tabeli
-    /// DICT_CasBurdenGroup; 12 pul kosztu (TOTAL COST) i 5 pul FCCOM (TOTAL FCCOM).
-    /// </summary>
-    public static IReadOnlyList<(string Pool, string Column)> CasPools { get; } =
-    [
-        ("MFG Fringe", "MfgFringe"), ("MFG OH", "MfgOh"), ("ENG Fringe", "EngFringe"), ("ENG OH", "EngOh"), ("MTL Fringe", "MtlFringe"),
-        ("Material Handling (MTL)", "MtlHandling"), ("Miscellaneous Material Pool (MMP)", "Mmp"), ("General Services (GS)", "Gs"),
-        ("GS Fringe", "GsFringe"), ("MSV Fringe", "MsvFringe"), ("General & Administrative (GA)", "Ga"), ("Corporate Flowdowns (FD)", "Fd"),
-        ("FCCOM MFG", "FccomMfg"), ("FCCOM ENG", "FccomEng"), ("FCCOM MTL", "FccomMtl"), ("FCCOM GS", "FccomGs"), ("FCCOM G&A", "FccomGa"),
-    ];
 
     /// <summary>Parametry słownika „Parametry produkcji” (kolumna Parametr).</summary>
     public const string ProductivityMonths = "Okno produktywności IPT (mies.)";
@@ -155,18 +142,41 @@ public static partial class GlobalDictionaries
         },
         new()
         {
+            Code = CasPools,
+            Name = "Pule narzutu CAS",
+            Description = "Pule narzutu CAS – kolumny raportu kosztów CES w kolejności „Kolejność”; Rodzaj: Koszt – w TOTAL COST, FCCOM – w TOTAL FCCOM. Nowa pula pojawia się w edytorze formuł, we wskaźnikach i w raporcie.",
+            Columns =
+            [
+                new("Pula", ColumnType.Text, Key: true, CheckSimilar: true),
+                new("Kolejność", ColumnType.Integer, Required: true),
+                new("Rodzaj", ColumnType.Choice, Required: true, Choices: [CasBurden.CostKind, CasBurden.FccomKind]),
+                new("Opis", ColumnType.Text),
+            ],
+            Rules = CasPoolRules,
+        },
+        new()
+        {
             Code = CasBurdenGroups,
             Name = "Grupy narzutowe CAS",
-            Description = "Grupa narzutowa elementu kosztowego (kolumna „Grupa narzutowa CAS” słownika Cost Category) → pule narzutu CAS naliczane na jego koszt w raporcie kosztów CES. "
-                + "Podstawy pul są wspólne (kaskada arkusza finansów): Fringe, MTL Handling, MMP, FCCOM MTL – koszt bazowy; OH i FCCOM MFG / ENG – koszt + Fringe; "
-                + "GS – koszt + Fringe + OH + MTL Handling; G&A, FD – jak GS + GS. „Koszt bazowy w podstawie GS i G&A” = nie – GS i G&A liczone od samego MTL Handling (suche koszty materiałów i usług).",
+            Description = "Grupa narzutowa elementu kosztowego (kolumna „Grupa narzutowa CAS” słownika Cost Category). Pule naliczane w grupie i ich podstawy – słownik „Formuły narzutów CAS” (przycisk „Edytor formuł”).",
             Columns =
             [
                 new("Grupa", ColumnType.Text, Key: true, CheckSimilar: true),
                 new("Opis", ColumnType.Text),
-                new(BaseInGsGaColumn, ColumnType.Boolean, Required: true),
-                .. CasPools.Select(p => new DictColumn(p.Pool, ColumnType.Boolean)),
             ],
+        },
+        new()
+        {
+            Code = CasBurdenFormulas,
+            Name = "Formuły narzutów CAS",
+            Description = "Formuła puli w grupie narzutowej: narzut = (suma składników podstawy) × wskaźnik puli. Podstawa – „Base cost elements” (koszt bazowy kolumny) i pule połączone „ + ”. Wiersz = pula naliczana w grupie. Edycja w macierzy – „Edytor formuł”.",
+            Columns =
+            [
+                new("Grupa", ColumnType.Text, Key: true, CheckSimilar: true),
+                new("Pula", ColumnType.Text, Key: true, CheckSimilar: true),
+                new("Podstawa", ColumnType.Text, Required: true),
+            ],
+            Rules = CasBurden.FormulaRules,
         },
         new()
         {
@@ -175,7 +185,7 @@ public static partial class GlobalDictionaries
             Description = "Wskaźnik puli narzutu CAS obowiązujący od – do (zwykle rok: 2026-01-01 – 2026-12-31; Do puste – bezterminowo). Raport kosztów CES bierze wskaźnik obowiązujący w okresie kolumny (okres, rok).",
             Columns =
             [
-                new("Pula", ColumnType.Choice, Key: true, Choices: CasPools.Select(p => p.Pool).ToList()),
+                new("Pula", ColumnType.Text, Key: true, CheckSimilar: true),
                 new("Od", ColumnType.Date, Key: true),
                 new("Do", ColumnType.Date),
                 new("Wskaźnik", ColumnType.Decimal, Required: true),
@@ -207,8 +217,9 @@ public static partial class GlobalDictionaries
         ]),
         new(Get(DjkRates), "dict.DjkRate", [("Grupa stanowisk", "WorkCenterGroup"), ("Udział DJK", "Share"), ("Opis", "Description")]),
         new(Get(ProductionParameters), "dict.ProductionParameter", [("Parametr", "Name"), ("Wartość", "Value"), ("Opis", "Description")]),
-        new(Get(CasBurdenGroups), "dict.CasBurdenGroup",
-            [("Grupa", "BurdenGroup"), ("Opis", "Description"), (BaseInGsGaColumn, "BaseInGsGa"), .. CasPools.Select(p => (p.Pool, p.Column))]),
+        new(Get(CasPools), "dict.CasPool", [("Pula", "Pool"), ("Kolejność", "SortOrder"), ("Rodzaj", "Kind"), ("Opis", "Description")]),
+        new(Get(CasBurdenGroups), "dict.CasBurdenGroup", [("Grupa", "BurdenGroup"), ("Opis", "Description")]),
+        new(Get(CasBurdenFormulas), "dict.CasBurdenFormula", [("Grupa", "BurdenGroup"), ("Pula", "Pool"), ("Podstawa", "Basis")]),
         new(Get(CasBurdenRates), "dict.CasBurdenRate", [("Pula", "Pool"), ("Od", "ValidFrom"), ("Do", "ValidTo"), ("Wskaźnik", "Rate"), ("Opis", "Description")]),
     ];
 
@@ -295,6 +306,19 @@ public static partial class GlobalDictionaries
             if (rows[i]["Grupa stanowisk"] is { } prefix && prefixes.Any(p => p.Length > prefix.Length && p.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)))
                 yield return Issue.Warning($"Grupa {prefix} jest prefiksem innej grupy – dla dłuższej liczy się jej udział", at);
         }
+    }
+
+    /// <summary>„Pule narzutu CAS”: nazwa inna niż koszt bazowy i bez „+” (separator podstawy), kolejność bez powtórzeń.</summary>
+    private static IEnumerable<Issue> CasPoolRules(IReadOnlyList<DictRow> rows)
+    {
+        for (var i = 0; i < rows.Count; i++)
+        {
+            var at = DictionaryValidator.RowElement(i);
+            if (rows[i]["Pula"] is { } pool && (pool.Contains('+') || string.Equals(pool, CasBurden.Base, StringComparison.OrdinalIgnoreCase)))
+                yield return Issue.Error($"Pula „{pool}” – nazwa nie może zawierać „+” ani być „{CasBurden.Base}”", at);
+        }
+        foreach (var order in rows.Where(r => r["Kolejność"] is not null).GroupBy(r => r["Kolejność"]!).Where(g => g.Count() > 1))
+            yield return Issue.Warning($"Kolejność {order.Key} ma kilka pul ({string.Join(", ", order.Select(r => r["Pula"]))}) – kolumny ułożone po nazwie", "Kolejność");
     }
 
     /// <summary>„Wskaźniki narzutu CAS”: wskaźnik nieujemny (okresy obowiązywania – DictionaryValidator, Validity).</summary>

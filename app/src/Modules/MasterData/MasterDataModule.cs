@@ -30,14 +30,18 @@ public sealed class MasterDataModule : IModule
     // Magazyn danych: baza MS SQL środowiska (Sql*Store); dane startowe – migracja sql/mssql/002_dane_startowe.sql.
     public void Initialize(AppServices services) => _store = new SqlDictionaryStore(services.Sql, services.Clock, services.User, GlobalDictionaries.Tables);
 
-    public FrameworkElement CreateView(ModuleContext context) =>
-        new MasterDataView
+    public FrameworkElement CreateView(ModuleContext context)
+    {
+        var service = new DictionaryService(_store!, context.Services.Journal);
+        return new MasterDataView
         {
-            DataContext = new MasterDataViewModel(new DictionaryService(_store!, context.Services.Journal), new FileDialogs(),
+            DataContext = new MasterDataViewModel(service, new FileDialogs(),
                 context.Services.PzlHrProd is { } hr ? new SqlHrSource(hr) : null, new SqlCostElementSource(context.Services.Sql),
                 context.Services.PzlProd is { } prod ? new SqlPzlProdSource(prod) : null)
             {
                 PickPersons = PersonPickerWindow.Pick,
+                EditCasFormulas = group => CasFormulaEditorWindow.Edit(service, group),
             },
         };
+    }
 }
