@@ -7,7 +7,6 @@ using PzlEv.Shared.Models;
 using PzlEv.Shared.Utils.Data;
 using PzlEv.Shared.Utils.Data.Sql;
 using PzlEv.Shared.Utils.Dictionaries;
-using PzlEv.Shared.Utils.Mapping;
 using PzlEv.Shared.Utils.Ui.Dialogs;
 using PzlEv.Shared.Utils.Ui.Modularity;
 
@@ -32,8 +31,9 @@ public sealed class ProjectsModule : IModule
             new SqlDictionaryStore(services.Sql, services.Clock, services.User, [.. GlobalDictionaries.Tables, .. ProjectDictionaries.Tables]),
             services.Journal,
             new ProjectFolders(services.Config.ProjectsFolder),
-            new SqlMappingStore(services.Sql, services.Clock, services.User),
-            services.PzlProd is null ? null : new SqlPzlProdSource(services.PzlProd));
+            services.PzlProd is null ? null : new SqlPzlProdSource(services.PzlProd),
+            () => services.Contracts.Get<ISourceImport>(),
+            () => services.Contracts.Get<IRunLauncher>());
 
     public FrameworkElement CreateView(ModuleContext context) =>
         new ProjectsView { DataContext = new ProjectsViewModel(_service!, new FileDialogs()) };

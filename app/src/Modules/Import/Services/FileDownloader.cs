@@ -63,7 +63,7 @@ public sealed class FileDownloader : IDisposable
     /// <summary>
     /// Plik na dysku lokalnym; detail – postęp pobierania dla ekranu („35,2 z 86,0 MB (4,1 MB/s), HTTPS”), true – stan końcowy.
     /// </summary>
-    public LocalFile Download(ImportLocation location, FileInfo file, Action<string, bool> detail, CancellationToken cancellation)
+    public LocalFile Download(ImportLocation location, SourceFile file, Action<string, bool> detail, CancellationToken cancellation)
     {
         var folder = Path.Combine(_root, Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(folder);
@@ -98,7 +98,7 @@ public sealed class FileDownloader : IDisposable
     }
 
     /// <summary>Pobranie przez HTTPS; null – pobrano, inaczej powód niepowodzenia (wtedy kopia przez WebDAV).</summary>
-    private string? TryHttps(Uri url, FileInfo file, string target, Action<string, bool> detail, CancellationToken cancellation, out string sha, out long size)
+    private string? TryHttps(Uri url, SourceFile file, string target, Action<string, bool> detail, CancellationToken cancellation, out string sha, out long size)
     {
         sha = "";
         size = 0;

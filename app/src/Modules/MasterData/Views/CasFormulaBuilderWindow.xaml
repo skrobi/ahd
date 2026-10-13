@@ -1,0 +1,137 @@
+<Window x:Class="PzlEv.Modules.MasterData.Views.CasFormulaBuilderWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="clr-namespace:PzlEv.Modules.MasterData.ViewModels"
+        Title="{Binding Title}" Width="1120" Height="760" MinWidth="820" MinHeight="520"
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="False" Background="{StaticResource Surface}"
+        PreviewKeyDown="OnKey">
+    <!-- Edytor formuły narzutu z klocków (DataContext: CasFormulaBuilderViewModel) -->
+    <Window.Resources>
+        <!-- Kolor klocka według rodzaju: koszt, narzut puli, wskaźnik, operator -->
+        <Style x:Key="Chip" TargetType="Border">
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="Padding" Value="9,5" />
+            <Setter Property="Margin" Value="0,0,6,6" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Background" Value="{StaticResource Surface2}" />
+            <Setter Property="BorderBrush" Value="{StaticResource Line}" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding Category}" Value="{x:Static vm:BlockCategory.Cost}">
+                    <Setter Property="Background" Value="{StaticResource OkSoft}" />
+                    <Setter Property="BorderBrush" Value="{StaticResource Ok}" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Category}" Value="{x:Static vm:BlockCategory.Pool}">
+                    <Setter Property="Background" Value="{StaticResource InfoSoft}" />
+                    <Setter Property="BorderBrush" Value="{StaticResource Info}" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Category}" Value="{x:Static vm:BlockCategory.Rate}">
+                    <Setter Property="Background" Value="{StaticResource WarnSoft}" />
+                    <Setter Property="BorderBrush" Value="{StaticResource Warn}" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding IsEnabled}" Value="False">
+                    <Setter Property="Opacity" Value="0.35" />
+                    <Setter Property="Cursor" Value="No" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- Klocek palety: kliknięcie – wstawienie w miejscu kursora, przeciągnięcie – w miejscu upuszczenia -->
+        <DataTemplate x:Key="PaletteChip" DataType="{x:Type vm:PaletteBlock}">
+            <Border Style="{StaticResource Chip}" ToolTip="{Binding Tip}"
+                    PreviewMouseLeftButtonDown="OnPalettePress" PreviewMouseMove="OnPaletteMove" MouseLeftButtonUp="OnPaletteClick">
+                <TextBlock Text="{Binding Label}" FontWeight="Medium" />
+            </Border>
+        </DataTemplate>
+
+        <ItemsPanelTemplate x:Key="Wrap">
+            <WrapPanel />
+        </ItemsPanelTemplate>
+    </Window.Resources>
+
+    <DockPanel Margin="16">
+        <TextBlock DockPanel.Dock="Top" Text="{Binding Title}" Style="{StaticResource H2}" />
+        <TextBlock DockPanel.Dock="Top" Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="0,0,0,10"
+                   Text="Kliknij klocek z palety albo przeciągnij go do formuły. Pionowa kreska to kursor – miejsce wstawienia: kliknij klocek formuły, aby ustawić kursor za nim. Klocki formuły można przeciągać, × usuwa klocek; Backspace / Delete – usuń przed / za kursorem, ← → Home End – kursor. Narzut = wynik formuły (np. (koszt + Fringe) × wskaźnik puli)." />
+
+        <!-- Przyciski i wynik -->
+        <DockPanel DockPanel.Dock="Bottom" Margin="0,12,0,0">
+            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                <Button Content="Anuluj" Style="{StaticResource Btn}" Margin="0,0,8,0" IsCancel="True" />
+                <Button Content="Zatwierdź" Style="{StaticResource BtnPrimary}" Click="OnConfirm" IsEnabled="{Binding IsValid}" IsDefault="True" />
+            </StackPanel>
+            <StackPanel Orientation="Horizontal">
+                <Button Content="Koszt × wskaźnik puli" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding UseDefault}"
+                        ToolTip="Zastępuje formułę formułą podstawową: Base cost elements × wskaźnik tej puli" />
+                <Button Content="Wyczyść" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding Clear}" />
+                <Button Content="Pula nienaliczana w grupie" Style="{StaticResource Btn}" Click="OnRemove"
+                        ToolTip="Usuwa formułę – pula nie ma narzutu w tej grupie (pole w macierzy odznaczone)" />
+            </StackPanel>
+        </DockPanel>
+
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+
+            <!-- Formuła z klocków -->
+            <Border x:Name="FormulaArea" Style="{StaticResource Panel}" BorderBrush="{StaticResource Accent}" MinHeight="96" Padding="10,10,10,4"
+                    AllowDrop="True" DragOver="OnDragOver" Drop="OnDrop" Background="{StaticResource Surface}" MouseLeftButtonUp="OnAreaClick">
+                <ItemsControl ItemsSource="{Binding Blocks}" ItemsPanel="{StaticResource Wrap}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="{x:Type vm:FormulaBlock}">
+                            <StackPanel Orientation="Horizontal" Background="Transparent" Tag="{Binding}">
+                                <Rectangle Width="3" Margin="0,2,4,8" Fill="{StaticResource Accent}"
+                                           Visibility="{Binding CaretBefore, Converter={StaticResource BoolToVisibility}}" />
+                                <Border Style="{StaticResource Chip}" Visibility="{Binding IsBlock, Converter={StaticResource BoolToVisibility}}"
+                                        PreviewMouseLeftButtonDown="OnBlockPress" PreviewMouseMove="OnBlockMove" MouseLeftButtonUp="OnBlockClick">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="{Binding Label}" FontWeight="Medium" VerticalAlignment="Center" />
+                                        <Button Content="×" Margin="6,0,0,0" Padding="4,0" FontSize="11" Background="Transparent" BorderThickness="0"
+                                                Foreground="{StaticResource Muted}" Cursor="Hand" ToolTip="Usuń klocek"
+                                                Command="{Binding DataContext.RemoveBlock, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                CommandParameter="{Binding}" />
+                                    </StackPanel>
+                                </Border>
+                                <Border Width="40" Height="28" Visibility="{Binding IsEnd, Converter={StaticResource BoolToVisibility}}" Background="Transparent" />
+                            </StackPanel>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </Border>
+
+            <!-- Formuła do czytania i kontrola -->
+            <StackPanel Grid.Row="1" Margin="2,8,0,10">
+                <TextBlock Text="{Binding Readable}" Style="{StaticResource MonoText}" TextWrapping="Wrap" />
+                <TextBlock Text="{Binding Check}" TextWrapping="Wrap" FontWeight="Medium" Margin="0,4,0,0">
+                    <TextBlock.Style>
+                        <Style TargetType="TextBlock">
+                            <Setter Property="Foreground" Value="{StaticResource Ok}" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsValid}" Value="False">
+                                    <Setter Property="Foreground" Value="{StaticResource Crit}" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </TextBlock.Style>
+                </TextBlock>
+            </StackPanel>
+
+            <!-- Paleta klocków -->
+            <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
+                <StackPanel>
+                    <TextBlock Text="Operatory" FontWeight="SemiBold" Margin="0,0,0,6" />
+                    <ItemsControl ItemsSource="{Binding OperatorBlocks}" ItemsPanel="{StaticResource Wrap}" ItemTemplate="{StaticResource PaletteChip}" />
+                    <TextBlock Text="Koszt" FontWeight="SemiBold" Margin="0,8,0,6" />
+                    <ItemsControl ItemsSource="{Binding CostBlocks}" ItemsPanel="{StaticResource Wrap}" ItemTemplate="{StaticResource PaletteChip}" />
+                    <TextBlock Text="Narzuty pul (wartość narzutu puli w tym samym wierszu)" FontWeight="SemiBold" Margin="0,8,0,6" />
+                    <ItemsControl ItemsSource="{Binding PoolBlocks}" ItemsPanel="{StaticResource Wrap}" ItemTemplate="{StaticResource PaletteChip}" />
+                    <TextBlock Text="Wskaźniki pul (słownik „Wskaźniki narzutu CAS”, wiersz wskaźników raportu)" FontWeight="SemiBold" Margin="0,8,0,6" />
+                    <ItemsControl ItemsSource="{Binding RateBlocks}" ItemsPanel="{StaticResource Wrap}" ItemTemplate="{StaticResource PaletteChip}" />
+                </StackPanel>
+            </ScrollViewer>
+        </Grid>
+    </DockPanel>
+</Window>

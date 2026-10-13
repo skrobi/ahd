@@ -223,38 +223,89 @@ public sealed class ImportServiceTests : IDisposable
     }
 
     [SqlFact]
-    public void File_save_chosen_as_deadlock_victim_is_retried_and_imported_once()
+    public void File_in_progress_is_visible_at_once_and_readers_of_files_do_not_wait_for_its_rows()
     {
         Use();
         var path = CopySample(ImportFolder, "ACTUALS_PAF_01.csv");
-        // Druga sesja: blokuje CAN_Row (import czeka przy zapisie wierszy), potem czyta META_SourceFile – czeka na nowy
-        // wiersz pliku importu; SQL Server wybiera import na ofiarę zakleszczenia (niższy priorytet).
+        // Druga sesja blokuje CAN_Row (import czeka przy zapisie wierszy) i czyta META_SourceFile: wpis pliku jest już
+        // zatwierdzony („w toku”), więc odczyt nie czeka i nie ma zakleszczenia; odczyty danych pomijają plik „w toku”.
         using var other = _database!.Sql.Open();
         using var transaction = other.BeginTransaction();
-        Task? reader = null;
+        Task<(string Status, int Created)>? reader = null;
+        var files = _database.Sql.Table("meta.SourceFile");
         var progress = new Collect(p =>
         {
             if (reader is not null || p.Status?.StartsWith(ImportService.StageCheck) != true)
                 return;
-            Dapper.SqlMapper.Execute(other, $"SET DEADLOCK_PRIORITY HIGH; SELECT TOP (0) FileId FROM {_database.Sql.Table("can.Row")} WITH (TABLOCKX, HOLDLOCK)",
-                transaction: transaction);
+            Dapper.SqlMapper.Execute(other, $"SELECT TOP (0) FileId FROM {_database.Sql.Table("can.Row")} WITH (TABLOCKX, HOLDLOCK)", transaction: transaction);
             reader = Task.Run(() =>
             {
-                Thread.Sleep(1000);   // import wstawił wiersz pliku i czeka na CAN_Row
-                Dapper.SqlMapper.ExecuteScalar<int>(other, $"SELECT COUNT(*) FROM {_database.Sql.Table("meta.SourceFile")}", transaction: transaction,
-                    commandTimeout: 60);
+                Thread.Sleep(1000);   // import wstawił wpis pliku i czeka na CAN_Row
+                var seen = (Dapper.SqlMapper.QuerySingle<string>(other, $"SELECT CanonicalStatus FROM {files}", transaction: transaction, commandTimeout: 5),
+                    Dapper.SqlMapper.ExecuteScalar<int>(other, $"SELECT COUNT(*) FROM {files} WHERE CanonicalStatus = N'utworzone'", transaction: transaction, commandTimeout: 5));
                 transaction.Commit();
+                return seen;
             });
         });
 
         var run = _import.Run(progress);
 
-        reader!.Wait();
-        var result = Assert.Single(run.Files);
-        Assert.Equal(FileDecisions.Imported, result.Decision);
-        Assert.Contains(progress.Items, p => p.Status?.StartsWith($"{ImportService.StageRows} (ponowienie 2/{ImportService.DeadlockAttempts} po zakleszczeniu w bazie)") == true);
+        Assert.Equal((CanonicalStatuses.InProgress, 0), reader!.Result);
+        Assert.Equal(FileDecisions.Imported, Assert.Single(run.Files).Decision);
+        Assert.DoesNotContain(progress.Items, p => p.Status?.Contains("ponowienie") == true);
         var file = _store.FindByHash(FileHash.Sha256(File.ReadAllBytes(path)))!;
-        Assert.Equal(6, Canonical(file.Id).Count);   // wiersze zapisane raz – pierwsza próba wycofana
+        Assert.Equal((CanonicalStatuses.Created, 6), (file.CanonicalStatus, Canonical(file.Id).Count));
+    }
+
+    [SqlFact]
+    public void Project_sources_import_only_their_files_beside_a_full_import_and_skip_a_file_imported_by_someone_else()
+    {
+        Use();
+        Assert.True(_config.SaveDefinition(new DefinitionInput(null, null, "ACTUALS_PROGRAM1", "ACTUALS_PROGRAM1_", "Koszty programu 1", ActualsLayout.Parser, true)).Success);
+        CopySample(ImportFolder, "ACTUALS_PAF_01.csv");
+        var program = Path.Combine(ImportFolder, "ACTUALS_PROGRAM1_01.csv");
+        File.Copy(Path.Combine(ImportFolder, "ACTUALS_PAF_01.csv"), program);
+        File.AppendAllText(program, "2DI473;2DI473001003;51105550;x;x;PLN;1,00;PLN;1,00;USD;0,25;0,000;;;;;;;;2026;2026-03-31;3;\r\n");
+        var other = new TestServices().App(_root, _database!.Sql);   // druga osoba – ten sam folder sieciowy i baza
+        using var fullImport = other.Locks.TryAcquire(ImportService.LockName, out _);   // pełny import innej osoby trwa
+
+        var run = _import.Run(sources: new HashSet<string> { "ACTUALS_PROGRAM1" });
+
+        Assert.Null(run.NotStarted);
+        var file = Assert.Single(run.Files);
+        Assert.Equal(("ACTUALS_PROGRAM1_01.csv", FileDecisions.Imported), (file.FileName, file.Decision));
+        Assert.Contains("źródła: ACTUALS_PROGRAM1", _app.Journal.Recent(5)[0].Message);
+
+        using (other.Locks.TryAcquire(ImportService.FileLock(ImportFolder, "ACTUALS_PAF_01.csv"), out _))   // plik importuje teraz ktoś inny
+        {
+            var busy = Assert.Single(_import.Run(sources: new HashSet<string> { "ACTUALS_PAF" }).Files);
+            Assert.Equal(FileDecisions.Skipped, busy.Decision);
+            Assert.StartsWith(@"importuje go teraz inny import: PZL\analityk", busy.Description);
+        }
+        Assert.Equal(FileDecisions.Imported, Assert.Single(_import.Run(sources: new HashSet<string> { "ACTUALS_PAF" }).Files).Decision);
+    }
+
+    [SqlFact]
+    public void File_left_in_progress_by_a_crashed_import_is_removed_with_its_rows()
+    {
+        Use();
+        var path = CopySample(ImportFolder, "ACTUALS_PAF_01.csv");
+        Assert.Equal(FileDecisions.Imported, Assert.Single(_import.Run().Files).Decision);
+        var file = _store.FindByHash(FileHash.Sha256(File.ReadAllBytes(path)))!;
+        using (var connection = _database!.Sql.Open())   // awaria aplikacji w trakcie zapisu: import „w toku”, plik „w toku”
+            Dapper.SqlMapper.Execute(connection,
+                $"UPDATE {_database.Sql.Table("meta.SourceFile")} SET CanonicalStatus = N'w toku' WHERE FileId = @id; " +
+                $"UPDATE {_database.Sql.Table("meta.ImportBatch")} SET Status = N'w toku', FinishedAt = NULL WHERE BatchId = @batch",
+                new { id = file.Id, batch = file.BatchId });
+
+        _store.AbandonRunning(_services.Clock.Now, id => id == file.BatchId);   // import pliku nadal trwa – nic nie jest usuwane
+        Assert.NotNull(_store.File(file.Id));
+        _store.AbandonRunning(_services.Clock.Now, _ => false);                 // blokada importu wolna – import nie trwa
+
+        Assert.Null(_store.File(file.Id));
+        Assert.Empty(Canonical(file.Id));
+        Assert.Equal(ImportBatchStatus.Abandoned, _store.Batches(10).Single(b => b.Id == file.BatchId).Status);
+        Assert.Equal(FileDecisions.Imported, Assert.Single(_import.Run().Files).Decision);   // plik wraca do importu
     }
 
     [SqlFact]

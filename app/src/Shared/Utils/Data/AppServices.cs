@@ -20,6 +20,9 @@ public sealed record AppServices(
     SqlDatabase? PzlProd = null,
     SqlDatabase? PzlHrProd = null)
 {
+    /// <summary>Kontrakty modułów dla innych modułów (np. ISourceImport) – rejestrowane w IModule.Initialize.</summary>
+    public ContractRegistry Contracts { get; } = new();
+
     /// <summary>Opis bazy do stopki i Diagnostyki.</summary>
     public string DataDescription => $"Baza: {Sql.Describe}";
 

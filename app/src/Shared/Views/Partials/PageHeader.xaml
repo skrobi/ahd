@@ -7,11 +7,11 @@
         <ContentPresenter DockPanel.Dock="Right" VerticalAlignment="Top"
                           Content="{Binding Actions, RelativeSource={RelativeSource AncestorType=local:PageHeader}}" />
         <StackPanel>
-            <TextBlock Text="{Binding Eyebrow, RelativeSource={RelativeSource AncestorType=local:PageHeader}}"
+            <TextBlock x:Name="EyebrowText" Text="{Binding Eyebrow, RelativeSource={RelativeSource AncestorType=local:PageHeader}}"
                        Style="{StaticResource Eyebrow}" />
             <TextBlock Text="{Binding Title, RelativeSource={RelativeSource AncestorType=local:PageHeader}}"
                        Style="{StaticResource H1}" Margin="0,2,0,4" />
-            <TextBlock Text="{Binding Subtitle, RelativeSource={RelativeSource AncestorType=local:PageHeader}}"
+            <TextBlock x:Name="SubtitleText" Text="{Binding Subtitle, RelativeSource={RelativeSource AncestorType=local:PageHeader}}"
                        Style="{StaticResource MutedText}" />
         </StackPanel>
     </DockPanel>

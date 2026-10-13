@@ -4,7 +4,7 @@ namespace PzlEv.Modules.Projects.Models;
 
 /// <summary>
 /// Zakres projektu po stronie P1S (docs/performance-objectives.md, rozdz. 2, 4.1): kody P1S węzłów nakładki
-/// (Legacy WBS z Excela i cel z mapowania CES ↔ P1S) oraz elementy LOG.WBS leżące pod celami mapowania.
+/// (Legacy WBS z Performance Objectives) oraz elementy LOG.WBS leżące pod nimi.
 /// Element P1S należy do projektu, gdy jest jednym z tych kodów, leży pod nim w LOG.WBS albo jego kod zaczyna się od
 /// kodu z kropką (np. AC-CAB.6.38.01 pod AC-CAB.6.38).
 /// </summary>
@@ -13,7 +13,7 @@ public sealed class P1sScope
     private readonly Dictionary<string, string> _below;
 
     /// <param name="roots">Kody P1S węzłów nakładki.</param>
-    /// <param name="below">Elementy LOG.WBS pod celami mapowania: (kod elementu, kod celu).</param>
+    /// <param name="below">Elementy LOG.WBS pod kodami węzłów: (kod elementu, kod węzła).</param>
     public P1sScope(IEnumerable<string> roots, IEnumerable<(string Code, string Root)> below)
     {
         Roots = roots.Where(r => r.Length > 0).Distinct(StringComparer.OrdinalIgnoreCase).ToList();

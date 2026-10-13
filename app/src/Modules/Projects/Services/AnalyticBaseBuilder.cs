@@ -6,7 +6,7 @@ namespace PzlEv.Modules.Projects.Services;
 
 /// <summary>
 /// Baza analityczna (docs/funkcjonalnosc.md, F01, krok 5): węzeł nakładki → WP (słownik „WP i CAM” przez kody P1S
-/// węzła – Legacy WBS i cel mapowania: element P1S trafia do węzła, którego kod go obejmuje (P1sScope), a przy kilku
+/// węzła – Legacy WBS: element P1S trafia do węzła, którego kod go obejmuje (P1sScope), a przy kilku
 /// takich węzłach – do najgłębszego) → budżet i daty
 /// („Harmonogram i budżet”). Sumy węzła obejmują poddrzewo; WP liczony raz.
 /// </summary>
@@ -48,7 +48,7 @@ public static class AnalyticBaseBuilder
             string? gap = null;
             if (!node.IsVirtual && wps.Count == 0)
             {
-                gap = codesOf(node).Count == 0 ? "brak kodu P1S (Legacy WBS ani mapowania) – bez WP" : "element nakładki bez WP";
+                gap = codesOf(node).Count == 0 ? "brak kodu P1S (Legacy WBS) – bez WP" : "element nakładki bez WP";
                 withoutWp.Add(node.WbsElement ?? node.Name);
             }
             else if (wps.Any(w => !HasBudget(budgets.GetValueOrDefault(w))))
@@ -73,7 +73,11 @@ public static class AnalyticBaseBuilder
         return new AnalyticBase(rows, byCam, withoutWp, withoutBudget, allWps.Count, total.Hours, total.Material);
     }
 
-    internal static bool HasBudget(DictRow? row) => row is not null && (row["BAC HOURS"] is not null || row["BAC MATERIAL"] is not null);
+    internal static bool HasBudget(DictRow? row) => row is not null && (row["BAC HOURS"] is not null || row["BAC MATERIAL"] is not null || row["BAC"] is not null);
+
+    /// <summary>Budżet kosztowy (BAC) WP – suma.</summary>
+    internal static decimal Bac(IEnumerable<string> wps, IReadOnlyDictionary<string, DictRow> budgets) =>
+        wps.Sum(wp => budgets.GetValueOrDefault(wp) is { } b ? Dec(b["BAC"]) : 0);
 
     internal static (decimal Hours, decimal Material, string? Start, string? Finish) Totals(IReadOnlyList<string> wps, IReadOnlyDictionary<string, DictRow> budgets)
     {

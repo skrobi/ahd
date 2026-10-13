@@ -1,10 +1,10 @@
 <UserControl x:Class="PzlEv.Modules.MasterData.Views.MasterDataView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:partials="clr-namespace:PzlEv.Shared.Views.Partials">
+             xmlns:partials="clr-namespace:PzlEv.Shared.Views.Partials"
+             xmlns:views="clr-namespace:PzlEv.Modules.MasterData.Views">
     <StackPanel>
-        <partials:PageHeader Eyebrow="Słowniki globalne" Title="Słowniki"
-                             Subtitle="Edycja z historią i walidacją przy zapisie (ERROR blokuje, WARNING wymaga potwierdzenia). Wymiana przez Excel: pobierz, zmień, wczytaj z podglądem różnic." />
+        <partials:PageHeader Title="Słowniki" />
 
         <Grid>
             <Grid.ColumnDefinitions>
@@ -12,8 +12,9 @@
                 <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
 
-            <!-- Lista słowników -->
-            <Border Style="{StaticResource Panel}" Margin="0,0,16,0" VerticalAlignment="Top" Padding="8">
+            <!-- Lista słowników; pod nią podgląd struktury P1S (PZLPROD) -->
+            <StackPanel Margin="0,0,16,0">
+            <Border Style="{StaticResource Panel}" VerticalAlignment="Top" Padding="8">
                 <ListBox ItemsSource="{Binding Dictionaries}" SelectedItem="{Binding SelectedDictionary}"
                          BorderThickness="0" Background="Transparent">
                     <ListBox.ItemTemplate>
@@ -27,22 +28,31 @@
                     </ListBox.ItemTemplate>
                 </ListBox>
             </Border>
+            <Button Content="Struktura P1S (PZLPROD)" Style="{StaticResource Btn}" HorizontalAlignment="Stretch" Margin="0,10,0,0"
+                    Command="{Binding OpenP1s}" ToolTip="Drzewo WBS z PZLPROD (LOG.WBS) – tylko do odczytu" />
+            </StackPanel>
 
-            <StackPanel Grid.Column="1">
+            <Border Grid.Column="1" Visibility="{Binding ShowP1s, Converter={StaticResource BoolToVisibility}}">
+                <views:P1sStructureView DataContext="{Binding P1s}" />
+            </Border>
+
+            <StackPanel Grid.Column="1" Visibility="{Binding ShowDictionary, Converter={StaticResource BoolToVisibility}}">
                 <TextBlock Text="{Binding Spec.Name}" Style="{StaticResource H2}" />
-                <TextBlock Text="{Binding Spec.Description}" Style="{StaticResource MutedText}" Margin="0,2,0,10" />
 
                 <!-- Akcje -->
                 <DockPanel Margin="0,0,0,8">
                     <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
                         <Button Content="Pobierz do Excela" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding Export}" />
                         <Button Content="Wczytaj z Excela" Style="{StaticResource Btn}" Command="{Binding Import}" />
-                        <Button Content="Wczytaj z HR" Style="{StaticResource Btn}" Margin="8,0,0,0" Command="{Binding ImportFromHr}"
+                        <Button Content="Dodaj z HR" Style="{StaticResource Btn}" Margin="8,0,0,0" Command="{Binding ImportFromHr}"
                                 Visibility="{Binding IsPersons, Converter={StaticResource BoolToVisibility}}"
-                                ToolTip="Pracownicy z PZLHRPROD (HR.ORG) – podgląd różnic przed zapisem; zawartość słownika zostaje zastąpiona" />
+                                ToolTip="Szukaj pracowników PZLHRPROD (numer znaczka / USRID, PERNR, imię i nazwisko, e-mail, dział) i dodaj wybranych – podgląd przed zapisem; nic nie jest usuwane" />
                         <Button Content="Uzupełnij z ACTUALS" Style="{StaticResource Btn}" Margin="8,0,0,0" Command="{Binding FillFromActuals}"
                                 Visibility="{Binding IsCostCategory, Converter={StaticResource BoolToVisibility}}"
                                 ToolTip="Dopisuje cost elementy z całego ostatniego importu ACTUALS, których nie ma w słowniku (podgląd przed zapisem; nic nie jest usuwane) – Cost Category i „Rozliczeniowy” uzupełnia finansista" />
+                        <Button Content="Formuły narzutów" Style="{StaticResource Btn}" Margin="8,0,0,0" Command="{Binding EditFormulas}"
+                                Visibility="{Binding IsCasBurden, Converter={StaticResource BoolToVisibility}}"
+                                ToolTip="Macierz grupy narzutowe × pule: zaznaczone pole – pula naliczana w grupie; kliknięcie otwiera edytor formuły z klocków" />
                     </StackPanel>
                     <StackPanel Orientation="Horizontal">
                         <Button Content="Dodaj wiersz" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding AddRow}" />

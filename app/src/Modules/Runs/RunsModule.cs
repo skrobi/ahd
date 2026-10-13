@@ -1,6 +1,10 @@
 using System.Windows;
+using PzlEv.Modules.Runs.Data;
+using PzlEv.Modules.Runs.Services;
+using PzlEv.Modules.Runs.ViewModels;
 using PzlEv.Shared.Models;
 using PzlEv.Shared.Models.Pipeline;
+using PzlEv.Shared.Utils.Data;
 using PzlEv.Shared.Utils.Ui.Modularity;
 using PzlEv.Shared.Views.Partials;
 
@@ -22,6 +26,14 @@ public sealed class RunsModule : IModule
         new("P2", "Walidacja", "Walidacja", StageScope.Run, CanAutoRun: true),
         new("Z", "Zamknięcie okresu", "Zamrożenie", StageScope.Run, CanAutoRun: false),
     ];
+
+    /// <summary>Kontrakt IRunLauncher (przebieg projektu w tle) dla ekranu projektu.</summary>
+    public void Initialize(AppServices services)
+    {
+        var store = new SqlRunStore(services.Sql);
+        ISourceImport? Imports() => services.Contracts.Get<ISourceImport>();
+        services.Contracts.Register<IRunLauncher>(new RunLauncher(new RunService(store, services, Imports), store, Imports));
+    }
 
     public FrameworkElement CreateView(ModuleContext context) => PlaceholderView.Create(this, context.Navigator);
 }

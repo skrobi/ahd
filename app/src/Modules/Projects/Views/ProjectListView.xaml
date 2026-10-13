@@ -3,8 +3,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:partials="clr-namespace:PzlEv.Shared.Views.Partials">
     <StackPanel>
-        <partials:PageHeader Eyebrow="Projekty" Title="Projekty"
-                             Subtitle="Projekt = struktura kontraktu Performance Objectives po stronie CES. Mapowanie CES ↔ P1S jest globalne i nie zależy od projektu.">
+        <partials:PageHeader Title="Projekty">
             <partials:PageHeader.Actions>
                 <StackPanel Orientation="Horizontal">
                     <Button Content="Odśwież" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding Refresh}" />
@@ -15,17 +14,38 @@
         <partials:BusyBar DataContext="{Binding Busy}" />
         <TextBlock Text="{Binding Status}" TextWrapping="Wrap" Margin="0,0,0,8" />
         <Border Style="{StaticResource Panel}" Visibility="{Binding IsEmpty, Converter={StaticResource BoolToVisibility}}">
-            <TextBlock Style="{StaticResource MutedText}" Text="Brak projektów. Utwórz pierwszy projekt kreatorem: dane podstawowe, Performance Objectives, słowniki projektu, foldery, podsumowanie." TextWrapping="Wrap" />
+            <TextBlock Style="{StaticResource MutedText}" Text="Brak projektów." TextWrapping="Wrap" />
         </Border>
         <DataGrid x:Name="ProjectsGrid" Style="{StaticResource DataTable}" ItemsSource="{Binding Items}" SelectedItem="{Binding Selected}" IsReadOnly="True"
                   MouseDoubleClick="OnDoubleClick">
             <DataGrid.Columns>
                 <DataGridTextColumn Header="Kod" Binding="{Binding Code}" FontWeight="SemiBold" />
-                <DataGridTextColumn Header="Nazwa" Binding="{Binding Name}" Width="*" />
+                <DataGridTextColumn Header="Nazwa" Binding="{Binding Name}" Width="2*" MinWidth="160" />
                 <DataGridTextColumn Header="Typ" Binding="{Binding Type}" />
-                <DataGridTextColumn Header="Aktywny przebieg" Binding="{Binding ActiveRun}" />
-                <DataGridTextColumn Header="Folder" Binding="{Binding Folder}" />
-                <DataGridTemplateColumn>
+                <DataGridTextColumn Header="Ostatni przebieg" Binding="{Binding ActiveRun}" />
+                <DataGridTemplateColumn Header="Problemy" SortMemberPath="Problems">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <Border CornerRadius="10" Padding="8,1" Margin="4,2" HorizontalAlignment="Left" ToolTip="{Binding RunDetails}"
+                                    Background="{Binding ProblemsLevel, Converter={StaticResource LevelBrush}, ConverterParameter=bg}"
+>
+                                <Border.Style>
+                                    <Style TargetType="Border">
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding Problems}" Value="">
+                                                <Setter Property="Visibility" Value="Collapsed" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+                                <TextBlock Text="{Binding Problems}" FontSize="11" FontWeight="Medium"
+                                           Foreground="{Binding ProblemsLevel, Converter={StaticResource LevelBrush}, ConverterParameter=fg}" />
+                            </Border>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+                <DataGridTextColumn Header="Folder" Binding="{Binding Folder}" Width="3*" MinWidth="160" />
+                <DataGridTemplateColumn Width="Auto" MinWidth="80">
                     <DataGridTemplateColumn.CellTemplate>
                         <DataTemplate>
                             <Button Content="Otwórz" Style="{StaticResource Btn}" Padding="8,2" Margin="4,2"

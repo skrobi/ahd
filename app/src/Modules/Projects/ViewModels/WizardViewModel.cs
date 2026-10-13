@@ -33,7 +33,7 @@ public sealed class WizardViewModel : ObservableObject
     private string _status = "";
     private CreateOutcome? _outcome;
     private AnalyticBase? _analytic;
-    private MappingInputs _mapping = MappingInputs.None;
+    private P1sInputs _mapping = P1sInputs.None;
     private IReadOnlyDictionary<string, string> _owners = new Dictionary<string, string>();
     private IReadOnlyList<string> _codes = [];
 
@@ -47,7 +47,6 @@ public sealed class WizardViewModel : ObservableObject
         _type = Types[0];
         // Kontrola nakładki w pamięci: elementy CES innych projektów wczytane raz (InitAsync), zapis sprawdza je ponownie w bazie.
         Objectives = new PoEditorViewModel(dialogs, busy, service.ReadObjectives, tree => ObjectivesValidator.Validate(tree, _owners), (_, imported) => imported);
-        Objectives.ResolveMapping = tree => ProjectService.Resolve(tree, _mapping);
         Back = new RelayCommand(_ => GoTo(_step - 1), _ => _step > 0 && _outcome is not { Created: true } && !Busy.IsBusy);
         Next = new RelayCommand(_ => DoNext(), _ => _step < StepTitles.Count - 1 && !Busy.IsBusy);
         Cancel = new RelayCommand(_ => cancel(), _ => !Busy.IsBusy);
@@ -56,7 +55,7 @@ public sealed class WizardViewModel : ObservableObject
         ExportAnalytic = new AsyncRelayCommand(DoExportAnalytic, () => _analytic is not null && !Busy.IsBusy);
         Create = new AsyncRelayCommand(DoCreate, () => _outcome is not { Created: true } && !Busy.IsBusy);
         OpenProject = new RelayCommand(_ => _openProject(Code), _ => _outcome is { Created: true } && !Busy.IsBusy);
-        Objectives.MappingInfo = "Wczytywanie danych mapowania CES ↔ P1S…";
+        Objectives.MappingInfo = "Wczytywanie struktury P1S (PZLPROD)…";
         Objectives.Load(new PoTree());
         BuildPanels();
         GoTo(0);
@@ -70,7 +69,7 @@ public sealed class WizardViewModel : ObservableObject
     {
         try
         {
-            (_codes, _owners, _mapping) = await Busy.Run("Wczytywanie projektów i mapowania CES ↔ P1S…",
+            (_codes, _owners, _mapping) = await Busy.Run("Wczytywanie projektów i struktury P1S…",
                 () => ((IReadOnlyList<string>)_service.Projects().Select(p => p.Code).ToList(), _service.WbsOwners(""), _service.Mapping()));
             Objectives.MappingInfo = _mapping.Describe;
             Objectives.Refresh();
@@ -79,7 +78,7 @@ public sealed class WizardViewModel : ObservableObject
         {
             Logger.Error(ex, "Kreator projektu – dane początkowe");
             Status = $"Nie udało się wczytać danych z bazy: {ex.Message}";
-            Objectives.MappingInfo = "Mapowanie CES ↔ P1S niedostępne.";
+            Objectives.MappingInfo = "Struktura P1S (PZLPROD) niedostępna.";
         }
     }
 
@@ -181,6 +180,7 @@ public sealed class WizardViewModel : ObservableObject
 
     private void GoTo(int step)
     {
+        Objectives.CommitEdits();
         _step = Math.Clamp(step, 0, StepTitles.Count - 1);
         Steps.Clear();
         for (var i = 0; i < StepTitles.Count; i++)
@@ -346,7 +346,7 @@ public sealed class WizardViewModel : ObservableObject
             Status = $"Nie udało się przygotować podsumowania: {ex.Message}";
             return;
         }
-        checks.Add(ObjectivesMapping.Check(Objectives.Tree, ProjectService.Resolve(Objectives.Tree, _mapping), _mapping));
+        checks.Add(ObjectivesMapping.Check(Objectives.Tree, _mapping));
         if (_analytic.ElementsWithoutWp.Count > 0)
             checks.Add(Issue.Warning($"Elementy nakładki bez WP: {string.Join(", ", _analytic.ElementsWithoutWp.Take(15))}{(_analytic.ElementsWithoutWp.Count > 15 ? "…" : "")}", "baza analityczna"));
         if (_analytic.WpsWithoutBudget.Count > 0)

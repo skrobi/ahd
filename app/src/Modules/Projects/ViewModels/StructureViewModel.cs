@@ -55,6 +55,9 @@ public sealed class StructureViewModel : ObservableObject
     /// <summary>Lista wyboru CAM (USRID → imię i nazwisko).</summary>
     public BulkObservableCollection<LookupOption> Persons { get; } = [];
 
+    /// <summary>Lista wyboru Cost Category – kategorie ze słownika „Kategorie WBS” projektu.</summary>
+    public BulkObservableCollection<LookupOption> Categories { get; } = [];
+
     public StructureRowViewModel? Selected { get => _selected; set => SetProperty(ref _selected, value); }
 
     public StructureSummary Summary { get => _summary; private set => SetProperty(ref _summary, value); }
@@ -82,12 +85,14 @@ public sealed class StructureViewModel : ObservableObject
     /// Nowe dane struktury – zachowuje rozwinięcie, zaznaczenie i niezapisane zmiany wierszy (np. po nieudanym zapisie);
     /// saved – wiersze zapisane w tej chwili (ich zmiany są już w danych).
     /// </summary>
-    public void Load(ProjectStructure structure, IReadOnlyList<LookupOption> persons, IReadOnlySet<string>? saved = null)
+    public void Load(ProjectStructure structure, IReadOnlyList<LookupOption> persons, IReadOnlyList<LookupOption> categories, IReadOnlySet<string>? saved = null)
     {
         CommitEdits();
         RowsReplacing?.Invoke();
         if (!Persons.SequenceEqual(persons))
             Persons.ReplaceAll(persons);
+        if (!Categories.SequenceEqual(categories))
+            Categories.ReplaceAll(categories);
         var pending = _all.Where(r => r.Changes.Count > 0 && saved?.Contains(r.Id) != true)
             .ToDictionary(r => r.Id, r => r.Changes.ToDictionary(c => c.Key, c => c.Value));
         var selected = _selected?.Id;
@@ -150,7 +155,7 @@ public sealed class StructureViewModel : ObservableObject
 
     /// <summary>
     /// Wpis do komórek (wklejenie z Excela, Delete, Ctrl+D): komórki zablokowane w danym wierszu są pomijane, CAM
-    /// wpisany imieniem i nazwiskiem – zamieniany na USRID, WP – znacznik (tak / x / 1 – zaznaczony, pusty – nie).
+    /// wpisany imieniem i nazwiskiem – zamieniany na USRID, Cost Category – pisownia kategorii ze słownika, WP – znacznik (tak / x / 1 – zaznaczony, pusty – nie).
     /// Zmienione wiersze trafiają do zapisu. Zwraca liczbę wpisanych i pominiętych komórek.
     /// </summary>
     public (int Set, int Skipped) SetCells(IEnumerable<(StructureRowViewModel Row, string Column, string? Text)> cells)
@@ -169,6 +174,7 @@ public sealed class StructureViewModel : ObservableObject
             row[column] = column switch
             {
                 StructureEdits.Cam => DictionaryCells.Resolve(text, Persons),
+                StructureEdits.CostCategory => DictionaryCells.Resolve(text, Categories),
                 StructureEdits.Wp => IsYes(text) ? "true" : "false",
                 _ => ValueFormat.Clean(text),
             };

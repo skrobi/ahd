@@ -9,7 +9,7 @@ namespace PzlEv.Shared.Utils.Config;
 /// Układ: "Env" (TEST / PROD) i "Environments": { "TEST": { NetworkRoot, Sql: { Server, Database, Schema,
 /// TablePrefix, TrustServerCertificate }, PzlProd: { Server, Database, Schema, TrustServerCertificate } }, "PROD": {…} }.
 /// Plik jest wymagany; brak pliku albo pola = błąd z opisem przy starcie (bez cichych wartości domyślnych). Sekcja
-/// PzlProd jest opcjonalna – bez niej ekran mapowania pokazuje, czego brakuje; PzlHrProd (pracownicy HR.ORG) – też opcjonalna. Ścieżki mogą zawierać zmienne, np. %LOCALAPPDATA%.
+/// PzlProd jest opcjonalna – bez niej struktura P1S jest niedostępna z podaniem powodu; PzlHrProd (pracownicy HR.ORG) – też opcjonalna. Ścieżki mogą zawierać zmienne, np. %LOCALAPPDATA%.
 /// </summary>
 public static partial class AppConfigLoader
 {

@@ -15,9 +15,25 @@ public static class ExcelTableWriter
     /// <summary>Rodzaj kolumny szablonu – format całej kolumny.</summary>
     public enum Kind { Text, Number, Integer, Date }
 
-    /// <summary>Kolumna szablonu: nagłówek, format, wartości do wyboru (lista), opis (komentarz nagłówka).</summary>
+    /// <summary>
+    /// Kolumna szablonu: nagłówek, format, wartości do wyboru (lista), opis (komentarz nagłówka); Input – kolumna do
+    /// uzupełnienia (nagłówek wyróżniony kolorem).
+    /// </summary>
     public sealed record ExcelColumn(string Header, Kind Kind = Kind.Text, IReadOnlyList<string>? Choices = null, string? Note = null,
-        IReadOnlyList<(string Value, string Label)>? Lookup = null);
+        IReadOnlyList<(string Value, string Label)>? Lookup = null, bool Input = false);
+
+    /// <summary>Komórka z formułą Excela w zapisie A1 (np. „=H6*K$2”); Format – format liczby (null – ogólny).</summary>
+    public sealed record Formula(string A1, string? Format = null);
+
+    /// <summary>Wartość z formatem liczby Excela (np. wskaźnik „0.0000%”).</summary>
+    public sealed record Formatted(object? Value, string Format);
+
+    /// <summary>
+    /// Arkusz raportu: wiersze nad nagłówkiem (Above – np. nazwa bloku kolumn i wskaźniki), nagłówek, wiersze danych
+    /// (wartości jak w WriteSheets, także Formula i Formatted); FrozenColumns – kolumny zamrożone z lewej.
+    /// </summary>
+    public sealed record ReportSheet(string Name, IReadOnlyList<string> Headers, IEnumerable<IReadOnlyList<object?>> Rows,
+        IReadOnlyList<IReadOnlyList<object?>>? Above = null, int FrozenColumns = 0);
 
     /// <summary>Wiersze, w które można wpisać dane z listą wyboru i formatem kolumny (poza wierszami z danymi).</summary>
     private const int TemplateRows = 2000;
@@ -44,6 +60,8 @@ public static class ExcelTableWriter
                 };
                 if (column.Note is { } note)
                     ws.Cell(1, c + 1).CreateComment().AddText(note);
+                if (column.Input)
+                    ws.Cell(1, c + 1).Style.Fill.BackgroundColor = XLColor.FromHtml("#FFF2CC");
                 if (column.Choices is { Count: > 0 } choices && string.Join(",", choices).Length < 250)
                 {
                     var validation = range.CreateDataValidation();
@@ -104,58 +122,88 @@ public static class ExcelTableWriter
         workbook.SaveAs(path);
     }
 
-    private static (IXLWorksheet Sheet, int Rows) AddSheet(XLWorkbook workbook, string sheetName, IReadOnlyList<string> headers, IEnumerable<IReadOnlyList<object?>> rows)
+    /// <summary>Raport z formułami – arkusz na ReportSheet (np. raport kosztów CES).</summary>
+    public static void WriteReport(string path, IEnumerable<ReportSheet> sheets)
+    {
+        using var workbook = new XLWorkbook();
+        foreach (var sheet in sheets)
+            AddSheet(workbook, sheet.Name, sheet.Headers, sheet.Rows, sheet.Above, sheet.FrozenColumns);
+        workbook.SaveAs(path);
+    }
+
+    private static (IXLWorksheet Sheet, int Rows) AddSheet(XLWorkbook workbook, string sheetName, IReadOnlyList<string> headers, IEnumerable<IReadOnlyList<object?>> rows,
+        IReadOnlyList<IReadOnlyList<object?>>? above = null, int frozenColumns = 0)
     {
         var ws = workbook.Worksheets.Add(SafeSheetName(sheetName));
+        above ??= [];
+        for (var a = 0; a < above.Count; a++)
+        {
+            for (var c = 0; c < above[a].Count; c++)
+                SetValue(ws.Cell(a + 1, c + 1), above[a][c]);
+        }
+        var headerRow = above.Count + 1;
         for (var c = 0; c < headers.Count; c++)
         {
-            var cell = ws.Cell(1, c + 1);
+            var cell = ws.Cell(headerRow, c + 1);
             cell.Value = headers[c];
             cell.Style.Font.Bold = true;
             ws.Column(c + 1).Width = Math.Clamp(headers[c].Length + 4, 12, 48);
         }
 
-        var r = 2;
+        var r = headerRow + 1;
         foreach (var row in rows)
         {
             for (var c = 0; c < row.Count; c++)
-            {
-                var cell = ws.Cell(r, c + 1);
-                switch (row[c])
-                {
-                    case null:
-                        break;
-                    case string s:
-                        cell.Value = s;
-                        cell.Style.NumberFormat.Format = "@";
-                        break;
-                    case decimal d:
-                        cell.Value = (double)d;
-                        break;
-                    case long l:
-                        cell.Value = l;
-                        break;
-                    case int i:
-                        cell.Value = i;
-                        break;
-                    case DateOnly date:
-                        cell.Value = date.ToDateTime(TimeOnly.MinValue);
-                        cell.Style.DateFormat.Format = "yyyy-mm-dd";
-                        break;
-                    case bool b:
-                        cell.Value = b ? "tak" : "nie";
-                        break;
-                    default:
-                        cell.Value = row[c]!.ToString();
-                        break;
-                }
-            }
+                SetValue(ws.Cell(r, c + 1), row[c]);
             r++;
         }
-        ws.SheetView.FreezeRows(1);
+        ws.SheetView.FreezeRows(headerRow);
+        if (frozenColumns > 0)
+            ws.SheetView.FreezeColumns(frozenColumns);
         if (headers.Count > 0)
-            ws.Range(1, 1, Math.Max(r - 1, 1), headers.Count).SetAutoFilter();
-        return (ws, r - 2);
+            ws.Range(headerRow, 1, Math.Max(r - 1, headerRow), headers.Count).SetAutoFilter();
+        return (ws, r - headerRow - 1);
+    }
+
+    private static void SetValue(IXLCell cell, object? value)
+    {
+        switch (value)
+        {
+            case null:
+                break;
+            case string s:
+                cell.Value = s;
+                cell.Style.NumberFormat.Format = "@";
+                break;
+            case decimal d:
+                cell.Value = (double)d;
+                break;
+            case long l:
+                cell.Value = l;
+                break;
+            case int i:
+                cell.Value = i;
+                break;
+            case DateOnly date:
+                cell.Value = date.ToDateTime(TimeOnly.MinValue);
+                cell.Style.DateFormat.Format = "yyyy-mm-dd";
+                break;
+            case bool b:
+                cell.Value = b ? "tak" : "nie";
+                break;
+            case Formula f:
+                cell.FormulaA1 = f.A1;
+                if (f.Format is { } formulaFormat)
+                    cell.Style.NumberFormat.Format = formulaFormat;
+                break;
+            case Formatted { Value: var inner, Format: var format }:
+                SetValue(cell, inner);
+                cell.Style.NumberFormat.Format = format;
+                break;
+            default:
+                cell.Value = value.ToString();
+                break;
+        }
     }
 
     private static string SafeSheetName(string name)

@@ -3,8 +3,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:partials="clr-namespace:PzlEv.Shared.Views.Partials">
     <StackPanel>
-        <partials:PageHeader Eyebrow="Test stosu" Title="Diagnostyka środowiska"
-                             Subtitle="Jeśli widzisz ten ekran z wersjami pakietów, .exe uruchomił się bez instalacji .NET, a pakiety z założeń wczytały się z jednego pliku." />
+        <partials:PageHeader Title="Diagnostyka środowiska" />
 
         <Border Style="{StaticResource Panel}" BorderBrush="{StaticResource Accent}">
             <StackPanel>
@@ -65,8 +64,6 @@
                             ToolTip="Wykonuje skrypty, których nie ma jeszcze w bazie; wykonane pomija" />
                     <StackPanel>
                         <TextBlock Text="Migracje bazy" Style="{StaticResource H2}" FontSize="15" />
-                        <TextBlock Text="Tabele i dane startowe (definicje źródeł, lokalizacja RABIT, kalendarz, Cost Category)."
-                                   Style="{StaticResource MutedText}" FontSize="12" TextWrapping="Wrap" />
                     </StackPanel>
                 </DockPanel>
                 <ItemsControl ItemsSource="{Binding Migrations}">

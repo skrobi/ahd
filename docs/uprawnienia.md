@@ -19,7 +19,7 @@ Powiązane: `docs/architektura.md` (rozdz. 6 – dostęp do bazy przez procedury
 
 | Rola | Wersja | Funkcje | Zakres danych |
 |---|---|---|---|
-| **Analityk** | v1 | wszystkie funkcje aplikacji: import, definicje źródeł, słowniki, mapowanie, projekty, przebiegi, obliczenia EV, administracja (role, kalendarz, konfiguracja) | wszystkie projekty |
+| **Analityk** | v1 | wszystkie funkcje aplikacji: import, definicje źródeł, słowniki, projekty, przebiegi, obliczenia EV, administracja (role, kalendarz, konfiguracja) | wszystkie projekty |
 | **CAM** | v2 | przegląd projektu; wprowadzanie zaawansowania, ETC i komentarza dla swoich WP; przekazanie (Submit) do dalszego przetwarzania | projekty, w których jest CAM w słowniku „WP i CAM” – widzi cały projekt |
 | **PM** | v2 | przegląd projektów: stan przebiegów, wyniki EV | O43 |
 

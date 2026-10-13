@@ -1,6 +1,5 @@
 using PzlEv.Modules.Projects.Models;
 using PzlEv.Shared.Models.Dictionaries;
-using PzlEv.Shared.Models.Mapping;
 using PzlEv.Shared.Models.PzlProd;
 using PzlEv.Shared.Utils.Files;
 using PzlEv.Shared.Utils.Mapping;
@@ -9,7 +8,7 @@ namespace PzlEv.Modules.Projects.Services;
 
 /// <summary>
 /// Struktura projektu (docs/performance-objectives.md, rozdz. 4.2): drzewo nakładki, a pod każdym węzłem – elementy
-/// P1S rozwinięte z LOG.WBS spod jego kodów P1S (Legacy WBS; cel mapowania CES ↔ P1S, gdy jest inny – osobny wiersz).
+/// P1S rozwinięte z LOG.WBS spod jego kodów P1S (Legacy WBS).
 /// Rozwinięcie zatrzymuje się na kodzie innego węzła nakładki (ten element jest pod swoim węzłem), każdy element P1S
 /// występuje raz. Elementy „WP i CAM” spoza LOG.WBS (np. bez PZLPROD) trafiają pod wiersz o najdłuższym pasującym
 /// kodzie (kod + kropka), a bez niego – do grupy „spoza struktury”. WP, CAM i budżet z słowników projektu; sumy
@@ -37,13 +36,45 @@ public static class StructureBuilder
         public List<Item> Children { get; } = [];
         public HashSet<string> Wps { get; } = new(StringComparer.OrdinalIgnoreCase);
         public decimal OwnCost { get; set; }
+        public bool SplitError { get; init; }
+        public ProductionValues? OwnProduction { get; set; }
+        public ProductionSum Production { get; set; }
         public decimal Cost { get; set; }
         public string? CostGap { get; set; }
     }
 
-    public static ProjectStructure Build(PoTree tree, IReadOnlyDictionary<long, MappingResult> mapping, IReadOnlyList<P1sElement>? p1s,
-        IReadOnlyList<DictRow> wpCam, IReadOnlyList<DictRow> schedule, IReadOnlyDictionary<string, decimal>? costs = null)
+    /// <summary>Suma wartości produkcyjnych (null – żaden element nie ma danych).</summary>
+    /// <summary>
+    /// Suma wartości produkcyjnych (null – żaden element nie ma danych); daty rzeczywiste: start – najwcześniejszy, koniec –
+    /// najpóźniejszy, gdy żaden element z godzinami nie jest otwarty (Open – element bez daty końca).
+    /// </summary>
+    private readonly record struct ProductionSum(decimal? Ac, decimal? Bac, decimal? Ev, decimal? Material, DateOnly? Start, DateOnly? Finish, bool Open)
     {
+        public ProductionSum Add(ProductionValues? v) => v is null ? this
+            : new(Plus(Ac, v.AcHours), Plus(Bac, v.BacHours), Plus(Ev, v.EvHours), Plus(Material, v.ActualMaterial), Min(Start, v.ActualStart),
+                Max(Finish, v.ActualFinish), Open || (v.ActualFinish is null && (v.AcHours is not null || v.BacHours is not null)));
+
+        public ProductionSum Add(ProductionSum v) => new(Plus(Ac, v.Ac), Plus(Bac, v.Bac), Plus(Ev, v.Ev), Plus(Material, v.Material),
+            Min(Start, v.Start), Max(Finish, v.Finish), Open || v.Open);
+
+        public DateOnly? ActualFinish => Open ? null : Finish;
+
+        private static decimal? Plus(decimal? a, decimal? b) => a is null ? b : b is null ? a : a + b;
+
+        private static DateOnly? Min(DateOnly? a, DateOnly? b) => a is null ? b : b is null ? a : a < b ? a : b;
+
+        private static DateOnly? Max(DateOnly? a, DateOnly? b) => a is null ? b : b is null ? a : a > b ? a : b;
+    }
+
+    /// <param name="production">Wartości produkcyjne z PZLPROD (Operational EV, materiały) – null: kolumny puste.</param>
+    /// <param name="statusDate">Dzień stanu dla PV (domyślnie dziś).</param>
+    public static ProjectStructure Build(PoTree tree, IReadOnlyList<P1sElement>? p1s,
+        IReadOnlyList<DictRow> wpCam, IReadOnlyList<DictRow> schedule, IReadOnlyDictionary<string, decimal>? costs = null,
+        ProductionData? production = null, DateOnly? statusDate = null)
+    {
+        var today = statusDate ?? DateOnly.FromDateTime(DateTime.Today);
+        var productionOf = (production?.ByPspnr ?? new Dictionary<string, ProductionValues>())
+            .GroupBy(p => MappingKeys.Key(p.Key)).ToDictionary(g => g.Key, g => g.First().Value);
         var budgets = schedule.Where(r => r["WP"] is not null).GroupBy(r => r["WP"]!, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
         var assignments = wpCam.Where(r => r["Element P1S"] is not null).GroupBy(r => MappingKeys.Key(r["Element P1S"]))
@@ -51,12 +82,17 @@ public static class StructureBuilder
         var byCode = (p1s ?? []).GroupBy(e => MappingKeys.Key(e.WbsElement)).ToDictionary(g => g.Key, g => g.First());
         var children = (p1s ?? []).Where(e => e.Parent.Length > 0).GroupBy(e => MappingKeys.Key(e.Parent))
             .ToDictionary(g => g.Key, g => g.OrderBy(e => e.WbsElement, StringComparer.OrdinalIgnoreCase).ToList());
-        var codes = tree.Nodes.Where(n => !n.IsVirtual).ToDictionary(n => n.Key, n => ObjectivesMapping.CodesOf(n, mapping));
+        // Kody węzłów: element CES – Legacy WBS; węzeł wirtualny – Legacy WBS (wydzielenie ELEMENT_P1S.NAZWA.CPLGR).
+        var codes = tree.Nodes.Where(n => !n.IsVirtual || !string.IsNullOrWhiteSpace(n.LegacyWbs))
+            .ToDictionary(n => n.Key, n => ObjectivesMapping.CodesOf(n));
         // Kody węzłów nakładki: na nich zatrzymuje się rozwinięcie innego węzła.
         var anchors = codes.Values.SelectMany(c => c).Select(MappingKeys.Key).ToHashSet();
         var primary = codes.Values.Where(c => c.Count > 0).Select(c => MappingKeys.Key(c[0])).ToHashSet();
         var placed = new HashSet<string>();
         var withCode = new Dictionary<string, Item>();
+        // Dzieci węzłów nakładki jednym przebiegiem (PoTree.Children przegląda wszystkie węzły przy każdym wywołaniu).
+        var nodesOf = tree.Nodes.ToLookup(n => n.ParentKey);
+        IEnumerable<PoNode> ChildrenOf(long? key) => nodesOf[key].OrderBy(n => n.SortOrder);
 
         Item P1sItem(string code, string? note)
         {
@@ -91,43 +127,44 @@ public static class StructureBuilder
         Item Objective(PoNode node)
         {
             var nodeCodes = codes.GetValueOrDefault(node.Key) ?? [];
+            var split = node.IsVirtual && nodeCodes.Count > 0 ? ProductionSplit.Parse(nodeCodes[0], byCode) : null;
             var item = new Item
             {
+                Note = split is not null ? ProductionSplit.Describe(split)
+                    : node.IsVirtual && nodeCodes.Count > 0 && byCode.Count > 0 && !byCode.ContainsKey(MappingKeys.Key(nodeCodes[0]))
+                        ? $"kod {nodeCodes[0]} – wydzielenie zapisuje się jako ELEMENT_P1S.NAZWA.CPLGR (element z LOG.WBS), np. AC-R39.1.18.03.25.PAINT.W20"
+                        : null,
+                SplitError = node.IsVirtual && nodeCodes.Count > 0 && split is null && byCode.Count > 0 && !byCode.ContainsKey(MappingKeys.Key(nodeCodes[0])),
                 Id = $"po:{node.Key}", Kind = GridRowKind.Objective, NodeKey = node.Key, IsVirtual = node.IsVirtual, HasCode = nodeCodes.Count > 0,
                 Name = node.Name, WbsElement = node.WbsElement, P1s = nodeCodes.Count > 0 ? nodeCodes[0] : null,
                 IsGreyed = nodeCodes.Count > 0 && byCode.GetValueOrDefault(MappingKeys.Key(nodeCodes[0])) is { IsGreyed: true },
             };
             if (item.P1s is not null)
                 withCode.TryAdd(MappingKeys.Key(item.P1s), item);
-            foreach (var child in tree.Children(node.Key))
+            foreach (var child in ChildrenOf(node.Key))
                 item.Children.Add(Objective(child));
             if (item.P1s is not null)
                 Expand(item);
-            foreach (var extra in nodeCodes.Skip(1).Where(c => !primary.Contains(MappingKeys.Key(c)) && !placed.Contains(MappingKeys.Key(c))))
-                item.Children.Add(P1sItem(extra, "cel mapowania CES ↔ P1S"));
             return item;
         }
 
-        var roots = tree.Children(null).Select(Objective).ToList();
+        var roots = ChildrenOf(null).Select(Objective).ToList();
+
+        Item? outside = null;
+        Item Outside() => outside ??= new Item
+        {
+            Id = OutsideId, Kind = GridRowKind.P1s, HasCode = false, Name = "Elementy P1S spoza struktury",
+            Note = "przypisania „WP i CAM” do elementów spoza nakładki i LOG.WBS",
+        };
 
         // Przypisania „WP i CAM” do elementów, których nie ma w drzewie: pod najdłuższy pasujący kod albo poza strukturą.
-        Item? outside = null;
         foreach (var (key, row) in assignments.OrderBy(a => a.Value["Element P1S"], StringComparer.OrdinalIgnoreCase))
         {
             if (withCode.ContainsKey(key))
                 continue;
             var element = row["Element P1S"]!;
-            var parent = withCode.Values.Where(i => i.P1s is not null && element.StartsWith(i.P1s + ".", StringComparison.OrdinalIgnoreCase))
-                .MaxBy(i => i.P1s!.Length);
-            if (parent is null)
-            {
-                outside ??= new Item
-                {
-                    Id = OutsideId, Kind = GridRowKind.P1s, HasCode = false, Name = "Elementy P1S spoza struktury",
-                    Note = "przypisania „WP i CAM” do elementów spoza nakładki i LOG.WBS",
-                };
-                parent = outside;
-            }
+            var parent = LongestPrefix(element, withCode);
+            parent ??= Outside();
             var item = new Item { Id = $"p1s:{key}", Kind = GridRowKind.P1s, Name = element, P1s = element, Note = "spoza LOG.WBS" };
             withCode[key] = item;
             parent.Children.Add(item);
@@ -178,23 +215,64 @@ public static class StructureBuilder
         foreach (var root in roots)
             Assign(root);
 
+        // Produkcja (PZLPROD): element P1S wiersza → PSPNR → wartości (wydzielenie – węzeł wirtualny z kodem
+        // ELEMENT_P1S.NAZWA.CPLGR – własne wartości, odjęte od elementu); sumy poddrzewa (każdy element raz w drzewie).
+        // WP: wartości elementów przypisane do najbliższego WP w górę drzewa (własnego albo przodka) – WP zagnieżdżony
+        // (np. wydzielenie z własnym CAM) ma swoje godziny, WP nadrzędny – resztę; podstawa PV Hours, EV Cost.
+        // Kilka węzłów z tym samym kodem – wartości elementu liczone raz, w najgłębszym (jak przypisanie WP do węzła).
+        var wpProduction = new Dictionary<string, ProductionSum>(StringComparer.OrdinalIgnoreCase);
+        var counted = new HashSet<string>();
+        ProductionSum Produce(Item item, string? inheritedWp)
+        {
+            var wp = (item.P1s is null ? null : assignments.GetValueOrDefault(MappingKeys.Key(item.P1s))?["WP"]) ?? inheritedWp;
+            var children = item.Children.Aggregate(new ProductionSum(), (sum, child) => sum.Add(Produce(child, wp)));
+            var key = item is { IsVirtual: true, P1s: { } virtualCode } ? MappingKeys.Key(ProductionData.VirtualKey(MappingKeys.Key(virtualCode)))
+                : item.P1s is not null && byCode.GetValueOrDefault(MappingKeys.Key(item.P1s)) is { } element ? MappingKeys.Key(element.Pspnr) : null;
+            if (key is not null && counted.Add(key))
+                item.OwnProduction = productionOf.GetValueOrDefault(key);
+            if (wp is not null)
+                wpProduction[wp] = wpProduction.GetValueOrDefault(wp).Add(item.OwnProduction);
+            item.Production = children.Add(item.OwnProduction);
+            return item.Production;
+        }
+        foreach (var root in roots)
+            Produce(root, null);
+        decimal? Elapsed(string wp) => budgets.GetValueOrDefault(wp) is { } b ? EarnedValue.Elapsed(b["Baseline Start"], b["Baseline Koniec"], today) : null;
+        decimal? Sum(IEnumerable<string> wps, Func<string, decimal?> value) =>
+            wps.Select(value).Aggregate((decimal?)null, (sum, v) => v is null ? sum : (sum ?? 0) + v);
+        decimal? PvHours(string wp) => wpProduction.GetValueOrDefault(wp).Bac * Elapsed(wp);
+        decimal? BacCost(string wp) => budgets.GetValueOrDefault(wp) is { } b && decimal.TryParse(b["BAC"], System.Globalization.NumberStyles.Number,
+            System.Globalization.CultureInfo.InvariantCulture, out var v) ? v : null;
+        decimal? PvCost(string wp) => BacCost(wp) * Elapsed(wp);
+        decimal? EvCost(string wp) => wpProduction.GetValueOrDefault(wp) is { Bac: > 0 } p && p.Ev is { } ev ? BacCost(wp) * Math.Min(1, ev / p.Bac.Value) : null;
+
         var rows = new List<StructureRow>();
         void Emit(Item item, string? parentId, int depth)
         {
             var assignment = item.P1s is null ? null : assignments.GetValueOrDefault(MappingKeys.Key(item.P1s));
             var wps = item.Wps.Order(StringComparer.OrdinalIgnoreCase).ToList();
-            var (hours, material, start, finish) = AnalyticBaseBuilder.Totals(wps, budgets);
+            // Wiersz z własnym WP pokazuje ten WP (budżet, daty, godziny przypisane do WP, PV / EV); bez własnego WP – sumy WP
+            // i elementów poddrzewa.
+            var ownWp = assignment?["WP"];
+            List<string> shown = ownWp is not null ? [ownWp] : wps;
+            var ops = ownWp is not null ? wpProduction.GetValueOrDefault(ownWp) : item.Production;
+            var (hours, material, start, finish) = AnalyticBaseBuilder.Totals(shown, budgets);
             string? gap = null;
             if (item.Kind == GridRowKind.Objective && !item.IsVirtual && wps.Count == 0)
-                gap = item.HasCode ? "element nakładki bez WP" : "brak kodu P1S (Legacy WBS ani mapowania) – bez WP";
+                gap = item.HasCode ? "element nakładki bez WP" : "brak kodu P1S (Legacy WBS) – bez WP";
             else if (wps.Any(w => !AnalyticBaseBuilder.HasBudget(budgets.GetValueOrDefault(w))))
                 gap = "WP bez budżetu";
+            if (item.SplitError)
+                gap = gap is null ? "kod wydzielenia: ELEMENT_P1S.NAZWA.CPLGR" : $"{gap}; kod wydzielenia: ELEMENT_P1S.NAZWA.CPLGR";
+            if (assignment?["WP"] is not null && assignment["CAM"] is null)
+                gap = gap is null ? "WP bez CAM" : $"{gap}; WP bez CAM";
             if (item.CostGap is { } costGap)
                 gap = gap is null ? costGap : $"{gap}; {costGap}";
             var acwp = item.Kind == GridRowKind.Objective ? item.Cost : wps.Sum(w => wpCost.GetValueOrDefault(w));
             rows.Add(new StructureRow(item.Id, parentId, depth, item.Kind, item.NodeKey, item.IsVirtual, item.Name, item.WbsElement, item.P1s,
                 item.Note, item.IsGreyed, assignment?["WP"], assignment?["CAM"], assignment?["Cost Category"], wps, hours, material, start, finish,
-                gap, item.Children.Count > 0, acwp));
+                gap, item.Children.Count > 0, acwp, AnalyticBaseBuilder.Bac(shown, budgets), Date(ops.Start), Date(ops.ActualFinish),
+                ops.Bac, Sum(shown, PvHours), ops.Ev, ops.Ac, ops.Material, Sum(shown, PvCost), Sum(shown, EvCost)));
             foreach (var child in item.Children)
                 Emit(child, item.Id, depth + 1);
         }
@@ -214,7 +292,21 @@ public static class StructureBuilder
             roots.Sum(r => r.Cost),
             withoutWp,
             costOf.Where(c => !used.Contains(c.Key)).Sum(c => c.Value),
-            costs is not null);
+            costs is not null,
+            AnalyticBaseBuilder.Bac(all, budgets));
         return new ProjectStructure(rows, summary);
+    }
+
+    private static string? Date(DateOnly? value) => value?.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
+
+    /// <summary>Wiersz o najdłuższym kodzie P1S, który jest prefiksem elementu do kropki (A.B.C → A.B, potem A).</summary>
+    private static Item? LongestPrefix(string element, IReadOnlyDictionary<string, Item> withCode)
+    {
+        for (var dot = element.LastIndexOf('.'); dot > 0; dot = element.LastIndexOf('.', dot - 1))
+        {
+            if (withCode.TryGetValue(MappingKeys.Key(element[..dot]), out var item) && item.P1s is not null)
+                return item;
+        }
+        return null;
     }
 }

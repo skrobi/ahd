@@ -48,7 +48,12 @@ public sealed class SqlDashboardData(AppServices services) : IDashboardDataSourc
     public IReadOnlyList<GlobalCard> GlobalCards()
     {
         using var connection = services.Sql.Open();
-        return [ImportCard(LastBatch(connection)), SourcesCard(connection), DictionariesCard(connection)];
+        return
+        [
+            ImportCard(LastBatch(connection)) with { ModuleKey = ModuleKeys.Import },
+            SourcesCard(connection) with { ModuleKey = ModuleKeys.Administration },
+            DictionariesCard(connection) with { ModuleKey = ModuleKeys.MasterData },
+        ];
     }
 
     public IReadOnlyList<ZakresCard> ZakresCards()
@@ -60,9 +65,18 @@ public sealed class SqlDashboardData(AppServices services) : IDashboardDataSourc
             .ToList();
     }
 
-    public IReadOnlyList<AttentionItem> Attention() =>
-        services.Problems.Open()
+    /// <summary>
+    /// Otwarte problemy (błędy najpierw); problemy importu – tylko ostatniego importu (także trwającego): problemy
+    /// wcześniejszych importów są nieaktualne, bo każdy import ocenia pliki od nowa.
+    /// </summary>
+    public IReadOnlyList<AttentionItem> Attention()
+    {
+        string? latest;
+        using (var connection = services.Sql.Open())
+            latest = LastBatch(connection) is { } batch ? ImportBatchRow.ProblemReference(batch.BatchId) : null;
+        return services.Problems.Open()
             .Where(p => p.Level != CheckLevel.Pass)
+            .Where(p => p.Reference is not { } reference || !reference.StartsWith(ImportBatchRow.ProblemReferencePrefix, StringComparison.Ordinal) || reference == latest)
             .OrderBy(p => p.Level == CheckLevel.Error ? 0 : 1)
             .ThenByDescending(p => p.Id)
             .Select(p => new AttentionItem(
@@ -71,6 +85,7 @@ public sealed class SqlDashboardData(AppServices services) : IDashboardDataSourc
                 p.Element is { Length: > 0 } element ? $"{element}: {p.Message}" : p.Message,
                 p.At.ToLocalTime().ToString("dd.MM HH:mm", Pl)))
             .ToList();
+    }
 
     public void Resolve(long problemId)
     {
@@ -80,14 +95,14 @@ public sealed class SqlDashboardData(AppServices services) : IDashboardDataSourc
         services.Journal.Add("Pulpit", $"Problem #{problemId} ({problem.Area}) oznaczony jako rozwiązany: {problem.Message}");
     }
 
-    /// <summary>Skąd problem: import (numer), mapowanie (G2) albo obszar.</summary>
+    /// <summary>Skąd problem: import (numer) albo obszar.</summary>
     private static string Source(ProblemRecord problem) =>
         problem.Reference is { } reference && reference.StartsWith(ImportBatchRow.ProblemReferencePrefix, StringComparison.Ordinal)
             ? $"Import #{reference[ImportBatchRow.ProblemReferencePrefix.Length..]}"
             : problem.Area;
 
     public IReadOnlyList<EventItem> Events() =>
-        services.Journal.Recent(15)
+        services.Journal.Recent(60)
             .Select(e => new EventItem(e.At.ToLocalTime().ToString("dd.MM HH:mm", Pl), e.Scope ?? e.Area, e.User, e.Message))
             .ToList();
 

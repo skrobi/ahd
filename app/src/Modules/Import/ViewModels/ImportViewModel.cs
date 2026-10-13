@@ -91,16 +91,6 @@ public sealed class ImportViewModel : ObservableObject
         }
     }
 
-    public string DefinitionsText => $"Rozpoznawane źródła (aktywne definicje): {string.Join(", ", _store.ActiveDefinitions().Select(d => $"{d.Code} – pliki zaczynające się od {SourceMatcher.Prefix(d.Prefix)}"))}";
-
-    public string ManualFolderText =>
-        "Do_importu – folder na pliki pobrane ręcznie; import czyta go razem z SharePoint. Każdy plik do zaimportowania import " +
-        "najpierw pobiera na dysk lokalny (folder tymczasowy, usuwany po pliku), potem zapisuje dane w bazie – status pliku pokazuje " +
-        "etap (1/4 pobieranie, 2/4 sprawdzanie, 3/4 odczyt i zapis wierszy, 4/4 kontrola w bazie). Pliki nie są przechowywane – w bazie zostają dane.";
-
-    /// <summary>Katalog logu aplikacji (App.xaml.cs) – szczegóły importu i sprawdzenia źródeł.</summary>
-    public string LogText => $"Szczegóły (ścieżki, dostęp, decyzje, pełne błędy) w logu: {Path.Combine(AppContext.BaseDirectory, "logs")}";
-
     public ImportBatchRow? SelectedBatch
     {
         get => _selectedBatch;
@@ -204,35 +194,8 @@ public sealed class ImportViewModel : ObservableObject
         row.Status = progress.Status;
     }
 
-    /// <summary>
-    /// Logowanie do bramy SharePoint każdej aktywnej lokalizacji (jak Office – MS-OFBA; bez niego strona folderu
-    /// w oknie aplikacji). Bez lokalizacji SharePoint – nic do zrobienia. false – logowanie anulowane.
-    /// </summary>
-    private async Task<bool> LoginToSharePoint()
-    {
-        var addresses = _service.Locations().Where(l => !l.IsManualFolder)
-            .Select(l => SharePointAddress.Parse(l.ConfiguredPath))
-            .OfType<SharePointAddress>()
-            .DistinctBy(a => a.Origin, StringComparer.OrdinalIgnoreCase)
-            .ToList();
-        foreach (var address in addresses)
-        {
-            Progress = $"Logowanie do SharePoint ({address.Host})…";
-            var request = await Task.Run(() =>
-            {
-                using var login = new SharePointLogin();
-                return login.Prepare(address);
-            });
-            if (!_login.Login(request))
-            {
-                Logger.Information("Logowanie SharePoint {Host} anulowane", address.Host);
-                Progress = "";
-                return false;
-            }
-        }
-        Progress = "";
-        return true;
-    }
+    /// <summary>Logowanie do SharePoint lokalizacji (SharePointSignIn); false – anulowane.</summary>
+    private Task<bool> LoginToSharePoint() => SharePointSignIn.Run(_service, _login, text => Progress = text);
 
     /// <summary>Sprawdzenie źródeł (bez importu); null – przerwane błędem (opis w Progress).</summary>
     private async Task<SourcesCheckResult?> CheckSources()
@@ -297,6 +260,5 @@ public sealed class ImportViewModel : ObservableObject
         ReloadBatches();
         RunningElsewhere = _isRunning || _service.RunningImport() is not { } holder ? "" : $"Trwa import: {holder.Text} – poczekaj na jego zakończenie.";
         OnPropertyChanged(nameof(IsRunningElsewhere));
-        OnPropertyChanged(nameof(DefinitionsText));
     }
 }

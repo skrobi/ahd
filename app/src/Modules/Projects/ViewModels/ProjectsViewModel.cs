@@ -24,7 +24,17 @@ public sealed class ProjectsViewModel : ObservableObject
     /// <summary>Operacja w tle wspólna dla stron modułu (pasek „Trwa: …”).</summary>
     public BusyState Busy { get; } = new();
 
-    public object Page { get => _page; private set => SetProperty(ref _page, value); }
+    /// <summary>Bieżąca strona; poprzednia jest zwalniana (odpięcie od zdarzeń przebiegów – bez wycieku pamięci).</summary>
+    public object Page
+    {
+        get => _page;
+        private set
+        {
+            var previous = _page;
+            if (SetProperty(ref _page, value) && !ReferenceEquals(previous, value))
+                (previous as IDisposable)?.Dispose();
+        }
+    }
 
     public void ShowList() => Page = new ProjectListViewModel(_service, Busy, ShowWizard, code => _ = ShowProject(code));
 

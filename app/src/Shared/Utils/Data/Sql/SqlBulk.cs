@@ -6,16 +6,20 @@ namespace PzlEv.Shared.Utils.Data.Sql;
 
 /// <summary>
 /// Wsadowy zapis wierszy (SqlBulkCopy) strumieniowo – wiersze nie są gromadzone w pamięci (miliony wierszy raportu).
-/// Paczki co najmniej 102 400 wierszy trafiają do indeksu kolumnowego od razu jako skompresowane grupy wierszy.
+/// Paczki po 102 400 wierszy trafiają do indeksu kolumnowego od razu jako skompresowane grupy wierszy.
 /// </summary>
 public static class SqlBulk
 {
-    public const int BatchSize = 500_000;
+    public const int BatchSize = 102_400;
 
-    public static long Insert(SqlConnection connection, SqlTransaction transaction, string table, IReadOnlyList<(string Name, Type Type)> columns,
-        IEnumerable<object?[]> rows)
+    /// <summary>
+    /// Zapis strumieniowy paczkami po BatchSize wierszy, każda paczka zatwierdzana osobno (SqlBulkCopy, wewnętrzna
+    /// transakcja paczki): odczyty innych sesji czekają najwyżej na jedną paczkę (jej czytanie z pliku i zapis), a nie
+    /// na cały plik; w pamięci nic nie jest gromadzone. Przy błędzie zatwierdzone paczki zostają – wywołujący je usuwa.
+    /// </summary>
+    public static long InsertInBatches(SqlConnection connection, string table, IReadOnlyList<(string Name, Type Type)> columns, IEnumerable<object?[]> rows)
     {
-        using var copy = new SqlBulkCopy(connection, SqlBulkCopyOptions.Default, transaction)
+        using var copy = new SqlBulkCopy(connection, SqlBulkCopyOptions.UseInternalTransaction, null)
         {
             DestinationTableName = table,
             BulkCopyTimeout = 0,

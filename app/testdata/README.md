@@ -10,17 +10,12 @@ służą do sprawdzenia przepływu danych (liczba wierszy i sumy kontrolne na ka
 |---|---|---|---|---|
 | `RABIT/ACTUALS_PAF_01.csv` | `ACTUALS_PAF` | 6 | 10 574,11 | 2 203,12 |
 
-## Mapowanie
-
-| Plik | Zawartość | Oczekiwane |
-|---|---|---|
-| `Mapowanie/Raport_mapowan.csv` | raport mapowań SAP↔CES w pełnym układzie (28 kolumn, `docs/mapowanie-ces-p1s.md`, rozdz. 2) – słownik „Raport mapowań CES ↔ P1S” | 27 wierszy (20 SAP, 7 CES), bez błędów i ostrzeżeń; projekty CES `4D02U8`, `4D02UH`, `4D02UR` → `AC-LH8.1.01`, `.1.02`, `.1.03`; np. `4D02U8000001` → PSPNR `14217226`, `4D02U8.RA` → `14217225` |
-
 ## Projekty
 
 | Plik | Zawartość | Oczekiwane |
 |---|---|---|
 | `Projekty/PO_M28.xlsx` | eksport struktury WBS z SAP (układ `docs/performance-objectives.md`, rozdz. 5), projekt CES `4D06WP` | 8 elementów, 4 poziomy: `4D06WP` → `4D06WP.RA` → `4D06WP.01` (`…000001`, `…000002`), `4D06WP.02` (`…000003`, `…000004`) |
+| `Projekty/Narzuty_CAS_arkusz.xlsx` | arkusz finansów z narzutami CAS na koszty Cost Elementów (arkusz „Arkusz2”: wskaźniki w wierszu 4, nagłówek w 5, dane od 6; okres 07/2026, lata 2026 i 2025) – wzór formuł raportu kosztów CES | 29 Cost Elementów; formuły i wartości raportu jak w arkuszu (poza błędem BA29 – MTL Fringe 2025 ze wskaźnikiem FCCOM GS) |
 | `Projekty/Slowniki_M28.xlsx` | słowniki projektu M28: arkusze „WP i CAM”, „Harmonogram i budżet”, „Wykluczenia”, „Cost Category projektu” | 4 elementy P1S, 3 WP, 2 CAM; BAC HOURS 2 250, BAC MATERIAL 75 000,50; 2 wykluczenia; 1 zmiana Cost Category (`0057100000`) |
 
 Format plików RABIT: CSV, separator `;`, UTF-8, liczby w formacie polskim (spacja tysięcy, przecinek dziesiętny, minus na

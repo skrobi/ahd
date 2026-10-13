@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.IO;
+using System.Net.Http;
 using PzlEv.Modules.Import.Data;
 using PzlEv.Modules.Import.Models;
 using PzlEv.Shared.Models;
@@ -18,7 +19,7 @@ namespace PzlEv.Modules.Import.Services;
 /// SHA-256), zaimportowany (wersja pliku + dane kanoniczne) albo błąd. Błąd pliku lub niedostępna lokalizacja
 /// nie zatrzymuje pozostałych. Kontrola przepływu: wiersze i sumy kwot kanonicznych = kolumny pliku (także w bazie po zapisie).
 /// </summary>
-public sealed class ImportService(IImportStore store, AppServices services, Func<FileDownloader>? downloader = null)
+public sealed class ImportService(IImportStore store, AppServices services, Func<FileDownloader>? downloader = null, Func<SharePointListing>? listing = null)
 {
     public const string StageDownload = "1/4 pobieranie na dysk";
     public const string StageCheck = "2/4 sprawdzanie pliku (duplikat, nagłówek, parser)";
@@ -30,6 +31,8 @@ public sealed class ImportService(IImportStore store, AppServices services, Func
     public const int DeadlockAttempts = 3;
 
     public const string Area = "Import";
+
+    /// <summary>Blokada pełnego importu (wszystkie źródła) – jeden naraz; import źródeł projektu jej nie bierze.</summary>
     public const string LockName = "import";
     public const string WillImport = "zostanie zaimportowany";
     public const string WillSkip = "zostanie pominięty – bez zmian od ostatniego importu";
@@ -43,8 +46,21 @@ public sealed class ImportService(IImportStore store, AppServices services, Func
     /// <summary>Pobieranie plików bieżącego importu (Run).</summary>
     private FileDownloader _downloader = null!;
 
-    /// <summary>Kto teraz importuje (blokada wspólna dla wszystkich użytkowników); null – nikt.</summary>
+    /// <summary>Kto teraz wykonuje pełny import (blokada wspólna dla wszystkich użytkowników); null – nikt.</summary>
     public LockHolder? RunningImport() => services.Locks.Holder(LockName);
+
+    /// <summary>Blokada trwającego importu (wpis „w toku” w historii) – wolna po zakończeniu albo awarii aplikacji.</summary>
+    public static string BatchLock(long batchId) => $"import-batch-{batchId}";
+
+    /// <summary>
+    /// Blokada pliku (lokalizacja + nazwa) na czas jego importu – dwa importy (pełny i źródeł projektu albo dwóch
+    /// projektów) nie zapisują tego samego pliku jednocześnie; różne pliki importują się równolegle.
+    /// </summary>
+    public static string FileLock(string location, string fileName) =>
+        "import-file-" + FileHash.Sha256(System.Text.Encoding.UTF8.GetBytes($"{location}|{fileName}".ToUpperInvariant()))[..16];
+
+    /// <summary>Aktywne definicje źródeł (wybór źródeł projektu).</summary>
+    public IReadOnlyList<SourceDefinitionRow> Definitions() => store.ActiveDefinitions();
 
     public IReadOnlyList<ImportLocation> Locations() =>
         store.ActiveLocations().Select(l => new ImportLocation(l.Name, WebDavPath.ToUnc(l.Path), false, l.Path))
@@ -70,10 +86,10 @@ public sealed class ImportService(IImportStore store, AppServices services, Func
         {
             try
             {
-                var (found, ignored, subfolders) = ListFiles(location);
+                var (found, ignored, subfolders, method) = ListFiles(location);
                 var matching = found.Where(f => SourceMatcher.Match(f.Name, definitions) is not null).ToList();
                 var newest = matching.Count > 0 ? $" (najnowszy z {matching.Max(f => f.LastWriteTime):yyyy-MM-dd HH:mm})" : "";
-                var status = $"dostęp OK: plików {found.Count}, pasujących do definicji {matching.Count}{newest}" +
+                var status = $"dostęp OK ({method}): plików {found.Count}, pasujących do definicji {matching.Count}{newest}" +
                              (ignored.Count > 0 ? $", pominiętych tymczasowych {ignored.Count}" : "") +
                              (subfolders.Count > 0 ? $", podfoldery (import ich nie czyta): {string.Join(", ", subfolders.Take(10))}" : "");
                 locations.Add(new LocationCheck(location.Name, location.ConfiguredPath, location.Path, true, status));
@@ -103,21 +119,46 @@ public sealed class ImportService(IImportStore store, AppServices services, Func
         return new SourcesCheckResult(locations, files);
     }
 
-    /// <summary>Pliki lokalizacji (bez podfolderów), pliki tymczasowe pominięte; zapis do logu. Brak dostępu = wyjątek.</summary>
-    private static (List<FileInfo> Files, List<string> Ignored, List<string> Subfolders) ListFiles(ImportLocation location)
+    /// <summary>
+    /// Pliki lokalizacji (bez podfolderów), pliki tymczasowe pominięte; zapis do logu. Brak dostępu = wyjątek.
+    /// SharePoint: najpierw lista przez HTTPS z sesją bramy z okna logowania (SharePointListing – bez usługi WebClient),
+    /// a gdy się nie uda – ścieżka UNC (WebDAV przez usługę WebClient).
+    /// </summary>
+    private (List<SourceFile> Files, List<string> Ignored, List<string> Subfolders, string Method) ListFiles(ImportLocation location)
     {
         Logger.Information("Lokalizacja {Location}: zapisana ścieżka {Configured}, czytana ścieżka {Path}", location.Name, location.ConfiguredPath, location.Path);
-        if (location.IsManualFolder)
-            Directory.CreateDirectory(location.Path);
-        var dir = new DirectoryInfo(location.Path);
-        if (!dir.Exists)
-            throw new DirectoryNotFoundException("folder nie istnieje albo brak dostępu (Directory.Exists = false)");
-        var (all, subfolders) = FolderEntries.List(dir.FullName);
+        List<SourceFile>? all = null;
+        List<string> subfolders = [];
+        var method = location.IsManualFolder ? "folder" : "WebDAV (usługa WebClient)";
+        if (!location.IsManualFolder && SharePointAddress.Parse(location.ConfiguredPath) is { } address)
+        {
+            try
+            {
+                using var reader = listing?.Invoke() ?? new SharePointListing();
+                (all, subfolders) = reader.List(address, location.Path);
+                method = "HTTPS (sesja z logowania w aplikacji)";
+            }
+            catch (Exception ex) when (ex is IOException or HttpRequestException or TaskCanceledException or System.Xml.XmlException)
+            {
+                Logger.Warning("Lokalizacja {Location}: lista przez HTTPS nieudana ({Error}) – odczyt ścieżki UNC (WebDAV)", location.Name, ex.Message);
+            }
+        }
+        if (all is null)
+        {
+            if (location.IsManualFolder)
+                Directory.CreateDirectory(location.Path);
+            var dir = new DirectoryInfo(location.Path);
+            if (!dir.Exists)
+                throw new DirectoryNotFoundException("folder nie istnieje albo brak dostępu (Directory.Exists = false)");
+            List<FileInfo> found;
+            (found, subfolders) = FolderEntries.List(dir.FullName);
+            all = found.Select(SourceFile.From).ToList();
+        }
         var ignored = all.Where(f => SourceMatcher.IsIgnored(f.Name)).Select(f => f.Name).ToList();
         var files = all.Where(f => !SourceMatcher.IsIgnored(f.Name)).ToList();
-        Logger.Information("Lokalizacja {Location}: plików {Count} ({Files}); pominięte tymczasowe: {Ignored}; podfoldery: {Subfolders}",
-            location.Name, files.Count, string.Join(", ", files.Select(f => f.Name)), string.Join(", ", ignored), string.Join(", ", subfolders));
-        return (files, ignored, subfolders);
+        Logger.Information("Lokalizacja {Location} ({Method}): plików {Count} ({Files}); pominięte tymczasowe: {Ignored}; podfoldery: {Subfolders}",
+            location.Name, method, files.Count, string.Join(", ", files.Select(f => f.Name)), string.Join(", ", ignored), string.Join(", ", subfolders));
+        return (files, ignored, subfolders, method);
     }
 
     private static void LogDefinitions(IReadOnlyList<SourceDefinitionRow> definitions) =>
@@ -144,20 +185,28 @@ public sealed class ImportService(IImportStore store, AppServices services, Func
             Logger.Information("Import #{Batch}: rozwiązane problemy wcześniejszych importów: {Count}", batchId, resolved);
     }
 
-    public ImportRunResult Run(IProgress<ImportProgress>? progress = null, CancellationToken cancellation = default)
+    /// <param name="sources">Kody definicji źródeł do importu (import źródeł projektu); null – pełny import wszystkich źródeł.</param>
+    public ImportRunResult Run(IProgress<ImportProgress>? progress = null, CancellationToken cancellation = default, IReadOnlySet<string>? sources = null)
     {
-        using var lease = services.Locks.TryAcquire(LockName, out var holder);
-        if (lease is null)
+        IDisposable? lease = null;
+        if (sources is null)
         {
-            var busy = $"Import nie rozpoczęty – trwa import: {holder!.Text}.";
-            Logger.Warning(busy);
-            return new ImportRunResult(0, [], [Issue.Warning(busy, "import")], false) { NotStarted = busy };
+            lease = services.Locks.TryAcquire(LockName, out var holder);
+            if (lease is null)
+            {
+                var busy = $"Import nie rozpoczęty – trwa import: {holder!.Text}.";
+                Logger.Warning(busy);
+                return new ImportRunResult(0, [], [Issue.Warning(busy, "import")], false) { NotStarted = busy };
+            }
         }
+        using var full = lease;
 
-        store.AbandonRunning(services.Clock.Now);
+        store.AbandonRunning(services.Clock.Now, id => services.Locks.Holder(BatchLock(id)) is not null);
         var definitions = store.ActiveDefinitions();
         var batchId = store.BeginBatch(services.Clock.Now, services.User.Account, Environment.MachineName, services.AppVersion);
-        services.Journal.Add(Area, $"Import #{batchId} rozpoczęty ({services.User.Account}, {Environment.MachineName})");
+        using var alive = services.Locks.TryAcquire(BatchLock(batchId), out _);
+        var scope = sources is null ? "" : $" – źródła: {string.Join(", ", sources.Order())}";
+        services.Journal.Add(Area, $"Import #{batchId} rozpoczęty ({services.User.Account}, {Environment.MachineName}){scope}");
         Logger.Information("Import #{Batch} start – {User} na {Machine}, wersja {Version}", batchId, services.User.Account, Environment.MachineName, services.AppVersion);
         progress?.Report(new ImportProgress($"Import #{batchId} rozpoczęty…", BatchId: batchId));
         LogDefinitions(definitions);
@@ -189,10 +238,10 @@ public sealed class ImportService(IImportStore store, AppServices services, Func
                 break;
             }
 
-            List<FileInfo> files;
+            List<SourceFile> files;
             try
             {
-                (files, _, var subfolders) = ListFiles(location);
+                (files, _, var subfolders, _) = ListFiles(location);
                 if (files.Count == 0 && subfolders.Count > 0)
                     Problem("pliki w podfolderach", Issue.Warning(
                         $"Brak plików w folderze lokalizacji, są podfoldery: {string.Join(", ", subfolders.Take(10))} – import nie czyta podfolderów; wskaż w Administracji folder z plikami.",
@@ -214,6 +263,8 @@ public sealed class ImportService(IImportStore store, AppServices services, Func
                     cancelled = true;
                     break;
                 }
+                if (sources is not null && !sources.Contains(SourceMatcher.Match(file.Name, definitions)?.Code ?? ""))
+                    continue;   // import źródeł projektu – pozostałe pliki nie są jego sprawą
                 var label = $"[{results.Count + 1}] {location.Name} / {file.Name}";
                 FileResult result;
                 using (var stage = new StageReporter(text => progress?.Report(new ImportProgress($"{label}: {text}", null, location.Name, file.Name, text))))
@@ -246,14 +297,14 @@ public sealed class ImportService(IImportStore store, AppServices services, Func
             Count(FileDecisions.Duplicate), Count(FileDecisions.Unrecognized), Count(FileDecisions.Error), status);
 
         var run = new ImportRunResult(batchId, results, issues, cancelled);
-        services.Journal.Add(Area, $"Import #{batchId}: {run.Summary}");
-        if (!cancelled)
+        services.Journal.Add(Area, $"Import #{batchId}{scope}: {run.Summary}");
+        if (!cancelled && sources is null)
             ResolveEarlierProblems(batchId, reference);
         Logger.Information("Import #{Batch} koniec: {Summary}", batchId, run.Summary);
         return run;
     }
 
-    private FileResult ImportFile(long batchId, ImportLocation location, FileInfo file, IReadOnlyList<SourceDefinitionRow> definitions,
+    private FileResult ImportFile(long batchId, ImportLocation location, SourceFile file, IReadOnlyList<SourceDefinitionRow> definitions,
         Action<string, Issue> problem, StageReporter stage, CancellationToken cancellation)
     {
         var modified = new DateTimeOffset(file.LastWriteTimeUtc, TimeSpan.Zero);
@@ -283,7 +334,14 @@ public sealed class ImportService(IImportStore store, AppServices services, Func
             else
             {
                 sourceCode = definition.Code;
-                (decision, description, sha, rows) = ImportContent(batchId, location, file, modified, definition, problem, stage, cancellation);
+                using var fileLease = services.Locks.TryAcquire(FileLock(location.Path, file.Name), out var holder);
+                if (fileLease is null)
+                {
+                    decision = FileDecisions.Skipped;
+                    description = $"importuje go teraz inny import: {holder?.Text ?? "?"}";
+                }
+                else
+                    (decision, description, sha, rows) = ImportContent(batchId, location, file, modified, definition, problem, stage, cancellation);
             }
         }
         catch (Exception ex) when (ex is not OperationCanceledException and not OutOfMemoryException && !cancellation.IsCancellationRequested)
@@ -315,7 +373,7 @@ public sealed class ImportService(IImportStore store, AppServices services, Func
     /// 4) kontrola w bazie (liczba wierszy i sumy po zapisie) i zatwierdzenie; niezgodność wycofuje cały zapis.
     /// Treść pliku nie jest przechowywana – po imporcie plik lokalny jest usuwany, dane są w CAN_Row.
     /// </summary>
-    private (string Decision, string Description, string? Sha, int? Rows) ImportContent(long batchId, ImportLocation location, FileInfo file,
+    private (string Decision, string Description, string? Sha, int? Rows) ImportContent(long batchId, ImportLocation location, SourceFile file,
         DateTimeOffset modified, SourceDefinitionRow definition, Action<string, Issue> problem, StageReporter stage, CancellationToken cancellation)
     {
         if (!TabularFileReader.IsSupported(file.Name))
