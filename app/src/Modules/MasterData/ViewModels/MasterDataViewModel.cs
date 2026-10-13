@@ -63,6 +63,7 @@ public sealed class MasterDataViewModel : ObservableObject
         ApplyImport = new AsyncRelayCommand(DoApplyImport, () => _preview is { HasErrors: false, HasChanges: true } && !Busy.IsBusy);
         ImportFromHr = new AsyncRelayCommand(DoImportFromHr, () => IsPersons && _preview is null && !Busy.IsBusy);
         FillFromActuals = new AsyncRelayCommand(DoFillFromActuals, () => IsCostCategory && _costElements is not null && _preview is null && !Busy.IsBusy);
+        EditFormulas = new AsyncRelayCommand(DoEditFormulas, () => IsCasBurden && _preview is null && !Busy.IsBusy);
         CancelImport = new RelayCommand(_ => ClosePreview("Wczytanie anulowane – słownik bez zmian."), _ => _preview is not null && !Busy.IsBusy);
 
         SelectedDictionary = Dictionaries.FirstOrDefault();
@@ -120,6 +121,7 @@ public sealed class MasterDataViewModel : ObservableObject
             OnPropertyChanged(nameof(Spec));
             OnPropertyChanged(nameof(IsPersons));
             OnPropertyChanged(nameof(IsCostCategory));
+            OnPropertyChanged(nameof(IsCasBurden));
             ClosePreview(null);
             _ = Reload("");
         }
@@ -166,6 +168,13 @@ public sealed class MasterDataViewModel : ObservableObject
     public ICommand CancelImport { get; }
     public ICommand ImportFromHr { get; }
     public ICommand FillFromActuals { get; }
+    public ICommand EditFormulas { get; }
+
+    /// <summary>Wybrany słownik narzutów CAS (pule, grupy, formuły) – „Edytor formuł”.</summary>
+    public bool IsCasBurden => Spec?.Code is GlobalDictionaries.CasPools or GlobalDictionaries.CasBurdenGroups or GlobalDictionaries.CasBurdenFormulas;
+
+    /// <summary>Okno edytora formuł grupy narzutowej (grupa do pokazania; true – zapisano). Ustawia moduł.</summary>
+    public Func<string?, bool> EditCasFormulas { get; set; } = _ => false;
 
     /// <summary>Wybrany słownik Cost Category – „Uzupełnij z ACTUALS”.</summary>
     public bool IsCostCategory => Spec?.Code == GlobalDictionaries.CostCategory;
@@ -303,6 +312,23 @@ public sealed class MasterDataViewModel : ObservableObject
                 ? $"Wszystkie cost elementy z ACTUALS ({total}) są już w słowniku."
                 : $"Nowe cost elementy z ACTUALS: {added} (z {total}) – zatwierdź wczytanie, potem uzupełnij Cost Category i „Rozliczeniowy”.";
         });
+    }
+
+    /// <summary>
+    /// „Edytor formuł” (słowniki narzutów CAS): macierz pula × składnik podstawy wybranej grupy (zaznaczony wiersz grup
+    /// albo formuł); zapis w oknie – słownik „Formuły narzutów CAS”, po zamknięciu tabela jest odświeżana.
+    /// </summary>
+    private async Task DoEditFormulas()
+    {
+        Table.CommitEdits();
+        if (HasPendingChanges)
+        {
+            Status = "Masz niezapisane zmiany – zapisz albo odrzuć je przed otwarciem edytora formuł.";
+            return;
+        }
+        var group = Spec?.Column("Grupa") is { } column && Table.SelectedRow is { } row ? row[Spec.Columns.ToList().IndexOf(column)] : null;
+        if (EditCasFormulas(group))
+            await Reload("Formuły narzutów CAS zapisane w edytorze.");
     }
 
     /// <summary>Okno wyboru osób z HR (pracownicy, USRID już w słowniku) → wybrane; null – anulowano. Ustawia moduł.</summary>

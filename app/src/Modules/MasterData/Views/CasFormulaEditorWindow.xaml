@@ -1,0 +1,29 @@
+<Window x:Class="PzlEv.Modules.MasterData.Views.CasFormulaEditorWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:partials="clr-namespace:PzlEv.Shared.Views.Partials"
+        Title="Edytor formuł narzutów CAS" Width="1280" Height="760" MinWidth="900" MinHeight="480"
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="False" Background="{StaticResource Surface}">
+    <!-- Macierz formuł grupy narzutowej (DataContext: CasFormulaEditorViewModel); kolumny składników – code-behind -->
+    <DockPanel Margin="16">
+        <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8">
+            <TextBlock Text="Grupa narzutowa" VerticalAlignment="Center" Margin="0,0,8,0" Foreground="{StaticResource Muted}" />
+            <ComboBox Width="240" ItemsSource="{Binding Groups}" SelectedItem="{Binding SelectedGroup}" VerticalAlignment="Center" />
+            <TextBlock Text="{Binding Description}" VerticalAlignment="Center" Margin="12,0,0,0" TextTrimming="CharacterEllipsis" />
+        </DockPanel>
+        <TextBlock DockPanel.Dock="Top" Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="0,0,0,8"
+                   Text="Wiersz – pula; „Naliczana” – pula ma narzut w tej grupie. Zaznaczone kolumny to składniki podstawy: narzut = (suma składników) × wskaźnik puli (słownik „Wskaźniki narzutu CAS”). Pule i ich kolejność – słownik „Pule narzutu CAS”." />
+        <DockPanel DockPanel.Dock="Bottom" Margin="0,10,0,0">
+            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                <Button Content="Odrzuć zmiany" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding Discard}" />
+                <Button Content="Zapisz" Style="{StaticResource BtnPrimary}" Margin="0,0,8,0" Command="{Binding Save}" />
+                <Button Content="Zamknij" Style="{StaticResource Btn}" IsCancel="True" />
+            </StackPanel>
+            <TextBlock Text="{Binding Status}" TextWrapping="Wrap" VerticalAlignment="Center" />
+        </DockPanel>
+        <partials:BusyBar DockPanel.Dock="Top" DataContext="{Binding Busy}" />
+        <DataGrid x:Name="Matrix" Style="{StaticResource DataTable}" ItemsSource="{Binding Rows}" AutoGenerateColumns="False"
+                  CanUserAddRows="False" CanUserDeleteRows="False" CanUserSortColumns="False" CanUserReorderColumns="False"
+                  SelectionUnit="Cell" FrozenColumnCount="2" />
+    </DockPanel>
+</Window>

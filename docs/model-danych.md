@@ -333,13 +333,21 @@ podaje `@Value` procedur `REP_ProjectCosts`, `REP_ProjectCostsByElement` i `RUN_
 
 **Migracja `sql/mssql/029_narzuty_cas.sql`:** narzuty CAS raportu kosztów CES (`docs/slowniki.md`, rozdz. 6.1):
 `DICT_CostCategory.BurdenGroup` – „Grupa narzutowa CAS” elementu kosztowego; `DICT_CasBurdenGroup` – „Grupy narzutowe
-CAS” (grupa, opis, `BaseInGsGa` i kolumna `BIT` na każdą z 17 pul); `DICT_CasBurdenRate` – „Wskaźniki narzutu CAS”
+CAS” (od migracji 031 – grupa i opis); `DICT_CasBurdenRate` – „Wskaźniki narzutu CAS”
 (pula, `ValidFrom`, `ValidTo`, `Rate DECIMAL(38,18)`; klucz projekt + pula + od). Raport liczy aplikacja
 (`CasCostReport`) z wyniku `REP_ProjectCosts` – bez nowej procedury. Wymaga aplikacji 0.46.0.
 
-**Migracja `sql/mssql/030_dane_narzuty_cas.sql`** (dane startowe): 10 grup narzutowych i wskaźniki 2025 i 2026 z arkusza
+**Migracja `sql/mssql/030_dane_narzuty_cas.sql`** (dane startowe): 10 grup narzutowych (formuły – migracja 032) i wskaźniki 2025 i 2026 z arkusza
 finansów; grupa narzutowa elementów kosztowych arkusza w globalnym Cost Category – nowa wersja pozycji bez grupy
 (grupa ustawiona wcześniej zostaje).
+
+**Migracja `sql/mssql/031_formuly_narzutow_cas.sql`:** formuły narzutów CAS jako dane (`docs/slowniki.md`, rozdz. 6.1):
+`DICT_CasPool` – „Pule narzutu CAS” (pula, `SortOrder`, `Kind`: Koszt / FCCOM); `DICT_CasBurdenFormula` – „Formuły
+narzutów CAS” (grupa, pula, `Basis` – składniki połączone „ + ”; klucz projekt + grupa + pula); z `DICT_CasBurdenGroup`
+usunięte kolumny pul i `BaseInGsGa` (029) – zostają grupa i opis. Wymaga aplikacji 0.47.0.
+
+**Migracja `sql/mssql/032_dane_formuly_narzutow_cas.sql`** (dane startowe): 17 pul arkusza finansów i formuły 10 grup
+(składniki w kolejności z arkusza); formuły grupy tylko, gdy grupa nie ma jeszcze żadnej formuły.
 
 `META_SourceFile.CanonicalStatus`: „utworzone” – dane kanoniczne zapisane i sprawdzone (widoczne dla odczytów),
 „w toku” – zapis wierszy trwa (odczyty pomijają plik; po awarii wpis i wiersze są usuwane), inna wartość – powód

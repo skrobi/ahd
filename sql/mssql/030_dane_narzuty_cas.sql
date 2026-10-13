@@ -1,6 +1,6 @@
 /* PZL-EV – migracja 030: dane startowe narzutów CAS (migracja 029) – odwzorowanie arkusza finansów z wyliczeniem
    narzutów CAS na koszty Cost Elementów (lata 2025–2026):
-   - „Grupy narzutowe CAS”: 10 grup z pulami stosowanymi w formułach arkusza;
+   - „Grupy narzutowe CAS”: 10 grup (formuły pul grup – migracja 032);
    - „Wskaźniki narzutu CAS”: wskaźniki pul na 2025 i 2026 (od – do = rok);
    - „Grupa narzutowa CAS” w globalnym słowniku Cost Category dla elementów kosztowych z arkusza – nowa wersja
      pozycji (historia zostaje), tylko gdy grupa nie jest jeszcze ustawiona.
@@ -14,26 +14,20 @@ GO
 
 DECLARE @at DATETIMEOFFSET(7) = SYSDATETIMEOFFSET(), @by NVARCHAR(128) = ORIGINAL_LOGIN();
 
-INSERT INTO [$(Schema)].[$(Prefix)DICT_CasBurdenGroup]
-    (RowId, Version, Project, BurdenGroup, Description, BaseInGsGa, MfgFringe, MfgOh, EngFringe, EngOh, MtlFringe, MtlHandling, Mmp,
-     Gs, GsFringe, MsvFringe, Ga, Fd, FccomMfg, FccomEng, FccomMtl, FccomGs, FccomGa, RecordedAt, RecordedBy)
-SELECT NEXT VALUE FOR [$(Schema)].[$(Prefix)META_LogicalId], 1, NULL, g.BurdenGroup, g.Description, g.BaseInGsGa, g.MfgFringe, g.MfgOh,
-       g.EngFringe, g.EngOh, g.MtlFringe, g.MtlHandling, g.Mmp, g.Gs, g.GsFringe, g.MsvFringe, g.Ga, g.Fd, g.FccomMfg, g.FccomEng,
-       g.FccomMtl, g.FccomGs, g.FccomGa, @at, @by
+INSERT INTO [$(Schema)].[$(Prefix)DICT_CasBurdenGroup] (RowId, Version, Project, BurdenGroup, Description, RecordedAt, RecordedBy)
+SELECT NEXT VALUE FOR [$(Schema)].[$(Prefix)META_LogicalId], 1, NULL, g.BurdenGroup, g.Description, @at, @by
 FROM (VALUES
-    --                                                                                  Base MfgF MfgOh EngF EngOh MtlF MtlH Mmp  Gs GsF MsvF Ga Fd  FcMfg FcEng FcMtl FcGs FcGa
-    (N'MFG labor',        N'Robocizna produkcji i jakości (MFG Fringe, MFG OH)',                1, 1, 1, 0, 0, 0, 0, 0, 1, 0, 0, 1, 1, 1, 0, 0, 1, 1),
-    (N'ENG labor',        N'Robocizna inżynierii i programów (ENG Fringe, ENG OH)',             1, 0, 0, 1, 1, 0, 0, 0, 1, 0, 0, 1, 1, 0, 1, 0, 1, 1),
-    (N'ENG LL labor',     N'Inżynieria – praca leasingowana (ENG OH bez ENG Fringe)',           1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 1, 1, 0, 1, 0, 1, 1),
-    (N'MSV labor',        N'Robocizna pośrednia i usług produkcyjnych (MSV Fringe)',            1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 1, 1, 0, 0, 0, 1, 1),
-    (N'GS labor',         N'Robocizna General Services – finanse, HR, wysyłka (GS Fringe)',     1, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 1, 1, 0, 0, 0, 1, 1),
-    (N'MTL labor',        N'Robocizna zakupów – Procurement (MTL Fringe)',                      1, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 1, 1, 0, 0, 0, 1, 1),
-    (N'Direct Materials', N'Materiały bezpośrednie – suche koszty (MTL Handling, MMP; GS i G&A od MTL Handling)', 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 1, 1, 0, 0, 1, 1, 1),
-    (N'Direct Services',  N'Usługi bezpośrednie – suche koszty (MTL Handling; GS i G&A od MTL Handling)',       0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 1, 1),
-    (N'Travel',           N'Podróże – suche koszty (GS, G&A, FD, FCCOM G&A od kosztu)',         1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 0, 0, 1),
-    (N'ODC',              N'Other Direct Cost – bez narzutów',                                  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
-) g (BurdenGroup, Description, BaseInGsGa, MfgFringe, MfgOh, EngFringe, EngOh, MtlFringe, MtlHandling, Mmp, Gs, GsFringe, MsvFringe, Ga, Fd,
-     FccomMfg, FccomEng, FccomMtl, FccomGs, FccomGa)
+    (N'MFG labor',        N'Robocizna produkcji i jakości (MFG Fringe, MFG OH)'),
+    (N'ENG labor',        N'Robocizna inżynierii i programów (ENG Fringe, ENG OH)'),
+    (N'ENG LL labor',     N'Inżynieria – praca leasingowana (ENG OH bez ENG Fringe)'),
+    (N'MSV labor',        N'Robocizna pośrednia i usług produkcyjnych (MSV Fringe)'),
+    (N'GS labor',         N'Robocizna General Services – finanse, HR, wysyłka (GS Fringe)'),
+    (N'MTL labor',        N'Robocizna zakupów – Procurement (MTL Fringe)'),
+    (N'Direct Materials', N'Materiały bezpośrednie – suche koszty (MTL Handling, MMP; GS i G&A od MTL Handling)'),
+    (N'Direct Services',  N'Usługi bezpośrednie – suche koszty (MTL Handling; GS i G&A od MTL Handling)'),
+    (N'Travel',           N'Podróże – suche koszty (GS, G&A, FD, FCCOM G&A od kosztu)'),
+    (N'ODC',              N'Other Direct Cost – bez narzutów')
+) g (BurdenGroup, Description)
 WHERE NOT EXISTS (SELECT 1 FROM [$(Schema)].[$(Prefix)DICT_CasBurdenGroup] x
                   WHERE x.Project IS NULL AND x.SupersededAt IS NULL AND x.BurdenGroup = g.BurdenGroup);
 
