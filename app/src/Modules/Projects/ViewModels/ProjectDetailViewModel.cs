@@ -64,6 +64,7 @@ public sealed class ProjectDetailViewModel : ObservableObject, IDisposable
         Project = project;
         // Edycja struktury także w trakcie zapisu – zapisy idą po kolei (CommitRow), niezapisane zmiany trwają po odświeżeniu.
         Structure = new StructureViewModel { Commit = CommitRow, CanEditNow = () => !IsEditingObjectives };
+        Structure.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(StructureViewModel.Notice)) OnPropertyChanged(nameof(StatusLine)); };
         // Edycja nakładki tym samym edytorem co w kreatorze (przeciąganie, przesuwanie, usuwanie, węzły wirtualne);
         // „Wczytaj Excel” podmienia strukturę (elementy o tym samym WBS element zachowują historię).
         Objectives = new PoEditorViewModel(dialogs, busy, service.ReadObjectives, tree => ObjectivesValidator.Validate(tree, _owners), ProjectService.Refresh);
@@ -246,7 +247,21 @@ public sealed class ProjectDetailViewModel : ObservableObject, IDisposable
 
     public Pill ReadinessPill { get => _readiness; private set => SetProperty(ref _readiness, value); }
 
-    public string Status { get => _status; private set => SetProperty(ref _status, value); }
+    public string Status
+    {
+        get => _status;
+        private set
+        {
+            if (SetProperty(ref _status, value))
+                OnPropertyChanged(nameof(StatusLine));
+        }
+    }
+
+    /// <summary>
+    /// Komunikat w stałym miejscu pod nagłówkiem (jedna linia, pełna treść w podpowiedzi): wynik ostatniej operacji
+    /// i wynik operacji na komórkach struktury (wklejenie, Delete, Ctrl+D, Ctrl+Z) – bez przesuwania tabeli.
+    /// </summary>
+    public string StatusLine => string.Join(" · ", new[] { _status, Structure.Notice }.Where(t => !string.IsNullOrWhiteSpace(t)));
 
     public string FolderPath => _service.Folders.PathOf(Code);
 

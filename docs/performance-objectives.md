@@ -127,9 +127,11 @@ i budżetem (`StructureBuilder`).
   Dane produkcyjne są czytane na żywo (`IPzlProdSource.Production`, filtr – zakres P1S projektu) przy
   otwarciu projektu, „Odśwież P1S i koszty” i po zmianie Legacy WBS; chwila odczytu – w nagłówku ekranu
   („Produkcja (PZLPROD) …”). Kolumny mają stałą szerokość – przy kolejnych kolumnach tabela przewija się w poziomie. Tabela kończy się na dole okna (wysokość
-  dopasowana do okna, strona bez przewijania – wiersze przewija tabela; przy zwiniętym menu – szersza); komunikat
-  o wklejeniu – nad tabelą, skróty klawiszowe i opis kolumn – okno „?”; nad tabelą daty danych RABIT i produkcji – osobna
-  linia pod nagłówkiem projektu.
+  dopasowana do okna przy każdej zmianie jego rozmiaru, bez górnego limitu; strona bez przewijania – wiersze przewija
+  tabela; przy zwiniętym menu – szersza); skróty klawiszowe i opis kolumn – okno „?”; nad tabelą daty danych RABIT
+  i produkcji – osobna linia pod nagłówkiem projektu. Komunikaty (operacja w toku – „Trwa…”, wynik zapisu, wczytania,
+  wklejenia) – jedna linia o stałej wysokości pod datami danych (pełna treść w podpowiedzi); pokazanie i ukrycie
+  komunikatu nie przesuwa zakładek ani tabeli.
 - **WP** to znacznik elementu P1S (wiersz z kodem P1S), który wskażą finansiści: zaznaczony element jest pakietem pracy
   i ma mieć koszty i budżet. Kodem nowego WP jest kod elementu P1S (WP zapisany już w słowniku zachowuje swój
   kod). WP nie jest osobnym poziomem drzewa.
@@ -184,7 +186,7 @@ i budżetem (`StructureBuilder`).
   BAC HOURS, BAC MATERIAL, BAC, Baseline Start, Baseline Koniec wiersza z jednym WP w poddrzewie – własnym albo jedynym
   pod nim (np. węzeł nakładki nad elementem P1S z WP) → „Harmonogram i budżet” tego WP (klucz – WP); wiersz z kilkoma WP
   w poddrzewie pokazuje sumę i nie jest edytowalny. Walidacja jak przy zapisie słownika: ERROR blokuje zapis (zmiany zostają w wierszu, komunikat
-  nad tabelą), WARNING nie wstrzymuje. Błąd, który słownik ma już w innym wierszu (np. element poza zakresem
+  w linii komunikatów), WARNING nie wstrzymuje. Błąd, który słownik ma już w innym wierszu (np. element poza zakresem
   po odświeżeniu P1S), nie blokuje zmiany – jest ostrzeżeniem. Zmiana `Legacy WBS` razem z WP / CAM w jednym
   wierszu przypisuje WP do nowego kodu P1S. Kolumny zablokowane do edycji – lista `StructureEdits.Locked` (do ustalenia).
 - **Jak w Excelu:** zaznaczanie komórek, pisanie zastępuje zawartość komórki, Ctrl+C / Ctrl+V – kopiowanie i wklejanie

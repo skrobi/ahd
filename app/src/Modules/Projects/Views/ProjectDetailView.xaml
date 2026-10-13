@@ -64,8 +64,30 @@
                 <TextBlock Text="{Binding ProductionInfo}" FontSize="12" />
             </Border>
         </WrapPanel>
-        <partials:BusyBar DataContext="{Binding Busy}" />
-        <TextBlock Text="{Binding Status}" TextWrapping="Wrap" Margin="0,0,0,8" />
+        <!-- Komunikat w stałym miejscu (jedna linia o stałej wysokości, pełna treść w podpowiedzi): operacja w toku albo wynik
+             ostatniej operacji – pokazanie i ukrycie nie przesuwa zakładek ani tabeli struktury. -->
+        <Grid Height="22" Margin="0,0,0,6">
+            <DockPanel Visibility="{Binding Busy.IsBusy, Converter={StaticResource BoolToVisibility}}" ToolTip="{Binding Busy.Display}">
+                <ProgressBar DockPanel.Dock="Left" IsIndeterminate="True" Width="80" Height="4" Margin="0,0,10,0" BorderThickness="0"
+                             VerticalAlignment="Center" Foreground="{StaticResource Info}" Background="{StaticResource Surface}" />
+                <TextBlock Text="{Binding Busy.Display}" Foreground="{StaticResource Info}" FontWeight="SemiBold" VerticalAlignment="Center"
+                           TextTrimming="CharacterEllipsis" />
+            </DockPanel>
+            <TextBlock Text="{Binding StatusLine}" ToolTip="{Binding StatusLine}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis">
+                <TextBlock.Style>
+                    <Style TargetType="TextBlock">
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding Busy.IsBusy}" Value="True">
+                                <Setter Property="Visibility" Value="Hidden" />
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding StatusLine}" Value="">
+                                <Setter Property="Visibility" Value="Hidden" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </TextBlock.Style>
+            </TextBlock>
+        </Grid>
 
         <TabControl Background="Transparent" BorderThickness="0,1,0,0" Padding="0,12,0,0">
             <!-- Wskaźniki: sumy projektu teraz, wskaźniki EV po przebiegach; gotowość do przebiegu zwinięta -->
