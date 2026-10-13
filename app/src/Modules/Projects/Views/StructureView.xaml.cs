@@ -55,7 +55,7 @@ public partial class StructureView : UserControl
             Dispatcher.BeginInvoke(FitHeight, DispatcherPriority.Loaded);
         };
         RowsGrid.IsVisibleChanged += (_, _) => Dispatcher.BeginInvoke(FitHeight, DispatcherPriority.Loaded);
-        LayoutUpdated += (_, _) => FitHeight();   // zmiana wysokości elementów nad tabelą (komunikat, pasek „Trwa…”)
+        LayoutUpdated += (_, _) => FitHeight();   // zmiana wysokości elementów nad tabelą (np. zawinięcie linii dat danych)
         DataContextChanged += (_, e) =>
         {
             if (e.OldValue is StructureViewModel old)

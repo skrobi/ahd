@@ -45,22 +45,11 @@
         </DataTemplate>
     </UserControl.Resources>
     <StackPanel>
-        <!-- Wynik ostatniej operacji na komórkach (wklejenie, Delete) – nad tabelą; pod tabelą nic (tabela do dołu okna).
-             Skróty i opis kolumn – przycisk „?” na pasku nad tabelą (StructureHelpWindow). -->
-        <TextBlock Text="{Binding Notice}" Foreground="{StaticResource Info}" Margin="0,0,0,4" TextWrapping="Wrap">
-            <TextBlock.Style>
-                <Style TargetType="TextBlock">
-                    <Style.Triggers>
-                        <Trigger Property="Text" Value="">
-                            <Setter Property="Visibility" Value="Collapsed" />
-                        </Trigger>
-                    </Style.Triggers>
-                </Style>
-            </TextBlock.Style>
-        </TextBlock>
+        <!-- Wynik operacji na komórkach (wklejenie, Delete) – w stałej linii komunikatu ekranu projektu (StatusLine), bez
+             przesuwania tabeli. Skróty i opis kolumn – przycisk „?” na pasku nad tabelą (StructureHelpWindow). -->
         <!-- Zaznaczanie komórek jak w Excelu (tylko ta tabela – styl DataTable i edytor Performance Objectives bez zmian). -->
         <DataGrid x:Name="RowsGrid" Style="{StaticResource DataTable}" ItemsSource="{Binding Rows}"
-                  MinHeight="320" FrozenColumnCount="1" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto"
+                  MinHeight="320" MaxHeight="Infinity" FrozenColumnCount="1" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto"
                   CanUserSortColumns="False" CanUserReorderColumns="False" SelectionUnit="Cell" SelectionMode="Extended"
                   ClipboardCopyMode="ExcludeHeader"
                   EnableRowVirtualization="True" EnableColumnVirtualization="False"
@@ -71,10 +60,10 @@
             <DataGrid.RowStyle>
                 <Style TargetType="DataGridRow">
                     <Style.Triggers>
-                        <!-- Wiersz z niezapisanymi zmianami (zapis w toku albo nieudany – komunikat nad tabelą). -->
+                        <!-- Wiersz z niezapisanymi zmianami (zapis w toku albo nieudany – komunikat w linii pod nagłówkiem projektu). -->
                         <DataTrigger Binding="{Binding HasChanges}" Value="True">
                             <Setter Property="Background" Value="{StaticResource WarnSoft}" />
-                            <Setter Property="ToolTip" Value="Niezapisane zmiany – zapis w toku albo nieudany (komunikat nad tabelą); „Odrzuć niezapisane” cofa" />
+                            <Setter Property="ToolTip" Value="Niezapisane zmiany – zapis w toku albo nieudany (komunikat pod nagłówkiem projektu); „Odrzuć niezapisane” cofa" />
                         </DataTrigger>
                     </Style.Triggers>
                 </Style>
