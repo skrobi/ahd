@@ -129,6 +129,30 @@ public sealed class StructureTests
     }
 
     [Fact]
+    public void Actual_dlh_of_ces_elements_goes_to_wp_like_acwp()
+    {
+        DictRow[] wpCam = [Wp("XYZ-1", "WP-1"), Wp("AC-CAB.6.38.01", "WP-2"), Wp("AC-CAB.6.38.03.01.05", "WP-3")];
+        DictRow[] schedule = [Budget("WP-1", "10"), Budget("WP-2", "5"), Budget("WP-3", "1")];
+        var costs = new Dictionary<string, decimal> { ["4D06WP000001"] = 100m, ["4D06WP.02"] = 7m };
+        var dlh = new Dictionary<string, decimal>
+        {
+            ["4D06WP000001"] = 40m,    // WP na kodzie P1S węzła (WP-2)
+            ["4d06wp.02"] = 3m,        // jedyny WP pod elementem (WP-3), wielkość liter bez znaczenia
+            ["4D06WP000002"] = 8m,     // bez WP i bez kosztu – godziny na węźle, bez braku „koszt bez WP”
+        };
+
+        var structure = ProjectService.Structure(Objectives(), Inputs(), wpCam, schedule, costs, dlh: dlh);
+
+        Assert.Equal(40m, Of(structure, "4D06WP000001").ActualDlh);
+        Assert.Equal(3m, Of(structure, "p1s:AC-CAB.6.38.03.01.05").ActualDlh);   // wiersz WP-3: godziny przypisane do WP
+        Assert.Equal(8m, Of(structure, "4D06WP000002").ActualDlh);
+        Assert.DoesNotContain("koszt bez WP", Of(structure, "4D06WP000002").Gap ?? "");
+        Assert.Equal(51m, Of(structure, "4D06WP").ActualDlh);                     // suma poddrzewa nakładki
+        Assert.Equal(100m, Of(structure, "4D06WP000001").Acwp);                   // ACWP bez zmian
+        Assert.Equal(0m, ProjectService.Structure(Objectives(), Inputs(), wpCam, schedule, costs).Rows.Sum(r => r.ActualDlh));
+    }
+
+    [Fact]
     public void Editable_cells_depend_on_row()
     {
         var structure = ProjectService.Structure(Objectives(), Inputs(), [Wp("XYZ-1", "WP-1")], [Budget("WP-1", "10")]);

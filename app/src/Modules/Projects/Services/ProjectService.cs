@@ -371,8 +371,8 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
 
     /// <summary>Struktura projektu: nakładka z rozwinięciem P1S, WP, CAM, budżet i daty (StructureBuilder).</summary>
     public static ProjectStructure Structure(PoTree tree, P1sInputs inputs, IReadOnlyList<DictRow> wpCam, IReadOnlyList<DictRow> schedule,
-        IReadOnlyDictionary<string, decimal>? costs = null, ProductionData? production = null) =>
-        StructureBuilder.Build(tree, inputs.P1s, wpCam, schedule, costs, production);
+        IReadOnlyDictionary<string, decimal>? costs = null, ProductionData? production = null, IReadOnlyDictionary<string, decimal>? dlh = null) =>
+        StructureBuilder.Build(tree, inputs.P1s, wpCam, schedule, costs, production, dlh: dlh);
 
     /// <summary>
     /// Dane produkcyjne projektu na żywo z PZLPROD (Operational EV, daty rzeczywiste, materiały dostarczone): elementy P1S
@@ -421,9 +421,9 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
     [
         "Poziom", "WBS Name", "Rodzaj", "CES Element", "Legacy Element (P1S)", "WP", "CAM", "CAM – imię i nazwisko", "Cost Category", "WP w poddrzewie",
         "Baseline Start", "Baseline Finish", "Actual Start", "Actual Finish",
-        "BAC Hours", "PV Hours", "EV Hours", "AC Hours",
+        "TECH Hours", "PV Hours", "EV Hours", "AC Hours",
         "BAC Material", "Actual Material",
-        "BAC Hours baseline", "BAC Cost", "PV Cost", "EV Cost", "ACWP",
+        "BAC Hours baseline", "BAC Cost", "PV Cost", "EV Cost", "ACWP", "Actual DLH",
         "Braki", "Uwagi",
     ];
 
@@ -449,7 +449,7 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
                 Date(r.Start), Date(r.Finish), Date(r.ActualStart), Date(r.ActualFinish),
                 Round(r.OpsBacHours), Round(r.PvHours), Round(r.EvHours), Round(r.AcHours),
                 budget ? r.BacMaterial : null, Round(r.ActualMaterial),
-                budget ? r.BacHours : null, budget ? r.Bac : null, Round(r.PvCost), Round(r.EvCost), r.Acwp == 0 ? null : r.Acwp,
+                budget ? r.BacHours : null, budget ? r.Bac : null, Round(r.PvCost), Round(r.EvCost), r.Acwp == 0 ? null : r.Acwp, r.ActualDlh == 0 ? null : r.ActualDlh,
                 r.Gap, r.Note,
             };
         });
@@ -472,7 +472,7 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
             StructureImport.BacHoursHeader or StructureImport.BacMaterialHeader or StructureImport.BacHeader => new(header, ExcelTableWriter.Kind.Number,
                 Note: "Do uzupełnienia w wierszu z WP; w wierszach bez WP – suma poddrzewa, nie jest wczytywana.", Input: true),
             "Actual Start" or "Actual Finish" => new(header, ExcelTableWriter.Kind.Date),
-            "BAC Hours" or "PV Hours" or "EV Hours" or "AC Hours" or "Actual Material" or "PV Cost" or "EV Cost" or "ACWP" => new(header, ExcelTableWriter.Kind.Number),
+            "TECH Hours" or "PV Hours" or "EV Hours" or "AC Hours" or "Actual Material" or "PV Cost" or "EV Cost" or "ACWP" or "Actual DLH" => new(header, ExcelTableWriter.Kind.Number),
             _ => new ExcelTableWriter.ExcelColumn(header),
         }).ToList();
 
@@ -501,6 +501,15 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
 
     /// <summary>ACWP po elemencie CES z podanego pola kwoty ACTUALS.</summary>
     public IReadOnlyDictionary<string, decimal> CostsByElement(string code, string field) => store.CostsByElement(code, field);
+
+    /// <summary>Pole godzin parsera ACTUALS (kolumna „Total Quantity”) – Actual DLH struktury.</summary>
+    public const string ActualsHours = "TotalQuantity";
+
+    /// <summary>
+    /// Actual DLH po elemencie CES z ostatniego importu ACTUALS – suma „Total Quantity” z tych samych wierszy co ACWP
+    /// (REP_ProjectCostsByElement z polem godzin zamiast kwoty).
+    /// </summary>
+    public IReadOnlyDictionary<string, decimal> HoursByElement(string code) => store.CostsByElement(code, ActualsHours);
 
     /// <summary>Pole kwoty ACTUALS projektu – słownik „Parametry projektu” (brak – ValueObjCrcy).</summary>
     public string ActualsAmount(string code) => ProjectDictionaries.ActualsAmount(Rows(ProjectDictionaries.Settings, code));
