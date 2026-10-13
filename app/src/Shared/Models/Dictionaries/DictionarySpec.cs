@@ -30,6 +30,15 @@ public sealed class DictionarySpec
     /// </summary>
     public bool SkipKeyOnlyRows { get; init; }
 
+    /// <summary>Słownik edytowany tylko w oknie specjalnym (np. formuły narzutów CAS) – bez pozycji na liście ekranu Słowniki.</summary>
+    public bool Hidden { get; init; }
+
+    /// <summary>
+    /// Słowniki wskazujące wiersze tego słownika identyfikatorem (RowId): kod słownika, kolumna, czy wartość wskazuje
+    /// identyfikator. Usunięcie wiersza wskazywanego (globalnie albo w projekcie) – ERROR.
+    /// </summary>
+    public IReadOnlyList<(string Dictionary, string Column, Func<string?, long, bool> References)> ReferencedBy { get; init; } = [];
+
     /// <summary>Reguły szczegółowe na całym zestawie wierszy (po normalizacji wartości).</summary>
     public Func<IReadOnlyList<DictRow>, IEnumerable<Issue>>? Rules { get; init; }
 

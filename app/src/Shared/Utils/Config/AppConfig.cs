@@ -5,7 +5,7 @@ namespace PzlEv.Shared.Utils.Config;
 /// <summary>
 /// Ustawienia środowiska z pliku pzl-ev.json obok PZL-EV.exe (docs/architektura.md, rozdz. 7–8): przełącznik Env
 /// (TEST / PROD) wybiera sekcję Environments.&lt;Env&gt; – korzeń folderów, baza MS SQL i baza PZLPROD (struktura P1S,
-/// tylko odczyt; null – sekcja PzlProd nieustawiona, mapowanie pokazuje komunikat) i baza PZLHRPROD (pracownicy HR.ORG
+/// tylko odczyt; null – sekcja PzlProd nieustawiona, struktura P1S niedostępna z komunikatem) i baza PZLHRPROD (pracownicy HR.ORG
 /// do słownika Osoby, tylko odczyt; null – sekcja PzlHrProd nieustawiona).
 /// </summary>
 public sealed record AppConfig(string Environment, string NetworkRoot, SqlSettings Sql, SqlSettings? PzlProd = null, SqlSettings? PzlHrProd = null)

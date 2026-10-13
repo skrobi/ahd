@@ -1,4 +1,5 @@
 using PzlEv.Shared.Models.Hr;
+using PzlEv.Shared.Models.PzlProd;
 using System.Globalization;
 using System.Text.RegularExpressions;
 using PzlEv.Shared.Models.Dictionaries;
@@ -15,23 +16,20 @@ public static partial class GlobalDictionaries
     public const string FxRates = "fx-rates";
     public const string CostCategory = "cost-category";
     public const string Persons = "persons";
-    public const string MappingReport = "mapping-report";
+    public const string DjkRates = "djk-rates";
+    public const string ProductionParameters = "production-parameters";
+    public const string CasPools = "cas-pools";
+    public const string CasBurdenGroups = "cas-burden-groups";
+    public const string CasBurdenFormulas = "cas-burden-formulas";
+    public const string CasBurdenRates = "cas-burden-rates";
 
-    /// <summary>
-    /// Kolumny raportu mapowań SAP↔CES (docs/mapowanie-ces-p1s.md, rozdz. 2) – nazwy jak w nagłówku pliku, w bazie
-    /// kolumny DICT_MappingReport (project → ProjectDef – Project to kolumna słowników projektu). Rozstrzyganie czyta
-    /// src, pspnr, pspnr_sap, project_sap, project_ces, wbs, wbs_sap, wbs_ces; pozostałe kolumny są przechowywane, żeby
-    /// słownik można było pobrać do Excela w pełnym układzie.
-    /// </summary>
-    public static readonly IReadOnlyList<(string Name, string Column)> MappingReportColumns =
-    [
-        ("src", "Src"), ("pspnr", "Pspnr"), ("pspnr_sap", "PspnrSap"), ("pspnr_ces", "PspnrCes"), ("pspnr_parent", "PspnrParent"),
-        ("project", "ProjectDef"), ("project_sap", "ProjectSap"), ("project_sap_org", "ProjectSapOrg"), ("project_ces", "ProjectCes"),
-        ("wbs", "Wbs"), ("wbs_sap", "WbsSap"), ("wbs_ces", "WbsCes"), ("wbs_desc", "WbsDesc"), ("wbs_desc_sap", "WbsDescSap"),
-        ("wbs_desc_ces", "WbsDescCes"), ("prctr", "Prctr"), ("prctr_sap", "PrctrSap"), ("prctr_ces", "PrctrCes"), ("lvl", "Lvl"),
-        ("lvl_sap", "LvlSap"), ("lvl_ces", "LvlCes"), ("perf_obg", "PerfObg"), ("techs", "Techs"), ("sales_order_typ", "SalesOrderTyp"),
-        ("sales_order", "SalesOrder"), ("sales_order_pos", "SalesOrderPos"), ("matnr", "Matnr"), ("network", "Network"),
-    ];
+    /// <summary>Kolumna słownika Cost Category z grupą narzutową CAS elementu kosztowego (raport kosztów CES).</summary>
+    public const string BurdenGroupColumn = "Grupa narzutowa CAS";
+
+    /// <summary>Parametry słownika „Parametry produkcji” (kolumna Parametr).</summary>
+    public const string ProductivityMonths = "Okno produktywności IPT (mies.)";
+    public const string DeliveredStatuses = "Statusy materiałów dostarczonych";
+    public const string DivideByZClo = "Wartość materiałów ÷ (1 + Z_CLO)";
 
     public static IReadOnlyList<DictionarySpec> All { get; } =
     [
@@ -91,6 +89,7 @@ public static partial class GlobalDictionaries
                 new("Obszar", ColumnType.Text, CheckSimilar: true),
                 new("Cost Category", ColumnType.Text, CheckSimilar: true),
                 new("Rozliczeniowy", ColumnType.Boolean),
+                new(BurdenGroupColumn, ColumnType.Text, Lookup: CasBurdenGroups, IdLookup: true),
             ],
             Rules = CostCategoryRules,
         },
@@ -98,7 +97,7 @@ public static partial class GlobalDictionaries
         {
             Code = Persons,
             Name = "Osoby",
-            Description = "Pracownicy z HR (PZLHRPROD, HR.ORG – „Wczytaj z HR”): USRID (numer znaczka, login) → imię i nazwisko, MPK, dział, stanowisko. CAM w strukturze projektu wybiera się z tej listy (zapisywany USRID).",
+            Description = "Pracownicy z HR (PZLHRPROD, HR.ORG – „Dodaj z HR”): USRID (numer znaczka, login) → imię i nazwisko, MPK, dział, stanowisko. CAM w strukturze projektu wybiera się z tej listy (zapisywany USRID).",
             Columns =
             [
                 new("USRID", ColumnType.Text, Key: true, Aliases: ["Konto AD"]),
@@ -117,17 +116,86 @@ public static partial class GlobalDictionaries
         },
         new()
         {
-            Code = MappingReport,
-            Name = "Raport mapowań CES ↔ P1S",
-            Description = "Raport mapowań SAP↔CES (eksport z PZLPROD) – źródło przypisań elementów CES do P1S (ekran Mapowanie). " +
-                          "Wczytanie z Excela zastępuje cały słownik zawartością pliku: wiersze spoza pliku są usuwane (historia zostaje).",
-            Columns = [.. MappingReportColumns.Select(c => c.Name switch
-            {
-                "src" => new DictColumn(c.Name, ColumnType.Choice, Key: true, Choices: ["SAP", "CES"]),
-                "pspnr" => new DictColumn(c.Name, ColumnType.Text, Key: true),
-                _ => new DictColumn(c.Name, ColumnType.Text),
-            })],
-            Rules = MappingReportRules,
+            Code = DjkRates,
+            Name = "Wskaźniki DJK",
+            Description = "Godziny jakości DJK doliczane do godzin produkcji: udział godzin TECH / TECH_PON według prefiksu grupy stanowisk (IPT, np. W2, W51 – najdłuższy pasujący prefiks). Odczyt danych produkcyjnych struktury projektu (vAHDD).",
+            Columns =
+            [
+                new("Grupa stanowisk", ColumnType.Text, Key: true),
+                new("Udział DJK", ColumnType.Decimal, Required: true),
+                new("Opis", ColumnType.Text),
+            ],
+            Rules = DjkRules,
+        },
+        new()
+        {
+            Code = ProductionParameters,
+            Name = "Parametry produkcji",
+            Description = "Parametry odczytu danych produkcyjnych z PZLPROD (struktura projektu): okno produktywności IPT w miesiącach, statusy vAPD liczone jako dostarczone (po przecinku), dzielenie wartości materiałów przez (1 + Z_CLO) – tak / nie.",
+            Columns =
+            [
+                new("Parametr", ColumnType.Choice, Key: true, Choices: [ProductivityMonths, DeliveredStatuses, DivideByZClo]),
+                new("Wartość", ColumnType.Text, Required: true),
+                new("Opis", ColumnType.Text),
+            ],
+            Rules = ProductionParameterRules,
+        },
+        new()
+        {
+            Code = CasPools,
+            Name = "Pule narzutu CAS",
+            Description = "Pule narzutu CAS – kolumny raportu kosztów CES w kolejności „Kolejność”; Rodzaj: Koszt – w TOTAL COST, FCCOM – w TOTAL FCCOM. Formuły, wskaźniki i raport wskazują pulę identyfikatorem – zmiana nazwy jest od razu widoczna wszędzie; puli używanej w formułach albo wskaźnikach nie można usunąć.",
+            Columns =
+            [
+                new("Pula", ColumnType.Text, Key: true, CheckSimilar: true),
+                new("Kolejność", ColumnType.Integer, Required: true),
+                new("Rodzaj", ColumnType.Choice, Required: true, Choices: [CasBurden.CostKind, CasBurden.FccomKind]),
+                new("Opis", ColumnType.Text),
+            ],
+            Rules = CasPoolRules,
+            ReferencedBy = [(CasBurdenFormulas, "Pula", CasBurden.References), (CasBurdenFormulas, "Formuła", CasBurden.References), (CasBurdenRates, "Pula", CasBurden.References)],
+        },
+        new()
+        {
+            Code = CasBurdenGroups,
+            Name = "Grupy narzutowe CAS",
+            Description = "Grupa narzutowa elementu kosztowego (kolumna „Grupa narzutowa CAS” słownika Cost Category – zapisany identyfikator grupy, zmiana nazwy jest od razu widoczna). Pule naliczane w grupie i ich formuły – przycisk „Formuły narzutów” (macierz grup i pul, edytor formuły z klocków).",
+            Columns =
+            [
+                new("Grupa", ColumnType.Text, Key: true, CheckSimilar: true),
+                new("Opis", ColumnType.Text),
+            ],
+            ReferencedBy = [(CostCategory, BurdenGroupColumn, CasBurden.References), (CasBurdenFormulas, "Grupa", CasBurden.References)],
+        },
+        new()
+        {
+            Code = CasBurdenFormulas,
+            Name = "Formuły narzutów CAS",
+            Description = "Formuła puli w grupie narzutowej z klocków: Base cost elements (koszt bazowy kolumny), narzuty pul, wskaźniki pul, + − × ÷ ( ). Wiersz = pula naliczana w grupie. Edycja tylko w oknie „Formuły narzutów” (macierz grup i pul).",
+            Columns =
+            [
+                new("Grupa", ColumnType.Text, Key: true, Lookup: CasBurdenGroups, IdLookup: true),
+                new("Pula", ColumnType.Text, Key: true, Lookup: CasPools, IdLookup: true),
+                new("Formuła", ColumnType.Text, Required: true),
+            ],
+            Rules = CasBurden.FormulaRules,
+            Hidden = true,
+        },
+        new()
+        {
+            Code = CasBurdenRates,
+            Name = "Wskaźniki narzutu CAS",
+            Description = "Wskaźnik puli narzutu CAS obowiązujący od – do (zwykle rok: 2026-01-01 – 2026-12-31; Do puste – bezterminowo); pula z listy słownika „Pule narzutu CAS” (zapisany identyfikator – zmiana nazwy puli jest od razu widoczna). Raport kosztów CES bierze wskaźnik obowiązujący w okresie kolumny (okres, rok).",
+            Columns =
+            [
+                new("Pula", ColumnType.Text, Key: true, Lookup: CasPools, IdLookup: true),
+                new("Od", ColumnType.Date, Key: true),
+                new("Do", ColumnType.Date),
+                new("Wskaźnik", ColumnType.Decimal, Required: true, Decimals: 18),
+                new("Opis", ColumnType.Text),
+            ],
+            Validity = ("Od", "Do"),
+            Rules = CasRateRules,
         },
     ];
 
@@ -143,14 +211,19 @@ public static partial class GlobalDictionaries
         new(Get(FxRates), "dict.FxRate", [("Waluta", "Currency"), ("Okres", "Period"), ("Kurs", "Rate")]),
         new(Get(CostCategory), "dict.CostCategory",
             [("Numer elementu kosztowego", "CostElement"), ("Opis", "Description"), ("Obszar", "Area"), ("Cost Category", "CostCategory"),
-             ("Rozliczeniowy", "IsSettlement")]),
+             ("Rozliczeniowy", "IsSettlement"), (BurdenGroupColumn, "BurdenGroupId")]),
         new(Get(Persons), "dict.Person",
         [
             ("USRID", "AdAccount"), ("Imię i nazwisko", "FullName"), ("Imię", "FirstName"), ("Nazwisko", "LastName"), ("E-mail", "Email"),
             ("MPK", "CostCenter"), ("Dział", "DepartmentShort"), ("Dział – pełna nazwa", "DepartmentName"), ("Stanowisko", "Position"),
             ("Pion", "Division"), ("Manager", "IsManager"), ("PERNR", "Pernr"),
         ]),
-        new(Get(MappingReport), "dict.MappingReport", MappingReportColumns),
+        new(Get(DjkRates), "dict.DjkRate", [("Grupa stanowisk", "WorkCenterGroup"), ("Udział DJK", "Share"), ("Opis", "Description")]),
+        new(Get(ProductionParameters), "dict.ProductionParameter", [("Parametr", "Name"), ("Wartość", "Value"), ("Opis", "Description")]),
+        new(Get(CasPools), "dict.CasPool", [("Pula", "Pool"), ("Kolejność", "SortOrder"), ("Rodzaj", "Kind"), ("Opis", "Description")]),
+        new(Get(CasBurdenGroups), "dict.CasBurdenGroup", [("Grupa", "BurdenGroup"), ("Opis", "Description")]),
+        new(Get(CasBurdenFormulas), "dict.CasFormula", [("Grupa", "GroupId"), ("Pula", "PoolId"), ("Formuła", "Formula")]),
+        new(Get(CasBurdenRates), "dict.CasBurdenRate", [("Pula", "PoolId"), ("Od", "ValidFrom"), ("Do", "ValidTo"), ("Wskaźnik", "Rate"), ("Opis", "Description")]),
     ];
 
     private static IEnumerable<Issue> CalendarRules(IReadOnlyList<DictRow> rows)
@@ -224,6 +297,94 @@ public static partial class GlobalDictionaries
         }
     }
 
+    /// <summary>„Wskaźniki DJK”: udział 0–1; prefiks zawarty w innym (W5 i W51) – ostrzeżenie (liczy się najdłuższy).</summary>
+    private static IEnumerable<Issue> DjkRules(IReadOnlyList<DictRow> rows)
+    {
+        var prefixes = rows.Select(r => r["Grupa stanowisk"]).OfType<string>().ToList();
+        for (var i = 0; i < rows.Count; i++)
+        {
+            var at = DictionaryValidator.RowElement(i);
+            if (Dec(rows[i]["Udział DJK"]) is { } share && (share < 0 || share > 1))
+                yield return Issue.Error("Udział DJK – wartość od 0 do 1 (np. 0,15 = 15%)", at);
+            if (rows[i]["Grupa stanowisk"] is { } prefix && prefixes.Any(p => p.Length > prefix.Length && p.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)))
+                yield return Issue.Warning($"Grupa {prefix} jest prefiksem innej grupy – dla dłuższej liczy się jej udział", at);
+        }
+    }
+
+    /// <summary>„Pule narzutu CAS”: nazwa inna niż koszt bazowy i bez „+” (separator podstawy), kolejność bez powtórzeń.</summary>
+    private static IEnumerable<Issue> CasPoolRules(IReadOnlyList<DictRow> rows)
+    {
+        for (var i = 0; i < rows.Count; i++)
+        {
+            var at = DictionaryValidator.RowElement(i);
+            if (rows[i]["Pula"] is { } pool && (pool.Contains('+') || string.Equals(pool, CasBurden.Base, StringComparison.OrdinalIgnoreCase)))
+                yield return Issue.Error($"Pula „{pool}” – nazwa nie może zawierać „+” ani być „{CasBurden.Base}”", at);
+        }
+        foreach (var order in rows.Where(r => r["Kolejność"] is not null).GroupBy(r => r["Kolejność"]!).Where(g => g.Count() > 1))
+            yield return Issue.Warning($"Kolejność {order.Key} ma kilka pul ({string.Join(", ", order.Select(r => r["Pula"]))}) – kolumny ułożone po nazwie", "Kolejność");
+    }
+
+    /// <summary>„Wskaźniki narzutu CAS”: wskaźnik nieujemny (okresy obowiązywania – DictionaryValidator, Validity).</summary>
+    private static IEnumerable<Issue> CasRateRules(IReadOnlyList<DictRow> rows)
+    {
+        for (var i = 0; i < rows.Count; i++)
+        {
+            if (Dec(rows[i]["Wskaźnik"]) is < 0)
+                yield return Issue.Error("Wskaźnik nie może być ujemny", DictionaryValidator.RowElement(i));
+        }
+    }
+
+    /// <summary>„Parametry produkcji”: okno 1–120 miesięcy, statusy niepuste, Z_CLO – tak / nie.</summary>
+    private static IEnumerable<Issue> ProductionParameterRules(IReadOnlyList<DictRow> rows)
+    {
+        for (var i = 0; i < rows.Count; i++)
+        {
+            var at = DictionaryValidator.RowElement(i);
+            var value = rows[i]["Wartość"];
+            switch (rows[i]["Parametr"])
+            {
+                case ProductivityMonths when Int(value) is not (>= 1 and <= 120):
+                    yield return Issue.Error($"{ProductivityMonths} – liczba miesięcy od 1 do 120", at);
+                    break;
+                case DeliveredStatuses when Statuses(value).Count == 0:
+                    yield return Issue.Error($"{DeliveredStatuses} – podaj statusy po przecinku (np. DOST, WYD)", at);
+                    break;
+                case DivideByZClo when YesNo(value) is null:
+                    yield return Issue.Error($"{DivideByZClo} – tak albo nie", at);
+                    break;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Parametry odczytu produkcji ze słowników „Wskaźniki DJK” i „Parametry produkcji”; pusty słownik – wartości raportu
+    /// S70MR (ProductionParameters.Default, IsDefault – informacja na ekranie).
+    /// </summary>
+    public static Models.PzlProd.ProductionParameters ProductionParametersFrom(IReadOnlyList<DictRow> djk, IReadOnlyList<DictRow> parameters)
+    {
+        var defaults = Models.PzlProd.ProductionParameters.Default;
+        string? Value(string name) => parameters.FirstOrDefault(r => r["Parametr"] == name)?["Wartość"];
+        var shares = djk.Where(r => r["Grupa stanowisk"] is not null && Dec(r["Udział DJK"]) is not null)
+            .Select(r => (r["Grupa stanowisk"]!.Trim(), Dec(r["Udział DJK"])!.Value)).ToList();
+        var statuses = Statuses(Value(DeliveredStatuses));
+        return new Models.PzlProd.ProductionParameters(
+            djk.Count > 0 ? shares : defaults.Djk,
+            Int(Value(ProductivityMonths)) ?? defaults.ProductivityMonths,
+            statuses.Count > 0 ? statuses : defaults.DeliveredStatuses,
+            YesNo(Value(DivideByZClo)) ?? defaults.DivideByZClo,
+            IsDefault: djk.Count == 0 || parameters.Count == 0);
+    }
+
+    private static IReadOnlyList<string> Statuses(string? value) =>
+        (value ?? "").Split([',', ';', ' '], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Select(s => s.ToUpperInvariant()).Distinct().ToList();
+
+    private static bool? YesNo(string? value) => value?.Trim().ToLowerInvariant() switch
+    {
+        "tak" or "t" or "1" or "true" or "yes" => true,
+        "nie" or "n" or "0" or "false" or "no" => false,
+        _ => null,
+    };
+
     private static IEnumerable<Issue> CostCategoryRules(IReadOnlyList<DictRow> rows)
     {
         for (var i = 0; i < rows.Count; i++)
@@ -233,25 +394,6 @@ public static partial class GlobalDictionaries
                 yield return Issue.Error($"Numer '{number}' dłuższy niż 10 znaków", at);
             if (rows[i]["Cost Category"] is null)
                 yield return Issue.Warning($"Numer {rows[i]["Numer elementu kosztowego"]} bez Cost Category", at);
-        }
-    }
-
-    /// <summary>
-    /// Wiersz raportu mapowań bez przypisania (rozstrzyganie go pominie): brak elementu CES (wbs_ces, a w wierszu CES – wbs)
-    /// albo celu P1S (pspnr_sap / wbs_sap, a w wierszu SAP – pspnr / wbs) i brak pary project_ces → project_sap.
-    /// </summary>
-    private static IEnumerable<Issue> MappingReportRules(IReadOnlyList<DictRow> rows)
-    {
-        for (var i = 0; i < rows.Count; i++)
-        {
-            var row = rows[i];
-            var ces = row["src"] == "CES";
-            var element = row["wbs_ces"] ?? (ces ? row["wbs"] : null);
-            var target = row["pspnr_sap"] ?? row["wbs_sap"] ?? (ces ? null : row["pspnr"] ?? row["wbs"]);
-            var project = row["project_ces"] is not null && row["project_sap"] is not null;
-            if (ces && (element is null || target is null) && !project)
-                yield return Issue.Warning($"Wiersz CES {row["pspnr"]} bez przypisania (brak wbs_ces / wbs albo pspnr_sap / wbs_sap i pary project_ces → project_sap)",
-                    DictionaryValidator.RowElement(i));
         }
     }
 
@@ -276,6 +418,7 @@ public static partial class GlobalDictionaries
             rows.Add(new DictRow(null, null, new Dictionary<string, string?>
             {
                 [number.Name] = element.CostElement, ["Opis"] = element.Name, ["Obszar"] = null, ["Cost Category"] = null, ["Rozliczeniowy"] = null,
+                [BurdenGroupColumn] = null,
             }));
             added++;
         }
@@ -292,6 +435,12 @@ public static partial class GlobalDictionaries
             .Select(r => new LookupOption(r["USRID"]!, r["Imię i nazwisko"] ?? r["USRID"]!))
             .OrderBy(o => o.Label, StringComparer.CurrentCulture)
             .ToList(),
+        // Pule i grupy narzutowe CAS: zapisywany identyfikator wiersza (RowId), wyświetlana nazwa.
+        CasPools => rows.Where(r => r.RowId is not null && r["Pula"] is not null)
+            .OrderBy(r => int.TryParse(r["Kolejność"], out var order) ? order : int.MaxValue)
+            .Select(r => new LookupOption(CasBurden.Ref(r.RowId!.Value), r["Pula"]!)).ToList(),
+        CasBurdenGroups => rows.Where(r => r.RowId is not null && r["Grupa"] is not null)
+            .Select(r => new LookupOption(CasBurden.Ref(r.RowId!.Value), r["Grupa"]!)).OrderBy(o => o.Label, StringComparer.CurrentCulture).ToList(),
         _ => rows.Select(r => Get(code).KeyOf(r.Values)).Distinct().Select(k => new LookupOption(k, k)).ToList(),
     };
 
@@ -327,6 +476,41 @@ public static partial class GlobalDictionaries
                 ["Manager"] = Null(p.IsManager), ["PERNR"] = Null(p.Pernr),
             }))
             .ToList();
+
+    /// <summary>
+    /// Osoby uzupełnione o wybranych pracowników z HR („Dodaj z HR”): bieżące wiersze bez zmian i nowe wiersze dla USRID,
+    /// których w słowniku nie ma – podgląd pokazuje same nowe osoby, nic nie jest usuwane.
+    /// </summary>
+    public static (IReadOnlyList<DictRow> Rows, int Added) PersonsWithAdded(IReadOnlyList<DictRow> current, IEnumerable<HrPerson> persons)
+    {
+        var known = current.Select(r => r["USRID"] ?? "").ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var rows = current.Select(r => new DictRow(null, null, r.Values)).ToList();
+        var added = PersonRows(persons).Where(r => known.Add(r["USRID"] ?? "")).ToList();
+        rows.AddRange(added);
+        return (rows, added.Count);
+    }
+
+    /// <summary>
+    /// Szukanie pracowników HR: każde słowo frazy musi wystąpić w którymś polu – USRID, PERNR (numer znaczka), imię,
+    /// nazwisko, „imię nazwisko” / „nazwisko imię”, e-mail, dział (skrót i pełna nazwa). Wielkość liter bez znaczenia.
+    /// </summary>
+    public static IReadOnlyList<HrPerson> SearchPersons(IEnumerable<HrPerson> persons, string text, int limit = 200)
+    {
+        var words = text.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (words.Length == 0 || words.Sum(w => w.Length) < 2)
+            return [];
+        return persons
+            .Where(p => p.Usrid.Length > 0)
+            .Where(p =>
+            {
+                string[] fields = [p.Usrid, p.Pernr, p.FirstName, p.LastName, p.FullName, $"{p.LastName} {p.FirstName}", p.Email, p.DepartmentShort, p.DepartmentName];
+                return words.All(w => fields.Any(f => f.Contains(w, StringComparison.CurrentCultureIgnoreCase)));
+            })
+            .GroupBy(p => p.Usrid, StringComparer.OrdinalIgnoreCase).Select(g => g.First())
+            .OrderBy(p => p.LastName, StringComparer.CurrentCulture).ThenBy(p => p.FirstName, StringComparer.CurrentCulture)
+            .Take(limit)
+            .ToList();
+    }
 
     private static string? Null(string value) => value.Length == 0 ? null : value;
 }

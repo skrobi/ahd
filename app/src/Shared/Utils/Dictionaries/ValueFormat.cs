@@ -55,7 +55,9 @@ public static class ValueFormat
                 if (PolishNumber.TryParse(canonical, out var number))
                 {
                     // Jak w bazie – inaczej ponowne wczytanie tego samego pliku pokazywałoby zmianę (np. =1/3,95).
-                    canonical = PolishNumber.ToCanonical(Math.Round(number, Decimals, MidpointRounding.AwayFromZero));
+                    canonical = PolishNumber.ToCanonical(column.Decimals is { } decimals
+                        ? Significant(Math.Round(number, decimals, MidpointRounding.AwayFromZero))
+                        : Math.Round(number, Decimals, MidpointRounding.AwayFromZero));
                     return true;
                 }
                 error = $"'{input}' – oczekiwano liczby";
@@ -93,13 +95,25 @@ public static class ValueFormat
         }
     }
 
+    /// <summary>
+    /// Liczba z kolumny o własnej precyzji (DictColumn.Decimals) – najwyżej 15 cyfr znaczących, jak w Excelu: pobranie
+    /// słownika do Excela i ponowne wczytanie nie zmienia wartości (np. wskaźnik 0,0000574568193098370).
+    /// </summary>
+    private static decimal Significant(decimal value)
+    {
+        if (value == 0)
+            return 0;
+        var digits = (int)Math.Floor(Math.Log10((double)Math.Abs(value))) + 1;
+        return Math.Round(value, Math.Clamp(15 - digits, 0, 28), MidpointRounding.AwayFromZero);
+    }
+
     /// <summary>Tekst do wyświetlenia i edycji (liczby w formacie polskim).</summary>
     public static string Display(DictColumn column, string? canonical)
     {
         if (canonical is null)
             return "";
         if (column.Type == ColumnType.Decimal && PolishNumber.TryParse(canonical, out var number))
-            return PolishNumber.ToDisplay(number);
+            return column.Decimals is { } decimals ? PolishNumber.ToDisplay(number, decimals) : PolishNumber.ToDisplay(number);
         return canonical;
     }
 

@@ -12,6 +12,9 @@ public interface IDictionaryStore
 {
     IReadOnlyList<DictionaryEntryRow> Current(string dictionary, string? project = null);
 
+    /// <summary>Bieżące wiersze słownika globalnego i wszystkich projektów (kontrola powiązań przy usunięciu).</summary>
+    IReadOnlyList<DictionaryEntryRow> CurrentAll(string dictionary);
+
     /// <summary>Stan słownika w danym momencie (oś techniczna) – odczyt przebiegu na znacznik stanu.</summary>
     IReadOnlyList<DictionaryEntryRow> AsOf(string dictionary, DateTimeOffset moment, string? project = null);
 

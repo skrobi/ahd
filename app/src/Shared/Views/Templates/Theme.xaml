@@ -32,6 +32,8 @@
 
     <FontFamily x:Key="FBody">Segoe UI</FontFamily>
     <FontFamily x:Key="FMono">Consolas</FontFamily>
+    <!-- Ikony przycisków (Windows 10+; Windows 11 – Segoe Fluent Icons zawiera te same kody) -->
+    <FontFamily x:Key="FIcon">Segoe Fluent Icons, Segoe MDL2 Assets</FontFamily>
 
     <!-- Karta/panel -->
     <Style x:Key="Panel" TargetType="Border">
@@ -94,6 +96,20 @@
         <Setter Property="BorderBrush" Value="{StaticResource Accent}" />
     </Style>
 
+    <!-- Przycisk-ikona (pasek narzędzi): Content – kod znaku ikony (FIcon), opis w ToolTip -->
+    <Style x:Key="BtnIcon" TargetType="Button" BasedOn="{StaticResource Btn}">
+        <Setter Property="FontFamily" Value="{StaticResource FIcon}" />
+        <Setter Property="FontSize" Value="15" />
+        <Setter Property="Padding" Value="8,6" />
+        <Setter Property="Margin" Value="0,0,4,0" />
+        <Setter Property="ToolTipService.ShowOnDisabled" Value="True" />
+    </Style>
+    <Style x:Key="BtnIconPrimary" TargetType="Button" BasedOn="{StaticResource BtnIcon}">
+        <Setter Property="Background" Value="{StaticResource Accent}" />
+        <Setter Property="Foreground" Value="{StaticResource AccentInk}" />
+        <Setter Property="BorderBrush" Value="{StaticResource Accent}" />
+    </Style>
+
     <!-- Przycisk nawigacji -->
     <Style x:Key="NavBtn" TargetType="Button">
         <Setter Property="Background" Value="Transparent" />
@@ -108,7 +124,7 @@
                 <ControlTemplate TargetType="Button">
                     <Border x:Name="b" Background="{TemplateBinding Background}" CornerRadius="6"
                             Padding="{TemplateBinding Padding}">
-                        <ContentPresenter HorizontalAlignment="Left" VerticalAlignment="Center" />
+                        <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" VerticalAlignment="Center" />
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">

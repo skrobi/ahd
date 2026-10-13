@@ -1,6 +1,16 @@
 namespace PzlEv.Shared.Models.Db;
 
 /// <summary>Statusy importu w historii (meta.ImportBatch.Status).</summary>
+/// <summary>Stan danych kanonicznych wersji pliku (META_SourceFile.CanonicalStatus); inne wartości – powód braku danych.</summary>
+public static class CanonicalStatuses
+{
+    /// <summary>Dane zapisane i sprawdzone – widoczne dla odczytów (CAN_LatestFiles).</summary>
+    public const string Created = "utworzone";
+
+    /// <summary>Zapis wierszy trwa – plik pomijany przez odczyty; po awarii usuwany.</summary>
+    public const string InProgress = "w toku";
+}
+
 public static class ImportBatchStatus
 {
     public const string Running = "w toku";

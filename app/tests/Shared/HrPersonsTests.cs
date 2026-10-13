@@ -26,6 +26,29 @@ public sealed class HrPersonsTests
         Assert.Empty(DictionaryValidator.Validate(spec, rows));
     }
 
+    [Fact]
+    public void Search_matches_badge_name_email_and_department_and_adds_only_picked_persons()
+    {
+        HrPerson[] people =
+        [
+            Person("e1", "Jan", "Kowalski"), Person("e2", "Anna", "Kowal"), Person("e3", "Piotr", "Kowalik"), Person("e4", "Ewa", "Nowak"),
+            Person("e5", "Adam", "Zieliński") with { Pernr = "777123", DepartmentShort = "PGXX", DepartmentName = "Dział jakości", Email = "adam.z@lmco.com" },
+        ];
+
+        Assert.Equal(["e2", "e3", "e1"], GlobalDictionaries.SearchPersons(people, "kowal").Select(p => p.Usrid));   // Kowal, Kowalik, Kowalski
+        Assert.Equal(["e1"], GlobalDictionaries.SearchPersons(people, "jan kowal").Select(p => p.Usrid));          // każde słowo w którymś polu
+        Assert.Equal(["e1"], GlobalDictionaries.SearchPersons(people, "Kowalski Jan").Select(p => p.Usrid));
+        Assert.Equal(["e5"], GlobalDictionaries.SearchPersons(people, "777123").Select(p => p.Usrid));             // numer znaczka
+        Assert.Equal(["e5"], GlobalDictionaries.SearchPersons(people, "adam.z@").Select(p => p.Usrid));            // e-mail
+        Assert.Equal(["e5"], GlobalDictionaries.SearchPersons(people, "jakości").Select(p => p.Usrid));            // dział
+        Assert.Empty(GlobalDictionaries.SearchPersons(people, "k"));
+
+        var current = GlobalDictionaries.PersonRows([Person("e4", "Ewa", "Nowak")]);
+        var (rows, added) = GlobalDictionaries.PersonsWithAdded(current, [people[0], people[1], people[3]]);
+        Assert.Equal(2, added);                                                                                   // Nowak już jest
+        Assert.Equal(["e4", "e2", "e1"], rows.Select(r => r["USRID"]));                              // nowe po nazwisku
+    }
+
     [SqlFact]
     public void Persons_are_read_from_hr_and_replace_dictionary_after_preview()
     {

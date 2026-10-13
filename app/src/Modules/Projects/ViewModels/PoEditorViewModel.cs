@@ -3,7 +3,6 @@ using System.IO;
 using System.Windows.Input;
 using PzlEv.Modules.Projects.Models;
 using PzlEv.Shared.Models;
-using PzlEv.Shared.Models.Mapping;
 using PzlEv.Shared.Utils.Ui.Dialogs;
 using PzlEv.Shared.Utils.Ui.Mvvm;
 using Serilog;
@@ -12,7 +11,8 @@ namespace PzlEv.Modules.Projects.ViewModels;
 
 /// <summary>
 /// Edycja nakładki Performance Objectives (kreator, krok 2; ekran Projekt): wczytanie eksportu SAP, elementy CES
-/// i węzły wirtualne, zmiana nazw, przenoszenie (przeciąganie, strzałki, poziom wyżej), usuwanie.
+/// i węzły wirtualne, zmiana nazwy, Element CES i P1S w komórkach tabeli, przenoszenie (przeciąganie, strzałki, na początek / koniec, poziom wyżej,
+/// „Przenieś do” i grupowanie kilku zaznaczonych), zwijanie drzewa, usuwanie.
 /// </summary>
 public sealed class PoEditorViewModel : ObservableObject
 {
@@ -25,12 +25,11 @@ public sealed class PoEditorViewModel : ObservableObject
     private readonly Func<PoTree, PoTree, PoTree> _fromImport;
     private PoTree _tree = new();
     private PoRowViewModel? _selected;
-    private string _editName = "";
-    private string _editWbs = "";
-    private string _editLegacy = "";
     private string _status = "";
     private bool _isDirty;
     private string _mappingInfo = "";
+    private readonly HashSet<long> _collapsed = [];   // węzły zwinięte (dzieci ukryte w tabeli)
+    private IReadOnlyList<PoRowViewModel> _selectedRows = [];
 
     /// <param name="validate">Kontrola nakładki w pamięci (bez bazy – wywoływana po każdej zmianie).</param>
     /// <param name="fromImport">Nakładka po wczytaniu pliku: (bieżąca, wczytana) → wynik (kreator – wczytana; projekt – odświeżenie).</param>
@@ -42,12 +41,17 @@ public sealed class PoEditorViewModel : ObservableObject
         _validate = validate;
         _fromImport = fromImport;
         ImportExcel = new AsyncRelayCommand(DoImport, () => !_busy.IsBusy);
-        AddVirtual = new RelayCommand(_ => AddNode(_tree.AddVirtual(_selected?.Key, "Nowy węzeł"), "Dodano węzeł wirtualny – wpisz nazwę i kliknij „Zmień zaznaczony”."), _ => !_busy.IsBusy);
+        AddVirtual = new RelayCommand(_ => AddNode(_tree.AddVirtual(_selected?.Key, "Nowy węzeł"), "Dodano węzeł wirtualny – wpisz nazwę (Enter zatwierdza)."), _ => !_busy.IsBusy);
         AddElement = new RelayCommand(_ => AddNode(_tree.AddElement(_selected?.Key, "", "Nowy element", null),
-            "Dodano element CES – wpisz WBS element, nazwę i Legacy WBS, potem „Zmień zaznaczony”."), _ => !_busy.IsBusy);
-        ApplyEdit = new RelayCommand(_ => DoApplyEdit(), _ => (_selected is not null) && !_busy.IsBusy);
+            "Dodano element CES – wpisz nazwę, potem Element CES i P1S w tabeli."), _ => !_busy.IsBusy);
         Up = new RelayCommand(_ => Change(() => _tree.Shift(_selected!.Key, -1), null), _ => (_selected is not null) && !_busy.IsBusy);
         Down = new RelayCommand(_ => Change(() => _tree.Shift(_selected!.Key, 1), null), _ => (_selected is not null) && !_busy.IsBusy);
+        Top = new RelayCommand(_ => Change(() => _tree.ShiftToEdge(_selected!.Key, first: true), null), _ => (_selected is not null) && !_busy.IsBusy);
+        Bottom = new RelayCommand(_ => Change(() => _tree.ShiftToEdge(_selected!.Key, first: false), null), _ => (_selected is not null) && !_busy.IsBusy);
+        GroupSelected = new RelayCommand(_ => DoGroup(), _ => SelectedKeys.Count > 0 && !_busy.IsBusy);
+        CollapseAll = new RelayCommand(_ => { _collapsed.UnionWith(_tree.Nodes.Where(n => _tree.Children(n.Key).Count > 0).Select(n => n.Key)); Rebuild(_selected?.Key); },
+            _ => _tree.Nodes.Count > 0);
+        ExpandAll = new RelayCommand(_ => { _collapsed.Clear(); Rebuild(_selected?.Key); }, _ => _collapsed.Count > 0);
         Outdent = new RelayCommand(_ => Change(() => _tree.Outdent(_selected!.Key), null), _ => (_selected?.Node.ParentKey is not null) && !_busy.IsBusy);
         Remove = new RelayCommand(_ => Change(() => _tree.Remove(_selected!.Key), "Usunięto węzeł – jego elementy przeszły poziom wyżej."), _ => (_selected is not null) && !_busy.IsBusy);
         Clear = new RelayCommand(_ => Change(_tree.Clear, "Wyczyszczono nakładkę."), _ => (_tree.Nodes.Count > 0) && !_busy.IsBusy);
@@ -57,10 +61,18 @@ public sealed class PoEditorViewModel : ObservableObject
     /// <summary>Zmiana drzewa (zapis, odświeżenie kontekstu słowników).</summary>
     public event Action? Changed;
 
+    /// <summary>Nowy węzeł – edycja nazwy w tabeli (widok rozpoczyna edycję komórki).</summary>
+    public event Action<PoRowViewModel>? EditRequested;
+
+    /// <summary>Widok zatwierdza edycję komórki – przed przebudową wierszy i przed odczytem drzewa (zapis, kolejny krok).</summary>
+    public event Action? CommitRequested;
+
+    /// <summary>Zatwierdza edycję komórki w toku (np. przed zapisem nakładki).</summary>
+    public void CommitEdits() => CommitRequested?.Invoke();
+
     public PoTree Tree => _tree;
 
     /// <summary>Strona P1S z mapowania dla elementów nakładki (ustawia ekran nadrzędny; domyślnie – brak).</summary>
-    public Func<PoTree, IReadOnlyDictionary<long, MappingResult>> ResolveMapping { get; set; } = _ => new Dictionary<long, MappingResult>();
 
     /// <summary>Źródło mapowania (raport, korekty, PZLPROD) do pokazania nad tabelą.</summary>
     public string MappingInfo { get => _mappingInfo; set => SetProperty(ref _mappingInfo, value); }
@@ -78,22 +90,15 @@ public sealed class PoEditorViewModel : ObservableObject
         {
             if (!SetProperty(ref _selected, value))
                 return;
-            EditName = value?.Node.Name ?? "";
-            EditWbs = value is { IsVirtual: false } ? value.Node.WbsElement ?? "" : "";
-            EditLegacy = value is { IsVirtual: false } ? value.Node.LegacyWbs ?? "" : "";
             OnPropertyChanged(nameof(SelectionText));
         }
     }
 
-    public string SelectionText => _selected is null
+    public string SelectionText => _selectedRows.Count > 1
+        ? $"Zaznaczono {_selectedRows.Count} – prawy przycisk myszy: „Przenieś do” albo „Grupuj w nowy węzeł”."
+        : _selected is null
         ? "Nic nie zaznaczono – nowe węzły trafią do korzenia."
         : $"Zaznaczony: {_selected.Name}{(_selected.IsVirtual ? " (węzeł wirtualny)" : $" ({_selected.WbsElement})")} – nowe węzły trafią pod niego.";
-
-    public string EditName { get => _editName; set => SetProperty(ref _editName, value); }
-
-    public string EditWbs { get => _editWbs; set => SetProperty(ref _editWbs, value); }
-
-    public string EditLegacy { get => _editLegacy; set => SetProperty(ref _editLegacy, value); }
 
     public string Status { get => _status; private set => SetProperty(ref _status, value); }
 
@@ -110,9 +115,58 @@ public sealed class PoEditorViewModel : ObservableObject
     public ICommand ImportExcel { get; }
     public ICommand AddVirtual { get; }
     public ICommand AddElement { get; }
-    public ICommand ApplyEdit { get; }
     public ICommand Up { get; }
     public ICommand Down { get; }
+    public ICommand Top { get; }
+    public ICommand Bottom { get; }
+    public ICommand GroupSelected { get; }
+    public ICommand CollapseAll { get; }
+    public ICommand ExpandAll { get; }
+
+    /// <summary>Wiersze zaznaczone w tabeli (Ctrl / Shift – kilka); przenoszenie „Przenieś do” i grupowanie.</summary>
+    public IReadOnlyList<PoRowViewModel> SelectedRows
+    {
+        get => _selectedRows;
+        set { _selectedRows = value; OnPropertyChanged(nameof(SelectionText)); }
+    }
+
+    /// <summary>Klucze zaznaczonych wierszy (bez zaznaczenia wielu – wiersz wybrany).</summary>
+    public IReadOnlyList<long> SelectedKeys =>
+        _selectedRows.Count > 0 ? _selectedRows.Select(r => r.Key).ToList() : _selected is null ? [] : [_selected.Key];
+
+    /// <summary>
+    /// Cele „Przenieś do”: najwyższy poziom (null) i węzły wirtualne (z wcięciem), pod które można przenieść
+    /// wszystkie zaznaczone wiersze.
+    /// </summary>
+    public IReadOnlyList<(long? Key, string Label)> MoveTargets()
+    {
+        var keys = SelectedKeys;
+        var targets = new List<(long?, string)> { (null, "Najwyższy poziom") };
+        targets.AddRange(_tree.Flatten()
+            .Where(x => x.Node.IsVirtual && keys.All(k => _tree.CanMove(k, x.Node.Key)))
+            .Select(x => ((long?)x.Node.Key, new string(' ', x.Depth * 4) + x.Node.Name)));
+        return targets;
+    }
+
+    /// <summary>„Przenieś do”: zaznaczone wiersze (z poddrzewami) na koniec dzieci węzła (null – najwyższy poziom).</summary>
+    public void MoveSelectedTo(long? parentKey)
+    {
+        if (_busy.IsBusy)
+            return;
+        var keys = SelectedKeys;
+        var target = parentKey is { } k ? _tree.Find(k)?.Name : "najwyższy poziom";
+        var moved = 0;
+        Change(() => moved = _tree.MoveAll(keys, parentKey), null);
+        Status = moved == 0 ? $"Nic nie przeniesiono – zaznaczone są już w „{target}”." : $"Przeniesiono {moved} do „{target}”.";
+    }
+
+    /// <summary>Zwinięcie / rozwinięcie dzieci węzła.</summary>
+    public void Toggle(PoRowViewModel row)
+    {
+        if (!_collapsed.Remove(row.Key))
+            _collapsed.Add(row.Key);
+        Rebuild(_selected?.Key);
+    }
     public ICommand Outdent { get; }
     public ICommand Remove { get; }
     public ICommand Clear { get; }
@@ -175,29 +229,37 @@ public sealed class PoEditorViewModel : ObservableObject
         }
     }
 
-    private void DoApplyEdit()
+    /// <summary>Nowy węzeł wirtualny w miejscu pierwszego zaznaczonego, z zaznaczonymi jako dziećmi; zaznaczony – do nadania nazwy.</summary>
+    private void DoGroup()
     {
-        var node = _selected!.Node;
-        if (EditName.Trim().Length == 0)
-        {
-            Status = "Podaj nazwę węzła.";
+        var keys = SelectedKeys;
+        PoNode? group = null;
+        Change(() => group = _tree.Group(keys, "Nowy węzeł"), null);
+        if (group is null)
             return;
-        }
-        Change(() =>
-        {
-            node.Name = EditName.Trim();
-            if (!node.IsVirtual)
-            {
-                node.WbsElement = EditWbs.Trim().Length > 0 ? EditWbs.Trim() : null;
-                node.LegacyWbs = EditLegacy.Trim().Length > 0 ? EditLegacy.Trim() : null;
-            }
-        }, "Zmieniono węzeł.");
+        Rebuild(group.Key);
+        Status = $"Zgrupowano {_tree.Children(group.Key).Count} w nowym węźle – wpisz nazwę (Enter zatwierdza).";
+        if (_selected is { } row)
+            EditRequested?.Invoke(row);
     }
 
     private void AddNode(PoNode node, string status)
     {
         IsDirty = true;
+        for (var parent = node.ParentKey; parent is { } key; parent = _tree.Find(key)?.ParentKey)
+            _collapsed.Remove(key);   // nowy węzeł widoczny – przodkowie rozwinięci
         Rebuild(node.Key);
+        Status = status;
+        Changed?.Invoke();
+        if (_selected is { } row)
+            EditRequested?.Invoke(row);
+    }
+
+    /// <summary>Zmiana w komórce tabeli (nazwa, Element CES, P1S) – bez przebudowy wierszy (edycja w toku).</summary>
+    private void OnRowEdited(string status)
+    {
+        IsDirty = true;
+        Validate();
         Status = status;
         Changed?.Invoke();
     }
@@ -215,10 +277,20 @@ public sealed class PoEditorViewModel : ObservableObject
 
     private void Rebuild(long? selectKey)
     {
+        CommitEdits();
         Rows.Clear();
-        var mapping = ResolveMapping(_tree);
+        _collapsed.RemoveWhere(k => _tree.Find(k) is null);
+        var children = _tree.Nodes.Where(n => n.ParentKey is not null).GroupBy(n => n.ParentKey!.Value).ToDictionary(g => g.Key, g => g.Count());
+        var hiddenBelow = int.MaxValue;   // głębokość zwiniętego przodka – głębsze wiersze ukryte
         foreach (var (node, depth) in _tree.Flatten())
-            Rows.Add(new PoRowViewModel(node, depth, mapping.GetValueOrDefault(node.Key)));
+        {
+            if (depth > hiddenBelow)
+                continue;
+            var collapsed = _collapsed.Contains(node.Key) && children.ContainsKey(node.Key);
+            hiddenBelow = collapsed ? depth : int.MaxValue;
+            Rows.Add(new PoRowViewModel(node, depth, children.GetValueOrDefault(node.Key), collapsed, OnRowEdited));
+        }
+        _selectedRows = [];
         Selected = Rows.FirstOrDefault(r => r.Key == selectKey);
         Validate();
         OnPropertyChanged(nameof(Summary));

@@ -4,7 +4,6 @@ using PzlEv.Modules.Diagnostics;
 using PzlEv.Modules.Evm;
 using PzlEv.Modules.Export;
 using PzlEv.Modules.Import;
-using PzlEv.Modules.Mapping;
 using PzlEv.Modules.MasterData;
 using PzlEv.Modules.Progress;
 using PzlEv.Modules.Projects;
@@ -30,7 +29,6 @@ public static class ModuleCatalog
         [
             new DashboardModule(),
             new ImportModule(),
-            new MappingModule(),
             new ProjectsModule(),
             new RunsModule(),
             new MasterDataModule(),

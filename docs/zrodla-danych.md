@@ -4,7 +4,7 @@ Zakres: źródła danych PZL-EV i ich znaczenie (kontrakt danych) – definicja 
 zaawansowanie z produkcji, pliki CAM, reguły walidacji źródeł.
 
 Powiązane: `docs/pipeline-fazy.md` (G1 – przebieg importu, P5–P6 – pobranie zaawansowania),
-`docs/model-danych.md` (warstwy i wersjonowanie), `docs/mapowanie-ces-p1s.md` (raport mapowań SAP↔CES).
+`docs/model-danych.md` (warstwy i wersjonowanie), `docs/performance-objectives.md` (strona P1S projektu).
 
 ---
 
@@ -13,9 +13,8 @@ Powiązane: `docs/pipeline-fazy.md` (G1 – przebieg importu, P5–P6 – pobran
 | Źródło | System | Dane | Pozyskanie |
 |---|---|---|---|
 | Raporty CES (CJI3, ZRD_KKAJ, Net Inv) | SAP CES przez RABIT | koszty rzeczywiste, zobowiązania | import plików z lokalizacji RABIT na SharePoint przez WebDAV (rozdz. 3) |
-| Struktura P1S i kategoryzacja | `PZLPROD.LOG.WBS`, `LOG.WBS_DIC` (`splmcd03`) | drzewo elementów P1S, kategorie | odczyt bezpośredni kontem AD (`pzl-ev.json`, sekcja `PzlProd`), źródło przyrostowe (rozdz. 5) |
-| Raport mapowań SAP↔CES | eksport z `PZLPROD` do Excela | przypisania elementów CES do P1S | wczytanie pliku do słownika globalnego „Raport mapowań CES ↔ P1S” na ekranie Słowniki (`docs/mapowanie-ces-p1s.md`, rozdz. 2) |
-| Pracownicy (słownik Osoby) | `PZLHRPROD.HR.ORG` | USRID, imię, nazwisko, e-mail, MPK, dział, stanowisko, pion | odczyt bezpośredni kontem AD (`pzl-ev.json`, sekcja `PzlHrProd`) na żądanie – „Wczytaj z HR” na ekranie Słowniki (`docs/slowniki.md`, rozdz. 2) |
+| Struktura P1S i kategoryzacja | `PZLPROD.LOG.WBS`, `LOG.WBS_DIC` (`splmcd03`) | drzewo elementów P1S, kategorie | odczyt bezpośredni kontem AD (`pzl-ev.json`, sekcja `PzlProd`) na żywo – struktura projektu i „Struktura P1S (PZLPROD)” na ekranie Słowniki (rozdz. 5) |
+| Pracownicy (słownik Osoby) | `PZLHRPROD.HR.ORG` | USRID (numer znaczka), PERNR, imię, nazwisko, e-mail, MPK, dział, stanowisko, pion | odczyt bezpośredni kontem AD (`pzl-ev.json`, sekcja `PzlHrProd`) na żądanie – „Dodaj z HR” na ekranie Słowniki: wyszukiwanie osób i dodanie wybranych do słownika (`docs/slowniki.md`, rozdz. 2) |
 | Zaawansowanie z produkcji | `PZLPROD.LOG.vAHDD` (O10) | zaawansowanie godzin i materiałów | odczyt w etapie P5 (rozdz. 6) |
 | Pliki CAM | Excel na dysku sieciowym | zaawansowanie od CAM w przebiegu zamykającym | import w etapie P6 (rozdz. 7) |
 | Cobra | Sikorsky (projekty SAC) | budżet i harmonogram SAC | do ustalenia (O28) |
@@ -53,7 +52,7 @@ i utrzymywaną na ekranie Administracja (`docs/funkcjonalnosc.md`, F08).
   Układ kolumn, typy i pola wymagane trzyma **parser** – definicja tylko go wskazuje, więc kilka prefiksów o tym samym
   układzie korzysta z jednego parsera (np. `ACTUALS_*` – rozdz. 4); ziarno, klucz i znaczenie okresu nie są polami
   definicji. Zapis tworzy nową wersję definicji. Definicję można usunąć: bieżąca wersja zostaje zamknięta (historia
-  i zaimportowane dane zostają), pliki o tym prefiksie są odtąd nierozpoznane, a kod i prefiks można użyć ponownie.
+  i zaimportowane dane zostają), pliki o tym prefiksie są nierozpoznane, a kod i prefiks można użyć ponownie.
 - **Parser** (`meta.Parser`, Administracja → Parsery, z historią) to pola danych kanonicznych: kolumna w pliku (pusta – pole nie jest czytane z pliku), nazwa kolumny w bazie, typ (tekst z długością,
   kwota / liczba, liczba całkowita, data), opcjonalnie dopełnianie zerami tekstu z cyfr i znacznik **wymagane**
   (wartość w każdym wierszu). „Kolumny z pliku…” wczytuje wiersz nagłówków z pliku źródła tak samo jak import:
@@ -70,9 +69,8 @@ i utrzymywaną na ekranie Administracja (`docs/funkcjonalnosc.md`, F08).
   się pola parsera). Plik, który walidacji nie przejdzie, ma decyzję „błąd” i nie zostawia danych w bazie; przy
   kolejnym imporcie jest pobierany ponownie (pomijane są tylko pliki, których wersja jest w bazie). Źródło bez
   parsera – zapisywana jest tylko wersja pliku (SHA-256, kolumny, liczba wierszy), bez danych.
-- **Sam plik nie jest przechowywany** (decyzja 2026-10-03, migracja 008): każdy raport RABIT to pełne dane
-  (ten sam układ, dane narastająco), a po udanym imporcie są one w `CAN_Row` – kopia pliku w bazie nic nie wnosi,
-  a wydłużała zapis.
+- **Sam plik nie jest przechowywany** (migracja 008): każdy raport RABIT to pełne dane
+  (ten sam układ, dane narastająco), a po udanym imporcie są one w `CAN_Row`.
 - **Import dużych plików** – cztery etapy, widoczne w statusie pliku na ekranie Import (z postępem i czasem etapu):
   1. *pobieranie na dysk* – plik trafia do folderu tymczasowego na dysku lokalnym użytkownika (`%TEMP%\PZL-EV\import`,
      usuwany po pliku), SHA-256 liczony w trakcie; dalsze odczyty idą z dysku, nie z sieci. SharePoint: najpierw
@@ -82,14 +80,22 @@ i utrzymywaną na ekranie Administracja (`docs/funkcjonalnosc.md`, F08).
      import widziałby je ponownie jako nowe pliki);
   2. *sprawdzanie pliku* – duplikat (ten sam SHA-256), nagłówek, kolumny parsera;
   3. *odczyt i zapis wierszy* – jeden przebieg pliku (CSV albo Excel – odczyt strumieniowy, wiersz po wierszu):
-     wiersze są parsowane w osobnym wątku i jednocześnie zapisywane wsadowo do `CAN_Row` w jednej transakcji. Błąd
-     wartości, puste pole wymagane albo niezgodne sumy kwot (z kolumn pliku i z wartości pól) wycofują zapis;
-  4. *kontrola w bazie* – liczba wierszy i sumy kwot po zapisie = odczytane z pliku (niezgodność wycofuje cały zapis),
-     zatwierdzenie; plik lokalny jest potem usuwany.
+     wpis pliku w `META_SourceFile` ze stanem danych „w toku” (osobna, krótka transakcja), wiersze parsowane
+     w osobnym wątku i zapisywane strumieniowo do `CAN_Row` paczkami po 102 400 wierszy, każda paczka zatwierdzana
+     osobno. Błąd wartości, puste pole wymagane albo niezgodne sumy kwot (z kolumn pliku
+     i z wartości pól) – wiersze pliku i jego wpis są usuwane;
+  4. *kontrola w bazie* – liczba wierszy i sumy kwot po zapisie = odczytane z pliku (niezgodność – wiersze i wpis
+     usuwane), stan danych „utworzone”; plik lokalny jest potem usuwany.
 
-  Liczby są zaokrąglane do 8 miejsc po przecinku. „Przerwij” działa także w trakcie pliku – jego zapis jest wycofany.
-  Gdy SQL Server wycofa zapis pliku jako ofiarę zakleszczenia z inną sesją (błąd 1205), import sam go powtarza (do
-  3 prób, plik czytany ponownie z dysku lokalnego; status: „ponowienie 2/3 po zakleszczeniu w bazie”, wpis w logu).
+  Odczyty danych kanonicznych (procedury i funkcje `CAN_*`, `REP_*`) biorą tylko pliki „utworzone”, więc plik w trakcie
+  zapisu jest dla nich niewidoczny, a odczyt czeka najwyżej na jedną paczkę (jej odczyt z pliku i zapis – ok. 2–3 s),
+  nie na cały plik. Różne pliki
+  importują się równolegle (indeks kolumnowy – każda sesja pisze do własnych grup wierszy); ten sam plik w dwóch
+  importach naraz chroni blokada pliku i unikalny SHA-256 (druga sesja – „pominięty” albo „duplikat”).
+  Liczby są zaokrąglane do 8 miejsc po przecinku. „Przerwij” działa także w trakcie pliku – jego wiersze i wpis są usuwane.
+  Gdy SQL Server wycofa zapis paczki jako ofiarę zakleszczenia z inną sesją (błąd 1205), import usuwa wiersze pliku
+  i powtarza zapis (do 3 prób, plik czytany ponownie z dysku lokalnego; status: „ponowienie 2/3 po zakleszczeniu
+  w bazie”, wpis w logu).
   Drugą sesję zakleszczenia pokazuje graf z sesji `system_health` (uprawnienie VIEW SERVER STATE):
 
   ```sql
@@ -133,17 +139,20 @@ i utrzymywaną na ekranie Administracja (`docs/funkcjonalnosc.md`, F08).
   strefa Internet – usługa WebClient nie wysyła logowania Windows, dopóki adres nie jest w strefie Intranet lokalny
   albo w `AuthForwardServerList` (`HKLM\SYSTEM\CurrentControlSet\Services\WebClient\Parameters`); za proxy – adres
   musi być na liście wyjątków.
-- **Ustalenia testu dostępu (stanowisko analityka, 2026-10-02):** SharePoint RABIT jest za bramą logowania F5 (BIG-IP).
-  Działa tylko WebDAV przez usługę WebClient i dopiero po zalogowaniu do bramy (wcześniej: przez Office – „Eksport do
-  Excela” albo otwarcie pliku w Excelu); po wygaśnięciu sesji logowanie trzeba powtórzyć. Drogi HTTP z aplikacji
-  (`owssvr.dll`, pobranie pliku, PROPFIND, REST, `Lists.asmx`) kończą się na stronie logowania bramy albo HTTP 403;
-  provider OLEDB listy niedostępny dla procesu 64-bit. Test dostępu (drogi A–I) służył tylko diagnozie i został
-  usunięty z aplikacji.
+- **Brama logowania F5:** SharePoint RABIT jest za bramą logowania F5 (BIG-IP). Dostęp wymaga sesji bramy
+  (logowanie w aplikacji – niżej – albo przez Office: „Eksport do Excela”, otwarcie pliku w Excelu); po wygaśnięciu
+  sesji logowanie trzeba powtórzyć. Zapytania HTTP bez sesji bramy (`owssvr.dll`, pobranie pliku, PROPFIND, REST,
+  `Lists.asmx`) kończą się na stronie logowania bramy albo HTTP 403; provider OLEDB listy jest niedostępny dla procesu
+  64-bit.
 - **Logowanie do bramy w aplikacji** – część **Importuj** i **Sprawdź źródła** (ekran Import, zawsze przed odczytem
   lokalizacji SharePoint): jak Office – protokół MS-OFBA (zapytanie z `X-FORMS_BASED_AUTH_ACCEPTED: t`, odpowiedź 403
   z adresem strony logowania i adresem powrotu); okno logowania na silniku przeglądarki Windows, który dzieli trwałe
-  ciasteczka z usługą WebClient – przy ważnej sesji zamyka się samo. Bez MS-OFBA okno otwiera stronę folderu.
-  Czy sesja z okna aplikacji wystarcza usłudze WebClient – do potwierdzenia na stanowisku.
+  ciasteczka WinINet procesu aplikacji – przy ważnej sesji zamyka się samo. Bez MS-OFBA okno otwiera stronę folderu.
+- **Lista plików SharePoint** – przez HTTPS z procesu aplikacji (WebDAV `PROPFIND`, `Depth: 1`) z kontem Windows
+  i ciasteczkami sesji bramy z okna logowania, tak jak pobieranie pliku (`SharePointListing`). Usługa WebClient
+  (ścieżka UNC) to osobny proces systemowy i widzi tylko trwałe ciasteczka – sesyjne ciasteczko bramy zapisuje trwale
+  dopiero Office (otwarcie pliku w Excelu); dlatego ścieżka UNC jest tylko zapasem, gdy lista przez HTTPS się nie uda
+  (powód w logu). **Sprawdź źródła** pokazuje przy lokalizacji, którą drogą odczytano listę (HTTPS albo WebDAV).
 - .NET zwraca na ścieżkach WebDAV nazwy plików z końcowym znakiem `\0` oraz wpisy „.” i „..”
   (dotnet/runtime#62429) – import czyści nazwy (`FolderEntries`).
 - Import czyta tylko główny folder lokalizacji (bez podfolderów). Gdy folder
@@ -157,7 +166,7 @@ i utrzymywaną na ekranie Administracja (`docs/funkcjonalnosc.md`, F08).
 
 Pliki z prefiksem `ACTUALS_` to zrzuty kosztów rzeczywistych pobierane z SAP CES przez RABIT, w formacie Excel
 (`.xlsx`). Każdy taki prefiks (np. `ACTUALS_PAF`, `ACTUALS_CES`) to **osobne źródło** (rozdz. 2); wszystkie mają
-wspólny układ kolumn (od 2026-10):
+wspólny układ kolumn:
 
 `Project Definition | WBS Element | Cost Element | Cost element name | CO object name | Transaction Currency |
 Value TranCurr | Object Currency | Value in Obj. Crcy | Report currency | Val.in rep.cur. | Total Quantity |
@@ -170,7 +179,7 @@ PLN | 1 254,51 | USD | 261,54 | 0,000 | … | 8000123401 | 10 | 4500012301 | 202
 | Kolumna | Znaczenie |
 |---|---|
 | `Project Definition` | projekt CES (np. `4D03GZ`) |
-| `WBS Element` | element WBS CES (np. `4D03GZ000001`) – klucz mapowania CES ↔ P1S |
+| `WBS Element` | element WBS CES (np. `4D03GZ000001`) – klucz powiązania z elementem nakładki Performance Objectives (`WBS element`) |
 | `Cost Element` | numer elementu kosztowego – klucz słownika Cost Category (`docs/slowniki.md`, rozdz. 6) |
 | `CO object name` | opis obiektu (wyszukiwanie) |
 | `Value TranCurr`, `Value in Obj. Crcy`, `Val.in rep.cur.` | kwota w walucie transakcji, obiektu (PLN) i raportowej (USD) |
@@ -182,7 +191,7 @@ PLN | 1 254,51 | USD | 261,54 | 0,000 | … | 8000123401 | 10 | 4500012301 | 202
 - Dane kanoniczne – parser `ACTUALS` (migracja 004; dane w `CAN_Row` – migracja 007): pola wszystkich kolumn powyżej; numer
   elementu kosztowego złożony z cyfr uzupełniany zerami do 10 znaków; minus na końcu liczby (zapis SAP, np. `48,00-`) oznacza wartość ujemną.
   Pola wymagane wskazuje parser (`WBS Element`, `Fiscal Year`, `Period`). Pola `Cost element descr.`,
-  `Partner-CCtr`, `Source object name` (wcześniejszy układ) zostają w parserze ze swoimi slotami, ale nie są czytane z pliku. Układ
+  `Partner-CCtr`, `Source object name` są w parserze ze swoimi slotami, ale nie są czytane z pliku (bez kolumny w pliku). Układ
   raportu może się zmieniać – zmienia się wtedy pola parsera ACTUALS (Administracja → Parsery), nie kod ani
   definicje. Klucz wiersza nie jest ustalony (O27) – bez kontroli duplikatów. Kontrola przepływu przy imporcie:
   liczba wierszy i sumy wszystkich pól liczbowych (kwot) parsera w danych kanonicznych zgodne z kolumnami pliku –
@@ -198,7 +207,7 @@ Wszystkie elementy WBS P1S (nadrzędne i szczegółowe), czytane bez zmian.
 
 | Kolumna | Użycie |
 |---|---|
-| `PSPNR` | identyfikator elementu; łączenie z raportem mapowań (`PSPNR` = `pspnr_sap`) |
+| `PSPNR` | identyfikator elementu; łączenie z danymi produkcji (`vAHDD`, `vAPD` – rozdz. 6) |
 | `PARENT` | `PSPNR` elementu nadrzędnego – hierarchia |
 | `STUFE` | poziom w hierarchii (1 = korzeń `PROJORG`) |
 | `WBS_ELEMENT` | kod WBS P1S (np. `MC-00.001.0001.001`) |
@@ -223,8 +232,9 @@ Słownik grupujący projekty P1S.
 
 ### 5.3 Drzewo P1S
 
-Jedno drzewo P1S jest używane przy budowie nakładki Performance Objectives (`docs/performance-objectives.md`) i w widoku mapowania
-(`docs/mapowanie-ces-p1s.md`, rozdz. 11):
+Drzewo P1S jest pokazywane na ekranie Słowniki – przycisk „Struktura P1S (PZLPROD)” (tylko do odczytu, z wyszukiwarką;
+`P1sTreeBuilder`). Nakładka Performance Objectives korzysta z hierarchii `LOG.WBS` (`PARENT`) pod `Legacy WBS` swoich
+węzłów (`docs/performance-objectives.md`, rozdz. 2):
 
 ```text
 Z_KAT_ZBIORCZA
@@ -250,6 +260,26 @@ Z_KAT_ZBIORCZA
   `_PSPNR` i `_VORNR` (ta ostatnia wywołuje `uspUpdateZMTO`). Status odświeżenia i błędy zapisują
   `StatusAktualizacjiRaportow`, `ReportErrorInfo` i `TableList` – na tej podstawie etap P0 sprawdza świeżość
   danych produkcyjnych.
+- **Odczyt na żywo w strukturze projektu** – wzorowany na raporcie produkcyjnym S70MR z serwera produkcyjnego, z filtrem
+  po zakresie P1S projektu (S70MR filtruje po programie – `Z_OPIS`, `SERNR_LO`). Logika jest rozdzielona na trzy warstwy:
+  - **zapytanie** – plik `sql/pzlprod/produkcja.sql` (wbudowany w aplikację, wykonuje `SqlPzlProdSource.Production`);
+    nazwy widoków `$(vAHDD)`, `$(vAHDD_PL_CPI)`, `$(vAPD)` z konfiguracji; dane wejściowe w tabelach tymczasowych sesji
+    (bez praw zapisu w PZLPROD): `#pspnr` (zakres projektu), `#rule` (wydzielenia), `#djk`, `#delivered`;
+  - **parametry** – słowniki globalne „Wskaźniki DJK” i „Parametry produkcji” (`docs/slowniki.md`, rozdz. 2);
+  - **wydzielenia** (np. Paint) – węzły wirtualne nakładki z kodem P1S `ELEMENT_P1S.NAZWA.CPLGR`, reguła: CPLGR operacji
+    zaczyna się od CPLGR kodu (`docs/performance-objectives.md`, rozdz. 4.2).
+- Ziarno `vAHDD`: operacja (`VORNR`) zlecenia (`AUFNR`) pod elementem (`PSPNR`, `WBS_ELEMENT`); `CPLGR` – grupa stanowisk
+  (zwykle = `IPT`), `ARBPL` – stanowisko, `SWBS` – podział (np. Cabin, Hangar), `VERWE` – MFG / QUAL (operacje kontroli DJK).
+- Wynik po elemencie (PSPNR, a operacje zgodne z regułą wydzielenia – po wydzieleniu, odjęte od elementu):
+  - AC = Σ `CATS`; BAC = Σ `TECH` ÷ produktywność IPT + DJK; EV = Σ `TECH_PON` ÷ produktywność IPT + DJK;
+    produktywność IPT = Σ `CzTechPon` ÷ Σ `CzRzecz` z `LOG.vAHDD_PL_CPI` w oknie z „Parametry produkcji” (brak – 1);
+    DJK = udział z „Wskaźniki DJK” (najdłuższy prefiks `IPT`) × godziny TECH / TECH_PON – idzie za stanowiskiem (DJK od W20
+    Paint – w Paint); operacje kontroli (`CPLGR` DJK, `VERWE` QUAL) – własne godziny w swoim elemencie;
+  - Actual Start = najwcześniejszy `GSTRI` (rzeczywisty start zlecenia); Actual Finish = najpóźniejszy `LTRMI`, gdy wszystkie
+    operacje elementu mają `STAT` = DONE, inaczej puste; wydzielenie – `DATA_REAL` jego operacji;
+  - materiały `LOG.vAPD` (po PSPNR, na elemencie – nie na wydzieleniu): Σ `NETWR_USD` [÷ (1 + `Z_CLO`)] statusów dostarczonych, USD.
+- Raport S70MR liczy jednocześnie operacje kontroli DJK i DJK procentowe od godzin W2–W6 – przeniesione bez zmian, do
+  potwierdzenia z autorem raportu (czy kontrola nie jest liczona podwójnie). TEMPO (`extCES.TEMPO1464`) – poza strukturą.
 
 ### 6.1 Istniejące obiekty na `splmcd03`
 
@@ -305,7 +335,8 @@ Kontrole danych względem okresu przebiegu i słowników – `docs/pipeline-fazy
 | # | Kwestia |
 |---|---|
 | O7 | Czy RABIT może eksportować CSV/TXT? (CSV preferowany) |
-| O10 | Źródło zaawansowania z produkcji (`vAHDD`) – potwierdzenie i definicja widoku |
+| O10 | Źródło zaawansowania z produkcji (`vAHDD`) – potwierdzenie i definicja widoku (kolumny z próbki danych użyte w `sql/pzlprod/produkcja.sql`) |
+| O49 | DJK w raporcie produkcyjnym: operacje kontroli (`CPLGR` DJK) i DJK procentowe od godzin W2–W6 liczone jednocześnie – potwierdzić, że to nie podwójne liczenie |
 | O27 | Zawartość pozostałych raportów RABIT (zobowiązania, „PZL roll”, „hedge”, „workaround”), ich prefiksy i definicje źródeł; układ `ACTUALS_*` – rozdz. 4 |
 | O28 | Które dane pochodzą z Cobra i w jakiej formie |
-| O38 | Wycofanie pliku, którego RABIT już nie generuje (dziś jego ostatnia wersja pozostaje najnowsza) |
+| O38 | Wycofanie pliku, którego RABIT nie generuje (jego ostatnia wersja pozostaje najnowsza) |

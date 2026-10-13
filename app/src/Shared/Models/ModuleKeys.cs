@@ -8,7 +8,6 @@ public static class ModuleKeys
 {
     public const string Dashboard = "dashboard";
     public const string Import = "import";
-    public const string Mapping = "mapping";
     public const string MasterData = "master-data";
     public const string Projects = "projects";
     public const string Runs = "runs";

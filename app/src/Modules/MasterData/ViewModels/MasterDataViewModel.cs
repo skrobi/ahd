@@ -2,6 +2,7 @@ using System.IO;
 using System.Collections.ObjectModel;
 using System.Windows.Input;
 using PzlEv.Shared.Models.Dictionaries;
+using PzlEv.Shared.Models.Hr;
 using PzlEv.Shared.Utils.Data;
 using PzlEv.Shared.Utils.Dictionaries;
 using PzlEv.Shared.Models;
@@ -26,16 +27,26 @@ public sealed class MasterDataViewModel : ObservableObject
     private ImportPreview? _preview;
     private readonly IHrSource? _hr;
     private readonly ICostElementSource? _costElements;
+    private bool _showP1s;
+    private IReadOnlyList<HrPerson>? _hrPersons;
 
     /// <param name="hr">Pracownicy z PZLHRPROD (słownik Osoby); null – brak sekcji PzlHrProd w pzl-ev.json.</param>
     /// <param name="costElements">Cost elementy ostatniego importu ACTUALS – „Uzupełnij z ACTUALS” w Cost Category.</param>
-    public MasterDataViewModel(DictionaryService service, IFileDialogs dialogs, IHrSource? hr = null, ICostElementSource? costElements = null)
+    /// <param name="pzlProd">Struktura P1S (LOG.WBS) do podglądu; null – brak sekcji PzlProd w pzl-ev.json.</param>
+    public MasterDataViewModel(DictionaryService service, IFileDialogs dialogs, IHrSource? hr = null, ICostElementSource? costElements = null,
+        IPzlProdSource? pzlProd = null)
     {
+        P1s = new P1sStructureViewModel(pzlProd);
+        OpenP1s = new RelayCommand(_ =>
+        {
+            ShowP1s = true;
+            P1s.EnsureLoaded();
+        });
         _service = service;
         _dialogs = dialogs;
         _hr = hr;
         _costElements = costElements;
-        Dictionaries = GlobalDictionaries.All.Select(spec => new DictionaryItem(spec, 0)).ToList();
+        Dictionaries = GlobalDictionaries.All.Where(spec => !spec.Hidden).Select(spec => new DictionaryItem(spec, 0)).ToList();
         Table.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(DictionaryTableViewModel.SelectedRow))
@@ -52,6 +63,7 @@ public sealed class MasterDataViewModel : ObservableObject
         ApplyImport = new AsyncRelayCommand(DoApplyImport, () => _preview is { HasErrors: false, HasChanges: true } && !Busy.IsBusy);
         ImportFromHr = new AsyncRelayCommand(DoImportFromHr, () => IsPersons && _preview is null && !Busy.IsBusy);
         FillFromActuals = new AsyncRelayCommand(DoFillFromActuals, () => IsCostCategory && _costElements is not null && _preview is null && !Busy.IsBusy);
+        EditFormulas = new AsyncRelayCommand(DoEditFormulas, () => IsCasBurden && _preview is null && !Busy.IsBusy);
         CancelImport = new RelayCommand(_ => ClosePreview("Wczytanie anulowane – słownik bez zmian."), _ => _preview is not null && !Busy.IsBusy);
 
         SelectedDictionary = Dictionaries.FirstOrDefault();
@@ -93,6 +105,8 @@ public sealed class MasterDataViewModel : ObservableObject
         get => _selectedDictionary;
         set
         {
+            if (value is not null)
+                ShowP1s = false;
             if (value is null || ReferenceEquals(value, _selectedDictionary))
                 return;
             Table.CommitEdits();
@@ -107,10 +121,28 @@ public sealed class MasterDataViewModel : ObservableObject
             OnPropertyChanged(nameof(Spec));
             OnPropertyChanged(nameof(IsPersons));
             OnPropertyChanged(nameof(IsCostCategory));
+            OnPropertyChanged(nameof(IsCasBurden));
             ClosePreview(null);
             _ = Reload("");
         }
     }
+
+    /// <summary>Struktura P1S z PZLPROD – podgląd tylko do odczytu zamiast tabeli słownika.</summary>
+    public P1sStructureViewModel P1s { get; }
+
+    public ICommand OpenP1s { get; }
+
+    public bool ShowP1s
+    {
+        get => _showP1s;
+        private set
+        {
+            if (SetProperty(ref _showP1s, value))
+                OnPropertyChanged(nameof(ShowDictionary));
+        }
+    }
+
+    public bool ShowDictionary => !ShowP1s;
 
     public string Status
     {
@@ -136,11 +168,18 @@ public sealed class MasterDataViewModel : ObservableObject
     public ICommand CancelImport { get; }
     public ICommand ImportFromHr { get; }
     public ICommand FillFromActuals { get; }
+    public ICommand EditFormulas { get; }
+
+    /// <summary>Wybrany słownik narzutów CAS (pule, grupy, wskaźniki) – „Formuły narzutów”.</summary>
+    public bool IsCasBurden => Spec?.Code is GlobalDictionaries.CasPools or GlobalDictionaries.CasBurdenGroups or GlobalDictionaries.CasBurdenRates;
+
+    /// <summary>Okno macierzy formuł narzutów CAS (true – zapisano). Ustawia moduł.</summary>
+    public Func<bool> EditCasFormulas { get; set; } = () => false;
 
     /// <summary>Wybrany słownik Cost Category – „Uzupełnij z ACTUALS”.</summary>
     public bool IsCostCategory => Spec?.Code == GlobalDictionaries.CostCategory;
 
-    /// <summary>Wybrany słownik Osoby – „Wczytaj z HR”.</summary>
+    /// <summary>Wybrany słownik Osoby – „Dodaj z HR”.</summary>
     public bool IsPersons => Spec?.Code == GlobalDictionaries.Persons;
 
     private async Task Reload(string status)
@@ -151,10 +190,10 @@ public sealed class MasterDataViewModel : ObservableObject
             var item = _selectedDictionary!;
             try
             {
-                var rows = await Busy.Run($"Wczytywanie słownika „{spec.Name}”…", () => _service.Load(spec));
+                var (rows, lookups) = await Busy.Run($"Wczytywanie słownika „{spec.Name}”…", () => (_service.Load(spec), _service.Lookups(spec)));
                 if (!ReferenceEquals(item, _selectedDictionary))
                     return;   // w międzyczasie wybrano inny słownik
-                Table.Load(spec, rows);
+                Table.Load(spec, rows.Select(r => (r, false)), lookups);
                 item.Count = rows.Count;
             }
             catch (Exception ex) when (ex is not OutOfMemoryException)
@@ -275,7 +314,29 @@ public sealed class MasterDataViewModel : ObservableObject
         });
     }
 
-    /// <summary>Słownik Osoby z PZLHRPROD (HR.ORG): podgląd różnic jak przy wczytaniu z Excela – zawartość zastępowana.</summary>
+    /// <summary>
+    /// „Formuły narzutów” (słowniki narzutów CAS): okno macierzy grupy × pule z edytorem formuły z klocków; zapis w oknie,
+    /// po zamknięciu tabela jest odświeżana (nazwy pul i grup – z tabel słowników, formuły wskazują je identyfikatorem).
+    /// </summary>
+    private async Task DoEditFormulas()
+    {
+        Table.CommitEdits();
+        if (HasPendingChanges)
+        {
+            Status = "Masz niezapisane zmiany – zapisz albo odrzuć je przed otwarciem formuł narzutów.";
+            return;
+        }
+        if (EditCasFormulas())
+            await Reload("Formuły narzutów CAS zapisane.");
+    }
+
+    /// <summary>Okno wyboru osób z HR (pracownicy, USRID już w słowniku) → wybrane; null – anulowano. Ustawia moduł.</summary>
+    public Func<IReadOnlyList<HrPerson>, IReadOnlySet<string>, IReadOnlyList<HrPerson>?> PickPersons { get; set; } = (_, _) => null;
+
+    /// <summary>
+    /// „Dodaj z HR” (słownik Osoby): okno szukania pracowników PZLHRPROD (HR.ORG), wybrane osoby trafiają do podglądu jak
+    /// przy wczytaniu z Excela – same nowe osoby, nic nie jest zmieniane ani usuwane.
+    /// </summary>
     private async Task DoImportFromHr()
     {
         if (_hr is null)
@@ -286,15 +347,24 @@ public sealed class MasterDataViewModel : ObservableObject
         Table.CommitEdits();
         if (HasPendingChanges)
         {
-            Status = "Masz niezapisane zmiany – zapisz albo odrzuć je przed wczytaniem z HR.";
+            Status = "Masz niezapisane zmiany – zapisz albo odrzuć je przed dodaniem osób z HR.";
             return;
         }
         var spec = Spec!;
         await Try(async () =>
         {
-            var preview = await Busy.Run("Wczytywanie pracowników z PZLHRPROD (HR.ORG)…", () =>
-                _service.PreviewRows(spec, GlobalDictionaries.PersonRows(_hr.Persons()), "PZLHRPROD HR.ORG"));
+            var (persons, current) = await Busy.Run("Wczytywanie pracowników z PZLHRPROD (HR.ORG)…", () =>
+                (_hrPersons ??= _hr.Persons(), _service.Load(spec)));
+            var existing = current.Select(r => r["USRID"]).OfType<string>().ToHashSet(StringComparer.OrdinalIgnoreCase);
+            if (PickPersons(persons, existing) is not { Count: > 0 } picked)
+            {
+                Status = "Nie wybrano osób do dodania.";
+                return;
+            }
+            var (rows, added) = GlobalDictionaries.PersonsWithAdded(current, picked);
+            var preview = await Busy.Run("Sprawdzanie osób do dodania…", () => _service.PreviewRows(spec, rows, "PZLHRPROD HR.ORG"));
             ShowPreview(preview, "Dane z HR");
+            Status = $"Nowe osoby z HR: {added} – sprawdź i zatwierdź wczytanie.";
         });
     }
 
@@ -333,7 +403,7 @@ public sealed class MasterDataViewModel : ObservableObject
         });
     }
 
-    /// <summary>Pierwsze linie zmian danego rodzaju – pełne wczytanie dużego słownika (raport mapowań) to tysiące wierszy.</summary>
+    /// <summary>Pierwsze linie zmian danego rodzaju – pełne wczytanie dużego słownika to tysiące wierszy.</summary>
     private void AddPreviewLines(string sign, IReadOnlyList<string> lines)
     {
         foreach (var line in lines.Take(PreviewLimit))
@@ -374,7 +444,9 @@ public sealed class MasterDataViewModel : ObservableObject
             for (var i = versions.Count - 1; i >= 0; i--)
             {
                 var v = versions[i];
-                var values = string.Join(" · ", spec.Columns.Select(c => $"{c.Name}: {ValueFormat.Display(c, v.Values.GetValueOrDefault(c.Name))}"));
+                var values = string.Join(" · ", spec.Columns.Select(c => $"{c.Name}: {(c.Lookup is not null && Table.Options(c) is { } options
+                    ? DictionaryCells.Display(v.Values.GetValueOrDefault(c.Name), options)
+                    : ValueFormat.Display(c, v.Values.GetValueOrDefault(c.Name)))}"));
                 var note = v.SupersededAt is null
                     ? "bieżąca"
                     : i == versions.Count - 1

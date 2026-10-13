@@ -61,5 +61,5 @@ public static class DictionaryCells
         return list.Count == 1 ? list[0] : null;   // dwie osoby o tym samym nazwisku – bez zgadywania
     }
 
-    private static string LookupName(string code) => GlobalDictionaries.All.FirstOrDefault(s => s.Code == code)?.Name ?? code;
+    private static string LookupName(string code) => GlobalDictionaries.All.FirstOrDefault(s => s.Code == code)?.Name ?? "projektu";
 }

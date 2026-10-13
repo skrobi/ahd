@@ -77,6 +77,42 @@ public sealed class ObjectivesTests
         Assert.Equal(1, e1.Level);
     }
 
+    /// <summary>Grupowanie wielu elementów najwyższego poziomu w węzły wirtualne (np. 100 elementów PSP → kilka węzłów).</summary>
+    [Fact]
+    public void Many_top_elements_are_grouped_moved_and_ordered()
+    {
+        var tree = new PoTree();
+        var tops = Enumerable.Range(1, 10).Select(i => tree.AddElement(null, $"E{i:00}", $"Element {i}", null)).ToList();
+        var child = tree.AddElement(tops[2].Key, "E03.1", "Element 3.1", null);
+
+        // Grupuj: nowy węzeł w miejscu pierwszego zaznaczonego, zaznaczone w kolejności drzewa; potomek zaznaczonego idzie z nim.
+        var group = tree.Group([tops[4].Key, tops[2].Key, child.Key], "Grupa A")!;
+        Assert.Null(group.ParentKey);
+        Assert.Equal(["E01", "E02", null, "E04", "E06"], tree.Children(null).Take(5).Select(n => n.WbsElement));
+        Assert.Equal(group.Key, tree.Children(null)[2].Key);
+        Assert.Equal(["E03", "E05"], tree.Children(group.Key).Select(n => n.WbsElement));
+        Assert.Equal(tops[2].Key, child.ParentKey);
+        Assert.Equal(3, child.Level);
+        Assert.Null(tree.Group([], "pusta"));
+
+        // Przenieś do: kilka naraz na koniec węzła; już tam będące – pominięte.
+        var b = tree.AddVirtual(null, "Grupa B");
+        Assert.Equal(3, tree.MoveAll([tops[9].Key, tops[0].Key, tops[1].Key], b.Key));
+        Assert.Equal(["E01", "E02", "E10"], tree.Children(b.Key).Select(n => n.WbsElement));
+        Assert.Equal(0, tree.MoveAll([tops[0].Key], b.Key));
+        Assert.Equal(1, tree.MoveAll([tops[0].Key], null));
+        Assert.Equal(["E01"], tree.Children(null).TakeLast(1).Select(n => n.WbsElement));
+
+        // Nowy węzeł ląduje na końcu – na początek / na koniec rodzeństwa.
+        Assert.Equal(b.Key, tree.Children(null)[^2].Key);
+        Assert.True(tree.ShiftToEdge(b.Key, first: true));
+        Assert.Equal(b.Key, tree.Children(null)[0].Key);
+        Assert.True(tree.ShiftToEdge(b.Key, first: false));
+        Assert.Equal(b.Key, tree.Children(null)[^1].Key);
+        Assert.Equal(Enumerable.Range(0, tree.Children(null).Count), tree.Children(null).Select(n => n.SortOrder));
+        Assert.False(tree.ShiftToEdge(-999, first: true));   // brak węzła
+    }
+
     [Fact]
     public void Validation_requires_element_and_rejects_element_of_other_project()
     {

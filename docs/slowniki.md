@@ -4,9 +4,8 @@ Zakres: słowniki globalne i słowniki projektu – zawartość, zależność od
 Excel i reguły walidacji. Słowniki zawierają wiedzę biznesową potrzebną do przekształcenia danych źródłowych
 w dane raportowe.
 
-Powiązane: `docs/model-danych.md` (historia i przypięcie przez przebieg), `docs/mapowanie-ces-p1s.md`
-(raport mapowań CES ↔ P1S – rozstrzyganie; korekty mapowania – osobny mechanizm), `docs/funkcjonalnosc.md` (ekran
-Słowniki, kreator projektu).
+Powiązane: `docs/model-danych.md` (historia i przypięcie przez przebieg), `docs/funkcjonalnosc.md` (ekran
+Słowniki, kreator projektu), `docs/zrodla-danych.md` (struktura P1S).
 
 ---
 
@@ -63,11 +62,19 @@ Słowniki, kreator projektu).
 | Kalendarz okresów | okres (`RRRR-MM`); tygodnie okresu (numer, od – do); oznaczenie tygodnia zamykającego okres | tydzień | przebieg: okres i czy zamyka okres (P0); nazwy plików |
 | Stawki wydziałów | `MPK` (miejsce powstawania kosztów), `Department` (opis MPK, opcjonalny), `Year`, `Labor Rate`, `Overhead` (opcjonalny) | `MPK` + `Year` | łączenie źródeł – godziny na koszt (P3) |
 | Kursy walut | waluta, okres, kurs (USD / PLN) | waluta + okres | przeliczenia walut (P3, P8) |
-| Cost Category | numer elementu kosztowego → Opis, Obszar, Cost Category (rozdz. 6) | numer elementu kosztowego | walidacja (P2), łączenie źródeł (P3) |
-| Osoby | pracownicy z HR – „Wczytaj z HR” (PZLHRPROD `HR.ORG`, osoby z niepustym `USRID`; zawartość zastępowana po podglądzie różnic): USRID (numer znaczka, login), imię i nazwisko, imię, nazwisko, e-mail, MPK (`KOSTL`), dział (`SHORT`, `LONG`), stanowisko (`STEXT`), pion, manager, PERNR | USRID | wybór CAM w strukturze projektu i słowniku „WP i CAM” (zapisywany USRID) |
-| Raport mapowań CES ↔ P1S | raport mapowań SAP↔CES z `PZLPROD` – wszystkie kolumny pliku (`docs/mapowanie-ces-p1s.md`, rozdz. 2); wczytywany w całości nowym raportem | `src` + `pspnr` | mapowanie CES ↔ P1S (ekran Mapowanie, nakładka projektu, G2, P1, P3) |
+| Cost Category | numer elementu kosztowego → Opis, Obszar, Cost Category, Rozliczeniowy, Grupa narzutowa CAS (wybór z „Grup narzutowych CAS” – zapisany identyfikator grupy) (rozdz. 6) | numer elementu kosztowego | walidacja (P2), łączenie źródeł (P3), raport kosztów CES |
+| Pule narzutu CAS | pula → `Kolejność` kolumny w raporcie, `Rodzaj` (Koszt – TOTAL COST, FCCOM – TOTAL FCCOM), opis (rozdz. 6.1) | pula | raport kosztów CES, formuły, wskaźniki |
+| Grupy narzutowe CAS | grupa narzutowa elementu kosztowego → opis (rozdz. 6.1) | grupa | raport kosztów CES, formuły, Cost Category |
+| Formuły narzutów CAS | grupa + pula → formuła z klocków; wiersz = pula naliczana w grupie; bez pozycji na liście ekranu Słowniki – edycja tylko w oknie „Formuły narzutów” (rozdz. 6.1) | grupa + pula | raport kosztów CES |
+| Wskaźniki narzutu CAS | pula → `Wskaźnik` obowiązujący `Od` – `Do` (zwykle rok; `Do` puste – bezterminowo) (rozdz. 6.1) | pula + `Od` | raport kosztów CES |
+| Osoby | pracownicy z HR – „Dodaj z HR” (PZLHRPROD `HR.ORG`, osoby z niepustym `USRID`): okno szukania po USRID, PERNR, imieniu i nazwisku, e-mailu, dziale; „Dodaj” przy wyniku odkłada osobę na listę, „Zatwierdź” – podgląd z samymi nowymi osobami (nic nie jest usuwane): USRID (numer znaczka, login), imię i nazwisko, imię, nazwisko, e-mail, MPK (`KOSTL`), dział (`SHORT`, `LONG`), stanowisko (`STEXT`), pion, manager, PERNR | USRID | wybór CAM w strukturze projektu i słowniku „WP i CAM” (zapisywany USRID) |
+| Wskaźniki DJK | prefiks grupy stanowisk (IPT, np. `W2`, `W51`) → `Udział DJK` (0–1) – godziny jakości doliczane do godzin TECH / TECH_PON; liczy się najdłuższy pasujący prefiks; dane startowe (migracja 023): W2–W4 10%, W5 15%, W6 20% | grupa stanowisk | Operational EV struktury projektu (`docs/zrodla-danych.md`, rozdz. 6) |
+| Parametry produkcji | `Okno produktywności IPT (mies.)` (12), `Statusy materiałów dostarczonych` (DOST, WYD), `Wartość materiałów ÷ (1 + Z_CLO)` (tak); puste słowniki – wartości raportu S70MR (informacja na ekranie projektu) | parametr | odczyt danych produkcyjnych (`sql/pzlprod/produkcja.sql`) |
 
 Definicje źródeł i ich prefiksy są konfiguracją importu – `docs/zrodla-danych.md`, rozdz. 2.
+
+Na ekranie Słowniki przycisk **„Struktura P1S (PZLPROD)”** otwiera drzewo `LOG.WBS` (Z_KAT_ZBIORCZA → Z_KATEGORIA →
+Z_OPIS → PROJORG → elementy) z wyszukiwarką – tylko do odczytu, to nie jest słownik (`docs/zrodla-danych.md`, rozdz. 5.3).
 
 ---
 
@@ -75,17 +82,22 @@ Definicje źródeł i ich prefiksy są konfiguracją importu – `docs/zrodla-da
 
 | Słownik | Zawartość | Klucz |
 |---|---|---|
-| WP i CAM | element P1S projektu → WP, CAM, Cost Category (Labor / Material / Subcontract – O24); powiązanie z nakładką przez `Legacy WBS` (`docs/performance-objectives.md`, rozdz. 4.1) | element P1S |
-| Harmonogram i budżet | WP → `BAC HOURS` (godziny), `BAC MATERIAL` (koszt materiałów), Baseline Start, Baseline Koniec (RRRR-MM-DD; w plikach Excel rozpoznawane też dawne nagłówki „Planowany Start/Koniec”) – baseline projektu | WP |
+| WP i CAM | element P1S projektu → WP, CAM, Cost Category (kategoria ze słownika „Kategorie WBS” projektu); powiązanie z nakładką przez `Legacy WBS` (`docs/performance-objectives.md`, rozdz. 4.1) | element P1S |
+| Harmonogram i budżet | WP → `BAC HOURS` (godziny), `BAC MATERIAL` (koszt materiałów), `BAC` (budżet kosztowy WP – kwota), Baseline Start, Baseline Koniec (RRRR-MM-DD; w plikach Excel rozpoznawane też nagłówki „Planowany Start/Koniec”) – baseline projektu | WP |
+| Kategorie WBS | kategorie elementów WBS indywidualne dla projektu: `Cost Category` (np. Production, Programs), `Opis` – lista wyboru kolumny Cost Category w strukturze projektu i w „WP i CAM”; raport po kategoriach (wiele elementów WBS w jednej kategorii); inne niż globalny słownik Cost Category (numer elementu kosztowego) – **opcjonalny** | Cost Category |
 | Stawki CAS | stawki CAS projektu (zawartość – O37); do ustalenia słownik nie jest wczytywany, a projekt CAS jest niegotowy (ERROR) | do ustalenia |
 | Cost Category – zmiany w projekcie | zmiany i uzupełnienia słownika globalnego Cost Category dla projektu (rozdz. 6) | numer elementu kosztowego |
 | Wykluczenia | elementy pomijane na późniejszym etapie analizy: kombinacja `Cost Element`, `WBS Element`, `Partner object` (co najmniej jedno z trzech) + wymagany opis (rozdz. 7) – **opcjonalny** | kombinacja trzech pól |
+| Źródła danych | definicje źródeł (Administracja) importowane dla projektu – „Importuj źródła projektu” importuje tylko ich pliki: `Definicja źródła` (lista aktywnych definicji), `Opis`; definicja nieistniejąca albo nieaktywna – WARNING – **opcjonalny** | Definicja źródła |
+| Parametry projektu | `Parametr`, `Wartość`, `Opis`; parametr `Pole kwoty ACTUALS` – pole kwoty parsera ACTUALS dla ACWP struktury, raportu kosztów i przebiegu: `ValueObjCrcy` (waluta obiektu, PLN), `ValueRepCur` (waluta raportu), `ValueTranCurr` (waluta transakcji); inna wartość – ERROR; brak wiersza – `ValueObjCrcy` – **opcjonalny** | Parametr |
 
 - Słowniki projektu powstają w kreatorze projektu z plików Excel (szablon z elementami projektu – jeden
   plik z arkuszami albo osobne pliki / CSV) i są dalej utrzymywane w aplikacji (`docs/funkcjonalnosc.md`, F01, F03):
-  na ekranie Projekt w zakładce Słowniki projektu – lista słowników i tabela wybranego słownika z edycją
+  na ekranie Projekt w zakładce Słowniki projektu (Źródła danych i Parametry projektu – zakładka Konfiguracja, z listą
+  definicji źródeł projektu z Administracji tylko do odczytu) – lista słowników i tabela wybranego słownika z edycją
   w komórkach jak na ekranie Słowniki (dodaj / zmień / usuń wiersz, „Zapisz” z walidacją, „Odrzuć zmiany”, filtr)
-  oraz pobranie i wczytanie z Excela z podglądem różnic. „WP i CAM” oraz „Harmonogram i budżet” zmienia się też
+  oraz pobranie i wczytanie z Excela z podglądem różnic (Cost Category w arkuszu „WP i CAM” – lista kategorii projektu
+  w arkuszu „Listy”). „WP i CAM” oraz „Harmonogram i budżet” zmienia się też
   w komórkach tabeli w zakładce Struktura – to te same słowniki (zapis od razu po zatwierdzeniu wiersza, z tą samą
   walidacją i historią; `docs/performance-objectives.md`, rozdz. 4.2).
 - Harmonogram i budżet mogą się zmieniać w trakcie projektu – każda zmiana jest w historii, a przebieg liczy
@@ -126,10 +138,11 @@ Kontekst biznesowy typów – `readme.md`.
 
 | Reguła | Poziom |
 |---|---|
-| element P1S należy do projektu (kod P1S elementu nakładki – `Legacy WBS` albo cel mapowania – albo pod nim, także w `LOG.WBS`) i nie należy do innego projektu | ERROR |
+| element P1S należy do projektu (kod P1S elementu nakładki – `Legacy WBS` – albo pod nim, także w `LOG.WBS`) i nie należy do innego projektu | ERROR |
 | jeden WP na element P1S | ERROR |
-| WP wymaga CAM | ERROR |
+| WP bez CAM – zapis dozwolony (najpierw wskazuje się WP, CAM uzupełnia się później); w strukturze brak „WP bez CAM”; gotowość projektu – ERROR (blokuje przebieg) | WARNING |
 | CAM wybierany z listy osób; przy wczytaniu z Excela CAM spoza listy osób | – / WARNING |
+| Cost Category spoza słownika „Kategorie WBS” projektu (sprawdzane, gdy słownik ma pozycje) | WARNING |
 
 ### 5.3 Harmonogram i budżet
 
@@ -140,7 +153,7 @@ Kontekst biznesowy typów – `readme.md`.
 | data rozpoczęcia ≤ data zakończenia (bazowe, planowane, rzeczywiste) | ERROR |
 | budżet ≥ 0 | ERROR |
 | budżet na elemencie bez WP | WARNING |
-| WP bez budżetu | WARNING |
+| WP bez budżetu (`BAC HOURS`, `BAC MATERIAL` i `BAC` puste) | WARNING |
 
 ### 5.4 Stawki wydziałów i stawki CAS
 
@@ -157,6 +170,13 @@ Kontekst biznesowy typów – `readme.md`.
 | numer elementu kosztowego unikalny w słowniku (globalnym / zmianach projektu); zapisywany jako tekst – numer liczbowy uzupełniany zerami do 10 znaków | ERROR |
 | numer w słowniku bez Cost Category | WARNING |
 
+| „Grupa narzutowa CAS” spoza słownika „Grupy narzutowe CAS” albo pusta | uwaga w raporcie kosztów CES (wiersz bez narzutów) |
+| „Wskaźniki narzutu CAS”: pula z listy, `Od` wymagane, `Wskaźnik` ≥ 0 (15 cyfr znaczących, jak w Excelu); okresy `Od`–`Do` jednej puli bez nakładania | ERROR |
+| „Pule narzutu CAS”: nazwa bez „+” i inna niż „Base cost elements”; `Kolejność` i `Rodzaj` wymagane / kolejność powtórzona | ERROR / WARNING |
+| „Formuły narzutów CAS”: formuła poprawnie zbudowana (składnik – operator – składnik, nawiasy domknięte); narzut puli zależny od niego samego (wprost albo przez narzuty innych pul grupy) | ERROR |
+| usunięcie puli albo grupy używanej w formułach, wskaźnikach albo Cost Category (globalnie lub w projekcie) | ERROR |
+| pula albo składnik formuły spoza „Pul narzutu CAS”, brak wskaźnika naliczanej puli | uwaga w raporcie kosztów CES |
+
 ### 5.6 Wykluczenia
 
 | Reguła | Poziom |
@@ -165,16 +185,22 @@ Kontekst biznesowy typów – `readme.md`.
 | opis wypełniony | ERROR |
 | powtórzona kombinacja `Cost Element` + `WBS Element` + `Partner object` | ERROR |
 
-### 5.7 Raport mapowań CES ↔ P1S
+### 5.7 Parametry produkcji
+
+Wydzielenia godzin z elementu P1S (np. Paint) to węzły wirtualne nakładki z kodem `ELEMENT_P1S.NAZWA.CPLGR`, nie słownik –
+`docs/performance-objectives.md`, rozdz. 4.2.
 
 | Reguła | Poziom |
 |---|---|
-| `src` = `SAP` albo `CES`; `pspnr` wypełniony | ERROR |
-| para `src` + `pspnr` unikalna | ERROR |
-| wiersz `src` = CES bez przypisania: brak elementu CES (`wbs_ces`, `wbs`) albo celu P1S (`pspnr_sap`, `wbs_sap`) i brak pary `project_ces` → `project_sap` | WARNING |
+| „Wskaźniki DJK”: udział od 0 do 1; prefiks zawarty w innym (W5 i W51) | ERROR / WARNING |
+| „Parametry produkcji”: okno 1–120 miesięcy; statusy niepuste; Z_CLO – tak / nie | ERROR |
 
-Reguły rozstrzygania na zawartości raportu (kilka celów jednego elementu CES, cel spoza `LOG.WBS`) sprawdza ekran
-Mapowanie – `docs/mapowanie-ces-p1s.md`, rozdz. 10.
+### 5.8 Kategorie WBS
+
+| Reguła | Poziom |
+|---|---|
+| `Cost Category` wymagana i unikalna w projekcie (bez względu na wielkość liter) | ERROR |
+| zapis podobny do istniejącej kategorii | WARNING |
 
 Kontrole słowników względem danych przebiegu (np. MPK z kosztów bez stawki na dany rok, numer elementu kosztowego bez
 wpisu w Cost Category) – `docs/pipeline-fazy.md`, P2.
@@ -199,6 +225,51 @@ wpisu w Cost Category) – `docs/pipeline-fazy.md`, P2.
   projektu przywraca pozycję globalną. Pozycji globalnej nie usuwa się w projekcie – tylko na ekranie Słowniki.
 - Numer elementu kosztowego z kosztów projektu bez wpisu w słowniku efektywnym naprawia się dodaniem pozycji
   w słowniku projektu.
+
+### 6.1 Narzuty CAS – raport kosztów CES
+
+W projektach CAS na koszty Cost Elementów (także suche koszty – materiały, usługi, podróże) nakładane są narzuty CAS:
+te same wskaźniki dla wszystkich projektów, zmienne w czasie. Reguła odwzorowuje arkusz finansów (formuły narzutów
+po Cost Elementach dla lat 2025–2026).
+
+- **Powiązania identyfikatorem:** pule i grupy narzutowe są wskazywane identyfikatorem wiersza słownika (RowId), nie
+  nazwą – formuły, wskaźniki („Pula”) i Cost Category („Grupa narzutowa CAS”) zapisują identyfikator, a tabele, historia,
+  Excel i raport pokazują bieżącą nazwę. Zmiana nazwy puli albo grupy w jej słowniku jest od razu widoczna wszędzie;
+  puli ani grupy używanej gdzie indziej nie można usunąć (ERROR z nazwą słownika, który jej używa). W Excelu kolumny
+  powiązane mają nazwy (lista w arkuszu „Listy”) – wczytanie zamienia nazwę na identyfikator.
+- **Mapowanie:** kolumna „Grupa narzutowa CAS” słownika Cost Category – globalnie, ze zmianą w projekcie jak pozostałe
+  kolumny (słownik efektywny). Grupy nie da się wywnioskować z Cost Category: np. „Engineering labor” to ENG labor
+  (ENG Fringe + ENG OH) albo ENG LL labor (praca leasingowana – bez ENG Fringe).
+- **Grupy narzutowe CAS** (dane startowe – migracja 034): MFG labor, ENG labor, ENG LL labor, MSV labor, GS labor,
+  MTL labor, Direct Materials, Direct Services, Travel, ODC (bez formuł – bez narzutów).
+- **Pule narzutu CAS** (dane startowe – migracja 034; kolejność kolumn raportu): MFG Fringe, MFG OH, ENG Fringe,
+  ENG OH, MTL Fringe, Material Handling (MTL), Miscellaneous Material Pool (MMP), General Services (GS), GS Fringe,
+  MSV Fringe, General & Administrative (GA), Corporate Flowdowns (FD) – rodzaj Koszt, sumowane w `TOTAL COST`
+  z kosztem bazowym; FCCOM MFG, FCCOM ENG, FCCOM MTL, FCCOM GS, FCCOM G&A – rodzaj FCCOM, w `TOTAL FCCOM`. Nowa pula
+  w słowniku to nowa kolumna raportu, kolumna macierzy formuł i klocki edytora – bez zmiany programu.
+- **Formuła narzutu** puli w grupie – z klocków: `Base cost elements` (koszt bazowy kolumny – okres albo rok), narzut
+  innej puli (w tym samym wierszu raportu), wskaźnik puli (wiersz wskaźników raportu), operatory `+ − × ÷` i nawiasy.
+  Program nie zawiera reguł podstaw – dane startowe (migracja 034) odwzorowują formuły arkusza finansów, np. MFG labor:
+  MFG OH = (Base + MFG Fringe) × wskaźnik MFG OH; Direct Materials: GS = Material Handling × wskaźnik GS,
+  G&A = (Material Handling + GS) × wskaźnik G&A (suche koszty – bez kosztu bazowego).
+- **Okno „Formuły narzutów”** (ekran Słowniki, przycisk przy słownikach pul, grup i wskaźników): macierz – wiersze to
+  grupy, kolumny to pule; zaznaczone pole = pula naliczana w grupie, podpowiedź pokazuje formułę. Kliknięcie pola
+  otwiera **edytor formuły z klocków**: paleta (operatory, koszt, narzuty pul, wskaźniki pul), formuła z klocków
+  z kursorem wstawiania – klocek wstawia się kliknięciem albo przeciągnięciem, klocki formuły można przestawiać
+  przeciągnięciem i usuwać (×, Backspace, Delete); formuła do czytania i kontrola na bieżąco (operator między
+  składnikami, nawiasy, klocek narzutu własnej puli niedozwolony). Pole puste (pula nienaliczana) otwiera
+  edytor z pustą formułą – przycisk „Koszt × wskaźnik puli” wstawia formułę podstawową; „Pula nienaliczana
+  w grupie” odznacza pole. Zmiany macierzy zapisuje „Zapisz” (historia
+  wersji; zapętlenie formuł w grupie – pole czerwone, zapis zablokowany).
+- **Wskaźnik kolumny:** kolumna okresu (`Period MM/RRRR`) – wskaźnik obowiązujący w tym miesiącu; kolumna roku –
+  w ostatnim miesiącu roku z danymi (bieżący rok – do ostatniego okresu danych). Projekt z kosztami z kilku lat ma
+  blok na każdy rok, każdy z wskaźnikami swojego roku. Wskaźnik zmieniony w trakcie roku albo brak wskaźnika
+  naliczanej puli – uwaga w raporcie (arkusz „Uwagi”; brak wskaźnika = narzut 0).
+- **Raport** (ekran Projekt, zakładka Raporty, „Raport kosztów CES (Excel)” – projekty CAS): wiersze i kolumny kosztu
+  raportu kosztów (`docs/model-danych.md`, migracja 013) + kolumna „Grupa narzutowa CAS”, potem blok na każdą kolumnę
+  kosztu: pule (kolejność ze słownika), `TOTAL COST …`, `TOTAL FCCOM …`. Narzuty to **formuły Excela** odwołujące się do kosztu wiersza
+  i wiersza wskaźników nad nagłówkiem – zmiana wskaźnika albo kosztu w pliku przelicza raport. Arkusz „Wskaźniki” –
+  użyte wskaźniki z okresem obowiązywania.
 
 ---
 
@@ -228,9 +299,8 @@ Wyklucza się po kombinacji trzech pól z raportu kosztów CES (`docs/zrodla-dan
 |---|---|
 | O9 | Los istniejących tabel słownikowych w `PZLPROD.LOG` (`Stanowiska`, `LearningCurve`, `PeriodDates`, `EmployeesHist`) – do ustalenia z właścicielami |
 | O18 | Numeracja tygodni w kalendarzu okresów (ISO czy wewnętrzna) |
-| O24 | Kolumna „Cost Category” w słowniku „WP i CAM” ma stałe wartości Labor / Material / Subcontract – czy ma przyjmować kategorie ze słownika Cost Category? |
 | O25 | Numer elementu kosztowego bez wpisu w Cost Category: ERROR (dziś) czy WARNING? |
-| O37 | Jakie stawki CAS są wykorzystywane i w jakim układzie |
+| O37 | Jakie stawki CAS są wykorzystywane i w jakim układzie – narzuty CAS na koszty Cost Elementów: słowniki globalne (rozdz. 6.1); otwarte: słownik projektu „Stawki CAS” i przeliczenie w przebiegu |
 | O48 | Wykluczenia: na którym etapie analizy są stosowane i jak wykazywany jest wykluczony koszt |
 
 ## Załącznik A. Początkowa zawartość słownika Cost Category

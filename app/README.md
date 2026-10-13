@@ -4,7 +4,7 @@ Aplikacja PZL-EV rozwijana według planu w `tasks/` (`tasks/README.md`). Powsta�
 i nadal służy do sprawdzenia uruchomienia jednego `PZL-EV.exe` z dysku sieciowego (O6, sekcja „Test stosu”).
 
 Stan: **Słowniki** (słowniki globalne – F1), **Import RABIT** i **Administracja** (import plików, definicje
-źródeł, parsery, lokalizacje – F2), **Mapowanie** (F3), **Projekty** (kreator, Performance Objectives, słowniki
+źródeł, parsery, lokalizacje – F2), **Projekty** (kreator, Performance Objectives, słowniki
 projektu, gotowość, foldery – F4), **Pulpit** (stan z bazy, otwarte problemy) i **Diagnostyka**.
 Pozostałe pozycje menu pokazują ekran
 zastępczy modułu (dokumentacja i etapy, które moduł przejmie). Dane są w bazie MS SQL środowiska
@@ -26,8 +26,8 @@ zmieni). Brak pliku albo błąd w nim = komunikat przy starcie z nazwą pola –
 | `Sql.Server`, `Sql.Database` | serwer i baza (TEST: `pzltestdb.intl.lmco.com`, `PZLTEST`); logowanie kontem AD użytkownika, bez hasła w pliku |
 | `Sql.Schema`, `Sql.TablePrefix` | schemat i sygnatura tabel: `[FINOP].[PZLEV_META_ImportBatch]` (`docs/model-danych.md`, rozdz. 2); tylko litery, cyfry i `_`; sygnatura domyślnie `PZLEV_` |
 | `Sql.TrustServerCertificate` | `true` tylko gdy połączenie zgłasza niezaufany certyfikat serwera |
-| `PzlProd.Server`, `PzlProd.Database`, `PzlProd.Schema` | baza ze strukturą P1S (`splmcd03`, `PZLPROD`, schemat `LOG`: tabele `WBS`, `WBS_DIC`) – tylko odczyt kontem AD; sekcja opcjonalna – bez niej ekran Mapowanie pokazuje, czego brakuje; **Diagnostyka → Sprawdź PZLPROD** testuje połączenie |
-| `PzlHrProd.Server`, `PzlHrProd.Database`, `PzlHrProd.Schema` | baza pracowników (`PZLHRPROD`, schemat `HR`, tabela `ORG`) – tylko odczyt kontem AD; źródło słownika Osoby („Wczytaj z HR” na ekranie Słowniki); sekcja opcjonalna; serwer we wzorze (`splmcd03`) do potwierdzenia |
+| `PzlProd.Server`, `PzlProd.Database`, `PzlProd.Schema` | baza ze strukturą P1S (`splmcd03`, `PZLPROD`, schemat `LOG`: tabele `WBS`, `WBS_DIC`) – tylko odczyt kontem AD; sekcja opcjonalna – bez niej struktura P1S (Słowniki → „Struktura P1S (PZLPROD)”, projekty) jest niedostępna z podaniem powodu; **Diagnostyka → Sprawdź PZLPROD** testuje połączenie |
+| `PzlHrProd.Server`, `PzlHrProd.Database`, `PzlHrProd.Schema` | baza pracowników (`PZLHRPROD`, schemat `HR`, tabela `ORG`) – tylko odczyt kontem AD; źródło słownika Osoby („Dodaj z HR” na ekranie Słowniki); sekcja opcjonalna; serwer we wzorze (`splmcd03`) do potwierdzenia |
 
 **Baza danych – migracje:** skrypty `sql/mssql/NNN_*.sql` są wbudowane w exe:
 - `001_etap1_import_slowniki_projekty.sql` – tabele etapu 1;
@@ -39,8 +39,7 @@ zmieni). Brak pliku albo błąd w nim = komunikat przy starcie z nazwą pola –
 - `004_parsery.sql` – parsery w bazie (Administracja → Parsery): parser pilnuje układu pliku (kolumna w pliku → pole,
   typ, wymagane), definicja źródła tylko go wskazuje; parser ACTUALS w układzie raportu z 2026-10 (nowe pola
   `Original Order Number`, `Item`, `Purchase order number`, `Invoice Number`);
-- `005_mapowanie_ces_p1s.sql` – parser `MAPOWANIA` (raport mapowań SAP↔CES z Excela)
-  i korekty mapowania (`DICT_MappingCorrection`);
+- `005_mapowanie_ces_p1s.sql` – parser `MAPOWANIA` i tabela `DICT_MappingCorrection` (usunięte przez 009 i 025);
 - `006_problemy_rozwiazywanie.sql` – rozwiązywanie problemów (kto, kiedy, jak); problemy importów wcześniejszych
   niż ostatni zakończony – rozwiązane;
 - `007_sloty_danych_kanonicznych.sql` – dane kanoniczne wszystkich parserów w jednej stałej tabeli `CAN_Row`
@@ -50,8 +49,8 @@ zmieni). Brak pliku albo błąd w nim = komunikat przy starcie z nazwą pola –
   pole to tylko zapis parsera (`docs/model-danych.md`, rozdz. 5.1);
 - `008_bez_tresci_plikow.sql` – usuwa przechowywaną treść plików (`META_SourceFileContent`): w bazie zostają wersje
   plików i dane kanoniczne, sam plik nie jest przechowywany;
-- `009_raport_mapowan_slownik.sql` – raport mapowań SAP↔CES jako słownik globalny (`DICT_MappingReport`); usuwa
-  definicje źródeł z parserem `MAPOWANIA` i sam parser – raport wczytuje się raz do słownika (Słowniki);
+- `009_raport_mapowan_slownik.sql` – tabela `DICT_MappingReport` (usunięta przez 025); usuwa definicje źródeł
+  z parserem `MAPOWANIA` i sam parser;
 - `010_stawki_mpk.sql` – stawki wydziałów według MPK: klucz MPK + rok, `Department` (opis MPK) i `Overhead`
   opcjonalne; istniejące stawki dostają MPK z dotychczasowego pola `Department`;
 - `011_ostatni_import_parsera.sql` – procedura `CAN_LatestImport`: dane kanoniczne parsera z najnowszej wersji każdego
@@ -60,7 +59,20 @@ zmieni). Brak pliku albo błąd w nim = komunikat przy starcie z nazwą pola –
   projektu;
 - `013_raport_kosztow_projektu.sql` – `CAN_LatestFiles` i procedura raportu kosztów projektu `REP_ProjectCosts`;
 - `014_definicje_projektu.sql` – Project definition projektu także z WBS elementu węzłów nakładki;
-- `015_osoby_z_hr.sql` – słownik Osoby z HR: kolumny imię, nazwisko, e-mail, MPK, dział, stanowisko, pion, manager, PERNR.
+- `015_osoby_z_hr.sql` – słownik Osoby z HR: kolumny imię, nazwisko, e-mail, MPK, dział, stanowisko, pion, manager, PERNR;
+- `016`–`024` – kolejne zmiany schematu i danych startowych (opis w `docs/model-danych.md`);
+- `025_bez_mapowania_ces_p1s.sql` – usuwa tabele `DICT_MappingReport` i `DICT_MappingCorrection`;
+- `026_zrodla_projektu.sql` – słownik projektu „Źródła danych” (`DICT_ProjectSource`);
+- `027_przebiegi.sql` – przebiegi projektu, uruchomienia, dane przypięte i wyniki kontroli, procedura `RUN_PinBalance`;
+- `028_konfiguracja_projektu.sql` – słownik projektu „Parametry projektu” (`DICT_ProjectSetting`), pole kwoty ACTUALS w przebiegu.
+- `029_narzuty_cas.sql` – narzuty CAS raportu kosztów CES: „Grupa narzutowa CAS” w Cost Category, słowniki „Grupy narzutowe CAS”
+  i „Wskaźniki narzutu CAS”;
+- `030_dane_narzuty_cas.sql` – (zastąpione przez 034) tylko zapis wersji;
+- `031_formuly_narzutow_cas.sql` – słowniki „Pule narzutu CAS” i „Formuły narzutów CAS” (podstawy pul w danych, edytor formuł);
+  grupy narzutowe bez kolumn pul;
+- `032_dane_formuly_narzutow_cas.sql` – (zastąpione przez 034) tylko zapis wersji;
+- `033_narzuty_cas_identyfikatory.sql` – narzuty CAS powiązane identyfikatorem puli / grupy zamiast nazwy; formuły z klocków (`DICT_CasFormula`);
+- `034_dane_narzuty_cas.sql` – dane startowe narzutów CAS z arkusza finansów (pule, grupy, wskaźniki, formuły, grupa elementów kosztowych).
 
 Migracje wykonuje przycisk **Diagnostyka → Migracja** – uruchamia po kolei skrypty, których numeru nie ma
 w `META_SchemaVersion`, a wykonane pomija. Lista na tym ekranie pokazuje, które skrypty są wykonane (kiedy, kto)
@@ -101,22 +113,15 @@ na ekranie **Diagnostyka** i w stopce okna.
    albo pełny błąd, liczbę plików i podfoldery (import czyta tylko główny folder lokalizacji). Szczegóły, decyzja dla
    każdego pliku importu i pełna treść wyjątków – `logs\pzl-ev-RRRRMMDD.log` obok `.exe`.
 6. **Administracja** – definicję źródła można usunąć (**Usuń definicję** → **Potwierdź usunięcie**); historia zostaje.
-7. **Mapowanie CES ↔ P1S** – **Diagnostyka → Sprawdź PZLPROD**: liczba elementów `LOG.WBS`, grup `WBS_DIC`
+7. **Struktura P1S** – **Diagnostyka → Sprawdź PZLPROD**: liczba elementów `LOG.WBS`, grup `WBS_DIC`
    i faktyczne wartości `Z_ACTIVE` / `LOEKZ` (aplikacja przyjmuje: `LOEKZ` niepuste = usunięty; `Z_ACTIVE` puste,
-   `0` albo `N` = nieaktywny). **Słowniki** → „Raport mapowań CES ↔ P1S” → **Wczytaj z Excela** (np.
-   `testdata/Mapowanie/Raport_mapowan.csv` albo eksport z `PZLPROD`) → podgląd różnic → **Zatwierdź wczytanie**;
-   ponowne wczytanie innego pliku zastępuje cały raport (wiersze spoza pliku – „−”, historia zostaje).
-   **Mapowanie**: statusy elementów CES z raportów ACTUALS (REPORT, INHERITED, OVERRIDE, UNMAPPED), drzewo P1S
-   z elementami CES pod celami i węzłem „Nieprzypisane” (z propozycją). Korekta: wybierz element CES → cel w drzewie
-   albo w wyszukiwaniu → uzasadnienie (wymagane przy zmianie przypisania z raportu) → **Zapisz korektę**; status
-   OVERRIDE, historia; **Usuń korektę** – wraca przypisanie z raportu.
-8. **Pulpit → Wymaga uwagi** – otwarte problemy wszystkich obszarów (import, mapowanie), błędy najpierw. Plik z błędem
-   → import (problem) → poprawiony plik → import: problem poprzedniego importu znika sam. Korekta elementu CES
-   z problemem G2 → **Mapowanie → Odśwież**: problem znika. **Rozwiązane** przy problemie – zamknięcie ręczne
-   (wpis w dzienniku).
+   `0` albo `N` = nieaktywny). **Słowniki → Struktura P1S (PZLPROD)**: drzewo Z_KAT_ZBIORCZA → Z_KATEGORIA → Z_OPIS →
+   PROJORG → elementy (nieaktywne i usunięte – kursywą), szukanie po kodzie i opisie; tylko do odczytu.
+8. **Pulpit → Wymaga uwagi** – otwarte problemy wszystkich obszarów, błędy najpierw. Plik z błędem → import (problem)
+   → poprawiony plik → import: problem poprzedniego importu znika sam. **Rozwiązane** przy problemie – zamknięcie
+   ręczne (wpis w dzienniku).
 9. **Projekty** – **+ Nowy projekt**: kod `M28`, nazwa, typ → **Performance Objectives**: **Wczytaj Excel**
-   `testdata/Projekty/PO_M28.xlsx` (8 elementów; kolumna „P1S z mapowania” – status i cel z mapowania CES ↔ P1S,
-   gdy słownik raportu mapowań nie jest pusty), dodaj węzeł wirtualny i przeciągnij do niego elementy →
+   `testdata/Projekty/PO_M28.xlsx` (8 elementów; strona P1S – kolumna Legacy WBS), dodaj węzeł wirtualny i przeciągnij do niego elementy →
    **Słowniki projektu**: **Pobierz szablon Excel** (arkusz „WP i CAM” z elementami P1S z zakresu) albo
    **Wczytaj skoroszyt** `testdata/Projekty/Slowniki_M28.xlsx` → **Foldery** → **Podsumowanie**: baza analityczna
    (3 WP, 2 250 h, 75 000,50 materiałów) → **Utwórz projekt**. Bez słowników projekt powstaje, ale jest niegotowy
@@ -131,7 +136,7 @@ na ekranie **Diagnostyka** i w stopce okna.
 | self-contained, single-file, bez instalacji .NET | publikacja `build.cmd` → jeden `PZL-EV.exe`; uruchomienie na komputerze bez .NET |
 | uruchomienie z dysku sieciowego | start `PZL-EV.exe` ze ścieżki UNC; ekran Diagnostyka pokazuje „Uruchomiono z” |
 | Dapper, Microsoft.Data.SqlClient, ClosedXML (OpenXML) | pakiety są w projekcie; ekran **Diagnostyka** pokazuje wersje wczytane w runtime z bundla (bez łączenia z bazą) |
-| Serilog | log w `logs\pzl-ev-RRRRMMDD.log` obok `.exe` (sprawdza też prawo zapisu w tym miejscu) |
+| Serilog | log w `logs\pzl-ev-RRRRMMDD.log` obok `.exe` (sprawdza też prawo zapisu w tym miejscu); profilowanie: polecenia SQL dłuższe niż 200 ms („SQL 1234 ms [baza]: tekst polecenia”, błędy SQL zawsze – `SqlProfiler`, wszystkie bazy) i czasy kroków wczytania projektu od najdłuższego („Projekt M28: wczytanie 180000 ms – koszty ACWP (ACTUALS) 150000 ms, …”) |
 | konto Windows / AD | panel pokazuje `DOMENA\użytkownik` |
 
 ## Budowa (maszyna developera, Windows)
@@ -262,7 +267,7 @@ pomija testy z ostrzeżeniem.
 | SmartScreen „Nieznany wydawca” | brak podpisu kodu | podpis certyfikatem firmowym |
 | długi pierwszy start | single-file rozpakowuje biblioteki natywne do `%TEMP%\.net` | normalne przy pierwszym uruchomieniu; kolejne szybsze |
 | brak pliku logu | brak prawa zapisu w folderze `.exe` | docelowo log w `%LOCALAPPDATA%` albo w osobnym folderze sieciowym |
-| import: „…was deadlocked on lock resources with another process…” | zapis pliku zakleszczył się z inną sesją bazy (np. ekran Mapowanie / Projekty innej osoby, testy na tej samej bazie, zadania serwera na indeksie kolumnowym) | od 0.18.1 import powtarza zapis pliku sam (do 3 prób, wpis w logu); gdy błąd zostaje – graf zakleszczenia z `system_health` (zapytanie w `docs/zrodla-danych.md`, rozdz. 2) pokaże drugą sesję |
+| import: „…was deadlocked on lock resources with another process…” | zapis pliku zakleszczył się z inną sesją bazy (np. ekran Projekty innej osoby, testy na tej samej bazie, zadania serwera na indeksie kolumnowym) | import powtarza zapis pliku sam (do 3 prób, wpis w logu); gdy błąd zostaje – graf zakleszczenia z `system_health` (zapytanie w `docs/zrodla-danych.md`, rozdz. 2) pokaże drugą sesję |
 | błąd restore pakietu przy budowie | brak sieci LM / VPN, brak poświadczeń do eFOSS, zły/wygasły token albo pakiet niedostępny w feedzie | diagnostyka w sekcji „Pakiety NuGet… eFOSS”; jeśli pakietu nie ma w feedzie – lista do zatwierdzenia / lokalny cache |
 
 ## Struktura
@@ -282,12 +287,11 @@ app/
     ├── App.xaml(.cs)            start: konfiguracja → usługi wspólne → moduły → powłoka
     ├── Shell/                   okno, menu, nawigacja; ModuleCatalog.cs – lista modułów
     ├── Modules/
-    │   ├── MasterData/          Słowniki globalne (F1)
+    │   ├── MasterData/          Słowniki globalne (F1), podgląd struktury P1S (PZLPROD)
     │   ├── Import/              Import RABIT (F2)
     │   ├── Administration/      definicje źródeł, lokalizacje RABIT (F2)
     │   ├── Dashboard/           Pulpit: import, źródła, słowniki, otwarte problemy, dziennik (z bazy)
     │   ├── Diagnostics/         test stosu, konfiguracja środowiska, migracje, sprawdzenie PZLPROD
-    │   ├── Mapping/             Mapowanie CES ↔ P1S (F3): rozstrzyganie, drzewo P1S, korekty
     │   └── Runs/ Projects/ …    pozostałe moduły: plik wejścia + etapy, ekran zastępczy
     └── Shared/
         ├── Utils/Ui/            MVVM, konwertery, okna wyboru pliku, kontrakt modułu, tabela słownika do edycji (WPF)

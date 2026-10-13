@@ -57,4 +57,8 @@ public static class PolishNumber
 
     /// <summary>Zapis do wyświetlenia: format polski z separatorem tysięcy.</summary>
     public static string ToDisplay(decimal value) => value.ToString("#,0.############", Polish);
+
+    /// <summary>Zapis do wyświetlenia z najwyżej decimals miejscami po przecinku (np. wskaźnik narzutu – 18).</summary>
+    public static string ToDisplay(decimal value, int decimals) =>
+        decimals <= 12 ? ToDisplay(value) : value.ToString("#,0." + new string('#', decimals), Polish);
 }

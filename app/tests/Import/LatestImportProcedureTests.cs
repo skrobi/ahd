@@ -65,6 +65,32 @@ public sealed class LatestImportProcedureTests : IDisposable
     }
 
     [SqlFact]
+    public void Actuals_files_show_rabit_report_date_import_and_check_without_changes()
+    {
+        Use();
+        var store = new PzlEv.Modules.Projects.Data.SqlProjectStore(_database!.Sql, _services.Clock, _services.User);
+        Assert.Empty(store.ActualsFiles());
+
+        var report = new DateTime(2026, 10, 6, 23, 0, 0, DateTimeKind.Utc);
+        Write("ACTUALS_PAF_01.csv", 0, report);
+        _import.Run();
+        var imported = Assert.Single(store.ActualsFiles());
+        Assert.Equal(("ACTUALS_PAF_01.csv", new DateTimeOffset(report)), (imported.FileName, imported.ReportAt.ToUniversalTime()));
+        Assert.Equal(imported.ReportAt, imported.DataAt);
+
+        // RABIT wygenerował raport ponownie z tą samą treścią – import go pomija, ale dane są aktualne na nowszą datę.
+        _services.Clock.Advance(TimeSpan.FromDays(1));
+        var rerun = report.AddDays(1);
+        Write("ACTUALS_PAF_01.csv", 0, rerun);
+        _import.Run();
+        var checkedFile = Assert.Single(store.ActualsFiles());
+        Assert.Equal(new DateTimeOffset(report), checkedFile.ReportAt.ToUniversalTime());       // dane w bazie – z pierwszego importu
+        Assert.Equal(new DateTimeOffset(rerun), checkedFile.DataAt.ToUniversalTime());          // aktualne na datę ponownego raportu
+        Assert.True(checkedFile.LastCheck > checkedFile.ImportedAt);
+        Assert.Contains("sprawdzony", new PzlEv.Modules.Projects.Models.ActualsFreshness([checkedFile]).Details);
+    }
+
+    [SqlFact]
     public void Returns_newest_version_of_each_file_across_import_batches_with_parser_field_names()
     {
         Use();
