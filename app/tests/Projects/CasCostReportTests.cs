@@ -592,6 +592,174 @@ public sealed partial class CasCostReportTests : IDisposable
         Assert.False(preview.HasChanges, string.Join("; ", preview.Changed.Take(3)));
     }
 
+    /// <summary>
+    /// Projekt w bieżącym okresie (10/2026) z losowymi kosztami z lat 2024–2026 dla wszystkich Cost Elementów arkusza
+    /// finansów: import ACTUALS, projekt CAS, wskaźniki 2024 dopisane w słowniku. Wartości raportu (przeliczone formuły)
+    /// porównane z niezależnym wzorcem – reguły arkusza finansów zapisane wprost dla każdej grupy.
+    /// </summary>
+    [SqlFact]
+    public void Ces_report_of_project_with_current_period_and_two_previous_years_matches_finance_rules()
+    {
+        var services = new TestServices();
+        using var database = new TestDatabase(presets: true);
+        var app = services.App(_folder, database.Sql);
+        var config = new SourceConfigService(new SqlSourceConfigStore(database.Sql, services.Clock, services.User), app.Journal);
+        var rabit = Assert.Single(config.Locations());
+        Assert.True(config.SaveLocation(new LocationInput(rabit.LocationId, rabit.Version, rabit.Name, rabit.Path, Active: false)).Success);
+
+        // ACTUALS: 29 Cost Elementów × losowe miesiące 2024, 2025 i 2026 (do 10/2026), kilka WBS projektu 4D05QG.
+        var random = new Random(20261013);
+        var expected = new Dictionary<(string Element, int Year, int Period), decimal>();
+        var lines = new List<string> { string.Join(";", ActualsLayout.Columns) };
+        foreach (var element in FinanceMappingNames.Keys)
+        {
+            foreach (var year in new[] { 2024, 2025, 2026 })
+            {
+                for (var period = 1; period <= (year == 2026 ? 10 : 12); period++)
+                {
+                    if (random.NextDouble() < 0.35 && !(year == 2026 && period == 10))
+                        continue;
+                    var amount = Math.Round((decimal)(random.NextDouble() * 20000 - 2000), 2);
+                    expected[(element, year, period)] = expected.GetValueOrDefault((element, year, period)) + amount;
+                    var text = amount.ToString("N2", System.Globalization.CultureInfo.GetCultureInfo("pl-PL")).Replace('\u00A0', ' ');
+                    var number = element.TrimStart('0');
+                    lines.Add(string.Join(";",
+                        "4D05QG", $"4D05QG00000{random.Next(1, 4)}", number, $"CE {number}", "Test 1", "PLN", text, "PLN", text, "USD", text, "0,000",
+                        "", "", "", "", "", "", "", year.ToString(), $"{year}-{period:00}-15", period.ToString(), ""));
+                }
+            }
+        }
+        Directory.CreateDirectory(app.Config.ImportFolder);
+        File.WriteAllLines(Path.Combine(app.Config.ImportFolder, "ACTUALS_PAF_01.csv"), lines, new System.Text.UTF8Encoding(true));
+        Assert.Equal(FileDecisions.Imported, Assert.Single(new ImportService(new SqlImportStore(database.Sql), app).Run().Files).Decision);
+
+        var store = new SqlProjectStore(database.Sql, services.Clock, services.User);
+        var service = new ProjectService(store, new SqlDictionaryStore(database.Sql, services.Clock, services.User, [.. GlobalDictionaries.Tables, .. ProjectDictionaries.Tables]),
+            app.Journal, new ProjectFolders(Path.Combine(_folder, "Projekty")), null);
+        var tree = new PoTree();
+        tree.AddElement(null, "4D05QG", "Test 1", null);
+        Assert.True(store.Create("T1", "Test 1", ProjectTypes.Cas, tree).Success);
+
+        // Wskaźniki 2024 – w danych startowych są 2025 i 2026; dopisane w słowniku (pula wybrana po nazwie, zapis – identyfikator).
+        var dictionaries = new DictionaryService(new SqlDictionaryStore(database.Sql, services.Clock, services.User, GlobalDictionaries.Tables), app.Journal);
+        var rateSpec = GlobalDictionaries.Get(GlobalDictionaries.CasBurdenRates);
+        var pools = CasBurden.PoolsFrom(dictionaries.Load(GlobalDictionaries.Get(GlobalDictionaries.CasPools)));
+        var current = dictionaries.Load(rateSpec);
+        var rate2024 = pools.ToDictionary(p => p.Name, p => Math.Round(0.01m + (decimal)random.NextDouble(), 6));
+        var added = pools.Select(p => new DictRow(null, null, new Dictionary<string, string?>
+        {
+            ["Pula"] = CasBurden.Ref(p.Id), ["Od"] = "2024-01-01", ["Do"] = "2024-12-31",
+            ["Wskaźnik"] = rate2024[p.Name].ToString(System.Globalization.CultureInfo.InvariantCulture), ["Opis"] = "test",
+        }));
+        Assert.Equal(SaveStatus.Saved, dictionaries.Save(rateSpec, [.. current, .. added], [], confirmWarnings: true).Status);
+        var rates = CasCostReport.RatesFrom(dictionaries.Load(rateSpec));
+
+        // 0057510550 (PZL Other Direct Cost) – w arkuszu, poza danymi startowymi Cost Category: finansista dopisuje go z grupą ODC.
+        var costCategory = GlobalDictionaries.Get(GlobalDictionaries.CostCategory);
+        var odc = CasBurden.Ref(dictionaries.Load(GlobalDictionaries.Get(GlobalDictionaries.CasBurdenGroups)).Single(r => r["Grupa"] == "ODC").RowId!.Value);
+        Assert.Equal(SaveStatus.Saved, dictionaries.Save(costCategory, [.. dictionaries.Load(costCategory), new DictRow(null, null, new Dictionary<string, string?>
+        {
+            ["Numer elementu kosztowego"] = "0057510550", ["Opis"] = "PZL Other Direct Cost", ["Cost Category"] = "Other Direct Cost", [GlobalDictionaries.BurdenGroupColumn] = odc,
+        })], [], confirmWarnings: true).Status);
+        decimal Rate(string pool, int year) => rates.Single(r => r.Pool == pools.Single(p => p.Name == pool).Id && r.From.Year == year).Value;
+
+        var path = Path.Combine(_folder, "T1_koszty_CES.xlsx");
+        var (count, notes) = service.ExportCasCostReport(path, "T1");
+        Assert.Equal(29, count);
+        if (notes > 0)
+        {
+            using var file = new XLWorkbook(path);
+            Assert.Fail(string.Join(" | ", file.Worksheet("Uwagi").Column(1).CellsUsed().Skip(1).Select(c => c.GetString())));
+        }
+        if (Environment.GetEnvironmentVariable("PZLEV_CES_SAMPLE") is { Length: > 0 } sample)   // podgląd pliku poza testem
+            File.Copy(path, sample, overwrite: true);
+
+        using var report = new XLWorkbook(path);
+        var ws = report.Worksheet("Koszty CES");
+        report.RecalculateAllFormulas();
+        Assert.Equal(["Period 10/2026", "2026", "2025", "2024"], Enumerable.Range(8, 4).Select(c => ws.Cell(CasCostReport.HeaderRow, c).GetString()));
+        var blocks = new (string Header, string Label, int Year, Func<int, int, bool> In)[]
+        {
+            ("Period 10/2026", "10/2026", 2026, (y, p) => y == 2026 && p == 10),
+            ("2026", "2026", 2026, (y, _) => y == 2026), ("2025", "2025", 2025, (y, _) => y == 2025), ("2024", "2024", 2024, (y, _) => y == 2024),
+        };
+        var checkedCells = 0;
+        for (var row = CasCostReport.FirstDataRow; row < CasCostReport.FirstDataRow + count; row++)
+        {
+            var element = ws.Cell(row, 4).GetString();
+            var group = FinanceMappingNames[element];
+            Assert.Equal(group, ws.Cell(row, 7).GetString());
+            foreach (var (header, label, year, inBlock) in blocks)
+            {
+                var b = expected.Where(e => e.Key.Element == element && inBlock(e.Key.Year, e.Key.Period)).Sum(e => e.Value);
+                Assert.Equal((double)b, ws.Cell(row, 8 + Array.FindIndex(blocks, x => x.Header == header)).GetDouble(), 6);
+                var (pools2, cost, fccom) = Oracle(group, b, pool => Rate(pool, year));
+                double Value(string column) => ws.Cell(row, Header(ws, header, column)).CachedValue is { IsNumber: true } v ? v.GetNumber() : 0;
+                Assert.True(Math.Abs((double)cost - Value($"TOTAL COST {label}")) < 1e-6, $"{element} {group} {header}: TOTAL COST {cost} ≠ {Value($"TOTAL COST {label}")}");
+                Assert.True(Math.Abs((double)fccom - Value($"TOTAL FCCOM {label}")) < 1e-6, $"{element} {group} {header}: TOTAL FCCOM {fccom} ≠ {Value($"TOTAL FCCOM {label}")}");
+                foreach (var (pool, amount) in pools2)
+                    Assert.True(Math.Abs((double)amount - Value(pool)) < 1e-6, $"{element} {group} {header}: {pool} {amount} ≠ {Value(pool)}");
+                checkedCells += pools2.Count + 2;
+            }
+        }
+        Assert.True(checkedCells > 500);
+        Assert.Equal(17 * 4, report.Worksheet("Wskaźniki").RowsUsed().Count() - 1);
+    }
+
+    /// <summary>
+    /// Wzorzec niezależny od formuł ze słownika: narzuty grupy według reguł arkusza finansów zapisanych wprost (koszt
+    /// bazowy b, wskaźnik puli r). Zwraca narzuty pul, TOTAL COST (b + pule kosztu) i TOTAL FCCOM.
+    /// </summary>
+    private static (Dictionary<string, decimal> Pools, decimal Cost, decimal Fccom) Oracle(string group, decimal b, Func<string, decimal> r)
+    {
+        var p = new Dictionary<string, decimal>();
+        const string Gs = "General Services (GS)", Ga = "General & Administrative (GA)", Fd = "Corporate Flowdowns (FD)", Mtl = "Material Handling (MTL)";
+        void Labor(string? fringe, string? oh, string? fccomOh)
+        {
+            var f = fringe is null ? 0 : p[fringe] = b * r(fringe);
+            var o = oh is null ? 0 : p[oh] = (b + f) * r(oh);
+            if (fccomOh is not null)
+                p[fccomOh] = (b + f) * r(fccomOh);
+            var gsBase = b + f + o;
+            var gs = p[Gs] = gsBase * r(Gs);
+            p[Ga] = (gsBase + gs) * r(Ga);
+            p[Fd] = (gsBase + gs) * r(Fd);
+            p["FCCOM GS"] = gsBase * r("FCCOM GS");
+            p["FCCOM G&A"] = (gsBase + gs) * r("FCCOM G&A");
+        }
+        void Dry(bool mmp)
+        {
+            var mtl = p[Mtl] = b * r(Mtl);
+            if (mmp)
+                p["Miscellaneous Material Pool (MMP)"] = b * r("Miscellaneous Material Pool (MMP)");
+            var gs = p[Gs] = mtl * r(Gs);
+            p[Ga] = (mtl + gs) * r(Ga);
+            p[Fd] = (mtl + gs) * r(Fd);
+            p["FCCOM MTL"] = b * r("FCCOM MTL");
+            p["FCCOM GS"] = mtl * r("FCCOM GS");
+            p["FCCOM G&A"] = (mtl + gs) * r("FCCOM G&A");
+        }
+        switch (group)
+        {
+            case "MFG labor": Labor("MFG Fringe", "MFG OH", "FCCOM MFG"); break;
+            case "ENG labor": Labor("ENG Fringe", "ENG OH", "FCCOM ENG"); break;
+            case "ENG LL labor": Labor(null, "ENG OH", "FCCOM ENG"); break;
+            case "MSV labor": Labor("MSV Fringe", null, null); break;
+            case "GS labor": Labor("GS Fringe", null, null); break;
+            case "MTL labor": Labor("MTL Fringe", null, null); break;
+            case "Direct Materials": Dry(mmp: true); break;
+            case "Direct Services": Dry(mmp: false); break;
+            case "Travel":
+                var travel = p[Gs] = b * r(Gs);
+                p[Ga] = (b + travel) * r(Ga);
+                p[Fd] = (b + travel) * r(Fd);
+                p["FCCOM G&A"] = (b + travel) * r("FCCOM G&A");
+                break;
+        }
+        var fccom = p.Where(x => x.Key.StartsWith("FCCOM")).Sum(x => x.Value);
+        return (p, b + p.Where(x => !x.Key.StartsWith("FCCOM")).Sum(x => x.Value), fccom);
+    }
+
     /// <summary>Kolumna puli w bloku kolumny kosztu (nazwa bloku w wierszu nad nagłówkiem).</summary>
     private static int Header(IXLWorksheet ws, string block, string header) =>
         Enumerable.Range(1, ws.LastColumnUsed()!.ColumnNumber())
