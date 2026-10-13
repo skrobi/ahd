@@ -43,7 +43,7 @@ public sealed class CasFormulaBuilderViewModel : ObservableObject
         IsNew = tokens is null;
         _names = pools.ToDictionary(p => p.Id, p => p.Name);
         _known = pools.Select(p => p.Id).ToHashSet();
-        _draft = new CasFormulaDraft(pool.Id, tokens ?? CasFormula.Default(pool.Id));
+        _draft = new CasFormulaDraft(pool.Id, tokens ?? []);   // pula nienaliczana – pusta formuła
         CostBlocks = [new PaletteBlock(CasBurden.Base, CasFormula.Token.BaseCost, BlockCategory.Cost, Tip: "Koszt bazowy kolumny raportu (okres albo rok)")];
         PoolBlocks = pools.Select(p => new PaletteBlock(p.Name, CasFormula.Token.Pool(p.Id), BlockCategory.Pool, p.Id != pool.Id,
             p.Id == pool.Id ? "Narzut tej puli – nie może wejść do własnej formuły" : $"Narzut puli {p.Name} w tym samym wierszu")).ToList();
@@ -65,10 +65,10 @@ public sealed class CasFormulaBuilderViewModel : ObservableObject
     public string Group { get; }
     public string PoolName { get; }
 
-    /// <summary>Pula nie miała formuły w grupie (zaznaczenie pola w macierzy) – formuła domyślna koszt × wskaźnik.</summary>
+    /// <summary>Pula nie miała formuły w grupie (puste pole macierzy) – edytor zaczyna od pustej formuły.</summary>
     public bool IsNew { get; }
 
-    public string Title => $"Narzut {PoolName} w grupie {Group}";
+    public string Title => IsNew ? $"Narzut {PoolName} w grupie {Group} – pula nienaliczana, nowa formuła" : $"Narzut {PoolName} w grupie {Group}";
 
     public IReadOnlyList<PaletteBlock> CostBlocks { get; }
     public IReadOnlyList<PaletteBlock> PoolBlocks { get; }

@@ -257,8 +257,9 @@ po Cost Elementach dla lat 2025–2026).
   otwiera **edytor formuły z klocków**: paleta (operatory, koszt, narzuty pul, wskaźniki pul), formuła z klocków
   z kursorem wstawiania – klocek wstawia się kliknięciem albo przeciągnięciem, klocki formuły można przestawiać
   przeciągnięciem i usuwać (×, Backspace, Delete); formuła do czytania i kontrola na bieżąco (operator między
-  składnikami, nawiasy, klocek narzutu własnej puli niedozwolony). Nowa pula w grupie zaczyna od formuły
-  koszt × wskaźnik puli; „Pula nienaliczana w grupie” odznacza pole. Zmiany macierzy zapisuje „Zapisz” (historia
+  składnikami, nawiasy, klocek narzutu własnej puli niedozwolony). Pole puste (pula nienaliczana) otwiera
+  edytor z pustą formułą – przycisk „Koszt × wskaźnik puli” wstawia formułę podstawową; „Pula nienaliczana
+  w grupie” odznacza pole. Zmiany macierzy zapisuje „Zapisz” (historia
   wersji; zapętlenie formuł w grupie – pole czerwone, zapis zablokowany).
 - **Wskaźnik kolumny:** kolumna okresu (`Period MM/RRRR`) – wskaźnik obowiązujący w tym miesiącu; kolumna roku –
   w ostatnim miesiącu roku z danymi (bieżący rok – do ostatniego okresu danych). Projekt z kosztami z kilku lat ma
