@@ -21,6 +21,8 @@ public static class StructureEdits
     public const string Bac = "Bac";
     public const string Start = "Start";
     public const string Finish = "Finish";
+    public const string ActualStart = "ActualStart";
+    public const string ActualFinish = "ActualFinish";
 
     /// <summary>Kolumny, których nie wolno edytować w tabeli (zmiana tylko przez słowniki projektu).</summary>
     public static readonly IReadOnlySet<string> Locked = new HashSet<string>();
@@ -28,8 +30,11 @@ public static class StructureEdits
     /// <summary>Kolumny słownika „WP i CAM” (klucz – kod P1S wiersza).</summary>
     public static readonly IReadOnlyList<string> WpCamColumns = [Wp, Cam, CostCategory];
 
-    /// <summary>Kolumny słownika „Harmonogram i budżet” (klucz – WP wiersza).</summary>
-    public static readonly IReadOnlyList<string> ScheduleColumns = [BacHours, BacMaterial, Bac, Start, Finish];
+    /// <summary>
+    /// Kolumny słownika „Harmonogram i budżet” (klucz – WP wiersza); Actual Start / Finish – nadpisanie dat rzeczywistych
+    /// z produkcji (pusta komórka – data z raportu produkcyjnego).
+    /// </summary>
+    public static readonly IReadOnlyList<string> ScheduleColumns = [BacHours, BacMaterial, Bac, Start, Finish, ActualStart, ActualFinish];
 
     /// <summary>
     /// Czy komórkę można zmienić: nazwa i Legacy WBS – węzeł nakładki; WP, CAM, Cost Category – wiersz z kodem P1S;
@@ -45,7 +50,7 @@ public static class StructureEdits
             Name => row.Kind == GridRowKind.Objective,
             P1s => row.Kind == GridRowKind.Objective,   // węzeł wirtualny – kod wydzielenia ELEMENT_P1S.NAZWA.CPLGR
             Wp or Cam or CostCategory => row.P1s is not null,
-            BacHours or BacMaterial or Bac or Start or Finish => row.BudgetWp is not null,
+            BacHours or BacMaterial or Bac or Start or Finish or ActualStart or ActualFinish => row.BudgetWp is not null,
             _ => false,
         };
     }
@@ -68,6 +73,8 @@ public static class StructureEdits
         Bac => "BAC",
         Start => "Baseline Start",
         Finish => "Baseline Koniec",
+        ActualStart => "Actual Start",
+        ActualFinish => "Actual Koniec",
         _ => throw new ArgumentOutOfRangeException(nameof(column), column, null),
     };
 

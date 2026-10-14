@@ -16,7 +16,8 @@ public sealed record StructureImportResult(IReadOnlyList<StructureEdit> Edits, I
 /// „Wczytaj strukturę z Excela” (docs/performance-objectives.md, rozdz. 4.2): arkusz „Struktura” pobrany z aplikacji
 /// i uzupełniony ręcznie. Wiersz pliku → wiersz struktury po kodzie P1S („Legacy Element (P1S)”). Czytane kolumny
 /// (wyróżnione w eksporcie – Inputs): WP (niepuste – element jest WP; kod WP = kod elementu), CAM (USRID), Cost Category;
-/// z wierszy z WP – Baseline Start / Finish, BAC Hours baseline, BAC Material, BAC Cost. Pusta komórka – bez zmiany;
+/// z wierszy z WP – Baseline Start / Finish, BAC Hours baseline, BAC Material, BAC Cost, Actual Start / Finish (nadpisanie
+/// dat z produkcji; data równa dacie z produkcji – bez nadpisania). Pusta komórka – bez zmiany;
 /// pozostałe kolumny (sumy poddrzewa, wartości z AHD i ACTUALS) są pomijane. Zmiany zapisuje ProjectService.SaveStructureEdits.
 /// </summary>
 public static class StructureImport
@@ -30,17 +31,20 @@ public static class StructureImport
     public const string BacHoursHeader = "BAC Hours baseline";
     public const string BacMaterialHeader = "BAC Material";
     public const string BacHeader = "BAC Cost";
+    public const string ActualStartHeader = "Actual Start";
+    public const string ActualFinishHeader = "Actual Finish";
 
     /// <summary>Kolumny eksportu czytane przy wczytaniu (wyróżnione w arkuszu).</summary>
     public static IReadOnlySet<string> Inputs { get; } = new HashSet<string>
     {
-        WpHeader, CamHeader, CategoryHeader, StartHeader, FinishHeader, BacHoursHeader, BacMaterialHeader, BacHeader,
+        WpHeader, CamHeader, CategoryHeader, StartHeader, FinishHeader, BacHoursHeader, BacMaterialHeader, BacHeader, ActualStartHeader, ActualFinishHeader,
     };
 
     private static readonly (string Header, string Column, bool Date)[] Budget =
     [
         (BacHoursHeader, StructureEdits.BacHours, false), (BacMaterialHeader, StructureEdits.BacMaterial, false), (BacHeader, StructureEdits.Bac, false),
         (StartHeader, StructureEdits.Start, true), (FinishHeader, StructureEdits.Finish, true),
+        (ActualStartHeader, StructureEdits.ActualStart, true), (ActualFinishHeader, StructureEdits.ActualFinish, true),
     ];
 
     /// <param name="schedule">Wiersze „Harmonogram i budżet” projektu – wartości bieżące (bez zmiany – bez zapisu).</param>
@@ -118,8 +122,18 @@ public static class StructureImport
                     budgets[wp] = (p1s, values);
                     current.TryGetValue(wp, out var existing);
                     foreach (var (column, value) in values)
-                        if (existing is null || !SameValue(existing[StructureEdits.DictionaryColumn(column)], value))
+                    {
+                        var stored = existing?[StructureEdits.DictionaryColumn(column)];
+                        // Data rzeczywista równa dacie z produkcji (eksport pokazuje ją w kolumnie) – bez nadpisania.
+                        var produced = stored is null && row.BudgetWp == wp ? column switch
+                        {
+                            StructureEdits.ActualStart => row.ActualStart,
+                            StructureEdits.ActualFinish => row.ActualFinish,
+                            _ => null,
+                        } : null;
+                        if (!SameValue(stored, value) && produced != value)
                             changes[column] = value;
+                    }
                 }
             }
             if (changes.Count > 0)

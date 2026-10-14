@@ -359,6 +359,10 @@ zaokrąglone do 15 cyfr znaczących (jak w Excelu). Wymaga aplikacji 0.48.0.
 i grupa narzutowa elementów kosztowych z arkusza finansów – pule i grupy dopasowane po nazwie bieżącej albo z historii
 (przemianowane przez użytkownika nie są dodawane ponownie); formuły grupy tylko, gdy grupa nie ma żadnej formuły.
 
+**Migracja `sql/mssql/035_daty_rzeczywiste_wp.sql`:** kolumny `DICT_ScheduleBudget.ActualStart`, `ActualEnd` – daty
+rzeczywiste WP („Actual Start”, „Actual Koniec” w „Harmonogram i budżet”) nadpisujące daty z raportu produkcyjnego
+(`docs/performance-objectives.md`, rozdz. 4.2). Wymaga aplikacji 0.49.0.
+
 `META_SourceFile.CanonicalStatus`: „utworzone” – dane kanoniczne zapisane i sprawdzone (widoczne dla odczytów),
 „w toku” – zapis wierszy trwa (odczyty pomijają plik; po awarii wpis i wiersze są usuwane), inna wartość – powód
 braku danych (źródło bez parsera).

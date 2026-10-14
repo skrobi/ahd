@@ -160,6 +160,13 @@ public partial class StructureView : UserControl
             style.Setters.Add(new Setter(TextBlock.TextAlignmentProperty, TextAlignment.Right));
         if (definition.FromView)
             style.Setters.Add(new Setter(TextBlock.ForegroundProperty, FindResource("Muted")));
+        if (key is StructureEdits.ActualStart or StructureEdits.ActualFinish)
+        {
+            // Data z produkcji – wyszarzona; wpisana w „Harmonogram i budżet” (nadpisanie) – zwykły kolor.
+            var fromProduction = new DataTrigger { Binding = new Binding($"FromProduction[{key}]"), Value = "true" };
+            fromProduction.Setters.Add(new Setter(TextBlock.ForegroundProperty, FindResource("Muted")));
+            style.Triggers.Add(fromProduction);
+        }
         var column = new DataGridTextColumn
         {
             Width = definition.Width,

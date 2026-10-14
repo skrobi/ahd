@@ -260,6 +260,19 @@ public static class StructureBuilder
         decimal? BacCost(string wp) => budgets.GetValueOrDefault(wp) is { } b && decimal.TryParse(b["BAC"], System.Globalization.NumberStyles.Number,
             System.Globalization.CultureInfo.InvariantCulture, out var v) ? v : null;
         decimal? PvCost(string wp) => BacCost(wp) * Elapsed(wp);
+        // Daty rzeczywiste WP: Actual Start / Actual Koniec z „Harmonogram i budżet” nadpisują daty z produkcji; bez nich –
+        // daty z produkcji przypisane do WP. Wpisany start bez końca i bez daty końca z produkcji – WP trwa.
+        DateOnly? Parse(string? text) =>
+            DateOnly.TryParseExact(text, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var d) ? d : null;
+        ProductionSum Dates(string wp)
+        {
+            var produced = wpProduction.GetValueOrDefault(wp);
+            var budget = budgets.GetValueOrDefault(wp);
+            var start = Parse(budget?["Actual Start"]);
+            var finish = Parse(budget?["Actual Koniec"]);
+            return new ProductionSum(null, null, null, null, start ?? produced.Start, finish ?? produced.Finish,
+                finish is null && (produced.Open || (start is not null && produced.Finish is null)));
+        }
         decimal? EvCost(string wp) => wpProduction.GetValueOrDefault(wp) is { Bac: > 0 } p && p.Ev is { } ev ? BacCost(wp) * Math.Min(1, ev / p.Bac.Value) : null;
 
         var rows = new List<StructureRow>();
@@ -272,6 +285,11 @@ public static class StructureBuilder
             var ownWp = assignment?["WP"];
             List<string> shown = ownWp is not null ? [ownWp] : wps;
             var ops = ownWp is not null ? wpProduction.GetValueOrDefault(ownWp) : item.Production;
+            // Daty rzeczywiste: wiersz z WP w poddrzewie – daty WP (wpisane albo z produkcji); bez WP – z produkcji poddrzewa.
+            var dates = shown.Count > 0 ? shown.Aggregate(new ProductionSum(), (sum, w) => sum.Add(Dates(w))) : item.Production;
+            var budgetWp = ownWp ?? (wps.Count == 1 ? wps[0] : null);
+            var manualStart = budgetWp is not null && budgets.GetValueOrDefault(budgetWp)?["Actual Start"] is not null;
+            var manualFinish = budgetWp is not null && budgets.GetValueOrDefault(budgetWp)?["Actual Koniec"] is not null;
             var (hours, material, start, finish) = AnalyticBaseBuilder.Totals(shown, budgets);
             string? gap = null;
             if (item.Kind == GridRowKind.Objective && !item.IsVirtual && wps.Count == 0)
@@ -288,8 +306,8 @@ public static class StructureBuilder
             var actualDlh = item.Kind == GridRowKind.Objective ? item.Dlh : wps.Sum(w => wpDlh.GetValueOrDefault(w));
             rows.Add(new StructureRow(item.Id, parentId, depth, item.Kind, item.NodeKey, item.IsVirtual, item.Name, item.WbsElement, item.P1s,
                 item.Note, item.IsGreyed, assignment?["WP"], assignment?["CAM"], assignment?["Cost Category"], wps, hours, material, start, finish,
-                gap, item.Children.Count > 0, acwp, AnalyticBaseBuilder.Bac(shown, budgets), Date(ops.Start), Date(ops.ActualFinish),
-                ops.Bac, Sum(shown, PvHours), ops.Ev, ops.Ac, ops.Material, Sum(shown, PvCost), Sum(shown, EvCost), actualDlh));
+                gap, item.Children.Count > 0, acwp, AnalyticBaseBuilder.Bac(shown, budgets), Date(dates.Start), Date(dates.ActualFinish),
+                ops.Bac, Sum(shown, PvHours), ops.Ev, ops.Ac, ops.Material, Sum(shown, PvCost), Sum(shown, EvCost), actualDlh, manualStart, manualFinish));
             foreach (var child in item.Children)
                 Emit(child, item.Id, depth + 1);
         }

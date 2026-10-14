@@ -471,7 +471,8 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
                 Note: "Do uzupełnienia w wierszu z WP (RRRR-MM-DD); w wierszach bez WP – suma poddrzewa, nie jest wczytywana.", Input: true),
             StructureImport.BacHoursHeader or StructureImport.BacMaterialHeader or StructureImport.BacHeader => new(header, ExcelTableWriter.Kind.Number,
                 Note: "Do uzupełnienia w wierszu z WP; w wierszach bez WP – suma poddrzewa, nie jest wczytywana.", Input: true),
-            "Actual Start" or "Actual Finish" => new(header, ExcelTableWriter.Kind.Date),
+            StructureImport.ActualStartHeader or StructureImport.ActualFinishHeader => new(header, ExcelTableWriter.Kind.Date,
+                Note: "Do uzupełnienia w wierszu z WP (RRRR-MM-DD): data rzeczywista WP nadpisuje datę z raportu produkcyjnego (np. WP bez danych produkcyjnych, prace zakończone przed zamknięciem operacji). Komórka z datą z produkcji – bez zmiany.", Input: true),
             "TECH Hours" or "PV Hours" or "EV Hours" or "AC Hours" or "Actual Material" or "PV Cost" or "EV Cost" or "ACWP" or "Actual DLH" => new(header, ExcelTableWriter.Kind.Number),
             _ => new ExcelTableWriter.ExcelColumn(header),
         }).ToList();
