@@ -11,7 +11,9 @@ namespace PzlEv.Modules.Projects.Models;
 /// (vAHDD); PvHours – BAC Hours WP poddrzewa rozłożone liniowo na dni robocze baseline do dnia stanu. ActualMaterial –
 /// materiały dostarczone (vAPD). Financial EV: PvCost = BAC Cost × udział dni roboczych baseline, EvCost = BAC Cost ×
 /// (EV Hours / BAC Hours) WP; ActualDlh – godziny rzeczywiste (Total Quantity) z ostatniego importu ACTUALS, przypisane
-/// jak Acwp. ActualStart / ActualFinish – vAHDD (GSTRI, LTRMI; wydzielenie – DATA_REAL); koniec, gdy wszystkie zlecenia zamknięte.
+/// jak Acwp. ActualStart / ActualFinish – daty WP wpisane w „Harmonogram i budżet” (Actual Start / Koniec;
+/// ActualStartManual, ActualFinishManual), a bez nich vAHDD (GSTRI, LTRMI; wydzielenie – DATA_REAL); koniec, gdy
+/// wszystkie zlecenia zamknięte.
 /// </summary>
 public sealed record StructureRow(
     string Id,
@@ -46,7 +48,9 @@ public sealed record StructureRow(
     decimal? ActualMaterial = null,
     decimal? PvCost = null,
     decimal? EvCost = null,
-    decimal ActualDlh = 0)
+    decimal ActualDlh = 0,
+    bool ActualStartManual = false,
+    bool ActualFinishManual = false)
 {
     /// <summary>Budżet i daty wiersza to wartości jego własnego WP (także gdy pod nim są inne WP – np. wydzielenia).</summary>
     public bool OwnsBudget => Wp is not null;

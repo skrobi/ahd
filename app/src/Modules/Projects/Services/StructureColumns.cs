@@ -15,8 +15,8 @@ public static class StructureColumns
     public const string Materials = "Materials";
     public const string FinancialEv = "Financial EV";
 
-    public const string ActualStart = "ActualStart";
-    public const string ActualFinish = "ActualFinish";
+    public const string ActualStart = StructureEdits.ActualStart;
+    public const string ActualFinish = StructureEdits.ActualFinish;
     public const string OpsBacHours = "OpsBacHours";
     public const string PvHours = "PvHours";
     public const string EvHours = "EvHours";
@@ -53,8 +53,8 @@ public static class StructureColumns
 
         new(StructureEdits.Start, "Baseline Start", Schedule, "Planowany start WP (baseline, RRRR-MM-DD) – „Harmonogram i budżet”.", 110, Mono: true, Right: false),
         new(StructureEdits.Finish, "Baseline Finish", Schedule, "Planowany koniec WP (baseline, RRRR-MM-DD) – „Harmonogram i budżet”.", 110, Mono: true, Right: false),
-        new(ActualStart, "Actual Start", Schedule, "Rzeczywisty start – najwcześniejszy rzeczywisty start zlecenia (vAHDD GSTRI); wydzielenie (np. Paint) – najwcześniejsza data wykonania jego operacji (DATA_REAL).", 110, Mono: true, Right: false, FromView: true),
-        new(ActualFinish, "Actual Finish", Schedule, "Rzeczywisty koniec – najpóźniejszy rzeczywisty koniec zlecenia (vAHDD LTRMI; wydzielenie – DATA_REAL), gdy wszystkie zlecenia elementu są zamknięte (STAT = DONE); inaczej puste – element trwa.", 110, Mono: true, Right: false, FromView: true),
+        new(ActualStart, "Actual Start", Schedule, "Rzeczywisty start WP – wpisany w „Harmonogram i budżet” (Actual Start, np. przez CAM), a bez niego z produkcji: najwcześniejszy rzeczywisty start zlecenia (vAHDD GSTRI); wydzielenie (np. Paint) – najwcześniejsza data wykonania jego operacji (DATA_REAL). Wyczyszczenie komórki przywraca datę z produkcji.", 110, Mono: true, Right: false),
+        new(ActualFinish, "Actual Finish", Schedule, "Rzeczywisty koniec WP – wpisany w „Harmonogram i budżet” (Actual Koniec, np. prace zakończone, a operacja niezamknięta), a bez niego z produkcji: najpóźniejszy rzeczywisty koniec zlecenia (vAHDD LTRMI; wydzielenie – DATA_REAL), gdy wszystkie zlecenia elementu są zamknięte (STAT = DONE); inaczej puste – element trwa. Wyczyszczenie komórki przywraca datę z produkcji.", 110, Mono: true, Right: false),
 
         new(OpsBacHours, "TECH Hours", OperationalEv, "Budżet godzin z AHD (vAHDD): TECH ÷ produktywność IPT + godziny jakości DJK (słowniki „Parametry produkcji”, „Wskaźniki DJK”); może różnić się od BAC Hours baseline. Suma elementów P1S poddrzewa.", FromView: true),
         new(PvHours, "PV Hours", OperationalEv, "Godziny do wypracowania wg harmonogramu baseline: BAC Hours (AHD) WP rozłożone liniowo na dni robocze (pn–pt) od Baseline Start do Baseline Finish, stan na dziś.", FromView: true),

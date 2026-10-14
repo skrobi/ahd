@@ -263,6 +263,58 @@ public sealed class StructureTests
     }
 
     [Fact]
+    public void Actual_dates_entered_for_wp_override_production_dates()
+    {
+        // WP-1 na AC-CAB.6.38.07 (PSPNR 101, pod nim XYZ-1 – 102): produkcja z otwartym zleceniem; WP-2 na AC-CAB.6.38.01 bez produkcji.
+        DictRow[] wpCam = [Wp("AC-CAB.6.38.07", "WP-1"), Wp("AC-CAB.6.38.01", "WP-2")];
+        var production = new ProductionData(new Dictionary<string, ProductionValues>
+        {
+            ["101"] = new("101", 10, 60, 20, null, null, new DateOnly(2026, 2, 1), new DateOnly(2026, 4, 30)),
+            ["102"] = new("102", 5, 40, 30, null, null, new DateOnly(2026, 1, 15), null),   // operacja niezamknięta
+        }, DateTimeOffset.Now);
+        DictRow[] Schedule(string? start1, string? end1, string? start2, string? end2) =>
+        [
+            Row(("WP", "WP-1"), ("BAC HOURS", "1"), ("Actual Start", start1), ("Actual Koniec", end1)),
+            Row(("WP", "WP-2"), ("BAC HOURS", "1"), ("Actual Start", start2), ("Actual Koniec", end2)),
+        ];
+
+        // Bez wpisanych dat – z produkcji: start najwcześniejszy, koniec pusty (zlecenie otwarte); WP-2 – puste.
+        var structure = StructureBuilder.Build(Objectives(), Inputs().P1s, wpCam, Schedule(null, null, null, null), production: production);
+        var wp1 = Of(structure, "p1s:AC-CAB.6.38.07");
+        Assert.Equal(("2026-01-15", (string?)null, false, false), (wp1.ActualStart, wp1.ActualFinish, wp1.ActualStartManual, wp1.ActualFinishManual));
+        Assert.Equal(((string?)null, (string?)null), (Of(structure, "4D06WP000001").ActualStart, Of(structure, "4D06WP000001").ActualFinish));
+
+        // Wpisany koniec WP-1 (prace zakończone, operacja niezamknięta) i daty WP-2 podane przez CAM.
+        structure = StructureBuilder.Build(Objectives(), Inputs().P1s, wpCam, Schedule(null, "2026-05-10", "2026-03-01", "2026-03-20"), production: production);
+        wp1 = Of(structure, "p1s:AC-CAB.6.38.07");
+        Assert.Equal(("2026-01-15", "2026-05-10", false, true), (wp1.ActualStart, wp1.ActualFinish, wp1.ActualStartManual, wp1.ActualFinishManual));
+        var wp2 = Of(structure, "4D06WP000001");   // węzeł nakładki z jedynym WP-2 pod nim – daty WP-2
+        Assert.Equal(("2026-03-01", "2026-03-20", true, true), (wp2.ActualStart, wp2.ActualFinish, wp2.ActualStartManual, wp2.ActualFinishManual));
+        var root = Of(structure, "4D06WP");          // kilka WP – najwcześniejszy start, najpóźniejszy koniec, gdy wszystkie WP zakończone
+        Assert.Equal(("2026-01-15", "2026-05-10", false), (root.ActualStart, root.ActualFinish, root.ActualFinishManual));
+
+        // Wpisany sam start WP-2 (bez końca i bez produkcji) – WP trwa, wiersz nadrzędny bez daty końca.
+        structure = StructureBuilder.Build(Objectives(), Inputs().P1s, wpCam, Schedule(null, "2026-05-10", "2026-03-01", null), production: production);
+        Assert.Null(Of(structure, "4D06WP").ActualFinish);
+    }
+
+    [Fact]
+    public void Actual_dates_go_to_schedule_dictionary_and_are_validated()
+    {
+        var (working, _) = StructureEdits.Schedule([Budget("WP-1", "10")], "WP-1",
+            new Dictionary<string, string?> { [StructureEdits.ActualStart] = "2026-03-01", [StructureEdits.ActualFinish] = "2026-03-20" });
+        Assert.Equal(("2026-03-01", "2026-03-20", "10"), (working[0]["Actual Start"], working[0]["Actual Koniec"], working[0]["BAC HOURS"]));
+        (working, _) = StructureEdits.Schedule(working, "WP-1", new Dictionary<string, string?> { [StructureEdits.ActualFinish] = "" });
+        Assert.Null(working[0]["Actual Koniec"]);   // wyczyszczenie – data z produkcji
+
+        var spec = ProjectDictionaries.For(ProjectDictionaries.ScheduleBudget,
+            new ProjectDictionaryContext(new P1sScope([], []), new Dictionary<string, string>(), new HashSet<string>(), new HashSet<string> { "WP-1" }));
+        var issues = PzlEv.Shared.Utils.Dictionaries.DictionaryValidator.Validate(spec,
+            [Row(("WP", "WP-1"), ("BAC HOURS", "1"), ("Actual Start", "2026-04-01"), ("Actual Koniec", "2026-03-01"))]);
+        Assert.Contains(issues, i => i.Message.Contains("Actual Start jest późniejszy niż Actual Koniec"));
+    }
+
+    [Fact]
     public void Split_code_names_the_element_and_the_work_center_group()
     {
         var index = ProductionSplit.Index(Inputs().P1s);
@@ -392,6 +444,36 @@ public sealed class StructureTests
         Assert.Contains(result.Issues, i => i.Level == CheckLevel.Warning && i.Message.StartsWith($"BAC Hours baseline przy elemencie {other.P1s} bez WP"));
         Assert.Contains(result.Issues, i => i.Level == CheckLevel.Warning && i.Message.StartsWith("Elementu P1S NIE-MA nie ma w strukturze"));
         Assert.Equal((1, 1), (result.Count(StructureEdits.Wp), result.Count(StructureEdits.Cam)));
+    }
+
+    /// <summary>Actual Start / Finish z pliku: data z produkcji (pokazana w eksporcie) – bez nadpisania; wpisana inna – nadpisanie WP.</summary>
+    [Fact]
+    public void Structure_file_actual_dates_override_only_when_different_from_production()
+    {
+        DictRow[] wpCam = [Row(("Element P1S", "XYZ-1"), ("WP", "WP-1"), ("CAM", "e123456"), ("Cost Category", null))];
+        DictRow[] schedule = [Budget("WP-1", "10", "100", null, null, "1000")];
+        var production = new ProductionData(new Dictionary<string, ProductionValues>
+        {
+            ["102"] = new("102", 5, 40, 30, null, null, new DateOnly(2026, 1, 15), null),   // XYZ-1 – operacja niezamknięta
+        }, DateTimeOffset.Now);
+        var structure = ProjectService.Structure(Objectives(), Inputs(), wpCam, schedule, production: production);
+        var persons = new List<LookupOption> { new("e123456", "Anna Nowak") };
+        var path = Path.Combine(Directory.CreateTempSubdirectory("pzl-ev-structure-").FullName, "M28_struktura.xlsx");
+        ExcelTableWriter.WriteTemplate(path, [("Struktura", ProjectService.StructureSheetColumns(persons), ProjectService.StructureRows(structure, persons))]);
+
+        Assert.Empty(StructureImport.Read(TabularFileReader.Read(path, "Struktura"), structure, schedule).Edits);   // start z produkcji – bez zmian
+
+        using (var workbook = new XLWorkbook(path))
+        {
+            var sheet = workbook.Worksheet("Struktura");
+            var header = sheet.Row(1).CellsUsed().Select(c => c.GetString()).ToList();
+            var row = sheet.RowsUsed().Single(r => r.Cell(header.IndexOf("Legacy Element (P1S)") + 1).GetString() == "XYZ-1").RowNumber();
+            sheet.Cell(row, header.IndexOf("Actual Finish") + 1).Value = new DateTime(2026, 5, 10);
+            workbook.Save();
+        }
+        var changes = StructureImport.Read(TabularFileReader.Read(path, "Struktura"), structure, schedule).Edits.Single().Changes;
+        Assert.Equal(["ActualFinish"], changes.Keys);
+        Assert.Equal("2026-05-10", changes[StructureEdits.ActualFinish]);
     }
 
     [Fact]

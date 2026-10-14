@@ -44,7 +44,7 @@ public static class ProjectDictionaries
     {
         Code = ScheduleBudget,
         Name = "Harmonogram i budżet",
-        Description = "WP → BAC HOURS (godziny), BAC MATERIAL (koszt materiałów), BAC (budżet kosztowy), Baseline Start i Baseline Koniec – baseline projektu.",
+        Description = "WP → BAC HOURS (godziny), BAC MATERIAL (koszt materiałów), BAC (budżet kosztowy), Baseline Start i Baseline Koniec – baseline projektu; Actual Start i Actual Koniec – daty rzeczywiste WP nadpisujące daty z raportu produkcyjnego (puste – data z produkcji).",
         Columns =
         [
             new("WP", ColumnType.Text, Key: true),
@@ -53,6 +53,8 @@ public static class ProjectDictionaries
             new("BAC", ColumnType.Decimal),
             new("Baseline Start", ColumnType.Date, Aliases: ["Planowany Start"]),
             new("Baseline Koniec", ColumnType.Date, Aliases: ["Planowany Koniec"]),
+            new("Actual Start", ColumnType.Date),
+            new("Actual Koniec", ColumnType.Date, Aliases: ["Actual Finish"]),
         ],
         SkipKeyOnlyRows = true,
     };
@@ -132,7 +134,8 @@ public static class ProjectDictionaries
     [
         new(WpCamSpec, "dict.WpCam", [("Element P1S", "P1sElement"), ("WP", "Wp"), ("CAM", "Cam"), ("Cost Category", "CostCategory")]),
         new(ScheduleBudgetSpec, "dict.ScheduleBudget",
-            [("WP", "Wp"), ("BAC HOURS", "BacHours"), ("BAC MATERIAL", "BacMaterial"), ("BAC", "Bac"), ("Baseline Start", "PlannedStart"), ("Baseline Koniec", "PlannedEnd")]),
+            [("WP", "Wp"), ("BAC HOURS", "BacHours"), ("BAC MATERIAL", "BacMaterial"), ("BAC", "Bac"), ("Baseline Start", "PlannedStart"), ("Baseline Koniec", "PlannedEnd"),
+             ("Actual Start", "ActualStart"), ("Actual Koniec", "ActualEnd")]),
         new(WbsCategoriesSpec, "dict.WbsCategory", [("Cost Category", "Category"), ("Opis", "Description")]),
         new(ExclusionsSpec, "dict.Exclusion", [("Cost Element", "CostElement"), ("WBS Element", "WbsElement"), ("Partner object", "PartnerObject"), ("Opis", "Description")]),
         new(SourcesSpec, "dict.ProjectSource", [("Definicja źródła", "SourceCode"), ("Opis", "Description")]),
@@ -224,6 +227,8 @@ public static class ProjectDictionaries
                 yield return Issue.Warning($"WP {row["WP"]} bez budżetu (BAC HOURS, BAC MATERIAL i BAC puste)", at);
             if (row["Baseline Start"] is { } start && row["Baseline Koniec"] is { } end && string.CompareOrdinal(start, end) > 0)
                 yield return Issue.Error("Baseline Start jest późniejszy niż Baseline Koniec", at);
+            if (row["Actual Start"] is { } actualStart && row["Actual Koniec"] is { } actualEnd && string.CompareOrdinal(actualStart, actualEnd) > 0)
+                yield return Issue.Error("Actual Start jest późniejszy niż Actual Koniec", at);
         }
     }
 

@@ -65,6 +65,16 @@ public sealed class StructureRowViewModel(StructureRow row) : INotifyPropertyCha
         public string? this[string column] => texts.TryGetValue(column, out var text) ? text : missing;
     }
 
+    /// <summary>
+    /// Daty rzeczywiste z produkcji (nie wpisane w „Harmonogram i budżet”) według klucza kolumny: "true" – wyszarzone
+    /// w tabeli; wpisana data albo zmiana w toku – zwykły kolor.
+    /// </summary>
+    public CellTexts FromProduction => new(new Dictionary<string, string>
+    {
+        [StructureEdits.ActualStart] = !row.ActualStartManual && !_changes.ContainsKey(StructureEdits.ActualStart) ? "true" : "false",
+        [StructureEdits.ActualFinish] = !row.ActualFinishManual && !_changes.ContainsKey(StructureEdits.ActualFinish) ? "true" : "false",
+    });
+
     /// <summary>Zmiany wpisane w wierszu, jeszcze niezapisane (klucz kolumny → wartość).</summary>
     public IReadOnlyDictionary<string, string?> Changes => _changes;
 
@@ -200,6 +210,7 @@ public sealed class StructureRowViewModel(StructureRow row) : INotifyPropertyCha
         Notify(nameof(HasChanges));
         Notify(nameof(Problems));
         Notify(nameof(ProblemText));
+        Notify(nameof(FromProduction));
     }
 
     private static string? Amount(decimal value) => value == 0 ? null : PolishNumber.ToDisplay(value);
