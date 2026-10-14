@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Windows.Input;
+using PzlEv.Shared.Utils.Files;
 using PzlEv.Modules.Projects.Models;
 using PzlEv.Modules.Projects.Services;
 using PzlEv.Shared.Models;
@@ -403,6 +404,11 @@ public sealed class WizardViewModel : ObservableObject
         try
         {
             await action();
+        }
+        catch (Exception ex) when (FileInUse.Is(ex))
+        {
+            Logger.Warning("{Context}: plik otwarty w innym programie – {Message}", "Kreator projektu", ex.Message);
+            Status = FileInUse.Describe(ex);
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {

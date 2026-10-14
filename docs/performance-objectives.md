@@ -171,7 +171,8 @@ i budżetem (`StructureBuilder`).
   z produkcji poddrzewa.
 - **Actual DLH** (tylko do odczytu): godziny rzeczywiste narastająco z ostatniego importu ACTUALS – kolumna „Total
   Quantity” (pole parsera `TotalQuantity`), te same wiersze (bez wykluczeń i rozliczenia wychodzącego) i to samo
-  przypisanie do WP co ACWP (procedura `REP_ProjectCostsByElement` z polem godzin). Godziny elementu bez WP zostają
+  przypisanie do WP co ACWP – to samo wywołanie procedury `REP_ProjectCostsByElement` (parametr `@Hours`, kolumna
+  `Hours`; migracja 036), jeden odczyt zrzutu ACTUALS dla obu kolumn. Godziny elementu bez WP zostają
   na węźle nakładki (bez osobnego braku). Brak pola godzin w parserze – kolumna pusta, ACWP bez zmian.
 - **Pasek nad tabelą** – ikony z opisem w podpowiedzi: edycja Performance Objectives, dołożenie z Excela (eksport SAP),
   pobranie struktury do Excela, wczytanie struktury z Excela, rozwiń / zwiń wszystko, odświeżenie P1S i kosztów, cofnięcie wklejenia, odrzucenie

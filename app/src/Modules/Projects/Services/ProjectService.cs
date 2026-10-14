@@ -507,10 +507,11 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
     public const string ActualsHours = "TotalQuantity";
 
     /// <summary>
-    /// Actual DLH po elemencie CES z ostatniego importu ACTUALS – suma „Total Quantity” z tych samych wierszy co ACWP
-    /// (REP_ProjectCostsByElement z polem godzin zamiast kwoty).
+    /// ACWP (pole kwoty field) i Actual DLH (suma „Total Quantity” z tych samych wierszy) po elemencie CES – jedno wywołanie
+    /// REP_ProjectCostsByElement (migracja 036; wcześniej dwa odczyty dużego zrzutu ACTUALS).
     /// </summary>
-    public IReadOnlyDictionary<string, decimal> HoursByElement(string code) => store.CostsByElement(code, ActualsHours);
+    public (IReadOnlyDictionary<string, decimal> Amounts, IReadOnlyDictionary<string, decimal> Hours) CostsAndHoursByElement(string code, string field) =>
+        store.CostsAndHoursByElement(code, field, ActualsHours);
 
     /// <summary>Pole kwoty ACTUALS projektu – słownik „Parametry projektu” (brak – ValueObjCrcy).</summary>
     public string ActualsAmount(string code) => ProjectDictionaries.ActualsAmount(Rows(ProjectDictionaries.Settings, code));

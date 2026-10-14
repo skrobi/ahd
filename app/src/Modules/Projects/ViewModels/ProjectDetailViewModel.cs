@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Windows.Input;
+using PzlEv.Shared.Utils.Files;
 using PzlEv.Modules.Projects.Models;
 using PzlEv.Modules.Projects.Services;
 using PzlEv.Shared.Models;
@@ -504,8 +505,8 @@ public sealed class ProjectDetailViewModel : ObservableObject, IDisposable
 
     /// <summary>
     /// ACWP po elemencie CES (w tle) z pola kwoty ACTUALS projektu i Actual DLH (Total Quantity); cached – koszty w pamięci,
-    /// użyte przy tym samym polu. Brak danych lub procedury – pusta lista i powód (struktura bez kosztów); brak godzin –
-    /// kolumna Actual DLH pusta, ACWP bez zmian.
+    /// użyte przy tym samym polu – jedno wywołanie procedury. Brak danych lub procedury – pusta lista i powód (struktura bez
+    /// kosztów); brak pola godzin w parserze – kolumna Actual DLH pusta.
     /// </summary>
     private CostData ReadCosts(StepTimer steps, CostData? cached)
     {
@@ -515,26 +516,13 @@ public sealed class ProjectDetailViewModel : ObservableObject, IDisposable
             field = steps.Time("pole kwoty ACTUALS", () => _service.ActualsAmount(Code));
             if (cached is { } c && c.Field == field)
                 return c;
-            var amounts = steps.Time("koszty ACWP (ACTUALS)", () => _service.CostsByElement(Code, field));
-            return new CostData(amounts, ReadDlh(steps), null, field);
+            var (amounts, hours) = steps.Time("koszty ACWP i godziny Actual DLH (ACTUALS)", () => _service.CostsAndHoursByElement(Code, field));
+            return new CostData(amounts, hours, null, field);
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
             Logger.Warning(ex, "Koszty projektu {Code}", Code);
             return new CostData(new Dictionary<string, decimal>(), new Dictionary<string, decimal>(), $"koszty (ACWP) niedostępne: {ex.Message}", field);
-        }
-    }
-
-    private IReadOnlyDictionary<string, decimal> ReadDlh(StepTimer steps)
-    {
-        try
-        {
-            return steps.Time("godziny Actual DLH (ACTUALS)", () => _service.HoursByElement(Code));
-        }
-        catch (Exception ex) when (ex is not OutOfMemoryException)
-        {
-            Logger.Warning(ex, "Godziny Actual DLH projektu {Code}", Code);
-            return new Dictionary<string, decimal>();
         }
     }
 
@@ -944,6 +932,11 @@ public sealed class ProjectDetailViewModel : ObservableObject, IDisposable
         try
         {
             await action();
+        }
+        catch (Exception ex) when (FileInUse.Is(ex))
+        {
+            Logger.Warning("{Context}: plik otwarty w innym programie – {Message}", "Projekt " + Code, ex.Message);
+            Status = FileInUse.Describe(ex);
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {

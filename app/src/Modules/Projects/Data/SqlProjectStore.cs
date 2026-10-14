@@ -255,6 +255,16 @@ public sealed class SqlProjectStore(SqlDatabase db, IClock clock, ICurrentUser u
             .ToDictionary(r => r.WbsElement, r => r.Amount ?? 0, StringComparer.OrdinalIgnoreCase);
     }
 
+    public (IReadOnlyDictionary<string, decimal> Amounts, IReadOnlyDictionary<string, decimal> Hours) CostsAndHoursByElement(string code, string value, string hours)
+    {
+        using var connection = db.Open();
+        var rows = connection.Query<(string WbsElement, decimal? Amount, int Rows, decimal? Hours)>(db.Table("rep.ProjectCostsByElement"),
+                new { Project = code, Value = value, Hours = hours }, commandType: System.Data.CommandType.StoredProcedure, commandTimeout: 600)
+            .ToList();
+        return (rows.ToDictionary(r => r.WbsElement, r => r.Amount ?? 0, StringComparer.OrdinalIgnoreCase),
+            rows.Where(r => r.Hours is not null).ToDictionary(r => r.WbsElement, r => r.Hours!.Value, StringComparer.OrdinalIgnoreCase));
+    }
+
     public IReadOnlyList<ActualsFile> ActualsFiles()
     {
         using var connection = db.Open();

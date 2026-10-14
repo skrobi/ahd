@@ -363,6 +363,10 @@ i grupa narzutowa elementów kosztowych z arkusza finansów – pule i grupy dop
 rzeczywiste WP („Actual Start”, „Actual Koniec” w „Harmonogram i budżet”) nadpisujące daty z raportu produkcyjnego
 (`docs/performance-objectives.md`, rozdz. 4.2). Wymaga aplikacji 0.49.0.
 
+**Migracja `sql/mssql/036_koszty_i_godziny_po_elementach.sql`:** `REP_ProjectCostsByElement @Project, @Value, @Hours` –
+parametr `@Hours` (pole godzin parsera ACTUALS, np. `TotalQuantity`) dodaje kolumnę `Hours` (suma z tych samych wierszy
+co kwota); struktura projektu czyta ACWP i Actual DLH jednym wywołaniem zamiast dwóch. Wymaga aplikacji 0.50.0.
+
 `META_SourceFile.CanonicalStatus`: „utworzone” – dane kanoniczne zapisane i sprawdzone (widoczne dla odczytów),
 „w toku” – zapis wierszy trwa (odczyty pomijają plik; po awarii wpis i wiersze są usuwane), inna wartość – powód
 braku danych (źródło bez parsera).
