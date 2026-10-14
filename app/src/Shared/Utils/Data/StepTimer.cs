@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using PzlEv.Shared.Utils.Data.Sql;
 
 namespace PzlEv.Shared.Utils.Data;
 
@@ -11,12 +12,15 @@ public sealed class StepTimer
     public T Time<T>(string name, Func<T> work)
     {
         var watch = Stopwatch.StartNew();
+        var outer = SqlProfiler.Operation;
+        SqlProfiler.Operation = name;   // zapytania SQL kroku – z nazwą kroku w logu SQL
         try
         {
             return work();
         }
         finally
         {
+            SqlProfiler.Operation = outer;
             lock (_steps)
                 _steps.Add((name, watch.ElapsedMilliseconds));
         }
