@@ -236,9 +236,11 @@ public sealed class LatestImportProcedureTests : IDisposable
         Assert.Equal(2400m, costs["2di473001002"]);
         Assert.Equal(50014, Assert.Throws<SqlException>(() => store.CostsByElement("M28", "Brak")).Number);
 
-        // Actual DLH struktury: ta sama procedura z polem godzin (Total Quantity) – te same wiersze co ACWP.
-        var hours = store.CostsByElement("M28", ProjectService.ActualsHours);
+        // Migracja 036 – Actual DLH struktury: kwota i godziny (Total Quantity) jednym wywołaniem, te same wiersze co ACWP.
+        var (amounts, hours) = store.CostsAndHoursByElement("M28", "ValueObjCrcy", ProjectService.ActualsHours);
+        Assert.Equal(costs, amounts);
         Assert.Equal((32m, 12m), (hours["2DI473001001"], hours["2DI473001002"]));
+        Assert.Empty(store.CostsAndHoursByElement("M28", "ValueObjCrcy", "Brak").Hours);   // brak pola godzin – bez godzin
 
         // Migracja 017: cost element rozliczeniowy (Cost Category „Rozliczeniowy”) – rozliczenie wychodzące (klasa partnera
         // inna niż „Profit analysis”) pominięte; zmiana projektu w Cost Category ma pierwszeństwo przed globalnym.
