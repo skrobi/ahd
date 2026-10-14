@@ -136,7 +136,7 @@ na ekranie **Diagnostyka** i w stopce okna.
 | self-contained, single-file, bez instalacji .NET | publikacja `build.cmd` → jeden `PZL-EV.exe`; uruchomienie na komputerze bez .NET |
 | uruchomienie z dysku sieciowego | start `PZL-EV.exe` ze ścieżki UNC; ekran Diagnostyka pokazuje „Uruchomiono z” |
 | Dapper, Microsoft.Data.SqlClient, ClosedXML (OpenXML) | pakiety są w projekcie; ekran **Diagnostyka** pokazuje wersje wczytane w runtime z bundla (bez łączenia z bazą) |
-| Serilog | log w `logs\pzl-ev-RRRRMMDD.log` obok `.exe` (sprawdza też prawo zapisu w tym miejscu); profilowanie: polecenia SQL dłuższe niż 200 ms („SQL 1234 ms [baza]: tekst polecenia”, błędy SQL zawsze – `SqlProfiler`, wszystkie bazy) i czasy kroków wczytania projektu od najdłuższego („Projekt M28: wczytanie 180000 ms – koszty ACWP (ACTUALS) 150000 ms, …”) |
+| Serilog | log w `logs\pzl-ev-RRRRMMDD.log` obok `.exe` (sprawdza też prawo zapisu w tym miejscu); profilowanie: polecenia SQL dłuższe niż 200 ms („SQL 1234 ms [baza] (krok): tekst polecenia”, błędy SQL zawsze – `SqlProfiler`, wszystkie bazy) i czasy kroków wczytania projektu od najdłuższego („Projekt M28: wczytanie 180000 ms – koszty ACWP (ACTUALS) 150000 ms, …”); każde polecenie SQL – osobny log `logs\sql-RRRRMMDD.log` (czas, baza, krok `StepTimer`, tekst, błąd; 14 dni); przy zamknięciu aplikacji – podsumowanie sesji w obu logach (`SqlStatistics`: 20 poleceń o największym łącznym czasie – liczba wykonań, średni i najdłuższy czas – oraz polecenia z błędem) |
 | konto Windows / AD | panel pokazuje `DOMENA\użytkownik` |
 
 ## Budowa (maszyna developera, Windows)
