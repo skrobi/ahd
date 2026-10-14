@@ -78,6 +78,21 @@ public sealed class StructureRowViewModel(StructureRow row) : INotifyPropertyCha
     /// <summary>Zmiany wpisane w wierszu, jeszcze niezapisane (klucz kolumny → wartość).</summary>
     public IReadOnlyDictionary<string, string?> Changes => _changes;
 
+    /// <summary>Wiersz bieżącej komórki (StructureViewModel.Selected) – podświetlony ciemniejszym szarym.</summary>
+    public bool IsCurrent
+    {
+        get => _isCurrent;
+        set
+        {
+            if (_isCurrent == value)
+                return;
+            _isCurrent = value;
+            Notify(nameof(IsCurrent));
+        }
+    }
+
+    private bool _isCurrent;
+
     public bool IsExpanded
     {
         get => _isExpanded;
