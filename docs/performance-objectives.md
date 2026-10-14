@@ -106,7 +106,7 @@ i budżetem (`StructureBuilder`).
   |---|---|
   | WBS Attributes | WBS Name (drzewo, zamrożona; poziom – wcięcie), CES Element i Legacy Element (P1S) (domyślnie schowane – „+” w nagłówku WBS Name), WP (checkbox), CAM (lista osób), Cost Category (lista kategorii projektu) |
   | Schedule | Baseline Start, Baseline Finish (RRRR-MM-DD, „Harmonogram i budżet”); Actual Start, Actual Finish – data wpisana dla WP w „Harmonogram i budżet” (Actual Start / Actual Koniec), a bez niej z produkcji: start – najwcześniejszy `GSTRI` zleceń, koniec – najpóźniejszy `LTRMI`, gdy wszystkie zlecenia zamknięte (inaczej puste); element wirtualny – `DATA_REAL` operacji |
-  | Operational EV | TECH Hours (AHD: TECH ÷ produktywność IPT z 12 mies. + DJK), PV Hours (TECH Hours WP rozłożone liniowo na dni robocze pn–pt baseline, stan na dziś), EV Hours (TECH_PON ÷ produktywność + DJK), AC Hours (CATS) |
+  | Operational EV | TECH Hours (AHD: TECH ÷ produktywność IPT z 12 mies. + DJK), PV Hours (TECH Hours WP rozłożone liniowo na dni robocze pn–pt baseline, stan na dziś), EV Hours (TECH_PON ÷ produktywność + DJK), % Complete (EV Hours ÷ TECH Hours × 100 – zaawansowanie z produkcji, jak EV ÷ BAC raportu S70MR), AC Hours (CATS) |
   | Materials | BAC Material („Harmonogram i budżet”), Actual Material (vAPD: dostarczone / wydane, USD bez narzutu Z_CLO) |
   | Financial EV | BAC Hours baseline i BAC Cost („Harmonogram i budżet”), PV Cost (BAC Cost × udział dni roboczych baseline), EV Cost (BAC Cost × EV Hours ÷ TECH Hours, najwyżej BAC Cost), ACWP, Actual DLH |
 

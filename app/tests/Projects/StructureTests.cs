@@ -254,6 +254,8 @@ public sealed class StructureTests
         Assert.Equal((40m, 30m, 5m, (decimal?)null), (leaf.OpsBacHours, leaf.EvHours, leaf.AcHours, leaf.ActualMaterial));
         var wp = Of(structure, "p1s:AC-CAB.6.38.07");
         Assert.Equal((100m, 50m, 15m, 500m), (wp.OpsBacHours, wp.EvHours, wp.AcHours, wp.ActualMaterial));   // suma poddrzewa
+        Assert.Equal((75m, 50m), (leaf.PercentComplete, wp.PercentComplete));   // zaawansowanie: EV ÷ TECH Hours × 100
+        Assert.Null(Of(structure, "4D06WP000002").PercentComplete);              // bez godzin TECH – puste
         Assert.Equal(50m, wp.PvHours);      // BAC Hours (AHD) 100 × 5/10 dni roboczych
         Assert.Equal(5000m, wp.PvCost);     // BAC Cost 10 000 × 0,5
         Assert.Equal(5000m, wp.EvCost);     // BAC Cost × EV/BAC = 10 000 × 50/100

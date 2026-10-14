@@ -180,6 +180,7 @@ public sealed class StructureRowViewModel(StructureRow row) : INotifyPropertyCha
         StructureColumns.PvHours => Optional(row.PvHours),
         StructureColumns.EvHours => Optional(row.EvHours),
         StructureColumns.AcHours => Optional(row.AcHours),
+        StructureColumns.PercentComplete => row.PercentComplete is { } percent ? $"{PolishNumber.ToDisplay(Math.Round(percent, 1))}%" : null,
         StructureColumns.ActualMaterial => Optional(row.ActualMaterial),
         StructureColumns.PvCost => Optional(row.PvCost),
         StructureColumns.EvCost => Optional(row.EvCost),

@@ -21,6 +21,7 @@ public static class StructureColumns
     public const string PvHours = "PvHours";
     public const string EvHours = "EvHours";
     public const string AcHours = "AcHours";
+    public const string PercentComplete = "PercentComplete";
     public const string ActualMaterial = "ActualMaterial";
     public const string PvCost = "PvCost";
     public const string EvCost = "EvCost";
@@ -59,6 +60,7 @@ public static class StructureColumns
         new(OpsBacHours, "TECH Hours", OperationalEv, "Budżet godzin z AHD (vAHDD): TECH ÷ produktywność IPT + godziny jakości DJK (słowniki „Parametry produkcji”, „Wskaźniki DJK”); może różnić się od BAC Hours baseline. Suma elementów P1S poddrzewa.", FromView: true),
         new(PvHours, "PV Hours", OperationalEv, "Godziny do wypracowania wg harmonogramu baseline: BAC Hours (AHD) WP rozłożone liniowo na dni robocze (pn–pt) od Baseline Start do Baseline Finish, stan na dziś.", FromView: true),
         new(EvHours, "EV Hours", OperationalEv, "Godziny zarobione wg raportu AHD (vAHDD): TECH_PON ÷ produktywność IPT + DJK.", FromView: true),
+        new(PercentComplete, "% Complete", OperationalEv, "Zaawansowanie z produkcji: EV Hours ÷ TECH Hours × 100 (jak EV ÷ BAC w raporcie operacyjnym S70MR); wiersz z WP – godziny WP, bez WP – suma poddrzewa.", 90, FromView: true),
         new(AcHours, "AC Hours", OperationalEv, "Godziny rzeczywiste – zaraportowane godziny CATS (vAHDD).", FromView: true),
 
         new(StructureEdits.BacMaterial, "BAC Material", Materials, "Budżet materiałów WP – „Harmonogram i budżet”."),

@@ -421,7 +421,7 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
     [
         "Poziom", "WBS Name", "Rodzaj", "CES Element", "Legacy Element (P1S)", "WP", "CAM", "CAM – imię i nazwisko", "Cost Category", "WP w poddrzewie",
         "Baseline Start", "Baseline Finish", "Actual Start", "Actual Finish",
-        "TECH Hours", "PV Hours", "EV Hours", "AC Hours",
+        "TECH Hours", "PV Hours", "EV Hours", "% Complete", "AC Hours",
         "BAC Material", "Actual Material",
         "BAC Hours baseline", "BAC Cost", "PV Cost", "EV Cost", "ACWP", "Actual DLH",
         "Braki", "Uwagi",
@@ -447,7 +447,7 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
                 r.WbsElement, r.P1s, r.Wp, r.Cam, r.Cam is { } cam ? names.GetValueOrDefault(cam) : null, r.CostCategory,
                 budget ? string.Join(", ", r.Wps) : null,
                 Date(r.Start), Date(r.Finish), Date(r.ActualStart), Date(r.ActualFinish),
-                Round(r.OpsBacHours), Round(r.PvHours), Round(r.EvHours), Round(r.AcHours),
+                Round(r.OpsBacHours), Round(r.PvHours), Round(r.EvHours), Round(r.PercentComplete), Round(r.AcHours),
                 budget ? r.BacMaterial : null, Round(r.ActualMaterial),
                 budget ? r.BacHours : null, budget ? r.Bac : null, Round(r.PvCost), Round(r.EvCost), r.Acwp == 0 ? null : r.Acwp, r.ActualDlh == 0 ? null : r.ActualDlh,
                 r.Gap, r.Note,
@@ -473,7 +473,7 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
                 Note: "Do uzupełnienia w wierszu z WP; w wierszach bez WP – suma poddrzewa, nie jest wczytywana.", Input: true),
             StructureImport.ActualStartHeader or StructureImport.ActualFinishHeader => new(header, ExcelTableWriter.Kind.Date,
                 Note: "Do uzupełnienia w wierszu z WP (RRRR-MM-DD): data rzeczywista WP nadpisuje datę z raportu produkcyjnego (np. WP bez danych produkcyjnych, prace zakończone przed zamknięciem operacji). Komórka z datą z produkcji – bez zmiany.", Input: true),
-            "TECH Hours" or "PV Hours" or "EV Hours" or "AC Hours" or "Actual Material" or "PV Cost" or "EV Cost" or "ACWP" or "Actual DLH" => new(header, ExcelTableWriter.Kind.Number),
+            "TECH Hours" or "PV Hours" or "EV Hours" or "% Complete" or "AC Hours" or "Actual Material" or "PV Cost" or "EV Cost" or "ACWP" or "Actual DLH" => new(header, ExcelTableWriter.Kind.Number),
             _ => new ExcelTableWriter.ExcelColumn(header),
         }).ToList();
 
