@@ -10,7 +10,6 @@ using PzlEv.Modules.Projects.Services;
 using PzlEv.Modules.Projects.ViewModels;
 using PzlEv.Shared.Utils.Files;
 using PzlEv.Shared.Utils.Ui.Converters;
-using PzlEv.Shared.Views.Partials;
 
 namespace PzlEv.Modules.Projects.Views;
 
@@ -44,8 +43,6 @@ public partial class StructureView : UserControl
     {
         InitializeComponent();
         BuildColumns();
-        // Wysokość tabeli – do dołu okna (zamiast stałej): przy zmianie rozmiaru okna, zwinięciu menu, pokazaniu zakładki.
-        FitToPage.Attach(this, RowsGrid);
         DataContextChanged += (_, e) =>
         {
             if (e.OldValue is StructureViewModel old)

@@ -44,12 +44,13 @@
                        Visibility="{Binding HasGap, Converter={StaticResource BoolToVisibility}}" />
         </DataTemplate>
     </UserControl.Resources>
-    <StackPanel>
-        <!-- Wynik operacji na komórkach (wklejenie, Delete) – w stałej linii komunikatu ekranu projektu (StatusLine), bez
-             przesuwania tabeli. Skróty i opis kolumn – przycisk „?” na pasku nad tabelą (StructureHelpWindow). -->
+    <Grid>
+        <!-- Tabela wypełnia miejsce od paska narzędzi do dołu okna (wiersz * ekranu projektu); wiersze przewija tabela.
+             Wynik operacji na komórkach (wklejenie, Delete) – w linii komunikatu ekranu projektu (StatusLine). Skróty i opis
+             kolumn – przycisk „?” na pasku nad tabelą (StructureHelpWindow). -->
         <!-- Zaznaczanie komórek jak w Excelu (tylko ta tabela – styl DataTable i edytor Performance Objectives bez zmian). -->
         <DataGrid x:Name="RowsGrid" Style="{StaticResource DataTable}" ItemsSource="{Binding Rows}"
-                  MinHeight="320" MaxHeight="Infinity" FrozenColumnCount="1" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto"
+                  MinHeight="160" MaxHeight="Infinity" FrozenColumnCount="1" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto"
                   CanUserSortColumns="False" CanUserReorderColumns="False" SelectionUnit="Cell" SelectionMode="Extended"
                   ClipboardCopyMode="ExcludeHeader"
                   EnableRowVirtualization="True" EnableColumnVirtualization="False"
@@ -73,5 +74,5 @@
                 </Style>
             </DataGrid.RowStyle>
         </DataGrid>
-    </StackPanel>
+    </Grid>
 </UserControl>
