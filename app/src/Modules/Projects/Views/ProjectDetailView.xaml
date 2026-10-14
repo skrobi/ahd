@@ -41,7 +41,16 @@
             </StackPanel>
         </DataTemplate>
     </UserControl.Resources>
-    <StackPanel>
+    <!-- Wysokość ekranu = widoczny obszar strony (ScrollViewer powłoki); zakładki wypełniają resztę (wiersz *) – tabela
+         struktury i edytor Performance Objectives sięgają do dołu okna bez liczenia wysokości w kodzie; dłuższe zakładki
+         przewijają się wewnątrz. -->
+    <Grid Height="{Binding ViewportHeight, RelativeSource={RelativeSource AncestorType=ScrollViewer}}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
         <partials:PageHeader Title="{Binding Title}" Subtitle="{Binding Subtitle}">
             <partials:PageHeader.Actions>
                 <StackPanel Orientation="Horizontal">
@@ -56,7 +65,7 @@
             </partials:PageHeader.Actions>
         </partials:PageHeader>
         <!-- Z kiedy są dane: RABIT (ACTUALS) i produkcja (PZLPROD) – osobna linia pod nagłówkiem (tytuł i opis mają całą szerokość) -->
-        <WrapPanel Margin="0,-12,0,12">
+        <WrapPanel Grid.Row="1" Margin="0,-12,0,12">
             <Border Style="{StaticResource Tag}" VerticalAlignment="Center" Margin="0,0,8,4" ToolTip="{Binding DataInfoDetails}">
                 <TextBlock Text="{Binding DataInfo}" FontSize="12" />
             </Border>
@@ -66,7 +75,7 @@
         </WrapPanel>
         <!-- Komunikat w stałym miejscu (jedna linia o stałej wysokości, pełna treść w podpowiedzi): operacja w toku albo wynik
              ostatniej operacji – pokazanie i ukrycie nie przesuwa zakładek ani tabeli struktury. -->
-        <Grid Height="22" Margin="0,0,0,6">
+        <Grid Grid.Row="2" Height="22" Margin="0,0,0,6">
             <DockPanel Visibility="{Binding Busy.IsBusy, Converter={StaticResource BoolToVisibility}}" ToolTip="{Binding Busy.Display}">
                 <ProgressBar DockPanel.Dock="Left" IsIndeterminate="True" Width="80" Height="4" Margin="0,0,10,0" BorderThickness="0"
                              VerticalAlignment="Center" Foreground="{StaticResource Info}" Background="{StaticResource Surface}" />
@@ -89,9 +98,10 @@
             </TextBlock>
         </Grid>
 
-        <TabControl Background="Transparent" BorderThickness="0,1,0,0" Padding="0,12,0,0">
+        <TabControl Grid.Row="3" Background="Transparent" BorderThickness="0,1,0,0" Padding="0,12,0,0">
             <!-- Wskaźniki: sumy projektu teraz, wskaźniki EV po przebiegach; gotowość do przebiegu zwinięta -->
             <TabItem Header="Wskaźniki" Padding="12,4">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
                 <StackPanel>
                     <!-- Grupy wskaźników jak w tabeli struktury (Operational EV, Materials, Financial EV) -->
                     <ItemsControl ItemsSource="{Binding Kpis}">
@@ -125,14 +135,15 @@
                         <ItemsControl ItemsSource="{Binding Readiness}" Margin="0,8,0,0" />
                     </Expander>
                 </StackPanel>
+                </ScrollViewer>
             </TabItem>
 
             <!-- Struktura: Performance Objectives z rozwinięciem P1S, WP, CAM, budżet i daty – edycja w komórkach -->
             <TabItem Header="Struktura" Padding="12,4">
-                <StackPanel>
-                    <!-- Przegląd: tabela struktury -->
-                    <StackPanel Visibility="{Binding IsViewingStructure, Converter={StaticResource BoolToVisibility}}">
-                        <DockPanel Margin="0,0,0,8">
+                <Grid>
+                    <!-- Przegląd: pasek narzędzi, pod nim tabela struktury do dołu okna -->
+                    <DockPanel Visibility="{Binding IsViewingStructure, Converter={StaticResource BoolToVisibility}}">
+                        <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8">
                             <TextBlock DockPanel.Dock="Right" Text="{Binding Structure.SummaryText}" Style="{StaticResource MutedText}" VerticalAlignment="Center"
                                        ToolTip="{Binding MappingInfo}" />
                             <!-- Ikony z opisem w podpowiedzi (Segoe MDL2 / Fluent Icons) -->
@@ -171,11 +182,11 @@
                             </StackPanel>
                         </DockPanel>
                         <views:StructureView DataContext="{Binding Structure}" />
-                    </StackPanel>
+                    </DockPanel>
 
-                    <!-- Edycja Performance Objectives: edytor z kreatora -->
-                    <StackPanel Visibility="{Binding IsEditingObjectives, Converter={StaticResource BoolToVisibility}}">
-                        <DockPanel Margin="0,0,0,8">
+                    <!-- Edycja Performance Objectives: edytor z kreatora (tabela do dołu okna) -->
+                    <DockPanel Visibility="{Binding IsEditingObjectives, Converter={StaticResource BoolToVisibility}}">
+                        <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8">
                             <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
                                 <Button Content="Anuluj" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding CancelObjectives}" />
                                 <Button Content="Zapisz Performance Objectives" Style="{StaticResource BtnPrimary}" Command="{Binding SaveObjectives}" />
@@ -183,12 +194,13 @@
                             <TextBlock Text="Edycja Performance Objectives" Style="{StaticResource H2}" VerticalAlignment="Center" />
                         </DockPanel>
                         <views:PoEditorView DataContext="{Binding Objectives}" FillPage="True" />
-                    </StackPanel>
-                </StackPanel>
+                    </DockPanel>
+                </Grid>
             </TabItem>
 
             <!-- Raporty: tabela – przycisk raportu po lewej, opis po prawej -->
             <TabItem Header="Raporty" Padding="12,4">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
                 <Border Style="{StaticResource Panel}" Padding="0">
                     <Grid>
                         <Grid.ColumnDefinitions>
@@ -211,10 +223,12 @@
                                    Text="Raport kosztów z narzutami CAS w formułach Excela: pule według grupy narzutowej elementu kosztowego (słownik Cost Category), wskaźniki obowiązujące w okresie kolumny (słownik „Wskaźniki narzutu CAS”) – wiersz wskaźników nad nagłówkiem można zmienić w pliku." />
                     </Grid>
                 </Border>
+                </ScrollViewer>
             </TabItem>
 
             <!-- Słowniki projektu: lista słowników i tabela wybranego słownika z edycją w komórkach (jak ekran Słowniki) -->
             <TabItem Header="Słowniki projektu" Padding="12,4" IsSelected="{Binding DictionaryTabOpen, Mode=OneWayToSource}">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="260" />
@@ -242,10 +256,12 @@
 
                     <ContentControl Grid.Column="1" Content="{Binding}" ContentTemplate="{StaticResource DictionaryEditor}" />
                 </Grid>
+                </ScrollViewer>
             </TabItem>
 
             <!-- Konfiguracja: źródła danych projektu (definicje z Administracji) i parametry projektu -->
             <TabItem Header="Konfiguracja" Padding="12,4" IsSelected="{Binding ConfigTabOpen, Mode=OneWayToSource}">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="260" />
@@ -280,10 +296,12 @@
                         </DataGrid>
                     </StackPanel>
                 </Grid>
+                </ScrollViewer>
             </TabItem>
 
             <!-- Przebiegi -->
             <TabItem Header="Przebiegi" Padding="12,4">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
@@ -318,10 +336,12 @@
                         </DataGrid.Columns>
                     </DataGrid>
                 </Grid>
+                </ScrollViewer>
             </TabItem>
 
             <!-- Foldery -->
             <TabItem Header="Foldery" Padding="12,4">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
                 <StackPanel>
                     <DockPanel Margin="0,0,0,8">
                         <Button DockPanel.Dock="Right" Content="Utwórz brakujące foldery" Style="{StaticResource Btn}" Command="{Binding CreateFolders}" />
@@ -333,7 +353,8 @@
                     <TextBlock Text="Zgłoszenie do IT (dostęp CAM do folderu Zwrocone)" Style="{StaticResource MutedText}" Margin="0,0,0,4" />
                     <TextBox Style="{StaticResource Input}" Text="{Binding ItRequest, Mode=OneWay}" IsReadOnly="True" TextWrapping="Wrap" />
                 </StackPanel>
+                </ScrollViewer>
             </TabItem>
         </TabControl>
-    </StackPanel>
+    </Grid>
 </UserControl>
