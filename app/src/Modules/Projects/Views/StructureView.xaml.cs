@@ -10,6 +10,7 @@ using PzlEv.Modules.Projects.Services;
 using PzlEv.Modules.Projects.ViewModels;
 using PzlEv.Shared.Utils.Files;
 using PzlEv.Shared.Utils.Ui.Converters;
+using PzlEv.Shared.Views.Partials;
 
 namespace PzlEv.Modules.Projects.Views;
 
@@ -44,18 +45,7 @@ public partial class StructureView : UserControl
         InitializeComponent();
         BuildColumns();
         // Wysokość tabeli – do dołu okna (zamiast stałej): przy zmianie rozmiaru okna, zwinięciu menu, pokazaniu zakładki.
-        Loaded += (_, _) =>
-        {
-            _host ??= FindAncestor<ScrollViewer>(this);
-            if (_host is not null)
-            {
-                _host.SizeChanged -= OnHostSizeChanged;
-                _host.SizeChanged += OnHostSizeChanged;
-            }
-            Dispatcher.BeginInvoke(FitHeight, DispatcherPriority.Loaded);
-        };
-        RowsGrid.IsVisibleChanged += (_, _) => Dispatcher.BeginInvoke(FitHeight, DispatcherPriority.Loaded);
-        LayoutUpdated += (_, _) => FitHeight();   // zmiana wysokości elementów nad tabelą (np. zawinięcie linii dat danych)
+        FitToPage.Attach(this, RowsGrid);
         DataContextChanged += (_, e) =>
         {
             if (e.OldValue is StructureViewModel old)
@@ -76,32 +66,6 @@ public partial class StructureView : UserControl
     }
 
     private StructureViewModel? Model => DataContext as StructureViewModel;
-
-    private ScrollViewer? _host;
-
-    private void OnHostSizeChanged(object sender, SizeChangedEventArgs e) => FitHeight();
-
-    /// <summary>
-    /// Tabela kończy się na dole okna – strona bez przewijania (pod tabelą nic; skróty i opis kolumn w oknie „?”); wiersze
-    /// przewija sama tabela. Kolumny rozciągają się z szerokością okna (DataGrid w pełnej szerokości strony).
-    /// </summary>
-    private void FitHeight()
-    {
-        if (_host is null || !RowsGrid.IsVisible)
-            return;
-        var top = RowsGrid.TranslatePoint(new Point(0, 0), _host).Y + _host.VerticalOffset;
-        var height = Math.Max(RowsGrid.MinHeight, Math.Floor(_host.ViewportHeight - top - _host.Padding.Bottom - 4));
-        if (Math.Abs(RowsGrid.Height - height) > 1 || double.IsNaN(RowsGrid.Height))
-            RowsGrid.Height = height;
-    }
-
-    private static T? FindAncestor<T>(DependencyObject child) where T : DependencyObject
-    {
-        for (var parent = VisualTreeHelper.GetParent(child); parent is not null; parent = VisualTreeHelper.GetParent(parent))
-            if (parent is T found)
-                return found;
-        return null;
-    }
 
     /// <summary>
     /// Kolumny w grupach (StructureColumns): nagłówek – nazwa grupy z przyciskiem „−” / „+” nad pierwszą kolumną grupy

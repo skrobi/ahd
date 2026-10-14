@@ -46,7 +46,8 @@ Powiązane: `docs/funkcjonalnosc.md` (F01 – kreator projektu), `docs/zrodla-da
   - „Edytuj Performance Objectives” – ten sam edytor co w kreatorze (przeciąganie, przesuwanie, poziom wyżej,
     usuwanie, węzły wirtualne, elementy CES); „Wczytaj Excel” w edytorze **podmienia** strukturę strukturą z pliku
     (elementy o tym samym `WBS element` zachowują identyfikator i historię; węzły wirtualne i ręczne zmiany nie są
-    przenoszone). Zapis „Zapisz Performance Objectives” tworzy nowe wersje zmienionych węzłów, „Anuluj” odrzuca zmiany;
+    przenoszone). Zapis „Zapisz Performance Objectives” tworzy nowe wersje zmienionych węzłów, „Anuluj” odrzuca zmiany.
+    Tabela edytora na ekranie projektu sięga do dołu okna (jak tabela struktury); w kreatorze – stała wysokość;
   - w tabeli struktury zmienia się nazwę węzła i `Legacy WBS` (zapis od razu, z historią).
 - **Element CES należy do co najwyżej jednej nakładki** (jednego projektu) – element z nakładki innego projektu
   jest odrzucany przy wczytaniu i zapisie (ERROR z kodem projektu, który go ma).
