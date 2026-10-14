@@ -182,7 +182,7 @@
                             </StackPanel>
                             <TextBlock Text="Edycja Performance Objectives" Style="{StaticResource H2}" VerticalAlignment="Center" />
                         </DockPanel>
-                        <views:PoEditorView DataContext="{Binding Objectives}" />
+                        <views:PoEditorView DataContext="{Binding Objectives}" FillPage="True" />
                     </StackPanel>
                 </StackPanel>
             </TabItem>

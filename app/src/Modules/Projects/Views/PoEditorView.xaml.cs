@@ -3,6 +3,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using PzlEv.Modules.Projects.ViewModels;
+using PzlEv.Shared.Views.Partials;
 
 namespace PzlEv.Modules.Projects.Views;
 
@@ -18,9 +19,26 @@ public partial class PoEditorView : UserControl
     private Point _start;
     private PoRowViewModel? _dragged;
 
+    private bool _fitted;
+
+    /// <summary>
+    /// Tabela do dołu okna (FitToPage, bez limitu MaxHeight) – ekran projektu, gdzie pod edytorem nic nie ma; w kreatorze
+    /// (przyciski kroków pod edytorem) – wysokość stała.
+    /// </summary>
+    public bool FillPage { get; set; }
+
     public PoEditorView()
     {
         InitializeComponent();
+        Loaded += (_, _) =>
+        {
+            if (!FillPage || _fitted)
+                return;
+            _fitted = true;
+            NodesGrid.MaxHeight = double.PositiveInfinity;
+            NodesGrid.MinHeight = 240;
+            FitToPage.Attach(this, NodesGrid);
+        };
         DataContextChanged += (_, e) =>
         {
             if (e.OldValue is PoEditorViewModel old)
