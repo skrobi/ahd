@@ -58,7 +58,21 @@ public sealed class StructureViewModel : ObservableObject
     /// <summary>Lista wyboru Cost Category – kategorie ze słownika „Kategorie WBS” projektu.</summary>
     public BulkObservableCollection<LookupOption> Categories { get; } = [];
 
-    public StructureRowViewModel? Selected { get => _selected; set => SetProperty(ref _selected, value); }
+    /// <summary>Wiersz bieżącej komórki – podświetlony w tabeli (IsCurrent), także po odświeżeniu danych.</summary>
+    public StructureRowViewModel? Selected
+    {
+        get => _selected;
+        set
+        {
+            var previous = _selected;
+            if (!SetProperty(ref _selected, value))
+                return;
+            if (previous is not null)
+                previous.IsCurrent = false;
+            if (value is not null)
+                value.IsCurrent = true;
+        }
+    }
 
     public StructureSummary Summary { get => _summary; private set => SetProperty(ref _summary, value); }
 

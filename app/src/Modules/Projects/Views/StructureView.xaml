@@ -60,6 +60,10 @@
             <DataGrid.RowStyle>
                 <Style TargetType="DataGridRow">
                     <Style.Triggers>
+                        <!-- Wiersz bieżącej komórki – ciemniejszy szary (łatwiej śledzić wiersz przy wielu kolumnach); niezapisane zmiany mają pierwszeństwo. -->
+                        <DataTrigger Binding="{Binding IsCurrent}" Value="True">
+                            <Setter Property="Background" Value="{StaticResource RowCurrent}" />
+                        </DataTrigger>
                         <!-- Wiersz z niezapisanymi zmianami (zapis w toku albo nieudany – komunikat w linii pod nagłówkiem projektu). -->
                         <DataTrigger Binding="{Binding HasChanges}" Value="True">
                             <Setter Property="Background" Value="{StaticResource WarnSoft}" />
