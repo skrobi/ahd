@@ -194,7 +194,7 @@ public sealed class ImportServiceTests : IDisposable
         Assert.Equal(   // etapy importu pliku na ekranie, potem decyzja
         [
             ImportService.StageDownload, ImportService.StageCheck, ImportService.StageRows, "4/4 kontrola w bazie (liczba wierszy i sumy)",
-            "4/4 zatwierdzanie zapisu", "zaimportowany",
+            "4/4 zestawienie ACTUALS po Project definition", "4/4 zatwierdzanie zapisu", "zaimportowany",
         ], statuses.Select(s => s.Split(" – ")[0].Split(" · ")[0]).Distinct());
         Assert.Contains(statuses, s => s.StartsWith($"{ImportService.StageDownload} – ") && s.Contains(" MB, kopia pliku · "));
         Assert.Contains(statuses, s => s.StartsWith($"{ImportService.StageRows} – 6 wierszy"));
@@ -526,10 +526,11 @@ public sealed class ImportServiceTests : IDisposable
         Assert.StartsWith("dane kanoniczne w bazie niezgodne z plikiem (wiersze 2/2, suma Value in Obj. Crcy 16/15", error.Message);
         Assert.Null(_store.FindByHash(new string('a', 64)));   // plik, treść i wiersze wycofane razem
         Assert.Null(_store.FindByHash(new string('c', 64)));   // błędy treści wykryte po przesłaniu wierszy – też wycofane
-        Assert.Equal(["kontrola w bazie (liczba wierszy i sumy)", "zatwierdzanie zapisu"], stages);
+        Assert.Equal(["kontrola w bazie (liczba wierszy i sumy)", "zestawienie ACTUALS po Project definition", "zatwierdzanie zapisu"], stages);
         Assert.Equal((2, 2), (_store.File(stored.FileId)!.RowCount, _store.File(stored.FileId)!.CanonicalRows));
         Assert.Equal((2, 15.5m), (stored.CanonicalRows, stored.Sums["ValueObjCrcy"]));
         Assert.Equal(2, Count("can.Row"));
+        Assert.Equal(2, Count("can.ActualsBalance"));   // zestawienie tylko zapisanego pliku (wycofane – bez zestawienia)
         Assert.Equal(["A.1", "A.2"], _store.CanonicalRows(parser, stored.FileId).Select(r => r["WbsElement"]));
     }
 

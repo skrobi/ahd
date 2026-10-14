@@ -76,6 +76,9 @@ tabeli problemów (`meta.Problem`).
     (np. awaria aplikacji), dostaje przy następnym imporcie status „przerwany”, a jego pliki „w toku” są usuwane
     razem z wierszami `CAN_Row` i wracają do importu.
 - Import jest idempotentny: ten sam hash pliku nie tworzy nowej wersji ani duplikatu danych.
+- Zestawienie ACTUALS po Project definition (`CAN_ActualsBalance`, `docs/model-danych.md`, migracja 037) liczy import pliku
+  w jednej transakcji ze zmianą stanu na „utworzone”, tylko pod swoim `FileId` – importy o dowolnej porze i równoległe
+  nie kolidują, a odczyt projektu w trakcie importu widzi poprzednią wersję pliku albo nową, kompletną.
 - Równoczesna edycja słowników – `docs/slowniki.md`, rozdz. 1.
 
 ---
