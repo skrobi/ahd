@@ -178,6 +178,7 @@ Bez metodologii EV; kolejne tabele dochodzą kolejnymi migracjami.
 | `META_Parser` (004) | parsery i ich pola (kolumna w pliku, typ, długość, wymagane, slot w `CAN_Row` – 007) z historią |
 | `META_ImportBatch`, `META_SourceFile`, `META_SourceFileSeen` | importy, wersje plików (SHA-256), decyzje dla plików |
 | `CAN_Row` (007) | dane kanoniczne wszystkich parserów: `FileId`, `RowNumber`, `ParserId`, `ParserVersion` i sloty T01–T40 (`NVARCHAR(400)`), L01–L05 (`NVARCHAR(4000)`), N01–N20 (`DECIMAL(28,8)`), I01–I10 (`INT`), D01–D10 (`DATE`); indeks klastrowy kolumnowy (clustered columnstore) – kompresja i szybkie grupowanie milionów wierszy |
+| `CAN_ActualsBalance` (037) | zestawienie każdej wersji pliku ACTUALS: plik, Project definition, WBS element, Cost element (i nazwa), klasa i obiekt partnera, rok, okres, waluty; sumy `ValueObjCrcy`, `ValueRepCur`, `ValueTranCurr`, `TotalQuantity`, liczba wierszy, najpóźniejsze Created on; indeks klastrowy (Project definition, plik) – odczyty kosztów projektu bez czytania `CAN_Row` |
 | `META_Journal`, `META_Problem` | dziennik zdarzeń (`meta.Zdarzenie`) i problemy (otwarte / rozwiązane: `ResolvedAt`, `ResolvedBy`, `Resolution` – migracja 006) |
 | `META_Project`, `META_PerformanceObjective` | projekty (kod, nazwa, typ SAC / CAS / WEWNETRZNY) i nakładka Performance Objectives z historią |
 | `DICT_Calendar`, `DICT_DepartmentRate`, `DICT_FxRate`, `DICT_CostCategory`, `DICT_Person`, `DICT_DjkRate`, `DICT_ProductionParameter` | słowniki globalne – tabela z typowanymi kolumnami na słownik; `Project` NULL = globalny (w Cost Category `Project` = zmiany w projekcie) |
@@ -366,6 +367,18 @@ rzeczywiste WP („Actual Start”, „Actual Koniec” w „Harmonogram i budż
 **Migracja `sql/mssql/036_koszty_i_godziny_po_elementach.sql`:** `REP_ProjectCostsByElement @Project, @Value, @Hours` –
 parametr `@Hours` (pole godzin parsera ACTUALS, np. `TotalQuantity`) dodaje kolumnę `Hours` (suma z tych samych wierszy
 co kwota); struktura projektu czyta ACWP i Actual DLH jednym wywołaniem zamiast dwóch. Wymaga aplikacji 0.50.0.
+
+**Migracja `sql/mssql/037_zestawienie_actuals.sql`:** zestawienie ACTUALS po Project definition – tabela
+`CAN_ActualsBalance` i procedura `CAN_BuildActualsBalance @FileId` (grupuje tylko wiersze jednej wersji pliku). Import
+liczy zestawienie po kontroli w bazie, w jednej transakcji ze zmianą stanu pliku na „utworzone” – plik jest widoczny dla
+odczytów razem z zestawieniem; każdy import pisze tylko pod swoim `FileId`, więc równoległe importy (pełny i źródeł
+projektów, o dowolnej porze) się nie blokują; wycofanie pliku usuwa też jego zestawienie. `REP_ProjectCostsByElement`,
+`REP_ProjectCosts`, `RUN_PinBalance` i `CAN_ActualsCostElements` czytają zestawienie najnowszych wersji plików
+(`CAN_LatestFiles`) po Project definition nakładki projektu – niezależnie od źródła i pliku (plik z wieloma projektami,
+projekt na cudzym imporcie); `CAN_LatestImport @Project` (ACTUALS) czyta z `CAN_Row` tylko pliki z Project definition
+projektu (stała lista `FileId` – serwer pomija rowgroupy innych plików i starszych wersji). Kwota: `ValueObjCrcy`,
+`ValueRepCur` albo `ValueTranCurr`. Migracja liczy zestawienie plików już zaimportowanych (plik po pliku). Wymaga
+aplikacji 0.51.0.
 
 `META_SourceFile.CanonicalStatus`: „utworzone” – dane kanoniczne zapisane i sprawdzone (widoczne dla odczytów),
 „w toku” – zapis wierszy trwa (odczyty pomijają plik; po awarii wpis i wiersze są usuwane), inna wartość – powód

@@ -252,6 +252,46 @@ public sealed class LatestImportProcedureTests : IDisposable
         Assert.Equal(6054.51m, store.CostsByElement("M28", "ValueObjCrcy")["2DI473001001"]);   // w projekcie nie jest rozliczeniowy
     }
 
+    /// <summary>
+    /// Migracja 037: zestawienie ACTUALS po Project definition liczone przy imporcie – sumy jak w wierszach pliku; dwa projekty
+    /// z jednego pliku (bez przypisanych źródeł) mają każdy swoje koszty; nowa wersja pliku zastępuje poprzednią w odczytach.
+    /// </summary>
+    [SqlFact]
+    public void Actuals_balance_is_built_at_import_and_serves_every_project_of_a_shared_file()
+    {
+        Use();
+        Write("ACTUALS_PAF_01.csv", 0, new DateTime(2026, 10, 6, 23, 0, 0, DateTimeKind.Utc));
+        _import.Run();
+        var store = new SqlProjectStore(_database!.Sql, _services.Clock, _services.User);
+        PoTree Tree(string definition, string element)
+        {
+            var tree = new PoTree();
+            var root = tree.Add(new PoNode { Key = tree.NewKey(), WbsElement = definition, Name = definition, ProjectDefinition = definition });
+            tree.Add(new PoNode { Key = tree.NewKey(), ParentKey = root.Key, WbsElement = element, Name = "element", ProjectDefinition = definition });
+            return tree;
+        }
+        Assert.True(store.Create("M28", "M28", ProjectTypes.Internal, Tree("2DI473", "2DI473001001")).Success);
+        Assert.True(store.Create("GZ", "GZ", ProjectTypes.Internal, Tree("4D03GZ", "4D03GZ000001")).Success);
+
+        using var connection = _database.Sql.Open();
+        var balance = connection.QuerySingle<(int Rows, decimal Amount, decimal Hours)>(
+            $"SELECT SUM(Rows), SUM(ValueObjCrcy), SUM(TotalQuantity) FROM {_database.Sql.Table("can.ActualsBalance")}");
+        Assert.Equal((6, 10574.11m, 60m), balance);   // wszystkie wiersze pliku: 1 254,51 + 4 800 + 2 400 + 430 − 230,40 + 1 920; godziny 32 + 12 + 16
+
+        var (m28, m28Hours) = store.CostsAndHoursByElement("M28", "ValueObjCrcy", ProjectService.ActualsHours);
+        Assert.Equal((6054.51m, 32m), (m28["2DI473001001"], m28Hours["2DI473001001"]));
+        var (gz, gzHours) = store.CostsAndHoursByElement("GZ", "ValueObjCrcy", ProjectService.ActualsHours);
+        Assert.Equal((-230.40m, 1920m, 16m), (gz["4D03GZ000001"], gz["4D03GZ000041"], gzHours["4D03GZ000041"]));
+        Assert.DoesNotContain("2DI473001001", gz.Keys);
+
+        // Nowa wersja tego samego pliku – odczyty biorą tylko ją (zestawienie starej wersji zostaje, ale nie jest czytane).
+        Write("ACTUALS_PAF_01.csv", 1, new DateTime(2026, 10, 13, 23, 0, 0, DateTimeKind.Utc));
+        _import.Run();
+        Assert.Equal(2, connection.ExecuteScalar<int>($"SELECT COUNT(DISTINCT FileId) FROM {_database.Sql.Table("can.ActualsBalance")}"));
+        var latest = store.CostsAndHoursByElement("M28", "ValueObjCrcy", ProjectService.ActualsHours).Amounts;
+        Assert.Equal((m28.Count + 1, 1m, 6054.51m), (latest.Count, latest["2DI473001003"], latest["2DI473001001"]));   // wiersz dopisany w nowej wersji, bez podwójnego liczenia
+    }
+
     /// <summary>Migracja 018: cost elementy całego ostatniego importu ACTUALS i „Uzupełnij z ACTUALS” w Cost Category (same nowe pozycje).</summary>
     [SqlFact]
     public void Missing_cost_elements_from_actuals_are_added_to_cost_category()
