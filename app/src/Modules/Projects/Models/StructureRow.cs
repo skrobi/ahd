@@ -60,4 +60,10 @@ public sealed record StructureRow(
     /// poddrzewa (np. węzeł nakładki nad elementem P1S z WP). Bez własnego WP i z kilkoma WP w poddrzewie (suma) – null.
     /// </summary>
     public string? BudgetWp => Wp ?? (Wps.Count == 1 ? Wps[0] : null);
+
+    /// <summary>
+    /// Zaawansowanie godzin z produkcji (%) – EV Hours ÷ TECH Hours × 100 (jak EV ÷ BAC w raporcie operacyjnym S70MR);
+    /// brak godzin TECH – null.
+    /// </summary>
+    public decimal? PercentComplete => OpsBacHours is > 0 && EvHours is { } ev ? ev / OpsBacHours.Value * 100 : null;
 }
