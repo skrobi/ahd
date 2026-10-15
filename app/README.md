@@ -87,6 +87,8 @@ zmieni). Brak pliku albo błąd w nim = komunikat przy starcie z nazwą pola –
 - `043_rozliczeniowe_poza_kosztami.sql` – cost element „Rozliczeniowy” poza ACWP struktury i raportem kosztów CES bez
   wyjątku dla klasy partnera „Profit analysis”.
 - `044_raport_kosztow_grouping.sql` – raport kosztów: Grouping z drzewa Performance Objectives po elemencie WBS wiersza.
+- `045_koszty_cas_z_narzutami.sql` – „Kursy walut” od – do z kolumną Kurs CAS; koszt bazowy projektu CAS po okresach
+  (`REP_ProjectCasCosts`) – ACWP, raport CES i przebieg CAS po narzutach.
 
 Migracje wykonuje przycisk **Diagnostyka → Migracja** – uruchamia po kolei skrypty, których numeru nie ma
 w `META_SchemaVersion`, a wykonane pomija. Lista na tym ekranie pokazuje, które skrypty są wykonane (kiedy, kto)

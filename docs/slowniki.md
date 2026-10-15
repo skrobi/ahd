@@ -61,7 +61,7 @@ Słowniki, kreator projektu), `docs/zrodla-danych.md` (struktura P1S).
 |---|---|---|---|
 | Kalendarz okresów | okres (`RRRR-MM`); tygodnie okresu (numer, od – do); oznaczenie tygodnia zamykającego okres | tydzień | przebieg: okres i czy zamyka okres (P0); nazwy plików |
 | Stawki wydziałów | `MPK` (miejsce powstawania kosztów), `Department` (opis MPK, opcjonalny), `Year`, `Labor Rate`, `Overhead` (opcjonalny) | `MPK` + `Year` | łączenie źródeł – godziny na koszt (P3) |
-| Kursy walut | waluta, okres, kurs (USD / PLN) | waluta + okres | przeliczenia walut (P3, P8) |
+| Kursy walut | waluta, `Od` – `Do` (`Do` puste – bezterminowo), `Kurs` (do PLN: ile PLN za jednostkę), `Kurs CAS` (projekty CAS – rozdz. 6.1); wiersz ma Kurs albo Kurs CAS; okresy jednej waluty się nie nakładają (migracja 045 – wcześniej okres RRRR-MM) | waluta + `Od` | Kurs – przeliczenia walut w strukturze projektu (kurs obowiązujący w dniu stanu), P3, P8; Kurs CAS – koszty projektów CAS |
 | Cost Category | numer elementu kosztowego → Opis, Obszar, Cost Category, Rozliczeniowy, Rodzaj kosztu (Hours / Materials / Other, puste – Other: podział ACWP na ACWP Hours / ACWP Materials / ACWP Other w strukturze projektu, suma = ACWP; migracja 038 – wstępnie wg Cost Category zawierającego „labor” / „material”; 040 – konta materiałowe 0051105550 PZL Mat Consump, 0051102550 PZL Mat Comsump-SAC, 0051103550 IC Profit Mat-SAC jako Materials), Grupa narzutowa CAS (wybór z „Grup narzutowych CAS” – zapisany identyfikator grupy) (rozdz. 6) | numer elementu kosztowego | walidacja (P2), łączenie źródeł (P3), raport kosztów CES |
 | Pule narzutu CAS | pula → `Kolejność` kolumny w raporcie, `Rodzaj` (Koszt – TOTAL COST, FCCOM – TOTAL FCCOM), opis (rozdz. 6.1) | pula | raport kosztów CES, formuły, wskaźniki |
 | Grupy narzutowe CAS | grupa narzutowa elementu kosztowego → opis (rozdz. 6.1) | grupa | raport kosztów CES, formuły, Cost Category |
@@ -273,6 +273,17 @@ po Cost Elementach dla lat 2025–2026).
   kosztu: pule (kolejność ze słownika), `TOTAL COST …`, `TOTAL FCCOM …`. Narzuty to **formuły Excela** odwołujące się do kosztu wiersza
   i wiersza wskaźników nad nagłówkiem – zmiana wskaźnika albo kosztu w pliku przelicza raport. Arkusz „Wskaźniki” –
   użyte wskaźniki z okresem obowiązywania.
+- **Waluta i kurs CAS (reguła tylko dla projektów CAS, decyzja 2026-10-15):** narzuty CAS liczy się samemu, więc koszt
+  bazowy jest **zawsze** w PLN z ACTUALS (`Value in Obj. Crcy`), także gdy projekt raportuje w USD – kwot USD z SAP
+  (`Val.in rep.cur.`) projekt CAS nie używa. Waluta projektu – zestaw walutowy w „Parametry projektu”: Object currency –
+  PLN, bez przeliczenia; Report currency (np. USD) – koszt PLN każdego okresu przeliczony **kursem CAS** („Kursy walut”,
+  kolumna Kurs CAS – kurs zakupu waluty) obowiązującym w okresie kosztu (okresy 13–16 – grudzień), potem narzuty. Brak
+  kursu CAS dla któregokolwiek okresu z kosztem – błąd z listą okresów (raport się nie tworzy, ACWP pusty). Narzuty
+  w raporcie i w koszcie projektu liczy ta sama usługa (`CasCosts`, `CasBurden`): **ACWP projektu CAS = TOTAL COST**
+  (koszt + pule rodzaju Koszt, bez pul FCCOM), podział ACWP Hours / Materials / Other według rodzaju kosztu cost elementu
+  (narzut idzie za kosztem, od którego jest liczony); przebieg tygodniowy projektu CAS – na kosztach po narzutach
+  (`docs/pipeline-fazy.md`, rozdz. 4.1). Dane – procedura `REP_ProjectCasCosts` (migracja 045). ETC, EAC i budżet
+  projektu CAS z narzutami i kursem CAS – osobne zadanie (`tasks/F4.7-cas-etc-eac-z-narzutami.md`).
 
 ---
 

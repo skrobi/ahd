@@ -81,7 +81,7 @@ public sealed class SqlPresetsTests : IDisposable
         var groups = CasBurden.GroupsFrom(Rows(GlobalDictionaries.CasBurdenGroups), Rows(GlobalDictionaries.CasBurdenFormulas));
         Assert.Equal(CasCostReportTests.FinanceGroups.Select(g => Describe(g, CasCostReportTests.FinancePools)).Order(), groups.Select(g => Describe(g, pools)).Order());
         Assert.All(groups, g => Assert.NotNull(g.Description));
-        var rates = CasCostReport.RatesFrom(Rows(GlobalDictionaries.CasBurdenRates));
+        var rates = CasBurden.RatesFrom(Rows(GlobalDictionaries.CasBurdenRates));
         Assert.Equal(34, rates.Count);   // 17 pul × 2025, 2026; DECIMAL(38,18)
         Assert.Equal((new DateOnly(2026, 1, 1), (DateOnly?)new DateOnly(2026, 12, 31), 0.000057456819309837m),
             rates.Where(r => r.Pool == pools.Single(p => p.Name == "FCCOM G&A").Id && r.From.Year == 2026).Select(r => (r.From, r.To, r.Value)).Single());

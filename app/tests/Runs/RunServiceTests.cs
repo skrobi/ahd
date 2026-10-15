@@ -77,6 +77,45 @@ public sealed class RunServiceTests : IDisposable
             Assert.StartsWith("Przebieg projektu PAF trwa", service.Execute("PAF").Summary);
     }
 
+    /// <summary>
+    /// Projekt CAS: przebieg liczy koszty po narzutach CAS (koszt brutto = ACWP struktury), kontrola netowania do 0 – na danych
+    /// źródłowych (saldo okresów zamkniętych bez narzutów).
+    /// </summary>
+    [SqlFact]
+    public void Cas_project_run_checks_costs_after_cas_burdens()
+    {
+        _database = new TestDatabase(presets: true);
+        var app = _services.App(_root, _database.Sql);
+        var config = new SourceConfigService(new SqlSourceConfigStore(_database.Sql, _services.Clock, _services.User), app.Journal);
+        var rabit = Assert.Single(config.Locations());
+        Assert.True(config.SaveLocation(new LocationInput(rabit.LocationId, rabit.Version, rabit.Name, rabit.Path, Active: false)).Success);
+        Directory.CreateDirectory(app.Config.ImportFolder);
+        File.Copy(TestServices.TestData("RABIT", "ACTUALS_PAF_01.csv"), Path.Combine(app.Config.ImportFolder, "ACTUALS_PAF_01.csv"));
+        Assert.Equal(FileDecisions.Imported, Assert.Single(new ImportService(new SqlImportStore(_database.Sql), app).Run().Files).Decision);
+        var tree = new PoTree();
+        tree.AddElement(null, "2DI473", "PAF2", null);
+        var projects = new SqlProjectStore(_database.Sql, _services.Clock, _services.User);
+        Assert.True(projects.Create("PAF", "PAF", ProjectTypes.Cas, tree).Success);
+        var dictionaries = new PzlEv.Shared.Utils.Dictionaries.SqlDictionaryStore(_database.Sql, _services.Clock, _services.User,
+            [.. PzlEv.Shared.Utils.Dictionaries.GlobalDictionaries.Tables, .. PzlEv.Modules.Projects.Services.ProjectDictionaries.Tables]);
+        var project = new PzlEv.Modules.Projects.Services.ProjectService(projects, dictionaries, app.Journal,
+            new PzlEv.Modules.Projects.Services.ProjectFolders(Path.Combine(_root, "Projekty")), null);
+        var store = new SqlRunStore(_database.Sql);
+        var service = new RunService(store, app, casCosts: () => new PzlEv.Modules.Projects.Services.CasCostSource(project));
+
+        var outcome = service.Execute("PAF");
+
+        var pin = Assert.Single(store.Pins("PAF", 10));
+        var acwp = project.CostsAndHoursByElement("PAF", "ValueObjCrcy").Amounts.Values.Sum();
+        Assert.True(acwp > 8884.51m);                                                    // 1 254,51 + 4 800 + 2 400 + 430 z narzutami
+        Assert.Equal(Math.Round(acwp, 2), Math.Round(pin.GrossCost!.Value, 2));
+        Assert.Equal(8884.51m, pin.Balance);                                             // saldo okresów zamkniętych – dane źródłowe
+        var issues = store.Issues(pin.PinId);
+        Assert.Contains(issues, i => i.CheckName == RunService.CasCosts && i.Level == CheckLevel.Pass && i.Message.Contains("w PLN"));
+        Assert.Contains(issues, i => i.CheckName == RunChecks.NetZero && i.Level == CheckLevel.Error && i.Amount == 8884.51m);
+        Assert.NotEqual(RunStatuses.Failed, outcome.Status);
+    }
+
     [Fact]
     public void Previous_period_stays_open_during_settlement_days()
     {

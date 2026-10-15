@@ -567,7 +567,9 @@ public sealed class ProjectDetailViewModel : ObservableObject, IDisposable
         [
             new KpiTile("BAC", Amount(summary.Bac), "budżet kosztowy – Harmonogram i budżet"),
             _costsError is null
-                ? new KpiTile("ACWP", Amount(summary.Acwp), $"koszt rzeczywisty narastająco – {ProjectSettings.SetOf(_costsField).AmountColumn}, {_currency ?? ProjectSettings.CurrencyOf(_costsField)}; ostatni import ACTUALS, bez wykluczeń")
+                ? new KpiTile("ACWP", Amount(summary.Acwp), IsCas
+                    ? $"koszt rzeczywisty narastająco po narzutach CAS (TOTAL COST) – koszt PLN z ACTUALS (Value in Obj. Crcy){(_currency is { } c && c != "PLN" ? $" w {c} kursem CAS okresu kosztu" : "")}; ostatni import ACTUALS, bez wykluczeń"
+                    : $"koszt rzeczywisty narastająco – {ProjectSettings.SetOf(_costsField).AmountColumn}, {_currency ?? ProjectSettings.CurrencyOf(_costsField)}; ostatni import ACTUALS, bez wykluczeń")
                 : new KpiTile("ACWP", "—", _costsError, Pending: true),
             new KpiTile("Koszt bez WP", Amount(summary.AcwpWithoutWp + summary.AcwpOutside),
                 $"bez przypisania do WP: {Amount(summary.AcwpWithoutWp)} (brak WP / kilka WP – O45); elementy CES spoza nakładki: {Amount(summary.AcwpOutside)}"),

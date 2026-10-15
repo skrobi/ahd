@@ -25,7 +25,8 @@ public sealed class ProjectsModule : IModule
 
     // Magazyny: baza MS SQL środowiska – projekty (META_Project, META_PerformanceObjective), słowniki projektu (DICT_*),
     // mapowanie CES ↔ P1S (tylko odczyt); struktura P1S – PZLPROD (pzl-ev.json, PzlProd).
-    public void Initialize(AppServices services) =>
+    public void Initialize(AppServices services)
+    {
         _service = new ProjectService(
             new SqlProjectStore(services.Sql, services.Clock, services.User),
             new SqlDictionaryStore(services.Sql, services.Clock, services.User, [.. GlobalDictionaries.Tables, .. ProjectDictionaries.Tables]),
@@ -34,6 +35,8 @@ public sealed class ProjectsModule : IModule
             services.PzlProd is null ? null : new SqlPzlProdSource(services.PzlProd),
             () => services.Contracts.Get<ISourceImport>(),
             () => services.Contracts.Get<IRunLauncher>());
+        services.Contracts.Register<ICasCostSource>(new CasCostSource(_service));
+    }
 
     public FrameworkElement CreateView(ModuleContext context) =>
         new ProjectsView { DataContext = new ProjectsViewModel(_service!, new FileDialogs()) };

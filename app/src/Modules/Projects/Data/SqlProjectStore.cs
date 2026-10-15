@@ -268,6 +268,13 @@ public sealed class SqlProjectStore(SqlDatabase db, IClock clock, ICurrentUser u
             Of(r => r.Hours), Of(r => r.Labor), Of(r => r.Material));
     }
 
+    public IReadOnlyList<CasCostRow> CasCosts(string code)
+    {
+        using var connection = db.Open();
+        return connection.Query<CasCostRow>(db.Table("rep.ProjectCasCosts"), new { Project = code },
+            commandType: System.Data.CommandType.StoredProcedure, commandTimeout: 600).ToList();
+    }
+
     public IReadOnlyList<string> CurrenciesOf(IReadOnlyCollection<string> definitions, string currencyField)
     {
         if (definitions.Count == 0)

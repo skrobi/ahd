@@ -130,6 +130,48 @@ public static class CasFormula
             _ => ")",
         })).Replace("( ", "(").Replace(" )", ")");
 
+    /// <summary>
+    /// Wartość formuły (jak formuła Excela raportu kosztów CES): cost – koszt bazowy, pool / rate – narzut / wskaźnik puli;
+    /// mnożenie i dzielenie przed dodawaniem i odejmowaniem, od lewej; dzielenie przez 0 – 0 (w Excelu #DZIEL/0!).
+    /// Formuła ma być poprawna (Error = null).
+    /// </summary>
+    public static decimal Evaluate(IReadOnlyList<Token> tokens, decimal cost, Func<long, decimal> pool, Func<long, decimal> rate)
+    {
+        var at = 0;
+        decimal Operand()
+        {
+            var token = tokens[at++];
+            if (token.Kind != Kind.Open)
+                return token.Kind switch { Kind.Base => cost, Kind.Pool => pool(token.Id), _ => rate(token.Id) };
+            var value = Sum();
+            at++;   // „)”
+            return value;
+        }
+        decimal Product()
+        {
+            var value = Operand();
+            while (at < tokens.Count && tokens[at] is { Kind: Kind.Operator, Symbol: '*' or '/' } op)
+            {
+                at++;
+                var right = Operand();
+                value = op.Symbol == '*' ? value * right : right == 0 ? 0 : value / right;
+            }
+            return value;
+        }
+        decimal Sum()
+        {
+            var value = Product();
+            while (at < tokens.Count && tokens[at] is { Kind: Kind.Operator, Symbol: '+' or '-' } op)
+            {
+                at++;
+                var right = Product();
+                value = op.Symbol == '+' ? value + right : value - right;
+            }
+            return value;
+        }
+        return Sum();
+    }
+
     /// <summary>Formuła Excela: cost – komórka kosztu bazowego, pool / rate – komórka narzutu / wskaźnika puli.</summary>
     public static string Excel(IEnumerable<Token> tokens, string cost, Func<long, string> pool, Func<long, string> rate) =>
         "=" + string.Concat(tokens.Select(t => t.Kind switch

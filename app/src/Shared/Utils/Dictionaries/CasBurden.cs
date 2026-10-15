@@ -77,6 +77,57 @@ public static class CasBurden
         return cyclic;
     }
 
+    /// <summary>Wskaźnik puli (identyfikator puli) obowiązujący od – do (To null – bezterminowo).</summary>
+    public sealed record Rate(long Pool, DateOnly From, DateOnly? To, decimal Value);
+
+    /// <summary>Wskaźniki z wierszy słownika „Wskaźniki narzutu CAS” (zapis kanoniczny: daty RRRR-MM-DD, liczba z kropką).</summary>
+    public static IReadOnlyList<Rate> RatesFrom(IEnumerable<DictRow> rows) =>
+        rows.Where(r => r["Pula"] is not null && r["Od"] is not null && r["Wskaźnik"] is not null)
+            .Where(r => Id(r["Pula"]) is not null)
+            .Select(r => new Rate(Id(r["Pula"])!.Value, Date(r["Od"]!), r["Do"] is { } to ? Date(to) : null,
+                decimal.Parse(r["Wskaźnik"]!, NumberStyles.Number, CultureInfo.InvariantCulture)))
+            .ToList();
+
+    private static DateOnly Date(string canonical) => DateOnly.ParseExact(canonical, "yyyy-MM-dd", CultureInfo.InvariantCulture);
+
+    /// <summary>
+    /// Wskaźnik puli dla miesięcy kolumny raportu: wersja obowiązująca w ostatnim miesiącu, dla którego jakaś obowiązuje
+    /// (w miesiącu kilka – najpóźniej rozpoczęta); changes – w miesiącach kolumny obowiązują różne wskaźniki.
+    /// </summary>
+    public static (Rate? Rate, bool Changes) RateFor(IReadOnlyList<Rate> rates, long pool, IReadOnlyList<DateOnly> months)
+    {
+        var found = months.Select(m => rates
+                .Where(r => r.Pool == pool && r.From <= m.AddMonths(1).AddDays(-1) && (r.To is null || r.To >= m))
+                .MaxBy(r => r.From))
+            .OfType<Rate>().ToList();
+        return found.Count == 0 ? (null, false) : (found[^1], found.Select(r => r.Value).Distinct().Count() > 1);
+    }
+
+    /// <summary>
+    /// Formuły grupy do naliczenia (indeks puli w pools, klocki) w kolejności pul: pula spoza słownika pul, formuła błędna
+    /// albo zapętlona – bez narzutu, z uwagą w notes (raport kosztów CES i koszt projektu CAS liczą tak samo).
+    /// </summary>
+    public static IReadOnlyList<(int Pool, IReadOnlyList<CasFormula.Token> Tokens)> Usable(Group group, IReadOnlyList<Pool> pools, ICollection<string> notes)
+    {
+        var index = pools.Select((p, i) => (p.Id, i)).ToDictionary(x => x.Id, x => x.i);
+        var known = pools.Select(p => p.Id).ToHashSet();
+        var cycles = Cycles(group.Formulas);
+        var list = new List<(int Pool, IReadOnlyList<CasFormula.Token> Tokens)>();
+        foreach (var (pool, tokens) in group.Formulas)
+        {
+            if (!index.TryGetValue(pool, out var p))
+                notes.Add($"Grupa {group.Name}: formuła puli usuniętej ze słownika „Pule narzutu CAS” – pominięta");
+            else if (CasFormula.Error(tokens, known) is { } error)
+                notes.Add($"Grupa {group.Name}, pula {pools[p].Name}: {error} – bez narzutu");
+            else if (cycles.Contains(pool))
+                notes.Add($"Grupa {group.Name}: narzut puli {pools[p].Name} zależy od niego samego (zapętlenie formuł) – bez narzutu");
+            else
+                list.Add((p, tokens));
+        }
+        list.Sort((x, y) => x.Pool.CompareTo(y.Pool));
+        return list;
+    }
+
     /// <summary>„Formuły narzutów CAS”: zapis czytelny, formuła poprawnie zbudowana, bez zapętlenia pul w grupie.</summary>
     public static IEnumerable<Issue> FormulaRules(IReadOnlyList<DictRow> rows)
     {
