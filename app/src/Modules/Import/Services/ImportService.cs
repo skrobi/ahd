@@ -372,11 +372,12 @@ public sealed class ImportService(IImportStore store, AppServices services, Func
     /// Nowa treść pliku, etapami widocznymi na ekranie:
     /// 1) pobranie na dysk lokalny (HTTPS albo WebDAV, SHA-256 w trakcie) – dalsze odczyty z dysku, nie z sieci;
     /// 2) duplikat (ten sam SHA-256), nagłówek i parser – kolumny parsera obecne w pliku;
-    /// 3) jeden przebieg pliku: wiersze czytane i parsowane w osobnym wątku i jednocześnie zapisywane wsadowo do CAN_Row
-    ///    w jednej transakcji; błąd wartości, puste pole wymagane albo niezgodne sumy kwot (z kolumn pliku i z wartości pól)
-    ///    wycofują zapis – plik nie trafia do bazy (decyzja „błąd”, problem w rejestrze) i przy kolejnym imporcie jest
-    ///    pobierany ponownie;
-    /// 4) kontrola w bazie (liczba wierszy i sumy po zapisie) i zatwierdzenie; niezgodność wycofuje cały zapis.
+    /// 3) jeden przebieg pliku: wpis pliku ze stanem „w toku”, wiersze czytane i parsowane w osobnym wątku i jednocześnie
+    ///    zapisywane do CAN_Row paczkami zatwierdzanymi osobno (odczyty widzą plik dopiero w stanie „utworzone”); błąd
+    ///    wartości, puste pole wymagane albo niezgodne sumy kwot (z kolumn pliku i z wartości pól) – wiersze i wpis pliku są
+    ///    usuwane: plik nie trafia do bazy (decyzja „błąd”, problem w rejestrze) i przy kolejnym imporcie jest pobierany
+    ///    ponownie;
+    /// 4) kontrola w bazie (liczba wierszy i sumy po zapisie) i stan „utworzone”; niezgodność usuwa wiersze i wpis pliku.
     /// Treść pliku nie jest przechowywana – po imporcie plik lokalny jest usuwany, dane są w CAN_Row.
     /// </summary>
     private (string Decision, string Description, string? Sha, int? Rows) ImportContent(long batchId, ImportLocation location, SourceFile file,
@@ -522,8 +523,9 @@ public sealed class ImportService(IImportStore store, AppServices services, Func
     }
 
     /// <summary>
-    /// Przebieg pliku przez parser: liczba wierszy, błędy wartości (do 20 opisów), sumy kwot liczone niezależnie od
-    /// parsera z tekstu kolumn pliku (format polski) i z wartości pól po parsowaniu. Wiersze do zapisu – do pierwszego
+    /// Przebieg pliku przez parser: liczba wierszy, błędy wartości (do 20 opisów), sumy kwot z tekstu kolumn pliku i z wartości
+    /// pól po parsowaniu – to samo parsowanie liczb (PolishNumber), więc sumy wykrywają błędy mapowania wierszy, a nie błędy
+    /// parsowania liczb; niezależna jest kontrola w bazie (SqlImportStore.Verify). Wiersze do zapisu – do pierwszego
     /// błędu (dalej plik jest tylko sprawdzany, a zapis zostanie wycofany).
     /// </summary>
     private sealed class ContentCheck(RowMapper mapper)

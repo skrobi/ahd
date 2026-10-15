@@ -8,9 +8,10 @@ namespace PzlEv.Modules.Projects.Models;
 /// rzeczywisty z ostatniego importu ACTUALS: węzeł nakładki – elementy CES jego poddrzewa, element P1S – koszt
 /// przypisany do WP poddrzewa (StructureBuilder). Bac – budżet kosztowy (BAC) WP poddrzewa.
 /// Operational EV (z PZLPROD na żywo, null – brak danych): OpsBacHours, EvHours, AcHours – suma elementów P1S poddrzewa
-/// (vAHDD); PvHours – BAC Hours WP poddrzewa rozłożone liniowo na dni robocze baseline do dnia stanu. ActualMaterial –
-/// materiały dostarczone (vAPD). Financial EV: PvCost = BAC Cost × udział dni roboczych baseline, EvCost = BAC Cost ×
-/// (EV Hours / BAC Hours) WP; ActualDlh – godziny rzeczywiste (Total Quantity) z ostatniego importu ACTUALS, przypisane
+/// (vAHDD; OpsBacHours – TECH Hours); PvHours – TECH Hours WP poddrzewa (produkcyjne BacHours, nie BAC Hours z „Harmonogram
+/// i budżet”) rozłożone liniowo na dni robocze baseline do dnia stanu. ActualMaterial – materiały dostarczone (vAPD).
+/// Financial EV: PvCost = BAC Cost × udział dni roboczych baseline, EvCost = BAC Cost × (EV Hours / TECH Hours) WP, najwyżej
+/// BAC Cost; ActualDlh – godziny rzeczywiste (Total Quantity) z ostatniego importu ACTUALS, przypisane
 /// jak Acwp. ActualStart / ActualFinish – daty WP wpisane w „Harmonogram i budżet” (Actual Start / Koniec;
 /// ActualStartManual, ActualFinishManual), a bez nich vAHDD (GSTRI, LTRMI; wydzielenie – DATA_REAL); koniec, gdy
 /// wszystkie zlecenia zamknięte.
