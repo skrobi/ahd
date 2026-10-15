@@ -202,6 +202,14 @@ public sealed class ImportService(IImportStore store, AppServices services, Func
         var definitions = store.ActiveDefinitions();
         var batchId = store.BeginBatch(services.Clock.Now, services.User.Account, Environment.MachineName, services.AppVersion);
         using var alive = services.Locks.TryAcquire(BatchLock(batchId), out _);
+        if (alive is null)
+        {
+            // Bez blokady „żyje” inny import uznałby ten za przerwany i usunął pliki w trakcie zapisu.
+            var refused = $"Import #{batchId} nie rozpoczęty – nie udało się założyć blokady importu w folderze {services.Config.RabitFolder}.";
+            Logger.Error(refused);
+            store.FinishBatch(batchId, services.Clock.Now, 0, 0, 0, 0, 0, 0, ImportBatchStatus.Abandoned);
+            return new ImportRunResult(batchId, [], [Issue.Error(refused, "import")], false) { NotStarted = refused };
+        }
         var scope = sources is null ? "" : $" – źródła: {string.Join(", ", sources.Order())}";
         services.Journal.Add(Area, $"Import #{batchId} rozpoczęty ({services.User.Account}, {Environment.MachineName}){scope}");
         Logger.Information("Import #{Batch} start – {User} na {Machine}, wersja {Version}", batchId, services.User.Account, Environment.MachineName, services.AppVersion);
@@ -457,7 +465,14 @@ public sealed class ImportService(IImportStore store, AppServices services, Func
             rows = check.Rows;
         }
         if (stored is null)
-            return (FileDecisions.Duplicate, DuplicateText(store.FindByHash(sha)!), sha, null);
+        {
+            // Ta sama treść zapisana w międzyczasie przez inny import – albo przez niego już wycofana (wtedy plik wraca przy kolejnym imporcie).
+            if (store.FindByHash(sha) is { } concurrent)
+                return (FileDecisions.Duplicate, DuplicateText(concurrent), sha, null);
+            const string withdrawn = "tę samą treść zapisywał równolegle inny import i zapis wycofał – plik nie zapisany, wróci przy kolejnym imporcie";
+            problem("zapis równoległy", Issue.Error($"{file.Name}: {withdrawn}", location.Name));
+            return (FileDecisions.Error, withdrawn, sha, null);
+        }
 
         var pl = CultureInfo.GetCultureInfo("pl-PL");
         var canonical = mapper is null

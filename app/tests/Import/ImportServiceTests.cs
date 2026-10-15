@@ -310,6 +310,35 @@ public sealed class ImportServiceTests : IDisposable
         Assert.Equal(FileDecisions.Imported, Assert.Single(run.Files).Decision);
     }
 
+    /// <summary>
+    /// Inny import uznaje trwający za przerwany i usuwa jego plik „w toku” w trakcie zapisu: zapis kończy się błędem
+    /// (nie „zaimportowany” bez pliku w bazie), wiersze CAN_Row pliku nie zostają.
+    /// </summary>
+    [SqlFact]
+    public void File_removed_during_its_write_is_an_error_without_orphan_rows()
+    {
+        Use();
+        CopySample(ImportFolder, "ACTUALS_PAF_01.csv");
+        long? fileId = null;
+        var progress = new SyncProgress(p =>
+        {
+            if (fileId is not null || p.Status?.Contains("zestawienie ACTUALS") != true)
+                return;
+            using var connection = _database!.Sql.Open();   // jak SqlImportStore.AbandonRunning innej sesji: wpis pliku usunięty
+            fileId = Dapper.SqlMapper.ExecuteScalar<long>(connection,
+                $"SELECT FileId FROM {_database.Sql.Table("meta.SourceFile")} WHERE CanonicalStatus = N'w toku'; " +
+                $"DELETE FROM {_database.Sql.Table("meta.SourceFile")} WHERE CanonicalStatus = N'w toku'");
+        });
+
+        var result = Assert.Single(_import.Run(progress).Files);
+
+        Assert.NotNull(fileId);
+        Assert.Equal(FileDecisions.Error, result.Decision);
+        Assert.Contains("usunięta w trakcie zapisu", result.Description);
+        using var check = _database!.Sql.Open();
+        Assert.Equal(0, Dapper.SqlMapper.ExecuteScalar<int>(check, $"SELECT COUNT(*) FROM {_database.Sql.Table("can.Row")} WHERE FileId = @fileId", new { fileId }));
+    }
+
     /// <summary>Postęp wywoływany synchronicznie (Progress&lt;T&gt; wysyła do puli wątków).</summary>
     private sealed class SyncProgress(Action<ImportProgress> report) : IProgress<ImportProgress>
     {

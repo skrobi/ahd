@@ -61,6 +61,13 @@ public sealed class RunService(IRunStore store, AppServices services, Func<ISour
 
         var pin = store.StartPin(project, week, services.Clock.Now, services.User.Account, Environment.MachineName);
         using var alive = services.Locks.TryAcquire(PinLock(pin.PinId), out _);
+        if (alive is null)
+        {
+            // Bez blokady „żyje” inny przebieg uznałby to przypięcie za przerwane.
+            var refused = $"Przebieg nie rozpoczęty – nie udało się założyć blokady przypięcia w folderze {services.Config.RabitFolder}";
+            store.Finish(pin.PinId, services.Clock.Now, RunStatuses.Failed, null, 0, 0, 0, [("Przebieg", CheckLevel.Error, null, refused, null)], refused);
+            return new RunOutcome(project, pin.Code, RunStatuses.Failed, 1, 0, refused);
+        }
         services.Journal.Add(Area, $"Przebieg {pin.Code} #{pin.PinNo} rozpoczęty", pin.Code);
         var issues = new List<RunIssue>();
         long? batchId = null;
