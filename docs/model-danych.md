@@ -385,6 +385,14 @@ wydziałów”), `DICT_ScheduleBudget.ForecastStart`, `ForecastEnd`, `EtcHours`,
 nadpisujące produkcję), `DICT_CostCategory.CostKind` (rodzaj kosztu Labor / Material – wstępnie wg Cost Category);
 `REP_ProjectCostsByElement` zwraca też ACWP Labor i Material. Wymaga aplikacji 0.52.0.
 
+**Migracja `sql/mssql/039_rodzaj_kosztu.sql`:** rodzaj kosztu Cost Category – wartości Hours / Materials / Other (Labor → Hours,
+Material → Materials); `REP_ProjectCostsByElement` liczy ACWP Hours i Materials według nowych wartości (reszta – ACWP Other).
+Wymaga aplikacji 0.53.0.
+
+**Migracja `sql/mssql/040_dane_rodzaj_kosztu.sql` (dane startowe):** konta 0051105550, 0051102550, 0051103550 – rodzaj
+Materials w globalnym Cost Category (pozycja bez rodzaju – nowa wersja; brakująca – dodana jako Direct Materials z grupą
+narzutową jak 0051105550; rodzaj ustawiony wcześniej zostaje).
+
 `META_SourceFile.CanonicalStatus`: „utworzone” – dane kanoniczne zapisane i sprawdzone (widoczne dla odczytów),
 „w toku” – zapis wierszy trwa (odczyty pomijają plik; po awarii wpis i wiersze są usuwane), inna wartość – powód
 braku danych (źródło bez parsera).

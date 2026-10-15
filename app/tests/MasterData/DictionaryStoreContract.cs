@@ -138,7 +138,7 @@ public sealed class DictionaryStoreContract : IDisposable
         Assert.Equal(expected.Count, calendar.Count);
         Assert.Equal(expected[0], calendar[0].Values);                      // daty RRRR-MM-DD, tak / nie, liczby całkowite
         Assert.Contains(calendar, r => r.Values["Zamykający"] == "tak");
-        Assert.Equal(33, store.Current(GlobalDictionaries.CostCategory).Count);
+        Assert.Equal(35, store.Current(GlobalDictionaries.CostCategory).Count);
         Assert.Equal("3.98765432", Assert.Single(store.Current(GlobalDictionaries.FxRates)).Values["Kurs"]);
         Assert.Equal("Jan Kowalski", Assert.Single(store.Current(GlobalDictionaries.Persons)).Values["Imię i nazwisko"]);
     }
