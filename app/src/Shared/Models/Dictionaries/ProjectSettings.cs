@@ -14,6 +14,7 @@ public static class ProjectSettings
     /// <summary>
     /// Zestaw walutowy ACTUALS: pole kwoty i pole jej waluty (kolumny raportu RABIT). Projekt liczy koszty (ACWP, raport
     /// kosztów, przebieg) w kwocie zestawu, a walutę projektu odczytuje z kolumny waluty tego zestawu w danych projektu.
+    /// Waluta transakcji (Value TranCurr) nie jest zestawem – kwoty w różnych walutach się nie sumują (decyzja finansów).
     /// </summary>
     public sealed record ActualsSet(string Field, string AmountColumn, string CurrencyField, string CurrencyColumn, string Description)
     {
@@ -25,7 +26,6 @@ public static class ProjectSettings
     [
         new("ValueObjCrcy", "Value in Obj. Crcy", "ObjectCurrency", "Object Currency", "waluta obiektu (PLN)"),
         new("ValueRepCur", "Val.in rep.cur.", "ReportCurrency", "Report currency", "waluta raportu"),
-        new("ValueTranCurr", "Value TranCurr", "TransactionCurrency", "Transaction Currency", "waluta transakcji – różna w wierszach"),
     ];
 
     /// <summary>Zestaw walutowy pola kwoty (nieznane pole – domyślny).</summary>

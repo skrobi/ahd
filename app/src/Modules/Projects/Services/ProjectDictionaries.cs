@@ -45,7 +45,7 @@ public static class ProjectDictionaries
     {
         Code = ScheduleBudget,
         Name = "Harmonogram i budżet",
-        Description = "WP → BAC HOURS (godziny), BAC MATERIAL (koszt materiałów), BAC (budżet kosztowy), Baseline Start i Baseline Koniec – baseline projektu; Actual Start i Actual Koniec – daty rzeczywiste WP nadpisujące daty z raportu produkcyjnego (puste – data z produkcji); Forecast Start i Forecast Koniec – prognoza; ETC HOURS i ETC MATERIAL – godziny i materiały do poniesienia nadpisujące wartości z produkcji (puste – z produkcji).",
+        Description = "WP → BAC HOURS (godziny), BAC MATERIAL (koszt materiałów), BAC (budżet kosztowy), Baseline Start i Baseline Koniec – baseline projektu; Actual Start i Actual Koniec – daty rzeczywiste WP nadpisujące daty z raportu produkcyjnego (puste – data z produkcji); Forecast Start i Forecast Koniec – prognoza; ETC HOURS i ETC MATERIAL – godziny i materiały do poniesienia nadpisujące wartości z produkcji (puste – z produkcji). Kwoty (BAC MATERIAL, BAC, ETC MATERIAL) – w walucie projektu; Waluta – kod waluty projektu zapisywany przy wpisaniu kwot (puste – waluta projektu).",
         Columns =
         [
             new("WP", ColumnType.Text, Key: true),
@@ -60,6 +60,7 @@ public static class ProjectDictionaries
             new("Forecast Koniec", ColumnType.Date, Aliases: ["Forecast Finish"]),
             new("ETC HOURS", ColumnType.Decimal),
             new("ETC MATERIAL", ColumnType.Decimal),
+            new(CurrencyColumn, ColumnType.Text),
         ],
         SkipKeyOnlyRows = true,
     };
@@ -93,7 +94,7 @@ public static class ProjectDictionaries
         Code = Settings,
         Name = "Parametry projektu",
         Description = $"Parametry projektu: {ProjectSettings.ActualsAmount} – pole kwoty parsera ACTUALS dla ACWP struktury, raportu kosztów i przebiegu "
-                      + "(ValueObjCrcy – waluta obiektu (PLN), ValueRepCur – waluta raportu, ValueTranCurr – waluta transakcji); brak wiersza – ValueObjCrcy.",
+                      + "(ValueObjCrcy – waluta obiektu (PLN), ValueRepCur – waluta raportu); brak wiersza – ValueObjCrcy.",
         Columns =
         [
             new("Parametr", ColumnType.Choice, Key: true, Choices: [ProjectSettings.ActualsAmount]),
@@ -141,7 +142,7 @@ public static class ProjectDictionaries
         new(ScheduleBudgetSpec, "dict.ScheduleBudget",
             [("WP", "Wp"), ("BAC HOURS", "BacHours"), ("BAC MATERIAL", "BacMaterial"), ("BAC", "Bac"), ("Baseline Start", "PlannedStart"), ("Baseline Koniec", "PlannedEnd"),
              ("Actual Start", "ActualStart"), ("Actual Koniec", "ActualEnd"), ("Forecast Start", "ForecastStart"), ("Forecast Koniec", "ForecastEnd"),
-             ("ETC HOURS", "EtcHours"), ("ETC MATERIAL", "EtcMaterial")]),
+             ("ETC HOURS", "EtcHours"), ("ETC MATERIAL", "EtcMaterial"), (CurrencyColumn, "Currency")]),
         new(WbsCategoriesSpec, "dict.WbsCategory", [("Cost Category", "Category"), ("Opis", "Description")]),
         new(ExclusionsSpec, "dict.Exclusion", [("Cost Element", "CostElement"), ("WBS Element", "WbsElement"), ("Partner object", "PartnerObject"), ("Opis", "Description")]),
         new(SourcesSpec, "dict.ProjectSource", [("Definicja źródła", "SourceCode"), ("Opis", "Description")]),
@@ -158,7 +159,7 @@ public static class ProjectDictionaries
     public static DictionarySpec For(string code, ProjectDictionaryContext context) => code switch
     {
         WpCam => With(WpCamSpec, rows => WpCamRules(rows, context)),
-        ScheduleBudget => With(ScheduleBudgetSpec, rows => ScheduleBudgetRules(rows, context)),
+        ScheduleBudget => With(ScheduleBudgetSpec, rows => ScheduleBudgetRules(rows, context), (row, stored) => StampCurrency(row, stored, context.Currency, context.Factor)),
         Exclusions => With(ExclusionsSpec, ExclusionRules),
         WbsCategories => WbsCategoriesSpec,
         Sources => With(SourcesSpec, rows => SourceRules(rows, context)),
@@ -181,11 +182,45 @@ public static class ProjectDictionaries
             .ToList();
     }
 
-    private static DictionarySpec With(DictionarySpec spec, Func<IReadOnlyList<DictRow>, IEnumerable<Issue>> rules) => new()
+    private static DictionarySpec With(DictionarySpec spec, Func<IReadOnlyList<DictRow>, IEnumerable<Issue>> rules,
+        Func<DictRow, DictRow?, DictRow>? prepare = null) => new()
     {
         Code = spec.Code, Name = spec.Name, Description = spec.Description, Columns = spec.Columns, Validity = spec.Validity,
-        EmptyKeyPartsAllowed = spec.EmptyKeyPartsAllowed, SkipKeyOnlyRows = spec.SkipKeyOnlyRows, Rules = rules,
+        EmptyKeyPartsAllowed = spec.EmptyKeyPartsAllowed, SkipKeyOnlyRows = spec.SkipKeyOnlyRows, Rules = rules, Prepare = prepare,
     };
+
+    /// <summary>„Harmonogram i budżet”: kolumna z kodem waluty wpisanych kwot (MoneyColumns).</summary>
+    public const string CurrencyColumn = "Waluta";
+
+    /// <summary>Kwoty „Harmonogram i budżet” – w walucie projektu (CurrencyColumn); BAC HOURS i ETC HOURS to godziny.</summary>
+    public static IReadOnlyList<string> MoneyColumns { get; } = ["BAC MATERIAL", "BAC", "ETC MATERIAL"];
+
+    /// <summary>
+    /// Waluta kwot wiersza „Harmonogram i budżet” przy zapisie: kwoty zmienione (albo nowy wiersz z kwotą) – waluta projektu
+    /// (nieznana – waluta wiersza bez zmian); kwoty bez zmian – waluta wiersza; brak kwot – pusta. Wiersz w innej walucie:
+    /// niezmienione kwoty przeliczone na walutę projektu (factor; brak kursu – wiersz zostaje w swojej walucie).
+    /// </summary>
+    public static DictRow StampCurrency(DictRow row, DictRow? stored, string? currency, Func<string, decimal?>? factor = null)
+    {
+        var previous = stored?[CurrencyColumn] ?? row[CurrencyColumn];
+        var currencyOf = MoneyColumns.All(c => row[c] is null) ? null
+            : stored is not null && MoneyColumns.All(c => row[c] == stored[c]) ? row[CurrencyColumn]
+            : currency ?? row[CurrencyColumn];
+        var values = row.Values.ToDictionary(v => v.Key, v => v.Value);
+        if (currencyOf is not null && previous is not null && stored is not null && !string.Equals(previous, currencyOf, StringComparison.OrdinalIgnoreCase)
+            && MoneyColumns.Any(c => row[c] is not null && row[c] == stored[c]))
+        {
+            if (factor?.Invoke(previous) is not { } rate)
+                currencyOf = previous;
+            else
+                foreach (var column in MoneyColumns.Where(c => row[c] is not null && row[c] == stored[c]))
+                    values[column] = Dec(row[column]) is { } amount ? (amount * rate).ToString(System.Globalization.CultureInfo.InvariantCulture) : row[column];
+        }
+        if (currencyOf == row[CurrencyColumn] && values.All(v => v.Value == row[v.Key]))
+            return row;
+        values[CurrencyColumn] = currencyOf;
+        return row with { Values = values };
+    }
 
     /// <summary>
     /// docs/slowniki.md, rozdz. 5.2. Jeden WP na element P1S – klucz. CAM uzupełnia się później (najpierw wskazuje się WP):
@@ -241,6 +276,8 @@ public static class ProjectDictionaries
                 yield return Issue.Error("ETC HOURS nie może być ujemne", at);
             if (Dec(row["ETC MATERIAL"]) is < 0)
                 yield return Issue.Error("ETC MATERIAL nie może być ujemne", at);
+            if (row[CurrencyColumn] is { } code && (code.Length != 3 || !code.All(char.IsAsciiLetterUpper)))
+                yield return Issue.Error($"Waluta „{code}” – kod waluty z trzech wielkich liter (np. PLN, USD)", at);
         }
     }
 

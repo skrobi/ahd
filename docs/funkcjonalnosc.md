@@ -58,7 +58,7 @@ Nagłówek aplikacji – `docs/architektura.md`, rozdz. 3.
 Kroki kreatora:
 
 1. **Podstawowe** – kod, nazwa, typ; aplikacja pokazuje słowniki wymagane dla typu. Waluta kosztów – zestaw walutowy
-   ACTUALS (Object / Report / Transaction Currency z odpowiednią kolumną kwoty), zapisywany w „Parametrach projektu”
+   ACTUALS (Object / Report currency z odpowiednią kolumną kwoty; waluta transakcji – nie), zapisywany w „Parametrach projektu”
    (`docs/slowniki.md`, rozdz. 3); zmiana później – zakładka Konfiguracja. Waluta projektu (nagłówek ekranu projektu) –
    z kolumny waluty zestawu w danych ACTUALS.
 2. **Performance Objectives** – budowa nakładki kontraktu CES (`docs/performance-objectives.md`): wczytanie

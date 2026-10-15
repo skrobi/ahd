@@ -88,10 +88,33 @@ public static class StructureBuilder
         IReadOnlyDictionary<string, decimal>? labor = null, IReadOnlyDictionary<string, decimal>? material = null, EtcRates? rates = null)
     {
         var today = statusDate ?? DateOnly.FromDateTime(DateTime.Today);
+        // Waluta projektu (rates.Currency): materiały z vAPD (USD) przeliczone kursem bieżącym (brak kursu – puste);
+        // kwoty „Harmonogram i budżet” wpisane w innej walucie (kolumna Waluta) – przeliczone, brak kursu – puste i brak w wierszu.
+        var materialFactor = rates is null ? 1 : rates.MaterialFactor;
         var productionOf = (production?.ByPspnr ?? new Dictionary<string, ProductionValues>())
-            .GroupBy(p => MappingKeys.Key(p.Key)).ToDictionary(g => g.Key, g => g.First().Value);
+            .GroupBy(p => MappingKeys.Key(p.Key)).ToDictionary(g => g.Key, g => g.First().Value with
+            {
+                ActualMaterial = g.First().Value.ActualMaterial * materialFactor,
+                MaterialValue = g.First().Value.MaterialValue * materialFactor,
+                MaterialFee = g.First().Value.MaterialFee * materialFactor,
+            });
+        var currencyGaps = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        DictRow InProjectCurrency(DictRow row)
+        {
+            var currency = row[ProjectDictionaries.CurrencyColumn];
+            if (rates is null || rates.Factor(currency) is 1m)
+                return row;
+            var factor = rates.Factor(currency);
+            if (factor is null)
+                currencyGaps[row["WP"]!] = $"budżet w {currency} – brak kursu {currency} w „Kursy walut” (przeliczenie na {rates.Currency})";
+            var values = row.Values.ToDictionary(v => v.Key, v => v.Value);
+            foreach (var column in ProjectDictionaries.MoneyColumns)
+                values[column] = decimal.TryParse(row[column], System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var amount)
+                    ? (amount * factor)?.ToString(System.Globalization.CultureInfo.InvariantCulture) : row[column];
+            return row with { Values = values };
+        }
         var budgets = schedule.Where(r => r["WP"] is not null).GroupBy(r => r["WP"]!, StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
+            .ToDictionary(g => g.Key, g => InProjectCurrency(g.First()), StringComparer.OrdinalIgnoreCase);
         var assignments = wpCam.Where(r => r["Element P1S"] is not null).GroupBy(r => MappingKeys.Key(r["Element P1S"]))
             .ToDictionary(g => g.Key, g => g.First());
         var byCode = (p1s ?? []).GroupBy(e => MappingKeys.Key(e.WbsElement)).ToDictionary(g => g.Key, g => g.First());
@@ -294,16 +317,14 @@ public static class StructureBuilder
             ?? (wpProduction.GetValueOrDefault(wp) is { Value: { } value } p ? value - (p.Material ?? 0) : null);
         var mpkOf = wpCam.Where(r => r["WP"] is not null && r["MPK"] is not null).GroupBy(r => r["WP"]!, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(g => g.Key, g => g.First()["MPK"]!, StringComparer.OrdinalIgnoreCase);
-        // ETC Cost WP = ETC Hours × stawka MPK (Labor Rate × Overhead, PLN) × przelicznik pracy + Material ETC (USD) × przelicznik
-        // materiałów – w walucie projektu; brak MPK, stawki albo kursu – null (powód w brakach wiersza).
+        // ETC Cost WP = ETC Hours × stawka MPK (Labor Rate × Overhead, PLN) × przelicznik pracy + Material ETC (już w walucie
+        // projektu) – w walucie projektu; brak MPK, stawki albo kursu (także USD materiałów) – null (powód w brakach wiersza).
         decimal? EtcCost(string wp)
         {
-            if (rates is null || !mpkOf.TryGetValue(wp, out var mpk) || !rates.RateByMpk.TryGetValue(mpk, out var rate) || rates.LaborFactor is not { } laborFactor)
+            if (rates is null || !mpkOf.TryGetValue(wp, out var mpk) || !rates.RateByMpk.TryGetValue(mpk, out var rate) || rates.LaborFactor is not { } laborFactor
+                || rates.MaterialFactor is null || currencyGaps.ContainsKey(wp))
                 return null;
-            var materialEtc = MaterialEtc(wp) ?? 0;
-            if (materialEtc != 0 && rates.MaterialFactor is null)
-                return null;
-            return (EtcHours(wp) ?? 0) * rate * laborFactor + materialEtc * (rates.MaterialFactor ?? 0);
+            return (EtcHours(wp) ?? 0) * rate * laborFactor + (MaterialEtc(wp) ?? 0);
         }
         string? EtcGap(string wp) => rates is null ? null
             : !mpkOf.TryGetValue(wp, out var mpk) ? "WP bez MPK"
@@ -338,6 +359,8 @@ public static class StructureBuilder
                 gap = gap is null ? "kod wydzielenia: ELEMENT_P1S.NAZWA.CPLGR" : $"{gap}; kod wydzielenia: ELEMENT_P1S.NAZWA.CPLGR";
             if (assignment?["WP"] is not null && assignment["CAM"] is null)
                 gap = gap is null ? "WP bez CAM" : $"{gap}; WP bez CAM";
+            if (ownWp is not null && currencyGaps.GetValueOrDefault(ownWp) is { } currencyGap)
+                gap = gap is null ? currencyGap : $"{gap}; {currencyGap}";
             if (ownWp is not null && EtcGap(ownWp) is { } etcGap)
                 gap = gap is null ? etcGap : $"{gap}; {etcGap}";
             if (item.CostGap is { } costGap)

@@ -347,13 +347,15 @@ public sealed class StructureTests
         var wp1 = Of(structure, "p1s:AC-CAB.6.38.07");
         Assert.Equal((100m, 50m, 50m, 50m), (wp1.OpsBacHours, wp1.EvHours, wp1.AcHours, wp1.PvHours));   // TECH 60+40, BCWP 30+20, CATS 40+10; BCWS 100 × 5/10
         Assert.Equal((1m, 1m, 30m, 80m), (wp1.SpiHours, wp1.CpiHours, wp1.EtcHours, wp1.EacHours));     // ETC z produkcji 20+10; EAC 50+30
-        Assert.Equal((400m, 40m, 300m, 25m, 5, 2, 2027), (wp1.MaterialValue, wp1.MaterialFee, wp1.MaterialEtc, wp1.PercentDelivered, wp1.Parts, wp1.PartsDelivered, wp1.NextDeliveryYear));
-        // ETC Cost: 30 h × 150 PLN + 300 USD × 4 = 5700; BCWS / BCWP z BAC Cost 10 000 × 0,5.
+        // Materiały vAPD w USD przeliczone na walutę projektu (PLN, kurs 4): wartość 400 → 1600, fee 40 → 160, dostarczone 100 → 400.
+        Assert.Equal((1600m, 160m, 400m, 1200m, 25m, 5, 2, 2027),
+            (wp1.MaterialValue, wp1.MaterialFee, wp1.ActualMaterial, wp1.MaterialEtc, wp1.PercentDelivered, wp1.Parts, wp1.PartsDelivered, wp1.NextDeliveryYear));
+        // ETC Cost: 30 h × 150 PLN + 1200 PLN (300 USD × 4) = 5700; BCWS / BCWP z BAC Cost 10 000 × 0,5.
         Assert.Equal((5700m, 5000m, 5000m), (wp1.EtcCost, wp1.PvCost, wp1.EvCost));
         Assert.Equal(("2026-11-30", "w toku", "W30"), (wp1.ForecastFinish, wp1.Status, wp1.Mpk));
         Assert.False(wp1.EtcHoursManual);
 
-        // WP-2: ETC wpisane (8 h, 50 USD), bez MPK – ETC Cost pusty i brak „WP bez MPK”; ACWP węzła: Labor 600, Material 200, Other 100.
+        // WP-2: ETC wpisane (8 h, 50 PLN – waluta projektu), bez MPK – ETC Cost pusty i brak „WP bez MPK”; ACWP węzła: Labor 600, Material 200, Other 100.
         var wp2Row = Of(structure, "4D06WP000001");   // węzeł nakładki z kodem AC-CAB.6.38.01 – WP-2 w wierszu węzła
         Assert.Equal((8m, 50m, true, true), (wp2Row.EtcHours, wp2Row.MaterialEtc, wp2Row.EtcHoursManual, wp2Row.MaterialEtcManual));
         Assert.Null(wp2Row.EtcCost);
@@ -388,8 +390,60 @@ public sealed class StructureTests
         var eur = ProjectService.EtcRatesOf(departments, [.. fx, Row(("Waluta", "EUR"), ("Okres", "2026-10"), ("Kurs", "4.25"))], "EUR", null, today);
         Assert.Equal((Math.Round(1 / 4.25m, 10), Math.Round(4m / 4.25m, 10)), (Math.Round(eur.LaborFactor!.Value, 10), Math.Round(eur.MaterialFactor!.Value, 10)));
         Assert.Contains("brak kursu EUR", ProjectService.EtcRatesOf(departments, fx, "EUR", null, today).Problem);
-        Assert.Contains("kilka walut", ProjectService.EtcRatesOf(departments, fx, null, "kilka walut w kolumnie Transaction Currency: EUR, PLN", today).Problem);
+        Assert.Contains("kilka walut", ProjectService.EtcRatesOf(departments, fx, null, "kilka walut w kolumnie Report currency: EUR, PLN", today).Problem);
         Assert.Contains("brak kursu USD", ProjectService.EtcRatesOf(departments, [], "PLN", null, today).Problem);
+        // Przeliczniki kwot w innej walucie na walutę projektu: USD → PLN 4; PLN → USD 0,25; waluta projektu – 1; brak kursu – null.
+        Assert.Equal((4m, 1m, (decimal?)null), (pln.Factor("USD"), pln.Factor("PLN"), pln.Factor("EUR")));
+        Assert.Equal((0.25m, 1m), (usd.Factor("PLN"), usd.Factor(null)));
+    }
+
+    /// <summary>Kwoty „Harmonogram i budżet” wpisane w innej walucie (kolumna Waluta) – przeliczone na walutę projektu; brak kursu – puste i brak.</summary>
+    [Fact]
+    public void Budget_amounts_in_other_currency_are_converted_to_project_currency()
+    {
+        DictRow[] wpCam =
+        [
+            Row(("Element P1S", "AC-CAB.6.38.07"), ("WP", "WP-1"), ("CAM", "Anna Nowak"), ("Cost Category", null), ("MPK", "W30")),
+            Row(("Element P1S", "AC-CAB.6.38.01"), ("WP", "WP-2"), ("CAM", "Anna Nowak"), ("Cost Category", null), ("MPK", "W30")),
+        ];
+        DictRow[] schedule =
+        [
+            Row(("WP", "WP-1"), ("BAC HOURS", "100"), ("BAC MATERIAL", "50"), ("BAC", "1000"), ("ETC HOURS", "0"), ("ETC MATERIAL", "10"), ("Waluta", "USD")),
+            Row(("WP", "WP-2"), ("BAC HOURS", "1"), ("BAC", "700"), ("Waluta", "EUR")),
+        ];
+        var rates = new EtcRates(new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase) { ["W30"] = 150m }, 2026, "PLN", 1, 4m, null,
+            new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase) { ["USD"] = 4m, ["PLN"] = 1m });
+        var structure = StructureBuilder.Build(Objectives(), Inputs().P1s, wpCam, schedule, statusDate: new DateOnly(2026, 10, 11), rates: rates);
+
+        var wp1 = Of(structure, "p1s:AC-CAB.6.38.07");
+        Assert.Equal((100m, 200m, 4000m, 40m, 40m), (wp1.BacHours, wp1.BacMaterial, wp1.Bac, wp1.MaterialEtc, wp1.EtcCost));   // godziny bez przeliczenia
+        var wp2 = Of(structure, "4D06WP000001");
+        Assert.Equal(0m, wp2.Bac);
+        Assert.Null(wp2.EtcCost);
+        Assert.Contains("budżet w EUR – brak kursu EUR", wp2.Gap);
+    }
+
+    /// <summary>Waluta kwot „Harmonogram i budżet” przy zapisie: kwoty zmienione – waluta projektu, bez zmian – waluta wiersza.</summary>
+    [Fact]
+    public void Saving_budget_amounts_stamps_project_currency()
+    {
+        static DictRow Stored(params (string, string?)[] values) => Row(values) with { RowId = 1, Version = 1 };
+        // Nowy wiersz z kwotą – waluta projektu; bez kwot – pusta; waluta nieznana – bez zmian.
+        Assert.Equal("PLN", ProjectDictionaries.StampCurrency(Row(("WP", "WP-1"), ("BAC", "10")), null, "PLN")["Waluta"]);
+        Assert.Null(ProjectDictionaries.StampCurrency(Row(("WP", "WP-1"), ("BAC HOURS", "10"), ("Waluta", "USD")), null, "PLN")["Waluta"]);
+        Assert.Null(ProjectDictionaries.StampCurrency(Row(("WP", "WP-1"), ("BAC", "10")), null, null)["Waluta"]);
+        // Zmiana daty – kwoty bez zmian: waluta wiersza zostaje.
+        var stored = Stored(("WP", "WP-1"), ("BAC", "100"), ("BAC MATERIAL", "50"), ("Baseline Start", null), ("Waluta", "USD"));
+        var dateOnly = ProjectDictionaries.StampCurrency(Row(("WP", "WP-1"), ("BAC", "100"), ("BAC MATERIAL", "50"), ("Baseline Start", "2026-01-05"), ("Waluta", "USD")),
+            stored, "PLN", c => c == "USD" ? 4m : null);
+        Assert.Equal(("USD", "100", "50"), (dateOnly["Waluta"], dateOnly["BAC"], dateOnly["BAC MATERIAL"]));
+        // Zmiana BAC w walucie projektu – niezmienione kwoty wiersza przeliczone z USD (kurs 4), cały wiersz w PLN.
+        var changed = ProjectDictionaries.StampCurrency(Row(("WP", "WP-1"), ("BAC", "500"), ("BAC MATERIAL", "50"), ("Waluta", "USD")),
+            stored, "PLN", c => c == "USD" ? 4m : null);
+        Assert.Equal(("PLN", "500", "200"), (changed["Waluta"], changed["BAC"], changed["BAC MATERIAL"]));
+        // Brak kursu – wiersz zostaje w swojej walucie.
+        Assert.Equal("USD", ProjectDictionaries.StampCurrency(Row(("WP", "WP-1"), ("BAC", "500"), ("BAC MATERIAL", "50"), ("Waluta", "USD")),
+            stored, "PLN", _ => null)["Waluta"]);
     }
 
     [Fact]
