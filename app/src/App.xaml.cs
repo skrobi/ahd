@@ -50,6 +50,13 @@ public partial class App : Application
             Log.Information("Środowisko {Environment}, baza {Database}, korzeń {NetworkRoot}", config.Environment, config.Sql.Describe, config.NetworkRoot);
             _services = AppServices.Create(config, version);
             OfferMigrations(_services.Sql);
+            if (SqlMigrations.AppVersionRefusal(version, SqlMigrations.RequiredAppVersion(_services.Sql)) is { } refusal)
+            {
+                Log.Error("Wersja aplikacji niezgodna z bazą: {Refusal}", refusal);
+                MessageBox.Show(refusal, "PZL-EV – nieaktualna wersja aplikacji", MessageBoxButton.OK, MessageBoxImage.Error);
+                Shutdown(1);
+                return;
+            }
             var modules = ModuleCatalog.Create(_services);
             var window = new ShellWindow { DataContext = new ShellViewModel(modules, _services) };
             window.Show();
