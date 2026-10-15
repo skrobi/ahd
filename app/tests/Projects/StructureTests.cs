@@ -578,6 +578,45 @@ public sealed class StructureTests
         Assert.Equal((1, 1), (result.Count(StructureEdits.Wp), result.Count(StructureEdits.Cam)));
     }
 
+    /// <summary>
+    /// Pobrana struktura wczytana bez zmian: pusty budżet (w eksporcie 0) i budżet w walucie bez kursu (w eksporcie 0) – bez zapisu,
+    /// budżet w innej walucie (w eksporcie przeliczony) – bez zapisu; zmieniona wartość – zapis.
+    /// </summary>
+    [Fact]
+    public void Structure_file_exported_and_read_back_keeps_empty_and_foreign_currency_budgets()
+    {
+        DictRow[] wpCam =
+        [
+            Row(("Element P1S", "AC-CAB.6.38.07"), ("WP", "WP-1"), ("CAM", "Anna Nowak"), ("Cost Category", null), ("MPK", "W30")),
+            Row(("Element P1S", "AC-CAB.6.38.01"), ("WP", "WP-2"), ("CAM", "Anna Nowak"), ("Cost Category", null), ("MPK", "W30")),
+        ];
+        DictRow[] schedule =
+        [
+            Row(("WP", "WP-1"), ("BAC HOURS", "100"), ("BAC", "1000"), ("Waluta", "USD")),   // BAC MATERIAL pusty
+            Row(("WP", "WP-2"), ("BAC HOURS", "1"), ("BAC", "700"), ("Waluta", "EUR")),      // brak kursu EUR
+        ];
+        var rates = new EtcRates(new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase) { ["W30"] = 150m }, 2026, "PLN", 1, 4m, null,
+            new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase) { ["USD"] = 4m, ["PLN"] = 1m });
+        var structure = StructureBuilder.Build(Objectives(), Inputs().P1s, wpCam, schedule, statusDate: new DateOnly(2026, 10, 11), rates: rates);
+        var persons = new List<LookupOption> { new("Anna Nowak", "Anna Nowak") };
+        var path = Path.Combine(Directory.CreateTempSubdirectory("pzl-ev-structure-").FullName, "M28_struktura.xlsx");
+        ExcelTableWriter.WriteTemplate(path, [("Struktura", ProjectService.StructureSheetColumns(persons), ProjectService.StructureRows(structure, persons))]);
+
+        Assert.Empty(StructureImport.Read(TabularFileReader.Read(path, "Struktura"), structure, schedule).Edits);
+
+        using (var workbook = new XLWorkbook(path))
+        {
+            var sheet = workbook.Worksheet("Struktura");
+            var header = ProjectService.StructureHeaders.ToList();
+            var row = sheet.RowsUsed().Single(r => r.Cell(header.IndexOf("Legacy Element (P1S)") + 1).GetString() == "AC-CAB.6.38.07").RowNumber();
+            sheet.Cell(row, header.IndexOf("BAC Material") + 1).Value = 25;
+            workbook.Save();
+        }
+        var changes = StructureImport.Read(TabularFileReader.Read(path, "Struktura"), structure, schedule).Edits.Single().Changes;
+        Assert.Equal(["BacMaterial"], changes.Keys);
+        Assert.Equal("25", changes[StructureEdits.BacMaterial]);
+    }
+
     /// <summary>Actual Start / Finish z pliku: data z produkcji (pokazana w eksporcie) – bez nadpisania; wpisana inna – nadpisanie WP.</summary>
     [Fact]
     public void Structure_file_actual_dates_override_only_when_different_from_production()
