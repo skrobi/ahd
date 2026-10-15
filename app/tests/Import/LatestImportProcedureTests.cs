@@ -239,9 +239,14 @@ public sealed class LatestImportProcedureTests : IDisposable
         // Migracja 036 – Actual DLH struktury: kwota i godziny (Total Quantity) jednym wywołaniem, te same wiersze co ACWP.
         var (amounts, hours, labor, material) = store.CostsAndHoursByElement("M28", "ValueObjCrcy", ProjectService.ActualsHours);
         Assert.Equal(costs, amounts);
-        // Migracja 038 – ACWP według rodzaju kosztu (Cost Category: „Manufacturing and QA labor” – Labor, „Direct Materials” – Material).
+        // Migracje 038–039 – ACWP według rodzaju kosztu (Cost Category: „Manufacturing and QA labor” – Hours, 0051105550 PZL Mat Consump – Materials).
         Assert.Equal((4800m, 1254.51m), (labor["2DI473001001"], material["2DI473001001"]));
         Assert.Equal(2400m, labor["2di473001002"]);   // 94410550 Engineering labor
+        var kinds = connection.Query<(string CostElement, string? CostKind)>(
+                $"SELECT CostElement, CostKind FROM {_database.Sql.Table("dict.CostCategory")} WHERE Project IS NULL AND SupersededAt IS NULL")
+            .ToDictionary(k => k.CostElement, k => k.CostKind);
+        Assert.Equal(("Materials", "Materials", "Materials", "Hours"),
+            (kinds["0051105550"], kinds["0051102550"], kinds["0051103550"], kinds["0092212550"]));   // konta materiałowe – migracja 039
         Assert.Equal((32m, 12m), (hours["2DI473001001"], hours["2DI473001002"]));
         Assert.Empty(store.CostsAndHoursByElement("M28", "ValueObjCrcy", "Brak").Hours);   // brak pola godzin – bez godzin
 
