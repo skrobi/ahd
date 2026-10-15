@@ -99,16 +99,25 @@ i budżetem (`StructureBuilder`).
   w grupie „Elementy P1S spoza struktury”.
 - **Kolumny w grupach** (`StructureColumns`) – jedna struktura WBS dla perspektywy operacyjnej (godziny) i finansowej
   (koszty); grupy zwijane jak grupowanie kolumn w Excelu („−” nad pierwszą kolumną grupy, zwinięta grupa – kolumna
-  „+ Grupa”); Schedule, Operational EV i Financial EV domyślnie zwinięte. Opis każdej kolumny – podpowiedź nagłówka
-  i okno „Skróty i opis kolumn” (przycisk „?” nad tabelą). Kolumny z danych (PZLPROD, ACTUALS, wyliczone) – tylko do odczytu (nagłówek kursywą).
+  „+ Grupa”); Schedule, Operational EV, Materials i Financial EV domyślnie zwinięte. Nazewnictwo EVM: BCWS / BCWP / ACWP.
+  Opis każdej kolumny – podpowiedź nagłówka i okno „Skróty i opis kolumn” (przycisk „?” nad tabelą). Kolumny z danych
+  (PZLPROD, ACTUALS, wyliczone) – tylko do odczytu (nagłówek kursywą).
 
   | Grupa | Kolumny |
   |---|---|
-  | WBS Attributes | WBS Name (drzewo, zamrożona; poziom – wcięcie), CES Element i Legacy Element (P1S) (domyślnie schowane – „+” w nagłówku WBS Name), WP (checkbox), CAM (lista osób), Cost Category (lista kategorii projektu) |
-  | Schedule | Baseline Start, Baseline Finish (RRRR-MM-DD, „Harmonogram i budżet”); Actual Start, Actual Finish – data wpisana dla WP w „Harmonogram i budżet” (Actual Start / Actual Koniec), a bez niej z produkcji: start – najwcześniejszy `GSTRI` zleceń, koniec – najpóźniejszy `LTRMI`, gdy wszystkie zlecenia zamknięte (inaczej puste); element wirtualny – `DATA_REAL` operacji |
-  | Operational EV | TECH Hours (AHD: TECH ÷ produktywność IPT z 12 mies. + DJK), PV Hours (TECH Hours WP rozłożone liniowo na dni robocze pn–pt baseline, stan na dziś), EV Hours (TECH_PON ÷ produktywność + DJK), % Complete (EV Hours ÷ TECH Hours × 100 – zaawansowanie z produkcji, jak EV ÷ BAC raportu S70MR), AC Hours (CATS) |
-  | Materials | BAC Material („Harmonogram i budżet”), Actual Material (vAPD: dostarczone / wydane, USD bez narzutu Z_CLO) |
-  | Financial EV | BAC Hours baseline i BAC Cost („Harmonogram i budżet”), PV Cost (BAC Cost × udział dni roboczych baseline), EV Cost (BAC Cost × EV Hours ÷ TECH Hours, najwyżej BAC Cost), ACWP, Actual DLH |
+  | WBS Attributes | WBS Name (drzewo, zamrożona; poziom – wcięcie), Braki, CES Element, Legacy Element (P1S) i Performance Obligation (domyślnie schowane – „+” w nagłówku WBS Name), WP (checkbox), CAM (lista osób), Cost Category (lista kategorii projektu), MPK (lista MPK ze „Stawek wydziałów” – „WP i CAM”) |
+  | Baseline (wpisywane) | Baseline Start, Baseline Finish, BAC Hours, BAC Material, BAC Cost (z wyceny) – „Harmonogram i budżet” |
+  | Schedule | Actual Start, Actual Finish – data wpisana dla WP w „Harmonogram i budżet” (Actual Start / Actual Koniec), a bez niej z produkcji: start – najwcześniejszy `GSTRI` zleceń, koniec – najpóźniejszy `LTRMI`, gdy wszystkie zlecenia zamknięte (inaczej puste); element wirtualny – `DATA_REAL` operacji; Forecast Start, Forecast Finish (wpisywane); Status (zakończony / w toku / nie rozpoczęty – z dat rzeczywistych) |
+  | Operational EV | TECH Hours (AHD: TECH ÷ produktywność IPT + DJK), BCWS Hours (TECH Hours WP rozłożone liniowo na dni robocze pn–pt baseline, stan na dziś), BCWP Hours (TECH_PON ÷ produktywność + DJK), % Complete (BCWP Hours ÷ TECH Hours × 100 – jak EV ÷ BAC raportu S70MR), ACWP Hours (CATS), ETC Hours (wpisane – „ETC HOURS”, a bez nich TECH_DO_PON ÷ produktywność + DJK), EAC Hours (ACWP Hours + ETC Hours), SPI (h), CPI (h) |
+  | Materials (vAPD, USD) | Material Value (wszystkie części, bez fee), Material Fee (narzut Z_CLO), Material Delivered (dostarczone / wydane), Material ETC (wpisane – „ETC MATERIAL”, a bez nich Value − Delivered), % Delivered, PN / Delivered (liczba numerów części), Next Delivery (najbliższy rok planowanej dostawy) |
+  | Financial EV | BCWS (BAC Cost × udział dni roboczych baseline), BCWP (BAC Cost × BCWP Hours ÷ TECH Hours, najwyżej BAC Cost), ACWP Labor, ACWP Material, ACWP Other (rodzaj kosztu cost elementu w Cost Category), ACWP, Actual DLH, Δ DLH vs CATS, SV, CV, SPI, CPI, ETC Cost, EAC (ACWP + ETC Cost), VAC (BAC Cost − EAC), % Spent (ACWP ÷ BAC Cost) |
+
+  **ETC Cost** WP = ETC Hours × stawka MPK (Labor Rate × Overhead – brak Overhead: 1; słownik „Stawki wydziałów”, bieżący
+  rok, PLN) + Material ETC (USD) – w walucie projektu (pole kwoty ACTUALS z „Parametrów projektu”: ValueObjCrcy – PLN,
+  ValueRepCur – USD) z kursem USD ze słownika „Kursy walut” (najnowszy okres nie późniejszy niż bieżący). Brak MPK – ETC Cost
+  pusty i brak „WP bez MPK”; brak stawki MPK na rok, kursu albo waluta transakcji (ValueTranCurr) – powód w brakach. ETC
+  Hours i Material ETC podaje docelowo CAM w osobnym formularzu (powiadomienie w przebiegu, uprawnienia); do tego czasu
+  wpisywane w tabeli struktury (wartość z produkcji – wyszarzona, wyczyszczenie przywraca produkcję).
 
   **Wiersz z własnym WP** pokazuje ten WP: budżet i daty (edytowalne, także gdy pod nim są inne WP), godziny z PZLPROD
   przypisane do WP oraz PV / EV. Godziny elementu trafiają do najbliższego WP w górę drzewa (własnego albo przodka) – WP

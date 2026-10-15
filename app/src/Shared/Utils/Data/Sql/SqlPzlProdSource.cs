@@ -99,12 +99,16 @@ public sealed class SqlPzlProdSource(SqlDatabase db) : IPzlProdSource
             commandTimeout: Timeout);
         var hours = results.Read<HoursRow>().ToList();
         var materials = results.Read<MaterialRow>().ToDictionary(r => r.Pspnr);
-        var values = hours.Select(h => new ProductionValues(h.Pspnr, h.AcHours, h.BacHours, h.EvHours,
-                h.VirtualCode is null ? materials.GetValueOrDefault(h.Pspnr)?.Delivered : null, h.VirtualCode,
-                h.ActualStart is { } start ? DateOnly.FromDateTime(start) : null, h.ActualFinish is { } finish ? DateOnly.FromDateTime(finish) : null))
+        // Materiały – na elemencie P1S, nie na wydzieleniu.
+        ProductionValues WithMaterials(ProductionValues v, MaterialRow? m) => m is null || v.VirtualCode is not null ? v
+            : v with { ActualMaterial = m.Delivered, MaterialValue = m.Value, MaterialFee = m.Fee, Parts = m.Parts, PartsDelivered = m.PartsDelivered,
+                NextDeliveryYear = m.NextDeliveryYear };
+        var values = hours.Select(h => WithMaterials(new ProductionValues(h.Pspnr, h.AcHours, h.BacHours, h.EvHours, null, h.VirtualCode,
+                h.ActualStart is { } start ? DateOnly.FromDateTime(start) : null, h.ActualFinish is { } finish ? DateOnly.FromDateTime(finish) : null,
+                h.EtcHours), materials.GetValueOrDefault(h.Pspnr)))
             .ToList();
         values.AddRange(materials.Values.Where(m => !hours.Any(h => h.VirtualCode is null && h.Pspnr == m.Pspnr))
-            .Select(m => new ProductionValues(m.Pspnr, null, null, null, m.Delivered)));
+            .Select(m => WithMaterials(new ProductionValues(m.Pspnr, null, null, null, null), m)));
         return values;
     }
 
@@ -129,12 +133,18 @@ public sealed class SqlPzlProdSource(SqlDatabase db) : IPzlProdSource
         public decimal? AcHours { get; set; }
         public decimal? BacHours { get; set; }
         public decimal? EvHours { get; set; }
+        public decimal? EtcHours { get; set; }
     }
 
     private sealed class MaterialRow
     {
         public string Pspnr { get; set; } = "";
         public decimal? Delivered { get; set; }
+        public decimal? Value { get; set; }
+        public decimal? Fee { get; set; }
+        public int? Parts { get; set; }
+        public int? PartsDelivered { get; set; }
+        public int? NextDeliveryYear { get; set; }
     }
 
     private static string T(string? value) => value?.Trim() ?? "";

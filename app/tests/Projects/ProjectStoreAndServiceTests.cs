@@ -458,7 +458,7 @@ public sealed class ProjectStoreAndServiceTests : IDisposable
             {
                 var line = sheet.RowsUsed().Single(r => r.Cell(header.IndexOf("Legacy Element (P1S)") + 1).GetString() == row.P1s).RowNumber();
                 sheet.Cell(line, header.IndexOf("WP") + 1).Value = "x";
-                sheet.Cell(line, header.IndexOf("BAC Hours baseline") + 1).Value = hours;
+                sheet.Cell(line, header.IndexOf("BAC Hours") + 1).Value = hours;
                 sheet.Cell(line, header.IndexOf("Baseline Start") + 1).Value = new DateTime(2026, 3, 1);
             }
             workbook.Save();

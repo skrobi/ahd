@@ -73,6 +73,8 @@ public sealed class StructureRowViewModel(StructureRow row) : INotifyPropertyCha
     {
         [StructureEdits.ActualStart] = !row.ActualStartManual && !_changes.ContainsKey(StructureEdits.ActualStart) ? "true" : "false",
         [StructureEdits.ActualFinish] = !row.ActualFinishManual && !_changes.ContainsKey(StructureEdits.ActualFinish) ? "true" : "false",
+        [StructureEdits.EtcHours] = !row.EtcHoursManual && !_changes.ContainsKey(StructureEdits.EtcHours) ? "true" : "false",
+        [StructureEdits.MaterialEtc] = !row.MaterialEtcManual && !_changes.ContainsKey(StructureEdits.MaterialEtc) ? "true" : "false",
     });
 
     /// <summary>Zmiany wpisane w wierszu, jeszcze niezapisane (klucz kolumny → wartość).</summary>
@@ -195,10 +197,37 @@ public sealed class StructureRowViewModel(StructureRow row) : INotifyPropertyCha
         StructureColumns.PvHours => Optional(row.PvHours),
         StructureColumns.EvHours => Optional(row.EvHours),
         StructureColumns.AcHours => Optional(row.AcHours),
-        StructureColumns.PercentComplete => row.PercentComplete is { } percent ? $"{PolishNumber.ToDisplay(Math.Round(percent, 1))}%" : null,
+        StructureColumns.PercentComplete => Percent(row.PercentComplete),
         StructureColumns.ActualMaterial => Optional(row.ActualMaterial),
         StructureColumns.PvCost => Optional(row.PvCost),
         StructureColumns.EvCost => Optional(row.EvCost),
+        StructureColumns.PerformanceObligation => row.PerformanceObligation,
+        StructureEdits.Mpk => row.Mpk,
+        StructureEdits.ForecastStart => row.ForecastStart,
+        StructureEdits.ForecastFinish => row.ForecastFinish,
+        StructureColumns.Status => row.Status,
+        StructureEdits.EtcHours => Optional(row.EtcHours),
+        StructureColumns.EacHours => Optional(row.EacHours),
+        StructureColumns.SpiHours => Index(row.SpiHours),
+        StructureColumns.CpiHours => Index(row.CpiHours),
+        StructureColumns.MaterialValue => Optional(row.MaterialValue),
+        StructureColumns.MaterialFee => Optional(row.MaterialFee),
+        StructureEdits.MaterialEtc => Optional(row.MaterialEtc),
+        StructureColumns.PercentDelivered => Percent(row.PercentDelivered),
+        StructureColumns.Parts => row.Parts is { } parts ? $"{parts} / {row.PartsDelivered ?? 0}" : null,
+        StructureColumns.NextDeliveryYear => row.NextDeliveryYear?.ToString(System.Globalization.CultureInfo.InvariantCulture),
+        StructureColumns.AcwpLabor => Amount(row.AcwpLabor),
+        StructureColumns.AcwpMaterial => Amount(row.AcwpMaterial),
+        StructureColumns.AcwpOther => Amount(row.AcwpOther),
+        StructureColumns.DlhDelta => Optional(row.DlhDelta),
+        StructureColumns.Sv => Optional(row.Sv),
+        StructureColumns.Cv => Optional(row.Cv),
+        StructureColumns.Spi => Index(row.Spi),
+        StructureColumns.Cpi => Index(row.Cpi),
+        StructureColumns.EtcCost => Optional(row.EtcCost),
+        StructureColumns.Eac => Optional(row.Eac),
+        StructureColumns.Vac => Optional(row.Vac),
+        StructureColumns.PercentSpent => Percent(row.PercentSpent),
         _ => null,
     };
 
@@ -230,6 +259,12 @@ public sealed class StructureRowViewModel(StructureRow row) : INotifyPropertyCha
     }
 
     private static string? Amount(decimal value) => value == 0 ? null : PolishNumber.ToDisplay(value);
+
+    /// <summary>Procent z jednym miejscem po przecinku, np. „45,3%”.</summary>
+    private static string? Percent(decimal? value) => value is { } v ? $"{PolishNumber.ToDisplay(Math.Round(v, 1))}%" : null;
+
+    /// <summary>Wskaźnik (SPI, CPI) z dwoma miejscami po przecinku.</summary>
+    private static string? Index(decimal? value) => value is { } v ? PolishNumber.ToDisplay(Math.Round(v, 2)) : null;
 
     /// <summary>Wartość z danych (PZLPROD, wyliczona): brak danych – pusto, zero – „0” (np. brak godzin na elemencie).</summary>
     private static string? Optional(decimal? value) => value is { } v ? PolishNumber.ToDisplay(Math.Round(v, 2)) : null;

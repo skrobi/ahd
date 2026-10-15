@@ -316,6 +316,78 @@ public sealed class StructureTests
         Assert.Contains(issues, i => i.Message.Contains("Actual Start jest późniejszy niż Actual Koniec"));
     }
 
+    /// <summary>Wskaźniki EVM wiersza WP: godziny i koszty z produkcji, ACTUALS i budżetu; ETC z produkcji albo wpisane; ETC Cost ze stawki MPK.</summary>
+    [Fact]
+    public void Evm_columns_of_wp_use_production_actuals_budget_and_mpk_rate()
+    {
+        // WP-1 na AC-CAB.6.38.07 (PSPNR 101, pod nim XYZ-1 – 102); węzeł nakładki 4D06WP000001 (AC-CAB.6.38.01) – WP-2 bez MPK.
+        DictRow[] wpCam =
+        [
+            Row(("Element P1S", "AC-CAB.6.38.07"), ("WP", "WP-1"), ("CAM", "Anna Nowak"), ("Cost Category", null), ("MPK", "W30")),
+            Wp("AC-CAB.6.38.01", "WP-2"),
+        ];
+        DictRow[] schedule =
+        [
+            Row(("WP", "WP-1"), ("BAC HOURS", "100"), ("BAC", "10000"), ("Baseline Start", "2026-10-05"), ("Baseline Koniec", "2026-10-16"),
+                ("Forecast Koniec", "2026-11-30")),
+            Row(("WP", "WP-2"), ("BAC HOURS", "1"), ("ETC HOURS", "8"), ("ETC MATERIAL", "50")),
+        ];
+        var production = new ProductionData(new Dictionary<string, ProductionValues>
+        {
+            ["101"] = new("101", AcHours: 40, BacHours: 60, EvHours: 30, ActualMaterial: 100, ActualStart: new DateOnly(2026, 10, 6), EtcHours: 20,
+                MaterialValue: 400, MaterialFee: 40, Parts: 5, PartsDelivered: 2, NextDeliveryYear: 2027),
+            ["102"] = new("102", AcHours: 10, BacHours: 40, EvHours: 20, ActualMaterial: null, EtcHours: 10),
+        }, DateTimeOffset.Now);
+        var costs = new Dictionary<string, decimal> { ["4D06WP000001"] = 900m };
+        var rates = new EtcRates(new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase) { ["W30"] = 150m }, 2026, "PLN", 1, 4m, null);
+        var structure = StructureBuilder.Build(Objectives(), Inputs().P1s, wpCam, schedule, costs, production, new DateOnly(2026, 10, 11),
+            labor: new Dictionary<string, decimal> { ["4D06WP000001"] = 600m }, material: new Dictionary<string, decimal> { ["4D06WP000001"] = 200m },
+            rates: rates);
+
+        var wp1 = Of(structure, "p1s:AC-CAB.6.38.07");
+        Assert.Equal((100m, 50m, 50m, 50m), (wp1.OpsBacHours, wp1.EvHours, wp1.AcHours, wp1.PvHours));   // TECH 60+40, BCWP 30+20, CATS 40+10; BCWS 100 × 5/10
+        Assert.Equal((1m, 1m, 30m, 80m), (wp1.SpiHours, wp1.CpiHours, wp1.EtcHours, wp1.EacHours));     // ETC z produkcji 20+10; EAC 50+30
+        Assert.Equal((400m, 40m, 300m, 25m, 5, 2, 2027), (wp1.MaterialValue, wp1.MaterialFee, wp1.MaterialEtc, wp1.PercentDelivered, wp1.Parts, wp1.PartsDelivered, wp1.NextDeliveryYear));
+        // ETC Cost: 30 h × 150 PLN + 300 USD × 4 = 5700; BCWS / BCWP z BAC Cost 10 000 × 0,5.
+        Assert.Equal((5700m, 5000m, 5000m), (wp1.EtcCost, wp1.PvCost, wp1.EvCost));
+        Assert.Equal(("2026-11-30", "w toku", "W30"), (wp1.ForecastFinish, wp1.Status, wp1.Mpk));
+        Assert.False(wp1.EtcHoursManual);
+
+        // WP-2: ETC wpisane (8 h, 50 USD), bez MPK – ETC Cost pusty i brak „WP bez MPK”; ACWP węzła: Labor 600, Material 200, Other 100.
+        var wp2Row = Of(structure, "4D06WP000001");   // węzeł nakładki z kodem AC-CAB.6.38.01 – WP-2 w wierszu węzła
+        Assert.Equal((8m, 50m, true, true), (wp2Row.EtcHours, wp2Row.MaterialEtc, wp2Row.EtcHoursManual, wp2Row.MaterialEtcManual));
+        Assert.Null(wp2Row.EtcCost);
+        Assert.Contains("WP bez MPK", wp2Row.Gap);
+        var node = Of(structure, "4D06WP000001");
+        Assert.Equal((900m, 600m, 200m, 100m), (node.Acwp, node.AcwpLabor, node.AcwpMaterial, node.AcwpOther));
+        Assert.Null(node.Eac);   // WP-2 bez ETC Cost
+
+        // Wskaźniki kosztowe z wartości wiersza.
+        var row = wp1 with { Acwp = 4000m };
+        Assert.Equal((0m, 1000m, 1m, 1.25m, 9700m, 300m, 40m), (row.Sv, row.Cv, row.Spi, row.Cpi, row.Eac, row.Vac, row.PercentSpent));
+    }
+
+    [Fact]
+    public void Etc_rates_use_mpk_rate_with_overhead_of_current_year_and_usd_rate_for_project_currency()
+    {
+        DictRow[] departments =
+        [
+            Row(("MPK", "W30"), ("Year", "2026"), ("Labor Rate", "100"), ("Overhead", "1.5")),
+            Row(("MPK", "W30"), ("Year", "2025"), ("Labor Rate", "90"), ("Overhead", "1.4")),
+            Row(("MPK", "W50"), ("Year", "2026"), ("Labor Rate", "80"), ("Overhead", null)),
+        ];
+        DictRow[] fx = [Row(("Waluta", "USD"), ("Okres", "2026-09"), ("Kurs", "3.9")), Row(("Waluta", "USD"), ("Okres", "2026-10"), ("Kurs", "4")),
+            Row(("Waluta", "USD"), ("Okres", "2026-11"), ("Kurs", "5"))];
+        var today = new DateOnly(2026, 10, 15);
+
+        var pln = ProjectService.EtcRatesOf(departments, fx, "ValueObjCrcy", today);
+        Assert.Equal((150m, 80m, "PLN", 1m, 4m), (pln.RateByMpk["w30"], pln.RateByMpk["W50"], pln.Currency, pln.LaborFactor, pln.MaterialFactor));   // kurs z bieżącego okresu
+        var usd = ProjectService.EtcRatesOf(departments, fx, "ValueRepCur", today);
+        Assert.Equal(("USD", 0.25m, 1m), (usd.Currency, usd.LaborFactor, usd.MaterialFactor));
+        Assert.Contains("waluta transakcji", ProjectService.EtcRatesOf(departments, fx, "ValueTranCurr", today).Problem);
+        Assert.Contains("brak kursu USD", ProjectService.EtcRatesOf(departments, [], "ValueObjCrcy", today).Problem);
+    }
+
     [Fact]
     public void Split_code_names_the_element_and_the_work_center_group()
     {
@@ -391,11 +463,11 @@ public sealed class StructureTests
         object? Cell(string column) => leaf[header.IndexOf(column)];
         Assert.Equal(("element P1S", "WP-1", "e123456", "Anna Nowak", "Production"), (Cell("Rodzaj"), Cell("WP"), Cell("CAM"), Cell("CAM – imię i nazwisko"), Cell("Cost Category")));
         Assert.Equal((10m, 100m, 1000m, new DateOnly(2026, 1, 1), new DateOnly(2026, 6, 30)),
-            (Cell("BAC Hours baseline"), Cell("BAC Material"), Cell("BAC Cost"), Cell("Baseline Start"), Cell("Baseline Finish")));
+            (Cell("BAC Hours"), Cell("BAC Material"), Cell("BAC Cost"), Cell("Baseline Start"), Cell("Baseline Finish")));
         Assert.StartsWith(new string(' ', structure.Rows.Single(r => r.Id == "p1s:XYZ-1").Depth * 2), (string)Cell("WBS Name")!);
         // Wiersz bez WP w poddrzewie – budżet pusty (nie 0).
         var empty = rows[structure.Rows.ToList().FindIndex(r => r.Wps.Count == 0)];
-        Assert.Null(empty[header.IndexOf("BAC Hours baseline")]);
+        Assert.Null(empty[header.IndexOf("BAC Hours")]);
     }
 
     /// <summary>Pobrana struktura uzupełniona w Excelu i wczytana: tylko wyróżnione kolumny, puste komórki bez zmiany.</summary>
@@ -419,12 +491,12 @@ public sealed class StructureTests
                 sheet.Cell(sheet.RowsUsed().Single(r => r.Cell(header.IndexOf("Legacy Element (P1S)") + 1).GetString() == p1s).RowNumber(), header.IndexOf(column) + 1);
             Cell("AC-CAB.9.01", "WP").Value = "x";                      // nowy WP z CAM, budżetem i datami
             Cell("AC-CAB.9.01", "CAM").Value = "e777";
-            Cell("AC-CAB.9.01", "BAC Hours baseline").Value = 20;
+            Cell("AC-CAB.9.01", "BAC Hours").Value = 20;
             Cell("AC-CAB.9.01", "BAC Cost").Value = "1 500,50";
             Cell("AC-CAB.9.01", "Baseline Start").Value = new DateTime(2026, 2, 1);
-            Cell("XYZ-1", "BAC Hours baseline").Value = 12;             // zmiana budżetu istniejącego WP; reszta bez zmian
+            Cell("XYZ-1", "BAC Hours").Value = 12;             // zmiana budżetu istniejącego WP; reszta bez zmian
             Cell("XYZ-1", "BAC Material").Value = "abc";                // błędna liczba – komórka pominięta
-            Cell(other.P1s!, "BAC Hours baseline").Value = 5;           // bez WP – pominięte
+            Cell(other.P1s!, "BAC Hours").Value = 5;           // bez WP – pominięte
             Cell(other.P1s!, "ACWP").Value = 999;                       // kolumna niewczytywana
             var last = sheet.LastRowUsed()!.RowNumber() + 1;
             sheet.Cell(last, header.IndexOf("Legacy Element (P1S)") + 1).Value = "NIE-MA";
@@ -443,7 +515,7 @@ public sealed class StructureTests
         Assert.Equal("12", changed[StructureEdits.BacHours]);
         Assert.Equal(2, result.Edits.Count);
         Assert.Contains(result.Issues, i => i.Level == CheckLevel.Error && i.Message.StartsWith("BAC Material „abc”"));
-        Assert.Contains(result.Issues, i => i.Level == CheckLevel.Warning && i.Message.StartsWith($"BAC Hours baseline przy elemencie {other.P1s} bez WP"));
+        Assert.Contains(result.Issues, i => i.Level == CheckLevel.Warning && i.Message.StartsWith($"BAC Hours przy elemencie {other.P1s} bez WP"));
         Assert.Contains(result.Issues, i => i.Level == CheckLevel.Warning && i.Message.StartsWith("Elementu P1S NIE-MA nie ma w strukturze"));
         Assert.Equal((1, 1), (result.Count(StructureEdits.Wp), result.Count(StructureEdits.Cam)));
     }

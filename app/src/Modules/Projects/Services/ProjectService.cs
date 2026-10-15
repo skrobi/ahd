@@ -175,13 +175,43 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
     /// Parametry projektu – pola kwoty ACTUALS; Cost Category – grupy narzutowe CAS (identyfikator → nazwa).
     /// </summary>
     public static IReadOnlyDictionary<string, IReadOnlyList<LookupOption>> Lookups(IReadOnlyList<LookupOption> persons, IReadOnlyList<LookupOption> categories,
-        IReadOnlyList<LookupOption>? sources = null, IReadOnlyList<LookupOption>? burdenGroups = null) =>
+        IReadOnlyList<LookupOption>? sources = null, IReadOnlyList<LookupOption>? burdenGroups = null, IReadOnlyList<LookupOption>? mpks = null) =>
         new Dictionary<string, IReadOnlyList<LookupOption>>
         {
             [GlobalDictionaries.Persons] = persons, [ProjectDictionaries.WbsCategories] = categories, [ProjectDictionaries.Sources] = sources ?? [],
-            [GlobalDictionaries.CasBurdenGroups] = burdenGroups ?? [],
+            [GlobalDictionaries.CasBurdenGroups] = burdenGroups ?? [], [GlobalDictionaries.DepartmentRates] = mpks ?? [],
             [ProjectDictionaries.Settings] = ProjectSettings.ActualsAmounts.Select(a => new LookupOption(a.Field, $"{a.Field} – {a.Currency}")).ToList(),
         };
+
+    /// <summary>Stawki wydziałów (MPK × rok: Labor Rate, Overhead) – lista MPK w „WP i CAM” i stawka ETC Cost struktury.</summary>
+    public IReadOnlyList<DictRow> DepartmentRates() => _dictionaries.Load(GlobalDictionaries.Get(GlobalDictionaries.DepartmentRates));
+
+    /// <summary>Kursy walut (waluta × okres → kurs do PLN) – przeliczenie ETC Cost na walutę projektu.</summary>
+    public IReadOnlyList<DictRow> FxRates() => _dictionaries.Load(GlobalDictionaries.Get(GlobalDictionaries.FxRates));
+
+    /// <summary>
+    /// Stawki ETC Cost: Labor Rate × Overhead (brak – 1) MPK z roku dnia stanu (stawki w PLN); waluta projektu z pola kwoty
+    /// ACTUALS; kurs USD do PLN – najnowszy okres nie późniejszy niż dzień stanu („Kursy walut”). Praca: PLN → waluta projektu,
+    /// materiały (vAPD): USD → waluta projektu.
+    /// </summary>
+    public static EtcRates EtcRatesOf(IReadOnlyList<DictRow> departmentRates, IReadOnlyList<DictRow> fxRates, string field, DateOnly today)
+    {
+        static decimal? Dec(string? text) => decimal.TryParse(text, System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var v) ? v : null;
+        var year = today.Year;
+        var rates = departmentRates.Where(r => r["MPK"] is not null && r["Year"] == year.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                                                && Dec(r["Labor Rate"]) is not null)
+            .GroupBy(r => r["MPK"]!, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => Dec(g.First()["Labor Rate"])!.Value * (Dec(g.First()["Overhead"]) ?? 1), StringComparer.OrdinalIgnoreCase);
+        var currency = ProjectSettings.CurrencyCodeOf(field);
+        if (currency is null)
+            return new EtcRates(rates, year, null, null, null, $"pole kwoty {field} – waluta transakcji różna w wierszach, ETC Cost niedostępny");
+        var period = today.ToString("yyyy-MM", System.Globalization.CultureInfo.InvariantCulture);
+        var usd = fxRates.Where(r => string.Equals(r["Waluta"], "USD", StringComparison.OrdinalIgnoreCase) && r["Okres"] is { } p && string.CompareOrdinal(p, period) <= 0)
+            .OrderByDescending(r => r["Okres"], StringComparer.Ordinal).Select(r => Dec(r["Kurs"])).FirstOrDefault(k => k is > 0);
+        if (usd is null)
+            return new EtcRates(rates, year, currency, currency == "PLN" ? 1 : null, currency == "USD" ? 1 : null, $"brak kursu USD w „Kursy walut” do okresu {period}");
+        return currency == "PLN" ? new EtcRates(rates, year, currency, 1, usd, null) : new EtcRates(rates, year, currency, 1 / usd, 1, null);
+    }
 
     /// <summary>Grupy narzutowe CAS do wyboru w kolumnie „Grupa narzutowa CAS” Cost Category projektu (identyfikator → nazwa).</summary>
     public IReadOnlyList<LookupOption> BurdenGroupLookups() =>
@@ -371,8 +401,9 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
 
     /// <summary>Struktura projektu: nakładka z rozwinięciem P1S, WP, CAM, budżet i daty (StructureBuilder).</summary>
     public static ProjectStructure Structure(PoTree tree, P1sInputs inputs, IReadOnlyList<DictRow> wpCam, IReadOnlyList<DictRow> schedule,
-        IReadOnlyDictionary<string, decimal>? costs = null, ProductionData? production = null, IReadOnlyDictionary<string, decimal>? dlh = null) =>
-        StructureBuilder.Build(tree, inputs.P1s, wpCam, schedule, costs, production, dlh: dlh);
+        IReadOnlyDictionary<string, decimal>? costs = null, ProductionData? production = null, IReadOnlyDictionary<string, decimal>? dlh = null,
+        IReadOnlyDictionary<string, decimal>? labor = null, IReadOnlyDictionary<string, decimal>? material = null, EtcRates? rates = null) =>
+        StructureBuilder.Build(tree, inputs.P1s, wpCam, schedule, costs, production, dlh: dlh, labor: labor, material: material, rates: rates);
 
     /// <summary>
     /// Dane produkcyjne projektu na żywo z PZLPROD (Operational EV, daty rzeczywiste, materiały dostarczone): elementy P1S
@@ -416,71 +447,147 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
         }
     }
 
-    /// <summary>Nagłówki arkusza „Struktura” (ExportStructure) – kolumny tabeli w grupach (StructureColumns) i pola pomocnicze.</summary>
+    /// <summary>Kolumny tabeli struktury w arkuszu „Struktura” – wszystkie poza nazwą i brakami (osobne kolumny arkusza).</summary>
+    private static IReadOnlyList<StructureColumns.Column> SheetColumns { get; } =
+        StructureColumns.All.Where(c => c.Key is not StructureEdits.Name and not StructureColumns.Gaps).ToList();
+
+    /// <summary>
+    /// Nagłówki arkusza „Struktura” (ExportStructure): poziom, nazwa i rodzaj wiersza, kolumny tabeli w kolejności grup
+    /// (StructureColumns; przy CAM – imię i nazwisko), WP w poddrzewie, braki, uwagi.
+    /// </summary>
     public static readonly IReadOnlyList<string> StructureHeaders =
     [
-        "Poziom", "WBS Name", "Rodzaj", "CES Element", "Legacy Element (P1S)", "WP", "CAM", "CAM – imię i nazwisko", "Cost Category", "WP w poddrzewie",
-        "Baseline Start", "Baseline Finish", "Actual Start", "Actual Finish",
-        "TECH Hours", "PV Hours", "EV Hours", "% Complete", "AC Hours",
-        "BAC Material", "Actual Material",
-        "BAC Hours baseline", "BAC Cost", "PV Cost", "EV Cost", "ACWP", "Actual DLH",
-        "Braki", "Uwagi",
+        "Poziom", "WBS Name", "Rodzaj",
+        .. SheetColumns.SelectMany(c => c.Key == StructureEdits.Cam ? [c.Header, CamNameHeader] : new[] { c.Header }),
+        "WP w poddrzewie", "Braki", "Uwagi",
     ];
+
+    private const string CamNameHeader = "CAM – imię i nazwisko";
 
     /// <summary>
     /// Wiersze arkusza „Struktura”: całe drzewo (także zwinięte wiersze) w kolejności tabeli, nazwa wcięta według poziomu;
-    /// budżet, daty, wartości produkcyjne i koszty jak w tabeli (sumy poddrzewa); CAM – USRID i imię i nazwisko ze słownika Osoby.
+    /// wartości jak w tabeli (sumy poddrzewa): liczby i daty jako wartości Excela, budżet tylko w wierszach z WP; CAM – USRID
+    /// i imię i nazwisko ze słownika Osoby.
     /// </summary>
     public static IEnumerable<IReadOnlyList<object?>> StructureRows(ProjectStructure structure, IReadOnlyList<LookupOption> persons)
     {
         var names = persons.GroupBy(p => p.Value, StringComparer.OrdinalIgnoreCase).ToDictionary(g => g.Key, g => g.First().Label, StringComparer.OrdinalIgnoreCase);
+        return structure.Rows.Select(r =>
+        {
+            var cells = new List<object?> { r.Depth + 1, new string(' ', r.Depth * 2) + r.Name,
+                r.Kind == GridRowKind.P1s ? "element P1S" : r.IsVirtual ? "węzeł wirtualny" : "element nakładki" };
+            foreach (var column in SheetColumns)
+            {
+                cells.Add(SheetValue(r, column.Key));
+                if (column.Key == StructureEdits.Cam)
+                    cells.Add(r.Cam is { } cam ? names.GetValueOrDefault(cam) : null);
+            }
+            cells.Add(r.Wps.Count > 0 ? string.Join(", ", r.Wps) : null);
+            cells.Add(r.Gap);
+            cells.Add(r.Note);
+            return (IReadOnlyList<object?>)cells;
+        });
+    }
+
+    /// <summary>Wartość komórki arkusza: data (RRRR-MM-DD) – DateOnly, liczba – zaokrąglona do 2 miejsc, puste – null.</summary>
+    private static object? SheetValue(StructureRow r, string key)
+    {
         static DateOnly? Date(string? value) =>
             DateOnly.TryParseExact(value, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var d) ? d : null;
         static object? Round(decimal? value) => value is { } v ? Math.Round(v, 2) : null;
-        return structure.Rows.Select(r =>
+        static object? NonZero(decimal value) => value == 0 ? null : value;
+        var budget = r.Wps.Count > 0;
+        return key switch
         {
-            var budget = r.Wps.Count > 0;
-            return (IReadOnlyList<object?>)new object?[]
-            {
-                r.Depth + 1, new string(' ', r.Depth * 2) + r.Name,
-                r.Kind == GridRowKind.P1s ? "element P1S" : r.IsVirtual ? "węzeł wirtualny" : "element nakładki",
-                r.WbsElement, r.P1s, r.Wp, r.Cam, r.Cam is { } cam ? names.GetValueOrDefault(cam) : null, r.CostCategory,
-                budget ? string.Join(", ", r.Wps) : null,
-                Date(r.Start), Date(r.Finish), Date(r.ActualStart), Date(r.ActualFinish),
-                Round(r.OpsBacHours), Round(r.PvHours), Round(r.EvHours), Round(r.PercentComplete), Round(r.AcHours),
-                budget ? r.BacMaterial : null, Round(r.ActualMaterial),
-                budget ? r.BacHours : null, budget ? r.Bac : null, Round(r.PvCost), Round(r.EvCost), r.Acwp == 0 ? null : r.Acwp, r.ActualDlh == 0 ? null : r.ActualDlh,
-                r.Gap, r.Note,
-            };
-        });
+            StructureColumns.WbsElement => r.WbsElement,
+            StructureEdits.P1s => r.P1s,
+            StructureColumns.PerformanceObligation => r.PerformanceObligation,
+            StructureEdits.Wp => r.Wp,
+            StructureEdits.Cam => r.Cam,
+            StructureEdits.CostCategory => r.CostCategory,
+            StructureEdits.Mpk => r.Mpk,
+            StructureEdits.Start => Date(r.Start),
+            StructureEdits.Finish => Date(r.Finish),
+            StructureEdits.BacHours => budget ? r.BacHours : null,
+            StructureEdits.BacMaterial => budget ? r.BacMaterial : null,
+            StructureEdits.Bac => budget ? r.Bac : null,
+            StructureColumns.ActualStart => Date(r.ActualStart),
+            StructureColumns.ActualFinish => Date(r.ActualFinish),
+            StructureEdits.ForecastStart => Date(r.ForecastStart),
+            StructureEdits.ForecastFinish => Date(r.ForecastFinish),
+            StructureColumns.Status => r.Status,
+            StructureColumns.OpsBacHours => Round(r.OpsBacHours),
+            StructureColumns.PvHours => Round(r.PvHours),
+            StructureColumns.EvHours => Round(r.EvHours),
+            StructureColumns.PercentComplete => Round(r.PercentComplete),
+            StructureColumns.AcHours => Round(r.AcHours),
+            StructureEdits.EtcHours => Round(r.EtcHours),
+            StructureColumns.EacHours => Round(r.EacHours),
+            StructureColumns.SpiHours => Round(r.SpiHours),
+            StructureColumns.CpiHours => Round(r.CpiHours),
+            StructureColumns.MaterialValue => Round(r.MaterialValue),
+            StructureColumns.MaterialFee => Round(r.MaterialFee),
+            StructureColumns.ActualMaterial => Round(r.ActualMaterial),
+            StructureEdits.MaterialEtc => Round(r.MaterialEtc),
+            StructureColumns.PercentDelivered => Round(r.PercentDelivered),
+            StructureColumns.Parts => r.Parts is { } parts ? $"{parts} / {r.PartsDelivered ?? 0}" : null,
+            StructureColumns.NextDeliveryYear => r.NextDeliveryYear,
+            StructureColumns.PvCost => Round(r.PvCost),
+            StructureColumns.EvCost => Round(r.EvCost),
+            StructureColumns.AcwpLabor => NonZero(r.AcwpLabor),
+            StructureColumns.AcwpMaterial => NonZero(r.AcwpMaterial),
+            StructureColumns.AcwpOther => NonZero(r.AcwpOther),
+            StructureColumns.Acwp => NonZero(r.Acwp),
+            StructureColumns.ActualDlh => NonZero(r.ActualDlh),
+            StructureColumns.DlhDelta => Round(r.DlhDelta),
+            StructureColumns.Sv => Round(r.Sv),
+            StructureColumns.Cv => Round(r.Cv),
+            StructureColumns.Spi => Round(r.Spi),
+            StructureColumns.Cpi => Round(r.Cpi),
+            StructureColumns.EtcCost => Round(r.EtcCost),
+            StructureColumns.Eac => Round(r.Eac),
+            StructureColumns.Vac => Round(r.Vac),
+            StructureColumns.PercentSpent => Round(r.PercentSpent),
+            _ => null,
+        };
     }
 
     /// <summary>
     /// Kolumny arkusza „Struktura”: format kolumny; kolumny czytane przy wczytaniu (StructureImport.Inputs) wyróżnione,
-    /// z opisem w komentarzu; CAM – lista osób (arkusz „Listy”).
+    /// z opisem w komentarzu; CAM – lista osób, MPK – lista MPK (arkusz „Listy”).
     /// </summary>
-    public static IReadOnlyList<ExcelTableWriter.ExcelColumn> StructureSheetColumns(IReadOnlyList<LookupOption> persons) =>
-        StructureHeaders.Select(header => header switch
+    public static IReadOnlyList<ExcelTableWriter.ExcelColumn> StructureSheetColumns(IReadOnlyList<LookupOption> persons, IReadOnlyList<LookupOption>? mpks = null)
+    {
+        var kinds = SheetColumns.ToDictionary(c => c.Header, c => c);
+        return StructureHeaders.Select(header => header switch
         {
             "Poziom" => new ExcelTableWriter.ExcelColumn(header, ExcelTableWriter.Kind.Integer),
             StructureImport.WpHeader => new(header, Note: "Do uzupełnienia: wpisz cokolwiek (np. x) przy elemencie P1S, który jest WP – kod WP = kod elementu. Pusta komórka – bez zmiany.", Input: true),
             StructureImport.CamHeader => new(header, Note: "Do uzupełnienia: numer znaczka (USRID) CAM – lista w arkuszu „Listy”. Pusta komórka – bez zmiany.",
                 Lookup: persons.Select(p => (p.Value, p.Label)).ToList(), Input: true),
             StructureImport.CategoryHeader => new(header, Note: "Do uzupełnienia: kategoria ze słownika „Kategorie WBS” projektu. Pusta komórka – bez zmiany.", Input: true),
-            StructureImport.StartHeader or StructureImport.FinishHeader => new(header, ExcelTableWriter.Kind.Date,
-                Note: "Do uzupełnienia w wierszu z WP (RRRR-MM-DD); w wierszach bez WP – suma poddrzewa, nie jest wczytywana.", Input: true),
-            StructureImport.BacHoursHeader or StructureImport.BacMaterialHeader or StructureImport.BacHeader => new(header, ExcelTableWriter.Kind.Number,
-                Note: "Do uzupełnienia w wierszu z WP; w wierszach bez WP – suma poddrzewa, nie jest wczytywana.", Input: true),
+            StructureImport.MpkHeader => new(header, Note: "Do uzupełnienia: MPK WP ze słownika „Stawki wydziałów” (stawka ETC Cost). Pusta komórka – bez zmiany.",
+                Lookup: mpks?.Select(m => (m.Value, m.Label)).ToList(), Input: true),
+            StructureImport.StartHeader or StructureImport.FinishHeader or StructureImport.ForecastStartHeader or StructureImport.ForecastFinishHeader
+                => new(header, ExcelTableWriter.Kind.Date, Note: "Do uzupełnienia w wierszu z WP (RRRR-MM-DD); w wierszach bez WP – wartość poddrzewa, nie jest wczytywana.", Input: true),
             StructureImport.ActualStartHeader or StructureImport.ActualFinishHeader => new(header, ExcelTableWriter.Kind.Date,
                 Note: "Do uzupełnienia w wierszu z WP (RRRR-MM-DD): data rzeczywista WP nadpisuje datę z raportu produkcyjnego (np. WP bez danych produkcyjnych, prace zakończone przed zamknięciem operacji). Komórka z datą z produkcji – bez zmiany.", Input: true),
-            "TECH Hours" or "PV Hours" or "EV Hours" or "% Complete" or "AC Hours" or "Actual Material" or "PV Cost" or "EV Cost" or "ACWP" or "Actual DLH" => new(header, ExcelTableWriter.Kind.Number),
+            StructureImport.BacHoursHeader or StructureImport.BacMaterialHeader or StructureImport.BacHeader => new(header, ExcelTableWriter.Kind.Number,
+                Note: "Do uzupełnienia w wierszu z WP; w wierszach bez WP – suma poddrzewa, nie jest wczytywana.", Input: true),
+            StructureImport.EtcHoursHeader or StructureImport.MaterialEtcHeader => new(header, ExcelTableWriter.Kind.Number,
+                Note: "Do uzupełnienia w wierszu z WP: wartość do poniesienia nadpisuje wartość z produkcji. Komórka z wartością z produkcji – bez zmiany.", Input: true),
+            _ when kinds.TryGetValue(header, out var column) && column.Key is StructureColumns.ActualStart or StructureColumns.ActualFinish
+                => new(header, ExcelTableWriter.Kind.Date),
+            _ when kinds.TryGetValue(header, out var column) && column.Right && column.Key is not StructureColumns.Parts and not StructureColumns.NextDeliveryYear
+                => new(header, ExcelTableWriter.Kind.Number),
             _ => new ExcelTableWriter.ExcelColumn(header),
         }).ToList();
+    }
 
     /// <summary>Struktura projektu do Excela – arkusz „Struktura” (StructureRows); zwraca liczbę wierszy.</summary>
-    public int ExportStructure(string path, string code, ProjectStructure structure, IReadOnlyList<LookupOption> persons)
+    public int ExportStructure(string path, string code, ProjectStructure structure, IReadOnlyList<LookupOption> persons, IReadOnlyList<LookupOption>? mpks = null)
     {
-        ExcelTableWriter.WriteTemplate(path, [("Struktura", StructureSheetColumns(persons), StructureRows(structure, persons))]);
+        ExcelTableWriter.WriteTemplate(path, [("Struktura", StructureSheetColumns(persons, mpks), StructureRows(structure, persons))]);
         journal.Add(Area, $"{code}: struktura projektu pobrana do Excela ({structure.Rows.Count} wierszy)", code);
         return structure.Rows.Count;
     }
@@ -510,7 +617,7 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
     /// ACWP (pole kwoty field) i Actual DLH (suma „Total Quantity” z tych samych wierszy) po elemencie CES – jedno wywołanie
     /// REP_ProjectCostsByElement (migracja 036; wcześniej dwa odczyty dużego zrzutu ACTUALS).
     /// </summary>
-    public (IReadOnlyDictionary<string, decimal> Amounts, IReadOnlyDictionary<string, decimal> Hours) CostsAndHoursByElement(string code, string field) =>
+    public ElementActuals CostsAndHoursByElement(string code, string field) =>
         store.CostsAndHoursByElement(code, field, ActualsHours);
 
     /// <summary>Pole kwoty ACTUALS projektu – słownik „Parametry projektu” (brak – ValueObjCrcy).</summary>

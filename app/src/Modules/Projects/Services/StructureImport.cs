@@ -28,16 +28,24 @@ public static class StructureImport
     public const string CategoryHeader = "Cost Category";
     public const string StartHeader = "Baseline Start";
     public const string FinishHeader = "Baseline Finish";
-    public const string BacHoursHeader = "BAC Hours baseline";
+    public const string BacHoursHeader = "BAC Hours";
+    /// <summary>Nagłówek BAC Hours w plikach pobranych przed wydzieleniem grupy Baseline.</summary>
+    public const string LegacyBacHoursHeader = "BAC Hours baseline";
     public const string BacMaterialHeader = "BAC Material";
     public const string BacHeader = "BAC Cost";
     public const string ActualStartHeader = "Actual Start";
     public const string ActualFinishHeader = "Actual Finish";
+    public const string ForecastStartHeader = "Forecast Start";
+    public const string ForecastFinishHeader = "Forecast Finish";
+    public const string EtcHoursHeader = "ETC Hours";
+    public const string MaterialEtcHeader = "Material ETC";
+    public const string MpkHeader = "MPK";
 
     /// <summary>Kolumny eksportu czytane przy wczytaniu (wyróżnione w arkuszu).</summary>
     public static IReadOnlySet<string> Inputs { get; } = new HashSet<string>
     {
-        WpHeader, CamHeader, CategoryHeader, StartHeader, FinishHeader, BacHoursHeader, BacMaterialHeader, BacHeader, ActualStartHeader, ActualFinishHeader,
+        WpHeader, CamHeader, CategoryHeader, MpkHeader, StartHeader, FinishHeader, BacHoursHeader, BacMaterialHeader, BacHeader, ActualStartHeader,
+        ActualFinishHeader, ForecastStartHeader, ForecastFinishHeader, EtcHoursHeader, MaterialEtcHeader,
     };
 
     private static readonly (string Header, string Column, bool Date)[] Budget =
@@ -45,6 +53,8 @@ public static class StructureImport
         (BacHoursHeader, StructureEdits.BacHours, false), (BacMaterialHeader, StructureEdits.BacMaterial, false), (BacHeader, StructureEdits.Bac, false),
         (StartHeader, StructureEdits.Start, true), (FinishHeader, StructureEdits.Finish, true),
         (ActualStartHeader, StructureEdits.ActualStart, true), (ActualFinishHeader, StructureEdits.ActualFinish, true),
+        (ForecastStartHeader, StructureEdits.ForecastStart, true), (ForecastFinishHeader, StructureEdits.ForecastFinish, true),
+        (EtcHoursHeader, StructureEdits.EtcHours, false), (MaterialEtcHeader, StructureEdits.MaterialEtc, false),
     ];
 
     /// <param name="schedule">Wiersze „Harmonogram i budżet” projektu – wartości bieżące (bez zmiany – bez zapisu).</param>
@@ -56,6 +66,8 @@ public static class StructureImport
         if (p1sColumn < 0)
             return new StructureImportResult([], [Issue.Error($"Plik nie ma kolumny „{P1sHeader}” – wczytaj arkusz „Struktura” pobrany z aplikacji")], data.Rows.Count);
         var columns = Inputs.ToDictionary(h => h, Column);
+        if (columns[BacHoursHeader] < 0)
+            columns[BacHoursHeader] = Column(LegacyBacHoursHeader);
         var rows = structure.Rows.Where(r => r.P1s is not null).GroupBy(r => MappingKeys.Key(r.P1s)).ToDictionary(g => g.Key, g => g.First());
         var current = schedule.Where(r => r["WP"] is not null).GroupBy(r => r["WP"]!, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
@@ -89,7 +101,10 @@ public static class StructureImport
                 changes[StructureEdits.Cam] = cam;
             if (Cell(CategoryHeader) is { } category && !string.Equals(category, row.CostCategory, StringComparison.OrdinalIgnoreCase))
                 changes[StructureEdits.CostCategory] = category;
-            if ((changes.ContainsKey(StructureEdits.Cam) || changes.ContainsKey(StructureEdits.CostCategory)) && row.Wp is null && wp is null)
+            if (Cell(MpkHeader) is { } mpk && !string.Equals(mpk, row.Mpk, StringComparison.OrdinalIgnoreCase))
+                changes[StructureEdits.Mpk] = mpk;
+            if ((changes.ContainsKey(StructureEdits.Cam) || changes.ContainsKey(StructureEdits.CostCategory) || changes.ContainsKey(StructureEdits.Mpk))
+                && row.Wp is null && wp is null)
                 wp = p1s;   // CAM / Cost Category zaznacza WP (StructureEdits.WpCam)
 
             var values = new Dictionary<string, string?>();
@@ -124,14 +139,16 @@ public static class StructureImport
                     foreach (var (column, value) in values)
                     {
                         var stored = existing?[StructureEdits.DictionaryColumn(column)];
-                        // Data rzeczywista równa dacie z produkcji (eksport pokazuje ją w kolumnie) – bez nadpisania.
+                        // Wartość równa wartości z produkcji (eksport pokazuje ją w kolumnie) – bez nadpisania.
                         var produced = stored is null && row.BudgetWp == wp ? column switch
                         {
                             StructureEdits.ActualStart => row.ActualStart,
                             StructureEdits.ActualFinish => row.ActualFinish,
+                            StructureEdits.EtcHours => row.EtcHours is { } hours ? PolishNumber.ToCanonical(Math.Round(hours, 2)) : null,
+                            StructureEdits.MaterialEtc => row.MaterialEtc is { } etc ? PolishNumber.ToCanonical(Math.Round(etc, 2)) : null,
                             _ => null,
                         } : null;
-                        if (!SameValue(stored, value) && produced != value)
+                        if (!SameValue(stored, value) && !SameValue(produced, value))
                             changes[column] = value;
                     }
                 }

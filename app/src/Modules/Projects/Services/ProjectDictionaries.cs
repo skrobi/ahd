@@ -29,13 +29,14 @@ public static class ProjectDictionaries
     {
         Code = WpCam,
         Name = "WP i CAM",
-        Description = "Element P1S projektu → WP, CAM, Cost Category (kategoria ze słownika „Kategorie WBS” projektu). Element P1S należy do projektu, gdy jest kodem P1S elementu nakładki (Legacy WBS albo cel z mapowania) albo leży pod nim.",
+        Description = "Element P1S projektu → WP, CAM, Cost Category (kategoria ze słownika „Kategorie WBS” projektu), MPK (słownik „Stawki wydziałów” – stawka ETC Cost). Element P1S należy do projektu, gdy jest kodem P1S elementu nakładki (Legacy WBS albo cel z mapowania) albo leży pod nim.",
         Columns =
         [
             new("Element P1S", ColumnType.Text, Key: true),
             new("WP", ColumnType.Text, Required: true, CheckSimilar: true),
             new("CAM", ColumnType.Text, CheckSimilar: true, Lookup: GlobalDictionaries.Persons),
             new("Cost Category", ColumnType.Text, CheckSimilar: true, Lookup: WbsCategories),
+            new("MPK", ColumnType.Text, Lookup: GlobalDictionaries.DepartmentRates),
         ],
         SkipKeyOnlyRows = true,
     };
@@ -44,7 +45,7 @@ public static class ProjectDictionaries
     {
         Code = ScheduleBudget,
         Name = "Harmonogram i budżet",
-        Description = "WP → BAC HOURS (godziny), BAC MATERIAL (koszt materiałów), BAC (budżet kosztowy), Baseline Start i Baseline Koniec – baseline projektu; Actual Start i Actual Koniec – daty rzeczywiste WP nadpisujące daty z raportu produkcyjnego (puste – data z produkcji).",
+        Description = "WP → BAC HOURS (godziny), BAC MATERIAL (koszt materiałów), BAC (budżet kosztowy), Baseline Start i Baseline Koniec – baseline projektu; Actual Start i Actual Koniec – daty rzeczywiste WP nadpisujące daty z raportu produkcyjnego (puste – data z produkcji); Forecast Start i Forecast Koniec – prognoza; ETC HOURS i ETC MATERIAL – godziny i materiały do poniesienia nadpisujące wartości z produkcji (puste – z produkcji).",
         Columns =
         [
             new("WP", ColumnType.Text, Key: true),
@@ -55,6 +56,10 @@ public static class ProjectDictionaries
             new("Baseline Koniec", ColumnType.Date, Aliases: ["Planowany Koniec"]),
             new("Actual Start", ColumnType.Date),
             new("Actual Koniec", ColumnType.Date, Aliases: ["Actual Finish"]),
+            new("Forecast Start", ColumnType.Date),
+            new("Forecast Koniec", ColumnType.Date, Aliases: ["Forecast Finish"]),
+            new("ETC HOURS", ColumnType.Decimal),
+            new("ETC MATERIAL", ColumnType.Decimal),
         ],
         SkipKeyOnlyRows = true,
     };
@@ -132,10 +137,11 @@ public static class ProjectDictionaries
     /// <summary>Tabele słowników projektu w bazie (SqlDictionaryStore; Cost Category – tabela globalna, Tables w GlobalDictionaries).</summary>
     public static IReadOnlyList<DictionaryTable> Tables { get; } =
     [
-        new(WpCamSpec, "dict.WpCam", [("Element P1S", "P1sElement"), ("WP", "Wp"), ("CAM", "Cam"), ("Cost Category", "CostCategory")]),
+        new(WpCamSpec, "dict.WpCam", [("Element P1S", "P1sElement"), ("WP", "Wp"), ("CAM", "Cam"), ("Cost Category", "CostCategory"), ("MPK", "Mpk")]),
         new(ScheduleBudgetSpec, "dict.ScheduleBudget",
             [("WP", "Wp"), ("BAC HOURS", "BacHours"), ("BAC MATERIAL", "BacMaterial"), ("BAC", "Bac"), ("Baseline Start", "PlannedStart"), ("Baseline Koniec", "PlannedEnd"),
-             ("Actual Start", "ActualStart"), ("Actual Koniec", "ActualEnd")]),
+             ("Actual Start", "ActualStart"), ("Actual Koniec", "ActualEnd"), ("Forecast Start", "ForecastStart"), ("Forecast Koniec", "ForecastEnd"),
+             ("ETC HOURS", "EtcHours"), ("ETC MATERIAL", "EtcMaterial")]),
         new(WbsCategoriesSpec, "dict.WbsCategory", [("Cost Category", "Category"), ("Opis", "Description")]),
         new(ExclusionsSpec, "dict.Exclusion", [("Cost Element", "CostElement"), ("WBS Element", "WbsElement"), ("Partner object", "PartnerObject"), ("Opis", "Description")]),
         new(SourcesSpec, "dict.ProjectSource", [("Definicja źródła", "SourceCode"), ("Opis", "Description")]),
@@ -229,6 +235,12 @@ public static class ProjectDictionaries
                 yield return Issue.Error("Baseline Start jest późniejszy niż Baseline Koniec", at);
             if (row["Actual Start"] is { } actualStart && row["Actual Koniec"] is { } actualEnd && string.CompareOrdinal(actualStart, actualEnd) > 0)
                 yield return Issue.Error("Actual Start jest późniejszy niż Actual Koniec", at);
+            if (row["Forecast Start"] is { } forecastStart && row["Forecast Koniec"] is { } forecastEnd && string.CompareOrdinal(forecastStart, forecastEnd) > 0)
+                yield return Issue.Error("Forecast Start jest późniejszy niż Forecast Koniec", at);
+            if (Dec(row["ETC HOURS"]) is < 0)
+                yield return Issue.Error("ETC HOURS nie może być ujemne", at);
+            if (Dec(row["ETC MATERIAL"]) is < 0)
+                yield return Issue.Error("ETC MATERIAL nie może być ujemne", at);
         }
     }
 

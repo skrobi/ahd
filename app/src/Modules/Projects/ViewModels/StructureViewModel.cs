@@ -55,6 +55,9 @@ public sealed class StructureViewModel : ObservableObject
     /// <summary>Lista wyboru CAM (USRID → imię i nazwisko).</summary>
     public BulkObservableCollection<LookupOption> Persons { get; } = [];
 
+    /// <summary>Lista wyboru MPK – słownik „Stawki wydziałów” (MPK → opis wydziału).</summary>
+    public BulkObservableCollection<LookupOption> Mpks { get; } = [];
+
     /// <summary>Lista wyboru Cost Category – kategorie ze słownika „Kategorie WBS” projektu.</summary>
     public BulkObservableCollection<LookupOption> Categories { get; } = [];
 
@@ -99,10 +102,13 @@ public sealed class StructureViewModel : ObservableObject
     /// Nowe dane struktury – zachowuje rozwinięcie, zaznaczenie i niezapisane zmiany wierszy (np. po nieudanym zapisie);
     /// saved – wiersze zapisane w tej chwili (ich zmiany są już w danych).
     /// </summary>
-    public void Load(ProjectStructure structure, IReadOnlyList<LookupOption> persons, IReadOnlyList<LookupOption> categories, IReadOnlySet<string>? saved = null)
+    public void Load(ProjectStructure structure, IReadOnlyList<LookupOption> persons, IReadOnlyList<LookupOption> categories, IReadOnlySet<string>? saved = null,
+        IReadOnlyList<LookupOption>? mpks = null)
     {
         CommitEdits();
         RowsReplacing?.Invoke();
+        if (mpks is not null && !Mpks.SequenceEqual(mpks))
+            Mpks.ReplaceAll(mpks);
         if (!Persons.SequenceEqual(persons))
             Persons.ReplaceAll(persons);
         if (!Categories.SequenceEqual(categories))
