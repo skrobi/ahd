@@ -255,6 +255,15 @@ public sealed class LatestImportProcedureTests : IDisposable
         Assert.Equal(1, connection.Execute($"UPDATE {_database.Sql.Table("dict.CostCategory")} SET IsSettlement = 1 " +
                                            "WHERE Project IS NULL AND SupersededAt IS NULL AND CostElement = '0092212550'"));   // pozycja z danych startowych
         Assert.Equal(1254.51m, store.CostsByElement("M28", "ValueObjCrcy")["2DI473001001"]);   // bez 4 800 (W30, klasa KSTL)
+        // Migracja 043: także klasa partnera „Profit analysis” (rozliczenie do segmentu rentowności) – pominięte; raport
+        // kosztów CES bez cost elementów rozliczeniowych.
+        Assert.True(connection.Execute($"UPDATE {_database.Sql.Table("can.ActualsBalance")} SET PartnerObjectClass = N'Profit analysis' " +
+                                       "WHERE CostElement = '0092212550'") > 0);
+        Assert.Equal(1254.51m, store.CostsByElement("M28", "ValueObjCrcy")["2DI473001001"]);
+        var report = store.CostReport("M28", "ValueObjCrcy");
+        var costElement = report.Columns.ToList().IndexOf("Cost Element");
+        Assert.DoesNotContain(report.Rows, r => (string?)r[costElement] == "0092212550");
+        Assert.Contains(report.Rows, r => (string?)r[costElement] == "0051105550");
         connection.Execute($"INSERT INTO {_database.Sql.Table("dict.CostCategory")} (RowId, Version, Project, CostElement, IsSettlement, RecordedAt, RecordedBy) " +
                            "VALUES (900001, 1, 'M28', '0092212550', 0, SYSDATETIMEOFFSET(), 'test')");
         Assert.Equal(6054.51m, store.CostsByElement("M28", "ValueObjCrcy")["2DI473001001"]);   // w projekcie nie jest rozliczeniowy

@@ -84,6 +84,8 @@ zmieni). Brak pliku albo błąd w nim = komunikat przy starcie z nazwą pola –
 - `040_dane_rodzaj_kosztu.sql` – konta materiałowe w Cost Category – rodzaj kosztu Materials;
 - `041_waluta_budzetu.sql` – waluta kwot „Harmonogram i budżet” (`DICT_ScheduleBudget.Currency`);
 - `042_bez_waluty_transakcji.sql` – zestaw walutowy ACTUALS tylko Object / Report currency (bez waluty transakcji).
+- `043_rozliczeniowe_poza_kosztami.sql` – cost element „Rozliczeniowy” poza ACWP struktury i raportem kosztów CES bez
+  wyjątku dla klasy partnera „Profit analysis”.
 
 Migracje wykonuje przycisk **Diagnostyka → Migracja** – uruchamia po kolei skrypty, których numeru nie ma
 w `META_SchemaVersion`, a wykonane pomija. Lista na tym ekranie pokazuje, które skrypty są wykonane (kiedy, kto)

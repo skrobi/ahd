@@ -167,9 +167,9 @@ i budżetem (`StructureBuilder`).
   WP bez budżetu.
 - **ACWP** (tylko do odczytu): koszt rzeczywisty narastająco z ostatniego importu ACTUALS (pole kwoty ze słownika
   „Parametry projektu”, domyślnie waluta obiektu – PLN; bez wykluczeń
-  projektu i bez rozliczenia wychodzącego – cost elementy oznaczone „Rozliczeniowy” w słowniku Cost Category,
-  klasa obiektu partnera inna niż „Profit analysis”; procedura `REP_ProjectCostsByElement`, `docs/model-danych.md`,
-  migracje 016–017). Bez oznaczenia cost elementów rozliczeniowych element WBS rozliczany co miesiąc ma ACWP 0. Koszt elementu CES trafia
+  projektu i bez cost elementów oznaczonych „Rozliczeniowy” w słowniku Cost Category (słownik efektywny projektu,
+  bez względu na klasę obiektu partnera); procedura `REP_ProjectCostsByElement`, `docs/model-danych.md`,
+  migracje 016–017, 043). Bez oznaczenia cost elementów rozliczeniowych element WBS rozliczany co miesiąc ma ACWP 0. Koszt elementu CES trafia
   do WP na kodzie P1S jego węzła, a bez niego – do jedynego WP pod węzłem. Brak WP („koszt bez WP”) albo kilka WP pod
   węzłem („koszt niejednoznaczny” – reguła rozdziału to O45) – koszt bez przypisania, w kolumnie Braki. Wiersz węzła
   pokazuje koszt elementów CES swojego poddrzewa, wiersz elementu P1S – koszt przypisany do WP poddrzewa. Koszt

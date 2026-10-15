@@ -23,11 +23,12 @@ public sealed class SqlProfilerTests
             Assert.ThrowsAny<Exception>(() => connection.Execute("SELECT * FROM dbo.TabelaKtorejNieMa"));
         }
 
-        var slow = Assert.Single(seen, p => p.Error is null);
+        // Obserwacja obejmuje cały proces – równoległe testy SQL dopisują swoje wolne polecenia; liczą się polecenia tego testu.
+        var slow = Assert.Single(seen, p => p.Error is null && p.Sql.Contains("SELECT 2 AS Slow"));
         Assert.Contains("WAITFOR DELAY '00:00:00.400'; SELECT 2 AS Slow", slow.Sql);
         Assert.True(slow.Elapsed >= TimeSpan.FromMilliseconds(380), slow.Elapsed.ToString());
         Assert.False(string.IsNullOrEmpty(slow.Database));
-        Assert.Contains("TabelaKtorejNieMa", Assert.Single(seen, p => p.Error is not null).Sql);
+        Assert.Single(seen, p => p.Error is not null && p.Sql.Contains("TabelaKtorejNieMa"));
         Assert.DoesNotContain(seen, p => p.Sql.Contains("Fast"));
     }
 
