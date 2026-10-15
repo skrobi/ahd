@@ -32,7 +32,8 @@ public static class WebDavPath
 
         var query = HttpUtility.ParseQueryString(uri.Query);
         var folder = query["RootFolder"] ?? query["id"] ?? Uri.UnescapeDataString(uri.AbsolutePath).Split("/Forms/")[0];
-        var host = uri.Authority + (uri.Scheme == Uri.UriSchemeHttps ? "@SSL" : "");
+        // Port inny niż domyślny – \\host@SSL@8443\… (składnia WebDAV Windows), nie host:8443.
+        var host = uri.Host + (uri.Scheme == Uri.UriSchemeHttps ? "@SSL" : "") + (uri.IsDefaultPort ? "" : $"@{uri.Port}");
         return $@"\\{host}\DavWWWRoot" + ("/" + folder.Trim('/')).Replace('/', '\\');
     }
 
