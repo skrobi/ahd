@@ -66,6 +66,17 @@ public sealed class StructureTests
         Assert.Equal("AC-CAB.6.38", ProjectService.Scope(Objectives(), Inputs()).RootOf("XYZ-1"));
     }
 
+    /// <summary>Kod wydzielenia elementu LOG.WBS bez kropkowego prefiksu węzła (XYZ-1 pod AC-CAB.6.38.07) – w zakresie elementu.</summary>
+    [Fact]
+    public void Split_code_of_log_wbs_element_is_in_scope_of_its_element()
+    {
+        var scope = ProjectService.Scope(Objectives(), Inputs());
+
+        Assert.Equal("AC-CAB.6.38", scope.RootOf("XYZ-1.QUALITY.DJ"));
+        Assert.Null(scope.RootOf("XYZ-1.QUALITY"));       // jeden człon za elementem – nie wydzielenie
+        Assert.Null(scope.RootOf("ZZZ.PAINT.W20"));       // element spoza zakresu
+    }
+
     [Fact]
     public void Scope_assigns_log_wbs_element_to_nearest_legacy_wbs()
     {
