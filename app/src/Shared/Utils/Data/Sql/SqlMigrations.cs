@@ -105,7 +105,8 @@ public static partial class SqlMigrations
                     EXEC @result = sp_getapplock @Resource = @resource, @LockMode = 'Exclusive', @LockOwner = 'Transaction', @LockTimeout = 120000;
                     IF @result < 0 THROW 51000, N'Migracja bazy jest właśnie wykonywana przez inną osobę – spróbuj za chwilę.', 1;
                     """,
-                    new { resource = $"PZL-EV migracje {db.Settings.Schema}.{db.Settings.TablePrefix}" }, transaction);
+                    new { resource = $"PZL-EV migracje {db.Settings.Schema}.{db.Settings.TablePrefix}" }, transaction,
+                    commandTimeout: 150);   // dłużej niż @LockTimeout (120 s) – inaczej klient przerwie oczekiwanie bez komunikatu o drugiej osobie
                 var done = connection.ExecuteScalar<int>(
                     $"IF OBJECT_ID(N'{table}') IS NULL SELECT 0 ELSE SELECT COUNT(*) FROM {table} WHERE Version = @number",
                     new { number = script.Number }, transaction);
