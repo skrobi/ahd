@@ -86,7 +86,8 @@ public sealed class ProjectDetailViewModel : ObservableObject, IDisposable
         CreateFolders = new AsyncRelayCommand(DoCreateFolders, () => !Busy.IsBusy);
         RefreshMapping = new AsyncRelayCommand(() => { Structure.CommitEdits(); return Reload(refreshMapping: true); }, () => !Busy.IsBusy);
         ImportSources = new AsyncRelayCommand(DoImportSources, () => !Busy.IsBusy && _service.Imports is not null);
-        StartRun = new AsyncRelayCommand(DoStartRun, () => _service.Runs is { } r && !r.IsRunning(Code));
+        // Projekt niegotowy (ERROR gotowości) – przebieg zablokowany (docs/pipeline-fazy.md, P0 – bramka wejścia).
+        StartRun = new AsyncRelayCommand(DoStartRun, () => IsReady && _service.Runs is { } r && !r.IsRunning(Code));
         if (_service.Runs is { } launcher)
         {
             launcher.Progress += OnRunProgress;
@@ -507,6 +508,7 @@ public sealed class ProjectDetailViewModel : ObservableObject, IDisposable
                 Readiness.Add(check);
             IsReady = ProjectReadiness.IsReady(snapshot.Readiness);
             ReadinessPill = IsReady ? new Pill("ok", "gotowy do przebiegu") : new Pill("crit", "niegotowy – przebieg zablokowany");
+            CommandManager.InvalidateRequerySuggested();   // „Uruchom przebieg” według gotowości
             if (refreshMapping)
                 Status = _costsError is null ? "Odświeżono strukturę P1S i koszty (ostatni import ACTUALS)." : $"Odświeżono strukturę P1S; {_costsError}";
         });
