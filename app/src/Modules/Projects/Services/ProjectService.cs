@@ -195,12 +195,16 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
 
     /// <summary>
     /// Waluta projektu z danych: kody z kolumny waluty zestawu (pole kwoty field) w ostatnim imporcie ACTUALS projektu –
-    /// jeden kod: waluta; kilka (np. waluta transakcji): null i powód (kwoty w różnych walutach się nie sumują); brak danych – null.
+    /// jeden kod: waluta; kilka: null i powód (kwoty w różnych walutach się nie sumują); brak danych – null.
     /// </summary>
     public (string? Currency, string? Problem) ProjectCurrency(string code, string field)
     {
         var set = ProjectSettings.SetOf(field);
-        var codes = store.ProjectCurrencies(code, set.CurrencyField);
+        return CurrencyOf(store.ProjectCurrencies(code, set.CurrencyField), set);
+    }
+
+    private static (string? Currency, string? Problem) CurrencyOf(IReadOnlyList<string> codes, ProjectSettings.ActualsSet set)
+    {
         return codes.Count switch
         {
             0 => (null, null),
@@ -941,21 +945,53 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
             folderChecks.Structure, folderChecks.CamAccess, withoutCam);
     }
 
-    public static AnalyticBase Analytic(PoTree tree, IReadOnlyList<DictRow> wpCam, IReadOnlyList<DictRow> schedule, P1sInputs inputs)
-        => AnalyticBaseBuilder.Build(tree, wpCam, schedule, ObjectivesMapping.CodesOf, ObjectivesMapping.Scope(tree, inputs));
+    /// <param name="rates">Waluta projektu i kursy (EtcRatesOf) – kwoty „Harmonogram i budżet” w innej walucie przeliczone; null – bez przeliczenia.</param>
+    public static AnalyticBase Analytic(PoTree tree, IReadOnlyList<DictRow> wpCam, IReadOnlyList<DictRow> schedule, P1sInputs inputs, EtcRates? rates = null)
+    {
+        var gaps = new List<string>();
+        var converted = schedule.Select(r =>
+        {
+            var row = ProjectDictionaries.InProjectCurrency(r, rates, out var gap);
+            if (gap is not null)
+                gaps.Add($"WP {r["WP"]}: {gap}");
+            return row;
+        }).ToList();
+        return AnalyticBaseBuilder.Build(tree, wpCam, converted, ObjectivesMapping.CodesOf, ObjectivesMapping.Scope(tree, inputs))
+            with { Currency = rates?.Currency, CurrencyGaps = gaps };
+    }
+
+    /// <summary>
+    /// Waluta projektu niezapisanego (kreator): kody z kolumny waluty zestawu w ostatnim imporcie ACTUALS dla Project
+    /// definition i WBS element nakładki – jak ProjectCurrency.
+    /// </summary>
+    public (string? Currency, string? Problem) ProjectCurrency(PoTree tree, string field)
+    {
+        var set = ProjectSettings.SetOf(field);
+        var codes = tree.Nodes.SelectMany(n => new[] { n.ProjectDefinition, n.WbsElement }).OfType<string>()
+            .Where(c => c.Length > 0).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        return CurrencyOf(store.CurrenciesOf(codes, set.CurrencyField), set);
+    }
+
+    /// <summary>Kursy kreatora: waluta projektu niezapisanego i kursy bieżące („Kursy walut”) – przeliczenie kwot budżetu.</summary>
+    public EtcRates WizardRates(PoTree tree, string field)
+    {
+        var (currency, problem) = ProjectCurrency(tree, field);
+        return EtcRatesOf([], FxRates(), currency, problem, DateOnly.FromDateTime(DateTime.Today));
+    }
 
     public void ExportAnalytic(string path, string code, AnalyticBase analytic)
     {
+        var material = analytic.Currency is { } currency ? $"BAC MATERIAL ({currency})" : "BAC MATERIAL";
         ExcelTableWriter.WriteSheets(path,
         [
             ("Baza analityczna",
-                ["Poziom", "Nazwa", "Element CES", "P1S (Legacy WBS)", "Węzeł wirtualny", "WP", "CAM", "BAC HOURS", "BAC MATERIAL", "Start", "Koniec", "Braki"],
+                ["Poziom", "Nazwa", "Element CES", "P1S (Legacy WBS)", "Węzeł wirtualny", "WP", "CAM", "BAC HOURS", material, "Start", "Koniec", "Braki"],
                 analytic.Rows.Select(r => (IReadOnlyList<object?>)new object?[]
                 {
                     r.Depth + 1, new string(' ', r.Depth * 2) + r.Name, r.WbsElement, r.P1s, r.IsVirtual, string.Join(", ", r.Wps), string.Join(", ", r.Cams),
                     r.BacHours, r.BacMaterial, r.Start, r.Finish, r.Gap,
                 })),
-            ("Wg CAM", ["CAM", "WP", "BAC HOURS", "BAC MATERIAL", "Start", "Koniec"],
+            ("Wg CAM", ["CAM", "WP", "BAC HOURS", material, "Start", "Koniec"],
                 analytic.ByCam.Select(c => (IReadOnlyList<object?>)new object?[] { c.Cam, c.Wps, c.BacHours, c.BacMaterial, c.Start, c.Finish })),
         ]);
         journal.Add(Area, $"{(code.Length > 0 ? code : "nowy projekt")}: baza analityczna pobrana do Excela", code.Length > 0 ? code : null);

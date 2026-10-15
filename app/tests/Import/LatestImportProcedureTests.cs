@@ -289,6 +289,10 @@ public sealed class LatestImportProcedureTests : IDisposable
         // Waluta projektu z kolumny waluty zestawu walutowego: Object Currency – PLN, Report currency – USD.
         Assert.Equal(["PLN"], store.ProjectCurrencies("M28", "ObjectCurrency"));
         Assert.Equal(["USD"], store.ProjectCurrencies("M28", "ReportCurrency"));
+        // Kreator (projekt niezapisany): waluta z kodów nakładki; kod spoza danych – brak waluty.
+        Assert.Equal(["USD"], store.CurrenciesOf(["2DI473", "2DI473001001"], "ReportCurrency"));
+        Assert.Empty(store.CurrenciesOf(["XYZ"], "ObjectCurrency"));
+        Assert.Empty(store.CurrenciesOf([], "ObjectCurrency"));
 
         var (m28, m28Hours, _, _) = store.CostsAndHoursByElement("M28", "ValueObjCrcy", ProjectService.ActualsHours);
         Assert.Equal((6054.51m, 32m), (m28["2DI473001001"], m28Hours["2DI473001001"]));

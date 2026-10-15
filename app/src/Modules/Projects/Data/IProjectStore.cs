@@ -55,6 +55,9 @@ public interface IProjectStore
     /// <summary>Kody walut z kolumny currencyField (ObjectCurrency, ReportCurrency) w ostatnim imporcie ACTUALS projektu.</summary>
     IReadOnlyList<string> ProjectCurrencies(string code, string currencyField);
 
+    /// <summary>Kody walut z kolumny currencyField w ostatnim imporcie ACTUALS dla kodów Project definition / WBS element (projekt jeszcze niezapisany – kreator).</summary>
+    IReadOnlyList<string> CurrenciesOf(IReadOnlyCollection<string> definitions, string currencyField);
+
     /// <summary>
     /// Pliki ACTUALS, z których są koszty (najnowsza wersja każdego pliku – CAN_LatestFiles): data raportu w RABIT, import
     /// i ostatnie sprawdzenie pliku w RABIT bez zmian treści (META_SourceFileSeen: pominięty / duplikat).
