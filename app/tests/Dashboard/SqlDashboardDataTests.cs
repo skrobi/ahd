@@ -64,7 +64,7 @@ public sealed class SqlDashboardDataTests : IDisposable
         Assert.StartsWith($"Ostatni import #{batch} · ", cards[0].Subtitle);
         Assert.Equal(["zakończony", "2 zaimportowane", "1 nierozpoznane"], cards[0].Pills.Select(p => p.Text));
         Assert.Equal(["definicje aktywne: 2 z 2", "lokalizacje aktywne: 1 z 1"], cards[1].Pills.Select(p => p.Text));
-        Assert.Contains(cards[2].Pills, p => p.Text == "Cost Category: 33");
+        Assert.Contains(cards[2].Pills, p => p.Text == "Cost Category: 35");
         Assert.Contains(cards[2].Pills, p => p.Text == "stawki: 0");
         var project = Assert.Single(_data.ZakresCards());
         Assert.Equal(("S70i", "SAC", SqlDashboardData.NoRuns), (project.Code, project.TypeLabel, project.RunLine));

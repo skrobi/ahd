@@ -23,6 +23,7 @@ public sealed class SqlImportStore(SqlDatabase db) : IImportStore
     private readonly string _files = db.Table(DbTables.SourceFile);
     private readonly string _seen = db.Table(DbTables.SourceFileSeen);
     private readonly string _canonical = db.Table(DbTables.CanonicalRow);
+    private readonly string _balance = db.Table(DbTables.ActualsBalance);
     private readonly string _parsers = db.Table(DbTables.Parser);
 
     private const string BatchColumns = "BatchId AS Id, StartedAt, FinishedAt, UserName AS [User], Machine, AppVersion, Files, Imported, Skipped, Duplicates, Unrecognized, Errors, Status";
@@ -144,9 +145,18 @@ public sealed class SqlImportStore(SqlDatabase db) : IImportStore
             var totals = canonical.Totals();   // błędy treści pliku – wyjątek, wiersze pliku usuwane
             stage?.Invoke("kontrola w bazie (liczba wierszy i sumy)");
             var stored = Verify(connection, id, canonical, totals);
-            stage?.Invoke("zatwierdzanie zapisu");
-            connection.Execute($"UPDATE {_files} SET DataRows = @rows, CanonicalRows = @rows, CanonicalStatus = @created WHERE FileId = @id",
-                new { id, rows = totals.Rows, created = CanonicalStatuses.Created });
+            // 4) zestawienie ACTUALS po Project definition (tylko wiersze tego pliku) i „utworzone” – jedna transakcja: plik
+            //    widoczny dla odczytów razem z zestawieniem; równoległe importy piszą pod swoim FileId.
+            stage?.Invoke("zestawienie ACTUALS po Project definition");
+            using (var transaction = connection.BeginTransaction())
+            {
+                connection.Execute(db.Table(DbTables.BuildActualsBalance), new { FileId = id }, transaction,
+                    commandTimeout: LongTimeout, commandType: System.Data.CommandType.StoredProcedure);
+                stage?.Invoke("zatwierdzanie zapisu");
+                connection.Execute($"UPDATE {_files} SET DataRows = @rows, CanonicalRows = @rows, CanonicalStatus = @created WHERE FileId = @id",
+                    new { id, rows = totals.Rows, created = CanonicalStatuses.Created }, transaction);
+                transaction.Commit();
+            }
             return stored;
         }
         catch
@@ -156,11 +166,11 @@ public sealed class SqlImportStore(SqlDatabase db) : IImportStore
         }
     }
 
-    /// <summary>Wersja pliku z niedokończonym zapisem: wiersze CAN_Row i wpis pliku usuwane (plik wraca do importu).</summary>
+    /// <summary>Wersja pliku z niedokończonym zapisem: zestawienie, wiersze CAN_Row i wpis pliku usuwane (plik wraca do importu).</summary>
     private void Discard(long fileId)
     {
         using var connection = db.Open();
-        connection.Execute($"DELETE FROM {_canonical} WHERE FileId = @fileId; DELETE FROM {_files} WHERE FileId = @fileId",
+        connection.Execute($"DELETE FROM {_balance} WHERE FileId = @fileId; DELETE FROM {_canonical} WHERE FileId = @fileId; DELETE FROM {_files} WHERE FileId = @fileId",
             new { fileId }, commandTimeout: LongTimeout);
     }
 

@@ -21,15 +21,29 @@ public static class StructureEdits
     public const string Bac = "Bac";
     public const string Start = "Start";
     public const string Finish = "Finish";
+    public const string ActualStart = "ActualStart";
+    public const string ActualFinish = "ActualFinish";
+    public const string ForecastStart = "ForecastStart";
+    public const string ForecastFinish = "ForecastFinish";
+    public const string EtcHours = "EtcHours";
+    public const string MaterialEtc = "MaterialEtc";
+    public const string Mpk = "Mpk";
 
     /// <summary>Kolumny, których nie wolno edytować w tabeli (zmiana tylko przez słowniki projektu).</summary>
     public static readonly IReadOnlySet<string> Locked = new HashSet<string>();
 
     /// <summary>Kolumny słownika „WP i CAM” (klucz – kod P1S wiersza).</summary>
-    public static readonly IReadOnlyList<string> WpCamColumns = [Wp, Cam, CostCategory];
+    public static readonly IReadOnlyList<string> WpCamColumns = [Wp, Cam, CostCategory, Mpk];
 
-    /// <summary>Kolumny słownika „Harmonogram i budżet” (klucz – WP wiersza).</summary>
-    public static readonly IReadOnlyList<string> ScheduleColumns = [BacHours, BacMaterial, Bac, Start, Finish];
+    /// <summary>
+    /// Kolumny słownika „Harmonogram i budżet” (klucz – WP wiersza); Actual Start / Finish – nadpisanie dat rzeczywistych
+    /// z produkcji (pusta komórka – data z raportu produkcyjnego).
+    /// </summary>
+    public static readonly IReadOnlyList<string> ScheduleColumns =
+        [BacHours, BacMaterial, Bac, Start, Finish, ActualStart, ActualFinish, ForecastStart, ForecastFinish, EtcHours, MaterialEtc];
+
+    /// <summary>Kolumny z wartością z produkcji, którą wpis w „Harmonogram i budżet” nadpisuje (pusta komórka – produkcja).</summary>
+    public static readonly IReadOnlySet<string> ProductionOverrides = new HashSet<string> { ActualStart, ActualFinish, EtcHours, MaterialEtc };
 
     /// <summary>
     /// Czy komórkę można zmienić: nazwa i Legacy WBS – węzeł nakładki; WP, CAM, Cost Category – wiersz z kodem P1S;
@@ -44,8 +58,8 @@ public static class StructureEdits
         {
             Name => row.Kind == GridRowKind.Objective,
             P1s => row.Kind == GridRowKind.Objective,   // węzeł wirtualny – kod wydzielenia ELEMENT_P1S.NAZWA.CPLGR
-            Wp or Cam or CostCategory => row.P1s is not null,
-            BacHours or BacMaterial or Bac or Start or Finish => row.BudgetWp is not null,
+            Wp or Cam or CostCategory or Mpk => row.P1s is not null,
+            _ when ScheduleColumns.Contains(column) => row.BudgetWp is not null,
             _ => false,
         };
     }
@@ -68,6 +82,13 @@ public static class StructureEdits
         Bac => "BAC",
         Start => "Baseline Start",
         Finish => "Baseline Koniec",
+        ActualStart => "Actual Start",
+        ActualFinish => "Actual Koniec",
+        ForecastStart => "Forecast Start",
+        ForecastFinish => "Forecast Koniec",
+        EtcHours => "ETC HOURS",
+        MaterialEtc => "ETC MATERIAL",
+        Mpk => "MPK",
         _ => throw new ArgumentOutOfRangeException(nameof(column), column, null),
     };
 
@@ -88,6 +109,7 @@ public static class StructureEdits
             values[Wp] = null;
             values[Cam] = null;
             values[CostCategory] = null;
+            values[Mpk] = null;
         }
         else
         {
@@ -95,6 +117,8 @@ public static class StructureEdits
                 values[Cam] = cam;
             if (changes.TryGetValue(CostCategory, out var category))
                 values[CostCategory] = category;
+            if (changes.TryGetValue(Mpk, out var mpk))
+                values[Mpk] = mpk;
             if (IsChecked(flag) || values.Count > 0)
                 values[Wp] = existingWp ?? element;
         }

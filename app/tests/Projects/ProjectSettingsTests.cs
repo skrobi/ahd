@@ -37,12 +37,12 @@ public sealed class ProjectSettingsTests : IDisposable
         Assert.Empty(DictionaryValidator.Validate(spec, [Setting(ProjectSettings.ActualsAmount, "ValueRepCur")]));
         var issue = Assert.Single(DictionaryValidator.Validate(spec, [Setting(ProjectSettings.ActualsAmount, "Kwota")]));
         Assert.Equal(CheckLevel.Error, issue.Level);
-        Assert.Contains("ValueObjCrcy, ValueRepCur, ValueTranCurr", issue.Message);
+        Assert.Contains("ValueObjCrcy, ValueRepCur", issue.Message);
 
         Assert.Equal("ValueObjCrcy", ProjectDictionaries.ActualsAmount([]));
         Assert.Equal("ValueRepCur", ProjectDictionaries.ActualsAmount([Setting(ProjectSettings.ActualsAmount, "valuerepcur")]));
         Assert.Equal("ValueObjCrcy", ProjectSettings.ActualsAmountOf("Kwota"));
-        Assert.Equal(["ValueObjCrcy", "ValueRepCur", "ValueTranCurr"], ProjectService.Lookups([], [])[ProjectDictionaries.Settings].Select(o => o.Value));
+        Assert.Equal(["ValueObjCrcy", "ValueRepCur"], ProjectService.Lookups([], [])[ProjectDictionaries.Settings].Select(o => o.Value));
 
         // Zakładka Konfiguracja: Źródła danych i Parametry projektu; pozostałe słowniki – zakładka „Słowniki projektu”.
         Assert.Equal([ProjectDictionaries.Sources, ProjectDictionaries.Settings],
@@ -96,6 +96,10 @@ public sealed class ProjectSettingsTests : IDisposable
         Assert.Contains(issues, i => i.CheckName == RunChecks.Volume && i.Level == CheckLevel.Warning && i.Message.StartsWith("Pole kwoty ACTUALS zmienione (ValueObjCrcy → ValueRepCur"));
         Assert.DoesNotContain(issues, i => i.CheckName == RunChecks.Deviations);
         Assert.DoesNotContain(issues, i => i.CheckName == RunChecks.Quality && i.Message.StartsWith("Waluta inna"));
+
+        // Waluta transakcji nie jest zestawem walutowym – procedury jej nie przyjmują (migracja 042).
+        Assert.Contains("nie ma pola kwoty ValueTranCurr", Assert.ThrowsAny<Exception>(() => store.CostsByElement("PAF", "ValueTranCurr")).Message);
+        Assert.Contains("nie ma pola kwoty ValueTranCurr", Assert.ThrowsAny<Exception>(() => store.CostReport("PAF", "ValueTranCurr")).Message);
     }
 
     public void Dispose()

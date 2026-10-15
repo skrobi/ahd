@@ -10,7 +10,10 @@ namespace PzlEv.Modules.Projects.Models;
 /// Operational EV (z PZLPROD na żywo, null – brak danych): OpsBacHours, EvHours, AcHours – suma elementów P1S poddrzewa
 /// (vAHDD); PvHours – BAC Hours WP poddrzewa rozłożone liniowo na dni robocze baseline do dnia stanu. ActualMaterial –
 /// materiały dostarczone (vAPD). Financial EV: PvCost = BAC Cost × udział dni roboczych baseline, EvCost = BAC Cost ×
-/// (EV Hours / BAC Hours) WP. ActualStart / ActualFinish – vAHDD (GSTRI, LTRMI; wydzielenie – DATA_REAL); koniec, gdy wszystkie zlecenia zamknięte.
+/// (EV Hours / BAC Hours) WP; ActualDlh – godziny rzeczywiste (Total Quantity) z ostatniego importu ACTUALS, przypisane
+/// jak Acwp. ActualStart / ActualFinish – daty WP wpisane w „Harmonogram i budżet” (Actual Start / Koniec;
+/// ActualStartManual, ActualFinishManual), a bez nich vAHDD (GSTRI, LTRMI; wydzielenie – DATA_REAL); koniec, gdy
+/// wszystkie zlecenia zamknięte.
 /// </summary>
 public sealed record StructureRow(
     string Id,
@@ -44,8 +47,61 @@ public sealed record StructureRow(
     decimal? AcHours = null,
     decimal? ActualMaterial = null,
     decimal? PvCost = null,
-    decimal? EvCost = null)
+    decimal? EvCost = null,
+    decimal ActualDlh = 0,
+    bool ActualStartManual = false,
+    bool ActualFinishManual = false,
+    string? PerformanceObligation = null,
+    string? Mpk = null,
+    string? ForecastStart = null,
+    string? ForecastFinish = null,
+    string? Status = null,
+    decimal? EtcHours = null,
+    bool EtcHoursManual = false,
+    decimal? MaterialValue = null,
+    decimal? MaterialFee = null,
+    decimal? MaterialEtc = null,
+    bool MaterialEtcManual = false,
+    int? Parts = null,
+    int? PartsDelivered = null,
+    int? NextDeliveryYear = null,
+    decimal AcwpLabor = 0,
+    decimal AcwpMaterial = 0,
+    decimal? EtcCost = null)
 {
+    // Wskaźniki EVM (docs/performance-objectives.md, rozdz. 4.2) – z wartości wiersza; brak danych albo dzielenie przez 0 – null.
+
+    /// <summary>ACWP poza pracą i materiałem (rodzaj kosztu w Cost Category nieustawiony).</summary>
+    public decimal AcwpOther => Acwp - AcwpLabor - AcwpMaterial;
+
+    public decimal? EacHours => AcHours is null && EtcHours is null ? null : (AcHours ?? 0) + (EtcHours ?? 0);
+
+    public decimal? SpiHours => Ratio(EvHours, PvHours);
+
+    public decimal? CpiHours => Ratio(EvHours, AcHours);
+
+    public decimal? PercentDelivered => Ratio(ActualMaterial, MaterialValue) * 100;
+
+    /// <summary>Godziny zaksięgowane w CES (Actual DLH) − godziny CATS.</summary>
+    public decimal? DlhDelta => ActualDlh == 0 && AcHours is null ? null : ActualDlh - (AcHours ?? 0);
+
+    public decimal? Sv => EvCost - PvCost;
+
+    public decimal? Cv => EvCost is { } ev ? ev - Acwp : null;
+
+    public decimal? Spi => Ratio(EvCost, PvCost);
+
+    public decimal? Cpi => Ratio(EvCost, Acwp);
+
+    /// <summary>EAC = ACWP + ETC Cost (koszt pozostały z godzin × stawka MPK i materiałów do poniesienia).</summary>
+    public decimal? Eac => EtcCost is { } etc ? Acwp + etc : null;
+
+    public decimal? Vac => Bac != 0 && Eac is { } eac ? Bac - eac : null;
+
+    public decimal? PercentSpent => Bac != 0 ? Acwp / Bac * 100 : null;
+
+    private static decimal? Ratio(decimal? value, decimal? total) => value is { } v && total is { } t && t != 0 ? v / t : null;
+
     /// <summary>Budżet i daty wiersza to wartości jego własnego WP (także gdy pod nim są inne WP – np. wydzielenia).</summary>
     public bool OwnsBudget => Wp is not null;
 
@@ -54,4 +110,10 @@ public sealed record StructureRow(
     /// poddrzewa (np. węzeł nakładki nad elementem P1S z WP). Bez własnego WP i z kilkoma WP w poddrzewie (suma) – null.
     /// </summary>
     public string? BudgetWp => Wp ?? (Wps.Count == 1 ? Wps[0] : null);
+
+    /// <summary>
+    /// Zaawansowanie godzin z produkcji (%) – EV Hours ÷ TECH Hours × 100 (jak EV ÷ BAC w raporcie operacyjnym S70MR);
+    /// brak godzin TECH – null.
+    /// </summary>
+    public decimal? PercentComplete => OpsBacHours is > 0 && EvHours is { } ev ? ev / OpsBacHours.Value * 100 : null;
 }

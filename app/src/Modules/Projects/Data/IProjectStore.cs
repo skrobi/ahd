@@ -47,6 +47,18 @@ public interface IProjectStore
     IReadOnlyDictionary<string, decimal> CostsByElement(string code, string value);
 
     /// <summary>
+    /// Koszt (pole kwoty value) i godziny (pole hours, np. TotalQuantity) po elemencie CES jednym wywołaniem
+    /// REP_ProjectCostsByElement (migracja 036) – ACWP i Actual DLH struktury; ACWP Labor / Material (migracja 038).
+    /// </summary>
+    ElementActuals CostsAndHoursByElement(string code, string value, string hours);
+
+    /// <summary>Kody walut z kolumny currencyField (ObjectCurrency, ReportCurrency) w ostatnim imporcie ACTUALS projektu.</summary>
+    IReadOnlyList<string> ProjectCurrencies(string code, string currencyField);
+
+    /// <summary>Kody walut z kolumny currencyField w ostatnim imporcie ACTUALS dla kodów Project definition / WBS element (projekt jeszcze niezapisany – kreator).</summary>
+    IReadOnlyList<string> CurrenciesOf(IReadOnlyCollection<string> definitions, string currencyField);
+
+    /// <summary>
     /// Pliki ACTUALS, z których są koszty (najnowsza wersja każdego pliku – CAN_LatestFiles): data raportu w RABIT, import
     /// i ostatnie sprawdzenie pliku w RABIT bez zmian treści (META_SourceFileSeen: pominięty / duplikat).
     /// </summary>

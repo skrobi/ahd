@@ -10,6 +10,8 @@
     <SolidColorBrush x:Key="Bg" Color="{StaticResource BgColor}" />
     <SolidColorBrush x:Key="Surface" Color="#FFFFFFFF" />
     <SolidColorBrush x:Key="Surface2" Color="#FFE4EAEC" />
+    <!-- Wiersz bieżącej komórki w długich tabelach (struktura projektu) – ciemniejszy szary niż wiersze naprzemienne -->
+    <SolidColorBrush x:Key="RowCurrent" Color="#FFD3DCE0" />
     <SolidColorBrush x:Key="Ink" Color="#FF13212A" />
     <SolidColorBrush x:Key="Muted" Color="#FF566974" />
     <SolidColorBrush x:Key="Line" Color="#FFCFD9DD" />

@@ -123,8 +123,11 @@ public sealed class ProjectStoreAndServiceTests : IDisposable
     public void Scenario_1_new_project_not_ready_then_dictionaries_make_it_ready()
     {
         // Kreator bez słowników: projekt powstaje, ale jest niegotowy (brak WP, CAM, budżetu).
-        var created = _service.Create("M28", "M28 – modernizacja", ProjectTypes.Internal, Objectives(), new Dictionary<string, (string, string?)>());
+        var created = _service.Create("M28", "M28 – modernizacja", ProjectTypes.Internal, Objectives(), new Dictionary<string, (string, string?)>(),
+            actualsAmount: "ValueRepCur");
         Assert.True(created.Created, string.Join("; ", created.Issues.Select(i => i.Message)));
+        Assert.Equal("ValueRepCur", _service.ActualsAmount("M28"));   // zestaw walutowy z kreatora – „Parametry projektu”
+        Assert.Contains(created.Steps, s => s.StartsWith("Zestaw walutowy ACTUALS: Report currency / Val.in rep.cur."));
         Assert.True(Directory.Exists(Path.Combine(_root, "Projekty", "M28", "CAM")));
         var project = _service.Find("M28")!;
         var tree = _service.Objectives("M28");
@@ -427,7 +430,17 @@ public sealed class ProjectStoreAndServiceTests : IDisposable
         Assert.False(rejected.Saved);
         Assert.Contains("ujemny", rejected.Message);
         var schedule = Assert.Single(_service.Rows(ProjectDictionaries.ScheduleBudget, "M28"));
-        Assert.Equal((a.BudgetWp ?? a.P1s, "10", "1000"), (schedule["WP"], schedule["BAC HOURS"], schedule["BAC"]));
+        Assert.Equal((a.BudgetWp ?? a.P1s, "10", "1000", null), (schedule["WP"], schedule["BAC HOURS"], schedule["BAC"], schedule["Waluta"]));   // bez ACTUALS – waluta nieznana
+
+        // Waluta projektu znana – zapisana przy zmienionej kwocie (kolumna Currency), zmiana samej daty jej nie zmienia.
+        var context = _service.Context("M28", _store.Objectives("M28"), _service.Rows(ProjectDictionaries.WpCam, "M28"), inputs) with { Currency = "PLN" };
+        var withBac = schedule with { Values = new Dictionary<string, string?>(schedule.Values) { ["BAC"] = "1200" } };
+        Assert.Equal(SaveStatus.Saved, _service.SaveDictionary(ProjectDictionaries.ScheduleBudget, context, [withBac], [], "M28").Status);
+        schedule = Assert.Single(_service.Rows(ProjectDictionaries.ScheduleBudget, "M28"));
+        Assert.Equal(("1200", "PLN"), (schedule["BAC"], schedule["Waluta"]));
+        var withDate = schedule with { Values = new Dictionary<string, string?>(schedule.Values) { ["Baseline Start"] = "2026-01-05" } };
+        Assert.Equal(SaveStatus.Saved, _service.SaveDictionary(ProjectDictionaries.ScheduleBudget, context with { Currency = "USD" }, [withDate], [], "M28").Status);
+        Assert.Equal("PLN", Assert.Single(_service.Rows(ProjectDictionaries.ScheduleBudget, "M28"))["Waluta"]);
 
         // Odznaczenie kilku WP naraz – przypisania i harmonogram usunięte jednym zapisem na słownik.
         rows = Read().Rows;
@@ -458,7 +471,7 @@ public sealed class ProjectStoreAndServiceTests : IDisposable
             {
                 var line = sheet.RowsUsed().Single(r => r.Cell(header.IndexOf("Legacy Element (P1S)") + 1).GetString() == row.P1s).RowNumber();
                 sheet.Cell(line, header.IndexOf("WP") + 1).Value = "x";
-                sheet.Cell(line, header.IndexOf("BAC Hours baseline") + 1).Value = hours;
+                sheet.Cell(line, header.IndexOf("BAC Hours") + 1).Value = hours;
                 sheet.Cell(line, header.IndexOf("Baseline Start") + 1).Value = new DateTime(2026, 3, 1);
             }
             workbook.Save();

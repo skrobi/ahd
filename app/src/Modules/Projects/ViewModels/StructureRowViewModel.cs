@@ -65,8 +65,35 @@ public sealed class StructureRowViewModel(StructureRow row) : INotifyPropertyCha
         public string? this[string column] => texts.TryGetValue(column, out var text) ? text : missing;
     }
 
+    /// <summary>
+    /// Daty rzeczywiste z produkcji (nie wpisane w „Harmonogram i budżet”) według klucza kolumny: "true" – wyszarzone
+    /// w tabeli; wpisana data albo zmiana w toku – zwykły kolor.
+    /// </summary>
+    public CellTexts FromProduction => new(new Dictionary<string, string>
+    {
+        [StructureEdits.ActualStart] = !row.ActualStartManual && !_changes.ContainsKey(StructureEdits.ActualStart) ? "true" : "false",
+        [StructureEdits.ActualFinish] = !row.ActualFinishManual && !_changes.ContainsKey(StructureEdits.ActualFinish) ? "true" : "false",
+        [StructureEdits.EtcHours] = !row.EtcHoursManual && !_changes.ContainsKey(StructureEdits.EtcHours) ? "true" : "false",
+        [StructureEdits.MaterialEtc] = !row.MaterialEtcManual && !_changes.ContainsKey(StructureEdits.MaterialEtc) ? "true" : "false",
+    });
+
     /// <summary>Zmiany wpisane w wierszu, jeszcze niezapisane (klucz kolumny → wartość).</summary>
     public IReadOnlyDictionary<string, string?> Changes => _changes;
+
+    /// <summary>Wiersz bieżącej komórki (StructureViewModel.Selected) – podświetlony ciemniejszym szarym.</summary>
+    public bool IsCurrent
+    {
+        get => _isCurrent;
+        set
+        {
+            if (_isCurrent == value)
+                return;
+            _isCurrent = value;
+            Notify(nameof(IsCurrent));
+        }
+    }
+
+    private bool _isCurrent;
 
     public bool IsExpanded
     {
@@ -163,15 +190,44 @@ public sealed class StructureRowViewModel(StructureRow row) : INotifyPropertyCha
         StructureEdits.Finish => row.Finish,
         "WpCount" => row.Wps.Count == 0 ? null : row.Wps.Count.ToString(System.Globalization.CultureInfo.InvariantCulture),
         "Acwp" => Amount(row.Acwp),
+        StructureColumns.ActualDlh => Amount(row.ActualDlh),
         StructureColumns.ActualStart => row.ActualStart,
         StructureColumns.ActualFinish => row.ActualFinish,
         StructureColumns.OpsBacHours => Optional(row.OpsBacHours),
         StructureColumns.PvHours => Optional(row.PvHours),
         StructureColumns.EvHours => Optional(row.EvHours),
         StructureColumns.AcHours => Optional(row.AcHours),
+        StructureColumns.PercentComplete => Percent(row.PercentComplete),
         StructureColumns.ActualMaterial => Optional(row.ActualMaterial),
         StructureColumns.PvCost => Optional(row.PvCost),
         StructureColumns.EvCost => Optional(row.EvCost),
+        StructureColumns.PerformanceObligation => row.PerformanceObligation,
+        StructureEdits.Mpk => row.Mpk,
+        StructureEdits.ForecastStart => row.ForecastStart,
+        StructureEdits.ForecastFinish => row.ForecastFinish,
+        StructureColumns.Status => row.Status,
+        StructureEdits.EtcHours => Optional(row.EtcHours),
+        StructureColumns.EacHours => Optional(row.EacHours),
+        StructureColumns.SpiHours => Index(row.SpiHours),
+        StructureColumns.CpiHours => Index(row.CpiHours),
+        StructureColumns.MaterialValue => Optional(row.MaterialValue),
+        StructureColumns.MaterialFee => Optional(row.MaterialFee),
+        StructureEdits.MaterialEtc => Optional(row.MaterialEtc),
+        StructureColumns.PercentDelivered => Percent(row.PercentDelivered),
+        StructureColumns.Parts => row.Parts is { } parts ? $"{parts} / {row.PartsDelivered ?? 0}" : null,
+        StructureColumns.NextDeliveryYear => row.NextDeliveryYear?.ToString(System.Globalization.CultureInfo.InvariantCulture),
+        StructureColumns.AcwpLabor => Amount(row.AcwpLabor),
+        StructureColumns.AcwpMaterial => Amount(row.AcwpMaterial),
+        StructureColumns.AcwpOther => Amount(row.AcwpOther),
+        StructureColumns.DlhDelta => Optional(row.DlhDelta),
+        StructureColumns.Sv => Optional(row.Sv),
+        StructureColumns.Cv => Optional(row.Cv),
+        StructureColumns.Spi => Index(row.Spi),
+        StructureColumns.Cpi => Index(row.Cpi),
+        StructureColumns.EtcCost => Optional(row.EtcCost),
+        StructureColumns.Eac => Optional(row.Eac),
+        StructureColumns.Vac => Optional(row.Vac),
+        StructureColumns.PercentSpent => Percent(row.PercentSpent),
         _ => null,
     };
 
@@ -199,9 +255,16 @@ public sealed class StructureRowViewModel(StructureRow row) : INotifyPropertyCha
         Notify(nameof(HasChanges));
         Notify(nameof(Problems));
         Notify(nameof(ProblemText));
+        Notify(nameof(FromProduction));
     }
 
     private static string? Amount(decimal value) => value == 0 ? null : PolishNumber.ToDisplay(value);
+
+    /// <summary>Procent z jednym miejscem po przecinku, np. „45,3%”.</summary>
+    private static string? Percent(decimal? value) => value is { } v ? $"{PolishNumber.ToDisplay(Math.Round(v, 1))}%" : null;
+
+    /// <summary>Wskaźnik (SPI, CPI) z dwoma miejscami po przecinku.</summary>
+    private static string? Index(decimal? value) => value is { } v ? PolishNumber.ToDisplay(Math.Round(v, 2)) : null;
 
     /// <summary>Wartość z danych (PZLPROD, wyliczona): brak danych – pusto, zero – „0” (np. brak godzin na elemencie).</summary>
     private static string? Optional(decimal? value) => value is { } v ? PolishNumber.ToDisplay(Math.Round(v, 2)) : null;

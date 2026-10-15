@@ -51,6 +51,28 @@ public sealed class ObjectivesMappingTests
         Assert.Contains(legacy, analytic.Rows.Single(r => r.WbsElement == "4D06WP000004").P1s);
     }
 
+    /// <summary>Baza analityczna (kreator): BAC MATERIAL w walucie projektu – wiersz w innej walucie przeliczony, bez kursu – pusty i brak.</summary>
+    [Fact]
+    public void Analytic_base_converts_budget_to_project_currency()
+    {
+        var tree = Objectives();
+        var legacy = tree.Nodes.Single(n => n.WbsElement == "4D06WP000004").LegacyWbs!;
+        DictRow[] wp = [new(null, null, new Dictionary<string, string?> { ["Element P1S"] = legacy, ["WP"] = "WP-9", ["CAM"] = "Anna Nowak" })];
+        DictRow Budget(string? currency) => new(null, null, new Dictionary<string, string?>
+            { ["WP"] = "WP-9", ["BAC HOURS"] = "10", ["BAC MATERIAL"] = "100", ["BAC"] = "1000", ["Waluta"] = currency });
+        var rates = new EtcRates(new Dictionary<string, decimal>(), 2026, "PLN", 1, 4m, null,
+            new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase) { ["USD"] = 4m, ["PLN"] = 1m });
+
+        var usd = ProjectService.Analytic(tree, wp, [Budget("USD")], Inputs(), rates);
+        Assert.Equal((10m, 400m, "PLN"), (usd.BacHours, usd.BacMaterial, usd.Currency));
+        Assert.Empty(usd.CurrencyGaps!);
+        Assert.Equal(100m, ProjectService.Analytic(tree, wp, [Budget(null)], Inputs(), rates).BacMaterial);   // pusta waluta – waluta projektu
+        var eur = ProjectService.Analytic(tree, wp, [Budget("EUR")], Inputs(), rates);
+        Assert.Equal(0m, eur.BacMaterial);
+        Assert.Contains("WP WP-9: budżet w EUR – brak kursu EUR", Assert.Single(eur.CurrencyGaps!));
+        Assert.Equal(100m, ProjectService.Analytic(tree, wp, [Budget("USD")], Inputs()).BacMaterial);   // bez kursów – bez przeliczenia
+    }
+
     [Fact]
     public void Readiness_reports_p1s_side()
     {

@@ -18,9 +18,20 @@ public partial class PoEditorView : UserControl
     private Point _start;
     private PoRowViewModel? _dragged;
 
+    /// <summary>
+    /// Tabela do dołu okna – ekran projektu: bez limitu MaxHeight, wysokość z układu (wiersz * edytora w wierszu * ekranu);
+    /// w kreatorze (przyciski kroków pod edytorem, strona przewijana) – najwyżej MaxHeight z XAML.
+    /// </summary>
+    public bool FillPage { get; set; }
+
     public PoEditorView()
     {
         InitializeComponent();
+        Loaded += (_, _) =>
+        {
+            if (FillPage)
+                NodesGrid.MaxHeight = double.PositiveInfinity;
+        };
         DataContextChanged += (_, e) =>
         {
             if (e.OldValue is PoEditorViewModel old)

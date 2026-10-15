@@ -17,10 +17,13 @@
 
    Wynik 1 – godziny i daty po elemencie (PSPNR; VirtualCode – wydzielenie, inaczej NULL):
      AC = CATS; BAC = TECH ÷ produktywność IPT + DJK × TECH; EV = TECH_PON ÷ produktywność IPT + DJK × TECH_PON;
+     ETC = TECH_DO_PON ÷ produktywność IPT + DJK × TECH_DO_PON (godziny do wykonania);
      produktywność IPT = Σ CzTechPon ÷ Σ CzRzecz z vAHDD_PL_CPI w oknie @months (brak – 1);
      Actual Start = MIN(GSTRI) (wydzielenie – MIN(DATA_REAL) jego operacji);
      Actual Finish = MAX(LTRMI) (wydzielenie – MAX(DATA_REAL)), gdy wszystkie operacje mają STAT = 'DONE', inaczej NULL.
-   Wynik 2 – materiały po PSPNR (vAPD): wartość dostarczona Σ NETWR_USD [÷ (1 + Z_CLO)] dla statusów #delivered (USD). */
+   Wynik 2 – materiały po PSPNR (vAPD, USD): wartość wszystkich części Σ NETWR_USD [÷ (1 + Z_CLO)] (Value), fee Σ NETWR_USD −
+     Σ NETWR_USD ÷ (1 + Z_CLO) (Fee), wartość dostarczona – statusy #delivered (Delivered), liczba numerów części (MATNR):
+     wszystkich i dostarczonych, najbliższy rok planowanej dostawy części niedostarczonych (YEAR(EINDT_MAX)). */
 
 WITH Produktywnosc AS (
     SELECT IPT, SUM(CzTechPon) / SUM(CzRzecz) AS Factor
@@ -29,7 +32,7 @@ WITH Produktywnosc AS (
     GROUP BY IPT
     HAVING SUM(CzRzecz) > 0 AND SUM(CzTechPon) > 0),
 A AS (
-    SELECT p.PSPNR, a.IPT, a.CATS, a.TECH, a.TECH_PON, a.STAT,
+    SELECT p.PSPNR, a.IPT, a.CATS, a.TECH, a.TECH_PON, a.TECH_DO_PON, a.STAT,
            TRY_CONVERT(DATE, a.GSTRI) AS GSTRI, TRY_CONVERT(DATE, a.LTRMI) AS LTRMI, TRY_CONVERT(DATE, a.DATA_REAL) AS DATA_REAL,
            r.Code AS VirtualCode
     FROM $(vAHDD) a
@@ -46,6 +49,7 @@ SELECT CAST(A.PSPNR AS NVARCHAR(50)) AS Pspnr, A.VirtualCode,
        CAST(SUM(A.CATS) AS DECIMAL(28,8)) AS AcHours,
        CAST(SUM(A.TECH / ISNULL(P.Factor, 1)) + SUM(ISNULL(K.Share, 0) * A.TECH) AS DECIMAL(28,8)) AS BacHours,
        CAST(SUM(A.TECH_PON / ISNULL(P.Factor, 1)) + SUM(ISNULL(K.Share, 0) * A.TECH_PON) AS DECIMAL(28,8)) AS EvHours,
+       CAST(SUM(A.TECH_DO_PON / ISNULL(P.Factor, 1)) + SUM(ISNULL(K.Share, 0) * A.TECH_DO_PON) AS DECIMAL(28,8)) AS EtcHours,
        MIN(CASE WHEN A.VirtualCode IS NULL THEN A.GSTRI ELSE A.DATA_REAL END) AS ActualStart,
        CASE WHEN SUM(CASE WHEN A.STAT = 'DONE' THEN 0 ELSE 1 END) = 0
             THEN MAX(CASE WHEN A.VirtualCode IS NULL THEN A.LTRMI ELSE A.DATA_REAL END) END AS ActualFinish
@@ -60,7 +64,12 @@ GROUP BY A.PSPNR, A.VirtualCode;
 
 SELECT CAST(p.PSPNR AS NVARCHAR(50)) AS Pspnr,
        CAST(SUM(CASE WHEN s.Status IS NOT NULL
-                     THEN v.NETWR_USD / IIF(@divideZClo = 1, 1 + ISNULL(v.Z_CLO, 0), 1) ELSE 0 END) AS DECIMAL(28,8)) AS Delivered
+                     THEN v.NETWR_USD / IIF(@divideZClo = 1, 1 + ISNULL(v.Z_CLO, 0), 1) ELSE 0 END) AS DECIMAL(28,8)) AS Delivered,
+       CAST(SUM(v.NETWR_USD / IIF(@divideZClo = 1, 1 + ISNULL(v.Z_CLO, 0), 1)) AS DECIMAL(28,8)) AS Value,
+       CAST(SUM(v.NETWR_USD - v.NETWR_USD / (1 + ISNULL(v.Z_CLO, 0))) AS DECIMAL(28,8)) AS Fee,
+       COUNT(DISTINCT v.MATNR) AS Parts,
+       COUNT(DISTINCT CASE WHEN s.Status IS NOT NULL THEN v.MATNR END) AS PartsDelivered,
+       MIN(CASE WHEN s.Status IS NULL THEN YEAR(v.EINDT_MAX) END) AS NextDeliveryYear
 FROM $(vAPD) v
 JOIN #pspnr p ON p.PSPNR = TRY_CONVERT(BIGINT, v.PSPNR)
 LEFT JOIN #delivered s ON s.Status = v.STATUS

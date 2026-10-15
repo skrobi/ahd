@@ -64,10 +64,13 @@ public sealed class SqlPresetsTests : IDisposable
             Assert.Equal(expected[i], calendar[i].Values);
 
         var costCategory = _dictionaries.Current(GlobalDictionaries.CostCategory).ToDictionary(r => r.Values["Numer elementu kosztowego"]!);
-        Assert.Equal(33, costCategory.Count);
+        Assert.Equal(35, costCategory.Count);   // 040 – konta materiałowe 0051102550, 0051103550
         Assert.Equal("Direct Materials", costCategory["0051105550"].Values["Cost Category"]);
         Assert.Null(costCategory["0057100000"].Values["Cost Category"]);
         Assert.Equal("Manufacturing and QA LL labor", costCategory["9229D550"].Values["Cost Category"]);
+        foreach (var element in new[] { "0051105550", "0051102550", "0051103550" })
+            Assert.Equal(GlobalDictionaries.MaterialKind, costCategory[element].Values[GlobalDictionaries.CostKindColumn]);
+        Assert.Equal(costCategory["0051105550"].Values[GlobalDictionaries.BurdenGroupColumn], costCategory["0051103550"].Values[GlobalDictionaries.BurdenGroupColumn]);
         Assert.Empty(_dictionaries.Current(GlobalDictionaries.DepartmentRates));
 
         // 034: narzuty CAS z arkusza finansów – pule, grupy i formuły z klocków (identyfikatory pul), wskaźniki 2025–2026,
@@ -85,7 +88,7 @@ public sealed class SqlPresetsTests : IDisposable
         string? GroupOf(string element) => groups.SingleOrDefault(g => CasBurden.Ref(g.Id) == costCategory[element].Values[GlobalDictionaries.BurdenGroupColumn])?.Name;
         Assert.Equal(("MFG labor", 2), (GroupOf("0092210550"), costCategory["0092210550"].Version));
         Assert.Equal("Manufacturing and QA labor", costCategory["0092210550"].Values["Cost Category"]);
-        Assert.Equal(CasCostReportTests.FinanceMappingNames.Count - 1, costCategory.Values.Count(r => r.Values[GlobalDictionaries.BurdenGroupColumn] is not null));   // 0057510550 – spoza danych startowych
+        Assert.Equal(CasCostReportTests.FinanceMappingNames.Count + 1, costCategory.Values.Count(r => r.Values[GlobalDictionaries.BurdenGroupColumn] is not null));   // 0057510550 – spoza danych startowych; 040 – 0051102550, 0051103550 jak 0051105550
         Assert.All(CasCostReportTests.FinanceMappingNames.Where(m => costCategory.ContainsKey(m.Key)), m => Assert.Equal(m.Value, GroupOf(m.Key)));
         Assert.Null(costCategory["0057100000"].Values[GlobalDictionaries.BurdenGroupColumn]);
 
@@ -112,7 +115,7 @@ public sealed class SqlPresetsTests : IDisposable
         };
         Assert.True(_dictionaries.Save(GlobalDictionaries.CostCategory, null, [new RowChange(RowChangeKind.Added, null, null, spec.KeyOf(own), own)]).Success);
 
-        Assert.Equal(["002_dane_startowe.sql", "023_dane_produkcji.sql", "030_dane_narzuty_cas.sql", "032_dane_formuly_narzutow_cas.sql", "034_dane_narzuty_cas.sql"],
+        Assert.Equal(["002_dane_startowe.sql", "023_dane_produkcji.sql", "030_dane_narzuty_cas.sql", "032_dane_formuly_narzutow_cas.sql", "034_dane_narzuty_cas.sql", "040_dane_rodzaj_kosztu.sql"],
             SqlMigrations.Apply(_database.Sql));
 
         var paf = _sources.Definitions().Single(d => d.Code == "ACTUALS_PAF");
@@ -121,9 +124,10 @@ public sealed class SqlPresetsTests : IDisposable
         var location = Assert.Single(_sources.Locations());
         Assert.Equal((2, true), (location.Version, location.Active));
         var costCategory = _dictionaries.Current(GlobalDictionaries.CostCategory);
-        Assert.Equal(33, costCategory.Count);
+        Assert.Equal(35, costCategory.Count);   // 040 – konta materiałowe 0051102550, 0051103550
         var mine = costCategory.Single(r => r.Values["Numer elementu kosztowego"] == "0051105550");
-        Assert.Equal(("Inna", "999", 1), (mine.Values["Cost Category"], mine.Values[GlobalDictionaries.BurdenGroupColumn], mine.Version));   // 034 – grupa ustawiona wcześniej zostaje
+        Assert.Equal(("Inna", "999", GlobalDictionaries.MaterialKind, 2),
+            (mine.Values["Cost Category"], mine.Values[GlobalDictionaries.BurdenGroupColumn], mine.Values[GlobalDictionaries.CostKindColumn], mine.Version));   // 034 – grupa ustawiona wcześniej zostaje; 040 – rodzaj Materials (nowa wersja)
         Assert.Contains(_journal.Recent(50), e => e.Message ==
             "Migracja 002 – dane startowe: definicje źródeł 1, lokalizacje RABIT 1, kalendarz okresów 105 tyg., Cost Category 32 wierszy");
     }
