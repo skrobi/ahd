@@ -255,14 +255,17 @@ public sealed class SqlProjectStore(SqlDatabase db, IClock clock, ICurrentUser u
             .ToDictionary(r => r.WbsElement, r => r.Amount ?? 0, StringComparer.OrdinalIgnoreCase);
     }
 
-    public (IReadOnlyDictionary<string, decimal> Amounts, IReadOnlyDictionary<string, decimal> Hours) CostsAndHoursByElement(string code, string value, string hours)
+    public ElementActuals CostsAndHoursByElement(string code, string value, string hours)
     {
         using var connection = db.Open();
-        var rows = connection.Query<(string WbsElement, decimal? Amount, int Rows, decimal? Hours)>(db.Table("rep.ProjectCostsByElement"),
-                new { Project = code, Value = value, Hours = hours }, commandType: System.Data.CommandType.StoredProcedure, commandTimeout: 600)
+        var rows = connection.Query<(string WbsElement, decimal? Amount, int Rows, decimal? Hours, decimal? Labor, decimal? Material)>(
+                db.Table("rep.ProjectCostsByElement"), new { Project = code, Value = value, Hours = hours },
+                commandType: System.Data.CommandType.StoredProcedure, commandTimeout: 600)
             .ToList();
-        return (rows.ToDictionary(r => r.WbsElement, r => r.Amount ?? 0, StringComparer.OrdinalIgnoreCase),
-            rows.Where(r => r.Hours is not null).ToDictionary(r => r.WbsElement, r => r.Hours!.Value, StringComparer.OrdinalIgnoreCase));
+        IReadOnlyDictionary<string, decimal> Of(Func<(string WbsElement, decimal? Amount, int Rows, decimal? Hours, decimal? Labor, decimal? Material), decimal?> value) =>
+            rows.Where(r => value(r) is not null).ToDictionary(r => r.WbsElement, r => value(r)!.Value, StringComparer.OrdinalIgnoreCase);
+        return new ElementActuals(rows.ToDictionary(r => r.WbsElement, r => r.Amount ?? 0, StringComparer.OrdinalIgnoreCase),
+            Of(r => r.Hours), Of(r => r.Labor), Of(r => r.Material));
     }
 
     public IReadOnlyList<ActualsFile> ActualsFiles()

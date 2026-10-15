@@ -35,6 +35,7 @@ public partial class StructureView : UserControl
     private Button? _codesToggle;
     private readonly LookupColumn _cam = new(StructureEdits.Cam, "CAM", 180);
     private readonly LookupColumn _category = new(StructureEdits.CostCategory, "Cost Category", 150);
+    private readonly LookupColumn _mpk = new(StructureEdits.Mpk, "MPK", 150);
     private bool _codesVisible;
     private bool _editing;
     private (string Id, int Column, bool Focused)? _current;
@@ -58,6 +59,7 @@ public partial class StructureView : UserControl
                 model.RowsReplaced += RestoreCurrent;
                 _cam.Options = model.Persons;
                 _category.Options = model.Categories;
+                _mpk.Options = model.Mpks;
             }
         };
     }
@@ -99,13 +101,6 @@ public partial class StructureView : UserControl
                     RowsGrid.Columns.Add(column);
             }
         }
-        RowsGrid.Columns.Add(new DataGridTemplateColumn
-        {
-            Header = Header(new StructureColumns.Column("Gaps", "Braki", "", "Braki do uzupełnienia: element bez WP, WP bez budżetu, WP bez CAM, koszt bez WP – szczegóły w podpowiedzi ⚠.", Right: false), null, first: false),
-            Width = 60,
-            IsReadOnly = true,
-            CellTemplate = (DataTemplate)Resources["GapCell"],
-        });
         ApplyGroups();
     }
 
@@ -138,9 +133,14 @@ public partial class StructureView : UserControl
             case StructureEdits.CostCategory:
                 _category.Width = definition.Width;
                 return _category;
+            case StructureEdits.Mpk:
+                _mpk.Width = definition.Width;
+                return _mpk;
+            case StructureColumns.Gaps:
+                return new DataGridTemplateColumn { Width = definition.Width, IsReadOnly = true, CellTemplate = (DataTemplate)Resources["GapCell"] };
             default:
                 var column = TextColumn(definition);
-                if (definition.Key is StructureColumns.WbsElement or StructureEdits.P1s)
+                if (definition.Key is StructureColumns.WbsElement or StructureEdits.P1s or StructureColumns.PerformanceObligation)
                     _codeColumns.Add(column);
                 return column;
         }
@@ -157,7 +157,7 @@ public partial class StructureView : UserControl
             style.Setters.Add(new Setter(TextBlock.TextAlignmentProperty, TextAlignment.Right));
         if (definition.FromView)
             style.Setters.Add(new Setter(TextBlock.ForegroundProperty, FindResource("Muted")));
-        if (key is StructureEdits.ActualStart or StructureEdits.ActualFinish)
+        if (StructureEdits.ProductionOverrides.Contains(key))
         {
             // Data z produkcji – wyszarzona; wpisana w „Harmonogram i budżet” (nadpisanie) – zwykły kolor.
             var fromProduction = new DataTrigger { Binding = new Binding($"FromProduction[{key}]"), Value = "true" };

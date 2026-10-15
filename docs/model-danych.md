@@ -380,6 +380,11 @@ projektu (stała lista `FileId` – serwer pomija rowgroupy innych plików i sta
 `ValueRepCur` albo `ValueTranCurr`. Migracja liczy zestawienie plików już zaimportowanych (plik po pliku). Wymaga
 aplikacji 0.51.0.
 
+**Migracja `sql/mssql/038_evm_struktury.sql`:** dane EVM struktury projektu – `DICT_WpCam.Mpk` (MPK WP, słownik „Stawki
+wydziałów”), `DICT_ScheduleBudget.ForecastStart`, `ForecastEnd`, `EtcHours`, `EtcMaterial` (prognoza i wartości do poniesienia
+nadpisujące produkcję), `DICT_CostCategory.CostKind` (rodzaj kosztu Labor / Material – wstępnie wg Cost Category);
+`REP_ProjectCostsByElement` zwraca też ACWP Labor i Material. Wymaga aplikacji 0.52.0.
+
 `META_SourceFile.CanonicalStatus`: „utworzone” – dane kanoniczne zapisane i sprawdzone (widoczne dla odczytów),
 „w toku” – zapis wierszy trwa (odczyty pomijają plik; po awarii wpis i wiersze są usuwane), inna wartość – powód
 braku danych (źródło bez parsera).

@@ -50,8 +50,58 @@ public sealed record StructureRow(
     decimal? EvCost = null,
     decimal ActualDlh = 0,
     bool ActualStartManual = false,
-    bool ActualFinishManual = false)
+    bool ActualFinishManual = false,
+    string? PerformanceObligation = null,
+    string? Mpk = null,
+    string? ForecastStart = null,
+    string? ForecastFinish = null,
+    string? Status = null,
+    decimal? EtcHours = null,
+    bool EtcHoursManual = false,
+    decimal? MaterialValue = null,
+    decimal? MaterialFee = null,
+    decimal? MaterialEtc = null,
+    bool MaterialEtcManual = false,
+    int? Parts = null,
+    int? PartsDelivered = null,
+    int? NextDeliveryYear = null,
+    decimal AcwpLabor = 0,
+    decimal AcwpMaterial = 0,
+    decimal? EtcCost = null)
 {
+    // Wskaźniki EVM (docs/performance-objectives.md, rozdz. 4.2) – z wartości wiersza; brak danych albo dzielenie przez 0 – null.
+
+    /// <summary>ACWP poza pracą i materiałem (rodzaj kosztu w Cost Category nieustawiony).</summary>
+    public decimal AcwpOther => Acwp - AcwpLabor - AcwpMaterial;
+
+    public decimal? EacHours => AcHours is null && EtcHours is null ? null : (AcHours ?? 0) + (EtcHours ?? 0);
+
+    public decimal? SpiHours => Ratio(EvHours, PvHours);
+
+    public decimal? CpiHours => Ratio(EvHours, AcHours);
+
+    public decimal? PercentDelivered => Ratio(ActualMaterial, MaterialValue) * 100;
+
+    /// <summary>Godziny zaksięgowane w CES (Actual DLH) − godziny CATS.</summary>
+    public decimal? DlhDelta => ActualDlh == 0 && AcHours is null ? null : ActualDlh - (AcHours ?? 0);
+
+    public decimal? Sv => EvCost - PvCost;
+
+    public decimal? Cv => EvCost is { } ev ? ev - Acwp : null;
+
+    public decimal? Spi => Ratio(EvCost, PvCost);
+
+    public decimal? Cpi => Ratio(EvCost, Acwp);
+
+    /// <summary>EAC = ACWP + ETC Cost (koszt pozostały z godzin × stawka MPK i materiałów do poniesienia).</summary>
+    public decimal? Eac => EtcCost is { } etc ? Acwp + etc : null;
+
+    public decimal? Vac => Bac != 0 && Eac is { } eac ? Bac - eac : null;
+
+    public decimal? PercentSpent => Bac != 0 ? Acwp / Bac * 100 : null;
+
+    private static decimal? Ratio(decimal? value, decimal? total) => value is { } v && total is { } t && t != 0 ? v / t : null;
+
     /// <summary>Budżet i daty wiersza to wartości jego własnego WP (także gdy pod nim są inne WP – np. wydzielenia).</summary>
     public bool OwnsBudget => Wp is not null;
 

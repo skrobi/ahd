@@ -37,33 +37,42 @@ public static class StructureBuilder
         public bool IsGreyed { get; init; }
         public List<Item> Children { get; } = [];
         public HashSet<string> Wps { get; } = new(StringComparer.OrdinalIgnoreCase);
-        public decimal OwnCost { get; set; }
         public bool SplitError { get; init; }
         public ProductionValues? OwnProduction { get; set; }
         public ProductionSum Production { get; set; }
-        public decimal Cost { get; set; }
-        public decimal OwnDlh { get; set; }
-        public decimal Dlh { get; set; }
+        // Koszty rzeczywiste elementu CES (Own) i poddrzewa nakładki (Sum): ACWP, Actual DLH, ACWP Labor, ACWP Material.
+        public decimal[] Own { get; } = new decimal[Measures];
+        public decimal[] Sum { get; } = new decimal[Measures];
         public string? CostGap { get; set; }
+        public string? PerformanceObligation { get; init; }
     }
 
-    /// <summary>Suma wartości produkcyjnych (null – żaden element nie ma danych).</summary>
+    private const int Measures = 4, CostMeasure = 0, DlhMeasure = 1, LaborMeasure = 2, MaterialMeasure = 3;
+
     /// <summary>
     /// Suma wartości produkcyjnych (null – żaden element nie ma danych); daty rzeczywiste: start – najwcześniejszy, koniec –
     /// najpóźniejszy, gdy żaden element z godzinami nie jest otwarty (Open – element bez daty końca).
     /// </summary>
-    private readonly record struct ProductionSum(decimal? Ac, decimal? Bac, decimal? Ev, decimal? Material, DateOnly? Start, DateOnly? Finish, bool Open)
+    private readonly record struct ProductionSum(decimal? Ac, decimal? Bac, decimal? Ev, decimal? Material, DateOnly? Start, DateOnly? Finish, bool Open,
+        decimal? Etc = null, decimal? Value = null, decimal? Fee = null, int? Parts = null, int? PartsDelivered = null, int? NextYear = null)
     {
         public ProductionSum Add(ProductionValues? v) => v is null ? this
             : new(Plus(Ac, v.AcHours), Plus(Bac, v.BacHours), Plus(Ev, v.EvHours), Plus(Material, v.ActualMaterial), Min(Start, v.ActualStart),
-                Max(Finish, v.ActualFinish), Open || (v.ActualFinish is null && (v.AcHours is not null || v.BacHours is not null)));
+                Max(Finish, v.ActualFinish), Open || (v.ActualFinish is null && (v.AcHours is not null || v.BacHours is not null)),
+                Plus(Etc, v.EtcHours), Plus(Value, v.MaterialValue), Plus(Fee, v.MaterialFee), Plus(Parts, v.Parts), Plus(PartsDelivered, v.PartsDelivered),
+                MinYear(NextYear, v.NextDeliveryYear));
 
         public ProductionSum Add(ProductionSum v) => new(Plus(Ac, v.Ac), Plus(Bac, v.Bac), Plus(Ev, v.Ev), Plus(Material, v.Material),
-            Min(Start, v.Start), Max(Finish, v.Finish), Open || v.Open);
+            Min(Start, v.Start), Max(Finish, v.Finish), Open || v.Open, Plus(Etc, v.Etc), Plus(Value, v.Value), Plus(Fee, v.Fee), Plus(Parts, v.Parts),
+            Plus(PartsDelivered, v.PartsDelivered), MinYear(NextYear, v.NextYear));
 
         public DateOnly? ActualFinish => Open ? null : Finish;
 
         private static decimal? Plus(decimal? a, decimal? b) => a is null ? b : b is null ? a : a + b;
+
+        private static int? Plus(int? a, int? b) => a is null ? b : b is null ? a : a + b;
+
+        private static int? MinYear(int? a, int? b) => a is null ? b : b is null ? a : Math.Min(a.Value, b.Value);
 
         private static DateOnly? Min(DateOnly? a, DateOnly? b) => a is null ? b : b is null ? a : a < b ? a : b;
 
@@ -75,7 +84,8 @@ public static class StructureBuilder
     /// <param name="dlh">Actual DLH – godziny (Total Quantity) po elemencie CES z ostatniego importu ACTUALS; null – kolumna pusta.</param>
     public static ProjectStructure Build(PoTree tree, IReadOnlyList<P1sElement>? p1s,
         IReadOnlyList<DictRow> wpCam, IReadOnlyList<DictRow> schedule, IReadOnlyDictionary<string, decimal>? costs = null,
-        ProductionData? production = null, DateOnly? statusDate = null, IReadOnlyDictionary<string, decimal>? dlh = null)
+        ProductionData? production = null, DateOnly? statusDate = null, IReadOnlyDictionary<string, decimal>? dlh = null,
+        IReadOnlyDictionary<string, decimal>? labor = null, IReadOnlyDictionary<string, decimal>? material = null, EtcRates? rates = null)
     {
         var today = statusDate ?? DateOnly.FromDateTime(DateTime.Today);
         var productionOf = (production?.ByPspnr ?? new Dictionary<string, ProductionValues>())
@@ -142,6 +152,7 @@ public static class StructureBuilder
                 SplitError = node.IsVirtual && nodeCodes.Count > 0 && split is null && byCode.Count > 0 && !byCode.ContainsKey(MappingKeys.Key(nodeCodes[0])),
                 Id = $"po:{node.Key}", Kind = GridRowKind.Objective, NodeKey = node.Key, IsVirtual = node.IsVirtual, HasCode = nodeCodes.Count > 0,
                 Name = node.Name, WbsElement = node.WbsElement, P1s = nodeCodes.Count > 0 ? nodeCodes[0] : null,
+                PerformanceObligation = node.PerformanceObligation,
                 IsGreyed = nodeCodes.Count > 0 && byCode.GetValueOrDefault(MappingKeys.Key(nodeCodes[0])) is { IsGreyed: true },
             };
             if (item.P1s is not null)
@@ -191,29 +202,31 @@ public static class StructureBuilder
         foreach (var root in roots)
             Collect(root);
 
-        // Koszt rzeczywisty i Actual DLH: element nakładki → WP na jego kodzie P1S albo jedyny WP pod nim; suma poddrzewa nakładki.
-        var costOf = costs is null ? new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase)
-            : costs.ToDictionary(c => c.Key, c => c.Value, StringComparer.OrdinalIgnoreCase);
-        var dlhOf = dlh is null ? new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase)
-            : dlh.ToDictionary(c => c.Key, c => c.Value, StringComparer.OrdinalIgnoreCase);
-        var wpCost = new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase);
-        var wpDlh = new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase);
+        // Koszt rzeczywisty (ACWP, Actual DLH, ACWP Labor / Material): element nakładki → WP na jego kodzie P1S albo jedyny WP pod
+        // nim; suma poddrzewa nakładki.
+        static Dictionary<string, decimal> Ci(IReadOnlyDictionary<string, decimal>? values) => values is null
+            ? new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase)
+            : values.ToDictionary(c => c.Key, c => c.Value, StringComparer.OrdinalIgnoreCase);
+        var costOf = Ci(costs);
+        Dictionary<string, decimal>[] measures = [costOf, Ci(dlh), Ci(labor), Ci(material)];
+        var wpActuals = new Dictionary<string, decimal[]>(StringComparer.OrdinalIgnoreCase);
         var used = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var withoutWp = 0m;
         void Assign(Item item)
         {
-            if (item.Kind == GridRowKind.Objective && item.WbsElement is { } wbs && (costOf.ContainsKey(wbs) || dlhOf.ContainsKey(wbs)) && used.Add(wbs))
+            if (item.Kind == GridRowKind.Objective && item.WbsElement is { } wbs && measures.Any(m => m.ContainsKey(wbs)) && used.Add(wbs))
             {
-                var amount = costOf.GetValueOrDefault(wbs);
-                var hours = dlhOf.GetValueOrDefault(wbs);
-                item.OwnCost = amount;
-                item.OwnDlh = hours;
+                for (var m = 0; m < Measures; m++)
+                    item.Own[m] = measures[m].GetValueOrDefault(wbs);
+                var amount = item.Own[CostMeasure];
                 var own = item.P1s is null ? null : assignments.GetValueOrDefault(MappingKeys.Key(item.P1s))?["WP"];
                 var target = own ?? (item.Wps.Count == 1 ? item.Wps.First() : null);
                 if (target is not null)
                 {
-                    wpCost[target] = wpCost.GetValueOrDefault(target) + amount;
-                    wpDlh[target] = wpDlh.GetValueOrDefault(target) + hours;
+                    if (!wpActuals.TryGetValue(target, out var sums))
+                        wpActuals[target] = sums = new decimal[Measures];
+                    for (var m = 0; m < Measures; m++)
+                        sums[m] += item.Own[m];
                 }
                 else if (amount != 0)
                 {
@@ -225,8 +238,8 @@ public static class StructureBuilder
             }
             foreach (var child in item.Children)
                 Assign(child);
-            item.Cost = item.OwnCost + item.Children.Sum(c => c.Cost);
-            item.Dlh = item.OwnDlh + item.Children.Sum(c => c.Dlh);
+            for (var m = 0; m < Measures; m++)
+                item.Sum[m] = item.Own[m] + item.Children.Sum(c => c.Sum[m]);
         }
         foreach (var root in roots)
             Assign(root);
@@ -274,6 +287,31 @@ public static class StructureBuilder
                 finish is null && (produced.Open || (start is not null && produced.Finish is null)));
         }
         decimal? EvCost(string wp) => wpProduction.GetValueOrDefault(wp) is { Bac: > 0 } p && p.Ev is { } ev ? BacCost(wp) * Math.Min(1, ev / p.Bac.Value) : null;
+        static decimal? Dec(string? text) => decimal.TryParse(text, System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var v) ? v : null;
+        // Do poniesienia (ETC): wpis w „Harmonogram i budżet” (ETC HOURS / ETC MATERIAL), a bez niego – z produkcji WP.
+        decimal? EtcHours(string wp) => Dec(budgets.GetValueOrDefault(wp)?["ETC HOURS"]) ?? wpProduction.GetValueOrDefault(wp).Etc;
+        decimal? MaterialEtc(string wp) => Dec(budgets.GetValueOrDefault(wp)?["ETC MATERIAL"])
+            ?? (wpProduction.GetValueOrDefault(wp) is { Value: { } value } p ? value - (p.Material ?? 0) : null);
+        var mpkOf = wpCam.Where(r => r["WP"] is not null && r["MPK"] is not null).GroupBy(r => r["WP"]!, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.First()["MPK"]!, StringComparer.OrdinalIgnoreCase);
+        // ETC Cost WP = ETC Hours × stawka MPK (Labor Rate × Overhead, PLN) × przelicznik pracy + Material ETC (USD) × przelicznik
+        // materiałów – w walucie projektu; brak MPK, stawki albo kursu – null (powód w brakach wiersza).
+        decimal? EtcCost(string wp)
+        {
+            if (rates is null || !mpkOf.TryGetValue(wp, out var mpk) || !rates.RateByMpk.TryGetValue(mpk, out var rate) || rates.LaborFactor is not { } laborFactor)
+                return null;
+            var materialEtc = MaterialEtc(wp) ?? 0;
+            if (materialEtc != 0 && rates.MaterialFactor is null)
+                return null;
+            return (EtcHours(wp) ?? 0) * rate * laborFactor + materialEtc * (rates.MaterialFactor ?? 0);
+        }
+        string? EtcGap(string wp) => rates is null ? null
+            : !mpkOf.TryGetValue(wp, out var mpk) ? "WP bez MPK"
+            : !rates.RateByMpk.ContainsKey(mpk) ? $"brak stawki MPK {mpk} na {rates.Year} („Stawki wydziałów”)"
+            : rates.Problem is { } problem ? $"ETC Cost: {problem}" : null;
+        DateOnly? Forecast(IEnumerable<string> wps, string column, bool latest) =>
+            wps.Select(w => Parse(budgets.GetValueOrDefault(w)?[column])).OfType<DateOnly>().DefaultIfEmpty().Aggregate((DateOnly?)null,
+                (best, d) => d == default ? best : best is null || (latest ? d > best : d < best) ? d : best);
 
         var rows = new List<StructureRow>();
         void Emit(Item item, string? parentId, int depth)
@@ -300,14 +338,27 @@ public static class StructureBuilder
                 gap = gap is null ? "kod wydzielenia: ELEMENT_P1S.NAZWA.CPLGR" : $"{gap}; kod wydzielenia: ELEMENT_P1S.NAZWA.CPLGR";
             if (assignment?["WP"] is not null && assignment["CAM"] is null)
                 gap = gap is null ? "WP bez CAM" : $"{gap}; WP bez CAM";
+            if (ownWp is not null && EtcGap(ownWp) is { } etcGap)
+                gap = gap is null ? etcGap : $"{gap}; {etcGap}";
             if (item.CostGap is { } costGap)
                 gap = gap is null ? costGap : $"{gap}; {costGap}";
-            var acwp = item.Kind == GridRowKind.Objective ? item.Cost : wps.Sum(w => wpCost.GetValueOrDefault(w));
-            var actualDlh = item.Kind == GridRowKind.Objective ? item.Dlh : wps.Sum(w => wpDlh.GetValueOrDefault(w));
+            decimal Actual(int measure) => item.Kind == GridRowKind.Objective ? item.Sum[measure]
+                : wps.Sum(w => wpActuals.TryGetValue(w, out var sums) ? sums[measure] : 0);
+            var budget = budgetWp is null ? null : budgets.GetValueOrDefault(budgetWp);
+            var status = dates.ActualFinish is not null ? "zakończony" : dates.Start is not null ? "w toku"
+                : shown.Count > 0 || ops.Bac is not null ? "nie rozpoczęty" : null;
             rows.Add(new StructureRow(item.Id, parentId, depth, item.Kind, item.NodeKey, item.IsVirtual, item.Name, item.WbsElement, item.P1s,
                 item.Note, item.IsGreyed, assignment?["WP"], assignment?["CAM"], assignment?["Cost Category"], wps, hours, material, start, finish,
-                gap, item.Children.Count > 0, acwp, AnalyticBaseBuilder.Bac(shown, budgets), Date(dates.Start), Date(dates.ActualFinish),
-                ops.Bac, Sum(shown, PvHours), ops.Ev, ops.Ac, ops.Material, Sum(shown, PvCost), Sum(shown, EvCost), actualDlh, manualStart, manualFinish));
+                gap, item.Children.Count > 0, Actual(CostMeasure), AnalyticBaseBuilder.Bac(shown, budgets), Date(dates.Start), Date(dates.ActualFinish),
+                ops.Bac, Sum(shown, PvHours), ops.Ev, ops.Ac, ops.Material, Sum(shown, PvCost), Sum(shown, EvCost), Actual(DlhMeasure), manualStart, manualFinish,
+                PerformanceObligation: item.PerformanceObligation, Mpk: assignment?["MPK"],
+                ForecastStart: Date(Forecast(shown, "Forecast Start", latest: false)), ForecastFinish: Date(Forecast(shown, "Forecast Koniec", latest: true)),
+                Status: status,
+                EtcHours: shown.Count > 0 ? Sum(shown, EtcHours) : ops.Etc, EtcHoursManual: budget?["ETC HOURS"] is not null,
+                MaterialValue: ops.Value, MaterialFee: ops.Fee,
+                MaterialEtc: shown.Count > 0 ? Sum(shown, MaterialEtc) : ops.Value - (ops.Material ?? 0), MaterialEtcManual: budget?["ETC MATERIAL"] is not null,
+                Parts: ops.Parts, PartsDelivered: ops.PartsDelivered, NextDeliveryYear: ops.NextYear,
+                AcwpLabor: Actual(LaborMeasure), AcwpMaterial: Actual(MaterialMeasure), EtcCost: Sum(shown, EtcCost)));
             foreach (var child in item.Children)
                 Emit(child, item.Id, depth + 1);
         }
@@ -324,7 +375,7 @@ public static class StructureBuilder
             total.Hours, total.Material, total.Start, total.Finish,
             rows.Count(r => r is { Kind: GridRowKind.Objective, IsVirtual: false } && r.Wps.Count == 0),
             all.Count(w => !AnalyticBaseBuilder.HasBudget(budgets.GetValueOrDefault(w))),
-            roots.Sum(r => r.Cost),
+            roots.Sum(r => r.Sum[CostMeasure]),
             withoutWp,
             costOf.Where(c => !used.Contains(c.Key)).Sum(c => c.Value),
             costs is not null,

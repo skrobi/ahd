@@ -23,6 +23,11 @@ public static partial class GlobalDictionaries
     public const string CasBurdenFormulas = "cas-burden-formulas";
     public const string CasBurdenRates = "cas-burden-rates";
 
+    /// <summary>Kolumna słownika Cost Category z rodzajem kosztu (Labor / Material; puste – Other) – podział ACWP w strukturze.</summary>
+    public const string CostKindColumn = "Rodzaj kosztu";
+    public const string LaborKind = "Labor";
+    public const string MaterialKind = "Material";
+
     /// <summary>Kolumna słownika Cost Category z grupą narzutową CAS elementu kosztowego (raport kosztów CES).</summary>
     public const string BurdenGroupColumn = "Grupa narzutowa CAS";
 
@@ -81,7 +86,7 @@ public static partial class GlobalDictionaries
         {
             Code = CostCategory,
             Name = "Cost Category",
-            Description = "Numer elementu kosztowego → opis, obszar, Cost Category; „Rozliczeniowy” – cost element rozliczenia (settlement), pomijany w ACWP jako rozliczenie wychodzące. Numer liczbowy uzupełniany zerami do 10 znaków.",
+            Description = "Numer elementu kosztowego → opis, obszar, Cost Category; „Rozliczeniowy” – cost element rozliczenia (settlement), pomijany w ACWP jako rozliczenie wychodzące; „Rodzaj kosztu” – Labor / Material (puste – Other): podział ACWP w strukturze projektu. Numer liczbowy uzupełniany zerami do 10 znaków.",
             Columns =
             [
                 new("Numer elementu kosztowego", ColumnType.Text, Key: true, PadNumericTo: 10),
@@ -89,6 +94,7 @@ public static partial class GlobalDictionaries
                 new("Obszar", ColumnType.Text, CheckSimilar: true),
                 new("Cost Category", ColumnType.Text, CheckSimilar: true),
                 new("Rozliczeniowy", ColumnType.Boolean),
+                new(CostKindColumn, ColumnType.Choice, Choices: [LaborKind, MaterialKind]),
                 new(BurdenGroupColumn, ColumnType.Text, Lookup: CasBurdenGroups, IdLookup: true),
             ],
             Rules = CostCategoryRules,
@@ -211,7 +217,7 @@ public static partial class GlobalDictionaries
         new(Get(FxRates), "dict.FxRate", [("Waluta", "Currency"), ("Okres", "Period"), ("Kurs", "Rate")]),
         new(Get(CostCategory), "dict.CostCategory",
             [("Numer elementu kosztowego", "CostElement"), ("Opis", "Description"), ("Obszar", "Area"), ("Cost Category", "CostCategory"),
-             ("Rozliczeniowy", "IsSettlement"), (BurdenGroupColumn, "BurdenGroupId")]),
+             ("Rozliczeniowy", "IsSettlement"), (CostKindColumn, "CostKind"), (BurdenGroupColumn, "BurdenGroupId")]),
         new(Get(Persons), "dict.Person",
         [
             ("USRID", "AdAccount"), ("Imię i nazwisko", "FullName"), ("Imię", "FirstName"), ("Nazwisko", "LastName"), ("E-mail", "Email"),
@@ -441,6 +447,10 @@ public static partial class GlobalDictionaries
             .Select(r => new LookupOption(CasBurden.Ref(r.RowId!.Value), r["Pula"]!)).ToList(),
         CasBurdenGroups => rows.Where(r => r.RowId is not null && r["Grupa"] is not null)
             .Select(r => new LookupOption(CasBurden.Ref(r.RowId!.Value), r["Grupa"]!)).OrderBy(o => o.Label, StringComparer.CurrentCulture).ToList(),
+        // MPK ze stawek wydziałów (klucz MPK + rok) – raz na MPK, z opisem wydziału.
+        DepartmentRates => rows.Where(r => r["MPK"] is not null).GroupBy(r => r["MPK"]!, StringComparer.OrdinalIgnoreCase)
+            .Select(g => new LookupOption(g.Key, g.Select(r => r["Department"]).FirstOrDefault(d => d is not null) is { } department ? $"{g.Key} – {department}" : g.Key))
+            .OrderBy(o => o.Value, StringComparer.OrdinalIgnoreCase).ToList(),
         _ => rows.Select(r => Get(code).KeyOf(r.Values)).Distinct().Select(k => new LookupOption(k, k)).ToList(),
     };
 

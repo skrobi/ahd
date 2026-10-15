@@ -23,6 +23,17 @@ public static class ProjectSettings
     public static string ActualsAmountOf(string? value) =>
         ActualsAmounts.FirstOrDefault(a => string.Equals(a.Field, value?.Trim(), StringComparison.OrdinalIgnoreCase)).Field ?? DefaultActualsAmount;
 
+    /// <summary>
+    /// Kod waluty pola kwoty – waluta projektu dla budżetu i ETC Cost: ValueObjCrcy – PLN (waluta obiektu), ValueRepCur – USD
+    /// (waluta raportu CES); ValueTranCurr – null (waluta transakcji różna w wierszach).
+    /// </summary>
+    public static string? CurrencyCodeOf(string field) => field switch
+    {
+        "ValueObjCrcy" => "PLN",
+        "ValueRepCur" => "USD",
+        _ => null,
+    };
+
     /// <summary>Opis waluty pola kwoty, np. „waluta obiektu (PLN)”.</summary>
     public static string CurrencyOf(string field) =>
         ActualsAmounts.FirstOrDefault(a => a.Field == field).Currency ?? field;

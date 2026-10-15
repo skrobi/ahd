@@ -237,8 +237,11 @@ public sealed class LatestImportProcedureTests : IDisposable
         Assert.Equal(50014, Assert.Throws<SqlException>(() => store.CostsByElement("M28", "Brak")).Number);
 
         // Migracja 036 – Actual DLH struktury: kwota i godziny (Total Quantity) jednym wywołaniem, te same wiersze co ACWP.
-        var (amounts, hours) = store.CostsAndHoursByElement("M28", "ValueObjCrcy", ProjectService.ActualsHours);
+        var (amounts, hours, labor, material) = store.CostsAndHoursByElement("M28", "ValueObjCrcy", ProjectService.ActualsHours);
         Assert.Equal(costs, amounts);
+        // Migracja 038 – ACWP według rodzaju kosztu (Cost Category: „Manufacturing and QA labor” – Labor, „Direct Materials” – Material).
+        Assert.Equal((4800m, 1254.51m), (labor["2DI473001001"], material["2DI473001001"]));
+        Assert.Equal(2400m, labor["2di473001002"]);   // 94410550 Engineering labor
         Assert.Equal((32m, 12m), (hours["2DI473001001"], hours["2DI473001002"]));
         Assert.Empty(store.CostsAndHoursByElement("M28", "ValueObjCrcy", "Brak").Hours);   // brak pola godzin – bez godzin
 
@@ -278,9 +281,9 @@ public sealed class LatestImportProcedureTests : IDisposable
             $"SELECT SUM(Rows), SUM(ValueObjCrcy), SUM(TotalQuantity) FROM {_database.Sql.Table("can.ActualsBalance")}");
         Assert.Equal((6, 10574.11m, 60m), balance);   // wszystkie wiersze pliku: 1 254,51 + 4 800 + 2 400 + 430 − 230,40 + 1 920; godziny 32 + 12 + 16
 
-        var (m28, m28Hours) = store.CostsAndHoursByElement("M28", "ValueObjCrcy", ProjectService.ActualsHours);
+        var (m28, m28Hours, _, _) = store.CostsAndHoursByElement("M28", "ValueObjCrcy", ProjectService.ActualsHours);
         Assert.Equal((6054.51m, 32m), (m28["2DI473001001"], m28Hours["2DI473001001"]));
-        var (gz, gzHours) = store.CostsAndHoursByElement("GZ", "ValueObjCrcy", ProjectService.ActualsHours);
+        var (gz, gzHours, _, _) = store.CostsAndHoursByElement("GZ", "ValueObjCrcy", ProjectService.ActualsHours);
         Assert.Equal((-230.40m, 1920m, 16m), (gz["4D03GZ000001"], gz["4D03GZ000041"], gzHours["4D03GZ000041"]));
         Assert.DoesNotContain("2DI473001001", gz.Keys);
 
