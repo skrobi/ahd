@@ -169,7 +169,9 @@ i budżetem (`StructureBuilder`).
   „Parametry projektu”, domyślnie waluta obiektu – PLN; bez wykluczeń
   projektu i bez cost elementów oznaczonych „Rozliczeniowy” w słowniku Cost Category (słownik efektywny projektu,
   bez względu na klasę obiektu partnera); procedura `REP_ProjectCostsByElement`, `docs/model-danych.md`,
-  migracje 016–017, 043). Bez oznaczenia cost elementów rozliczeniowych element WBS rozliczany co miesiąc ma ACWP 0. Koszt elementu CES trafia
+  migracje 016–017, 043). Projekt CAS – ACWP to koszt PLN z ACTUALS po narzutach CAS (TOTAL COST), w walucie projektu
+  kursem CAS okresu kosztu; ACWP Hours / Materials / Other – według rodzaju kosztu cost elementu z jego narzutami;
+  brak kursu CAS – ACWP pusty z błędem (`docs/slowniki.md`, rozdz. 6.1). Bez oznaczenia cost elementów rozliczeniowych element WBS rozliczany co miesiąc ma ACWP 0. Koszt elementu CES trafia
   do WP na kodzie P1S jego węzła, a bez niego – do jedynego WP pod węzłem. Brak WP („koszt bez WP”) albo kilka WP pod
   węzłem („koszt niejednoznaczny” – reguła rozdziału to O45) – koszt bez przypisania, w kolumnie Braki. Wiersz węzła
   pokazuje koszt elementów CES swojego poddrzewa, wiersz elementu P1S – koszt przypisany do WP poddrzewa. Koszt

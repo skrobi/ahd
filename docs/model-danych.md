@@ -432,6 +432,14 @@ Performance Objectives po elemencie WBS (najwyższy poziom nad jego węzłem; el
 Project definition); wiersze: Grouping × Project definition × Cost Element, kolejność grup – kolejność węzłów najwyższego
 poziomu w drzewie (decyzja 2026-10-15). Wymaga aplikacji 0.55.0.
 
+**Migracja `sql/mssql/045_koszty_cas_z_narzutami.sql`:** `DICT_FxRate` („Kursy walut”) – kurs obowiązujący od – do
+(`ValidFrom`, `ValidTo`) zamiast okresu RRRR-MM i kolumna `CasRate` („Kurs CAS”); istniejące wiersze obowiązują w miesiącu
+swojego okresu (`Period` zostaje dla historii, aplikacja jej nie używa), `Rate` opcjonalny, klucz bieżących wersji
+(`Project`, `Currency`, `ValidFrom`). Procedura **`REP_ProjectCasCosts @Project`** – koszt bazowy projektu CAS: Grouping ×
+Project definition × element WBS × Cost Element × rok × okres w PLN (`ValueObjCrcy`), te same wiersze co ACWP (bez
+rozliczeniowych i wykluczeń), opisy jak `REP_ProjectCosts`, ostatni okres danych; narzuty, kurs CAS i TOTAL COST liczy
+aplikacja (`CasCosts` – ACWP struktury, raport kosztów CES, przebieg; `docs/slowniki.md`, rozdz. 6.1). Wymaga aplikacji 0.55.0.
+
 `META_SourceFile.CanonicalStatus`: „utworzone” – dane kanoniczne zapisane i sprawdzone (widoczne dla odczytów),
 „w toku” – zapis wierszy trwa (odczyty pomijają plik; po awarii wpis i wiersze są usuwane), inna wartość – powód
 braku danych (źródło bez parsera).

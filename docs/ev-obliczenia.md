@@ -98,4 +98,4 @@ Wskaźnik z mianownikiem równym zero nie ma wartości (pusty), a nie zero.
 | O30 | ACWP – koszt okresu czy narastająco; obsługa korekt wstecznych w SAP |
 | O35 | Metody EV per WP (zestaw metod, słownik ustawień WP), granulacja rozkładu baseline w czasie, metody EAC, wariant TCPI (podgląd struktury przyjmuje BCWP = BAC Cost × BCWP Hours ÷ TECH Hours i liniowy rozkład baseline na dni robocze pn–pt, do potwierdzenia) |
 | O36 | Konwencja daty stanu (dzień uruchomienia przebiegu czy koniec tygodnia z kalendarza okresów) (podgląd struktury przyjmuje dzień bieżący, do potwierdzenia) |
-| O51 | Waluta wyniku EV: typ projektu (SAC – USD) czy zestaw walutowy ACTUALS projektu |
+| O51 | Waluta wyniku EV: typ projektu (SAC – USD) czy zestaw walutowy ACTUALS projektu. **CAS – rozstrzygnięte 2026-10-15:** zestaw walutowy projektu, USD – koszt PLN po narzutach kursem CAS (`docs/slowniki.md`, rozdz. 6.1); SAC i wewnętrzne – otwarte |

@@ -77,6 +77,7 @@ zmiana zakresu zadania w trakcie realizacji wymaga uzgodnienia.
 | [F4.4 Kreator projektu](F4.4-kreator-projektu.md) | Projects | F4.1–F4.3 | O23 | zrobione |
 | [F4.5 Gotowość projektu i ekrany Projekty / Projekt](F4.5-gotowosc-projektu-i-ekrany-projekty-projekt.md) | Projects | F4.4 | – | zrobione – historia przebiegów po F5 |
 | [F4.6 Ekran Projekt – zakładki i struktura projektu](F4.6-ekran-projektu-zakladki-i-struktura.md) | Projects | F4.5 | – | zrobione – wskaźniki EV po F8; test ekranu na Windows |
+| [F4.7 Projekt CAS – ETC, EAC i budżet z narzutami CAS i kursem CAS](F4.7-cas-etc-eac-z-narzutami.md) | Projects | F4.6 | O51 | do zrobienia – ACWP CAS po narzutach wdrożony (045) |
 
 ## F5. Przebieg – rdzeń (P0, P1, P2, Z)
 

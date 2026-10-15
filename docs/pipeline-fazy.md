@@ -191,7 +191,11 @@ Kalendarz okresów wyznacza wariant przebiegu:
 `docs/zrodla-danych.md`, rozdz. 2) → przypięcie: dane ACTUALS projektu z ostatniego importu (`RUN_PinBalance` w jednej
 transakcji, `docs/model-danych.md`, migracja 027) → kontrole wobec ostatniego zakończonego uruchomienia wcześniejszego tygodnia.
 Kwoty – pole kwoty ACTUALS projektu (słownik „Parametry projektu”, domyślnie waluta obiektu – PLN, `Value in Obj. Crcy`);
-pole inne niż w poprzednim przebiegu – WARNING i kontrole bez porównania z poprzednim przebiegiem; tolerancja zaokrągleń 1,00. Okresy zamknięte – okresy SAP przed
+pole inne niż w poprzednim przebiegu – WARNING i kontrole bez porównania z poprzednim przebiegiem; tolerancja zaokrągleń 1,00.
+Projekt CAS: przypięcie zawsze z PLN (`Value in Obj. Crcy`), kontrole – na kosztach po narzutach CAS w walucie projektu
+(kurs CAS, `docs/slowniki.md`, rozdz. 6.1; koszt brutto przebiegu = ACWP struktury), także porównanie z poprzednim
+przebiegiem; netowanie projektu do 0 i saldo okresów zamkniętych – na danych źródłowych (rozliczenie nie dostaje narzutów);
+brak kursu CAS – ERROR „Koszty po narzutach CAS” i kontrole na kosztach bez narzutów. Okresy zamknięte – okresy SAP przed
 bieżącym okresem kalendarza, a w pierwszych 7 dniach okresu – przed poprzednim (rozliczenie poprzedniego okresu trwa);
 okresy 13–16 liczone jak 12.
 

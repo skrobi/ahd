@@ -27,6 +27,10 @@ public sealed class StructureTests
 
     private static DictRow Row(params (string Column, string? Value)[] values) => new(null, null, values.ToDictionary(v => v.Column, v => v.Value));
 
+    /// <summary>Wiersz „Kursy walut”: waluta, obowiązuje od – do, kurs (kurs CAS – opcjonalny).</summary>
+    private static DictRow Fx(string currency, string from, string? to, string? rate, string? cas = null) =>
+        Row(("Waluta", currency), ("Od", from), ("Do", to), ("Kurs", rate), ("Kurs CAS", cas));
+
     private static DictRow Wp(string element, string wp, string cam = "Anna Nowak") => Row(("Element P1S", element), ("WP", wp), ("CAM", cam), ("Cost Category", null));
 
     private static DictRow Budget(string wp, string? hours, string? material = null, string? start = null, string? end = null, string? bac = null) =>
@@ -389,8 +393,7 @@ public sealed class StructureTests
             Row(("MPK", "W30"), ("Year", "2025"), ("Labor Rate", "90"), ("Overhead", "1.4")),
             Row(("MPK", "W50"), ("Year", "2026"), ("Labor Rate", "80"), ("Overhead", null)),
         ];
-        DictRow[] fx = [Row(("Waluta", "USD"), ("Okres", "2026-09"), ("Kurs", "3.9")), Row(("Waluta", "USD"), ("Okres", "2026-10"), ("Kurs", "4")),
-            Row(("Waluta", "USD"), ("Okres", "2026-11"), ("Kurs", "5"))];
+        DictRow[] fx = [Fx("USD", "2026-09-01", "2026-09-30", "3.9"), Fx("USD", "2026-10-01", "2026-10-31", "4"), Fx("USD", "2026-11-01", null, "5")];
         var today = new DateOnly(2026, 10, 15);
 
         var pln = ProjectService.EtcRatesOf(departments, fx, "PLN", null, today);
@@ -398,7 +401,7 @@ public sealed class StructureTests
         var usd = ProjectService.EtcRatesOf(departments, fx, "USD", null, today);
         Assert.Equal(("USD", 0.25m, 1m), (usd.Currency, usd.LaborFactor, usd.MaterialFactor));
         // Waluta spoza PLN / USD – kurs z „Kursy walut”: praca PLN → EUR, materiały USD → EUR.
-        var eur = ProjectService.EtcRatesOf(departments, [.. fx, Row(("Waluta", "EUR"), ("Okres", "2026-10"), ("Kurs", "4.25"))], "EUR", null, today);
+        var eur = ProjectService.EtcRatesOf(departments, [.. fx, Fx("EUR", "2026-10-01", null, "4.25")], "EUR", null, today);
         Assert.Equal((Math.Round(1 / 4.25m, 10), Math.Round(4m / 4.25m, 10)), (Math.Round(eur.LaborFactor!.Value, 10), Math.Round(eur.MaterialFactor!.Value, 10)));
         Assert.Contains("brak kursu EUR", ProjectService.EtcRatesOf(departments, fx, "EUR", null, today).Problem);
         Assert.Contains("kilka walut", ProjectService.EtcRatesOf(departments, fx, null, "kilka walut w kolumnie Report currency: EUR, PLN", today).Problem);
