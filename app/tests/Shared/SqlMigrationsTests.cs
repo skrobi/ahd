@@ -24,6 +24,35 @@ public sealed class SqlMigrationsTests
         Assert.Contains("Application Name=\"PZL-EV 0.8.0\"", Prod.ConnectionString);
     }
 
+    /// <summary>Aplikacja starsza niż minimalna wersja zapisana w bazie odmawia pracy (docs/architektura.md, rozdz. 3).</summary>
+    [Fact]
+    public void Older_app_than_required_by_database_is_refused()
+    {
+        Assert.Null(SqlMigrations.AppVersionRefusal("0.54.0", new Version(0, 54, 0)));
+        Assert.Null(SqlMigrations.AppVersionRefusal("0.55.1", new Version(0, 54, 0)));
+        Assert.Null(SqlMigrations.AppVersionRefusal("0.10.0", null));   // baza bez tabel PZL-EV
+        Assert.Contains("co najmniej 0.54.0, uruchomiona jest wersja 0.53.9", SqlMigrations.AppVersionRefusal("0.53.9", new Version(0, 54, 0)));
+        Assert.NotNull(SqlMigrations.AppVersionRefusal("0.9.0", new Version(0, 10, 0)));   // porównanie liczb, nie tekstu
+    }
+
+    /// <summary>Wymagana wersja = najwyższa MinAppVersion wykonanych migracji; bieżąca aplikacja (PzlEv.csproj) ją spełnia.</summary>
+    [SqlFact]
+    public void Required_app_version_is_highest_of_applied_migrations()
+    {
+        using var database = new TestDatabase();
+        var required = SqlMigrations.RequiredAppVersion(database.Sql);
+
+        Assert.NotNull(required);
+        using (var connection = database.Sql.Open())
+            Assert.Equal(connection.Query<string>($"SELECT MinAppVersion FROM {database.Sql.Table("meta.SchemaVersion")}").Max(v => Version.Parse(v)), required);
+        var project = System.Xml.Linq.XDocument.Load(AppProject());
+        Assert.Null(SqlMigrations.AppVersionRefusal(project.Descendants("Version").Single().Value, required));
+    }
+
+    /// <summary>app/src/PzlEv.csproj względem tego pliku źródłowego (app/tests/Shared).</summary>
+    private static string AppProject([System.Runtime.CompilerServices.CallerFilePath] string here = "") =>
+        Path.GetFullPath(Path.Combine(Path.GetDirectoryName(here)!, "..", "..", "src", "PzlEv.csproj"));
+
     [Fact]
     public void Scripts_are_embedded_numbered_and_parameterised()
     {

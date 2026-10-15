@@ -50,6 +50,28 @@ public static partial class SqlMigrations
         return connection.ExecuteScalar<int>($"IF OBJECT_ID(N'{table}') IS NULL SELECT 0 ELSE SELECT ISNULL(MAX(Version), 0) FROM {table}");
     }
 
+    /// <summary>
+    /// Minimalna wersja aplikacji wymagana przez bazę – najwyższa MinAppVersion wykonanych migracji (META_SchemaVersion);
+    /// null – brak tabel PZL-EV.
+    /// </summary>
+    public static Version? RequiredAppVersion(SqlDatabase db)
+    {
+        using var connection = db.Open();
+        var table = db.Table("meta.SchemaVersion");
+        return connection.Query<string>($"IF OBJECT_ID(N'{table}') IS NULL SELECT CAST(NULL AS VARCHAR(30)) WHERE 1 = 0 ELSE SELECT MinAppVersion FROM {table}")
+            .Select(v => Version.TryParse(v, out var parsed) ? parsed : null)
+            .Max();
+    }
+
+    /// <summary>
+    /// Powód odmowy pracy, gdy aplikacja jest starsza niż wymaga baza (docs/architektura.md, rozdz. 3) – starsza wersja nie zna
+    /// zmian schematu i procedur (np. zestawienia ACTUALS przy imporcie); null – wersja zgodna albo nieznana.
+    /// </summary>
+    public static string? AppVersionRefusal(string appVersion, Version? required) =>
+        required is null || !Version.TryParse(appVersion, out var app) || app >= required
+            ? null
+            : $"Baza wymaga aplikacji PZL-EV w wersji co najmniej {required}, uruchomiona jest wersja {appVersion}. Uruchom aktualny PZL-EV.exe.";
+
     /// <summary>Wszystkie skrypty aplikacji z informacją, kiedy i kto je wykonał.</summary>
     public static IReadOnlyList<ScriptStatus> Status(SqlDatabase db)
     {
