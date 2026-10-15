@@ -180,7 +180,7 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
         {
             [GlobalDictionaries.Persons] = persons, [ProjectDictionaries.WbsCategories] = categories, [ProjectDictionaries.Sources] = sources ?? [],
             [GlobalDictionaries.CasBurdenGroups] = burdenGroups ?? [], [GlobalDictionaries.DepartmentRates] = mpks ?? [],
-            [ProjectDictionaries.Settings] = ProjectSettings.ActualsAmounts.Select(a => new LookupOption(a.Field, $"{a.Field} – {a.Currency}")).ToList(),
+            [ProjectDictionaries.Settings] = CurrencySetOptions,
         };
 
     /// <summary>Stawki wydziałów (MPK × rok: Labor Rate, Overhead) – lista MPK w „WP i CAM” i stawka ETC Cost struktury.</summary>
@@ -189,12 +189,33 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
     /// <summary>Kursy walut (waluta × okres → kurs do PLN) – przeliczenie ETC Cost na walutę projektu.</summary>
     public IReadOnlyList<DictRow> FxRates() => _dictionaries.Load(GlobalDictionaries.Get(GlobalDictionaries.FxRates));
 
+    /// <summary>Zestawy walutowe ACTUALS do wyboru (kreator, „Parametry projektu”): pole kwoty → kolumna waluty / kwoty.</summary>
+    public static IReadOnlyList<LookupOption> CurrencySetOptions { get; } =
+        ProjectSettings.ActualsSets.Select(s => new LookupOption(s.Field, s.Label)).ToList();
+
     /// <summary>
-    /// Stawki ETC Cost: Labor Rate × Overhead (brak – 1) MPK z roku dnia stanu (stawki w PLN); waluta projektu z pola kwoty
-    /// ACTUALS; kurs USD do PLN – najnowszy okres nie późniejszy niż dzień stanu („Kursy walut”). Praca: PLN → waluta projektu,
-    /// materiały (vAPD): USD → waluta projektu.
+    /// Waluta projektu z danych: kody z kolumny waluty zestawu (pole kwoty field) w ostatnim imporcie ACTUALS projektu –
+    /// jeden kod: waluta; kilka (np. waluta transakcji): null i powód (kwoty w różnych walutach się nie sumują); brak danych – null.
     /// </summary>
-    public static EtcRates EtcRatesOf(IReadOnlyList<DictRow> departmentRates, IReadOnlyList<DictRow> fxRates, string field, DateOnly today)
+    public (string? Currency, string? Problem) ProjectCurrency(string code, string field)
+    {
+        var set = ProjectSettings.SetOf(field);
+        var codes = store.ProjectCurrencies(code, set.CurrencyField);
+        return codes.Count switch
+        {
+            0 => (null, null),
+            1 => (codes[0], null),
+            _ => (null, $"kilka walut w kolumnie {set.CurrencyColumn}: {string.Join(", ", codes)} – kwoty w różnych walutach się nie sumują; wybierz inny zestaw walutowy w „Parametrach projektu”"),
+        };
+    }
+
+    /// <summary>
+    /// Stawki ETC Cost: Labor Rate × Overhead (brak – 1) MPK z roku dnia stanu (stawki w PLN); waluta projektu – z danych
+    /// (ProjectCurrency); kursy do PLN – najnowszy okres nie późniejszy niż dzień stanu („Kursy walut”). Praca: PLN → waluta
+    /// projektu, materiały (vAPD): USD → waluta projektu.
+    /// </summary>
+    public static EtcRates EtcRatesOf(IReadOnlyList<DictRow> departmentRates, IReadOnlyList<DictRow> fxRates, string? currency, string? currencyProblem,
+        DateOnly today)
     {
         static decimal? Dec(string? text) => decimal.TryParse(text, System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var v) ? v : null;
         var year = today.Year;
@@ -202,15 +223,17 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
                                                 && Dec(r["Labor Rate"]) is not null)
             .GroupBy(r => r["MPK"]!, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(g => g.Key, g => Dec(g.First()["Labor Rate"])!.Value * (Dec(g.First()["Overhead"]) ?? 1), StringComparer.OrdinalIgnoreCase);
-        var currency = ProjectSettings.CurrencyCodeOf(field);
         if (currency is null)
-            return new EtcRates(rates, year, null, null, null, $"pole kwoty {field} – waluta transakcji różna w wierszach, ETC Cost niedostępny");
+            return new EtcRates(rates, year, null, null, null, currencyProblem ?? "waluta projektu nieznana – brak danych ACTUALS projektu");
         var period = today.ToString("yyyy-MM", System.Globalization.CultureInfo.InvariantCulture);
-        var usd = fxRates.Where(r => string.Equals(r["Waluta"], "USD", StringComparison.OrdinalIgnoreCase) && r["Okres"] is { } p && string.CompareOrdinal(p, period) <= 0)
-            .OrderByDescending(r => r["Okres"], StringComparer.Ordinal).Select(r => Dec(r["Kurs"])).FirstOrDefault(k => k is > 0);
-        if (usd is null)
-            return new EtcRates(rates, year, currency, currency == "PLN" ? 1 : null, currency == "USD" ? 1 : null, $"brak kursu USD w „Kursy walut” do okresu {period}");
-        return currency == "PLN" ? new EtcRates(rates, year, currency, 1, usd, null) : new EtcRates(rates, year, currency, 1 / usd, 1, null);
+        decimal? ToPln(string code) => string.Equals(code, "PLN", StringComparison.OrdinalIgnoreCase) ? 1
+            : fxRates.Where(r => string.Equals(r["Waluta"], code, StringComparison.OrdinalIgnoreCase) && r["Okres"] is { } p && string.CompareOrdinal(p, period) <= 0)
+                .OrderByDescending(r => r["Okres"], StringComparer.Ordinal).Select(r => Dec(r["Kurs"])).FirstOrDefault(k => k is > 0);
+        var project = ToPln(currency);
+        var usd = ToPln("USD");
+        var missing = new[] { (Code: currency, Rate: project), (Code: "USD", Rate: usd) }.Where(x => x.Rate is null).Select(x => x.Code).Distinct().ToList();
+        return new EtcRates(rates, year, currency, project is { } p1 ? 1 / p1 : null, project is { } p2 && usd is { } u ? u / p2 : null,
+            missing.Count > 0 ? $"brak kursu {string.Join(", ", missing)} w „Kursy walut” do okresu {period}" : null);
     }
 
     /// <summary>Grupy narzutowe CAS do wyboru w kolumnie „Grupa narzutowa CAS” Cost Category projektu (identyfikator → nazwa).</summary>
@@ -935,7 +958,8 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
     /// w bazie; zapis słowników (wczytane podglądy); utworzenie folderów i kontrola struktury. Słownik z ERROR blokuje.
     /// </summary>
     /// <param name="previews">Wczytane słowniki projektu: kod słownika → plik (ścieżka, arkusz).</param>
-    public CreateOutcome Create(string code, string name, string type, PoTree tree, IReadOnlyDictionary<string, (string Path, string? Sheet)> previews)
+    public CreateOutcome Create(string code, string name, string type, PoTree tree, IReadOnlyDictionary<string, (string Path, string? Sheet)> previews,
+        string? actualsAmount = null)
     {
         var issues = ValidateBasics(code, name, type);
         issues.AddRange(ValidateObjectives(code, tree));
@@ -964,6 +988,20 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
                 steps.Add($"{ProjectDictionaries.Item(dictionary).Name}: {preview.Working.Count} wierszy");
             else
                 problems.Add(Issue.Error($"{ProjectDictionaries.Item(dictionary).Name} nie zapisany: {outcome.Message}", dictionary));
+        }
+
+        // Zestaw walutowy ACTUALS wybrany w kreatorze – „Parametry projektu” (gdy skoroszyt nie podał parametru).
+        if (actualsAmount is not null && !loaded.ContainsKey(ProjectDictionaries.Settings))
+        {
+            var setting = new DictRow(null, null, new Dictionary<string, string?>
+            {
+                ["Parametr"] = ProjectSettings.ActualsAmount, ["Wartość"] = ProjectSettings.ActualsAmountOf(actualsAmount), ["Opis"] = null,
+            });
+            var saved = SaveStructureDictionary(ProjectDictionaries.Settings, context, [setting], [], code);
+            if (saved.Status is SaveStatus.Saved or SaveStatus.NoChanges)
+                steps.Add($"Zestaw walutowy ACTUALS: {ProjectSettings.SetOf(ProjectSettings.ActualsAmountOf(actualsAmount)).Label}");
+            else
+                problems.Add(Issue.Error($"Parametry projektu nie zapisane: {saved.Message}", ProjectDictionaries.Settings));
         }
 
         try

@@ -69,6 +69,10 @@
                         </ListBox.ItemTemplate>
                     </ListBox>
                     <TextBlock Text="{Binding Type.Required}" Margin="0,8,0,0" TextWrapping="Wrap" />
+                    <!-- Zestaw walutowy ACTUALS: kolumna waluty i kwoty kosztów projektu (zmiana później – Konfiguracja → „Parametry projektu”) -->
+                    <TextBlock Text="Waluta kosztów (zestaw walutowy ACTUALS)" Style="{StaticResource MutedText}" Margin="0,12,0,4" />
+                    <ComboBox ItemsSource="{Binding CurrencySets}" SelectedItem="{Binding CurrencySet}" DisplayMemberPath="Label" Width="480" HorizontalAlignment="Left"
+                              ToolTip="Kolumna waluty i kwoty raportu ACTUALS, w których projekt liczy ACWP, raport kosztów, ETC Cost i EAC; walutę odczytuje z danych. Zmiana później – Konfiguracja → „Parametry projektu”." />
                     <ItemsControl ItemsSource="{Binding BasicIssues}" Margin="0,8,0,0" />
                 </StackPanel>
 

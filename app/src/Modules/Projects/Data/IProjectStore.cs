@@ -52,6 +52,9 @@ public interface IProjectStore
     /// </summary>
     ElementActuals CostsAndHoursByElement(string code, string value, string hours);
 
+    /// <summary>Kody walut z kolumny currencyField (ObjectCurrency, ReportCurrency, TransactionCurrency) w ostatnim imporcie ACTUALS projektu.</summary>
+    IReadOnlyList<string> ProjectCurrencies(string code, string currencyField);
+
     /// <summary>
     /// Pliki ACTUALS, z których są koszty (najnowsza wersja każdego pliku – CAN_LatestFiles): data raportu w RABIT, import
     /// i ostatnie sprawdzenie pliku w RABIT bez zmian treści (META_SourceFileSeen: pominięty / duplikat).

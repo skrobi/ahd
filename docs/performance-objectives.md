@@ -113,9 +113,10 @@ i budżetem (`StructureBuilder`).
   | Financial EV | BCWS (BAC Cost × udział dni roboczych baseline), BCWP (BAC Cost × BCWP Hours ÷ TECH Hours, najwyżej BAC Cost), ACWP Labor, ACWP Material, ACWP Other (rodzaj kosztu cost elementu w Cost Category), ACWP, Actual DLH, Δ DLH vs CATS, SV, CV, SPI, CPI, ETC Cost, EAC (ACWP + ETC Cost), VAC (BAC Cost − EAC), % Spent (ACWP ÷ BAC Cost) |
 
   **ETC Cost** WP = ETC Hours × stawka MPK (Labor Rate × Overhead – brak Overhead: 1; słownik „Stawki wydziałów”, bieżący
-  rok, PLN) + Material ETC (USD) – w walucie projektu (pole kwoty ACTUALS z „Parametrów projektu”: ValueObjCrcy – PLN,
-  ValueRepCur – USD) z kursem USD ze słownika „Kursy walut” (najnowszy okres nie późniejszy niż bieżący). Brak MPK – ETC Cost
-  pusty i brak „WP bez MPK”; brak stawki MPK na rok, kursu albo waluta transakcji (ValueTranCurr) – powód w brakach. ETC
+  rok, PLN) + Material ETC (USD) – w walucie projektu: kod z kolumny waluty zestawu walutowego ACTUALS („Parametry
+  projektu”) w danych projektu (nagłówek ekranu: „Waluta: …”), kursy do PLN ze słownika „Kursy walut” (najnowszy okres nie
+  późniejszy niż bieżący). Brak MPK – ETC Cost pusty i brak „WP bez MPK”; brak stawki MPK na rok, kursu albo kilka walut
+  w kolumnie waluty zestawu – powód w brakach. ETC
   Hours i Material ETC podaje docelowo CAM w osobnym formularzu (powiadomienie w przebiegu, uprawnienia); do tego czasu
   wpisywane w tabeli struktury (wartość z produkcji – wyszarzona, wyczyszczenie przywraca produkcję).
 

@@ -281,6 +281,10 @@ public sealed class LatestImportProcedureTests : IDisposable
             $"SELECT SUM(Rows), SUM(ValueObjCrcy), SUM(TotalQuantity) FROM {_database.Sql.Table("can.ActualsBalance")}");
         Assert.Equal((6, 10574.11m, 60m), balance);   // wszystkie wiersze pliku: 1 254,51 + 4 800 + 2 400 + 430 − 230,40 + 1 920; godziny 32 + 12 + 16
 
+        // Waluta projektu z kolumny waluty zestawu walutowego: Object Currency – PLN, Report currency – USD.
+        Assert.Equal(["PLN"], store.ProjectCurrencies("M28", "ObjectCurrency"));
+        Assert.Equal(["USD"], store.ProjectCurrencies("M28", "ReportCurrency"));
+
         var (m28, m28Hours, _, _) = store.CostsAndHoursByElement("M28", "ValueObjCrcy", ProjectService.ActualsHours);
         Assert.Equal((6054.51m, 32m), (m28["2DI473001001"], m28Hours["2DI473001001"]));
         var (gz, gzHours, _, _) = store.CostsAndHoursByElement("GZ", "ValueObjCrcy", ProjectService.ActualsHours);

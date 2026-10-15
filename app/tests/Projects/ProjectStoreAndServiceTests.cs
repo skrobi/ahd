@@ -123,8 +123,11 @@ public sealed class ProjectStoreAndServiceTests : IDisposable
     public void Scenario_1_new_project_not_ready_then_dictionaries_make_it_ready()
     {
         // Kreator bez słowników: projekt powstaje, ale jest niegotowy (brak WP, CAM, budżetu).
-        var created = _service.Create("M28", "M28 – modernizacja", ProjectTypes.Internal, Objectives(), new Dictionary<string, (string, string?)>());
+        var created = _service.Create("M28", "M28 – modernizacja", ProjectTypes.Internal, Objectives(), new Dictionary<string, (string, string?)>(),
+            actualsAmount: "ValueRepCur");
         Assert.True(created.Created, string.Join("; ", created.Issues.Select(i => i.Message)));
+        Assert.Equal("ValueRepCur", _service.ActualsAmount("M28"));   // zestaw walutowy z kreatora – „Parametry projektu”
+        Assert.Contains(created.Steps, s => s.StartsWith("Zestaw walutowy ACTUALS: Report currency / Val.in rep.cur."));
         Assert.True(Directory.Exists(Path.Combine(_root, "Projekty", "M28", "CAM")));
         var project = _service.Find("M28")!;
         var tree = _service.Objectives("M28");

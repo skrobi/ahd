@@ -268,6 +268,23 @@ public sealed class SqlProjectStore(SqlDatabase db, IClock clock, ICurrentUser u
             Of(r => r.Hours), Of(r => r.Labor), Of(r => r.Material));
     }
 
+    public IReadOnlyList<string> ProjectCurrencies(string code, string currencyField)
+    {
+        var column = currencyField switch { "ReportCurrency" => "ReportCurrency", "TransactionCurrency" => "TransactionCurrency", _ => "ObjectCurrency" };
+        using var connection = db.Open();
+        return connection.Query<string>(
+            $"""
+            SELECT DISTINCT b.{column}
+            FROM (SELECT DISTINCT v.Code FROM {db.Table("meta.PerformanceObjective")} po
+                  CROSS APPLY (VALUES (po.ProjectDefinition), (po.WbsElement)) v(Code)
+                  WHERE po.Project = @code AND po.SupersededAt IS NULL AND v.Code IS NOT NULL) d
+            JOIN {db.Table("can.ActualsBalance")} b ON b.ProjectDefinition = d.Code
+            JOIN {db.Table("can.LatestFiles")}('ACTUALS', NULL, NULL) f ON f.FileId = b.FileId
+            WHERE b.{column} IS NOT NULL AND b.{column} <> N''
+            ORDER BY 1
+            """, new { code }).ToList();
+    }
+
     public IReadOnlyList<ActualsFile> ActualsFiles()
     {
         using var connection = db.Open();
