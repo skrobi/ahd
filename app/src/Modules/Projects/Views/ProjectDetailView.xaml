@@ -72,6 +72,9 @@
             <Border Style="{StaticResource Tag}" VerticalAlignment="Center" Margin="0,0,8,4" ToolTip="{Binding ProductionDetails}">
                 <TextBlock Text="{Binding ProductionInfo}" FontSize="12" />
             </Border>
+            <Border Style="{StaticResource Tag}" VerticalAlignment="Center" Margin="0,0,8,4" ToolTip="{Binding CurrencyDetails}">
+                <TextBlock Text="{Binding CurrencyInfo}" FontSize="12" />
+            </Border>
         </WrapPanel>
         <!-- Komunikat w stałym miejscu (jedna linia o stałej wysokości, pełna treść w podpowiedzi): operacja w toku albo wynik
              ostatniej operacji – pokazanie i ukrycie nie przesuwa zakładek ani tabeli struktury. -->

@@ -380,12 +380,16 @@ public sealed class StructureTests
             Row(("Waluta", "USD"), ("Okres", "2026-11"), ("Kurs", "5"))];
         var today = new DateOnly(2026, 10, 15);
 
-        var pln = ProjectService.EtcRatesOf(departments, fx, "ValueObjCrcy", today);
+        var pln = ProjectService.EtcRatesOf(departments, fx, "PLN", null, today);
         Assert.Equal((150m, 80m, "PLN", 1m, 4m), (pln.RateByMpk["w30"], pln.RateByMpk["W50"], pln.Currency, pln.LaborFactor, pln.MaterialFactor));   // kurs z bieżącego okresu
-        var usd = ProjectService.EtcRatesOf(departments, fx, "ValueRepCur", today);
+        var usd = ProjectService.EtcRatesOf(departments, fx, "USD", null, today);
         Assert.Equal(("USD", 0.25m, 1m), (usd.Currency, usd.LaborFactor, usd.MaterialFactor));
-        Assert.Contains("waluta transakcji", ProjectService.EtcRatesOf(departments, fx, "ValueTranCurr", today).Problem);
-        Assert.Contains("brak kursu USD", ProjectService.EtcRatesOf(departments, [], "ValueObjCrcy", today).Problem);
+        // Waluta spoza PLN / USD – kurs z „Kursy walut”: praca PLN → EUR, materiały USD → EUR.
+        var eur = ProjectService.EtcRatesOf(departments, [.. fx, Row(("Waluta", "EUR"), ("Okres", "2026-10"), ("Kurs", "4.25"))], "EUR", null, today);
+        Assert.Equal((Math.Round(1 / 4.25m, 10), Math.Round(4m / 4.25m, 10)), (Math.Round(eur.LaborFactor!.Value, 10), Math.Round(eur.MaterialFactor!.Value, 10)));
+        Assert.Contains("brak kursu EUR", ProjectService.EtcRatesOf(departments, fx, "EUR", null, today).Problem);
+        Assert.Contains("kilka walut", ProjectService.EtcRatesOf(departments, fx, null, "kilka walut w kolumnie Transaction Currency: EUR, PLN", today).Problem);
+        Assert.Contains("brak kursu USD", ProjectService.EtcRatesOf(departments, [], "PLN", null, today).Problem);
     }
 
     [Fact]

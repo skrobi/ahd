@@ -143,6 +143,14 @@ public sealed class WizardViewModel : ObservableObject
         }
     }
 
+    /// <summary>Zestawy walutowe ACTUALS do wyboru: kolumna waluty i kwoty (Object / Report / Transaction Currency).</summary>
+    public IReadOnlyList<LookupOption> CurrencySets { get; } = ProjectService.CurrencySetOptions;
+
+    /// <summary>Zestaw walutowy projektu – zapisywany w „Parametrach projektu” (pole kwoty ACTUALS); zmiana później – Konfiguracja.</summary>
+    public LookupOption CurrencySet { get => _currencySet; set => SetProperty(ref _currencySet, value ?? _currencySet); }
+
+    private LookupOption _currencySet = ProjectService.CurrencySetOptions[0];
+
     public string Status { get => _status; private set => SetProperty(ref _status, value); }
 
     public string FolderPreview => _service.Folders.Preview(Code);
@@ -374,10 +382,11 @@ public sealed class WizardViewModel : ObservableObject
 
     private async Task DoCreate()
     {
-        var (code, name, type, tree, files) = (Code, Name, Type.Code, Objectives.Tree.Copy(), new Dictionary<string, (string Path, string? Sheet)>(_files));
+        var (code, name, type, tree, files, amount) = (Code, Name, Type.Code, Objectives.Tree.Copy(), new Dictionary<string, (string Path, string? Sheet)>(_files),
+            CurrencySet.Value);
         await Try(async () =>
         {
-            _outcome = await Busy.Run($"Tworzenie projektu {code}: zapis w bazie, słowniki, foldery…", () => _service.Create(code, name, type, tree, files));
+            _outcome = await Busy.Run($"Tworzenie projektu {code}: zapis w bazie, słowniki, foldery…", () => _service.Create(code, name, type, tree, files, amount));
             SetAll(CreateIssues, _outcome.Issues);
             CreatedSteps.Clear();
             foreach (var step in _outcome.Steps)
