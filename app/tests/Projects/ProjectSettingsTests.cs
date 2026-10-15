@@ -96,6 +96,10 @@ public sealed class ProjectSettingsTests : IDisposable
         Assert.Contains(issues, i => i.CheckName == RunChecks.Volume && i.Level == CheckLevel.Warning && i.Message.StartsWith("Pole kwoty ACTUALS zmienione (ValueObjCrcy → ValueRepCur"));
         Assert.DoesNotContain(issues, i => i.CheckName == RunChecks.Deviations);
         Assert.DoesNotContain(issues, i => i.CheckName == RunChecks.Quality && i.Message.StartsWith("Waluta inna"));
+
+        // Waluta transakcji nie jest zestawem walutowym – procedury jej nie przyjmują (migracja 042).
+        Assert.Contains("nie ma pola kwoty ValueTranCurr", Assert.ThrowsAny<Exception>(() => store.CostsByElement("PAF", "ValueTranCurr")).Message);
+        Assert.Contains("nie ma pola kwoty ValueTranCurr", Assert.ThrowsAny<Exception>(() => store.CostReport("PAF", "ValueTranCurr")).Message);
     }
 
     public void Dispose()

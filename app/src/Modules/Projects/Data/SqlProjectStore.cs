@@ -268,6 +268,23 @@ public sealed class SqlProjectStore(SqlDatabase db, IClock clock, ICurrentUser u
             Of(r => r.Hours), Of(r => r.Labor), Of(r => r.Material));
     }
 
+    public IReadOnlyList<string> CurrenciesOf(IReadOnlyCollection<string> definitions, string currencyField)
+    {
+        if (definitions.Count == 0)
+            return [];
+        var column = currencyField == "ReportCurrency" ? "ReportCurrency" : "ObjectCurrency";
+        using var connection = db.Open();
+        return connection.Query<string>(
+            $"""
+            SELECT DISTINCT b.{column}
+            FROM (SELECT DISTINCT LTRIM(RTRIM(value)) AS Code FROM STRING_SPLIT(@codes, '|') WHERE LTRIM(RTRIM(value)) <> N'') d
+            JOIN {db.Table("can.ActualsBalance")} b ON b.ProjectDefinition = d.Code
+            JOIN {db.Table("can.LatestFiles")}('ACTUALS', NULL, NULL) f ON f.FileId = b.FileId
+            WHERE b.{column} IS NOT NULL AND b.{column} <> N''
+            ORDER BY 1
+            """, new { codes = string.Join('|', definitions.Where(d => !d.Contains('|'))) }).ToList();
+    }
+
     public IReadOnlyList<string> ProjectCurrencies(string code, string currencyField)
     {
         var column = currencyField == "ReportCurrency" ? "ReportCurrency" : "ObjectCurrency";

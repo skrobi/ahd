@@ -196,6 +196,26 @@ public static class ProjectDictionaries
     public static IReadOnlyList<string> MoneyColumns { get; } = ["BAC MATERIAL", "BAC", "ETC MATERIAL"];
 
     /// <summary>
+    /// Kwoty wiersza „Harmonogram i budżet” w walucie projektu (rates.Currency): wiersz w innej walucie (CurrencyColumn) –
+    /// przeliczony kursem bieżącym (rates.Factor); brak kursu – kwoty puste i powód w gap. rates null albo waluta projektu
+    /// nieznana – wiersz bez zmian.
+    /// </summary>
+    public static DictRow InProjectCurrency(DictRow row, EtcRates? rates, out string? gap)
+    {
+        gap = null;
+        var currency = row[CurrencyColumn];
+        if (rates is null || rates.Factor(currency) is 1m)
+            return row;
+        var factor = rates.Factor(currency);
+        if (factor is null)
+            gap = $"budżet w {currency} – brak kursu {currency} w „Kursy walut” (przeliczenie na {rates.Currency})";
+        var values = row.Values.ToDictionary(v => v.Key, v => v.Value);
+        foreach (var column in MoneyColumns)
+            values[column] = Dec(row[column]) is { } amount ? (amount * factor)?.ToString(System.Globalization.CultureInfo.InvariantCulture) : row[column];
+        return row with { Values = values };
+    }
+
+    /// <summary>
     /// Waluta kwot wiersza „Harmonogram i budżet” przy zapisie: kwoty zmienione (albo nowy wiersz z kwotą) – waluta projektu
     /// (nieznana – waluta wiersza bez zmian); kwoty bez zmian – waluta wiersza; brak kwot – pusta. Wiersz w innej walucie:
     /// niezmienione kwoty przeliczone na walutę projektu (factor; brak kursu – wiersz zostaje w swojej walucie).

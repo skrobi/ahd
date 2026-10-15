@@ -397,6 +397,11 @@ narzutową jak 0051105550; rodzaj ustawiony wcześniej zostaje).
 wpisaniu kwot „Harmonogram i budżet” (`BAC MATERIAL`, `BAC`, `ETC MATERIAL`); puste – waluta projektu. Wymaga aplikacji
 0.54.0.
 
+**Migracja `sql/mssql/042_bez_waluty_transakcji.sql`:** zestaw walutowy ACTUALS – tylko `ValueObjCrcy` i `ValueRepCur`:
+`REP_ProjectCostsByElement`, `REP_ProjectCosts`, `RUN_PinBalance` odrzucają `ValueTranCurr` (THROW 50014),
+`CAN_ActualsCostElements` go nie sumuje; „Parametry projektu” z `ValueTranCurr` – nowa wersja z `ValueObjCrcy`. Kolumna
+`CAN_ActualsBalance.ValueTranCurr` zostaje (dane źródła). Wymaga aplikacji 0.54.0.
+
 `META_SourceFile.CanonicalStatus`: „utworzone” – dane kanoniczne zapisane i sprawdzone (widoczne dla odczytów),
 „w toku” – zapis wierszy trwa (odczyty pomijają plik; po awarii wpis i wiersze są usuwane), inna wartość – powód
 braku danych (źródło bez parsera).

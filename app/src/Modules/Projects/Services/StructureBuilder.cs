@@ -101,17 +101,10 @@ public static class StructureBuilder
         var currencyGaps = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         DictRow InProjectCurrency(DictRow row)
         {
-            var currency = row[ProjectDictionaries.CurrencyColumn];
-            if (rates is null || rates.Factor(currency) is 1m)
-                return row;
-            var factor = rates.Factor(currency);
-            if (factor is null)
-                currencyGaps[row["WP"]!] = $"budżet w {currency} – brak kursu {currency} w „Kursy walut” (przeliczenie na {rates.Currency})";
-            var values = row.Values.ToDictionary(v => v.Key, v => v.Value);
-            foreach (var column in ProjectDictionaries.MoneyColumns)
-                values[column] = decimal.TryParse(row[column], System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var amount)
-                    ? (amount * factor)?.ToString(System.Globalization.CultureInfo.InvariantCulture) : row[column];
-            return row with { Values = values };
+            var converted = ProjectDictionaries.InProjectCurrency(row, rates, out var gap);
+            if (gap is not null)
+                currencyGaps[row["WP"]!] = gap;
+            return converted;
         }
         var budgets = schedule.Where(r => r["WP"] is not null).GroupBy(r => r["WP"]!, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(g => g.Key, g => InProjectCurrency(g.First()), StringComparer.OrdinalIgnoreCase);

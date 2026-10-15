@@ -143,7 +143,7 @@ public sealed class WizardViewModel : ObservableObject
         }
     }
 
-    /// <summary>Zestawy walutowe ACTUALS do wyboru: kolumna waluty i kwoty (Object / Report / Transaction Currency).</summary>
+    /// <summary>Zestawy walutowe ACTUALS do wyboru: kolumna waluty i kwoty (Object / Report currency).</summary>
     public IReadOnlyList<LookupOption> CurrencySets { get; } = ProjectService.CurrencySetOptions;
 
     /// <summary>Zestaw walutowy projektu – zapisywany w „Parametrach projektu” (pole kwoty ACTUALS); zmiana później – Konfiguracja.</summary>
@@ -161,7 +161,10 @@ public sealed class WizardViewModel : ObservableObject
         $"{Code} · {Name.Trim()} · {Type.Label} · folder {_service.Folders.PathOf(Code)}";
 
     public string Totals => _analytic is null ? "" :
-        $"Sumy kontrolne: {_analytic.WpCount} WP · BAC HOURS {_analytic.BacHours:N2} h · BAC MATERIAL {_analytic.BacMaterial:N2} · CAM: {_analytic.ByCam.Count}";
+        $"Sumy kontrolne: {_analytic.WpCount} WP · BAC HOURS {_analytic.BacHours:N2} h · BAC MATERIAL {_analytic.BacMaterial:N2} {AnalyticCurrency} · CAM: {_analytic.ByCam.Count}";
+
+    /// <summary>Waluta kwot bazy analitycznej: waluta projektu z danych ACTUALS nakładki (zestaw walutowy) albo „waluta nieznana”.</summary>
+    public string AnalyticCurrency => _analytic?.Currency ?? "(waluta projektu nieznana – brak danych ACTUALS nakładki; kwoty bez przeliczenia)";
 
     public ICommand Back { get; }
     public ICommand Next { get; }
@@ -340,12 +343,13 @@ public sealed class WizardViewModel : ObservableObject
         }
         var wp = Dictionaries.FirstOrDefault(p => p.Item.Code == ProjectDictionaries.WpCam)?.Preview;
         var plan = Dictionaries.FirstOrDefault(p => p.Item.Code == ProjectDictionaries.ScheduleBudget)?.Preview;
-        var (code, tree, mapping) = (Code, Objectives.Tree.Copy(), _mapping);
+        var (code, tree, mapping, field) = (Code, Objectives.Tree.Copy(), _mapping, CurrencySet.Value);
         try
         {
             var (folders, analytic) = await Busy.Run("Przygotowanie podsumowania i bazy analitycznej…", () =>
                 (code.Length > 0 ? _service.Folders.CheckBeforeCreate(code).Where(i => i.Level == CheckLevel.Error).ToList() : [],
-                 ProjectService.Analytic(tree, wp is { HasErrors: false } ? wp.Working : [], plan is { HasErrors: false } ? plan.Working : [], mapping)));
+                 ProjectService.Analytic(tree, wp is { HasErrors: false } ? wp.Working : [], plan is { HasErrors: false } ? plan.Working : [], mapping,
+                     _service.WizardRates(tree, field))));
             checks.AddRange(folders);
             _analytic = analytic;
         }
@@ -358,12 +362,15 @@ public sealed class WizardViewModel : ObservableObject
         checks.Add(ObjectivesMapping.Check(Objectives.Tree, _mapping));
         if (_analytic.ElementsWithoutWp.Count > 0)
             checks.Add(Issue.Warning($"Elementy nakładki bez WP: {string.Join(", ", _analytic.ElementsWithoutWp.Take(15))}{(_analytic.ElementsWithoutWp.Count > 15 ? "…" : "")}", "baza analityczna"));
+        foreach (var gap in _analytic.CurrencyGaps ?? [])
+            checks.Add(Issue.Warning(gap, "baza analityczna"));
         if (_analytic.WpsWithoutBudget.Count > 0)
             checks.Add(Issue.Warning($"WP bez budżetu: {string.Join(", ", _analytic.WpsWithoutBudget.Take(15))}", "baza analityczna"));
         SetAll(SummaryChecks, checks);
         OnPropertyChanged(nameof(AnalyticRows));
         OnPropertyChanged(nameof(ByCam));
         OnPropertyChanged(nameof(Totals));
+        OnPropertyChanged(nameof(AnalyticCurrency));
         OnPropertyChanged(nameof(SummaryText));
     }
 
