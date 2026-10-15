@@ -496,6 +496,29 @@ public sealed class StructureTests
         Assert.Equal((155m, 150m, 1500m), (root.OpsBacHours, root.BacHours, root.Bac));
     }
 
+    /// <summary>
+    /// Węzeł wirtualny z kodem elementu LOG.WBS (nie wydzielenie) – zastępuje element w drzewie: ma własne godziny elementu,
+    /// nie tylko jego poddrzewa (wcześniej godziny samego elementu znikały ze struktury).
+    /// </summary>
+    [Fact]
+    public void Virtual_node_with_log_wbs_element_code_keeps_the_element_own_hours()
+    {
+        var tree = Objectives();
+        var node = tree.AddVirtual(null, "Grupa 9.01");
+        node.LegacyWbs = "AC-CAB.9.01";
+        var production = new ProductionData(new Dictionary<string, ProductionValues>
+        {
+            ["200"] = new("200", 1, 10, 4, null),   // AC-CAB.9.01
+        }, DateTimeOffset.Now);
+
+        var structure = StructureBuilder.Build(tree, Inputs().P1s, [], [], production: production);
+
+        var row = Of(structure, $"po:{node.Key}");
+        Assert.Equal((10m, 4m, 1m), (row.OpsBacHours, row.EvHours, row.AcHours));
+        Assert.Null(row.Gap);
+        Assert.Equal(10m, structure.Rows.Where(r => r.ParentId is null).Sum(r => r.OpsBacHours ?? 0));   // element liczony raz
+    }
+
     [Fact]
     public void Split_code_outside_log_wbs_is_a_gap()
     {
