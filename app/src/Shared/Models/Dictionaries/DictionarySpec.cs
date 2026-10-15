@@ -39,6 +39,12 @@ public sealed class DictionarySpec
     /// </summary>
     public IReadOnlyList<(string Dictionary, string Column, Func<string?, long, bool> References)> ReferencedBy { get; init; } = [];
 
+    /// <summary>
+    /// Uzupełnienie wiersza przy zapisie (po walidacji): wiersz i jego bieżąca wersja w bazie (null – nowy), np. waluta
+    /// wpisanych kwot w „Harmonogram i budżet”.
+    /// </summary>
+    public Func<DictRow, DictRow?, DictRow>? Prepare { get; init; }
+
     /// <summary>Reguły szczegółowe na całym zestawie wierszy (po normalizacji wartości).</summary>
     public Func<IReadOnlyList<DictRow>, IEnumerable<Issue>>? Rules { get; init; }
 

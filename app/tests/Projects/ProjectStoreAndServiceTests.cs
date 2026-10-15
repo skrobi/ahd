@@ -430,7 +430,17 @@ public sealed class ProjectStoreAndServiceTests : IDisposable
         Assert.False(rejected.Saved);
         Assert.Contains("ujemny", rejected.Message);
         var schedule = Assert.Single(_service.Rows(ProjectDictionaries.ScheduleBudget, "M28"));
-        Assert.Equal((a.BudgetWp ?? a.P1s, "10", "1000"), (schedule["WP"], schedule["BAC HOURS"], schedule["BAC"]));
+        Assert.Equal((a.BudgetWp ?? a.P1s, "10", "1000", null), (schedule["WP"], schedule["BAC HOURS"], schedule["BAC"], schedule["Waluta"]));   // bez ACTUALS – waluta nieznana
+
+        // Waluta projektu znana – zapisana przy zmienionej kwocie (kolumna Currency), zmiana samej daty jej nie zmienia.
+        var context = _service.Context("M28", _store.Objectives("M28"), _service.Rows(ProjectDictionaries.WpCam, "M28"), inputs) with { Currency = "PLN" };
+        var withBac = schedule with { Values = new Dictionary<string, string?>(schedule.Values) { ["BAC"] = "1200" } };
+        Assert.Equal(SaveStatus.Saved, _service.SaveDictionary(ProjectDictionaries.ScheduleBudget, context, [withBac], [], "M28").Status);
+        schedule = Assert.Single(_service.Rows(ProjectDictionaries.ScheduleBudget, "M28"));
+        Assert.Equal(("1200", "PLN"), (schedule["BAC"], schedule["Waluta"]));
+        var withDate = schedule with { Values = new Dictionary<string, string?>(schedule.Values) { ["Baseline Start"] = "2026-01-05" } };
+        Assert.Equal(SaveStatus.Saved, _service.SaveDictionary(ProjectDictionaries.ScheduleBudget, context with { Currency = "USD" }, [withDate], [], "M28").Status);
+        Assert.Equal("PLN", Assert.Single(_service.Rows(ProjectDictionaries.ScheduleBudget, "M28"))["Waluta"]);
 
         // Odznaczenie kilku WP naraz – przypisania i harmonogram usunięte jednym zapisem na słownik.
         rows = Read().Rows;

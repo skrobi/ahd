@@ -212,7 +212,7 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
     /// <summary>
     /// Stawki ETC Cost: Labor Rate × Overhead (brak – 1) MPK z roku dnia stanu (stawki w PLN); waluta projektu – z danych
     /// (ProjectCurrency); kursy do PLN – najnowszy okres nie późniejszy niż dzień stanu („Kursy walut”). Praca: PLN → waluta
-    /// projektu, materiały (vAPD): USD → waluta projektu.
+    /// projektu, materiały (vAPD): USD → waluta projektu; kwoty „Harmonogram i budżet” w innej walucie – przeliczniki Factors.
     /// </summary>
     public static EtcRates EtcRatesOf(IReadOnlyList<DictRow> departmentRates, IReadOnlyList<DictRow> fxRates, string? currency, string? currencyProblem,
         DateOnly today)
@@ -232,8 +232,12 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
         var project = ToPln(currency);
         var usd = ToPln("USD");
         var missing = new[] { (Code: currency, Rate: project), (Code: "USD", Rate: usd) }.Where(x => x.Rate is null).Select(x => x.Code).Distinct().ToList();
+        var factors = project is not { } toProject ? null
+            : fxRates.Select(r => r["Waluta"]).OfType<string>().Append("PLN").Distinct(StringComparer.OrdinalIgnoreCase)
+                .Select(c => (Code: c, Rate: ToPln(c))).Where(x => x.Rate is not null)
+                .ToDictionary(x => x.Code, x => x.Rate!.Value / toProject, StringComparer.OrdinalIgnoreCase);
         return new EtcRates(rates, year, currency, project is { } p1 ? 1 / p1 : null, project is { } p2 && usd is { } u ? u / p2 : null,
-            missing.Count > 0 ? $"brak kursu {string.Join(", ", missing)} w „Kursy walut” do okresu {period}" : null);
+            missing.Count > 0 ? $"brak kursu {string.Join(", ", missing)} w „Kursy walut” do okresu {period}" : null, factors);
     }
 
     /// <summary>Grupy narzutowe CAS do wyboru w kolumnie „Grupa narzutowa CAS” Cost Category projektu (identyfikator → nazwa).</summary>
@@ -296,13 +300,19 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
     public static P1sScope Scope(PoTree tree, P1sInputs inputs) => ObjectivesMapping.Scope(tree, inputs);
 
     /// <param name="wpCam">Wiersze „WP i CAM” do sprawdzenia harmonogramu (null – słownika nie wczytano).</param>
-    public ProjectDictionaryContext Context(string code, PoTree tree, IEnumerable<DictRow>? wpCam, P1sInputs inputs) =>
-        new(Scope(tree, inputs),
+    public ProjectDictionaryContext Context(string code, PoTree tree, IEnumerable<DictRow>? wpCam, P1sInputs inputs)
+    {
+        // Waluta projektu i przeliczniki walut – zapis waluty kwot „Harmonogram i budżet” (ProjectDictionaries.StampCurrency).
+        var currency = code.Length > 0 ? ProjectCurrency(code, ActualsAmount(code)).Currency : null;
+        return new ProjectDictionaryContext(Scope(tree, inputs),
             store.P1sOwners(code),
             Persons(),
             wpCam?.Select(r => r["WP"]).OfType<string>().ToHashSet(StringComparer.OrdinalIgnoreCase),
             Categories(code),
-            imports?.Invoke() is null ? null : SourceLookups().Select(s => s.Value).ToHashSet(StringComparer.OrdinalIgnoreCase));
+            imports?.Invoke() is null ? null : SourceLookups().Select(s => s.Value).ToHashSet(StringComparer.OrdinalIgnoreCase),
+            currency,
+            currency is null ? null : EtcRatesOf([], FxRates(), currency, null, DateOnly.FromDateTime(DateTime.Today)).Factor);
+    }
 
     /// <summary>Kategorie „Kategorie WBS” projektu do sprawdzenia Cost Category w „WP i CAM”; słownik pusty – null (bez kontroli).</summary>
     private IReadOnlySet<string>? Categories(string code)

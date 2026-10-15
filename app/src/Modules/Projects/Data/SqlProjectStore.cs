@@ -270,7 +270,7 @@ public sealed class SqlProjectStore(SqlDatabase db, IClock clock, ICurrentUser u
 
     public IReadOnlyList<string> ProjectCurrencies(string code, string currencyField)
     {
-        var column = currencyField switch { "ReportCurrency" => "ReportCurrency", "TransactionCurrency" => "TransactionCurrency", _ => "ObjectCurrency" };
+        var column = currencyField == "ReportCurrency" ? "ReportCurrency" : "ObjectCurrency";
         using var connection = db.Open();
         return connection.Query<string>(
             $"""

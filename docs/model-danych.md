@@ -393,6 +393,10 @@ Wymaga aplikacji 0.53.0.
 Materials w globalnym Cost Category (pozycja bez rodzaju – nowa wersja; brakująca – dodana jako Direct Materials z grupą
 narzutową jak 0051105550; rodzaj ustawiony wcześniej zostaje).
 
+**Migracja `sql/mssql/041_waluta_budzetu.sql`:** `DICT_ScheduleBudget.Currency` – kod waluty projektu zapisywany przy
+wpisaniu kwot „Harmonogram i budżet” (`BAC MATERIAL`, `BAC`, `ETC MATERIAL`); puste – waluta projektu. Wymaga aplikacji
+0.54.0.
+
 `META_SourceFile.CanonicalStatus`: „utworzone” – dane kanoniczne zapisane i sprawdzone (widoczne dla odczytów),
 „w toku” – zapis wierszy trwa (odczyty pomijają plik; po awarii wpis i wiersze są usuwane), inna wartość – powód
 braku danych (źródło bez parsera).

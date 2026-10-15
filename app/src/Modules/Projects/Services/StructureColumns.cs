@@ -64,7 +64,7 @@ public static class StructureColumns
         new(Baseline, false, "Baseline WP – wpisywane: daty planowane, budżet godzin, materiałów i kosztów (z wyceny)."),
         new(Schedule, true, "Harmonogram: daty rzeczywiste (wpisane albo z produkcji), prognoza i stan."),
         new(OperationalEv, true, "Perspektywa operacyjna – godziny z raportu AHD (PZLPROD, na żywo) i wskaźniki godzinowe."),
-        new(Materials, true, "Materiały z vAPD (USD): wartość, fee, dostarczone, do poniesienia, części."),
+        new(Materials, true, "Materiały z vAPD (USD przeliczone kursem bieżącym z „Kursy walut” na walutę projektu): wartość, fee, dostarczone, do poniesienia, części."),
         new(FinancialEv, true, "Perspektywa finansowa – koszty: BCWS, BCWP, ACWP (praca, materiał, inne), odchylenia, wskaźniki, prognoza."),
     ];
 
@@ -83,8 +83,8 @@ public static class StructureColumns
         new(StructureEdits.Start, "Baseline Start", Baseline, "Planowany start WP (baseline, RRRR-MM-DD) – „Harmonogram i budżet”.", 110, Mono: true, Right: false),
         new(StructureEdits.Finish, "Baseline Finish", Baseline, "Planowany koniec WP (baseline, RRRR-MM-DD) – „Harmonogram i budżet”.", 110, Mono: true, Right: false),
         new(StructureEdits.BacHours, "BAC Hours", Baseline, "Budżet godzin WP – „Harmonogram i budżet” (wpisywany)."),
-        new(StructureEdits.BacMaterial, "BAC Material", Baseline, "Budżet materiałów WP – „Harmonogram i budżet”."),
-        new(StructureEdits.Bac, "BAC Cost", Baseline, "Budżet kosztowy WP z wyceny (oferty) – „Harmonogram i budżet”; podstawa BCWS, BCWP, VAC, % Spent."),
+        new(StructureEdits.BacMaterial, "BAC Material", Baseline, "Budżet materiałów WP – „Harmonogram i budżet”, w walucie projektu (wpisany w innej walucie – przeliczony kursem bieżącym)."),
+        new(StructureEdits.Bac, "BAC Cost", Baseline, "Budżet kosztowy WP z wyceny (oferty) – „Harmonogram i budżet”; w walucie projektu (wpisany w innej walucie – przeliczony kursem bieżącym); podstawa BCWS, BCWP, VAC, % Spent."),
 
         new(ActualStart, "Actual Start", Schedule, "Rzeczywisty start WP – wpisany w „Harmonogram i budżet” (Actual Start), a bez niego z produkcji: najwcześniejszy GSTRI zleceń (wydzielenie – DATA_REAL). Wyczyszczenie komórki przywraca datę z produkcji.", 110, Mono: true, Right: false),
         new(ActualFinish, "Actual Finish", Schedule, "Rzeczywisty koniec WP – wpisany (Actual Koniec), a bez niego z produkcji: najpóźniejszy LTRMI, gdy wszystkie zlecenia zamknięte (inaczej puste). Wyczyszczenie komórki przywraca datę z produkcji.", 110, Mono: true, Right: false),
@@ -102,10 +102,10 @@ public static class StructureColumns
         new(SpiHours, "SPI (h)", OperationalEv, "BCWP Hours ÷ BCWS Hours.", 80, FromView: true),
         new(CpiHours, "CPI (h)", OperationalEv, "BCWP Hours ÷ ACWP Hours (CATS).", 80, FromView: true),
 
-        new(MaterialValue, "Material Value", Materials, "Wartość wszystkich części elementu (vAPD): Σ NETWR_USD ÷ (1 + Z_CLO) – bez fee („Parametry produkcji”), USD.", FromView: true),
-        new(MaterialFee, "Material Fee", Materials, "Narzut Z_CLO: Σ NETWR_USD − Σ NETWR_USD ÷ (1 + Z_CLO), USD.", FromView: true),
-        new(ActualMaterial, "Material Delivered", Materials, "Wartość części dostarczonych i wydanych (statusy z „Parametry produkcji”), bez fee, USD.", FromView: true),
-        new(StructureEdits.MaterialEtc, "Material ETC", Materials, "Materiały do poniesienia – wpisane w „Harmonogram i budżet” (ETC MATERIAL), a bez nich Material Value − Material Delivered. Wyczyszczenie przywraca wartość z produkcji."),
+        new(MaterialValue, "Material Value", Materials, "Wartość wszystkich części elementu (vAPD): Σ NETWR_USD ÷ (1 + Z_CLO) – bez fee („Parametry produkcji”); USD → waluta projektu.", FromView: true),
+        new(MaterialFee, "Material Fee", Materials, "Narzut Z_CLO: Σ NETWR_USD − Σ NETWR_USD ÷ (1 + Z_CLO); USD → waluta projektu.", FromView: true),
+        new(ActualMaterial, "Material Delivered", Materials, "Wartość części dostarczonych i wydanych (statusy z „Parametry produkcji”), bez fee; USD → waluta projektu.", FromView: true),
+        new(StructureEdits.MaterialEtc, "Material ETC", Materials, "Materiały do poniesienia – wpisane w „Harmonogram i budżet” (ETC MATERIAL, waluta projektu), a bez nich Material Value − Material Delivered. Wyczyszczenie przywraca wartość z produkcji."),
         new(PercentDelivered, "% Delivered", Materials, "Material Delivered ÷ Material Value × 100.", 90, FromView: true),
         new(Parts, "PN / Delivered", Materials, "Liczba numerów części (MATNR): wszystkich / dostarczonych.", 100, FromView: true),
         new(NextDeliveryYear, "Next Delivery", Materials, "Najbliższy rok planowanej dostawy części niedostarczonych (EINDT_MAX).", 90, FromView: true),

@@ -109,14 +109,18 @@ i budżetem (`StructureBuilder`).
   | Baseline (wpisywane) | Baseline Start, Baseline Finish, BAC Hours, BAC Material, BAC Cost (z wyceny) – „Harmonogram i budżet” |
   | Schedule | Actual Start, Actual Finish – data wpisana dla WP w „Harmonogram i budżet” (Actual Start / Actual Koniec), a bez niej z produkcji: start – najwcześniejszy `GSTRI` zleceń, koniec – najpóźniejszy `LTRMI`, gdy wszystkie zlecenia zamknięte (inaczej puste); element wirtualny – `DATA_REAL` operacji; Forecast Start, Forecast Finish (wpisywane); Status (zakończony / w toku / nie rozpoczęty – z dat rzeczywistych) |
   | Operational EV | TECH Hours (AHD: TECH ÷ produktywność IPT + DJK), BCWS Hours (TECH Hours WP rozłożone liniowo na dni robocze pn–pt baseline, stan na dziś), BCWP Hours (TECH_PON ÷ produktywność + DJK), % Complete (BCWP Hours ÷ TECH Hours × 100 – jak EV ÷ BAC raportu S70MR), ACWP Hours (CATS), ETC Hours (wpisane – „ETC HOURS”, a bez nich TECH_DO_PON ÷ produktywność + DJK), EAC Hours (ACWP Hours + ETC Hours), SPI (h), CPI (h) |
-  | Materials (vAPD, USD) | Material Value (wszystkie części, bez fee), Material Fee (narzut Z_CLO), Material Delivered (dostarczone / wydane), Material ETC (wpisane – „ETC MATERIAL”, a bez nich Value − Delivered), % Delivered, PN / Delivered (liczba numerów części), Next Delivery (najbliższy rok planowanej dostawy) |
+  | Materials (vAPD: USD → waluta projektu, kurs bieżący) | Material Value (wszystkie części, bez fee), Material Fee (narzut Z_CLO), Material Delivered (dostarczone / wydane), Material ETC (wpisane – „ETC MATERIAL”, a bez nich Value − Delivered), % Delivered, PN / Delivered (liczba numerów części), Next Delivery (najbliższy rok planowanej dostawy) |
   | Financial EV | BCWS (BAC Cost × udział dni roboczych baseline), BCWP (BAC Cost × BCWP Hours ÷ TECH Hours, najwyżej BAC Cost), ACWP Hours, ACWP Materials, ACWP Other (rodzaj kosztu Hours / Materials / Other cost elementu w Cost Category; suma = ACWP), ACWP, Actual DLH, Δ DLH vs CATS, SV, CV, SPI, CPI, ETC Cost, EAC (ACWP + ETC Cost), VAC (BAC Cost − EAC), % Spent (ACWP ÷ BAC Cost) |
 
   **ETC Cost** WP = ETC Hours × stawka MPK (Labor Rate × Overhead – brak Overhead: 1; słownik „Stawki wydziałów”, bieżący
-  rok, PLN) + Material ETC (USD) – w walucie projektu: kod z kolumny waluty zestawu walutowego ACTUALS („Parametry
+  rok, PLN) × kurs + Material ETC – w walucie projektu: kod z kolumny waluty zestawu walutowego ACTUALS („Parametry
   projektu”) w danych projektu (nagłówek ekranu: „Waluta: …”), kursy do PLN ze słownika „Kursy walut” (najnowszy okres nie
   późniejszy niż bieżący). Brak MPK – ETC Cost pusty i brak „WP bez MPK”; brak stawki MPK na rok, kursu albo kilka walut
-  w kolumnie waluty zestawu – powód w brakach. ETC
+  w kolumnie waluty zestawu – powód w brakach.
+  **Waluta w strukturze:** wszystkie kwoty w walucie projektu (zestaw walutowy ACTUALS – Object albo Report currency).
+  Materiały z vAPD (USD) – kurs bieżący z „Kursy walut” (brak kursu USD – kolumny materiałów i ETC Cost puste); kwoty
+  „Harmonogram i budżet” (BAC Material, BAC Cost, ETC MATERIAL) zapisują walutę, w której je wpisano (kolumna `Waluta`) –
+  po zmianie zestawu przeliczone kursem bieżącym, brak kursu – puste i brak „budżet w … – brak kursu”. ETC
   Hours i Material ETC podaje docelowo CAM w osobnym formularzu (powiadomienie w przebiegu, uprawnienia); do tego czasu
   wpisywane w tabeli struktury (wartość z produkcji – wyszarzona, wyczyszczenie przywraca produkcję).
 

@@ -52,7 +52,7 @@ public interface IProjectStore
     /// </summary>
     ElementActuals CostsAndHoursByElement(string code, string value, string hours);
 
-    /// <summary>Kody walut z kolumny currencyField (ObjectCurrency, ReportCurrency, TransactionCurrency) w ostatnim imporcie ACTUALS projektu.</summary>
+    /// <summary>Kody walut z kolumny currencyField (ObjectCurrency, ReportCurrency) w ostatnim imporcie ACTUALS projektu.</summary>
     IReadOnlyList<string> ProjectCurrencies(string code, string currencyField);
 
     /// <summary>

@@ -144,7 +144,8 @@ public sealed class ProjectDetailViewModel : ObservableObject, IDisposable
     public string CurrencyDetails => _currencyProblem
         ?? $"Zestaw walutowy ACTUALS (Konfiguracja → „Parametry projektu”): kwota {ProjectSettings.SetOf(_costsField).AmountColumn}, waluta z kolumny "
            + $"{ProjectSettings.SetOf(_costsField).CurrencyColumn} ostatniego importu ACTUALS projektu{(_currency is null ? " – brak danych" : "")}. "
-           + "W tej walucie: ACWP, raport kosztów, ETC Cost i EAC.";
+           + "W tej walucie: ACWP, raport kosztów, materiały z vAPD (USD przeliczone kursem bieżącym), BAC Material, BAC Cost, ETC Cost i EAC; "
+           + "kwoty „Harmonogram i budżet” zapisują walutę projektu (wpisane w innej walucie – przeliczone).";
 
     public string ProductionInfo => _production is null ? "Produkcja: wczytywanie…"
         : _production.Error is null ? $"Produkcja (PZLPROD) {_production.ReadAt:yyyy-MM-dd HH:mm}" : "Produkcja: brak danych";
