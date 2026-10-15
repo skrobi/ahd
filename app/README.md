@@ -86,6 +86,7 @@ zmieni). Brak pliku albo błąd w nim = komunikat przy starcie z nazwą pola –
 - `042_bez_waluty_transakcji.sql` – zestaw walutowy ACTUALS tylko Object / Report currency (bez waluty transakcji).
 - `043_rozliczeniowe_poza_kosztami.sql` – cost element „Rozliczeniowy” poza ACWP struktury i raportem kosztów CES bez
   wyjątku dla klasy partnera „Profit analysis”.
+- `044_raport_kosztow_grouping.sql` – raport kosztów: Grouping z drzewa Performance Objectives po elemencie WBS wiersza.
 
 Migracje wykonuje przycisk **Diagnostyka → Migracja** – uruchamia po kolei skrypty, których numeru nie ma
 w `META_SchemaVersion`, a wykonane pomija. Lista na tym ekranie pokazuje, które skrypty są wykonane (kiedy, kto)

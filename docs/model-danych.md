@@ -278,7 +278,9 @@ najnowsza wersja każdego pliku parsera (wspólna dla `CAN_LatestImport` i rapor
 **`REP_ProjectCosts @Project, @Value = 'ValueObjCrcy'`** – raport kosztów projektu z ostatniego importu ACTUALS:
 - wiersz: `Project definition` z nakładki projektu × `Cost Element` – tylko elementy z kosztami projektu, bez wierszy
   pasujących do słownika projektu „Wykluczenia” (każde wypełnione pole wykluczenia musi się zgadzać);
-- kolumny: `Grouping` (nazwa korzenia nakładki nad Project definition), `Project definition`, `Project definition
+- kolumny: `Grouping` (najwyższy poziom drzewa nakładki nad węzłem elementu WBS wiersza – finansista grupuje elementy
+  w drzewie Performance Objectives; element WBS spoza nakładki – korzeń nad Project definition; migracja 044),
+  `Project definition` (z ACTUALS), `Project definition
   description` (nazwa elementu nakładki = Project definition), `Cost Element`, `Cost Elem. Descr.` i `Cost grouping`
   (słownik Cost Category: zmiany projektu przed globalnym; opis bez wpisu – z danych), `Period MM/RRRR` (ostatni okres
   w danych ACTUALS), kolumny lat projektu od najnowszego;
@@ -424,6 +426,11 @@ nie wchodzi do kosztów bez względu na klasę obiektu partnera – rozliczenie 
 ma partnera „Profit analysis” i zostawało w ACWP jako ujemny koszt (decyzja 2026-10-15): `REP_ProjectCostsByElement`
 (ACWP, praca, materiał, Actual DLH struktury) i `REP_ProjectCosts` (raport kosztów CES – dotąd bez filtra rozliczenia)
 pomijają te wiersze, `RUN_PinBalance` oznacza je `IsSettlement`. Wymaga aplikacji 0.55.0.
+
+**Migracja `sql/mssql/044_raport_kosztow_grouping.sql`:** `REP_ProjectCosts` – `Grouping` wiersza kosztu z drzewa
+Performance Objectives po elemencie WBS (najwyższy poziom nad jego węzłem; element spoza nakładki – jak dotąd, korzeń nad
+Project definition); wiersze: Grouping × Project definition × Cost Element, kolejność grup – kolejność węzłów najwyższego
+poziomu w drzewie (decyzja 2026-10-15). Wymaga aplikacji 0.55.0.
 
 `META_SourceFile.CanonicalStatus`: „utworzone” – dane kanoniczne zapisane i sprawdzone (widoczne dla odczytów),
 „w toku” – zapis wierszy trwa (odczyty pomijają plik; po awarii wpis i wiersze są usuwane), inna wartość – powód
