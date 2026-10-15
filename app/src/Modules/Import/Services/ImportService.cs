@@ -43,9 +43,6 @@ public sealed class ImportService(IImportStore store, AppServices services, Func
     /// <summary>Log importu (plik logs\pzl-ev-*.log obok exe): ścieżki, dostęp, decyzje, pełne błędy.</summary>
     private static readonly ILogger Logger = Log.ForContext("Module", "import");
 
-    /// <summary>Pobieranie plików bieżącego importu (Run).</summary>
-    private FileDownloader _downloader = null!;
-
     /// <summary>Kto teraz wykonuje pełny import (blokada wspólna dla wszystkich użytkowników); null – nikt.</summary>
     public LockHolder? RunningImport() => services.Locks.Holder(LockName);
 
@@ -212,7 +209,6 @@ public sealed class ImportService(IImportStore store, AppServices services, Func
         LogDefinitions(definitions);
         using var fetch = downloader?.Invoke() ?? new FileDownloader();
         fetch.CleanStale();
-        _downloader = fetch;
         var reference = ImportBatchRow.ProblemReference(batchId);
         var results = new List<FileResult>();
         var issues = new List<Issue>();
@@ -271,7 +267,7 @@ public sealed class ImportService(IImportStore store, AppServices services, Func
                 {
                     try
                     {
-                        result = ImportFile(batchId, location, file, definitions, Problem, stage, cancellation);
+                        result = ImportFile(batchId, location, file, definitions, fetch, Problem, stage, cancellation);
                     }
                     catch (Exception ex) when (cancellation.IsCancellationRequested && ex is not OutOfMemoryException)
                     {
@@ -304,8 +300,10 @@ public sealed class ImportService(IImportStore store, AppServices services, Func
         return run;
     }
 
+    /// <param name="downloader">Pobieranie plików bieżącego importu – lokalne dla wywołania Run: instancja ImportService (kontrakt
+    /// ISourceImport) jest wspólna dla przebiegów różnych projektów, które importują równolegle.</param>
     private FileResult ImportFile(long batchId, ImportLocation location, SourceFile file, IReadOnlyList<SourceDefinitionRow> definitions,
-        Action<string, Issue> problem, StageReporter stage, CancellationToken cancellation)
+        FileDownloader downloader, Action<string, Issue> problem, StageReporter stage, CancellationToken cancellation)
     {
         var modified = new DateTimeOffset(file.LastWriteTimeUtc, TimeSpan.Zero);
         string? sha = null;
@@ -341,7 +339,7 @@ public sealed class ImportService(IImportStore store, AppServices services, Func
                     description = $"importuje go teraz inny import: {holder?.Text ?? "?"}";
                 }
                 else
-                    (decision, description, sha, rows) = ImportContent(batchId, location, file, modified, definition, problem, stage, cancellation);
+                    (decision, description, sha, rows) = ImportContent(batchId, location, file, modified, definition, downloader, problem, stage, cancellation);
             }
         }
         catch (Exception ex) when (ex is not OperationCanceledException and not OutOfMemoryException && !cancellation.IsCancellationRequested)
@@ -374,13 +372,13 @@ public sealed class ImportService(IImportStore store, AppServices services, Func
     /// Treść pliku nie jest przechowywana – po imporcie plik lokalny jest usuwany, dane są w CAN_Row.
     /// </summary>
     private (string Decision, string Description, string? Sha, int? Rows) ImportContent(long batchId, ImportLocation location, SourceFile file,
-        DateTimeOffset modified, SourceDefinitionRow definition, Action<string, Issue> problem, StageReporter stage, CancellationToken cancellation)
+        DateTimeOffset modified, SourceDefinitionRow definition, FileDownloader downloader, Action<string, Issue> problem, StageReporter stage, CancellationToken cancellation)
     {
         if (!TabularFileReader.IsSupported(file.Name))
             throw new NotSupportedException($"format {file.Extension} nieobsługiwany (dozwolone: xlsx, xlsm, csv, txt)");
 
         stage.Start(StageDownload);
-        using var local = _downloader.Download(location, file, stage.Detail, cancellation);
+        using var local = downloader.Download(location, file, stage.Detail, cancellation);
         Logger.Information("Plik {Location} / {File}: pobrany na dysk ({Method}) – {Megabytes} MB w {Elapsed} ({Speed} MB/s)", location.Name, file.Name,
             local.Method, StageReporter.Megabytes(local.Size), StageReporter.Seconds(local.Elapsed),
             StageReporter.Megabytes((long)(local.Size / Math.Max(local.Elapsed.TotalSeconds, 0.001))));
