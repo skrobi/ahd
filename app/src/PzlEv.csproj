@@ -6,10 +6,7 @@
     pakiety NuGet) da się zbudować jeden self-contained single-file PZL-EV.exe,
     który uruchomi się z dysku sieciowego bez instalacji .NET i bez bazy danych.
 
-    Aplikacja NIE łączy się z żadną bazą. Pakiety bazodanowe i Excela są tylko
-    REFERENCJĄ – żeby potwierdzić, że restore'ują się z Twojego feedu i pakują
-    do jednego pliku .exe. Panel „Diagnostyka środowiska” pokazuje ich wersje
-    wczytane w runtime z bundla.
+    Aplikacja łączy się z bazą MS SQL (pzl-ev.json).
 
     Struktura kodu jest docelowa (docs/architektura.md, rozdz. 5.3): Shell/, Modules/<Moduł>/,
     Shared/{Utils,Models,Views/Templates,Views/Partials}. Granice modułów sprawdza przy każdej

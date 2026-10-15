@@ -8,8 +8,8 @@ public sealed record LockHolder(string User, string Machine, DateTimeOffset Sinc
 
 /// <summary>
 /// Blokada operacji wspólnej dla wszystkich użytkowników (np. import) – druga osoba widzi, kto ją wykonuje
-/// (docs/pipeline-fazy.md, rozdz. 1.3). Tryb w pamięci: plik blokady na dysku sieciowym (FileOperationLock);
-/// po przejściu na MS SQL (F10): sp_getapplock.
+/// (docs/pipeline-fazy.md, rozdz. 1.4). Implementacja: plik blokady na dysku sieciowym (FileOperationLock, 00_Global\RABIT);
+/// możliwa zmiana w przyszłości: sp_getapplock w bazie.
 /// </summary>
 public interface IOperationLock
 {

@@ -5,8 +5,9 @@ i nadal służy do sprawdzenia uruchomienia jednego `PZL-EV.exe` z dysku sieciow
 
 Stan: **Słowniki** (słowniki globalne – F1), **Import RABIT** i **Administracja** (import plików, definicje
 źródeł, parsery, lokalizacje – F2), **Projekty** (kreator, Performance Objectives, słowniki
-projektu, gotowość, foldery – F4), **Pulpit** (stan z bazy, otwarte problemy) i **Diagnostyka**.
-Pozostałe pozycje menu pokazują ekran
+projektu, gotowość, foldery – F4), **Przebiegi** (przebieg P0–P2 uruchamia „Uruchom przebieg” na ekranie
+projektu, historia – zakładka Przebiegi – F5), **Pulpit** (stan z bazy, otwarte problemy) i **Diagnostyka**.
+Pozycja menu „Przebiegi” pokazuje na razie ekran
 zastępczy modułu (dokumentacja i etapy, które moduł przejmie). Dane są w bazie MS SQL środowiska
 (sekcja „Konfiguracja i dane”).
 
@@ -72,14 +73,25 @@ zmieni). Brak pliku albo błąd w nim = komunikat przy starcie z nazwą pola –
   grupy narzutowe bez kolumn pul;
 - `032_dane_formuly_narzutow_cas.sql` – (zastąpione przez 034) tylko zapis wersji;
 - `033_narzuty_cas_identyfikatory.sql` – narzuty CAS powiązane identyfikatorem puli / grupy zamiast nazwy; formuły z klocków (`DICT_CasFormula`);
-- `034_dane_narzuty_cas.sql` – dane startowe narzutów CAS z arkusza finansów (pule, grupy, wskaźniki, formuły, grupa elementów kosztowych).
+- `034_dane_narzuty_cas.sql` – dane startowe narzutów CAS z arkusza finansów (pule, grupy, wskaźniki, formuły, grupa elementów kosztowych);
+- `035_daty_rzeczywiste_wp.sql` – daty rzeczywiste WP (Actual Start / Actual Koniec) w „Harmonogram i budżet” – nadpisanie dat z produkcji;
+- `036_koszty_i_godziny_po_elementach.sql` – `REP_ProjectCostsByElement` z parametrem `@Hours`: kwota i godziny jednym odczytem;
+- `037_zestawienie_actuals.sql` – zestawienie ACTUALS po Project definition (`CAN_ActualsBalance`, liczone przy imporcie);
+  odczyty kosztów projektu i `RUN_PinBalance` z zestawienia;
+- `038_evm_struktury.sql` – dane struktury do EVM: MPK WP, Forecast Start / Koniec, ETC Hours / ETC Material, rodzaj kosztu
+  w Cost Category, ACWP według rodzaju kosztu;
+- `039_rodzaj_kosztu.sql` – rodzaj kosztu Hours / Materials / Other (zamiast Labor / Material);
+- `040_dane_rodzaj_kosztu.sql` – konta materiałowe w Cost Category – rodzaj kosztu Materials;
+- `041_waluta_budzetu.sql` – waluta kwot „Harmonogram i budżet” (`DICT_ScheduleBudget.Currency`);
+- `042_bez_waluty_transakcji.sql` – zestaw walutowy ACTUALS tylko Object / Report currency (bez waluty transakcji).
 
 Migracje wykonuje przycisk **Diagnostyka → Migracja** – uruchamia po kolei skrypty, których numeru nie ma
 w `META_SchemaVersion`, a wykonane pomija. Lista na tym ekranie pokazuje, które skrypty są wykonane (kiedy, kto)
 i które czekają. Przy starcie aplikacja pyta o brakujące migracje: **Tak** – wykonuje je od razu, **Nie** – startuje
-bez nich. Migracje uruchamia konto AD z prawem tworzenia i zmiany tabel w schemacie; pozostali użytkownicy
+bez nich. Gdy baza wymaga nowszej aplikacji (najwyższa `MinAppVersion` wykonanych migracji w `META_SchemaVersion` jest
+wyższa niż wersja aplikacji), aplikacja pokazuje komunikat i się zamyka. Migracje uruchamia konto AD z prawem tworzenia i zmiany tabel w schemacie; pozostali użytkownicy
 takiego prawa nie potrzebują. Dwie osoby uruchamiające migrację jednocześnie nie
-wykonają skryptu dwa razy (`sp_getapplock`). Skrypty można też uruchomić ręcznie, po kolei:
+wykonają skryptu dwa razy (`sp_getapplock`). Skrypty można też uruchomić ręcznie, po kolei – tylko oczekujące (`docs/model-danych.md`, rozdz. 5):
 `sqlcmd -S pzltestdb.intl.lmco.com -d PZLTEST -E -f 65001 -v Schema=FINOP Prefix=PZLEV_ -i sql\mssql\001_etap1_import_slowniki_projekty.sql`
 (i tak samo kolejne; `-f 65001` – skrypty są w UTF-8). Dane startowe są tylko w migracji – aplikacja sama nic nie dopisuje;
 usunięta definicja nie wraca.
@@ -272,7 +284,7 @@ pomija testy z ostrzeżeniem.
 
 ## Struktura
 
-Zasady, warstwa danych przejściowa, testy i przepis „Nowy moduł” – `docs/architektura.md`, rozdz. 5.3.
+Zasady, warstwa danych (magazyny MS SQL), testy i przepis „Nowy moduł” – `docs/architektura.md`, rozdz. 5.3.
 
 ```
 app/
@@ -289,10 +301,12 @@ app/
     ├── Modules/
     │   ├── MasterData/          Słowniki globalne (F1), podgląd struktury P1S (PZLPROD)
     │   ├── Import/              Import RABIT (F2)
-    │   ├── Administration/      definicje źródeł, lokalizacje RABIT (F2)
+    │   ├── Administration/      definicje źródeł, parsery, lokalizacje RABIT (F2)
     │   ├── Dashboard/           Pulpit: import, źródła, słowniki, otwarte problemy, dziennik (z bazy)
     │   ├── Diagnostics/         test stosu, konfiguracja środowiska, migracje, sprawdzenie PZLPROD
-    │   └── Runs/ Projects/ …    pozostałe moduły: plik wejścia + etapy, ekran zastępczy
+    │   ├── Projects/            Projekty (F4): kreator, Performance Objectives, słowniki projektu, gotowość, struktura, przebiegi projektu
+    │   ├── Runs/                przebieg projektu P0–P2 (RunService, RunChecks); ekran „Przebiegi” – zastępczy
+    │   └── Reconciliation/ Progress/ Evm/ Export/   pozostałe moduły: plik wejścia + etapy, bez pozycji w menu
     └── Shared/
         ├── Utils/Ui/            MVVM, konwertery, okna wyboru pliku, kontrakt modułu, tabela słownika do edycji (WPF)
         ├── Utils/Config|Data|Files/  konfiguracja, baza MS SQL (Data/Sql), dziennik, problemy, Excel/CSV

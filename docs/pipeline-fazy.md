@@ -46,8 +46,8 @@ Etapy komunikują się przez bazę, więc mogą je wykonywać różne osoby, w r
 
 ### 1.3 Problemy (kontrola jakości danych)
 
-Każda kontrola – przy imporcie, w etapach przebiegu i w silniku EVM – zapisuje wynik w jednej
-tabeli problemów (`meta.Problem`).
+Kontrole importu zapisują wynik w tabeli problemów (`meta.Problem`); kontrole przebiegu (rozdz. 4.1) – w wynikach
+uruchomienia przebiegu (`RUN_Issue`).
 
 | Poziom | Znaczenie | Skutek |
 |---|---|---|
@@ -68,13 +68,20 @@ tabeli problemów (`meta.Problem`).
 
 - Jeden przebieg na projekt i tydzień (`docs/model-danych.md`, rozdz. 4.1).
 - Operacja w toku zakłada blokadę – plik na dysku sieciowym (`00_Global\RABIT\<operacja>.lock`, opis kto i od kiedy
-  w `<operacja>.lock.json`); system zwalnia go także po awarii aplikacji. Blokady importu:
+  w `<operacja>.lock.json`); system zwalnia go także po awarii aplikacji. Blokady importu i przebiegu:
   - `import` – pełny import (wszystkie źródła, ekran Import RABIT): jeden naraz, druga osoba widzi, kto importuje;
   - `import-file-…` – plik (lokalizacja + nazwa) na czas jego zapisu: pełny import i importy źródeł projektów
     pracują równolegle, plik zapisywany w innym imporcie jest pomijany („importuje go teraz inny import: …”);
   - `import-batch-<nr>` – trwający import (wpis „w toku” w historii importów). Import, którego blokada jest wolna
     (np. awaria aplikacji), dostaje przy następnym imporcie status „przerwany”, a jego pliki „w toku” są usuwane
-    razem z wierszami `CAN_Row` i wracają do importu.
+    razem z wierszami `CAN_Row` i wracają do importu. Plik, którego wpis inny import usunął w trakcie zapisu, kończy się
+    decyzją „błąd” (wróci przy kolejnym imporcie), nie „zaimportowany”;
+  - `run-<Projekt>` – przebieg projektu: jeden naraz, druga osoba widzi, kto go liczy;
+  - `run-pin-<nr>` – trwające uruchomienie przebiegu (przypięcie). Uruchomienie, którego blokada jest wolna, dostaje
+    status „przerwany (brak zakończenia)”.
+
+  Gdy blokady „żyje” (`import-batch-<nr>`, `run-pin-<nr>`) nie da się założyć, import albo przebieg nie startuje
+  (wpis z powodem) – inaczej inna operacja uznałaby go za przerwany.
 - Import jest idempotentny: ten sam hash pliku nie tworzy nowej wersji ani duplikatu danych.
 - Zestawienie ACTUALS po Project definition (`CAN_ActualsBalance`, `docs/model-danych.md`, migracja 037) liczy import pliku
   w jednej transakcji ze zmianą stanu na „utworzone”, tylko pod swoim `FileId` – importy o dowolnej porze i równoległe
@@ -181,8 +188,8 @@ Kalendarz okresów wyznacza wariant przebiegu:
 
 „Uruchom przebieg” (ekran projektu) wykonuje w tle: tydzień z kalendarza okresów i przebieg `R-<Projekt>-<RRRR-MM>-T<NN>`
 (kolejne uruchomienie w tym tygodniu – nowe przypięcie, numer #N) → import źródeł projektu (słownik „Źródła danych”,
-`docs/zrodla-danych.md`, rozdz. 2) → przypięcie: dane ACTUALS projektu z ostatniego importu (`RUN_PinBalance`,
-`docs/model-danych.md`, migracja 027) → kontrole wobec ostatniego zakończonego uruchomienia wcześniejszego tygodnia.
+`docs/zrodla-danych.md`, rozdz. 2) → przypięcie: dane ACTUALS projektu z ostatniego importu (`RUN_PinBalance` w jednej
+transakcji, `docs/model-danych.md`, migracja 027) → kontrole wobec ostatniego zakończonego uruchomienia wcześniejszego tygodnia.
 Kwoty – pole kwoty ACTUALS projektu (słownik „Parametry projektu”, domyślnie waluta obiektu – PLN, `Value in Obj. Crcy`);
 pole inne niż w poprzednim przebiegu – WARNING i kontrole bez porównania z poprzednim przebiegiem; tolerancja zaokrągleń 1,00. Okresy zamknięte – okresy SAP przed
 bieżącym okresem kalendarza, a w pierwszych 7 dniach okresu – przed poprzednim (rozliczenie poprzedniego okresu trwa);
@@ -208,8 +215,8 @@ Kontrole wymagające innych danych spoza zrzutu (odbiorca rozliczenia, suma kont
 | | |
 |---|---|
 | **Cel** | Założyć przebieg projektu za tydzień. |
-| **Działanie** | Wybór tygodnia (domyślnie bieżący). Aplikacja pokazuje okres i to, czy przebieg zamyka okres (kalendarz okresów), oraz datę stanu (`docs/ev-obliczenia.md`, rozdz. 2). |
-| **Bramka wejścia** | brak innego przebiegu projektu w tym tygodniu (ERROR); zgodna wersja aplikacji i schematu (ERROR); tydzień jest w kalendarzu okresów (ERROR); projekt gotowy – wymagane słowniki projektu dla typu (`docs/funkcjonalnosc.md`, F02; ERROR); świeżość danych produkcyjnych – data odświeżenia `vAHDD` (WARNING). |
+| **Działanie** | Wybór tygodnia (domyślnie bieżący; dziś zawsze tydzień bieżący z kalendarza okresów – wybór niewdrożony). Aplikacja pokazuje okres i to, czy przebieg zamyka okres (kalendarz okresów), oraz datę stanu (`docs/ev-obliczenia.md`, rozdz. 2). |
+| **Bramka wejścia** | tydzień jest w kalendarzu okresów (ERROR); przebieg projektu nie jest właśnie liczony (blokada `run-<Projekt>`, rozdz. 1.4) – kolejne uruchomienie w tym samym tygodniu to nowe przypięcie #N tego samego przebiegu (rozdz. 4.1); projekt gotowy – wymagane słowniki projektu dla typu (`docs/funkcjonalnosc.md`, F02) – sprawdza ekran projektu („Uruchom przebieg” aktywne tylko dla projektu gotowego; sama usługa przebiegu gotowości nie sprawdza); zgodna wersja aplikacji – kontrola przy starcie aplikacji (`docs/architektura.md`, rozdz. 3); świeżość danych produkcyjnych – data odświeżenia `vAHDD` (WARNING – niewdrożone). |
 | **Efekt** | Przebieg `R-<Projekt>-<RRRR-MM>-T<NN>`, pierwsze zdarzenie w dzienniku. |
 | **Przekazanie** | P1. |
 

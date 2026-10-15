@@ -15,9 +15,7 @@ Wszystkie dane PZL-EV są w centralnej bazie MS SQL. Oryginalne pliki źródłow
 
 ```text
 ŹRÓDŁA – RABIT (SAP CES), PZLPROD (struktura P1S, zaawansowanie z produkcji), pliki CAM
-  ↓ import (pipeline G1)
-SUROWE – wiersze plików bez zmian, z pochodzeniem                                   stg
-  ↓ parser według definicji źródła
+  ↓ import (pipeline G1), parser według definicji źródła – bez wierszy surowych (od migracji 007/008)
 KANONICZNE – dane typowane według definicji źródła                                  can
   ↓
 SŁOWNIKI, HARMONOGRAM I BUDŻET                                                      dict
@@ -37,7 +35,7 @@ ZAMROŻENIE – przebieg zamykający okres
 
 | Schemat | Zawartość |
 |---|---|
-| `meta` | importy, wersje plików i ich treść, definicje źródeł, parsery, projekty, przebiegi, etapy, rewizje, problemy, dziennik zdarzeń, role, wersja aplikacji i schematu |
+| `meta` | importy, wersje plików (bez treści – migracja 008), definicje źródeł, parsery, projekty, przebiegi, etapy, rewizje, problemy, dziennik zdarzeń, role, wersja aplikacji i schematu |
 | `can` | dane kanoniczne – jedna stała tabela `can.Row` ze slotami typowanymi dla wszystkich parserów (migracja 007) |
 | `dict` | słowniki globalne i projektu – z historią |
 | `ev` | koszt per WP, zaawansowanie, wyniki EV |
@@ -50,7 +48,9 @@ Strona P1S projektu to `Legacy WBS` węzłów nakładki Performance Objectives i
 jednym schemacie z konfiguracji, z sygnaturą przed nazwą: `[<Schema>].[<Sygnatura><WARSTWA>_<Nazwa>]`, np.
 `meta.ImportBatch` → `[FINOP].[PZLEV_META_ImportBatch]` (TEST: baza `PZLTEST`, schemat `FINOP`, sygnatura `PZLEV_`;
 `docs/architektura.md`, rozdz. 8). Kolumny – nazwy angielskie jak w kodzie (słowa zastrzeżone SQL zastąpione:
-`UserName`, `DataRows`, `CheckName`); każda tabela zapisu ma `DbLogin DEFAULT ORIGINAL_LOGIN()`; czas –
+`UserName`, `DataRows`, `CheckName`); tabele zapisu mają `DbLogin DEFAULT ORIGINAL_LOGIN()` – bez niej: `CAN_Row`,
+`CAN_ActualsBalance`, `META_Run`, `META_RunPin`, `RUN_Balance`, `RUN_Issue` (kto – w imporcie albo w przebiegu:
+`CreatedBy`, `StartedBy`); czas –
 `DATETIMEOFFSET(7)`, kwoty – `DECIMAL(28,8)`; tabele z historią – `RecordedAt/By`, `SupersededAt/By`, unikalność
 kluczy wśród bieżących wersji (indeksy filtrowane).
 
@@ -62,6 +62,9 @@ kluczy wśród bieżących wersji (indeksy filtrowane).
 
 Dane zapisane przez PZL-EV nie są nadpisywane ani usuwane. Zmiana tworzy nowy wpis, a poprzedni zostaje
 w historii z informacją, kto i kiedy go zastąpił.
+
+Wyjątek – migracje, które zmieniły wartości w miejscu, w całej historii: 033 (zaokrąglenie `Rate`, `PoolId`,
+`BurdenGroup` → `BurdenGroupId` z usunięciem kolumny) i 038/039 (`CostKind`).
 
 ### 3.2 Dwie osie czasu
 
@@ -116,6 +119,10 @@ Znacznik stanu to moment zapisany w przebiegu w etapie P1. Przebieg czyta wszyst
 
 Ponowne przypięcie zapisuje nowy znacznik (`docs/pipeline-fazy.md`, rozdz. 5).
 
+**Stan obecny (migracje 027/028):** przypięcie (`META_RunPin`) zapisuje tylko zagregowane dane ACTUALS projektu
+(`RUN_Balance`); nakładkę i słowniki (w tym Cost Category) przebieg czyta w stanie bieżącym – bez zapisu stanu
+słowników. Rewizji jeszcze nie ma (rozdz. 4.3 – stan docelowy, F8).
+
 ### 4.3 Rewizja
 
 Rewizja to jedno obliczenie EV przebiegu (etap P8). Zapisuje:
@@ -165,7 +172,13 @@ Zmiana istniejących wierszy w `LOG.WBS` nie jest wykrywana (`docs/architektura.
 | `ev.Zaawansowanie` | przebieg, WP, wartość, pochodzenie, wartość z produkcji (podpowiedź dla CAM), kto, kiedy |
 | `ev.Wynik` | rewizja, poziom (WP, CAM, `PROJORG`, projekt), wskaźniki EV (`docs/ev-obliczenia.md`) |
 
-Schemat bazy powstaje skryptami migracyjnymi (`docs/architektura.md`, rozdz. 8).
+`meta.Przebieg`, `meta.EtapPrzebiegu`, `meta.Rewizja`, `meta.Rola` i `ev.*` – encje docelowe, jeszcze bez tabel;
+przebieg dziś – `META_Run`, `META_RunPin` (rozdz. 5.1).
+
+Schemat bazy powstaje skryptami migracyjnymi (`docs/architektura.md`, rozdz. 8). Każdy skrypt w jednej transakcji
+wykonuje tylko aplikacja (Diagnostyka → Migracja, pytanie przy starcie). Ręcznie (sqlcmd) uruchamia się tylko skrypty
+oczekujące (brak numeru w `META_SchemaVersion`) – ponowne wykonanie wszystkich odtworzyłoby tabele usunięte przez
+późniejsze skrypty (np. zakładane w 001 i 005).
 
 ### 5.1 Tabele etapu 1 – migracja `sql/mssql/001_etap1_import_slowniki_projekty.sql`
 
@@ -183,6 +196,9 @@ Bez metodologii EV; kolejne tabele dochodzą kolejnymi migracjami.
 | `META_Project`, `META_PerformanceObjective` | projekty (kod, nazwa, typ SAC / CAS / WEWNETRZNY) i nakładka Performance Objectives z historią |
 | `DICT_Calendar`, `DICT_DepartmentRate`, `DICT_FxRate`, `DICT_CostCategory`, `DICT_Person`, `DICT_DjkRate`, `DICT_ProductionParameter` | słowniki globalne – tabela z typowanymi kolumnami na słownik; `Project` NULL = globalny (w Cost Category `Project` = zmiany w projekcie) |
 | `DICT_WpCam`, `DICT_ScheduleBudget`, `DICT_WbsCategory`, `DICT_Exclusion` | słowniki projektu (F4.3; `DICT_WbsCategory` – Kategorie WBS, migracja 019); „Cost Category – zmiany w projekcie” – `DICT_CostCategory` z kodem projektu; Stawki CAS – po ustaleniu zawartości (O37) |
+| `DICT_ProjectSource` (026), `DICT_ProjectSetting` (028) | słowniki projektu „Źródła danych” i „Parametry projektu” |
+| `DICT_CasPool`, `DICT_CasBurdenGroup`, `DICT_CasBurdenRate`, `DICT_CasFormula` (029–034) | narzuty CAS: pule, grupy narzutowe, wskaźniki, formuły |
+| `META_Run`, `META_RunPin`, `RUN_Balance`, `RUN_Issue` (027) | przebiegi (projekt + tydzień), uruchomienia (przypięcia), dane ACTUALS przypięte w uruchomieniu, wyniki kontroli przebiegu |
 
 **Dane startowe – migracja `sql/mssql/002_dane_startowe.sql`:** definicje źródeł `ACTUALS_PAF` i `ACTUALS_CES`
 (parser ACTUALS, układ kolumn – `docs/zrodla-danych.md`, rozdz. 4), aktywna lokalizacja RABIT E456659, kalendarz
@@ -407,6 +423,6 @@ wpisaniu kwot „Harmonogram i budżet” (`BAC MATERIAL`, `BAC`, `ETC MATERIAL`
 braku danych (źródło bez parsera).
 
 Aplikacja zapisuje do tabel importu, konfiguracji importu, słowników globalnych i projektu, projektów i nakładki
-Performance Objectives, dziennika i problemów. Blokady importu – pliki na dysku sieciowym
+Performance Objectives, przebiegów, dziennika i problemów. Blokady importu – pliki na dysku sieciowym
 (`docs/pipeline-fazy.md`, rozdz. 1.4).
 

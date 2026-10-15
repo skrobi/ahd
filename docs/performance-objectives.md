@@ -13,8 +13,9 @@ Powiązane: `docs/funkcjonalnosc.md` (F01 – kreator projektu), `docs/zrodla-da
 
 - **Struktura kontraktu** – hierarchiczne drzewo elementów WBS CES (poziomy 1..n), po którym raportuje się
   wykonanie kontraktu.
-- **Wyznacza zakres projektu PZL-EV** – elementy objęte nakładką to elementy projektu. Koszty i zaawansowanie
-  są do nich przypisywane na późniejszym etapie (rozdz. 6).
+- **Wyznacza zakres projektu PZL-EV** – elementy objęte nakładką to elementy projektu. Koszty (ACWP, Actual DLH)
+  przypisuje do WP podglądowo zakładka Struktura (rozdz. 4.2); przypisanie kosztów i zaawansowania w przebiegu –
+  na późniejszym etapie (rozdz. 6).
 - **Edytowalna** – strukturę SAP można zmieniać i **grupować elementy PSP we własnych, wirtualnych węzłach**
   (węzły raportowe utworzone w aplikacji, bez odpowiednika w SAP).
 
@@ -73,7 +74,7 @@ Powiązane: `docs/funkcjonalnosc.md` (F01 – kreator projektu), `docs/zrodla-da
 | Struktura P1S (`LOG.WBS`) | czytana na żywo z PZLPROD; poddrzewa pod `Legacy WBS` węzłów (rozdz. 2) |
 | Słownik „WP i CAM” | **osobny** (`docs/slowniki.md`, rozdz. 3); powiązanie z węzłem nakładki przez `Legacy WBS` (rozdz. 4.1) |
 | Zakres projektu | wyznaczany przez nakładkę |
-| Koszty i zaawansowanie | przypisywane do węzłów nakładki na późniejszym etapie, z plików (rozdz. 6) |
+| Koszty i zaawansowanie | podgląd: ACWP i Actual DLH przypisane do WP w zakładce Struktura (rozdz. 4.2); przypisanie w przebiegu (P3) i zaawansowanie – później (rozdz. 6) |
 
 ### 4.1 Powiązanie nakładki z WP
 
@@ -138,7 +139,10 @@ i budżetem (`StructureBuilder`).
   elementu – reszta zostaje na elemencie. Węzeł ma WP, CAM, Cost Category, budżet i daty jak element P1S; materiały i ACWP
   zostają na elemencie. SWBS nie jest brany pod uwagę. Kod niezgodny z konwencją – brak „kod wydzielenia” w kolumnie Braki,
   powód w podpowiedzi nazwy i w nagłówku „Produkcja (PZLPROD)”. Godziny wydzielane są tylko z operacji samego elementu
-  (PSPNR) – operacje elementów pod nim w `LOG.WBS` wydziela się kodem z ich elementem.
+  (PSPNR) – operacje elementów pod nim w `LOG.WBS` wydziela się kodem z ich elementem. Kod wydzielenia elementu `LOG.WBS`
+  spod węzła należy do zakresu projektu także wtedy, gdy kod elementu nie zaczyna się od kodu węzła z kropką (np.
+  `XYZ-1.PAINT.W20` pod `AC-CAB.6.38.07`). Węzeł wirtualny, którego `Legacy WBS` to zwykły element `LOG.WBS` (nie kod
+  wydzielenia), pokazuje godziny samego elementu.
   Dane produkcyjne są czytane na żywo (`IPzlProdSource.Production`, filtr – zakres P1S projektu) przy
   otwarciu projektu, „Odśwież P1S i koszty” i po zmianie Legacy WBS; chwila odczytu – w nagłówku ekranu
   („Produkcja (PZLPROD) …”). Kolumny mają stałą szerokość – przy kolejnych kolumnach tabela przewija się w poziomie. Tabela kończy się na dole okna (wysokość
@@ -200,7 +204,8 @@ i budżetem (`StructureBuilder`).
 - **Struktura z Excela** – „Wczytaj strukturę z Excela”: arkusz „Struktura” pobrany z aplikacji i uzupełniony ręcznie.
   Wiersz pliku → wiersz struktury po `Legacy Element (P1S)`; czytane są tylko kolumny do uzupełnienia: WP (niepusta
   komórka – element jest WP, kod WP = kod elementu), CAM (USRID), Cost Category, a w wierszu z WP (własnym albo
-  zaznaczonym w pliku) – budżet i daty WP (Actual Start / Finish równe dacie z produkcji – bez nadpisania). Pusta komórka – bez zmiany (czyszczenie – w tabeli); pozostałe kolumny (sumy
+  zaznaczonym w pliku) – budżet i daty WP (Actual Start / Finish równe dacie z produkcji – bez nadpisania; budżet równy wartości z eksportu – w walucie projektu,
+  pusty budżet eksportowany jako 0 – bez zapisu). Pusta komórka – bez zmiany (czyszczenie – w tabeli); pozostałe kolumny (sumy
   poddrzewa, AHD, ACTUALS) są pomijane. Pomijane z ostrzeżeniem: element P1S spoza struktury, budżet w wierszu bez WP;
   z błędem: niepoprawna liczba lub data, ten sam WP z innym budżetem w dwóch wierszach. Przed zapisem – podsumowanie
   (nowe WP, CAM, Cost Category, budżet i daty WP, pominięte) do potwierdzenia; zapis jak edycja w komórkach (jeden zapis
@@ -260,15 +265,17 @@ Kolumny istotne dla nakładki:
 | `SAC Obj Number` | numer obiektu SAC (np. `6156`) |
 | `Statistical`, `Acct asst elem.ind.` | znaczniki elementu: statystyczny / rozliczeniowy (`X`) |
 
-Pozostałe kolumny (`Applicant`, `Costing Sheet`, `Results Analysis Key`, `Open Date`, `Legacy #`,
-`Cross reference`, `Status`, `Created by`, `Company code`) są wczytywane jako atrybuty opisowe elementu.
+Aplikacja (`PerformanceObjectivesReader`) czyta tylko kolumny z tabeli wyżej; pozostałe kolumny (`Applicant`,
+`Costing Sheet`, `Results Analysis Key`, `Open Date`, `Legacy #`, `Cross reference`, `Status`, `Created by`,
+`Company code`) są pomijane.
 
 ---
 
 ## 6. Poza bieżącym zakresem
 
-Przypisywanie kosztów rzeczywistych i zaawansowania do węzłów nakładki (budowa gotowego raportu wykonania)
-to **późniejszy etap** – dane będą przypisywane z plików (O45). Ten dokument opisuje nakładkę na etapie
+Zakładka Struktura przypisuje już ACWP i Actual DLH do WP jako podgląd (rozdz. 4.2). Przypisywanie kosztów
+rzeczywistych i zaawansowania do węzłów nakładki w przebiegu (P3, budowa gotowego raportu wykonania) to **późniejszy
+etap** – dane będą przypisywane z plików (O45). Ten dokument opisuje nakładkę na etapie
 tworzenia i utrzymania projektu.
 
 ---

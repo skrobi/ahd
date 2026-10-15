@@ -22,7 +22,7 @@ Role, zakres danych i egzekwowanie – `docs/uprawnienia.md`.
 
 ## 2. Ekrany
 
-Menu modułów po lewej (Pulpit, Import RABIT, Słowniki, Projekty, Przebiegi, Administracja, Diagnostyka) zwija się do ikon („☰” u góry menu; nazwa modułu w podpowiedzi) – więcej miejsca na ekran modułu.
+Menu modułów po lewej (Pulpit, Import RABIT, Projekty, Przebiegi, Słowniki, Administracja, Diagnostyka – kolejność z `Shell/ModuleCatalog.cs`) zwija się do ikon („☰” u góry menu; nazwa modułu w podpowiedzi) – więcej miejsca na ekran modułu.
 
 | Ekran | Zawartość | Główne akcje |
 |---|---|---|

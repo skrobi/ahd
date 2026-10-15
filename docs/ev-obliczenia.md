@@ -17,6 +17,14 @@ Powiązane: `docs/pipeline-fazy.md` (P8 – kiedy silnik jest uruchamiany), `doc
 - Przypadki testowe silnika pochodzą z obecnych obliczeń analityków w Excelu: dla tych samych danych wynik
   silnika jest zgodny z wynikiem w Excelu.
 
+### 1.1 Podgląd w strukturze projektu
+
+Zakładka Struktura ekranu Projekt pokazuje już **podgląd** wartości EV (`docs/performance-objectives.md`, rozdz. 4.2):
+BCWS – rozkład liniowy na dni robocze pn–pt baseline; BCWP = BAC Cost × BCWP Hours ÷ TECH Hours, najwyżej BAC Cost;
+ETC z produkcji (`TECH_DO_PON`) z nadpisaniem ręcznym; ACWP narastająco z ostatniego importu ACTUALS; data stanu – dziś;
+kwoty w walucie projektu (zestaw walutowy ACTUALS). To nie jest silnik EVM (F8.1 – niezaimplementowany): podgląd nie
+zapisuje rewizji i nie rozstrzyga O15, O30, O35, O36 ani O51 – pozostają do ustalenia z Finansami (rozdz. 6).
+
 ---
 
 ## 2. Dane wejściowe (per WP)
@@ -30,7 +38,7 @@ Powiązane: `docs/pipeline-fazy.md` (P8 – kiedy silnik jest uruchamiany), `doc
 | ACWP | `ev.KosztWP` – wynik łączenia źródeł (P3) |
 | ETC | źródło do ustalenia (O15) |
 | Metoda EAC | ustawienie WP – słownik projektu |
-| Waluta wyniku i kursy | typ projektu (`docs/slowniki.md`, rozdz. 4), słownik kursów walut |
+| Waluta wyniku i kursy | typ projektu (`docs/slowniki.md`, rozdz. 4) albo zestaw walutowy ACTUALS projektu – O51; słownik kursów walut |
 
 - Metoda EV jest zawsze **jawnym ustawieniem WP**. Silnik nie przyjmuje dla całego projektu założenia
   BCWP = BAC × % zaawansowania. Zestaw metod i słownik ustawień WP – O35.
@@ -65,7 +73,8 @@ Wskaźnik z mianownikiem równym zero nie ma wartości (pusty), a nie zero.
 - Poziomy: **WP → CAM → `PROJORG` → projekt**.
 - Wartości (BAC, BCWS, BCWP, ACWP, CV, SV, ETC, EAC, VAC) są sumowane; wskaźniki (CPI, SPI, TCPI) są liczone
   z sum na danym poziomie, nie uśredniane.
-- Prezentacja w tysiącach waluty wyniku: PLN, w projektach SAC – USD.
+- Prezentacja w tysiącach waluty wyniku: PLN, w projektach SAC – USD (struktura projektu – waluta zestawu walutowego
+  ACTUALS; O51).
 - Wynik przebiegu w środku okresu jest oznaczony jako **EV wstępne**; zatwierdzona rewizja przebiegu
   zamykającego okres – jako **EV formalne**.
 
@@ -87,5 +96,6 @@ Wskaźnik z mianownikiem równym zero nie ma wartości (pusty), a nie zero.
 |---|---|
 | O15 | Źródło ETC i moment jego wprowadzenia w przebiegu |
 | O30 | ACWP – koszt okresu czy narastająco; obsługa korekt wstecznych w SAP |
-| O35 | Metody EV per WP (zestaw metod, słownik ustawień WP), granulacja rozkładu baseline w czasie, metody EAC, wariant TCPI |
-| O36 | Konwencja daty stanu (dzień uruchomienia przebiegu czy koniec tygodnia z kalendarza okresów) |
+| O35 | Metody EV per WP (zestaw metod, słownik ustawień WP), granulacja rozkładu baseline w czasie, metody EAC, wariant TCPI (podgląd struktury przyjmuje BCWP = BAC Cost × BCWP Hours ÷ TECH Hours i liniowy rozkład baseline na dni robocze pn–pt, do potwierdzenia) |
+| O36 | Konwencja daty stanu (dzień uruchomienia przebiegu czy koniec tygodnia z kalendarza okresów) (podgląd struktury przyjmuje dzień bieżący, do potwierdzenia) |
+| O51 | Waluta wyniku EV: typ projektu (SAC – USD) czy zestaw walutowy ACTUALS projektu |

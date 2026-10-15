@@ -117,6 +117,8 @@ pobieranych do przebiegu oraz wymaganych do jego uruchomienia:
 | Wewnętrzny | WP i CAM, Harmonogram i budżet | – | PLN | – |
 
 Słowniki globalne (rozdz. 2) i „Cost Category – zmiany w projekcie” są pobierane dla każdego typu.
+Waluta wyniku według typu albo zestaw walutowy ACTUALS projektu („Parametry projektu”, w nim liczy struktura
+projektu) – O51 (`docs/ev-obliczenia.md`, rozdz. 6).
 Kontekst biznesowy typów – `readme.md`.
 
 ---
@@ -169,7 +171,6 @@ Kontekst biznesowy typów – `readme.md`.
 |---|---|
 | numer elementu kosztowego unikalny w słowniku (globalnym / zmianach projektu); zapisywany jako tekst – numer liczbowy uzupełniany zerami do 10 znaków | ERROR |
 | numer w słowniku bez Cost Category | WARNING |
-
 | „Grupa narzutowa CAS” spoza słownika „Grupy narzutowe CAS” albo pusta | uwaga w raporcie kosztów CES (wiersz bez narzutów) |
 | „Wskaźniki narzutu CAS”: pula z listy, `Od` wymagane, `Wskaźnik` ≥ 0 (15 cyfr znaczących, jak w Excelu); okresy `Od`–`Do` jednej puli bez nakładania | ERROR |
 | „Pule narzutu CAS”: nazwa bez „+” i inna niż „Base cost elements”; `Kolejność` i `Rodzaj` wymagane / kolejność powtórzona | ERROR / WARNING |
@@ -276,7 +277,9 @@ po Cost Elementach dla lat 2025–2026).
 ## 7. Wykluczenia
 
 Opcjonalny słownik projektu wskazujący elementy danych źródłowych, które **nie są brane pod uwagę** na
-późniejszym etapie analizy. Definiowany jest na etapie projektu; stosowany później (poza bieżącym zakresem – O48).
+późniejszym etapie analizy. Definiowany jest na etapie projektu. Stosowany dziś w raporcie kosztów projektu
+(`REP_ProjectCosts`, migracja 013) oraz w ACWP i Actual DLH struktury projektu (`REP_ProjectCostsByElement`, migracja
+016); przypięcie i kontrole przebiegu (`RUN_PinBalance`) wykluczeń nie stosują – O48.
 Wyklucza się po kombinacji trzech pól z raportu kosztów CES (`docs/zrodla-danych.md`, rozdz. 4):
 
 | Pole | Znaczenie |
@@ -289,7 +292,7 @@ Wyklucza się po kombinacji trzech pól z raportu kosztów CES (`docs/zrodla-dan
 - Nie trzeba wypełniać wszystkich trzech pól kluczowych: wystarczy jedno, dwa albo komplet. Im mniej pól, tym
   szersze dopasowanie (np. sam `Cost Element` wyklucza wszystkie wiersze z tym elementem kosztowym).
 - Wiersz danych jest wykluczony, gdy pasuje do wszystkich **wypełnionych** pól reguły.
-- Moment zastosowania (który etap analizy, jak wykazywać wykluczony koszt) – O48.
+- Zastosowanie w przebiegu (przypięcie, łączenie źródeł – P3) i sposób wykazania wykluczonego kosztu – O48.
 
 ---
 
@@ -301,7 +304,7 @@ Wyklucza się po kombinacji trzech pól z raportu kosztów CES (`docs/zrodla-dan
 | O18 | Numeracja tygodni w kalendarzu okresów (ISO czy wewnętrzna) |
 | O25 | Numer elementu kosztowego bez wpisu w Cost Category: ERROR (dziś) czy WARNING? |
 | O37 | Jakie stawki CAS są wykorzystywane i w jakim układzie – narzuty CAS na koszty Cost Elementów: słowniki globalne (rozdz. 6.1); otwarte: słownik projektu „Stawki CAS” i przeliczenie w przebiegu |
-| O48 | Wykluczenia: na którym etapie analizy są stosowane i jak wykazywany jest wykluczony koszt |
+| O48 | Wykluczenia: stosowanie w przebiegu (przypięcie, P3) i sposób wykazania wykluczonego kosztu (raport kosztów i ACWP struktury już je pomijają – rozdz. 7) |
 
 ## Załącznik A. Początkowa zawartość słownika Cost Category
 
