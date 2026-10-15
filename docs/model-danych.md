@@ -304,7 +304,8 @@ struktury (`docs/performance-objectives.md`, rozdz. 4.2). Wymaga aplikacji 0.28.
 „Rozliczeniowy” (cost element rozliczenia SAP, np. 0091902551 „PZL Invent Cost Set”). `REP_ProjectCostsByElement`
 pomija rozliczenie wychodzące: wiersze z cost elementem rozliczeniowym (słownik efektywny projektu), których klasa
 obiektu partnera nie jest „Profit analysis”; rozliczenie przychodzące („Profit analysis”) zostaje w ACWP. Bez tego
-suma zrzutu na elemencie WBS rozliczanym co miesiąc wynosi 0. Wymaga aplikacji 0.29.0.
+suma zrzutu na elemencie WBS rozliczanym co miesiąc wynosi 0. Wymaga aplikacji 0.29.0. Wyjątek „Profit analysis”
+zniesiony w 043.
 
 **Migracja `sql/mssql/018_cost_elementy_z_actuals.sql`:** procedura `CAN_ActualsCostElements @Value` – cost elementy
 całego ostatniego importu ACTUALS (nazwa z danych, liczba wierszy, suma kwoty) dla „Uzupełnij z ACTUALS” w słowniku
@@ -417,6 +418,12 @@ wpisaniu kwot „Harmonogram i budżet” (`BAC MATERIAL`, `BAC`, `ETC MATERIAL`
 `REP_ProjectCostsByElement`, `REP_ProjectCosts`, `RUN_PinBalance` odrzucają `ValueTranCurr` (THROW 50014),
 `CAN_ActualsCostElements` go nie sumuje; „Parametry projektu” z `ValueTranCurr` – nowa wersja z `ValueObjCrcy`. Kolumna
 `CAN_ActualsBalance.ValueTranCurr` zostaje (dane źródła). Wymaga aplikacji 0.54.0.
+
+**Migracja `sql/mssql/043_rozliczeniowe_poza_kosztami.sql`:** cost element „Rozliczeniowy” (słownik efektywny projektu)
+nie wchodzi do kosztów bez względu na klasę obiektu partnera – rozliczenie elementu WBS do segmentu rentowności (CO-PA)
+ma partnera „Profit analysis” i zostawało w ACWP jako ujemny koszt (decyzja 2026-10-15): `REP_ProjectCostsByElement`
+(ACWP, praca, materiał, Actual DLH struktury) i `REP_ProjectCosts` (raport kosztów CES – dotąd bez filtra rozliczenia)
+pomijają te wiersze, `RUN_PinBalance` oznacza je `IsSettlement`. Wymaga aplikacji 0.55.0.
 
 `META_SourceFile.CanonicalStatus`: „utworzone” – dane kanoniczne zapisane i sprawdzone (widoczne dla odczytów),
 „w toku” – zapis wierszy trwa (odczyty pomijają plik; po awarii wpis i wiersze są usuwane), inna wartość – powód
