@@ -255,6 +255,53 @@ public sealed class SqlProjectStore(SqlDatabase db, IClock clock, ICurrentUser u
             .ToDictionary(r => r.WbsElement, r => r.Amount ?? 0, StringComparer.OrdinalIgnoreCase);
     }
 
+    public ElementActuals CostsAndHoursByElement(string code, string value, string hours)
+    {
+        using var connection = db.Open();
+        var rows = connection.Query<(string WbsElement, decimal? Amount, int Rows, decimal? Hours, decimal? Labor, decimal? Material)>(
+                db.Table("rep.ProjectCostsByElement"), new { Project = code, Value = value, Hours = hours },
+                commandType: System.Data.CommandType.StoredProcedure, commandTimeout: 600)
+            .ToList();
+        IReadOnlyDictionary<string, decimal> Of(Func<(string WbsElement, decimal? Amount, int Rows, decimal? Hours, decimal? Labor, decimal? Material), decimal?> value) =>
+            rows.Where(r => value(r) is not null).ToDictionary(r => r.WbsElement, r => value(r)!.Value, StringComparer.OrdinalIgnoreCase);
+        return new ElementActuals(rows.ToDictionary(r => r.WbsElement, r => r.Amount ?? 0, StringComparer.OrdinalIgnoreCase),
+            Of(r => r.Hours), Of(r => r.Labor), Of(r => r.Material));
+    }
+
+    public IReadOnlyList<string> CurrenciesOf(IReadOnlyCollection<string> definitions, string currencyField)
+    {
+        if (definitions.Count == 0)
+            return [];
+        var column = currencyField == "ReportCurrency" ? "ReportCurrency" : "ObjectCurrency";
+        using var connection = db.Open();
+        return connection.Query<string>(
+            $"""
+            SELECT DISTINCT b.{column}
+            FROM (SELECT DISTINCT LTRIM(RTRIM(value)) AS Code FROM STRING_SPLIT(@codes, '|') WHERE LTRIM(RTRIM(value)) <> N'') d
+            JOIN {db.Table("can.ActualsBalance")} b ON b.ProjectDefinition = d.Code
+            JOIN {db.Table("can.LatestFiles")}('ACTUALS', NULL, NULL) f ON f.FileId = b.FileId
+            WHERE b.{column} IS NOT NULL AND b.{column} <> N''
+            ORDER BY 1
+            """, new { codes = string.Join('|', definitions.Where(d => !d.Contains('|'))) }).ToList();
+    }
+
+    public IReadOnlyList<string> ProjectCurrencies(string code, string currencyField)
+    {
+        var column = currencyField == "ReportCurrency" ? "ReportCurrency" : "ObjectCurrency";
+        using var connection = db.Open();
+        return connection.Query<string>(
+            $"""
+            SELECT DISTINCT b.{column}
+            FROM (SELECT DISTINCT v.Code FROM {db.Table("meta.PerformanceObjective")} po
+                  CROSS APPLY (VALUES (po.ProjectDefinition), (po.WbsElement)) v(Code)
+                  WHERE po.Project = @code AND po.SupersededAt IS NULL AND v.Code IS NOT NULL) d
+            JOIN {db.Table("can.ActualsBalance")} b ON b.ProjectDefinition = d.Code
+            JOIN {db.Table("can.LatestFiles")}('ACTUALS', NULL, NULL) f ON f.FileId = b.FileId
+            WHERE b.{column} IS NOT NULL AND b.{column} <> N''
+            ORDER BY 1
+            """, new { code }).ToList();
+    }
+
     public IReadOnlyList<ActualsFile> ActualsFiles()
     {
         using var connection = db.Open();

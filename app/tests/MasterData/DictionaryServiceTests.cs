@@ -188,7 +188,7 @@ public sealed class DictionaryServiceTests : IDisposable
         Assert.Equal(24, calendar.Count(r => r["Zamykający"] == "tak"));
 
         var costCategory = _service.Load(CostCategory);
-        Assert.Equal(33, costCategory.Count);
+        Assert.Equal(35, costCategory.Count);
         var warning = Assert.Single(DictionaryValidator.Validate(CostCategory, costCategory));
         Assert.Contains("0057100000", warning.Message);
 

@@ -57,7 +57,10 @@ Nagłówek aplikacji – `docs/architektura.md`, rozdz. 3.
 
 Kroki kreatora:
 
-1. **Podstawowe** – kod, nazwa, typ; aplikacja pokazuje słowniki wymagane dla typu.
+1. **Podstawowe** – kod, nazwa, typ; aplikacja pokazuje słowniki wymagane dla typu. Waluta kosztów – zestaw walutowy
+   ACTUALS (Object / Report currency z odpowiednią kolumną kwoty; waluta transakcji – nie), zapisywany w „Parametrach projektu”
+   (`docs/slowniki.md`, rozdz. 3); zmiana później – zakładka Konfiguracja. Waluta projektu (nagłówek ekranu projektu) –
+   z kolumny waluty zestawu w danych ACTUALS.
 2. **Performance Objectives** – budowa nakładki kontraktu CES (`docs/performance-objectives.md`): wczytanie
    z Excela albo ręcznie, z możliwością grupowania elementów we własnych węzłach. Nakładka wyznacza zakres
    projektu; stronę P1S tworzą `Legacy WBS` elementów nakładki i poddrzewa `LOG.WBS` pod nimi (`PZLPROD`).
@@ -70,7 +73,10 @@ Kroki kreatora:
 5. **Podsumowanie (baza analityczna)**:
    - drzewo nakładki Performance Objectives połączone z WP, CAM, BAC i datami,
    - braki: element nakładki bez WP, WP bez budżetu,
-   - sumy kontrolne: budżet, godziny, koszty materiałów; zestawienie według CAM; eksport do xlsx.
+   - sumy kontrolne: budżet, godziny, koszty materiałów; zestawienie według CAM; eksport do xlsx,
+   - kwoty w walucie projektu: kod z kolumny waluty wybranego zestawu walutowego w ostatnim imporcie ACTUALS dla
+     Project definition / WBS element nakładki; budżet z kolumną „Waluta” w innej walucie – przeliczony kursem bieżącym
+     („Kursy walut”), brak kursu – kwota pusta i ostrzeżenie; brak danych ACTUALS – waluta nieznana, kwoty bez przeliczenia.
 
    **Utwórz projekt** – rejestracja w bazie, utworzenie folderów, kontrola struktury.
 

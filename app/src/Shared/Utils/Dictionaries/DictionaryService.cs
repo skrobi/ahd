@@ -46,8 +46,11 @@ public sealed class DictionaryService(IDictionaryStore store, IJournal journal)
 
         var current = store.Current(spec.Code, project).ToDictionary(r => r.RowId);
         var changes = new List<RowChange>();
-        foreach (var row in rows)
+        foreach (var normalized in rows)
         {
+            var row = spec.Prepare is { } prepare
+                ? prepare(normalized, normalized.RowId is { } rowId && current.TryGetValue(rowId, out var stored) ? new DictRow(stored.RowId, stored.Version, stored.Values) : null)
+                : normalized;
             var key = spec.KeyOf(row.Values);
             if (row.RowId is not { } id)
                 changes.Add(new RowChange(RowChangeKind.Added, null, null, key, row.Values));

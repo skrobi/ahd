@@ -46,7 +46,8 @@ Powiązane: `docs/funkcjonalnosc.md` (F01 – kreator projektu), `docs/zrodla-da
   - „Edytuj Performance Objectives” – ten sam edytor co w kreatorze (przeciąganie, przesuwanie, poziom wyżej,
     usuwanie, węzły wirtualne, elementy CES); „Wczytaj Excel” w edytorze **podmienia** strukturę strukturą z pliku
     (elementy o tym samym `WBS element` zachowują identyfikator i historię; węzły wirtualne i ręczne zmiany nie są
-    przenoszone). Zapis „Zapisz Performance Objectives” tworzy nowe wersje zmienionych węzłów, „Anuluj” odrzuca zmiany;
+    przenoszone). Zapis „Zapisz Performance Objectives” tworzy nowe wersje zmienionych węzłów, „Anuluj” odrzuca zmiany.
+    Tabela edytora na ekranie projektu sięga do dołu okna (jak tabela struktury); w kreatorze – stała wysokość;
   - w tabeli struktury zmienia się nazwę węzła i `Legacy WBS` (zapis od razu, z historią).
 - **Element CES należy do co najwyżej jednej nakładki** (jednego projektu) – element z nakładki innego projektu
   jest odrzucany przy wczytaniu i zapisie (ERROR z kodem projektu, który go ma).
@@ -98,16 +99,30 @@ i budżetem (`StructureBuilder`).
   w grupie „Elementy P1S spoza struktury”.
 - **Kolumny w grupach** (`StructureColumns`) – jedna struktura WBS dla perspektywy operacyjnej (godziny) i finansowej
   (koszty); grupy zwijane jak grupowanie kolumn w Excelu („−” nad pierwszą kolumną grupy, zwinięta grupa – kolumna
-  „+ Grupa”); Schedule, Operational EV i Financial EV domyślnie zwinięte. Opis każdej kolumny – podpowiedź nagłówka
-  i okno „Skróty i opis kolumn” (przycisk „?” nad tabelą). Kolumny z danych (PZLPROD, ACTUALS, wyliczone) – tylko do odczytu (nagłówek kursywą).
+  „+ Grupa”); Schedule, Operational EV, Materials i Financial EV domyślnie zwinięte. Nazewnictwo EVM: BCWS / BCWP / ACWP.
+  Opis każdej kolumny – podpowiedź nagłówka i okno „Skróty i opis kolumn” (przycisk „?” nad tabelą). Kolumny z danych
+  (PZLPROD, ACTUALS, wyliczone) – tylko do odczytu (nagłówek kursywą).
 
   | Grupa | Kolumny |
   |---|---|
-  | WBS Attributes | WBS Name (drzewo, zamrożona; poziom – wcięcie), CES Element i Legacy Element (P1S) (domyślnie schowane – „+” w nagłówku WBS Name), WP (checkbox), CAM (lista osób), Cost Category (lista kategorii projektu) |
-  | Schedule | Baseline Start, Baseline Finish (RRRR-MM-DD, „Harmonogram i budżet”); Actual Start (najwcześniejszy `GSTRI` zleceń), Actual Finish (najpóźniejszy `LTRMI`, gdy wszystkie zlecenia zamknięte – inaczej puste); element wirtualny – `DATA_REAL` operacji |
-  | Operational EV | BAC Hours (AHD: TECH ÷ produktywność IPT z 12 mies. + DJK), PV Hours (BAC Hours AHD WP rozłożone liniowo na dni robocze pn–pt baseline, stan na dziś), EV Hours (TECH_PON ÷ produktywność + DJK), AC Hours (CATS) |
-  | Materials | BAC Material („Harmonogram i budżet”), Actual Material (vAPD: dostarczone / wydane, USD bez narzutu Z_CLO) |
-  | Financial EV | BAC Hours baseline i BAC Cost („Harmonogram i budżet”), PV Cost (BAC Cost × udział dni roboczych baseline), EV Cost (BAC Cost × EV Hours ÷ BAC Hours AHD, najwyżej BAC Cost), ACWP |
+  | WBS Attributes | WBS Name (drzewo, zamrożona; poziom – wcięcie), Braki, CES Element, Legacy Element (P1S) i Performance Obligation (domyślnie schowane – „+” w nagłówku WBS Name), WP (checkbox), CAM (lista osób), Cost Category (lista kategorii projektu), MPK (lista MPK ze „Stawek wydziałów” – „WP i CAM”) |
+  | Baseline (wpisywane) | Baseline Start, Baseline Finish, BAC Hours, BAC Material, BAC Cost (z wyceny) – „Harmonogram i budżet” |
+  | Schedule | Actual Start, Actual Finish – data wpisana dla WP w „Harmonogram i budżet” (Actual Start / Actual Koniec), a bez niej z produkcji: start – najwcześniejszy `GSTRI` zleceń, koniec – najpóźniejszy `LTRMI`, gdy wszystkie zlecenia zamknięte (inaczej puste); element wirtualny – `DATA_REAL` operacji; Forecast Start, Forecast Finish (wpisywane); Status (zakończony / w toku / nie rozpoczęty – z dat rzeczywistych) |
+  | Operational EV | TECH Hours (AHD: TECH ÷ produktywność IPT + DJK), BCWS Hours (TECH Hours WP rozłożone liniowo na dni robocze pn–pt baseline, stan na dziś), BCWP Hours (TECH_PON ÷ produktywność + DJK), % Complete (BCWP Hours ÷ TECH Hours × 100 – jak EV ÷ BAC raportu S70MR), ACWP Hours (CATS), ETC Hours (wpisane – „ETC HOURS”, a bez nich TECH_DO_PON ÷ produktywność + DJK), EAC Hours (ACWP Hours + ETC Hours), SPI (h), CPI (h) |
+  | Materials (vAPD: USD → waluta projektu, kurs bieżący) | Material Value (wszystkie części, bez fee), Material Fee (narzut Z_CLO), Material Delivered (dostarczone / wydane), Material ETC (wpisane – „ETC MATERIAL”, a bez nich Value − Delivered), % Delivered, PN / Delivered (liczba numerów części), Next Delivery (najbliższy rok planowanej dostawy) |
+  | Financial EV | BCWS (BAC Cost × udział dni roboczych baseline), BCWP (BAC Cost × BCWP Hours ÷ TECH Hours, najwyżej BAC Cost), ACWP Hours, ACWP Materials, ACWP Other (rodzaj kosztu Hours / Materials / Other cost elementu w Cost Category; suma = ACWP), ACWP, Actual DLH, Δ DLH vs CATS, SV, CV, SPI, CPI, ETC Cost, EAC (ACWP + ETC Cost), VAC (BAC Cost − EAC), % Spent (ACWP ÷ BAC Cost) |
+
+  **ETC Cost** WP = ETC Hours × stawka MPK (Labor Rate × Overhead – brak Overhead: 1; słownik „Stawki wydziałów”, bieżący
+  rok, PLN) × kurs + Material ETC – w walucie projektu: kod z kolumny waluty zestawu walutowego ACTUALS („Parametry
+  projektu”) w danych projektu (nagłówek ekranu: „Waluta: …”), kursy do PLN ze słownika „Kursy walut” (najnowszy okres nie
+  późniejszy niż bieżący). Brak MPK – ETC Cost pusty i brak „WP bez MPK”; brak stawki MPK na rok, kursu albo kilka walut
+  w kolumnie waluty zestawu – powód w brakach.
+  **Waluta w strukturze:** wszystkie kwoty w walucie projektu (zestaw walutowy ACTUALS – Object albo Report currency).
+  Materiały z vAPD (USD) – kurs bieżący z „Kursy walut” (brak kursu USD – kolumny materiałów i ETC Cost puste); kwoty
+  „Harmonogram i budżet” (BAC Material, BAC Cost, ETC MATERIAL) zapisują walutę, w której je wpisano (kolumna `Waluta`) –
+  po zmianie zestawu przeliczone kursem bieżącym, brak kursu – puste i brak „budżet w … – brak kursu”. ETC
+  Hours i Material ETC podaje docelowo CAM w osobnym formularzu (powiadomienie w przebiegu, uprawnienia); do tego czasu
+  wpisywane w tabeli struktury (wartość z produkcji – wyszarzona, wyczyszczenie przywraca produkcję).
 
   **Wiersz z własnym WP** pokazuje ten WP: budżet i daty (edytowalne, także gdy pod nim są inne WP), godziny z PZLPROD
   przypisane do WP oraz PV / EV. Godziny elementu trafiają do najbliższego WP w górę drzewa (własnego albo przodka) – WP
@@ -127,9 +142,11 @@ i budżetem (`StructureBuilder`).
   Dane produkcyjne są czytane na żywo (`IPzlProdSource.Production`, filtr – zakres P1S projektu) przy
   otwarciu projektu, „Odśwież P1S i koszty” i po zmianie Legacy WBS; chwila odczytu – w nagłówku ekranu
   („Produkcja (PZLPROD) …”). Kolumny mają stałą szerokość – przy kolejnych kolumnach tabela przewija się w poziomie. Tabela kończy się na dole okna (wysokość
-  dopasowana do okna, strona bez przewijania – wiersze przewija tabela; przy zwiniętym menu – szersza); komunikat
-  o wklejeniu – nad tabelą, skróty klawiszowe i opis kolumn – okno „?”; nad tabelą daty danych RABIT i produkcji – osobna
-  linia pod nagłówkiem projektu.
+  dopasowana do okna przy każdej zmianie jego rozmiaru, bez górnego limitu; strona bez przewijania – wiersze przewija
+  tabela; przy zwiniętym menu – szersza); skróty klawiszowe i opis kolumn – okno „?”; nad tabelą daty danych RABIT
+  i produkcji – osobna linia pod nagłówkiem projektu. Komunikaty (operacja w toku – „Trwa…”, wynik zapisu, wczytania,
+  wklejenia) – jedna linia o stałej wysokości pod datami danych (pełna treść w podpowiedzi); pokazanie i ukrycie
+  komunikatu nie przesuwa zakładek ani tabeli.
 - **WP** to znacznik elementu P1S (wiersz z kodem P1S), który wskażą finansiści: zaznaczony element jest pakietem pracy
   i ma mieć koszty i budżet. Kodem nowego WP jest kod elementu P1S (WP zapisany już w słowniku zachowuje swój
   kod). WP nie jest osobnym poziomem drzewa.
@@ -159,19 +176,31 @@ i budżetem (`StructureBuilder`).
   pobranie raportu z tą samą treścią (import „pominięty” / „duplikat”) nie zmienia danych, ale przesuwa datę „dane z” na
   nowszy raport – wiadomo, że dane są aktualne na tę datę (`CAN_LatestFiles` + `META_SourceFileSeen`).
   To podgląd – formalny koszt WP liczy przebieg (P3, `ev.KosztWP`).
+- **Daty rzeczywiste WP** (Actual Start, Actual Finish): data z raportu produkcyjnego (vAHDD) może zostać nadpisana –
+  WP bez danych produkcyjnych (daty podaje CAM) albo prace zakończone, choć jedna operacja nie jest zamknięta (wyrobu nie
+  ma już w zakładzie). Nadpisanie zapisuje się dla WP w „Harmonogram i budżet” (Actual Start / Actual Koniec); pusta
+  komórka – data z produkcji (wyczyszczenie komórki przywraca datę z produkcji). Data z produkcji jest w tabeli wyszarzona,
+  wpisana – zwykłym kolorem. Wiersz z WP w poddrzewie pokazuje daty WP: start najwcześniejszy, koniec najpóźniejszy, gdy
+  wszystkie WP zakończone (wpisany start bez końca i bez daty końca z produkcji – WP trwa); wiersz bez WP – daty
+  z produkcji poddrzewa.
+- **Actual DLH** (tylko do odczytu): godziny rzeczywiste narastająco z ostatniego importu ACTUALS – kolumna „Total
+  Quantity” (pole parsera `TotalQuantity`), te same wiersze (bez wykluczeń i rozliczenia wychodzącego) i to samo
+  przypisanie do WP co ACWP – to samo wywołanie procedury `REP_ProjectCostsByElement` (parametr `@Hours`, kolumna
+  `Hours`; migracja 036), jeden odczyt zrzutu ACTUALS dla obu kolumn. Godziny elementu bez WP zostają
+  na węźle nakładki (bez osobnego braku). Brak pola godzin w parserze – kolumna pusta, ACWP bez zmian.
 - **Pasek nad tabelą** – ikony z opisem w podpowiedzi: edycja Performance Objectives, dołożenie z Excela (eksport SAP),
   pobranie struktury do Excela, wczytanie struktury z Excela, rozwiń / zwiń wszystko, odświeżenie P1S i kosztów, cofnięcie wklejenia, odrzucenie
   niezapisanych zmian.
 - **Struktura do Excela** – arkusz „Struktura”: całe drzewo (także zwinięte wiersze) w kolejności tabeli, nazwa wcięta
   według poziomu, kolumny Poziom, Rodzaj, Element CES, P1S, WP, CAM (USRID oraz imię i nazwisko), Cost Category, WP
-  w poddrzewie, BAC HOURS, BAC MATERIAL, BAC, Baseline Start, Baseline Koniec, ACWP, Braki, Uwagi (wartości jak w tabeli –
+  w poddrzewie, BAC HOURS, BAC MATERIAL, BAC, Baseline Start, Baseline Koniec, ACWP, Actual DLH, Braki, Uwagi (wartości jak w tabeli –
   sumy poddrzewa). Eksportowany jest stan zapisany; przy niezapisanych zmianach – najpierw zapis albo „Odrzuć niezapisane”.
   Kolumny do uzupełnienia mają żółty nagłówek z opisem w komentarzu: WP, CAM (lista osób w arkuszu „Listy”), Cost
-  Category, Baseline Start, Baseline Finish, BAC Hours baseline, BAC Material, BAC Cost.
+  Category, Baseline Start, Baseline Finish, Actual Start, Actual Finish, BAC Hours baseline, BAC Material, BAC Cost.
 - **Struktura z Excela** – „Wczytaj strukturę z Excela”: arkusz „Struktura” pobrany z aplikacji i uzupełniony ręcznie.
   Wiersz pliku → wiersz struktury po `Legacy Element (P1S)`; czytane są tylko kolumny do uzupełnienia: WP (niepusta
   komórka – element jest WP, kod WP = kod elementu), CAM (USRID), Cost Category, a w wierszu z WP (własnym albo
-  zaznaczonym w pliku) – budżet i daty WP. Pusta komórka – bez zmiany (czyszczenie – w tabeli); pozostałe kolumny (sumy
+  zaznaczonym w pliku) – budżet i daty WP (Actual Start / Finish równe dacie z produkcji – bez nadpisania). Pusta komórka – bez zmiany (czyszczenie – w tabeli); pozostałe kolumny (sumy
   poddrzewa, AHD, ACTUALS) są pomijane. Pomijane z ostrzeżeniem: element P1S spoza struktury, budżet w wierszu bez WP;
   z błędem: niepoprawna liczba lub data, ten sam WP z innym budżetem w dwóch wierszach. Przed zapisem – podsumowanie
   (nowe WP, CAM, Cost Category, budżet i daty WP, pominięte) do potwierdzenia; zapis jak edycja w komórkach (jeden zapis
@@ -181,10 +210,10 @@ i budżetem (`StructureBuilder`).
   (klucz – kod P1S; zaznaczenie WP albo wybór CAM tworzy przypisanie, odznaczenie WP je usuwa razem z budżetem WP, jeśli
   WP nie jest przypisany do innego elementu; WP można zapisać bez CAM – brak „WP bez CAM”, CAM uzupełnia się później,
   przebieg blokuje gotowość projektu);
-  BAC HOURS, BAC MATERIAL, BAC, Baseline Start, Baseline Koniec wiersza z jednym WP w poddrzewie – własnym albo jedynym
+  BAC HOURS, BAC MATERIAL, BAC, Baseline Start, Baseline Koniec, Actual Start, Actual Koniec wiersza z jednym WP w poddrzewie – własnym albo jedynym
   pod nim (np. węzeł nakładki nad elementem P1S z WP) → „Harmonogram i budżet” tego WP (klucz – WP); wiersz z kilkoma WP
   w poddrzewie pokazuje sumę i nie jest edytowalny. Walidacja jak przy zapisie słownika: ERROR blokuje zapis (zmiany zostają w wierszu, komunikat
-  nad tabelą), WARNING nie wstrzymuje. Błąd, który słownik ma już w innym wierszu (np. element poza zakresem
+  w linii komunikatów), WARNING nie wstrzymuje. Błąd, który słownik ma już w innym wierszu (np. element poza zakresem
   po odświeżeniu P1S), nie blokuje zmiany – jest ostrzeżeniem. Zmiana `Legacy WBS` razem z WP / CAM w jednym
   wierszu przypisuje WP do nowego kodu P1S. Kolumny zablokowane do edycji – lista `StructureEdits.Locked` (do ustalenia).
 - **Jak w Excelu:** zaznaczanie komórek, pisanie zastępuje zawartość komórki, Ctrl+C / Ctrl+V – kopiowanie i wklejanie
@@ -193,7 +222,7 @@ i budżetem (`StructureBuilder`).
   WP z CAM i budżetem można wkleić za jednym razem: w wierszu, w którym WP jest właśnie zaznaczany (bez innych WP
   w poddrzewie), budżet i daty są od razu edytowalne i zapisują się pod nowym WP. Ctrl+Z / „Cofnij wklejenie” –
   cofnięcie ostatniego wklejenia, wyczyszczenia albo wypełnienia (do 20 kroków; komórki
-  dostają wartości sprzed operacji i wiersze są ponownie zapisywane), Alt+→ / Alt+← – rozwinięcie / zwinięcie wiersza. Komórka liczby / daty z błędem jest podświetlona od razu po wpisaniu.
+  dostają wartości sprzed operacji i wiersze są ponownie zapisywane), Alt+→ / Alt+← – rozwinięcie / zwinięcie wiersza. Komórka liczby / daty z błędem jest podświetlona od razu po wpisaniu. Wiersz bieżącej komórki jest podświetlony ciemniejszym szarym (także po odświeżeniu danych); wiersz z niezapisanymi zmianami – żółty.
   **Zapis wsadowy:** wiersze zatwierdzone w krótkim czasie (kilka kliknięć WP w ciągu 0,3 s, Enter w kolejnych wierszach,
   wklejenie bloku, Delete, Ctrl+D, Ctrl+Z) idą jednym zapisem na słownik – „WP i CAM” i „Harmonogram i budżet” wczytane
   raz, zmiany wszystkich wierszy nakładane po kolei, jedna transakcja i jeden wpis w dzienniku na słownik

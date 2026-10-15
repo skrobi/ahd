@@ -10,6 +10,9 @@ public static class DbTables
     public const string SourceFileSeen = "meta.SourceFileSeen";
     public const string Parser = "meta.Parser";
     public const string CanonicalRow = "can.Row";
+    /// <summary>Zestawienie ACTUALS po Project definition (migracja 037) – liczone przy imporcie pliku.</summary>
+    public const string ActualsBalance = "can.ActualsBalance";
+    public const string BuildActualsBalance = "can.BuildActualsBalance";
     public const string Run = "meta.Run";
     public const string RunPin = "meta.RunPin";
     public const string RunBalance = "run.Balance";

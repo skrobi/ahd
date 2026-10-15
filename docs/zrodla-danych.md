@@ -277,7 +277,10 @@ Z_KAT_ZBIORCZA
     Paint – w Paint); operacje kontroli (`CPLGR` DJK, `VERWE` QUAL) – własne godziny w swoim elemencie;
   - Actual Start = najwcześniejszy `GSTRI` (rzeczywisty start zlecenia); Actual Finish = najpóźniejszy `LTRMI`, gdy wszystkie
     operacje elementu mają `STAT` = DONE, inaczej puste; wydzielenie – `DATA_REAL` jego operacji;
-  - materiały `LOG.vAPD` (po PSPNR, na elemencie – nie na wydzieleniu): Σ `NETWR_USD` [÷ (1 + `Z_CLO`)] statusów dostarczonych, USD.
+  - ETC = Σ `TECH_DO_PON` ÷ produktywność IPT + DJK (godziny do wykonania);
+  - materiały `LOG.vAPD` (po PSPNR, na elemencie – nie na wydzieleniu), USD: wartość wszystkich części Σ `NETWR_USD`
+    [÷ (1 + `Z_CLO`)], fee Σ `NETWR_USD` − Σ `NETWR_USD` ÷ (1 + `Z_CLO`), dostarczone – statusy dostarczone, liczba numerów
+    części (`MATNR`) wszystkich i dostarczonych, najbliższy rok planowanej dostawy niedostarczonych (`EINDT_MAX`).
 - Raport S70MR liczy jednocześnie operacje kontroli DJK i DJK procentowe od godzin W2–W6 – przeniesione bez zmian, do
   potwierdzenia z autorem raportu (czy kontrola nie jest liczona podwójnie). TEMPO (`extCES.TEMPO1464`) – poza strukturą.
 

@@ -3,9 +3,11 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
     <!-- Edytor nakładki Performance Objectives (DataContext: PoEditorViewModel). Przeciąganie, zwijanie, zaznaczenie
          kilku wierszy, edycja w komórkach i menu „Przenieś do” – PoEditorView.xaml.cs. -->
-    <StackPanel>
+    <!-- Układ: paski na górze, komunikaty i kontrole na dole, tabela wypełnia resztę (ekran projektu – do dołu okna;
+         kreator – najwyżej MaxHeight tabeli). -->
+    <DockPanel>
         <!-- Pasek narzędzi (jak w edytorze tekstu): plik | dodawanie | kolejność | usuwanie | zwijanie -->
-        <Border Style="{StaticResource Panel}" Padding="8,6" Margin="0,0,0,8">
+        <Border DockPanel.Dock="Top" Style="{StaticResource Panel}" Padding="8,6" Margin="0,0,0,8">
             <DockPanel>
                 <TextBlock DockPanel.Dock="Right" Text="{Binding Summary}" Style="{StaticResource MutedText}" VerticalAlignment="Center" Margin="12,0,0,0" />
                 <WrapPanel>
@@ -34,15 +36,33 @@
             </DockPanel>
         </Border>
 
-        <TextBlock Text="{Binding MappingInfo}" Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="0,0,0,8" />
-        <DockPanel Margin="0,0,0,4">
+        <TextBlock DockPanel.Dock="Top" Text="{Binding MappingInfo}" Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="0,0,0,8" />
+        <DockPanel DockPanel.Dock="Top" Margin="0,0,0,4">
             <Button DockPanel.Dock="Right" Content="Odznacz" Style="{StaticResource Btn}" Padding="8,2" Command="{Binding Unselect}" />
             <TextBlock Text="{Binding SelectionText}" Style="{StaticResource MutedText}" TextWrapping="Wrap" VerticalAlignment="Center" />
         </DockPanel>
-        <Border x:Name="RootDrop" AllowDrop="True" Drop="OnDropRoot" DragOver="OnDragOver" Background="{StaticResource Surface2}"
+        <Border DockPanel.Dock="Top" x:Name="RootDrop" AllowDrop="True" Drop="OnDropRoot" DragOver="OnDragOver" Background="{StaticResource Surface2}"
                 BorderBrush="{StaticResource Line}" BorderThickness="1" Padding="8,4" Margin="0,0,0,2">
             <TextBlock Text="⤒ korzeń" ToolTip="Upuść tutaj wiersz, aby przenieść go na najwyższy poziom" Style="{StaticResource MutedText}" />
         </Border>
+        <!-- Pod tabelą (DockPanel – od dołu): komunikat edytora, wynik wczytania pliku, kontrola nakładki -->
+        <Border DockPanel.Dock="Bottom" Style="{StaticResource Panel}" Margin="0,8,0,0" MaxHeight="220" Visibility="{Binding HasIssues, Converter={StaticResource BoolToVisibility}}">
+            <StackPanel>
+                <TextBlock Text="Kontrola nakładki" Style="{StaticResource H2}" FontSize="15" Margin="0,0,0,6" />
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <ItemsControl ItemsSource="{Binding Issues}" />
+                </ScrollViewer>
+            </StackPanel>
+        </Border>
+        <Border DockPanel.Dock="Bottom" Style="{StaticResource Panel}" Margin="0,8,0,0" MaxHeight="220" Visibility="{Binding HasImportIssues, Converter={StaticResource BoolToVisibility}}">
+            <StackPanel>
+                <TextBlock Text="Wynik wczytania pliku" Style="{StaticResource H2}" FontSize="15" Margin="0,0,0,6" />
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <ItemsControl ItemsSource="{Binding ImportIssues}" />
+                </ScrollViewer>
+            </StackPanel>
+        </Border>
+        <TextBlock DockPanel.Dock="Bottom" Text="{Binding Status}" TextWrapping="Wrap" Margin="0,6,0,0" />
         <!-- Nazwa, Element CES i P1S – edycja w komórce (dwuklik, F2 albo pisanie; Enter zatwierdza, Esc anuluje) -->
         <DataGrid x:Name="NodesGrid" Style="{StaticResource DataTable}" ItemsSource="{Binding Rows}" SelectedItem="{Binding Selected}"
                   IsReadOnly="False" AllowDrop="True" Drop="OnDropRow" DragOver="OnDragOver" MaxHeight="560"
@@ -83,19 +103,5 @@
             </DataGrid.Columns>
         </DataGrid>
 
-        <TextBlock Text="{Binding Status}" TextWrapping="Wrap" Margin="0,6,0,0" />
-
-        <Border Style="{StaticResource Panel}" Margin="0,8,0,0" Visibility="{Binding HasImportIssues, Converter={StaticResource BoolToVisibility}}">
-            <StackPanel>
-                <TextBlock Text="Wynik wczytania pliku" Style="{StaticResource H2}" FontSize="15" Margin="0,0,0,6" />
-                <ItemsControl ItemsSource="{Binding ImportIssues}" />
-            </StackPanel>
-        </Border>
-        <Border Style="{StaticResource Panel}" Margin="0,8,0,0" Visibility="{Binding HasIssues, Converter={StaticResource BoolToVisibility}}">
-            <StackPanel>
-                <TextBlock Text="Kontrola nakładki" Style="{StaticResource H2}" FontSize="15" Margin="0,0,0,6" />
-                <ItemsControl ItemsSource="{Binding Issues}" />
-            </StackPanel>
-        </Border>
-    </StackPanel>
+    </DockPanel>
 </UserControl>

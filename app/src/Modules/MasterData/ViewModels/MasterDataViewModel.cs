@@ -1,6 +1,7 @@
 using System.IO;
 using System.Collections.ObjectModel;
 using System.Windows.Input;
+using PzlEv.Shared.Utils.Files;
 using PzlEv.Shared.Models.Dictionaries;
 using PzlEv.Shared.Models.Hr;
 using PzlEv.Shared.Utils.Data;
@@ -463,6 +464,11 @@ public sealed class MasterDataViewModel : ObservableObject
         try
         {
             await action();
+        }
+        catch (Exception ex) when (FileInUse.Is(ex))
+        {
+            Logger.Warning("{Context}: plik otwarty w innym programie – {Message}", "Operacja na pliku Excel", ex.Message);
+            Status = FileInUse.Describe(ex);
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {

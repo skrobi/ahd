@@ -8,6 +8,7 @@ using PzlEv.Modules.Import.Data;
 using PzlEv.Modules.Import.Services;
 using PzlEv.Modules.Projects.Data;
 using PzlEv.Modules.Projects.Models;
+using PzlEv.Modules.Projects.Services;
 using PzlEv.Shared.Utils.Data;
 using PzlEv.Tests.TestSupport;
 using Xunit;
@@ -235,6 +236,20 @@ public sealed class LatestImportProcedureTests : IDisposable
         Assert.Equal(2400m, costs["2di473001002"]);
         Assert.Equal(50014, Assert.Throws<SqlException>(() => store.CostsByElement("M28", "Brak")).Number);
 
+        // Migracja 036 – Actual DLH struktury: kwota i godziny (Total Quantity) jednym wywołaniem, te same wiersze co ACWP.
+        var (amounts, hours, labor, material) = store.CostsAndHoursByElement("M28", "ValueObjCrcy", ProjectService.ActualsHours);
+        Assert.Equal(costs, amounts);
+        // Migracje 038–039 – ACWP według rodzaju kosztu (Cost Category: „Manufacturing and QA labor” – Hours, 0051105550 PZL Mat Consump – Materials).
+        Assert.Equal((4800m, 1254.51m), (labor["2DI473001001"], material["2DI473001001"]));
+        Assert.Equal(2400m, labor["2di473001002"]);   // 94410550 Engineering labor
+        var kinds = connection.Query<(string CostElement, string? CostKind)>(
+                $"SELECT CostElement, CostKind FROM {_database.Sql.Table("dict.CostCategory")} WHERE Project IS NULL AND SupersededAt IS NULL")
+            .ToDictionary(k => k.CostElement, k => k.CostKind);
+        Assert.Equal(("Materials", "Materials", "Materials", "Hours"),
+            (kinds["0051105550"], kinds["0051102550"], kinds["0051103550"], kinds["0092212550"]));   // konta materiałowe – migracja 039
+        Assert.Equal((32m, 12m), (hours["2DI473001001"], hours["2DI473001002"]));
+        Assert.Empty(store.CostsAndHoursByElement("M28", "ValueObjCrcy", "Brak").Hours);   // brak pola godzin – bez godzin
+
         // Migracja 017: cost element rozliczeniowy (Cost Category „Rozliczeniowy”) – rozliczenie wychodzące (klasa partnera
         // inna niż „Profit analysis”) pominięte; zmiana projektu w Cost Category ma pierwszeństwo przed globalnym.
         Assert.Equal(1, connection.Execute($"UPDATE {_database.Sql.Table("dict.CostCategory")} SET IsSettlement = 1 " +
@@ -243,6 +258,54 @@ public sealed class LatestImportProcedureTests : IDisposable
         connection.Execute($"INSERT INTO {_database.Sql.Table("dict.CostCategory")} (RowId, Version, Project, CostElement, IsSettlement, RecordedAt, RecordedBy) " +
                            "VALUES (900001, 1, 'M28', '0092212550', 0, SYSDATETIMEOFFSET(), 'test')");
         Assert.Equal(6054.51m, store.CostsByElement("M28", "ValueObjCrcy")["2DI473001001"]);   // w projekcie nie jest rozliczeniowy
+    }
+
+    /// <summary>
+    /// Migracja 037: zestawienie ACTUALS po Project definition liczone przy imporcie – sumy jak w wierszach pliku; dwa projekty
+    /// z jednego pliku (bez przypisanych źródeł) mają każdy swoje koszty; nowa wersja pliku zastępuje poprzednią w odczytach.
+    /// </summary>
+    [SqlFact]
+    public void Actuals_balance_is_built_at_import_and_serves_every_project_of_a_shared_file()
+    {
+        Use();
+        Write("ACTUALS_PAF_01.csv", 0, new DateTime(2026, 10, 6, 23, 0, 0, DateTimeKind.Utc));
+        _import.Run();
+        var store = new SqlProjectStore(_database!.Sql, _services.Clock, _services.User);
+        PoTree Tree(string definition, string element)
+        {
+            var tree = new PoTree();
+            var root = tree.Add(new PoNode { Key = tree.NewKey(), WbsElement = definition, Name = definition, ProjectDefinition = definition });
+            tree.Add(new PoNode { Key = tree.NewKey(), ParentKey = root.Key, WbsElement = element, Name = "element", ProjectDefinition = definition });
+            return tree;
+        }
+        Assert.True(store.Create("M28", "M28", ProjectTypes.Internal, Tree("2DI473", "2DI473001001")).Success);
+        Assert.True(store.Create("GZ", "GZ", ProjectTypes.Internal, Tree("4D03GZ", "4D03GZ000001")).Success);
+
+        using var connection = _database.Sql.Open();
+        var balance = connection.QuerySingle<(int Rows, decimal Amount, decimal Hours)>(
+            $"SELECT SUM(Rows), SUM(ValueObjCrcy), SUM(TotalQuantity) FROM {_database.Sql.Table("can.ActualsBalance")}");
+        Assert.Equal((6, 10574.11m, 60m), balance);   // wszystkie wiersze pliku: 1 254,51 + 4 800 + 2 400 + 430 − 230,40 + 1 920; godziny 32 + 12 + 16
+
+        // Waluta projektu z kolumny waluty zestawu walutowego: Object Currency – PLN, Report currency – USD.
+        Assert.Equal(["PLN"], store.ProjectCurrencies("M28", "ObjectCurrency"));
+        Assert.Equal(["USD"], store.ProjectCurrencies("M28", "ReportCurrency"));
+        // Kreator (projekt niezapisany): waluta z kodów nakładki; kod spoza danych – brak waluty.
+        Assert.Equal(["USD"], store.CurrenciesOf(["2DI473", "2DI473001001"], "ReportCurrency"));
+        Assert.Empty(store.CurrenciesOf(["XYZ"], "ObjectCurrency"));
+        Assert.Empty(store.CurrenciesOf([], "ObjectCurrency"));
+
+        var (m28, m28Hours, _, _) = store.CostsAndHoursByElement("M28", "ValueObjCrcy", ProjectService.ActualsHours);
+        Assert.Equal((6054.51m, 32m), (m28["2DI473001001"], m28Hours["2DI473001001"]));
+        var (gz, gzHours, _, _) = store.CostsAndHoursByElement("GZ", "ValueObjCrcy", ProjectService.ActualsHours);
+        Assert.Equal((-230.40m, 1920m, 16m), (gz["4D03GZ000001"], gz["4D03GZ000041"], gzHours["4D03GZ000041"]));
+        Assert.DoesNotContain("2DI473001001", gz.Keys);
+
+        // Nowa wersja tego samego pliku – odczyty biorą tylko ją (zestawienie starej wersji zostaje, ale nie jest czytane).
+        Write("ACTUALS_PAF_01.csv", 1, new DateTime(2026, 10, 13, 23, 0, 0, DateTimeKind.Utc));
+        _import.Run();
+        Assert.Equal(2, connection.ExecuteScalar<int>($"SELECT COUNT(DISTINCT FileId) FROM {_database.Sql.Table("can.ActualsBalance")}"));
+        var latest = store.CostsAndHoursByElement("M28", "ValueObjCrcy", ProjectService.ActualsHours).Amounts;
+        Assert.Equal((m28.Count + 1, 1m, 6054.51m), (latest.Count, latest["2DI473001003"], latest["2DI473001001"]));   // wiersz dopisany w nowej wersji, bez podwójnego liczenia
     }
 
     /// <summary>Migracja 018: cost elementy całego ostatniego importu ACTUALS i „Uzupełnij z ACTUALS” w Cost Category (same nowe pozycje).</summary>
