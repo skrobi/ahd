@@ -1,3 +1,4 @@
+using Dapper;
 using ClosedXML.Excel;
 using PzlEv.Modules.Administration.Data;
 using PzlEv.Modules.Administration.Models;
@@ -157,7 +158,9 @@ public sealed partial class CasCostReportTests
         Assert.True(pln.Labor["2DI473001001"] > 4800m && pln.Material["2DI473001001"] > 1254.51m);
         Assert.Equal(32m, pln.Hours["2DI473001001"]);                                  // Actual DLH bez zmian
 
-        // USD bez kursu CAS – błąd zamiast kwot USD z SAP.
+        // USD bez kursu CAS – błąd zamiast kwot USD z SAP (bez przybliżonych kursów USD z danych startowych 046).
+        using (var connection = database.Sql.Open())
+            connection.Execute($"DELETE FROM {database.Sql.Table("dict.FxRate")} WHERE Currency = 'USD'");
         var context = service.Context("PAF", tree, null, P1sInputs.None);
         Assert.Equal(SaveStatus.Saved, service.SaveDictionary(ProjectDictionaries.Settings, context,
             [new DictRow(null, null, new Dictionary<string, string?> { ["Parametr"] = ProjectSettings.ActualsAmount, ["Wartość"] = "ValueRepCur", ["Opis"] = null })], [], "PAF").Status);
