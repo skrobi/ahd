@@ -563,7 +563,7 @@ public sealed class ProjectDetailViewModel : ObservableObject, IDisposable
 
     private void ShowKpis(StructureSummary summary)
     {
-        static string Amount(decimal value) => PzlEv.Shared.Utils.Files.PolishNumber.ToDisplay(value);
+        static string Amount(decimal value) => PzlEv.Shared.Utils.Files.PolishNumber.ToDisplay(Math.Round(value, 2));
         Kpis.Clear();
         Kpis.Add(new KpiGroup(StructureColumns.OperationalEv,
             [new KpiTile("BAC HOURS", Amount(summary.BacHours), "budżet godzin – Harmonogram i budżet")]));

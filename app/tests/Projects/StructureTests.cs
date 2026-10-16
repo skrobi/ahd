@@ -576,6 +576,7 @@ public sealed class StructureTests
         var header = ProjectService.StructureHeaders.ToList();
         Assert.Equal((85095.89m, 85095.89m, 12.345m), (row[header.IndexOf("ACWP")], row[header.IndexOf("ACWP Hours")], row[header.IndexOf("Actual DLH")]));
         Assert.Null(row[header.IndexOf("ACWP Other")]);   // 0 – puste
+        Assert.EndsWith("095,89)", structure.Rows.Single(r => r.WbsElement == "4D06WP000001").Gap);   // „koszt bez WP (…)” na ekranie
     }
 
     /// <summary>Pobrana struktura uzupełniona w Excelu i wczytana: tylko wyróżnione kolumny, puste komórki bez zmiany.</summary>
