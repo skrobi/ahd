@@ -22,7 +22,16 @@ public partial class App : Application
         // Serilog zapisuje log obok uruchomionego .exe (katalog aplikacji) – sprawdza też prawo zapisu
         // w miejscu uruchomienia (np. na dysku sieciowym).
         var logDir = Path.Combine(AppContext.BaseDirectory, "logs");
-        Directory.CreateDirectory(logDir);
+        try
+        {
+            Directory.CreateDirectory(logDir);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            MessageBox.Show($"Brak prawa zapisu logu w {logDir}: {ex.Message}", "PZL-EV – nie można uruchomić", MessageBoxButton.OK, MessageBoxImage.Error);
+            Shutdown(1);
+            return;
+        }
         Log.Logger = new LoggerConfiguration()
             .MinimumLevel.Information()
             .WriteTo.File(
@@ -50,6 +59,13 @@ public partial class App : Application
             Log.Information("Środowisko {Environment}, baza {Database}, korzeń {NetworkRoot}", config.Environment, config.Sql.Describe, config.NetworkRoot);
             _services = AppServices.Create(config, version);
             OfferMigrations(_services.Sql);
+            if (SqlMigrations.AppVersionRefusal(version, SqlMigrations.RequiredAppVersion(_services.Sql)) is { } refusal)
+            {
+                Log.Error("Wersja aplikacji niezgodna z bazą: {Refusal}", refusal);
+                MessageBox.Show(refusal, "PZL-EV – nieaktualna wersja aplikacji", MessageBoxButton.OK, MessageBoxImage.Error);
+                Shutdown(1);
+                return;
+            }
             var modules = ModuleCatalog.Create(_services);
             var window = new ShellWindow { DataContext = new ShellViewModel(modules, _services) };
             window.Show();
@@ -64,6 +80,13 @@ public partial class App : Application
         {
             Log.Error(ex, "Błąd uruchomienia");
             MessageBox.Show(ex.Message, "PZL-EV – nie można uruchomić", MessageBoxButton.OK, MessageBoxImage.Error);
+            Shutdown(1);
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            // Inny błąd przed pokazaniem okna – bez tego proces zostawał uruchomiony bez okna (DispatcherUnhandledException).
+            Log.Error(ex, "Nieoczekiwany błąd uruchomienia");
+            MessageBox.Show($"{ex.GetType().Name}: {ex.Message}", "PZL-EV – nie można uruchomić", MessageBoxButton.OK, MessageBoxImage.Error);
             Shutdown(1);
         }
     }

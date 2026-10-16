@@ -27,6 +27,10 @@ public sealed class StructureTests
 
     private static DictRow Row(params (string Column, string? Value)[] values) => new(null, null, values.ToDictionary(v => v.Column, v => v.Value));
 
+    /// <summary>Wiersz „Kursy walut”: waluta, obowiązuje od – do, kurs (kurs CAS – opcjonalny).</summary>
+    private static DictRow Fx(string currency, string from, string? to, string? rate, string? cas = null) =>
+        Row(("Waluta", currency), ("Od", from), ("Do", to), ("Kurs", rate), ("Kurs CAS", cas));
+
     private static DictRow Wp(string element, string wp, string cam = "Anna Nowak") => Row(("Element P1S", element), ("WP", wp), ("CAM", cam), ("Cost Category", null));
 
     private static DictRow Budget(string wp, string? hours, string? material = null, string? start = null, string? end = null, string? bac = null) =>
@@ -64,6 +68,17 @@ public sealed class StructureTests
         Assert.Contains("AC-CAB.6.38.07", ChildrenOf(structure, Of(structure, "4D06WP.01")));
         Assert.Contains("AC-CAB.9.01", ChildrenOf(structure, Of(structure, "4D06WP")));   // bez korekty – zwykły element pod AC-CAB
         Assert.Equal("AC-CAB.6.38", ProjectService.Scope(Objectives(), Inputs()).RootOf("XYZ-1"));
+    }
+
+    /// <summary>Kod wydzielenia elementu LOG.WBS bez kropkowego prefiksu węzła (XYZ-1 pod AC-CAB.6.38.07) – w zakresie elementu.</summary>
+    [Fact]
+    public void Split_code_of_log_wbs_element_is_in_scope_of_its_element()
+    {
+        var scope = ProjectService.Scope(Objectives(), Inputs());
+
+        Assert.Equal("AC-CAB.6.38", scope.RootOf("XYZ-1.QUALITY.DJ"));
+        Assert.Null(scope.RootOf("XYZ-1.QUALITY"));       // jeden człon za elementem – nie wydzielenie
+        Assert.Null(scope.RootOf("ZZZ.PAINT.W20"));       // element spoza zakresu
     }
 
     [Fact]
@@ -378,8 +393,7 @@ public sealed class StructureTests
             Row(("MPK", "W30"), ("Year", "2025"), ("Labor Rate", "90"), ("Overhead", "1.4")),
             Row(("MPK", "W50"), ("Year", "2026"), ("Labor Rate", "80"), ("Overhead", null)),
         ];
-        DictRow[] fx = [Row(("Waluta", "USD"), ("Okres", "2026-09"), ("Kurs", "3.9")), Row(("Waluta", "USD"), ("Okres", "2026-10"), ("Kurs", "4")),
-            Row(("Waluta", "USD"), ("Okres", "2026-11"), ("Kurs", "5"))];
+        DictRow[] fx = [Fx("USD", "2026-09-01", "2026-09-30", "3.9"), Fx("USD", "2026-10-01", "2026-10-31", "4"), Fx("USD", "2026-11-01", null, "5")];
         var today = new DateOnly(2026, 10, 15);
 
         var pln = ProjectService.EtcRatesOf(departments, fx, "PLN", null, today);
@@ -387,7 +401,7 @@ public sealed class StructureTests
         var usd = ProjectService.EtcRatesOf(departments, fx, "USD", null, today);
         Assert.Equal(("USD", 0.25m, 1m), (usd.Currency, usd.LaborFactor, usd.MaterialFactor));
         // Waluta spoza PLN / USD – kurs z „Kursy walut”: praca PLN → EUR, materiały USD → EUR.
-        var eur = ProjectService.EtcRatesOf(departments, [.. fx, Row(("Waluta", "EUR"), ("Okres", "2026-10"), ("Kurs", "4.25"))], "EUR", null, today);
+        var eur = ProjectService.EtcRatesOf(departments, [.. fx, Fx("EUR", "2026-10-01", null, "4.25")], "EUR", null, today);
         Assert.Equal((Math.Round(1 / 4.25m, 10), Math.Round(4m / 4.25m, 10)), (Math.Round(eur.LaborFactor!.Value, 10), Math.Round(eur.MaterialFactor!.Value, 10)));
         Assert.Contains("brak kursu EUR", ProjectService.EtcRatesOf(departments, fx, "EUR", null, today).Problem);
         Assert.Contains("kilka walut", ProjectService.EtcRatesOf(departments, fx, null, "kilka walut w kolumnie Report currency: EUR, PLN", today).Problem);
@@ -496,6 +510,29 @@ public sealed class StructureTests
         Assert.Equal((155m, 150m, 1500m), (root.OpsBacHours, root.BacHours, root.Bac));
     }
 
+    /// <summary>
+    /// Węzeł wirtualny z kodem elementu LOG.WBS (nie wydzielenie) – zastępuje element w drzewie: ma własne godziny elementu,
+    /// nie tylko jego poddrzewa (wcześniej godziny samego elementu znikały ze struktury).
+    /// </summary>
+    [Fact]
+    public void Virtual_node_with_log_wbs_element_code_keeps_the_element_own_hours()
+    {
+        var tree = Objectives();
+        var node = tree.AddVirtual(null, "Grupa 9.01");
+        node.LegacyWbs = "AC-CAB.9.01";
+        var production = new ProductionData(new Dictionary<string, ProductionValues>
+        {
+            ["200"] = new("200", 1, 10, 4, null),   // AC-CAB.9.01
+        }, DateTimeOffset.Now);
+
+        var structure = StructureBuilder.Build(tree, Inputs().P1s, [], [], production: production);
+
+        var row = Of(structure, $"po:{node.Key}");
+        Assert.Equal((10m, 4m, 1m), (row.OpsBacHours, row.EvHours, row.AcHours));
+        Assert.Null(row.Gap);
+        Assert.Equal(10m, structure.Rows.Where(r => r.ParentId is null).Sum(r => r.OpsBacHours ?? 0));   // element liczony raz
+    }
+
     [Fact]
     public void Split_code_outside_log_wbs_is_a_gap()
     {
@@ -526,6 +563,20 @@ public sealed class StructureTests
         // Wiersz bez WP w poddrzewie – budżet pusty (nie 0).
         var empty = rows[structure.Rows.ToList().FindIndex(r => r.Wps.Count == 0)];
         Assert.Null(empty[header.IndexOf("BAC Hours")]);
+    }
+
+    /// <summary>Koszt CAS po narzutach ma pełną precyzję obliczeń – w pobranej strukturze ACWP zaokrąglony do 2 miejsc (zgłoszenie 2026-10-16).</summary>
+    [Fact]
+    public void Structure_export_rounds_acwp_to_cents()
+    {
+        var costs = new Dictionary<string, decimal> { ["4D06WP000001"] = 85095.893454848608m };
+        var structure = ProjectService.Structure(Objectives(), Inputs(), [], [], costs, labor: costs, dlh: new Dictionary<string, decimal> { ["4D06WP000001"] = 12.345m });
+        var rows = ProjectService.StructureRows(structure, []).ToList();
+        var row = rows[structure.Rows.ToList().FindIndex(r => r.WbsElement == "4D06WP000001")];
+        var header = ProjectService.StructureHeaders.ToList();
+        Assert.Equal((85095.89m, 85095.89m, 12.345m), (row[header.IndexOf("ACWP")], row[header.IndexOf("ACWP Hours")], row[header.IndexOf("Actual DLH")]));
+        Assert.Null(row[header.IndexOf("ACWP Other")]);   // 0 – puste
+        Assert.EndsWith("095,89)", structure.Rows.Single(r => r.WbsElement == "4D06WP000001").Gap);   // „koszt bez WP (…)” na ekranie
     }
 
     /// <summary>Pobrana struktura uzupełniona w Excelu i wczytana: tylko wyróżnione kolumny, puste komórki bez zmiany.</summary>
@@ -576,6 +627,45 @@ public sealed class StructureTests
         Assert.Contains(result.Issues, i => i.Level == CheckLevel.Warning && i.Message.StartsWith($"BAC Hours przy elemencie {other.P1s} bez WP"));
         Assert.Contains(result.Issues, i => i.Level == CheckLevel.Warning && i.Message.StartsWith("Elementu P1S NIE-MA nie ma w strukturze"));
         Assert.Equal((1, 1), (result.Count(StructureEdits.Wp), result.Count(StructureEdits.Cam)));
+    }
+
+    /// <summary>
+    /// Pobrana struktura wczytana bez zmian: pusty budżet (w eksporcie 0) i budżet w walucie bez kursu (w eksporcie 0) – bez zapisu,
+    /// budżet w innej walucie (w eksporcie przeliczony) – bez zapisu; zmieniona wartość – zapis.
+    /// </summary>
+    [Fact]
+    public void Structure_file_exported_and_read_back_keeps_empty_and_foreign_currency_budgets()
+    {
+        DictRow[] wpCam =
+        [
+            Row(("Element P1S", "AC-CAB.6.38.07"), ("WP", "WP-1"), ("CAM", "Anna Nowak"), ("Cost Category", null), ("MPK", "W30")),
+            Row(("Element P1S", "AC-CAB.6.38.01"), ("WP", "WP-2"), ("CAM", "Anna Nowak"), ("Cost Category", null), ("MPK", "W30")),
+        ];
+        DictRow[] schedule =
+        [
+            Row(("WP", "WP-1"), ("BAC HOURS", "100"), ("BAC", "1000"), ("Waluta", "USD")),   // BAC MATERIAL pusty
+            Row(("WP", "WP-2"), ("BAC HOURS", "1"), ("BAC", "700"), ("Waluta", "EUR")),      // brak kursu EUR
+        ];
+        var rates = new EtcRates(new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase) { ["W30"] = 150m }, 2026, "PLN", 1, 4m, null,
+            new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase) { ["USD"] = 4m, ["PLN"] = 1m });
+        var structure = StructureBuilder.Build(Objectives(), Inputs().P1s, wpCam, schedule, statusDate: new DateOnly(2026, 10, 11), rates: rates);
+        var persons = new List<LookupOption> { new("Anna Nowak", "Anna Nowak") };
+        var path = Path.Combine(Directory.CreateTempSubdirectory("pzl-ev-structure-").FullName, "M28_struktura.xlsx");
+        ExcelTableWriter.WriteTemplate(path, [("Struktura", ProjectService.StructureSheetColumns(persons), ProjectService.StructureRows(structure, persons))]);
+
+        Assert.Empty(StructureImport.Read(TabularFileReader.Read(path, "Struktura"), structure, schedule).Edits);
+
+        using (var workbook = new XLWorkbook(path))
+        {
+            var sheet = workbook.Worksheet("Struktura");
+            var header = ProjectService.StructureHeaders.ToList();
+            var row = sheet.RowsUsed().Single(r => r.Cell(header.IndexOf("Legacy Element (P1S)") + 1).GetString() == "AC-CAB.6.38.07").RowNumber();
+            sheet.Cell(row, header.IndexOf("BAC Material") + 1).Value = 25;
+            workbook.Save();
+        }
+        var changes = StructureImport.Read(TabularFileReader.Read(path, "Struktura"), structure, schedule).Edits.Single().Changes;
+        Assert.Equal(["BacMaterial"], changes.Keys);
+        Assert.Equal("25", changes[StructureEdits.BacMaterial]);
     }
 
     /// <summary>Actual Start / Finish z pliku: data z produkcji (pokazana w eksporcie) – bez nadpisania; wpisana inna – nadpisanie WP.</summary>

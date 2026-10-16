@@ -29,6 +29,9 @@ public static partial class GlobalDictionaries
     public const string MaterialKind = "Materials";
     public const string OtherKind = "Other";
 
+    /// <summary>Kolumna słownika „Kursy walut” z kursem projektów CAS (koszt PLN po narzutach → waluta projektu).</summary>
+    public const string CasFxColumn = "Kurs CAS";
+
     /// <summary>Kolumna słownika Cost Category z grupą narzutową CAS elementu kosztowego (raport kosztów CES).</summary>
     public const string BurdenGroupColumn = "Grupa narzutowa CAS";
 
@@ -74,13 +77,16 @@ public static partial class GlobalDictionaries
         {
             Code = FxRates,
             Name = "Kursy walut",
-            Description = "Kurs waluty w okresie (do PLN) – przeliczenia walut w łączeniu źródeł (P3) i obliczeniu EV (P8).",
+            Description = "Kurs waluty (do PLN: ile PLN za jednostkę waluty) obowiązujący od – do (Do puste – bezterminowo). „Kurs” – przeliczenia walut w strukturze projektu (materiały, budżety, ETC), łączeniu źródeł (P3) i obliczeniu EV (P8); „Kurs CAS” – projekty CAS w walucie innej niż PLN: koszt PLN z ACTUALS po narzutach CAS przeliczany kursem CAS obowiązującym w okresie kosztu (kurs zakupu waluty); brak kursu CAS dla okresu z kosztem – błąd.",
             Columns =
             [
                 new("Waluta", ColumnType.Text, Key: true),
-                new("Okres", ColumnType.Text, Key: true),
-                new("Kurs", ColumnType.Decimal, Required: true),
+                new("Od", ColumnType.Date, Key: true),
+                new("Do", ColumnType.Date),
+                new("Kurs", ColumnType.Decimal),
+                new(CasFxColumn, ColumnType.Decimal),
             ],
+            Validity = ("Od", "Do"),
             Rules = FxRules,
         },
         new()
@@ -215,7 +221,7 @@ public static partial class GlobalDictionaries
             [("Rok", "Year"), ("Tydzień", "Week"), ("Okres", "Period"), ("Od", "DateFrom"), ("Do", "DateTo"), ("Zamykający", "IsClosing")]),
         new(Get(DepartmentRates), "dict.DepartmentRate",
             [("MPK", "CostCenter"), ("Department", "Department"), ("Year", "Year"), ("Labor Rate", "LaborRate"), ("Overhead", "Overhead")]),
-        new(Get(FxRates), "dict.FxRate", [("Waluta", "Currency"), ("Okres", "Period"), ("Kurs", "Rate")]),
+        new(Get(FxRates), "dict.FxRate", [("Waluta", "Currency"), ("Od", "ValidFrom"), ("Do", "ValidTo"), ("Kurs", "Rate"), (CasFxColumn, "CasRate")]),
         new(Get(CostCategory), "dict.CostCategory",
             [("Numer elementu kosztowego", "CostElement"), ("Opis", "Description"), ("Obszar", "Area"), ("Cost Category", "CostCategory"),
              ("Rozliczeniowy", "IsSettlement"), (CostKindColumn, "CostKind"), (BurdenGroupColumn, "BurdenGroupId")]),
@@ -297,10 +303,12 @@ public static partial class GlobalDictionaries
             var at = DictionaryValidator.RowElement(i);
             if (rows[i]["Waluta"] is { } currency && !CurrencyPattern().IsMatch(currency))
                 yield return Issue.Error($"Waluta '{currency}' – kod ISO z trzech wielkich liter (np. USD)", at);
-            if (rows[i]["Okres"] is { } period && !PeriodPattern().IsMatch(period))
-                yield return Issue.Error($"Okres '{period}' – oczekiwano RRRR-MM", at);
             if (Dec(rows[i]["Kurs"]) is { } rate && rate <= 0)
                 yield return Issue.Error("Kurs musi być większy od 0", at);
+            if (Dec(rows[i][CasFxColumn]) is { } casRate && casRate <= 0)
+                yield return Issue.Error($"{CasFxColumn} musi być większy od 0", at);
+            if (rows[i]["Kurs"] is null && rows[i][CasFxColumn] is null)
+                yield return Issue.Error($"Podaj Kurs albo {CasFxColumn}", at);
         }
     }
 

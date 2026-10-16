@@ -43,9 +43,6 @@ public sealed class ImportService(IImportStore store, AppServices services, Func
     /// <summary>Log importu (plik logs\pzl-ev-*.log obok exe): ścieżki, dostęp, decyzje, pełne błędy.</summary>
     private static readonly ILogger Logger = Log.ForContext("Module", "import");
 
-    /// <summary>Pobieranie plików bieżącego importu (Run).</summary>
-    private FileDownloader _downloader = null!;
-
     /// <summary>Kto teraz wykonuje pełny import (blokada wspólna dla wszystkich użytkowników); null – nikt.</summary>
     public LockHolder? RunningImport() => services.Locks.Holder(LockName);
 
@@ -205,6 +202,14 @@ public sealed class ImportService(IImportStore store, AppServices services, Func
         var definitions = store.ActiveDefinitions();
         var batchId = store.BeginBatch(services.Clock.Now, services.User.Account, Environment.MachineName, services.AppVersion);
         using var alive = services.Locks.TryAcquire(BatchLock(batchId), out _);
+        if (alive is null)
+        {
+            // Bez blokady „żyje” inny import uznałby ten za przerwany i usunął pliki w trakcie zapisu.
+            var refused = $"Import #{batchId} nie rozpoczęty – nie udało się założyć blokady importu w folderze {services.Config.RabitFolder}.";
+            Logger.Error(refused);
+            store.FinishBatch(batchId, services.Clock.Now, 0, 0, 0, 0, 0, 0, ImportBatchStatus.Abandoned);
+            return new ImportRunResult(batchId, [], [Issue.Error(refused, "import")], false) { NotStarted = refused };
+        }
         var scope = sources is null ? "" : $" – źródła: {string.Join(", ", sources.Order())}";
         services.Journal.Add(Area, $"Import #{batchId} rozpoczęty ({services.User.Account}, {Environment.MachineName}){scope}");
         Logger.Information("Import #{Batch} start – {User} na {Machine}, wersja {Version}", batchId, services.User.Account, Environment.MachineName, services.AppVersion);
@@ -212,7 +217,6 @@ public sealed class ImportService(IImportStore store, AppServices services, Func
         LogDefinitions(definitions);
         using var fetch = downloader?.Invoke() ?? new FileDownloader();
         fetch.CleanStale();
-        _downloader = fetch;
         var reference = ImportBatchRow.ProblemReference(batchId);
         var results = new List<FileResult>();
         var issues = new List<Issue>();
@@ -271,7 +275,7 @@ public sealed class ImportService(IImportStore store, AppServices services, Func
                 {
                     try
                     {
-                        result = ImportFile(batchId, location, file, definitions, Problem, stage, cancellation);
+                        result = ImportFile(batchId, location, file, definitions, fetch, Problem, stage, cancellation);
                     }
                     catch (Exception ex) when (cancellation.IsCancellationRequested && ex is not OutOfMemoryException)
                     {
@@ -304,8 +308,10 @@ public sealed class ImportService(IImportStore store, AppServices services, Func
         return run;
     }
 
+    /// <param name="downloader">Pobieranie plików bieżącego importu – lokalne dla wywołania Run: instancja ImportService (kontrakt
+    /// ISourceImport) jest wspólna dla przebiegów różnych projektów, które importują równolegle.</param>
     private FileResult ImportFile(long batchId, ImportLocation location, SourceFile file, IReadOnlyList<SourceDefinitionRow> definitions,
-        Action<string, Issue> problem, StageReporter stage, CancellationToken cancellation)
+        FileDownloader downloader, Action<string, Issue> problem, StageReporter stage, CancellationToken cancellation)
     {
         var modified = new DateTimeOffset(file.LastWriteTimeUtc, TimeSpan.Zero);
         string? sha = null;
@@ -341,7 +347,7 @@ public sealed class ImportService(IImportStore store, AppServices services, Func
                     description = $"importuje go teraz inny import: {holder?.Text ?? "?"}";
                 }
                 else
-                    (decision, description, sha, rows) = ImportContent(batchId, location, file, modified, definition, problem, stage, cancellation);
+                    (decision, description, sha, rows) = ImportContent(batchId, location, file, modified, definition, downloader, problem, stage, cancellation);
             }
         }
         catch (Exception ex) when (ex is not OperationCanceledException and not OutOfMemoryException && !cancellation.IsCancellationRequested)
@@ -366,21 +372,22 @@ public sealed class ImportService(IImportStore store, AppServices services, Func
     /// Nowa treść pliku, etapami widocznymi na ekranie:
     /// 1) pobranie na dysk lokalny (HTTPS albo WebDAV, SHA-256 w trakcie) – dalsze odczyty z dysku, nie z sieci;
     /// 2) duplikat (ten sam SHA-256), nagłówek i parser – kolumny parsera obecne w pliku;
-    /// 3) jeden przebieg pliku: wiersze czytane i parsowane w osobnym wątku i jednocześnie zapisywane wsadowo do CAN_Row
-    ///    w jednej transakcji; błąd wartości, puste pole wymagane albo niezgodne sumy kwot (z kolumn pliku i z wartości pól)
-    ///    wycofują zapis – plik nie trafia do bazy (decyzja „błąd”, problem w rejestrze) i przy kolejnym imporcie jest
-    ///    pobierany ponownie;
-    /// 4) kontrola w bazie (liczba wierszy i sumy po zapisie) i zatwierdzenie; niezgodność wycofuje cały zapis.
+    /// 3) jeden przebieg pliku: wpis pliku ze stanem „w toku”, wiersze czytane i parsowane w osobnym wątku i jednocześnie
+    ///    zapisywane do CAN_Row paczkami zatwierdzanymi osobno (odczyty widzą plik dopiero w stanie „utworzone”); błąd
+    ///    wartości, puste pole wymagane albo niezgodne sumy kwot (z kolumn pliku i z wartości pól) – wiersze i wpis pliku są
+    ///    usuwane: plik nie trafia do bazy (decyzja „błąd”, problem w rejestrze) i przy kolejnym imporcie jest pobierany
+    ///    ponownie;
+    /// 4) kontrola w bazie (liczba wierszy i sumy po zapisie) i stan „utworzone”; niezgodność usuwa wiersze i wpis pliku.
     /// Treść pliku nie jest przechowywana – po imporcie plik lokalny jest usuwany, dane są w CAN_Row.
     /// </summary>
     private (string Decision, string Description, string? Sha, int? Rows) ImportContent(long batchId, ImportLocation location, SourceFile file,
-        DateTimeOffset modified, SourceDefinitionRow definition, Action<string, Issue> problem, StageReporter stage, CancellationToken cancellation)
+        DateTimeOffset modified, SourceDefinitionRow definition, FileDownloader downloader, Action<string, Issue> problem, StageReporter stage, CancellationToken cancellation)
     {
         if (!TabularFileReader.IsSupported(file.Name))
             throw new NotSupportedException($"format {file.Extension} nieobsługiwany (dozwolone: xlsx, xlsm, csv, txt)");
 
         stage.Start(StageDownload);
-        using var local = _downloader.Download(location, file, stage.Detail, cancellation);
+        using var local = downloader.Download(location, file, stage.Detail, cancellation);
         Logger.Information("Plik {Location} / {File}: pobrany na dysk ({Method}) – {Megabytes} MB w {Elapsed} ({Speed} MB/s)", location.Name, file.Name,
             local.Method, StageReporter.Megabytes(local.Size), StageReporter.Seconds(local.Elapsed),
             StageReporter.Megabytes((long)(local.Size / Math.Max(local.Elapsed.TotalSeconds, 0.001))));
@@ -459,7 +466,14 @@ public sealed class ImportService(IImportStore store, AppServices services, Func
             rows = check.Rows;
         }
         if (stored is null)
-            return (FileDecisions.Duplicate, DuplicateText(store.FindByHash(sha)!), sha, null);
+        {
+            // Ta sama treść zapisana w międzyczasie przez inny import – albo przez niego już wycofana (wtedy plik wraca przy kolejnym imporcie).
+            if (store.FindByHash(sha) is { } concurrent)
+                return (FileDecisions.Duplicate, DuplicateText(concurrent), sha, null);
+            const string withdrawn = "tę samą treść zapisywał równolegle inny import i zapis wycofał – plik nie zapisany, wróci przy kolejnym imporcie";
+            problem("zapis równoległy", Issue.Error($"{file.Name}: {withdrawn}", location.Name));
+            return (FileDecisions.Error, withdrawn, sha, null);
+        }
 
         var pl = CultureInfo.GetCultureInfo("pl-PL");
         var canonical = mapper is null
@@ -509,8 +523,9 @@ public sealed class ImportService(IImportStore store, AppServices services, Func
     }
 
     /// <summary>
-    /// Przebieg pliku przez parser: liczba wierszy, błędy wartości (do 20 opisów), sumy kwot liczone niezależnie od
-    /// parsera z tekstu kolumn pliku (format polski) i z wartości pól po parsowaniu. Wiersze do zapisu – do pierwszego
+    /// Przebieg pliku przez parser: liczba wierszy, błędy wartości (do 20 opisów), sumy kwot z tekstu kolumn pliku i z wartości
+    /// pól po parsowaniu – to samo parsowanie liczb (PolishNumber), więc sumy wykrywają błędy mapowania wierszy, a nie błędy
+    /// parsowania liczb; niezależna jest kontrola w bazie (SqlImportStore.Verify). Wiersze do zapisu – do pierwszego
     /// błędu (dalej plik jest tylko sprawdzany, a zapis zostanie wycofany).
     /// </summary>
     private sealed class ContentCheck(RowMapper mapper)

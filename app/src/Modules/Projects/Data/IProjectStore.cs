@@ -52,6 +52,12 @@ public interface IProjectStore
     /// </summary>
     ElementActuals CostsAndHoursByElement(string code, string value, string hours);
 
+    /// <summary>
+    /// Koszt bazowy projektu CAS po elemencie WBS × Cost Element × rok × okres w PLN, z Grouping i opisami raportu kosztów
+    /// (procedura REP_ProjectCasCosts, migracja 045) – podstawa kosztu po narzutach (CasCosts).
+    /// </summary>
+    IReadOnlyList<CasCostRow> CasCosts(string code);
+
     /// <summary>Kody walut z kolumny currencyField (ObjectCurrency, ReportCurrency) w ostatnim imporcie ACTUALS projektu.</summary>
     IReadOnlyList<string> ProjectCurrencies(string code, string currencyField);
 

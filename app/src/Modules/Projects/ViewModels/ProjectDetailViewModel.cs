@@ -11,6 +11,7 @@ using PzlEv.Shared.Models.Pipeline;
 using PzlEv.Shared.Models.PzlProd;
 using PzlEv.Shared.Utils.Data;
 using PzlEv.Shared.Utils.Dictionaries;
+using PzlEv.Shared.Utils.Process;
 using PzlEv.Shared.Utils.Ui.Dialogs;
 using PzlEv.Shared.Utils.Ui.Dictionaries;
 using PzlEv.Shared.Utils.Ui.Mvvm;
@@ -86,7 +87,8 @@ public sealed class ProjectDetailViewModel : ObservableObject, IDisposable
         CreateFolders = new AsyncRelayCommand(DoCreateFolders, () => !Busy.IsBusy);
         RefreshMapping = new AsyncRelayCommand(() => { Structure.CommitEdits(); return Reload(refreshMapping: true); }, () => !Busy.IsBusy);
         ImportSources = new AsyncRelayCommand(DoImportSources, () => !Busy.IsBusy && _service.Imports is not null);
-        StartRun = new AsyncRelayCommand(DoStartRun, () => _service.Runs is { } r && !r.IsRunning(Code));
+        // Projekt niegotowy (ERROR gotowości) – przebieg zablokowany (docs/pipeline-fazy.md, P0 – bramka wejścia).
+        StartRun = new AsyncRelayCommand(DoStartRun, () => IsReady && _service.Runs is { } r && !r.IsRunning(Code));
         if (_service.Runs is { } launcher)
         {
             launcher.Progress += OnRunProgress;
@@ -386,7 +388,12 @@ public sealed class ProjectDetailViewModel : ObservableObject, IDisposable
     /// <summary>Raport kosztów CES z narzutami CAS w formułach (zakładka Raporty – tylko projekty CAS).</summary>
     public ICommand ExportCasCostReport { get; }
 
-    public bool IsCas => Project.Type == ProjectTypes.Cas;
+    /// <summary>Proces projektu (ścieżka wspólna albo wariant typu – ProjectService.Process).</summary>
+    private ProjectProcess ProjectProcess => _projectProcess ??= _service.Process(Code, Project.Type, null);
+    private ProjectProcess? _projectProcess;
+
+    /// <summary>Raport kosztów z narzutami w formułach (raport kosztów CES) – projekty, których proces go ma (CAS).</summary>
+    public bool HasBurdenReport => ProjectProcess.HasBurdenReport;
     public ICommand ExportStructure { get; }
 
     /// <summary>„Wczytaj strukturę z Excela” – WP, CAM, Cost Category, budżet i daty z arkusza „Struktura” uzupełnionego ręcznie.</summary>
@@ -507,6 +514,7 @@ public sealed class ProjectDetailViewModel : ObservableObject, IDisposable
                 Readiness.Add(check);
             IsReady = ProjectReadiness.IsReady(snapshot.Readiness);
             ReadinessPill = IsReady ? new Pill("ok", "gotowy do przebiegu") : new Pill("crit", "niegotowy – przebieg zablokowany");
+            CommandManager.InvalidateRequerySuggested();   // „Uruchom przebieg” według gotowości
             if (refreshMapping)
                 Status = _costsError is null ? "Odświeżono strukturę P1S i koszty (ostatni import ACTUALS)." : $"Odświeżono strukturę P1S; {_costsError}";
         });
@@ -555,7 +563,7 @@ public sealed class ProjectDetailViewModel : ObservableObject, IDisposable
 
     private void ShowKpis(StructureSummary summary)
     {
-        static string Amount(decimal value) => PzlEv.Shared.Utils.Files.PolishNumber.ToDisplay(value);
+        static string Amount(decimal value) => PzlEv.Shared.Utils.Files.PolishNumber.ToDisplay(Math.Round(value, 2));
         Kpis.Clear();
         Kpis.Add(new KpiGroup(StructureColumns.OperationalEv,
             [new KpiTile("BAC HOURS", Amount(summary.BacHours), "budżet godzin – Harmonogram i budżet")]));
@@ -565,7 +573,8 @@ public sealed class ProjectDetailViewModel : ObservableObject, IDisposable
         [
             new KpiTile("BAC", Amount(summary.Bac), "budżet kosztowy – Harmonogram i budżet"),
             _costsError is null
-                ? new KpiTile("ACWP", Amount(summary.Acwp), $"koszt rzeczywisty narastająco – {ProjectSettings.SetOf(_costsField).AmountColumn}, {_currency ?? ProjectSettings.CurrencyOf(_costsField)}; ostatni import ACTUALS, bez wykluczeń")
+                ? new KpiTile("ACWP", Amount(summary.Acwp), ProjectProcess.AcwpDescription(_currency)
+                    ?? $"koszt rzeczywisty narastająco – {ProjectSettings.SetOf(_costsField).AmountColumn}, {_currency ?? ProjectSettings.CurrencyOf(_costsField)}; ostatni import ACTUALS, bez wykluczeń")
                 : new KpiTile("ACWP", "—", _costsError, Pending: true),
             new KpiTile("Koszt bez WP", Amount(summary.AcwpWithoutWp + summary.AcwpOutside),
                 $"bez przypisania do WP: {Amount(summary.AcwpWithoutWp)} (brak WP / kilka WP – O45); elementy CES spoza nakładki: {Amount(summary.AcwpOutside)}"),

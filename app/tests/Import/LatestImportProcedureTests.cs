@@ -194,6 +194,34 @@ public sealed class LatestImportProcedureTests : IDisposable
             connection.Query(_database.Sql.Table("rep.ProjectCosts"), new { Project = "M28", Value = "Brak" }, commandType: CommandType.StoredProcedure).ToList()).Number);
     }
 
+    /// <summary>
+    /// Migracja 044: Grouping z drzewa Performance Objectives po elemencie WBS wiersza – elementy jednego Project definition
+    /// pogrupowane przez finansistę pod różnymi węzłami najwyższego poziomu dają osobne wiersze, w kolejności drzewa.
+    /// </summary>
+    [SqlFact]
+    public void Project_cost_report_takes_grouping_from_tree_node_of_each_wbs_element()
+    {
+        Use();
+        Write("ACTUALS_PAF_01.csv", 0, new DateTime(2026, 10, 6, 23, 0, 0, DateTimeKind.Utc));
+        _import.Run();
+        var tree = new PoTree();
+        var design = tree.AddVirtual(null, "Konstrukcja");
+        var production = tree.AddVirtual(null, "Produkcja");
+        var project = tree.Add(new PoNode { Key = tree.NewKey(), ParentKey = design.Key, WbsElement = "2DI473", Name = "Projekt 2DI473", ProjectDefinition = "2DI473" });
+        tree.Add(new PoNode { Key = tree.NewKey(), ParentKey = project.Key, WbsElement = "2DI473001002", Name = "inżynieria", ProjectDefinition = "2DI473" });
+        tree.Add(new PoNode { Key = tree.NewKey(), ParentKey = production.Key, WbsElement = "2DI473001001", Name = "wykonanie", ProjectDefinition = "2DI473" });
+        var store = new SqlProjectStore(_database!.Sql, _services.Clock, _services.User);
+        Assert.True(store.Create("M28", "M28", ProjectTypes.Internal, tree).Success);
+
+        var (columns, rows) = store.CostReport("M28", "ValueObjCrcy");
+
+        var total = columns.ToList().IndexOf("2026");
+        Assert.Equal(
+            [("Konstrukcja", "2DI473", "Projekt 2DI473", "0057120550", 430m), ("Konstrukcja", "2DI473", "Projekt 2DI473", "0094410550", 2400m),
+             ("Produkcja", "2DI473", "Projekt 2DI473", "0051105550", 1254.51m), ("Produkcja", "2DI473", "Projekt 2DI473", "0092212550", 4800m)],
+            rows.Select(r => ((string)r[0]!, (string)r[1]!, (string)r[2]!, (string)r[3]!, (decimal)r[total]!)));
+    }
+
     /// <summary>Migracja 014: element CES dodany ręcznie (bez Project definition) – Project definition z jego WBS elementu.</summary>
     [SqlFact]
     public void Manually_added_top_element_without_project_definition_still_selects_its_costs()
@@ -255,6 +283,15 @@ public sealed class LatestImportProcedureTests : IDisposable
         Assert.Equal(1, connection.Execute($"UPDATE {_database.Sql.Table("dict.CostCategory")} SET IsSettlement = 1 " +
                                            "WHERE Project IS NULL AND SupersededAt IS NULL AND CostElement = '0092212550'"));   // pozycja z danych startowych
         Assert.Equal(1254.51m, store.CostsByElement("M28", "ValueObjCrcy")["2DI473001001"]);   // bez 4 800 (W30, klasa KSTL)
+        // Migracja 043: także klasa partnera „Profit analysis” (rozliczenie do segmentu rentowności) – pominięte; raport
+        // kosztów CES bez cost elementów rozliczeniowych.
+        Assert.True(connection.Execute($"UPDATE {_database.Sql.Table("can.ActualsBalance")} SET PartnerObjectClass = N'Profit analysis' " +
+                                       "WHERE CostElement = '0092212550'") > 0);
+        Assert.Equal(1254.51m, store.CostsByElement("M28", "ValueObjCrcy")["2DI473001001"]);
+        var report = store.CostReport("M28", "ValueObjCrcy");
+        var costElement = report.Columns.ToList().IndexOf("Cost Element");
+        Assert.DoesNotContain(report.Rows, r => (string?)r[costElement] == "0092212550");
+        Assert.Contains(report.Rows, r => (string?)r[costElement] == "0051105550");
         connection.Execute($"INSERT INTO {_database.Sql.Table("dict.CostCategory")} (RowId, Version, Project, CostElement, IsSettlement, RecordedAt, RecordedBy) " +
                            "VALUES (900001, 1, 'M28', '0092212550', 0, SYSDATETIMEOFFSET(), 'test')");
         Assert.Equal(6054.51m, store.CostsByElement("M28", "ValueObjCrcy")["2DI473001001"]);   // w projekcie nie jest rozliczeniowy

@@ -56,9 +56,11 @@ public sealed class SqlRunStore(SqlDatabase db) : IRunStore
 
     public IReadOnlyList<RunBalanceRow> PinBalance(string project, long pinId, string amountField)
     {
-        using (var connection = db.Open())
-            connection.Execute(db.Table("run.PinBalance"), new { Project = project, PinId = pinId, Value = amountField },
-                commandType: System.Data.CommandType.StoredProcedure, commandTimeout: LongTimeout);
+        // Jedna transakcja: procedura usuwa saldo przypięcia, zmienia pole kwoty i zapisuje nowe saldo – błąd w trakcie nie zostawia
+        // przypięcia z częściowym saldem.
+        db.InTransaction((connection, transaction) =>
+            connection.Execute(db.Table("run.PinBalance"), new { Project = project, PinId = pinId, Value = amountField }, transaction,
+                commandType: System.Data.CommandType.StoredProcedure, commandTimeout: LongTimeout));
         return Balance(pinId);
     }
 

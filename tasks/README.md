@@ -1,7 +1,7 @@
 # PZL-EV – zadania (backlog)
 
 Plan budowy aplikacji podzielony na fazy i zadania. Każde zadanie to osobny plik – **kontrakt implementacyjny**
-(`CLAUDE.md`, rozdz. 9): cel, wymagania, zakres, kryteria akceptacji. Zadania można zmieniać, dodawać i usuwać;
+(`CLAUDE.md`, rozdz. 8): cel, wymagania, zakres, kryteria akceptacji. Zadania można zmieniać, dodawać i usuwać;
 zmiana zakresu zadania w trakcie realizacji wymaga uzgodnienia.
 
 ## Zasady
@@ -62,10 +62,10 @@ zmiana zakresu zadania w trakcie realizacji wymaga uzgodnienia.
 
 | Zadanie | Moduł | Zależy od | Otwarte kwestie | Status |
 |---|---|---|---|---|
-| [F3.1 Źródło PZLPROD (LOG.WBS, WBS_DIC, raport mapowań)](F3.1-zrodlo-pzlprod-log-wbs-wbs-dic-raport-mapowan.md) | Mapping | F0.4 | – | zrobione |
-| [F3.2 Rozstrzyganie mapowania i korekty (G2)](F3.2-rozstrzyganie-mapowania-i-korekty-g2.md) | Mapping | F3.1, F2.3 | O20 | zrobione |
-| [F3.3 Drzewo P1S](F3.3-drzewo-p1s.md) | Mapping | F3.1 | O21 | zrobione |
-| [F3.4 Ekran Mapowanie CES ↔ P1S](F3.4-ekran-mapowanie-ces-p1s.md) | Mapping | F3.2, F3.3 | – | zrobione – ekran do sprawdzenia na stanowisku |
+| [F3.1 Źródło PZLPROD (LOG.WBS, WBS_DIC, raport mapowań)](F3.1-zrodlo-pzlprod-log-wbs-wbs-dic-raport-mapowan.md) | – (wycofane) | F0.4 | – | wycofane – mapowanie CES↔P1S usunięte (migracje 024/025); drzewo P1S – MasterData |
+| [F3.2 Rozstrzyganie mapowania i korekty (G2)](F3.2-rozstrzyganie-mapowania-i-korekty-g2.md) | – (wycofane) | F3.1, F2.3 | O20 | wycofane – mapowanie CES↔P1S usunięte (migracje 024/025); drzewo P1S – MasterData |
+| [F3.3 Drzewo P1S](F3.3-drzewo-p1s.md) | – (wycofane) | F3.1 | O21 | wycofane – mapowanie CES↔P1S usunięte (migracje 024/025); drzewo P1S – MasterData |
+| [F3.4 Ekran Mapowanie CES ↔ P1S](F3.4-ekran-mapowanie-ces-p1s.md) | – (wycofane) | F3.2, F3.3 | – | wycofane – mapowanie CES↔P1S usunięte (migracje 024/025); drzewo P1S – MasterData |
 
 ## F4. Projekty (F01, F02)
 
@@ -73,19 +73,20 @@ zmiana zakresu zadania w trakcie realizacji wymaga uzgodnienia.
 |---|---|---|---|---|
 | [F4.1 Projekt i foldery](F4.1-projekt-i-foldery.md) | Projects | F0.7 | – | zrobione |
 | [F4.2 Nakładka Performance Objectives](F4.2-nakladka-performance-objectives.md) | Projects | F4.1, F3.2 | – | zrobione |
-| [F4.3 Słowniki projektu](F4.3-slowniki-projektu.md) | Projects / MasterData | F1.1, F4.2 | O24, O37 | zrobione – Stawki CAS po O37 |
+| [F4.3 Słowniki projektu](F4.3-slowniki-projektu.md) | Projects / MasterData | F1.1, F4.2 | O24, O37 | zrobione |
 | [F4.4 Kreator projektu](F4.4-kreator-projektu.md) | Projects | F4.1–F4.3 | O23 | zrobione |
 | [F4.5 Gotowość projektu i ekrany Projekty / Projekt](F4.5-gotowosc-projektu-i-ekrany-projekty-projekt.md) | Projects | F4.4 | – | zrobione – historia przebiegów po F5 |
 | [F4.6 Ekran Projekt – zakładki i struktura projektu](F4.6-ekran-projektu-zakladki-i-struktura.md) | Projects | F4.5 | – | zrobione – wskaźniki EV po F8; test ekranu na Windows |
+| [F4.7 Projekt CAS – ETC, EAC i budżet z narzutami CAS i kursem CAS](F4.7-cas-etc-eac-z-narzutami.md) | Projects | F4.6 | O51 | do zrobienia – ACWP CAS po narzutach wdrożony (045) |
 
 ## F5. Przebieg – rdzeń (P0, P1, P2, Z)
 
 | Zadanie | Moduł | Zależy od | Otwarte kwestie | Status |
 |---|---|---|---|---|
-| [F5.1 P0 Uruchomienie przebiegu](F5.1-p0-uruchomienie-przebiegu.md) | Runs | F0.6, F4.5, F1.2 | O36 | do zrobienia |
-| [F5.2 P1 Przypięcie stanu](F5.2-p1-przypiecie-stanu.md) | Runs | F5.1, F2.3, F3.2 | O30, O45 | do zrobienia |
+| [F5.1 P0 Uruchomienie przebiegu](F5.1-p0-uruchomienie-przebiegu.md) | Runs | F0.6, F4.5, F1.2 | O36 | w toku – P0/P1 i kontrole ACTUALS (RunService, RunChecks; migracje 027/028) |
+| [F5.2 P1 Przypięcie stanu](F5.2-p1-przypiecie-stanu.md) | Runs | F5.1, F2.3, F3.2 | O30, O45 | w toku – P0/P1 i kontrole ACTUALS (RunService, RunChecks; migracje 027/028) |
 | [F5.3 Zmiana po przypięciu](F5.3-zmiana-po-przypieciu.md) | Runs | F5.2 | – | do zrobienia |
-| [F5.4 P2 Walidacja](F5.4-p2-walidacja.md) | Runs | F5.2 | O25 | do zrobienia |
+| [F5.4 P2 Walidacja](F5.4-p2-walidacja.md) | Runs | F5.2 | O25 | w toku – P0/P1 i kontrole ACTUALS (RunService, RunChecks; migracje 027/028) |
 | [F5.5 Z Zamknięcie okresu](F5.5-z-zamkniecie-okresu.md) | Runs | F8.2 | – | do zrobienia |
 | [F5.6 Ekrany Przebiegi i Przebieg](F5.6-ekrany-przebiegi-i-przebieg.md) | Runs | F5.1–F5.4 | – | do zrobienia |
 
@@ -127,7 +128,7 @@ zmiana zakresu zadania w trakcie realizacji wymaga uzgodnienia.
 | [F10.1 Skrypty migracyjne schematu](F10.1-skrypty-migracyjne-schematu.md) | baza | F0.4 | O5 | zrobione – etap 1; do wykonania na PZLTEST |
 | [F10.2 Procedury i widoki](F10.2-procedury-i-widoki.md) | baza | F10.1 | – | do zrobienia |
 | [F10.3 Magazyny SQL i testy kontraktu na bazie](F10.3-magazyny-sql-i-testy-kontraktu-na-bazie.md) | całość | F10.2 | – | w toku – import, administracja, słowniki globalne |
-| [F10.4 PZLPROD, WebDAV, wydajność](F10.4-pzlprod-webdav-wydajnosc.md) | całość | F10.3 | O5, O6 | do zrobienia |
+| [F10.4 PZLPROD, WebDAV, wydajność](F10.4-pzlprod-webdav-wydajnosc.md) | całość | F10.3 | O5, O6 | w toku – import dużych plików przebudowany (2026-10-03); zostało: pomiar na prawdziwej lokalizacji i bazie |
 | [F10.5 Paczka wdrożeniowa](F10.5-paczka-wdrozeniowa.md) | całość | F10.3 | – | do zrobienia |
 
 ## Otwarte kwestie blokujące
@@ -135,7 +136,7 @@ zmiana zakresu zadania w trakcie realizacji wymaga uzgodnienia.
 | Kwestia | Kto | Blokuje |
 |---|---|---|
 | O14 – logika łączenia źródeł | zespół | F6.1 |
-| O35, O15, O30, O36 – metody EV, ETC, ACWP, data stanu | Finanse | F8.1 |
+| O35, O15, O30, O36 – metody EV, ETC, ACWP, data stanu | Finanse | F8.1; O36 – także F5.1 |
 | O16, O17 – układ plików dla finansów i CAM | Finanse, CAM | F6.2, F7.3 |
 | O10 – definicja vAHDD | właściciele PZLPROD | F7.1 |
 | O45 – przypisanie kosztów i zaawansowania do węzłów nakładki | zespół | F5.2 |

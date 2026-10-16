@@ -35,7 +35,8 @@ public static class RunChecks
     public static decimal GrossCost(IEnumerable<RunBalanceRow> rows) => rows.Where(r => !r.IsSettlement).Sum(r => r.Amount);
 
     public static IReadOnlyList<RunIssue> Check(IReadOnlyList<RunBalanceRow> current, IReadOnlyList<RunBalanceRow>? previous,
-        IReadOnlySet<string> costElementsInDictionary, (int Year, int Period) closedBefore, (int Year, int Period) today, string? currency = "PLN")
+        IReadOnlySet<string> costElementsInDictionary, (int Year, int Period) closedBefore, (int Year, int Period) today, string? currency = "PLN",
+        IReadOnlyList<RunBalanceRow>? source = null)
     {
         var issues = new List<RunIssue>();
         bool Closed(RunBalanceRow r) => (r.FiscalYear, Math.Min(r.Period, 12)).CompareTo(closedBefore) < 0;
@@ -82,8 +83,9 @@ public static class RunChecks
                 issues.Add(new RunIssue(NewCostElements, CheckLevel.Pass, group.Key, $"Cost element {group.Key} pierwszy raz w projekcie", group.Sum(r => r.Amount)));
         }
 
-        // 4. Projekt netuje się do 0 w zamkniętych okresach; inaczej – gdzie: elementy WBS z saldem narastającym ≠ 0.
-        var closed = current.Where(Closed).ToList();
+        // 4. Projekt netuje się do 0 w zamkniętych okresach; inaczej – gdzie: elementy WBS z saldem narastającym ≠ 0. Dane
+        //    źródłowe ACTUALS (source; projekt CAS – koszty bez narzutów z rozliczeniem), nie koszty po narzutach.
+        var closed = (source ?? current).Where(Closed).ToList();
         var balance = closed.Sum(r => r.Amount);
         if (Math.Abs(balance) <= Tolerance)
             issues.Add(new RunIssue(NetZero, CheckLevel.Pass, null, $"Projekt netuje się do 0 w okresach zamkniętych (do {closedBefore.Year}/{closedBefore.Period:00} bez niego): saldo {Amount(balance)}", balance));
@@ -119,7 +121,7 @@ public static class RunChecks
         if (previous is not null)
         {
             var then = previous.Where(Closed).GroupBy(r => (r.WbsElement, r.FiscalYear, r.Period)).ToDictionary(g => g.Key, g => g.Sum(r => r.Amount));
-            var now = closed.GroupBy(r => (r.WbsElement, r.FiscalYear, r.Period)).ToDictionary(g => g.Key, g => g.Sum(r => r.Amount));
+            var now = current.Where(Closed).GroupBy(r => (r.WbsElement, r.FiscalYear, r.Period)).ToDictionary(g => g.Key, g => g.Sum(r => r.Amount));
             foreach (var change in now.Keys.Union(then.Keys)
                          .Select(k => (k, Delta: now.GetValueOrDefault(k) - then.GetValueOrDefault(k)))
                          .Where(x => Math.Abs(x.Delta) > Tolerance).OrderByDescending(x => Math.Abs(x.Delta)).Take(Top))

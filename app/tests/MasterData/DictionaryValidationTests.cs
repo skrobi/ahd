@@ -107,10 +107,17 @@ public class DictionaryValidationTests
     public void Fx_rules_are_enforced()
     {
         var spec = GlobalDictionaries.Get(GlobalDictionaries.FxRates);
-        var issues = Check(spec, Row(("Waluta", "usd"), ("Okres", "2026-13"), ("Kurs", "-4")));
+        var issues = Check(spec, Row(("Waluta", "usd"), ("Od", "2026-01-01"), ("Do", null), ("Kurs", "-4"), ("Kurs CAS", "0")));
         Assert.Contains(issues, i => i.Message.Contains("Waluta 'usd'"));
-        Assert.Contains(issues, i => i.Message.Contains("Okres '2026-13'"));
         Assert.Contains(issues, i => i.Message.Contains("Kurs musi być większy od 0"));
+        Assert.Contains(issues, i => i.Message.Contains("Kurs CAS musi być większy od 0"));
+        Assert.Contains(Check(spec, Row(("Waluta", "USD"), ("Od", "2026-01-01"), ("Do", null), ("Kurs", null), ("Kurs CAS", null))),
+            i => i.Message.Contains("Podaj Kurs albo Kurs CAS"));
+        // Okresy obowiązywania jednej waluty nie mogą się nakładać (Validity – wspólna reguła słowników od – do).
+        Assert.Contains(Check(spec,
+                Row(("Waluta", "USD"), ("Od", "2026-01-01"), ("Do", "2026-06-30"), ("Kurs", "4"), ("Kurs CAS", null)),
+                Row(("Waluta", "USD"), ("Od", "2026-06-01"), ("Do", null), ("Kurs", "4.1"), ("Kurs CAS", "3.9"))),
+            i => i.Level == PzlEv.Shared.Models.Pipeline.CheckLevel.Error);
     }
 
     [Fact]

@@ -10,14 +10,13 @@ namespace PzlEv.Modules.Projects.Services;
 /// Słowniki projektu (docs/slowniki.md, rozdz. 3, 5.2–5.6) na mechanizmie słowników (Shared/Utils/Dictionaries):
 /// WP i CAM, Harmonogram i budżet, Kategorie WBS, Cost Category – zmiany w projekcie (tabela słownika globalnego
 /// z kodem projektu), Wykluczenia. Reguły zależne od projektu (zakres, inne projekty, lista osób) dostają kontekst – For(...).
-/// Stawki CAS – zawartość nieustalona (O37): słownik nie jest wczytywany ani zapisywany.
+/// Narzuty CAS nie mają słownika projektu – słowniki globalne (docs/slowniki.md, rozdz. 6.1; O37).
 /// </summary>
 public static class ProjectDictionaries
 {
     public const string WpCam = "wp-cam";
     public const string ScheduleBudget = "schedule-budget";
     public const string Exclusions = "exclusions";
-    public const string CasRates = "cas-rates";
     public const string WbsCategories = "wbs-categories";
     public const string Sources = "project-sources";
     public const string Settings = "project-settings";
@@ -123,7 +122,6 @@ public static class ProjectDictionaries
     [
         new(WpCam, "WP i CAM", "WP i CAM", RequiredFor: ProjectTypes.All, Stored: true),
         new(ScheduleBudget, "Harmonogram i budżet", "Harmonogram i budżet", RequiredFor: ProjectTypes.All, Stored: true),
-        new(CasRates, "Stawki CAS", "Stawki CAS", RequiredFor: [ProjectTypes.Cas], Stored: false),
         new(WbsCategories, "Kategorie WBS", "Kategorie WBS", RequiredFor: [], Stored: true),
         new(GlobalDictionaries.CostCategory, "Cost Category – zmiany w projekcie", "Cost Category projektu", RequiredFor: [], Stored: true),
         new(Exclusions, "Wykluczenia", "Wykluczenia", RequiredFor: [], Stored: true),
@@ -131,9 +129,8 @@ public static class ProjectDictionaries
         new(Settings, "Parametry projektu", "Parametry projektu", RequiredFor: [], Stored: true),
     ];
 
-    /// <summary>Słowniki projektu dla typu (Stawki CAS tylko dla CAS).</summary>
-    public static IReadOnlyList<ProjectDictionaryItem> ForType(string type) =>
-        Items.Where(i => i.Code != CasRates || type == ProjectTypes.Cas).ToList();
+    /// <summary>Słowniki projektu dla typu (wspólne dla wszystkich typów; wymagalność – IsRequired).</summary>
+    public static IReadOnlyList<ProjectDictionaryItem> ForType(string type) => Items;
 
     /// <summary>Tabele słowników projektu w bazie (SqlDictionaryStore; Cost Category – tabela globalna, Tables w GlobalDictionaries).</summary>
     public static IReadOnlyList<DictionaryTable> Tables { get; } =

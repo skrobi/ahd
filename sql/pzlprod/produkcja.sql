@@ -13,7 +13,8 @@
      #delivered (Status)                                         – statusy vAPD liczone jako dostarczone („Parametry produkcji”)
      @months    INT                                              – okno produktywności IPT w miesiącach („Parametry produkcji”)
      @divideZClo BIT                                             – wartość materiałów ÷ (1 + Z_CLO) („Parametry produkcji”)
-   Nazwy widoków: $(vAHDD), $(vAHDD_PL_CPI), $(vAPD) – podstawiane z konfiguracji (pzl-ev.json, PzlProd, schemat LOG).
+   Nazwy widoków: $(vAHDD), $(vAHDD_PL_CPI), $(vAPD) – nazwy stałe w kodzie (SqlPzlProdSource); z konfiguracji (pzl-ev.json,
+   PzlProd) pochodzi tylko schemat (LOG).
 
    Wynik 1 – godziny i daty po elemencie (PSPNR; VirtualCode – wydzielenie, inaczej NULL):
      AC = CATS; BAC = TECH ÷ produktywność IPT + DJK × TECH; EV = TECH_PON ÷ produktywność IPT + DJK × TECH_PON;

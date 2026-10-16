@@ -65,6 +65,10 @@ public sealed class FileDownloader : IDisposable
     /// </summary>
     public LocalFile Download(ImportLocation location, SourceFile file, Action<string, bool> detail, CancellationToken cancellation)
     {
+        // Nazwa z listingu serwera (SharePoint) – tylko nazwa pliku: bez folderów i dysku, plik nie trafi poza folder pobrania.
+        if (file.Name.Length == 0 || file.Name.IndexOfAny(['\\', '/', ':']) >= 0 || file.Name.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0
+            || file.Name is "." or "..")
+            throw new InvalidDataException($"niedozwolona nazwa pliku „{file.Name}” (znaki ścieżki)");
         var folder = Path.Combine(_root, Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(folder);
         var target = Path.Combine(folder, file.Name);

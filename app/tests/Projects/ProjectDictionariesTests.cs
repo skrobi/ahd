@@ -171,10 +171,12 @@ public sealed class ProjectDictionariesTests
     }
 
     [Fact]
-    public void Cas_rates_are_required_only_for_cas()
+    public void Cas_project_has_no_project_rates_dictionary()
     {
-        Assert.DoesNotContain(ProjectDictionaries.ForType(ProjectTypes.Sac), i => i.Code == ProjectDictionaries.CasRates);
-        Assert.Contains(ProjectDictionaries.ForType(ProjectTypes.Cas), i => i.Code == ProjectDictionaries.CasRates && !i.Stored && i.IsRequired(ProjectTypes.Cas));
+        // Narzuty CAS – słowniki globalne (O37); projekt CAS ma te same słowniki projektu co pozostałe typy, wszystkie wczytywane.
+        Assert.Equal(ProjectDictionaries.ForType(ProjectTypes.Sac).Select(i => i.Code), ProjectDictionaries.ForType(ProjectTypes.Cas).Select(i => i.Code));
+        Assert.All(ProjectDictionaries.ForType(ProjectTypes.Cas), i => Assert.True(i.Stored));
+        Assert.DoesNotContain(ProjectDictionaries.ForType(ProjectTypes.Cas), i => i.Name.Contains("Stawki CAS"));
     }
 
     [Fact]

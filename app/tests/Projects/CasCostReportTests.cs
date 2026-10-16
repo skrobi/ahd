@@ -152,7 +152,7 @@ public sealed partial class CasCostReportTests : IDisposable
     private static XLWorkbook Finance() => new(TestServices.TestData("Projekty", "Narzuty_CAS_arkusz.xlsx"));
 
     /// <summary>Raport kosztów (REP_ProjectCosts) z kosztów bazowych arkusza finansów: opis B–G, koszt H (07/2026), I (2026), J (2025).</summary>
-    private static (List<string> Columns, List<IReadOnlyList<object?>> Rows, List<CasCostReport.Rate> Rates) Input(IXLWorksheet sheet)
+    private static (List<string> Columns, List<IReadOnlyList<object?>> Rows, List<CasBurden.Rate> Rates) Input(IXLWorksheet sheet)
     {
         var columns = Description.Concat(["Period 07/2026", "2026", "2025"]).ToList();
         var rows = new List<IReadOnlyList<object?>>();
@@ -160,11 +160,11 @@ public sealed partial class CasCostReportTests : IDisposable
             rows.Add([.. Enumerable.Range(2, 6).Select(c => (object?)sheet.Cell(r, c).GetFormattedString()),
                 .. Enumerable.Range(8, 3).Select(c => sheet.Cell(r, c).IsEmpty() ? null : (object?)(decimal)sheet.Cell(r, c).GetDouble())]);
         // Wskaźniki roku 2026 (kolumny AD–AT) i 2025 (AW–BM) – od – do = rok.
-        var rates = new List<CasCostReport.Rate>();
+        var rates = new List<CasBurden.Rate>();
         for (var p = 0; p < FinancePoolNames.Count; p++)
         {
-            rates.Add(new CasCostReport.Rate(p + 1, new DateOnly(2026, 1, 1), new DateOnly(2026, 12, 31), (decimal)sheet.Cell(SheetRateRow, 30 + p).GetDouble()));
-            rates.Add(new CasCostReport.Rate(p + 1, new DateOnly(2025, 1, 1), new DateOnly(2025, 12, 31), (decimal)sheet.Cell(SheetRateRow, 49 + p).GetDouble()));
+            rates.Add(new CasBurden.Rate(p + 1, new DateOnly(2026, 1, 1), new DateOnly(2026, 12, 31), (decimal)sheet.Cell(SheetRateRow, 30 + p).GetDouble()));
+            rates.Add(new CasBurden.Rate(p + 1, new DateOnly(2025, 1, 1), new DateOnly(2025, 12, 31), (decimal)sheet.Cell(SheetRateRow, 49 + p).GetDouble()));
         }
         return (columns, rows, rates);
     }
@@ -260,7 +260,7 @@ public sealed partial class CasCostReportTests : IDisposable
         List<string> columns = [.. Description, "Period 03/2027", "2027", "2026", "2025"];
         List<IReadOnlyList<object?>> rows = [["G", "P1", "Projekt", "0092210550", "Quality", "Manufacturing and QA labor", 100m, 300m, 1000m, 50m]];
         long fringe = PoolId("MFG Fringe"), oh = PoolId("MFG OH");
-        List<CasCostReport.Rate> rates =
+        List<CasBurden.Rate> rates =
         [
             new(fringe, new DateOnly(2025, 1, 1), new DateOnly(2026, 6, 30), 0.5m),   // jeden wskaźnik na dwa lata
             new(fringe, new DateOnly(2026, 7, 1), null, 0.7m),                        // od połowy 2026 bezterminowo
@@ -469,14 +469,14 @@ public sealed partial class CasCostReportTests : IDisposable
                 Row(2, ("Grupa", "109"), ("Pula", "11"), ("Formuła", "nieczytelna")),   // pominięta
                 Row(3, ("Grupa", "555"), ("Pula", "1"), ("Formuła", "base * r:1")),      // grupa spoza słownika grup
             ]);
-        var rates = CasCostReport.RatesFrom([Row(5, ("Pula", "17"), ("Od", "2026-01-01"), ("Do", null), ("Wskaźnik", "0.000057456819309837"))]);
+        var rates = CasBurden.RatesFrom([Row(5, ("Pula", "17"), ("Od", "2026-01-01"), ("Do", null), ("Wskaźnik", "0.000057456819309837"))]);
 
         Assert.Equal([new CasBurden.Pool(1, "MFG Fringe", 10, false), new CasBurden.Pool(17, "FCCOM G&A", 170, true)], pools);
         Assert.Equal(["Travel", "Pusta"], groups.Select(g => g.Name));
         Assert.Equal("( base + p:1 ) * r:8", CasFormula.Serialize(groups[0].Formulas[8]));
         Assert.Single(groups[0].Formulas);
         Assert.Empty(groups[1].Formulas);
-        Assert.Equal(new CasCostReport.Rate(17, new DateOnly(2026, 1, 1), null, 0.000057456819309837m), rates.Single());
+        Assert.Equal(new CasBurden.Rate(17, new DateOnly(2026, 1, 1), null, 0.000057456819309837m), rates.Single());
         Assert.Equal([new LookupOption("1", "MFG Fringe"), new LookupOption("17", "FCCOM G&A")],
             GlobalDictionaries.LookupOptions(GlobalDictionaries.CasPools, [Row(17, ("Pula", "FCCOM G&A"), ("Kolejność", "170")), Row(1, ("Pula", "MFG Fringe"), ("Kolejność", "10"))]));
     }
@@ -652,7 +652,7 @@ public sealed partial class CasCostReportTests : IDisposable
             ["Wskaźnik"] = rate2024[p.Name].ToString(System.Globalization.CultureInfo.InvariantCulture), ["Opis"] = "test",
         }));
         Assert.Equal(SaveStatus.Saved, dictionaries.Save(rateSpec, [.. current, .. added], [], confirmWarnings: true).Status);
-        var rates = CasCostReport.RatesFrom(dictionaries.Load(rateSpec));
+        var rates = CasBurden.RatesFrom(dictionaries.Load(rateSpec));
 
         // 0057510550 (PZL Other Direct Cost) – w arkuszu, poza danymi startowymi Cost Category: finansista dopisuje go z grupą ODC.
         var costCategory = GlobalDictionaries.Get(GlobalDictionaries.CostCategory);

@@ -24,7 +24,8 @@
       },
 
       // Baza PZLPROD (struktura P1S: [LOG].[WBS], [LOG].[WBS_DIC]) – tylko odczyt, kontem AD użytkownika.
-      // Bez tej sekcji ekran Mapowanie pokazuje, czego brakuje.
+      // Bez tej sekcji gotowość projektu (kontrola „Strona P1S”), okno „Struktura P1S (PZLPROD)” na ekranie Słowniki
+      // i Diagnostyka pokazują, czego brakuje.
       "PzlProd": {
         "Server": "splmcd03",
         "Database": "PZLPROD",
@@ -33,7 +34,7 @@
       },
 
       // Baza PZLHRPROD (pracownicy: [HR].[ORG]) – tylko odczyt, kontem AD użytkownika; źródło słownika Osoby
-      // („Wczytaj z HR” na ekranie Słowniki). Serwer do potwierdzenia. Bez tej sekcji przycisk pokazuje, czego brakuje.
+      // („Dodaj z HR” na ekranie Słowniki). Serwer do potwierdzenia. Bez tej sekcji przycisk pokazuje, czego brakuje.
       "PzlHrProd": {
         "Server": "splmcd03",
         "Database": "PZLHRPROD",

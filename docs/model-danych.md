@@ -15,9 +15,7 @@ Wszystkie dane PZL-EV są w centralnej bazie MS SQL. Oryginalne pliki źródłow
 
 ```text
 ŹRÓDŁA – RABIT (SAP CES), PZLPROD (struktura P1S, zaawansowanie z produkcji), pliki CAM
-  ↓ import (pipeline G1)
-SUROWE – wiersze plików bez zmian, z pochodzeniem                                   stg
-  ↓ parser według definicji źródła
+  ↓ import (pipeline G1), parser według definicji źródła – bez wierszy surowych (od migracji 007/008)
 KANONICZNE – dane typowane według definicji źródła                                  can
   ↓
 SŁOWNIKI, HARMONOGRAM I BUDŻET                                                      dict
@@ -37,7 +35,7 @@ ZAMROŻENIE – przebieg zamykający okres
 
 | Schemat | Zawartość |
 |---|---|
-| `meta` | importy, wersje plików i ich treść, definicje źródeł, parsery, projekty, przebiegi, etapy, rewizje, problemy, dziennik zdarzeń, role, wersja aplikacji i schematu |
+| `meta` | importy, wersje plików (bez treści – migracja 008), definicje źródeł, parsery, projekty, przebiegi, etapy, rewizje, problemy, dziennik zdarzeń, role, wersja aplikacji i schematu |
 | `can` | dane kanoniczne – jedna stała tabela `can.Row` ze slotami typowanymi dla wszystkich parserów (migracja 007) |
 | `dict` | słowniki globalne i projektu – z historią |
 | `ev` | koszt per WP, zaawansowanie, wyniki EV |
@@ -50,7 +48,9 @@ Strona P1S projektu to `Legacy WBS` węzłów nakładki Performance Objectives i
 jednym schemacie z konfiguracji, z sygnaturą przed nazwą: `[<Schema>].[<Sygnatura><WARSTWA>_<Nazwa>]`, np.
 `meta.ImportBatch` → `[FINOP].[PZLEV_META_ImportBatch]` (TEST: baza `PZLTEST`, schemat `FINOP`, sygnatura `PZLEV_`;
 `docs/architektura.md`, rozdz. 8). Kolumny – nazwy angielskie jak w kodzie (słowa zastrzeżone SQL zastąpione:
-`UserName`, `DataRows`, `CheckName`); każda tabela zapisu ma `DbLogin DEFAULT ORIGINAL_LOGIN()`; czas –
+`UserName`, `DataRows`, `CheckName`); tabele zapisu mają `DbLogin DEFAULT ORIGINAL_LOGIN()` – bez niej: `CAN_Row`,
+`CAN_ActualsBalance`, `META_Run`, `META_RunPin`, `RUN_Balance`, `RUN_Issue` (kto – w imporcie albo w przebiegu:
+`CreatedBy`, `StartedBy`); czas –
 `DATETIMEOFFSET(7)`, kwoty – `DECIMAL(28,8)`; tabele z historią – `RecordedAt/By`, `SupersededAt/By`, unikalność
 kluczy wśród bieżących wersji (indeksy filtrowane).
 
@@ -62,6 +62,9 @@ kluczy wśród bieżących wersji (indeksy filtrowane).
 
 Dane zapisane przez PZL-EV nie są nadpisywane ani usuwane. Zmiana tworzy nowy wpis, a poprzedni zostaje
 w historii z informacją, kto i kiedy go zastąpił.
+
+Wyjątek – migracje, które zmieniły wartości w miejscu, w całej historii: 033 (zaokrąglenie `Rate`, `PoolId`,
+`BurdenGroup` → `BurdenGroupId` z usunięciem kolumny) i 038/039 (`CostKind`).
 
 ### 3.2 Dwie osie czasu
 
@@ -116,6 +119,10 @@ Znacznik stanu to moment zapisany w przebiegu w etapie P1. Przebieg czyta wszyst
 
 Ponowne przypięcie zapisuje nowy znacznik (`docs/pipeline-fazy.md`, rozdz. 5).
 
+**Stan obecny (migracje 027/028):** przypięcie (`META_RunPin`) zapisuje tylko zagregowane dane ACTUALS projektu
+(`RUN_Balance`); nakładkę i słowniki (w tym Cost Category) przebieg czyta w stanie bieżącym – bez zapisu stanu
+słowników. Rewizji jeszcze nie ma (rozdz. 4.3 – stan docelowy, F8).
+
 ### 4.3 Rewizja
 
 Rewizja to jedno obliczenie EV przebiegu (etap P8). Zapisuje:
@@ -165,7 +172,13 @@ Zmiana istniejących wierszy w `LOG.WBS` nie jest wykrywana (`docs/architektura.
 | `ev.Zaawansowanie` | przebieg, WP, wartość, pochodzenie, wartość z produkcji (podpowiedź dla CAM), kto, kiedy |
 | `ev.Wynik` | rewizja, poziom (WP, CAM, `PROJORG`, projekt), wskaźniki EV (`docs/ev-obliczenia.md`) |
 
-Schemat bazy powstaje skryptami migracyjnymi (`docs/architektura.md`, rozdz. 8).
+`meta.Przebieg`, `meta.EtapPrzebiegu`, `meta.Rewizja`, `meta.Rola` i `ev.*` – encje docelowe, jeszcze bez tabel;
+przebieg dziś – `META_Run`, `META_RunPin` (rozdz. 5.1).
+
+Schemat bazy powstaje skryptami migracyjnymi (`docs/architektura.md`, rozdz. 8). Każdy skrypt w jednej transakcji
+wykonuje tylko aplikacja (Diagnostyka → Migracja, pytanie przy starcie). Ręcznie (sqlcmd) uruchamia się tylko skrypty
+oczekujące (brak numeru w `META_SchemaVersion`) – ponowne wykonanie wszystkich odtworzyłoby tabele usunięte przez
+późniejsze skrypty (np. zakładane w 001 i 005).
 
 ### 5.1 Tabele etapu 1 – migracja `sql/mssql/001_etap1_import_slowniki_projekty.sql`
 
@@ -182,7 +195,10 @@ Bez metodologii EV; kolejne tabele dochodzą kolejnymi migracjami.
 | `META_Journal`, `META_Problem` | dziennik zdarzeń (`meta.Zdarzenie`) i problemy (otwarte / rozwiązane: `ResolvedAt`, `ResolvedBy`, `Resolution` – migracja 006) |
 | `META_Project`, `META_PerformanceObjective` | projekty (kod, nazwa, typ SAC / CAS / WEWNETRZNY) i nakładka Performance Objectives z historią |
 | `DICT_Calendar`, `DICT_DepartmentRate`, `DICT_FxRate`, `DICT_CostCategory`, `DICT_Person`, `DICT_DjkRate`, `DICT_ProductionParameter` | słowniki globalne – tabela z typowanymi kolumnami na słownik; `Project` NULL = globalny (w Cost Category `Project` = zmiany w projekcie) |
-| `DICT_WpCam`, `DICT_ScheduleBudget`, `DICT_WbsCategory`, `DICT_Exclusion` | słowniki projektu (F4.3; `DICT_WbsCategory` – Kategorie WBS, migracja 019); „Cost Category – zmiany w projekcie” – `DICT_CostCategory` z kodem projektu; Stawki CAS – po ustaleniu zawartości (O37) |
+| `DICT_WpCam`, `DICT_ScheduleBudget`, `DICT_WbsCategory`, `DICT_Exclusion` | słowniki projektu (F4.3; `DICT_WbsCategory` – Kategorie WBS, migracja 019); „Cost Category – zmiany w projekcie” – `DICT_CostCategory` z kodem projektu (narzuty CAS – słowniki globalne, bez słownika projektu; O37) |
+| `DICT_ProjectSource` (026), `DICT_ProjectSetting` (028) | słowniki projektu „Źródła danych” i „Parametry projektu” |
+| `DICT_CasPool`, `DICT_CasBurdenGroup`, `DICT_CasBurdenRate`, `DICT_CasFormula` (029–034) | narzuty CAS: pule, grupy narzutowe, wskaźniki, formuły |
+| `META_Run`, `META_RunPin`, `RUN_Balance`, `RUN_Issue` (027) | przebiegi (projekt + tydzień), uruchomienia (przypięcia), dane ACTUALS przypięte w uruchomieniu, wyniki kontroli przebiegu |
 
 **Dane startowe – migracja `sql/mssql/002_dane_startowe.sql`:** definicje źródeł `ACTUALS_PAF` i `ACTUALS_CES`
 (parser ACTUALS, układ kolumn – `docs/zrodla-danych.md`, rozdz. 4), aktywna lokalizacja RABIT E456659, kalendarz
@@ -262,7 +278,9 @@ najnowsza wersja każdego pliku parsera (wspólna dla `CAN_LatestImport` i rapor
 **`REP_ProjectCosts @Project, @Value = 'ValueObjCrcy'`** – raport kosztów projektu z ostatniego importu ACTUALS:
 - wiersz: `Project definition` z nakładki projektu × `Cost Element` – tylko elementy z kosztami projektu, bez wierszy
   pasujących do słownika projektu „Wykluczenia” (każde wypełnione pole wykluczenia musi się zgadzać);
-- kolumny: `Grouping` (nazwa korzenia nakładki nad Project definition), `Project definition`, `Project definition
+- kolumny: `Grouping` (najwyższy poziom drzewa nakładki nad węzłem elementu WBS wiersza – finansista grupuje elementy
+  w drzewie Performance Objectives; element WBS spoza nakładki – korzeń nad Project definition; migracja 044),
+  `Project definition` (z ACTUALS), `Project definition
   description` (nazwa elementu nakładki = Project definition), `Cost Element`, `Cost Elem. Descr.` i `Cost grouping`
   (słownik Cost Category: zmiany projektu przed globalnym; opis bez wpisu – z danych), `Period MM/RRRR` (ostatni okres
   w danych ACTUALS), kolumny lat projektu od najnowszego;
@@ -288,7 +306,8 @@ struktury (`docs/performance-objectives.md`, rozdz. 4.2). Wymaga aplikacji 0.28.
 „Rozliczeniowy” (cost element rozliczenia SAP, np. 0091902551 „PZL Invent Cost Set”). `REP_ProjectCostsByElement`
 pomija rozliczenie wychodzące: wiersze z cost elementem rozliczeniowym (słownik efektywny projektu), których klasa
 obiektu partnera nie jest „Profit analysis”; rozliczenie przychodzące („Profit analysis”) zostaje w ACWP. Bez tego
-suma zrzutu na elemencie WBS rozliczanym co miesiąc wynosi 0. Wymaga aplikacji 0.29.0.
+suma zrzutu na elemencie WBS rozliczanym co miesiąc wynosi 0. Wymaga aplikacji 0.29.0. Wyjątek „Profit analysis”
+zniesiony w 043.
 
 **Migracja `sql/mssql/018_cost_elementy_z_actuals.sql`:** procedura `CAN_ActualsCostElements @Value` – cost elementy
 całego ostatniego importu ACTUALS (nazwa z danych, liczba wierszy, suma kwoty) dla „Uzupełnij z ACTUALS” w słowniku
@@ -402,11 +421,35 @@ wpisaniu kwot „Harmonogram i budżet” (`BAC MATERIAL`, `BAC`, `ETC MATERIAL`
 `CAN_ActualsCostElements` go nie sumuje; „Parametry projektu” z `ValueTranCurr` – nowa wersja z `ValueObjCrcy`. Kolumna
 `CAN_ActualsBalance.ValueTranCurr` zostaje (dane źródła). Wymaga aplikacji 0.54.0.
 
+**Migracja `sql/mssql/043_rozliczeniowe_poza_kosztami.sql`:** cost element „Rozliczeniowy” (słownik efektywny projektu)
+nie wchodzi do kosztów bez względu na klasę obiektu partnera – rozliczenie elementu WBS do segmentu rentowności (CO-PA)
+ma partnera „Profit analysis” i zostawało w ACWP jako ujemny koszt (decyzja 2026-10-15): `REP_ProjectCostsByElement`
+(ACWP, praca, materiał, Actual DLH struktury) i `REP_ProjectCosts` (raport kosztów CES – dotąd bez filtra rozliczenia)
+pomijają te wiersze, `RUN_PinBalance` oznacza je `IsSettlement`. Wymaga aplikacji 0.55.0.
+
+**Migracja `sql/mssql/044_raport_kosztow_grouping.sql`:** `REP_ProjectCosts` – `Grouping` wiersza kosztu z drzewa
+Performance Objectives po elemencie WBS (najwyższy poziom nad jego węzłem; element spoza nakładki – jak dotąd, korzeń nad
+Project definition); wiersze: Grouping × Project definition × Cost Element, kolejność grup – kolejność węzłów najwyższego
+poziomu w drzewie (decyzja 2026-10-15). Wymaga aplikacji 0.55.0.
+
+**Migracja `sql/mssql/045_koszty_cas_z_narzutami.sql`:** `DICT_FxRate` („Kursy walut”) – kurs obowiązujący od – do
+(`ValidFrom`, `ValidTo`) zamiast okresu RRRR-MM i kolumna `CasRate` („Kurs CAS”); istniejące wiersze obowiązują w miesiącu
+swojego okresu (`Period` zostaje dla historii, aplikacja jej nie używa), `Rate` opcjonalny, klucz bieżących wersji
+(`Project`, `Currency`, `ValidFrom`). Procedura **`REP_ProjectCasCosts @Project`** – koszt bazowy projektu CAS: Grouping ×
+Project definition × element WBS × Cost Element × rok × okres w PLN (`ValueObjCrcy`), te same wiersze co ACWP (bez
+rozliczeniowych i wykluczeń), opisy jak `REP_ProjectCosts`, ostatni okres danych; narzuty, kurs CAS i TOTAL COST liczy
+aplikacja (`CasCosts` – ACWP struktury, raport kosztów CES, przebieg; `docs/slowniki.md`, rozdz. 6.1). Wymaga aplikacji 0.55.0.
+
+**Migracja `sql/mssql/046_dane_kursy_usd.sql` (dane startowe):** globalne kursy USD miesięcy 2024-01 … 2026-10 (`ValidFrom` –
+pierwszy, `ValidTo` – ostatni dzień miesiąca, `Rate` = `CasRate`) – wartości **przybliżone** (zbliżone do średnich NBP, nie kursy
+urzędowe), do testów i uruchomienia projektów w USD; miesiąc z kursem USD obowiązującym wcześniej zostaje bez zmian. Wiersze
+rozpoznawalne po `RecordedBy = N'migracja 046 – kursy przybliżone'` – przed rozliczeniem zastąpić kursami finansów.
+
 `META_SourceFile.CanonicalStatus`: „utworzone” – dane kanoniczne zapisane i sprawdzone (widoczne dla odczytów),
 „w toku” – zapis wierszy trwa (odczyty pomijają plik; po awarii wpis i wiersze są usuwane), inna wartość – powód
 braku danych (źródło bez parsera).
 
 Aplikacja zapisuje do tabel importu, konfiguracji importu, słowników globalnych i projektu, projektów i nakładki
-Performance Objectives, dziennika i problemów. Blokady importu – pliki na dysku sieciowym
+Performance Objectives, przebiegów, dziennika i problemów. Blokady importu – pliki na dysku sieciowym
 (`docs/pipeline-fazy.md`, rozdz. 1.4).
 

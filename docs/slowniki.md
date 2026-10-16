@@ -61,7 +61,7 @@ Słowniki, kreator projektu), `docs/zrodla-danych.md` (struktura P1S).
 |---|---|---|---|
 | Kalendarz okresów | okres (`RRRR-MM`); tygodnie okresu (numer, od – do); oznaczenie tygodnia zamykającego okres | tydzień | przebieg: okres i czy zamyka okres (P0); nazwy plików |
 | Stawki wydziałów | `MPK` (miejsce powstawania kosztów), `Department` (opis MPK, opcjonalny), `Year`, `Labor Rate`, `Overhead` (opcjonalny) | `MPK` + `Year` | łączenie źródeł – godziny na koszt (P3) |
-| Kursy walut | waluta, okres, kurs (USD / PLN) | waluta + okres | przeliczenia walut (P3, P8) |
+| Kursy walut | waluta, `Od` – `Do` (`Do` puste – bezterminowo), `Kurs` (do PLN: ile PLN za jednostkę), `Kurs CAS` (projekty CAS – rozdz. 6.1); wiersz ma Kurs albo Kurs CAS; okresy jednej waluty się nie nakładają (migracja 045 – wcześniej okres RRRR-MM); dane startowe 046 – przybliżone kursy USD 2024-01 … 2026-10 do zastąpienia kursami finansów | waluta + `Od` | Kurs – przeliczenia walut w strukturze projektu (kurs obowiązujący w dniu stanu), P3, P8; Kurs CAS – koszty projektów CAS |
 | Cost Category | numer elementu kosztowego → Opis, Obszar, Cost Category, Rozliczeniowy, Rodzaj kosztu (Hours / Materials / Other, puste – Other: podział ACWP na ACWP Hours / ACWP Materials / ACWP Other w strukturze projektu, suma = ACWP; migracja 038 – wstępnie wg Cost Category zawierającego „labor” / „material”; 040 – konta materiałowe 0051105550 PZL Mat Consump, 0051102550 PZL Mat Comsump-SAC, 0051103550 IC Profit Mat-SAC jako Materials), Grupa narzutowa CAS (wybór z „Grup narzutowych CAS” – zapisany identyfikator grupy) (rozdz. 6) | numer elementu kosztowego | walidacja (P2), łączenie źródeł (P3), raport kosztów CES |
 | Pule narzutu CAS | pula → `Kolejność` kolumny w raporcie, `Rodzaj` (Koszt – TOTAL COST, FCCOM – TOTAL FCCOM), opis (rozdz. 6.1) | pula | raport kosztów CES, formuły, wskaźniki |
 | Grupy narzutowe CAS | grupa narzutowa elementu kosztowego → opis (rozdz. 6.1) | grupa | raport kosztów CES, formuły, Cost Category |
@@ -85,7 +85,6 @@ Z_OPIS → PROJORG → elementy) z wyszukiwarką – tylko do odczytu, to nie je
 | WP i CAM | element P1S projektu → WP, CAM, Cost Category (kategoria ze słownika „Kategorie WBS” projektu), MPK (lista MPK ze słownika „Stawki wydziałów” – stawka ETC Cost); powiązanie z nakładką przez `Legacy WBS` (`docs/performance-objectives.md`, rozdz. 4.1) | element P1S |
 | Harmonogram i budżet | WP → `BAC HOURS` (godziny), `BAC MATERIAL` (koszt materiałów), `BAC` (budżet kosztowy WP – kwota), Baseline Start, Baseline Koniec (RRRR-MM-DD; w plikach Excel rozpoznawane też nagłówki „Planowany Start/Koniec”) – baseline projektu; Actual Start, Actual Koniec – daty rzeczywiste WP nadpisujące daty z raportu produkcyjnego (puste – data z produkcji; `docs/performance-objectives.md`, rozdz. 4.2); Forecast Start, Forecast Koniec – prognoza; ETC HOURS, ETC MATERIAL – godziny i materiały do poniesienia nadpisujące wartości z produkcji (puste – z produkcji); kwoty (`BAC MATERIAL`, `BAC`, `ETC MATERIAL`) – w walucie projektu, `Waluta` – kod waluty projektu zapisywany automatycznie przy zmianie kwot (puste – waluta projektu; kwoty bez zmian – waluta wiersza zostaje; zmiana kwoty w wierszu w innej walucie – pozostałe kwoty wiersza przeliczone kursem bieżącym z „Kursy walut”, a bez kursu wiersz zostaje w swojej walucie); kod z trzech wielkich liter, inaczej ERROR | WP |
 | Kategorie WBS | kategorie elementów WBS indywidualne dla projektu: `Cost Category` (np. Production, Programs), `Opis` – lista wyboru kolumny Cost Category w strukturze projektu i w „WP i CAM”; raport po kategoriach (wiele elementów WBS w jednej kategorii); inne niż globalny słownik Cost Category (numer elementu kosztowego) – **opcjonalny** | Cost Category |
-| Stawki CAS | stawki CAS projektu (zawartość – O37); do ustalenia słownik nie jest wczytywany, a projekt CAS jest niegotowy (ERROR) | do ustalenia |
 | Cost Category – zmiany w projekcie | zmiany i uzupełnienia słownika globalnego Cost Category dla projektu (rozdz. 6) | numer elementu kosztowego |
 | Wykluczenia | elementy pomijane na późniejszym etapie analizy: kombinacja `Cost Element`, `WBS Element`, `Partner object` (co najmniej jedno z trzech) + wymagany opis (rozdz. 7) – **opcjonalny** | kombinacja trzech pól |
 | Źródła danych | definicje źródeł (Administracja) importowane dla projektu – „Importuj źródła projektu” importuje tylko ich pliki: `Definicja źródła` (lista aktywnych definicji), `Opis`; definicja nieistniejąca albo nieaktywna – WARNING – **opcjonalny** | Definicja źródła |
@@ -113,10 +112,12 @@ pobieranych do przebiegu oraz wymaganych do jego uruchomienia:
 | Typ | Słowniki projektu wymagane | Słowniki szczególne | Waluta wyniku | Wynik dodatkowy |
 |---|---|---|---|---|
 | SAC (Sikorsky) | WP i CAM, Harmonogram i budżet | Stawki wydziałów (bieżące), Kursy walut (USD) | USD | plik dla Cobra |
-| CAS Compliance | WP i CAM, Harmonogram i budżet, Stawki CAS | Stawki CAS – przeliczenie kosztów według reguł CAS | PLN | – |
+| CAS Compliance | WP i CAM, Harmonogram i budżet | narzuty CAS – słowniki globalne (rozdz. 6.1): Pule, Grupy, Formuły i Wskaźniki narzutu CAS, grupa narzutowa w Cost Category, Kurs CAS w „Kursy walut” – koszty po narzutach (TOTAL COST) | PLN | – |
 | Wewnętrzny | WP i CAM, Harmonogram i budżet | – | PLN | – |
 
 Słowniki globalne (rozdz. 2) i „Cost Category – zmiany w projekcie” są pobierane dla każdego typu.
+Waluta wyniku według typu albo zestaw walutowy ACTUALS projektu („Parametry projektu”, w nim liczy struktura
+projektu) – O51 (`docs/ev-obliczenia.md`, rozdz. 6).
 Kontekst biznesowy typów – `readme.md`.
 
 ---
@@ -169,7 +170,6 @@ Kontekst biznesowy typów – `readme.md`.
 |---|---|
 | numer elementu kosztowego unikalny w słowniku (globalnym / zmianach projektu); zapisywany jako tekst – numer liczbowy uzupełniany zerami do 10 znaków | ERROR |
 | numer w słowniku bez Cost Category | WARNING |
-
 | „Grupa narzutowa CAS” spoza słownika „Grupy narzutowe CAS” albo pusta | uwaga w raporcie kosztów CES (wiersz bez narzutów) |
 | „Wskaźniki narzutu CAS”: pula z listy, `Od` wymagane, `Wskaźnik` ≥ 0 (15 cyfr znaczących, jak w Excelu); okresy `Od`–`Do` jednej puli bez nakładania | ERROR |
 | „Pule narzutu CAS”: nazwa bez „+” i inna niż „Base cost elements”; `Kolejność` i `Rodzaj` wymagane / kolejność powtórzona | ERROR / WARNING |
@@ -212,8 +212,10 @@ wpisu w Cost Category) – `docs/pipeline-fazy.md`, P2.
 - **Globalny** słownik: numer elementu kosztowego z kosztów rzeczywistych (`Cost Element` w raporcie ACTUALS –
   `docs/zrodla-danych.md`, rozdz. 4) → Opis, Obszar, Cost Category. Początkowa zawartość – załącznik A.
 - **„Rozliczeniowy”** (pole wyboru): cost element rozliczenia SAP (settlement, np. 0091902551 „PZL Invent Cost Set”).
-  Rozliczenie wychodzące (klasa obiektu partnera inna niż „Profit analysis”) jest pomijane w ACWP struktury projektu –
-  inaczej koszty elementu WBS rozliczanego co miesiąc sumują się do 0 (`docs/performance-objectives.md`, rozdz. 4.2).
+  Wiersze z takim cost elementem (słownik efektywny projektu – zmiana projektu przed globalnym) są pomijane w ACWP
+  struktury projektu i w raporcie kosztów CES, bez względu na klasę obiektu partnera (także „Profit analysis” –
+  rozliczenie do segmentu rentowności); w przebiegu – oznaczone jako rozliczenie. Inaczej koszty elementu WBS
+  rozliczanego co miesiąc sumują się do 0 (`docs/performance-objectives.md`, rozdz. 4.2; migracja 043).
 - **„Uzupełnij z ACTUALS”** (ekran Słowniki, Cost Category): dopisuje cost elementy z całego ostatniego importu ACTUALS
   (wszystkie projekty), których w słowniku nie ma – numer i opis z danych; Cost Category i „Rozliczeniowy” uzupełnia
   finansista. Podgląd przed zapisem jak przy wczytaniu z Excela; istniejące pozycje bez zmian, nic nie jest usuwane
@@ -270,13 +272,26 @@ po Cost Elementach dla lat 2025–2026).
   kosztu: pule (kolejność ze słownika), `TOTAL COST …`, `TOTAL FCCOM …`. Narzuty to **formuły Excela** odwołujące się do kosztu wiersza
   i wiersza wskaźników nad nagłówkiem – zmiana wskaźnika albo kosztu w pliku przelicza raport. Arkusz „Wskaźniki” –
   użyte wskaźniki z okresem obowiązywania.
+- **Waluta i kurs CAS (reguła tylko dla projektów CAS, decyzja 2026-10-15):** narzuty CAS liczy się samemu, więc koszt
+  bazowy jest **zawsze** w PLN z ACTUALS (`Value in Obj. Crcy`), także gdy projekt raportuje w USD – kwot USD z SAP
+  (`Val.in rep.cur.`) projekt CAS nie używa. Waluta projektu – zestaw walutowy w „Parametry projektu”: Object currency –
+  PLN, bez przeliczenia; Report currency (np. USD) – koszt PLN każdego okresu przeliczony **kursem CAS** („Kursy walut”,
+  kolumna Kurs CAS – kurs zakupu waluty) obowiązującym w okresie kosztu (okresy 13–16 – grudzień), potem narzuty. Brak
+  kursu CAS dla któregokolwiek okresu z kosztem – błąd z listą okresów (raport się nie tworzy, ACWP pusty). Narzuty
+  w raporcie i w koszcie projektu liczy ta sama usługa (`CasCosts`, `CasBurden`): **ACWP projektu CAS = TOTAL COST**
+  (koszt + pule rodzaju Koszt, bez pul FCCOM), podział ACWP Hours / Materials / Other według rodzaju kosztu cost elementu
+  (narzut idzie za kosztem, od którego jest liczony); przebieg tygodniowy projektu CAS – na kosztach po narzutach
+  (`docs/pipeline-fazy.md`, rozdz. 4.1). Dane – procedura `REP_ProjectCasCosts` (migracja 045). ETC, EAC i budżet
+  projektu CAS z narzutami i kursem CAS – osobne zadanie (`tasks/F4.7-cas-etc-eac-z-narzutami.md`).
 
 ---
 
 ## 7. Wykluczenia
 
 Opcjonalny słownik projektu wskazujący elementy danych źródłowych, które **nie są brane pod uwagę** na
-późniejszym etapie analizy. Definiowany jest na etapie projektu; stosowany później (poza bieżącym zakresem – O48).
+późniejszym etapie analizy. Definiowany jest na etapie projektu. Stosowany dziś w raporcie kosztów projektu
+(`REP_ProjectCosts`, migracja 013) oraz w ACWP i Actual DLH struktury projektu (`REP_ProjectCostsByElement`, migracja
+016); przypięcie i kontrole przebiegu (`RUN_PinBalance`) wykluczeń nie stosują – O48.
 Wyklucza się po kombinacji trzech pól z raportu kosztów CES (`docs/zrodla-danych.md`, rozdz. 4):
 
 | Pole | Znaczenie |
@@ -289,7 +304,7 @@ Wyklucza się po kombinacji trzech pól z raportu kosztów CES (`docs/zrodla-dan
 - Nie trzeba wypełniać wszystkich trzech pól kluczowych: wystarczy jedno, dwa albo komplet. Im mniej pól, tym
   szersze dopasowanie (np. sam `Cost Element` wyklucza wszystkie wiersze z tym elementem kosztowym).
 - Wiersz danych jest wykluczony, gdy pasuje do wszystkich **wypełnionych** pól reguły.
-- Moment zastosowania (który etap analizy, jak wykazywać wykluczony koszt) – O48.
+- Zastosowanie w przebiegu (przypięcie, łączenie źródeł – P3) i sposób wykazania wykluczonego kosztu – O48.
 
 ---
 
@@ -300,8 +315,8 @@ Wyklucza się po kombinacji trzech pól z raportu kosztów CES (`docs/zrodla-dan
 | O9 | Los istniejących tabel słownikowych w `PZLPROD.LOG` (`Stanowiska`, `LearningCurve`, `PeriodDates`, `EmployeesHist`) – do ustalenia z właścicielami |
 | O18 | Numeracja tygodni w kalendarzu okresów (ISO czy wewnętrzna) |
 | O25 | Numer elementu kosztowego bez wpisu w Cost Category: ERROR (dziś) czy WARNING? |
-| O37 | Jakie stawki CAS są wykorzystywane i w jakim układzie – narzuty CAS na koszty Cost Elementów: słowniki globalne (rozdz. 6.1); otwarte: słownik projektu „Stawki CAS” i przeliczenie w przebiegu |
-| O48 | Wykluczenia: na którym etapie analizy są stosowane i jak wykazywany jest wykluczony koszt |
+| O37 | Jakie stawki CAS są wykorzystywane i w jakim układzie – narzuty CAS na koszty Cost Elementów: słowniki globalne (rozdz. 6.1); przeliczenie w przebiegu – wariant procesu CAS (`docs/pipeline-fazy.md`, rozdz. 4.1); słownika projektu „Stawki CAS” nie ma – **rozstrzygnięte** |
+| O48 | Wykluczenia: stosowanie w przebiegu (przypięcie, P3) i sposób wykazania wykluczonego kosztu (raport kosztów i ACWP struktury już je pomijają – rozdz. 7) |
 
 ## Załącznik A. Początkowa zawartość słownika Cost Category
 

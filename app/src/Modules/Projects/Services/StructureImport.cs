@@ -148,7 +148,16 @@ public static class StructureImport
                             StructureEdits.MaterialEtc => row.MaterialEtc is { } etc ? PolishNumber.ToCanonical(Math.Round(etc, 2)) : null,
                             _ => null,
                         } : null;
-                        if (!SameValue(stored, value) && !SameValue(produced, value))
+                        // Budżet równy wartości pokazanej w eksporcie (w walucie projektu; pusty budżet = 0) – bez zapisu: inaczej
+                        // eksport i wczytanie bez zmian zapisałyby 0 w pustym budżecie, a budżet w walucie bez kursu – jako 0.
+                        var exported = row.BudgetWp == wp ? column switch
+                        {
+                            StructureEdits.BacHours => row.BacHours,
+                            StructureEdits.BacMaterial => row.BacMaterial,
+                            StructureEdits.Bac => row.Bac,
+                            _ => (decimal?)null,
+                        } : null;
+                        if (!SameValue(stored, value) && !SameValue(produced, value) && !SameRounded(exported, value))
                             changes[column] = value;
                     }
                 }
@@ -158,6 +167,9 @@ public static class StructureImport
         }
         return new StructureImportResult(edits.Values.Select(e => new StructureEdit(e.Id, e.Row, e.Changes)).ToList(), issues, data.Rows.Count);
     }
+
+    private static bool SameRounded(decimal? exported, string value) =>
+        exported is { } e && PolishNumber.TryParse(value, out var v) && Math.Round(e, 2) == Math.Round(v, 2);
 
     private static bool SameValue(string? stored, string value) =>
         stored == value || (PolishNumber.TryParse(stored, out var a) && PolishNumber.TryParse(value, out var b) && a == b);

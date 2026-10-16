@@ -83,9 +83,10 @@ i utrzymywaną na ekranie Administracja (`docs/funkcjonalnosc.md`, F08).
      wpis pliku w `META_SourceFile` ze stanem danych „w toku” (osobna, krótka transakcja), wiersze parsowane
      w osobnym wątku i zapisywane strumieniowo do `CAN_Row` paczkami po 102 400 wierszy, każda paczka zatwierdzana
      osobno. Błąd wartości, puste pole wymagane albo niezgodne sumy kwot (z kolumn pliku
-     i z wartości pól) – wiersze pliku i jego wpis są usuwane;
-  4. *kontrola w bazie* – liczba wierszy i sumy kwot po zapisie = odczytane z pliku (niezgodność – wiersze i wpis
-     usuwane), stan danych „utworzone”; plik lokalny jest potem usuwany.
+     i z wartości pól) – wiersze pliku i jego wpis są usuwane. Suma z kolumn pliku używa tej samej zamiany liczb co
+     parser – wykrywa tylko błąd przypisania wartości w wierszu, nie jest kontrolą niezależną od parsera;
+  4. *kontrola w bazie* – liczba wierszy i sumy kwot po zapisie = odczytane z pliku w pamięci (`SqlImportStore.Verify`;
+     niezgodność – wiersze i wpis usuwane), stan danych „utworzone”; plik lokalny jest potem usuwany.
 
   Odczyty danych kanonicznych (procedury i funkcje `CAN_*`, `REP_*`) biorą tylko pliki „utworzone”, więc plik w trakcie
   zapisu jest dla nich niewidoczny, a odczyt czeka najwyżej na jedną paczkę (jej odczyt z pliku i zapis – ok. 2–3 s),
@@ -155,6 +156,8 @@ i utrzymywaną na ekranie Administracja (`docs/funkcjonalnosc.md`, F08).
   (powód w logu). **Sprawdź źródła** pokazuje przy lokalizacji, którą drogą odczytano listę (HTTPS albo WebDAV).
 - .NET zwraca na ścieżkach WebDAV nazwy plików z końcowym znakiem `\0` oraz wpisy „.” i „..”
   (dotnet/runtime#62429) – import czyści nazwy (`FolderEntries`).
+- Nazwa pliku z listy serwera ze znakami ścieżki (`\`, `/`, `:`) albo nazwa `.` / `..` jest odrzucana (błąd pliku) –
+  plik nie trafi poza folder pobrania.
 - Import czyta tylko główny folder lokalizacji (bez podfolderów). Gdy folder
   nie ma plików, a ma podfoldery – WARNING z ich nazwami. **Sprawdź źródła** (ekran Import) pokazuje bez importu
   dostęp, czytaną ścieżkę, pliki i ich rozpoznanie; szczegóły – log aplikacji (`app/README.md`).
@@ -258,8 +261,8 @@ Z_KAT_ZBIORCZA
   P1S. Pobierane w etapie P5 dla elementów WBS projektu.
 - `vAHDD` jest aktualny dopiero po przebiegu procedury `uspUpdateAHDD`, która uruchamia `uspUpdateAHDD_ORDER`,
   `_PSPNR` i `_VORNR` (ta ostatnia wywołuje `uspUpdateZMTO`). Status odświeżenia i błędy zapisują
-  `StatusAktualizacjiRaportow`, `ReportErrorInfo` i `TableList` – na tej podstawie etap P0 sprawdza świeżość
-  danych produkcyjnych.
+  `StatusAktualizacjiRaportow`, `ReportErrorInfo` i `TableList` – na tej podstawie etap P0 ma sprawdzać świeżość
+  danych produkcyjnych (niewdrożone).
 - **Odczyt na żywo w strukturze projektu** – wzorowany na raporcie produkcyjnym S70MR z serwera produkcyjnego, z filtrem
   po zakresie P1S projektu (S70MR filtruje po programie – `Z_OPIS`, `SERNR_LO`). Logika jest rozdzielona na trzy warstwy:
   - **zapytanie** – plik `sql/pzlprod/produkcja.sql` (wbudowany w aplikację, wykonuje `SqlPzlProdSource.Production`);
@@ -323,7 +326,7 @@ Poziomy ERROR / WARNING – `docs/pipeline-fazy.md`, rozdz. 1.3.
 | brak aktywnej lokalizacji RABIT | WARNING – import czyta tylko folder `Do_importu` | import |
 | folder lokalizacji bez plików, z podfolderami | WARNING z nazwami podfolderów (import ich nie czyta) | import |
 | brak w pliku kolumny parsera (zmiana układu raportu) | ERROR dla pliku – plik nie jest zapisywany w bazie; po poprawie pól parsera kolejny import pobiera go ponownie | import |
-| kolumna pliku spoza parsera | bez problemu – kolumna tylko w wierszach surowych (opis decyzji importu) | import |
+| kolumna pliku spoza parsera | bez problemu – kolumna nie jest zapisywana (wierszy surowych nie ma od migracji 007/008); opis decyzji importu | import |
 | wartość niezgodna z typem pola, tekst dłuższy niż pole, puste pole wymagane | ERROR dla pliku (wiersz i kolumna) – plik nie jest zapisywany w bazie | import |
 | parser definicji nieaktywny albo usunięty | ERROR dla pliku – plik nie jest zapisywany w bazie | import |
 | duplikat klucza w pliku albo między częściami jednego źródła | ERROR | import / P2 |

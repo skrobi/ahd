@@ -45,12 +45,15 @@ na dysku sieciowym.
 - **`PZL-EV.exe`** – jedna aplikacja dla wszystkich ról, publikowana jako *self-contained, single-file*:
   nie wymaga instalacji .NET, nie uruchamia lokalnego serwera i nie ma lokalnej bazy. Działa na komputerze
   użytkownika i łączy się bezpośrednio z bazą MS SQL oraz źródłami plikowymi.
-- Funkcje dostępne w aplikacji wynikają z roli użytkownika (`docs/uprawnienia.md`).
+- Funkcje dostępne w aplikacji wynikają z roli użytkownika (`docs/uprawnienia.md`) – stan docelowy; ról w aplikacji
+  jeszcze nie ma (RBAC brak).
 - Profil środowiska (TEST / PROD) określa serwer bazy i korzeń folderów; konfiguracja nie zawiera haseł.
-  Nagłówek aplikacji pokazuje środowisko, użytkownika, rolę oraz wersję aplikacji i schematu.
-- Przy starcie aplikacja sprawdza w bazie **minimalną wymaganą wersję aplikacji** i **wersję schematu**;
-  niezgodna wersja odmawia pracy i informuje, co zaktualizować. Dzięki temu wszyscy liczą EV tą samą wersją
-  silnika.
+  Nagłówek aplikacji pokazuje środowisko i użytkownika, stopka menu – wersję aplikacji i bazę (wykonane migracje –
+  Diagnostyka); rolę – docelowo (RBAC brak – `docs/uprawnienia.md`).
+- Przy starcie aplikacja sprawdza w bazie **minimalną wymaganą wersję aplikacji** (najwyższa `MinAppVersion`
+  wykonanych migracji, `META_SchemaVersion`); starsza aplikacja odmawia pracy i informuje, którą wersję uruchomić.
+  Dzięki temu wszyscy liczą EV tą samą wersją silnika. Brakujące migracje (schemat starszy niż aplikacja) – pytanie
+  przy starcie; użytkownik może odmówić i pracować na starszym schemacie (`app/README.md`).
 - Długie operacje (import, łączenie źródeł) działają w tle z widocznym postępem.
 - Forma dystrybucji pliku wymaga potwierdzenia testem na stanowisku PZL (O6).
 
@@ -118,7 +121,7 @@ Każdy moduł jest folderem `Modules/<Folder>/` i właścicielem swoich ekranów
 | Administration | `Administration` | definicje źródeł, lokalizacje RABIT, role (F08) | – | `docs/zrodla-danych.md`, `docs/uprawnienia.md` |
 | Diagnostyka | `Diagnostics` | test stosu (runtime, pakiety, ścieżka, konto), połączenie z `PZLPROD`, migracje bazy | – | rozdz. 8, `app/README.md` |
 
-Kontrola jakości (`meta.Problem`) i dziennik zdarzeń nie są modułami – to mechanizmy wspólne (`Shared`),
+Kontrola jakości (`META_Problem`; kontrole przebiegu – `RUN_Issue`) i dziennik zdarzeń nie są modułami – to mechanizmy wspólne (`Shared`),
 z których korzysta każdy moduł; pokazują je Pulpit i ekran Przebiegu.
 
 ### 5.3 Struktura kodu
@@ -218,12 +221,37 @@ decyzji (P4, P6, Z) albo z wynikiem ERROR.
 | historia zmian i dziennik | silnik EVM |
 | widoki dla raportów BI | generowanie plików Excel i pliku dla Cobra |
 
-- Aplikacja korzysta z bazy wyłącznie przez procedury i widoki. Użytkownicy nie mają praw do tabel –
-  mają prawo wykonywania procedur i odczytu widoków. Wyjątkiem jest ładowanie wsadowe wierszy importu
+- Stan docelowy (F10.2): aplikacja korzysta z bazy wyłącznie przez procedury i widoki. Użytkownicy nie mają praw
+  do tabel – mają prawo wykonywania procedur i odczytu widoków. Wyjątkiem jest ładowanie wsadowe wierszy importu
   (SqlBulkCopy) do tabeli przyjęć, na której rola ma wyłącznie prawo INSERT.
-- Reguły procesu są wymuszane w procedurach – aplikacja działa na stanowisku użytkownika i nie może być jedyną
-  kontrolą.
+- Stan obecny: magazyny (`Data/Sql<Moduł>Store`) wykonują sparametryzowane polecenia SQL bezpośrednio na tabelach
+  oraz wywołują procedury (np. `CAN_LatestImport`, `REP_ProjectCosts`, `RUN_PinBalance`) – konto użytkownika
+  (`pzl_ev_user`) potrzebuje dziś praw do tabel.
+- Reguły procesu są wymuszane w procedurach (docelowo; dziś część reguł sprawdza tylko aplikacja, np. gotowość
+  projektu przed przebiegiem – `docs/pipeline-fazy.md`, P0) – aplikacja działa na stanowisku użytkownika i nie może
+  być jedyną kontrolą.
 - Każda procedura zapisuje użytkownika AD (`ORIGINAL_LOGIN()`) w dzienniku.
+
+### 6.1 Proces projektu i warianty typów
+
+Wszystkie typy projektu przechodzą tę samą ścieżkę: import i przypięcie ACTUALS, struktura, BCWS / BCWP, wskaźniki,
+kontrole przebiegu. Różnice typu są zamknięte w **procesie projektu** (`Shared/Utils/Process`): klasa bazowa
+`ProjectProcess` („golden template”) to ścieżka wspólna – koszt projektu = koszt z ACTUALS z pola kwoty „Parametrów
+projektu”, bez przekształceń. Typ, który liczy inaczej, ma podklasę nadpisującą wyłącznie punkty zmienności:
+
+| Punkt zmienności | Proces bazowy (wewnętrzny, SAC – do czasu własnych reguł) | CAS (`CasProcess`) |
+|---|---|---|
+| `AmountField` – pole kwoty ACTUALS | z „Parametrów projektu” | zawsze PLN (`Value in Obj. Crcy`) |
+| `TransformsCosts`, `Costs` – koszt projektu | suma ACTUALS w bazie (`REP_ProjectCostsByElement`) | z kosztów po okresach (`REP_ProjectCasCosts`): narzuty CAS, kurs CAS, TOTAL COST (`CasCosts`) |
+| `Currency` – waluta kosztów | waluta pola kwoty | zestaw walutowy projektu (USD – kursem CAS) |
+| `CostsCheck` – kontrola przebiegu | – | „Koszty po narzutach CAS” |
+| `AcwpDescription`, `HasBurdenReport` – ekran projektu | opis wspólny, bez raportu z narzutami | opis kosztu po narzutach, raport kosztów CES |
+
+Wariant wybiera jedna fabryka (`ProjectService.Process`) według typu projektu; poza nią kod nie sprawdza typu (wyjątki:
+deklaratywna lista słowników wymaganych dla typu – `ProjectDictionaries`, nazwa typu na ekranie). Moduł Przebiegi
+dostaje proces kontraktem `IProjectProcessSource` (rejestruje go moduł Projekty). Nowa reguła typu (np. ETC / EAC CAS –
+`tasks/F4.7-cas-etc-eac-z-narzutami.md`, stawki i USD w SAC) to nowy punkt zmienności w klasie bazowej z zachowaniem
+wspólnym i nadpisanie w podklasie – bez warunków na typ w modułach.
 
 ---
 
@@ -232,7 +260,7 @@ decyzji (P4, P6, Z) albo z wynikiem ERROR.
 ```text
 \\serwer\udział\PZL-EV\                 korzeń środowiska (osobny dla TEST i PROD)
 ├── 00_Global\RABIT\Do_importu\         pliki RABIT pobrane ręcznie (powyżej limitu WebDAV)
-├── 00_Global\RABIT\*.lock              blokady importu: pełny import, pliki, trwające importy (docs/pipeline-fazy.md, rozdz. 1.4)
+├── 00_Global\RABIT\*.lock              blokady importu i przebiegu: pełny import, pliki, trwające importy, przebiegi (docs/pipeline-fazy.md, rozdz. 1.4)
 └── Projekty\<Projekt>\
     ├── Finanse\<RRRR-MM>\              pliki dla finansów (P4)
     ├── CAM\<RRRR-MM>\Wyslane\          pliki dla CAM (P6, przebieg zamykający)
@@ -252,7 +280,9 @@ decyzji (P4, P6, Z) albo z wynikiem ERROR.
 - **Konfiguracja środowiska:** plik `pzl-ev.json` obok `PZL-EV.exe` – przełącznik `Env` (`TEST` / `PROD`) i sekcja
   `Environments.<Env>`: `NetworkRoot` (korzeń folderów środowiska, rozdz. 7), `Sql` (serwer, baza, schemat,
   sygnatura tabel – logowanie kontem AD) i `PzlProd` (struktura P1S: serwer `splmcd03`, baza `PZLPROD`, schemat
-  `LOG` – tylko odczyt kontem AD; sekcja opcjonalna – bez niej gotowość projektu (kontrola „Strona P1S”), okno „Struktura P1S (PZLPROD)” na ekranie Słowniki i Diagnostyka pokazują, czego brakuje). Plik jest wymagany – wzór z opisem ustawień `app/pzl-ev.json` kopiowany
+  `LOG` – tylko odczyt kontem AD; sekcja opcjonalna – bez niej gotowość projektu (kontrola „Strona P1S”), okno „Struktura P1S (PZLPROD)” na ekranie Słowniki i Diagnostyka pokazują, czego brakuje) oraz `PzlHrProd` (baza
+  pracowników `PZLHRPROD`, schemat `HR` – źródło słownika Osoby, „Dodaj z HR”; tylko odczyt, sekcja opcjonalna –
+  `app/README.md`). Plik jest wymagany – wzór z opisem ustawień `app/pzl-ev.json` kopiowany
   obok exe przy budowie; brak pliku albo pola = komunikat przy starcie (`app/README.md`). TEST: `pzltestdb.intl.lmco.com`, baza `PZLTEST`, schemat `FINOP`, sygnatura `PZLEV_`.
 - **TEST** – developer; osobna baza i osobny korzeń folderów.
 - **PROD** – wdraża administrator (IT).
@@ -302,12 +332,12 @@ decyzji (P4, P6, Z) albo z wynikiem ERROR.
 | 3 | Przebiegi trwające dni | trwały stan w bazie, kontynuacja przez inną osobę, unieważnianie etapów |
 | 4 | Zmiana słowników lub nowe importy w trakcie przebiegu | znacznik stanu, decyzja „kontynuuj / przypnij ponownie” w dzienniku |
 | 5 | Zmiana istniejących wierszy w `PZLPROD` (założenie przyrostowości) | odczyt bez kopiowania; zmiana `LOG.WBS` nie jest wykrywana i może zmienić wynik odtworzenia rewizji |
-| 6 | Nieaktualne dane produkcyjne (`vAHDD`) | kontrola świeżości w P0 |
+| 6 | Nieaktualne dane produkcyjne (`vAHDD`) | kontrola świeżości w P0 (niewdrożona) |
 | 7 | Mieszanie źródeł zaawansowania | zapis pochodzenia; w przebiegu zamykającym wyłącznie CAM |
 | 8 | Nowe elementy SAP bez przypisania | gotowość projektu (element nakładki bez `Legacy WBS` – WARNING) i P3; blokada w przebiegu zamykającym |
 | 9 | Pliki CAM zmienione poza polami lub z innego przebiegu | identyfikator i blokady w szablonie, kontrola przy imporcie |
 | 10 | Excel zmienia typy (WBS jako liczba, daty, zera wiodące) | walidacja typów; CSV z RABIT, jeśli dostępny |
-| 11 | Reguły procesu omijane przez bezpośrednie połączenie z bazą | reguły w procedurach, brak praw do tabel |
+| 11 | Reguły procesu omijane przez bezpośrednie połączenie z bazą | reguły w procedurach, brak praw do tabel (stan docelowy – rozdz. 6; dziś część reguł tylko w aplikacji) |
 | 12 | Różne litery dysków | ścieżki UNC, w bazie ścieżki względne |
 | 13 | Etykiety poufności / szyfrowanie plików | do weryfikacji z IT |
 | 14 | Przyrost danych w bazie (wiersze importów co tydzień – dane wszystkich wersji plików zostają) | kompresja kolumnowa `CAN_Row`; sam plik nie jest przechowywany (`docs/model-danych.md`, rozdz. 5.1) |
