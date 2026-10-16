@@ -85,7 +85,6 @@ Z_OPIS → PROJORG → elementy) z wyszukiwarką – tylko do odczytu, to nie je
 | WP i CAM | element P1S projektu → WP, CAM, Cost Category (kategoria ze słownika „Kategorie WBS” projektu), MPK (lista MPK ze słownika „Stawki wydziałów” – stawka ETC Cost); powiązanie z nakładką przez `Legacy WBS` (`docs/performance-objectives.md`, rozdz. 4.1) | element P1S |
 | Harmonogram i budżet | WP → `BAC HOURS` (godziny), `BAC MATERIAL` (koszt materiałów), `BAC` (budżet kosztowy WP – kwota), Baseline Start, Baseline Koniec (RRRR-MM-DD; w plikach Excel rozpoznawane też nagłówki „Planowany Start/Koniec”) – baseline projektu; Actual Start, Actual Koniec – daty rzeczywiste WP nadpisujące daty z raportu produkcyjnego (puste – data z produkcji; `docs/performance-objectives.md`, rozdz. 4.2); Forecast Start, Forecast Koniec – prognoza; ETC HOURS, ETC MATERIAL – godziny i materiały do poniesienia nadpisujące wartości z produkcji (puste – z produkcji); kwoty (`BAC MATERIAL`, `BAC`, `ETC MATERIAL`) – w walucie projektu, `Waluta` – kod waluty projektu zapisywany automatycznie przy zmianie kwot (puste – waluta projektu; kwoty bez zmian – waluta wiersza zostaje; zmiana kwoty w wierszu w innej walucie – pozostałe kwoty wiersza przeliczone kursem bieżącym z „Kursy walut”, a bez kursu wiersz zostaje w swojej walucie); kod z trzech wielkich liter, inaczej ERROR | WP |
 | Kategorie WBS | kategorie elementów WBS indywidualne dla projektu: `Cost Category` (np. Production, Programs), `Opis` – lista wyboru kolumny Cost Category w strukturze projektu i w „WP i CAM”; raport po kategoriach (wiele elementów WBS w jednej kategorii); inne niż globalny słownik Cost Category (numer elementu kosztowego) – **opcjonalny** | Cost Category |
-| Stawki CAS | stawki CAS projektu (zawartość – O37); do ustalenia słownik nie jest wczytywany, a projekt CAS jest niegotowy (ERROR) | do ustalenia |
 | Cost Category – zmiany w projekcie | zmiany i uzupełnienia słownika globalnego Cost Category dla projektu (rozdz. 6) | numer elementu kosztowego |
 | Wykluczenia | elementy pomijane na późniejszym etapie analizy: kombinacja `Cost Element`, `WBS Element`, `Partner object` (co najmniej jedno z trzech) + wymagany opis (rozdz. 7) – **opcjonalny** | kombinacja trzech pól |
 | Źródła danych | definicje źródeł (Administracja) importowane dla projektu – „Importuj źródła projektu” importuje tylko ich pliki: `Definicja źródła` (lista aktywnych definicji), `Opis`; definicja nieistniejąca albo nieaktywna – WARNING – **opcjonalny** | Definicja źródła |
@@ -113,7 +112,7 @@ pobieranych do przebiegu oraz wymaganych do jego uruchomienia:
 | Typ | Słowniki projektu wymagane | Słowniki szczególne | Waluta wyniku | Wynik dodatkowy |
 |---|---|---|---|---|
 | SAC (Sikorsky) | WP i CAM, Harmonogram i budżet | Stawki wydziałów (bieżące), Kursy walut (USD) | USD | plik dla Cobra |
-| CAS Compliance | WP i CAM, Harmonogram i budżet, Stawki CAS | Stawki CAS – przeliczenie kosztów według reguł CAS | PLN | – |
+| CAS Compliance | WP i CAM, Harmonogram i budżet | narzuty CAS – słowniki globalne (rozdz. 6.1): Pule, Grupy, Formuły i Wskaźniki narzutu CAS, grupa narzutowa w Cost Category, Kurs CAS w „Kursy walut” – koszty po narzutach (TOTAL COST) | PLN | – |
 | Wewnętrzny | WP i CAM, Harmonogram i budżet | – | PLN | – |
 
 Słowniki globalne (rozdz. 2) i „Cost Category – zmiany w projekcie” są pobierane dla każdego typu.
@@ -316,7 +315,7 @@ Wyklucza się po kombinacji trzech pól z raportu kosztów CES (`docs/zrodla-dan
 | O9 | Los istniejących tabel słownikowych w `PZLPROD.LOG` (`Stanowiska`, `LearningCurve`, `PeriodDates`, `EmployeesHist`) – do ustalenia z właścicielami |
 | O18 | Numeracja tygodni w kalendarzu okresów (ISO czy wewnętrzna) |
 | O25 | Numer elementu kosztowego bez wpisu w Cost Category: ERROR (dziś) czy WARNING? |
-| O37 | Jakie stawki CAS są wykorzystywane i w jakim układzie – narzuty CAS na koszty Cost Elementów: słowniki globalne (rozdz. 6.1); otwarte: słownik projektu „Stawki CAS” i przeliczenie w przebiegu |
+| O37 | Jakie stawki CAS są wykorzystywane i w jakim układzie – narzuty CAS na koszty Cost Elementów: słowniki globalne (rozdz. 6.1); przeliczenie w przebiegu – wariant procesu CAS (`docs/pipeline-fazy.md`, rozdz. 4.1); słownika projektu „Stawki CAS” nie ma – **rozstrzygnięte** |
 | O48 | Wykluczenia: stosowanie w przebiegu (przypięcie, P3) i sposób wykazania wykluczonego kosztu (raport kosztów i ACWP struktury już je pomijają – rozdz. 7) |
 
 ## Załącznik A. Początkowa zawartość słownika Cost Category

@@ -23,7 +23,7 @@ public sealed class DictionaryPanelViewModel(ProjectDictionaryItem item, string 
     public string Name => item.Name;
 
     public string Requirement => !item.Stored
-        ? "zawartość nieustalona (O37) – nie jest wczytywany"
+        ? "nie jest wczytywany"
         : item.IsRequired(type) ? "wymagany – bez niego przebieg jest zablokowany" : "opcjonalny";
 
     public bool CanLoad => item.Stored;
@@ -45,7 +45,7 @@ public sealed class DictionaryPanelViewModel(ProjectDictionaryItem item, string 
     public string PreviewSummary => _preview is null ? "" : $"{_preview.Summary} · {_preview.Working.Count} wierszy w pliku";
 
     public Pill StatusPill => !item.Stored
-        ? new Pill("crit", "nieustalony (O37)")
+        ? new Pill("muted", "nie wczytywany")
         : _preview is { HasErrors: true } ? new Pill("crit", $"{_preview.Issues.Count(i => i.Level == Shared.Models.Pipeline.CheckLevel.Error)} błędów")
         : _preview is not null ? new Pill("ok", $"{_preview.Working.Count} wierszy z pliku")
         : _rows > 0 ? new Pill("ok", $"{_rows} wierszy")
