@@ -565,6 +565,19 @@ public sealed class StructureTests
         Assert.Null(empty[header.IndexOf("BAC Hours")]);
     }
 
+    /// <summary>Koszt CAS po narzutach ma pełną precyzję obliczeń – w pobranej strukturze ACWP zaokrąglony do 2 miejsc (zgłoszenie 2026-10-16).</summary>
+    [Fact]
+    public void Structure_export_rounds_acwp_to_cents()
+    {
+        var costs = new Dictionary<string, decimal> { ["4D06WP000001"] = 85095.893454848608m };
+        var structure = ProjectService.Structure(Objectives(), Inputs(), [], [], costs, labor: costs, dlh: new Dictionary<string, decimal> { ["4D06WP000001"] = 12.345m });
+        var rows = ProjectService.StructureRows(structure, []).ToList();
+        var row = rows[structure.Rows.ToList().FindIndex(r => r.WbsElement == "4D06WP000001")];
+        var header = ProjectService.StructureHeaders.ToList();
+        Assert.Equal((85095.89m, 85095.89m, 12.345m), (row[header.IndexOf("ACWP")], row[header.IndexOf("ACWP Hours")], row[header.IndexOf("Actual DLH")]));
+        Assert.Null(row[header.IndexOf("ACWP Other")]);   // 0 – puste
+    }
+
     /// <summary>Pobrana struktura uzupełniona w Excelu i wczytana: tylko wyróżnione kolumny, puste komórki bez zmiany.</summary>
     [Fact]
     public void Structure_file_filled_in_excel_gives_wp_cam_and_budget_changes()

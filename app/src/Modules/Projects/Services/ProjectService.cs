@@ -531,6 +531,8 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
             DateOnly.TryParseExact(value, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var d) ? d : null;
         static object? Round(decimal? value) => value is { } v ? Math.Round(v, 2) : null;
         static object? NonZero(decimal value) => value == 0 ? null : value;
+        // Kwota ACWP – zaokrąglona jak pozostałe kwoty (koszt CAS po narzutach ma pełną precyzję obliczeń); 0 – puste.
+        static object? Amount(decimal value) => value == 0 ? null : Math.Round(value, 2);
         var budget = r.Wps.Count > 0;
         return key switch
         {
@@ -569,10 +571,10 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
             StructureColumns.NextDeliveryYear => r.NextDeliveryYear,
             StructureColumns.PvCost => Round(r.PvCost),
             StructureColumns.EvCost => Round(r.EvCost),
-            StructureColumns.AcwpLabor => NonZero(r.AcwpLabor),
-            StructureColumns.AcwpMaterial => NonZero(r.AcwpMaterial),
-            StructureColumns.AcwpOther => NonZero(r.AcwpOther),
-            StructureColumns.Acwp => NonZero(r.Acwp),
+            StructureColumns.AcwpLabor => Amount(r.AcwpLabor),
+            StructureColumns.AcwpMaterial => Amount(r.AcwpMaterial),
+            StructureColumns.AcwpOther => Amount(r.AcwpOther),
+            StructureColumns.Acwp => Amount(r.Acwp),
             StructureColumns.ActualDlh => NonZero(r.ActualDlh),
             StructureColumns.DlhDelta => Round(r.DlhDelta),
             StructureColumns.Sv => Round(r.Sv),
