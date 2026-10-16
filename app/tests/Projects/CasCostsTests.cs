@@ -10,6 +10,7 @@ using PzlEv.Modules.Projects.Services;
 using PzlEv.Shared.Models.Db;
 using PzlEv.Shared.Models.Dictionaries;
 using PzlEv.Shared.Utils.Dictionaries;
+using PzlEv.Shared.Utils.Process;
 using PzlEv.Tests.TestSupport;
 using Xunit;
 
@@ -32,6 +33,36 @@ public sealed partial class CasCostReportTests
         Assert.Equal((10 + 3) * 0.5m, CasFormula.Evaluate(CasFormula.Parse("( base + p:1 ) * r:2")!, 10, _ => 3, _ => 0.5m));
         Assert.Equal(10 - 4 / 2m, CasFormula.Evaluate(CasFormula.Parse("base - p:1 / r:2")!, 10, _ => 4, _ => 2));
         Assert.Equal(0m, CasFormula.Evaluate(CasFormula.Parse("base / r:2")!, 10, _ => 0, _ => 0));   // jak #DZIEL/0! – 0
+    }
+
+    /// <summary>
+    /// Proces projektu: ścieżka wspólna – pole kwoty z „Parametrów projektu”, koszt bez przekształceń; wariant CAS – zawsze PLN,
+    /// koszt po narzutach CAS kalkulatorem CasCosts (tworzonym przy pierwszym użyciu), opis ACWP i raport kosztów CES.
+    /// </summary>
+    [Fact]
+    public void Project_process_default_keeps_actuals_and_cas_variant_burdens_pln_costs()
+    {
+        var common = ProjectProcess.Default;
+        CostRow[] rows = [new("WBS1", "0092210550", 2026, 1, 100m)];
+        Assert.Equal(("ValueRepCur", false, (string?)null, false), (common.AmountField("ValueRepCur"), common.TransformsCosts, common.Currency, common.HasBurdenReport));
+        Assert.Equal([100m], common.Costs(rows, (2026, 1)).Costs);
+        Assert.Null(common.AcwpDescription("USD"));
+
+        long fringe = PoolId("MFG Fringe");
+        var groups = FinanceGroups.Select(g => g with { Formulas = g.Formulas.Where(f => f.Key == fringe).ToDictionary(f => f.Key, f => f.Value) }).ToList();
+        var created = 0;
+        var cas = new CasProcess(() =>
+        {
+            created++;
+            return new CasCosts(FinancePools, groups, [new(fringe, new DateOnly(2026, 1, 1), null, 0.5m)], FinanceMapping, [Fx("USD", "2026-01-01", null, "4")], "USD");
+        });
+        Assert.Equal(("ValueObjCrcy", true, true), (cas.AmountField("ValueRepCur"), cas.TransformsCosts, cas.HasBurdenReport));
+        Assert.Contains("w USD kursem CAS", cas.AcwpDescription("USD"));
+        Assert.Equal(0, created);                                   // opis i flagi – bez słowników
+        var result = cas.Costs([new("WBS1", "0092210550", 2026, 1, 400m)], (2026, 1));
+        Assert.Equal([150m], result.Costs);                         // 100 USD + Fringe 50%
+        Assert.Equal(((string?)null, "USD", 1), (result.Error, cas.Currency, created));
+        Assert.Contains("brak kursu CAS", cas.Costs([new("WBS1", "0092210550", 2025, 12, 400m)], (2026, 1)).Error);
     }
 
     /// <summary>TOTAL COST każdego wiersza i roku = wartość w arkuszu finansów (kolumny TOTAL COST 2026 i 2025).</summary>
@@ -66,7 +97,7 @@ public sealed partial class CasCostReportTests
         var groups = FinanceGroups.Select(g => g with { Formulas = g.Formulas.Where(f => f.Key == fringe).ToDictionary(f => f.Key, f => f.Value) }).ToList();
         DictRow[] fx = [Fx("USD", "2026-01-01", "2026-01-31", "4"), Fx("USD", "2026-02-01", null, "5")];
         var costs = new CasCosts(FinancePools, groups, rates, FinanceMapping, fx, "USD");
-        CasCosts.Row[] rows =
+        CostRow[] rows =
         [
             new("WBS1", "0092210550", 2026, 1, 400m),    // 100 USD + Fringe 50%
             new("WBS1", "0092210550", 2026, 2, 500m),    // 100 USD + 50

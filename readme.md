@@ -90,7 +90,8 @@ poświęcanego na przygotowanie danych.
 ## Typy projektów EV
 
 W PZL-EV wszystkie typy przechodzą ten sam przebieg; typ wyznacza zestaw słowników pobieranych do przebiegu
-(`docs/slowniki.md`, rozdz. 4).
+(`docs/slowniki.md`, rozdz. 4) i wariant procesu – reguły liczenia kosztu odmienne od ścieżki wspólnej, np. narzuty
+i kurs CAS (`docs/architektura.md`, rozdz. 6.1).
 
 ### 1. Projekty Sikorsky (SAC)
 

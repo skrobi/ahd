@@ -314,7 +314,7 @@ app/
     │   └── Reconciliation/ Progress/ Evm/ Export/   pozostałe moduły: plik wejścia + etapy, bez pozycji w menu
     └── Shared/
         ├── Utils/Ui/            MVVM, konwertery, okna wyboru pliku, kontrakt modułu, tabela słownika do edycji (WPF)
-        ├── Utils/Config|Data|Files/  konfiguracja, baza MS SQL (Data/Sql), dziennik, problemy, Excel/CSV
+        ├── Utils/Config|Data|Files|Process/  konfiguracja, baza MS SQL (Data/Sql), dziennik, problemy, Excel/CSV, proces projektu i warianty typów
         ├── Models/              modele wspólne; Db/ – tabele schematu; Sources/ – układy źródeł; Pipeline/ – kontrakt etapu
         └── Views/
             ├── Templates/       Theme.xaml – paleta z prototypu, style, tabele, układ strony
