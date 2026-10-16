@@ -220,9 +220,9 @@
                                    Text="Koszty ostatniego importu ACTUALS: Project definition × Cost Element, ostatni okres i lata (PLN), bez wykluczeń projektu." />
                         <Button Grid.Row="1" Grid.Column="0" Content="Raport kosztów CES (Excel)" Style="{StaticResource Btn}" HorizontalAlignment="Left"
                                 VerticalAlignment="Center" Margin="12,0,12,12" Command="{Binding ExportCasCostReport}"
-                                Visibility="{Binding IsCas, Converter={StaticResource BoolToVisibility}}" />
+                                Visibility="{Binding HasBurdenReport, Converter={StaticResource BoolToVisibility}}" />
                         <TextBlock Grid.Row="1" Grid.Column="1" VerticalAlignment="Center" Margin="0,0,12,12" TextWrapping="Wrap"
-                                   Visibility="{Binding IsCas, Converter={StaticResource BoolToVisibility}}"
+                                   Visibility="{Binding HasBurdenReport, Converter={StaticResource BoolToVisibility}}"
                                    Text="Raport kosztów z narzutami CAS w formułach Excela: pule według grupy narzutowej elementu kosztowego (słownik Cost Category), wskaźniki obowiązujące w okresie kolumny (słownik „Wskaźniki narzutu CAS”) – wiersz wskaźników nad nagłówkiem można zmienić w pliku." />
                     </Grid>
                 </Border>

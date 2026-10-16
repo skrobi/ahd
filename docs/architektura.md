@@ -232,6 +232,27 @@ decyzji (P4, P6, Z) albo z wynikiem ERROR.
   być jedyną kontrolą.
 - Każda procedura zapisuje użytkownika AD (`ORIGINAL_LOGIN()`) w dzienniku.
 
+### 6.1 Proces projektu i warianty typów
+
+Wszystkie typy projektu przechodzą tę samą ścieżkę: import i przypięcie ACTUALS, struktura, BCWS / BCWP, wskaźniki,
+kontrole przebiegu. Różnice typu są zamknięte w **procesie projektu** (`Shared/Utils/Process`): klasa bazowa
+`ProjectProcess` („golden template”) to ścieżka wspólna – koszt projektu = koszt z ACTUALS z pola kwoty „Parametrów
+projektu”, bez przekształceń. Typ, który liczy inaczej, ma podklasę nadpisującą wyłącznie punkty zmienności:
+
+| Punkt zmienności | Proces bazowy (wewnętrzny, SAC – do czasu własnych reguł) | CAS (`CasProcess`) |
+|---|---|---|
+| `AmountField` – pole kwoty ACTUALS | z „Parametrów projektu” | zawsze PLN (`Value in Obj. Crcy`) |
+| `TransformsCosts`, `Costs` – koszt projektu | suma ACTUALS w bazie (`REP_ProjectCostsByElement`) | z kosztów po okresach (`REP_ProjectCasCosts`): narzuty CAS, kurs CAS, TOTAL COST (`CasCosts`) |
+| `Currency` – waluta kosztów | waluta pola kwoty | zestaw walutowy projektu (USD – kursem CAS) |
+| `CostsCheck` – kontrola przebiegu | – | „Koszty po narzutach CAS” |
+| `AcwpDescription`, `HasBurdenReport` – ekran projektu | opis wspólny, bez raportu z narzutami | opis kosztu po narzutach, raport kosztów CES |
+
+Wariant wybiera jedna fabryka (`ProjectService.Process`) według typu projektu; poza nią kod nie sprawdza typu (wyjątki:
+deklaratywna lista słowników wymaganych dla typu – `ProjectDictionaries`, nazwa typu na ekranie). Moduł Przebiegi
+dostaje proces kontraktem `IProjectProcessSource` (rejestruje go moduł Projekty). Nowa reguła typu (np. ETC / EAC CAS –
+`tasks/F4.7-cas-etc-eac-z-narzutami.md`, stawki i USD w SAC) to nowy punkt zmienności w klasie bazowej z zachowaniem
+wspólnym i nadpisanie w podklasie – bez warunków na typ w modułach.
+
 ---
 
 ## 7. Dysk sieciowy

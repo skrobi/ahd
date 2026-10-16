@@ -32,7 +32,7 @@ public sealed class RunsModule : IModule
     {
         var store = new SqlRunStore(services.Sql);
         ISourceImport? Imports() => services.Contracts.Get<ISourceImport>();
-        services.Contracts.Register<IRunLauncher>(new RunLauncher(new RunService(store, services, Imports, () => services.Contracts.Get<ICasCostSource>()),
+        services.Contracts.Register<IRunLauncher>(new RunLauncher(new RunService(store, services, Imports, () => services.Contracts.Get<IProjectProcessSource>()),
             store, Imports));
     }
 

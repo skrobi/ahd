@@ -35,7 +35,7 @@ public sealed class ProjectsModule : IModule
             services.PzlProd is null ? null : new SqlPzlProdSource(services.PzlProd),
             () => services.Contracts.Get<ISourceImport>(),
             () => services.Contracts.Get<IRunLauncher>());
-        services.Contracts.Register<ICasCostSource>(new CasCostSource(_service));
+        services.Contracts.Register<IProjectProcessSource>(new ProjectProcessSource(_service));
     }
 
     public FrameworkElement CreateView(ModuleContext context) =>

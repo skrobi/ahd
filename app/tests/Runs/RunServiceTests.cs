@@ -101,7 +101,7 @@ public sealed class RunServiceTests : IDisposable
         var project = new PzlEv.Modules.Projects.Services.ProjectService(projects, dictionaries, app.Journal,
             new PzlEv.Modules.Projects.Services.ProjectFolders(Path.Combine(_root, "Projekty")), null);
         var store = new SqlRunStore(_database.Sql);
-        var service = new RunService(store, app, casCosts: () => new PzlEv.Modules.Projects.Services.CasCostSource(project));
+        var service = new RunService(store, app, processes: () => new PzlEv.Modules.Projects.Services.ProjectProcessSource(project));
 
         var outcome = service.Execute("PAF");
 
@@ -111,7 +111,7 @@ public sealed class RunServiceTests : IDisposable
         Assert.Equal(Math.Round(acwp, 2), Math.Round(pin.GrossCost!.Value, 2));
         Assert.Equal(8884.51m, pin.Balance);                                             // saldo okresów zamkniętych – dane źródłowe
         var issues = store.Issues(pin.PinId);
-        Assert.Contains(issues, i => i.CheckName == RunService.CasCosts && i.Level == CheckLevel.Pass && i.Message.Contains("w PLN"));
+        Assert.Contains(issues, i => i.CheckName == "Koszty po narzutach CAS" && i.Level == CheckLevel.Pass && i.Message.Contains("w PLN"));
         Assert.Contains(issues, i => i.CheckName == RunChecks.NetZero && i.Level == CheckLevel.Error && i.Amount == 8884.51m);
         Assert.NotEqual(RunStatuses.Failed, outcome.Status);
     }

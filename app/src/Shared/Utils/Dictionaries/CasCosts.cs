@@ -1,4 +1,5 @@
 using PzlEv.Shared.Models.Dictionaries;
+using PzlEv.Shared.Utils.Process;
 
 namespace PzlEv.Shared.Utils.Dictionaries;
 
@@ -13,9 +14,6 @@ namespace PzlEv.Shared.Utils.Dictionaries;
 /// </summary>
 public sealed class CasCosts
 {
-    /// <summary>Koszt bazowy: element WBS, cost element, rok i okres SAP, kwota w PLN.</summary>
-    public sealed record Row(string WbsElement, string? CostElement, int FiscalYear, int Period, decimal Amount);
-
     /// <summary>Koszty wierszy po narzutach w walucie projektu (kolejność wierszy); MissingFx – okresy bez kursu CAS (RRRR-MM).</summary>
     public sealed record Result(IReadOnlyList<decimal> Costs, IReadOnlyList<string> MissingFx, IReadOnlyList<string> Notes)
     {
@@ -105,7 +103,7 @@ public sealed class CasCosts
     }
 
     /// <summary>Koszty wierszy po narzutach w walucie projektu; wiersz bez kursu CAS – 0 i okres w MissingFx.</summary>
-    public Result Calculate(IReadOnlyList<Row> rows, (int Year, int Period) last)
+    public Result Calculate(IReadOnlyList<CostRow> rows, (int Year, int Period) last)
     {
         var missing = new SortedSet<string>(StringComparer.Ordinal);
         var costs = new decimal[rows.Count];

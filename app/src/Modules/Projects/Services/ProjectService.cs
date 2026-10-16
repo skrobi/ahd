@@ -8,6 +8,7 @@ using PzlEv.Shared.Models.Pipeline;
 using PzlEv.Shared.Utils.Data;
 using PzlEv.Shared.Utils.Dictionaries;
 using PzlEv.Shared.Utils.Files;
+using PzlEv.Shared.Utils.Process;
 using PzlEv.Shared.Utils.Mapping;
 using PzlEv.Shared.Models.PzlProd;
 
@@ -653,13 +654,15 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
     /// </summary>
     public ElementActuals CostsAndHoursByElement(string code, string field)
     {
-        if (Find(code)?.Type != ProjectTypes.Cas)
-            return store.CostsAndHoursByElement(code, field, ActualsHours);
-        // Projekt CAS: ACWP – koszt PLN z ACTUALS po narzutach CAS (TOTAL COST), w walucie projektu kursem CAS; Actual DLH
-        // – godziny z tych samych wierszy co dotąd.
-        var hours = store.CostsAndHoursByElement(code, ProjectSettings.DefaultActualsAmount, ActualsHours).Hours;
+        var process = Process(code, field);
+        var actuals = store.CostsAndHoursByElement(code, process.AmountField(field), ActualsHours);
+        if (!process.TransformsCosts)
+            return actuals;
+        // Koszt liczony procesem projektu z kosztów bazowych po okresach (np. CAS – narzuty, kurs CAS); Actual DLH – godziny
+        // z tych samych wierszy co dotąd.
+        var hours = actuals.Hours;
         var data = store.CasCosts(code);
-        var result = CasCalculator(code, CasCurrency(code, field)).Calculate(CasRows(data), LastPeriod(data));
+        var result = process.Costs(CostRows(data), LastPeriod(data));
         if (result.Error is { } error)
             throw new InvalidOperationException(error);
         var kinds = EditableRows(GlobalDictionaries.CostCategory, code).Select(x => x.Row)
@@ -702,8 +705,22 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
             CasBurden.RatesFrom(Global(GlobalDictionaries.CasBurdenRates)), mapping, FxRates(), currency);
     }
 
-    private static IReadOnlyList<CasCosts.Row> CasRows(IReadOnlyList<CasCostRow> data) =>
-        data.Select(r => new CasCosts.Row(r.WbsElement, r.CostElement, r.FiscalYear, r.Period, r.Amount)).ToList();
+    private static IReadOnlyList<CostRow> CostRows(IReadOnlyList<CasCostRow> data) =>
+        data.Select(r => new CostRow(r.WbsElement, r.CostElement, r.FiscalYear, r.Period, r.Amount)).ToList();
+
+    /// <summary>
+    /// Proces projektu (docs/architektura.md, rozdz. 6.1) – jedyne miejsce wyboru wariantu według typu projektu: CAS – narzuty
+    /// CAS i kurs CAS (CasProcess), pozostałe typy – proces bazowy (SAC – do czasu własnych reguł). field – pole kwoty
+    /// ACTUALS projektu (null – z „Parametrów projektu”).
+    /// </summary>
+    public ProjectProcess Process(string code, string? field = null) => Process(code, Find(code)?.Type, field);
+
+    /// <summary>Proces projektu o znanym typie (bez odczytu projektu); kalkulator wariantu tworzony przy pierwszym użyciu.</summary>
+    public ProjectProcess Process(string code, string? type, string? field) => type switch
+    {
+        ProjectTypes.Cas => new CasProcess(() => CasCalculator(code, CasCurrency(code, field ?? ActualsAmount(code)))),
+        _ => ProjectProcess.Default,
+    };
 
     /// <summary>Ostatni okres w danych ACTUALS (kolumna okresu raportu); bez niego – najpóźniejszy okres kosztów projektu.</summary>
     private static (int Year, int Period) LastPeriod(IReadOnlyList<CasCostRow> data) =>
