@@ -440,6 +440,11 @@ Project definition × element WBS × Cost Element × rok × okres w PLN (`ValueO
 rozliczeniowych i wykluczeń), opisy jak `REP_ProjectCosts`, ostatni okres danych; narzuty, kurs CAS i TOTAL COST liczy
 aplikacja (`CasCosts` – ACWP struktury, raport kosztów CES, przebieg; `docs/slowniki.md`, rozdz. 6.1). Wymaga aplikacji 0.55.0.
 
+**Migracja `sql/mssql/046_dane_kursy_usd.sql` (dane startowe):** globalne kursy USD miesięcy 2024-01 … 2026-10 (`ValidFrom` –
+pierwszy, `ValidTo` – ostatni dzień miesiąca, `Rate` = `CasRate`) – wartości **przybliżone** (zbliżone do średnich NBP, nie kursy
+urzędowe), do testów i uruchomienia projektów w USD; miesiąc z kursem USD obowiązującym wcześniej zostaje bez zmian. Wiersze
+rozpoznawalne po `RecordedBy = N'migracja 046 – kursy przybliżone'` – przed rozliczeniem zastąpić kursami finansów.
+
 `META_SourceFile.CanonicalStatus`: „utworzone” – dane kanoniczne zapisane i sprawdzone (widoczne dla odczytów),
 „w toku” – zapis wierszy trwa (odczyty pomijają plik; po awarii wpis i wiersze są usuwane), inna wartość – powód
 braku danych (źródło bez parsera).
