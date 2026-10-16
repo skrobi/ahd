@@ -189,8 +189,8 @@ public sealed class StructureRowViewModel(StructureRow row) : INotifyPropertyCha
         StructureEdits.Start => row.Start,
         StructureEdits.Finish => row.Finish,
         "WpCount" => row.Wps.Count == 0 ? null : row.Wps.Count.ToString(System.Globalization.CultureInfo.InvariantCulture),
-        "Acwp" => Amount(row.Acwp),
-        StructureColumns.ActualDlh => Amount(row.ActualDlh),
+        "Acwp" => Rounded(row.Acwp),
+        StructureColumns.ActualDlh => Rounded(row.ActualDlh),
         StructureColumns.ActualStart => row.ActualStart,
         StructureColumns.ActualFinish => row.ActualFinish,
         StructureColumns.OpsBacHours => Optional(row.OpsBacHours),
@@ -216,9 +216,9 @@ public sealed class StructureRowViewModel(StructureRow row) : INotifyPropertyCha
         StructureColumns.PercentDelivered => Percent(row.PercentDelivered),
         StructureColumns.Parts => row.Parts is { } parts ? $"{parts} / {row.PartsDelivered ?? 0}" : null,
         StructureColumns.NextDeliveryYear => row.NextDeliveryYear?.ToString(System.Globalization.CultureInfo.InvariantCulture),
-        StructureColumns.AcwpLabor => Amount(row.AcwpLabor),
-        StructureColumns.AcwpMaterial => Amount(row.AcwpMaterial),
-        StructureColumns.AcwpOther => Amount(row.AcwpOther),
+        StructureColumns.AcwpLabor => Rounded(row.AcwpLabor),
+        StructureColumns.AcwpMaterial => Rounded(row.AcwpMaterial),
+        StructureColumns.AcwpOther => Rounded(row.AcwpOther),
         StructureColumns.DlhDelta => Optional(row.DlhDelta),
         StructureColumns.Sv => Optional(row.Sv),
         StructureColumns.Cv => Optional(row.Cv),
@@ -259,6 +259,9 @@ public sealed class StructureRowViewModel(StructureRow row) : INotifyPropertyCha
     }
 
     private static string? Amount(decimal value) => value == 0 ? null : PolishNumber.ToDisplay(value);
+
+    /// <summary>Wartość wyliczona (ACWP, Actual DLH) z dwoma miejscami po przecinku; zero – pusto. Koszt CAS po narzutach ma pełną precyzję obliczeń.</summary>
+    private static string? Rounded(decimal value) => Amount(Math.Round(value, 2));
 
     /// <summary>Procent z jednym miejscem po przecinku, np. „45,3%”.</summary>
     private static string? Percent(decimal? value) => value is { } v ? $"{PolishNumber.ToDisplay(Math.Round(v, 1))}%" : null;
