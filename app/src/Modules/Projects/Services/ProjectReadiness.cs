@@ -29,9 +29,7 @@ public static class ProjectReadiness
 
         foreach (var item in ProjectDictionaries.ForType(type).Where(i => i.IsRequired(type)))
         {
-            if (!item.Stored)
-                checks.Add(Issue.Error($"{item.Name} – zawartość słownika nieustalona (O37); przebieg projektu CAS jest zablokowany", item.Name));
-            else if (dictionaryRows.GetValueOrDefault(item.Code) is var rows && rows > 0)
+            if (dictionaryRows.GetValueOrDefault(item.Code) is var rows && rows > 0)
                 checks.Add(Pass($"{item.Name}: {rows} wierszy"));
             else
                 checks.Add(Issue.Error($"{item.Name} – słownik pusty; wymagany dla typu {ProjectTypes.Label(type)}, blokuje uruchomienie przebiegu", item.Name));

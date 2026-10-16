@@ -332,9 +332,7 @@ public sealed class WizardViewModel : ObservableObject
         await RefreshDictionaries();
         foreach (var panel in Dictionaries)
         {
-            if (!panel.Item.Stored)
-                checks.Add(Issue.Warning($"{panel.Name}: zawartość nieustalona (O37) – projekt CAS będzie niegotowy", panel.Name));
-            else if (panel.Preview is { HasErrors: true })
+            if (panel.Preview is { HasErrors: true })
                 checks.Add(Issue.Error($"{panel.Name}: plik z błędami – popraw plik albo usuń wczytanie w kroku 3", panel.Name));
             else if (panel.Preview is { } p)
                 checks.Add(new Issue(CheckLevel.Pass, $"{panel.Name}: {p.Working.Count} wierszy", panel.Name));

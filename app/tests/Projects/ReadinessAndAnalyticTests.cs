@@ -63,13 +63,22 @@ public sealed class ReadinessAndAnalyticTests
     }
 
     [Fact]
-    public void Empty_objectives_and_cas_rates_block()
+    public void Empty_objectives_block()
     {
         var empty = ProjectReadiness.Check(ProjectTypes.Internal, new PoTree(), Rows(4, 3), [], P1sSide, FoldersOk, CamAccess);
         Assert.Contains(empty, c => c.Level == CheckLevel.Error && c.Element == "Performance Objectives");
+    }
 
+    [Fact]
+    public void Cas_project_with_filled_dictionaries_is_ready()
+    {
+        // Regresja: dawny placeholder „Stawki CAS” (O37) blokował każdy projekt CAS – narzuty CAS są w słownikach globalnych.
         var cas = ProjectReadiness.Check(ProjectTypes.Cas, Objectives(), Rows(4, 3), [], P1sSide, FoldersOk, CamAccess);
-        Assert.Contains(cas, c => c.Level == CheckLevel.Error && c.Message.Contains("O37"));
+        Assert.True(ProjectReadiness.IsReady(cas));
+        Assert.DoesNotContain(cas, c => c.Message.Contains("O37") || c.Message.Contains("Stawki CAS"));
+
+        var empty = ProjectReadiness.Check(ProjectTypes.Cas, Objectives(), Rows(0, 3), [], P1sSide, FoldersOk, CamAccess);
+        Assert.False(ProjectReadiness.IsReady(empty));
     }
 
     private static DictRow Row(params (string Column, string? Value)[] values) => new(null, null, values.ToDictionary(v => v.Column, v => v.Value));
