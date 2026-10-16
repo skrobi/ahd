@@ -248,8 +248,8 @@ public static class StructureBuilder
                 {
                     withoutWp += amount;
                     item.CostGap = item.Wps.Count == 0
-                        ? $"koszt bez WP ({PolishNumber.ToDisplay(amount)})"
-                        : $"koszt niejednoznaczny ({PolishNumber.ToDisplay(amount)}) – {item.Wps.Count} WP pod elementem, reguła rozdziału O45";
+                        ? $"koszt bez WP ({PolishNumber.ToDisplay(Math.Round(amount, 2))})"
+                        : $"koszt niejednoznaczny ({PolishNumber.ToDisplay(Math.Round(amount, 2))}) – {item.Wps.Count} WP pod elementem, reguła rozdziału O45";
                 }
             }
             foreach (var child in item.Children)
@@ -271,8 +271,10 @@ public static class StructureBuilder
         {
             var wp = (item.P1s is null ? null : assignments.GetValueOrDefault(MappingKeys.Key(item.P1s))?["WP"]) ?? inheritedWp;
             var children = item.Children.Aggregate(new ProductionSum(), (sum, child) => sum.Add(Produce(child, wp)));
-            var key = item is { IsVirtual: true, P1s: { } virtualCode } ? MappingKeys.Key(ProductionData.VirtualKey(MappingKeys.Key(virtualCode)))
-                : item.P1s is not null && byCode.GetValueOrDefault(MappingKeys.Key(item.P1s)) is { } element ? MappingKeys.Key(element.Pspnr) : null;
+            // Kod elementu LOG.WBS (także w węźle wirtualnym, który zastępuje element w drzewie) – wartości elementu (PSPNR);
+            // węzeł wirtualny z kodem wydzielenia – wartości wydzielenia.
+            var key = item.P1s is not null && byCode.GetValueOrDefault(MappingKeys.Key(item.P1s)) is { } element ? MappingKeys.Key(element.Pspnr)
+                : item is { IsVirtual: true, P1s: { } virtualCode } ? MappingKeys.Key(ProductionData.VirtualKey(MappingKeys.Key(virtualCode))) : null;
             if (key is not null && counted.Add(key))
                 item.OwnProduction = productionOf.GetValueOrDefault(key);
             if (wp is not null)

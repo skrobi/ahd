@@ -37,6 +37,10 @@ public sealed class P1sScope
             return exact;
         if (_below.TryGetValue(MappingKeys.Key(p1sElement), out var root))
             return root;
+        // Kod wydzielenia ELEMENT_P1S.NAZWA.CPLGR elementu LOG.WBS spod węzła (np. XYZ-1.QUALITY.DJ) – zakres jego elementu.
+        var parts = p1sElement.Split('.');
+        if (parts.Length > 2 && _below.TryGetValue(MappingKeys.Key(string.Join('.', parts[..^2])), out var splitRoot))
+            return splitRoot;
         return Roots
             .Where(r => p1sElement.StartsWith(r + ".", StringComparison.OrdinalIgnoreCase))
             .OrderByDescending(r => r.Length)

@@ -81,7 +81,7 @@ public sealed class SqlPresetsTests : IDisposable
         var groups = CasBurden.GroupsFrom(Rows(GlobalDictionaries.CasBurdenGroups), Rows(GlobalDictionaries.CasBurdenFormulas));
         Assert.Equal(CasCostReportTests.FinanceGroups.Select(g => Describe(g, CasCostReportTests.FinancePools)).Order(), groups.Select(g => Describe(g, pools)).Order());
         Assert.All(groups, g => Assert.NotNull(g.Description));
-        var rates = CasCostReport.RatesFrom(Rows(GlobalDictionaries.CasBurdenRates));
+        var rates = CasBurden.RatesFrom(Rows(GlobalDictionaries.CasBurdenRates));
         Assert.Equal(34, rates.Count);   // 17 pul × 2025, 2026; DECIMAL(38,18)
         Assert.Equal((new DateOnly(2026, 1, 1), (DateOnly?)new DateOnly(2026, 12, 31), 0.000057456819309837m),
             rates.Where(r => r.Pool == pools.Single(p => p.Name == "FCCOM G&A").Id && r.From.Year == 2026).Select(r => (r.From, r.To, r.Value)).Single());
@@ -114,8 +114,11 @@ public sealed class SqlPresetsTests : IDisposable
             ["Numer elementu kosztowego"] = "0051105550", ["Opis"] = "własny", ["Obszar"] = null, ["Cost Category"] = "Inna", [GlobalDictionaries.BurdenGroupColumn] = "999",
         };
         Assert.True(_dictionaries.Save(GlobalDictionaries.CostCategory, null, [new RowChange(RowChangeKind.Added, null, null, spec.KeyOf(own), own)]).Success);
+        var fxSpec = GlobalDictionaries.Get(GlobalDictionaries.FxRates);
+        var ownFx = new Dictionary<string, string?> { ["Waluta"] = "USD", ["Od"] = "2024-01-01", ["Do"] = "2024-01-31", ["Kurs"] = "3.5", [GlobalDictionaries.CasFxColumn] = "3.6" };
+        Assert.True(_dictionaries.Save(GlobalDictionaries.FxRates, null, [new RowChange(RowChangeKind.Added, null, null, fxSpec.KeyOf(ownFx), ownFx)]).Success);
 
-        Assert.Equal(["002_dane_startowe.sql", "023_dane_produkcji.sql", "030_dane_narzuty_cas.sql", "032_dane_formuly_narzutow_cas.sql", "034_dane_narzuty_cas.sql", "040_dane_rodzaj_kosztu.sql"],
+        Assert.Equal(["002_dane_startowe.sql", "023_dane_produkcji.sql", "030_dane_narzuty_cas.sql", "032_dane_formuly_narzutow_cas.sql", "034_dane_narzuty_cas.sql", "040_dane_rodzaj_kosztu.sql", "046_dane_kursy_usd.sql"],
             SqlMigrations.Apply(_database.Sql));
 
         var paf = _sources.Definitions().Single(d => d.Code == "ACTUALS_PAF");
@@ -130,5 +133,16 @@ public sealed class SqlPresetsTests : IDisposable
             (mine.Values["Cost Category"], mine.Values[GlobalDictionaries.BurdenGroupColumn], mine.Values[GlobalDictionaries.CostKindColumn], mine.Version));   // 034 – grupa ustawiona wcześniej zostaje; 040 – rodzaj Materials (nowa wersja)
         Assert.Contains(_journal.Recent(50), e => e.Message ==
             "Migracja 002 – dane startowe: definicje źródeł 1, lokalizacje RABIT 1, kalendarz okresów 105 tyg., Cost Category 32 wierszy");
+        // 046 – kursy USD 2024-01 … 2026-10 (przybliżone); miesiąc z kursem wpisanym wcześniej zostaje bez zmian.
+        var usd = _dictionaries.Current(GlobalDictionaries.FxRates).Where(r => r.Values["Waluta"] == "USD").OrderBy(r => r.Values["Od"], StringComparer.Ordinal).ToList();
+        Assert.Equal(34, usd.Count);
+        Assert.Equal(("2024-01-01", "3.6"), (usd[0].Values["Od"], usd[0].Values[GlobalDictionaries.CasFxColumn]?.TrimEnd('0')));
+        Assert.Equal(("2026-10-01", "2026-10-31"), (usd[^1].Values["Od"], usd[^1].Values["Do"]));
+        Assert.All(usd.Skip(1), r =>
+        {
+            Assert.Equal(r.Values["Kurs"], r.Values[GlobalDictionaries.CasFxColumn]);
+            Assert.InRange(decimal.Parse(r.Values["Kurs"]!, System.Globalization.CultureInfo.InvariantCulture), 3.5m, 4.5m);
+        });
+        Assert.Empty(DictionaryValidator.Validate(fxSpec, usd.Select(r => new DictRow(r.RowId, r.Version, r.Values)).ToList()).Where(i => i.Level == PzlEv.Shared.Models.Pipeline.CheckLevel.Error));   // okresy się nie nakładają
     }
 }

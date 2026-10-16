@@ -3,6 +3,7 @@ using PzlEv.Shared.Models.Db;
 using PzlEv.Shared.Models.Dictionaries;
 using PzlEv.Shared.Models.Pipeline;
 using PzlEv.Shared.Utils.Data;
+using PzlEv.Shared.Utils.Process;
 using Serilog;
 
 namespace PzlEv.Modules.Runs.Services;
@@ -19,7 +20,7 @@ public sealed record RunOutcome(string Project, string? Code, string Status, int
 /// → kontrole wobec poprzedniego przebiegu (RunChecks) → wynik w bazie. Blokady: przebieg projektu (jeden naraz)
 /// i trwające uruchomienie (wolna po awarii – uruchomienie „przerwane”).
 /// </summary>
-public sealed class RunService(IRunStore store, AppServices services, Func<ISourceImport?>? imports = null)
+public sealed class RunService(IRunStore store, AppServices services, Func<ISourceImport?>? imports = null, Func<IProjectProcessSource?>? processes = null)
 {
     public const string Area = "Przebiegi";
 
@@ -49,6 +50,20 @@ public sealed class RunService(IRunStore store, AppServices services, Func<ISour
         return (today.Date < start.AddDays(SettlementDays) ? previous : current, current);
     }
 
+    /// <summary>
+    /// Wiersze kosztu (bez rozliczenia) przekształcone procesem projektu w walucie projektu (np. CAS – narzuty i kurs CAS,
+    /// wskaźniki jak w raporcie kosztów CES; ostatni okres – najpóźniejszy okres kosztów); błąd – kosztów nie da się policzyć.
+    /// </summary>
+    private static (IReadOnlyList<RunBalanceRow> Rows, string? Error) Transformed(ProjectProcess process, IReadOnlyList<RunBalanceRow> rows)
+    {
+        var costs = rows.Where(r => !r.IsSettlement).ToList();
+        var last = costs.Count == 0 ? (0, 0) : costs.Max(r => (r.FiscalYear, Math.Clamp(r.Period, 1, 12)));
+        var result = process.Costs(costs.Select(r => new CostRow(r.WbsElement, r.CostElement.Length == 0 ? null : r.CostElement,
+            r.FiscalYear, r.Period, r.Amount)).ToList(), last);
+        return result.Error is not null ? ([], result.Error)
+            : (costs.Select((r, i) => r with { Amount = result.Costs[i], Currency = process.Currency ?? r.Currency }).ToList(), null);
+    }
+
     public RunOutcome Execute(string project, IProgress<string>? progress = null, CancellationToken cancellation = default)
     {
         using var lease = services.Locks.TryAcquire(ProjectLock(project), out var holder);
@@ -61,6 +76,13 @@ public sealed class RunService(IRunStore store, AppServices services, Func<ISour
 
         var pin = store.StartPin(project, week, services.Clock.Now, services.User.Account, Environment.MachineName);
         using var alive = services.Locks.TryAcquire(PinLock(pin.PinId), out _);
+        if (alive is null)
+        {
+            // Bez blokady „żyje” inny przebieg uznałby to przypięcie za przerwane.
+            var refused = $"Przebieg nie rozpoczęty – nie udało się założyć blokady przypięcia w folderze {services.Config.RabitFolder}";
+            store.Finish(pin.PinId, services.Clock.Now, RunStatuses.Failed, null, 0, 0, 0, [("Przebieg", CheckLevel.Error, null, refused, null)], refused);
+            return new RunOutcome(project, pin.Code, RunStatuses.Failed, 1, 0, refused);
+        }
         services.Journal.Add(Area, $"Przebieg {pin.Code} #{pin.PinNo} rozpoczęty", pin.Code);
         var issues = new List<RunIssue>();
         long? batchId = null;
@@ -83,7 +105,9 @@ public sealed class RunService(IRunStore store, AppServices services, Func<ISour
 
             // 2. Przypięcie stanu: dane ACTUALS projektu w chwili przebiegu.
             progress?.Report("Przypięcie danych projektu…");
-            var amountField = store.ActualsAmount(project);
+            // Proces projektu: pole kwoty i ewentualne przekształcenie kosztów (np. CAS – PLN, narzuty, kurs CAS).
+            var process = processes?.Invoke()?.For(project) ?? ProjectProcess.Default;
+            var amountField = process.AmountField(store.ActualsAmount(project));
             var current = store.PinBalance(project, pin.PinId, amountField);
             var previousPin = store.Previous(project, pin.RunId);
             var previousField = previousPin?.AmountField ?? ProjectSettings.DefaultActualsAmount;
@@ -94,17 +118,32 @@ public sealed class RunService(IRunStore store, AppServices services, Func<ISour
             else if (previousPin is not null)
                 issues.Add(new RunIssue(RunChecks.Volume, CheckLevel.Pass, null, $"Porównanie z przebiegiem {previousPin.Code} #{previousPin.PinNo} ({previousPin.StartedAt.ToLocalTime():yyyy-MM-dd HH:mm})"));
 
-            // 3. Kontrole danych.
+            // 3. Kontrole danych; koszty przekształcone procesem projektu (np. CAS – po narzutach), netowanie do 0 – na danych
+            //    źródłowych.
             progress?.Report("Kontrole danych…");
+            var source = current;
+            if (process.TransformsCosts)
+            {
+                var (transformed, error) = Transformed(process, current);
+                if (error is null)
+                {
+                    current = transformed;
+                    previous = previous is null ? null : Transformed(process, previous) is { Error: null } before ? before.Rows : null;
+                    issues.Add(new RunIssue(process.CostsCheck, CheckLevel.Pass, null,
+                        $"{process.CostsCheck} w {process.Currency}: koszt brutto {Math.Round(RunChecks.GrossCost(current), 2):#,0.00}"));
+                }
+                else
+                    issues.Add(new RunIssue(process.CostsCheck, CheckLevel.Error, null, $"{process.CostsCheck} niepoliczone – {error}; kontrole na danych źródłowych"));
+            }
             var (closedBefore, today) = Periods(week.Period, services.Clock.Now.Date);
             issues.AddRange(RunChecks.Check(current, previous, store.CostElements(project), closedBefore, today,
-                amountField == ProjectSettings.DefaultActualsAmount ? "PLN" : null));
+                current != source ? process.Currency : amountField == ProjectSettings.DefaultActualsAmount ? "PLN" : null, source));
 
             var errors = issues.Count(i => i.Level == CheckLevel.Error);
             var warnings = issues.Count(i => i.Level == CheckLevel.Warning);
             var status = errors > 0 ? RunStatuses.Errors : warnings > 0 ? RunStatuses.Warnings : RunStatuses.Ok;
-            var rows = current.Sum(r => (long)r.Rows);
-            var balance = current.Where(r => (r.FiscalYear, Math.Min(r.Period, 12)).CompareTo(closedBefore) < 0).Sum(r => r.Amount);
+            var rows = source.Sum(r => (long)r.Rows);
+            var balance = source.Where(r => (r.FiscalYear, Math.Min(r.Period, 12)).CompareTo(closedBefore) < 0).Sum(r => r.Amount);
             var summary = $"{status}: błędy {errors}, ostrzeżenia {warnings}; wierszy {rows:#,0}, saldo okresów zamkniętych {Math.Round(balance, 2):#,0.00}";
             store.Finish(pin.PinId, services.Clock.Now, status, batchId, rows, RunChecks.GrossCost(current), balance,
                 issues.Select(i => (i.Check, i.Level, i.Element, i.Message, i.Amount)).ToList(), summary);

@@ -3,7 +3,7 @@
 ## Rola tego pliku
 
 Ten plik zawiera zasady pracy nad projektem.
-Nie jest dokumentacją aplikacji. Dokumentacja techniczna znajduje się w `README.md` oraz w katalogu `md/`.
+Nie jest dokumentacją aplikacji. Dokumentacja techniczna znajduje się w `readme.md` oraz w katalogu `docs/`.
 
 ## 1. Zanim zmienisz kod
 
@@ -11,7 +11,7 @@ Najpierw zrozum istniejącą implementację.
 
 Kolejność:
 
-1. Przeczytaj `README.md`.
+1. Przeczytaj `readme.md`.
 2. Ustal, której części aplikacji dotyczy zadanie.
 3. Otwórz odpowiedni dokument z `docs/`.
 4. Zlokalizuj konkretne pliki i metody.
@@ -19,7 +19,7 @@ Kolejność:
 
 Nie czytaj całego repozytorium, jeśli nie jest to potrzebne.
 
-`README.md` jest mapą kodu, a dokumenty `docs/*.md` zawierają szczegółową dokumentację poszczególnych obszarów. Dokumentacja jest pomocą nawigacyjną, a nie bezwzględnym źródłem prawdy. Przed zmianą zawsze zweryfikuj aktualny kod.
+`readme.md` jest mapą dokumentacji (mapa kodu: `docs/architektura.md`, rozdz. 5.3, i `app/README.md`), a dokumenty `docs/*.md` zawierają szczegółową dokumentację poszczególnych obszarów. Dokumentacja jest pomocą nawigacyjną, a nie bezwzględnym źródłem prawdy. Przed zmianą zawsze zweryfikuj aktualny kod.
 
 ## 2. Zakres zadania
 
@@ -51,13 +51,14 @@ Nie twórz równoległych implementacji tej samej funkcjonalności. Przestrzegaj
 
 ## 4. Dokumentacja
 
-`README.md` wskazuje, gdzie znajduje się odpowiedni kontekst.
+`readme.md` wskazuje, gdzie znajduje się odpowiedni kontekst.
 
 W szczególności:
 
-- `architektura.md` — architektura i przepływ,
-- `funkcjonalnosc.md` — funkcjonalności założeniowe,
-- `pipeline-fazy.md` - przepływ etapów w ramach uruchomionego przepływu 
+- `docs/architektura.md` — architektura, moduły, podział logiki,
+- `docs/pipeline-fazy.md` — przepływ etapów przebiegu,
+- `docs/funkcjonalnosc.md` — funkcjonalności,
+- pozostałe dokumenty – mapa w `readme.md`.
 
 
 Jeżeli zmiana powoduje, że dokumentacja przestaje być aktualna, zaktualizuj odpowiedni dokument `docs/`.
@@ -77,11 +78,11 @@ Nie osłabiaj istniejących mechanizmów:
 
 Jeżeli istnieje już helper lub guard zapewniający daną regułę, wykorzystaj go zamiast tworzyć własną implementację.
 
-## 8. Minimalna zmiana
+## 6. Minimalna zmiana
 
 Preferuj najmniejszą zmianę, która poprawnie rozwiązuje problem. Nie przepisuj istniejącego kodu tylko dlatego, że można go napisać inaczej. Nie zmieniaj istniejącego zachowania, jeżeli nie wynika to z wymagań zadania. Jeżeli zadanie wymaga istotnej decyzji architektonicznej, zatrzymaj się przed implementacją i przedstaw proponowane rozwiązanie.
 
-## 8. Weryfikacja
+## 7. Weryfikacja
 
 Po implementacji:
 
@@ -93,7 +94,7 @@ Po implementacji:
 
 Nie deklaruj, że funkcjonalność działa, jeżeli nie została zweryfikowana.
 
-## 9. Praca z taskami
+## 8. Praca z taskami
 
 Jeżeli zadanie znajduje się w katalogu `tasks/`, traktuj jego:
 
@@ -106,13 +107,13 @@ jako kontrakt implementacyjny. Jeżeli wykonanie zadania wymaga zmiany zakresu, 
 
 ---
 
-## 10. Oszczędzanie kontekstu
+## 9. Oszczędzanie kontekstu
 
 Celem jest rozwiązanie problemu przy użyciu minimalnego niezbędnego kontekstu, bez utraty poprawności. Nie analizuj całej aplikacji przed wykonaniem małego zadania.
 
 Preferowany przepływ:
 
-README.md
+readme.md
 → właściwy dokument `docs/*.md`
 → właściwe pliki
 → implementacja
@@ -120,6 +121,6 @@ README.md
 
 Jeżeli dokumentacja projektu zawiera potrzebną informację, nie szukaj jej ponownie w całym repozytorium. Najpierw wykorzystaj dokumentację, a następnie zweryfikuj tylko wskazane w niej pliki. Nie powtarzaj informacji, które już znajdują się w dokumentacji projektu.
 
-## 11. Zasada nadrzędna
+## 10. Zasada nadrzędna
 
 Najpierw zrozum istniejący system. Potem zmień tylko to, co jest potrzebne. Na końcu zweryfikuj zmianę.

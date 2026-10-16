@@ -8,6 +8,7 @@ using PzlEv.Shared.Models.Pipeline;
 using PzlEv.Shared.Utils.Data;
 using PzlEv.Shared.Utils.Dictionaries;
 using PzlEv.Shared.Utils.Files;
+using PzlEv.Shared.Utils.Process;
 using PzlEv.Shared.Utils.Mapping;
 using PzlEv.Shared.Models.PzlProd;
 
@@ -215,7 +216,7 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
 
     /// <summary>
     /// Stawki ETC Cost: Labor Rate × Overhead (brak – 1) MPK z roku dnia stanu (stawki w PLN); waluta projektu – z danych
-    /// (ProjectCurrency); kursy do PLN – najnowszy okres nie późniejszy niż dzień stanu („Kursy walut”). Praca: PLN → waluta
+    /// (ProjectCurrency); kursy do PLN – obowiązujące w dniu stanu („Kursy walut”, kolumna Kurs). Praca: PLN → waluta
     /// projektu, materiały (vAPD): USD → waluta projektu; kwoty „Harmonogram i budżet” w innej walucie – przeliczniki Factors.
     /// </summary>
     public static EtcRates EtcRatesOf(IReadOnlyList<DictRow> departmentRates, IReadOnlyList<DictRow> fxRates, string? currency, string? currencyProblem,
@@ -229,10 +230,7 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
             .ToDictionary(g => g.Key, g => Dec(g.First()["Labor Rate"])!.Value * (Dec(g.First()["Overhead"]) ?? 1), StringComparer.OrdinalIgnoreCase);
         if (currency is null)
             return new EtcRates(rates, year, null, null, null, currencyProblem ?? "waluta projektu nieznana – brak danych ACTUALS projektu");
-        var period = today.ToString("yyyy-MM", System.Globalization.CultureInfo.InvariantCulture);
-        decimal? ToPln(string code) => string.Equals(code, "PLN", StringComparison.OrdinalIgnoreCase) ? 1
-            : fxRates.Where(r => string.Equals(r["Waluta"], code, StringComparison.OrdinalIgnoreCase) && r["Okres"] is { } p && string.CompareOrdinal(p, period) <= 0)
-                .OrderByDescending(r => r["Okres"], StringComparer.Ordinal).Select(r => Dec(r["Kurs"])).FirstOrDefault(k => k is > 0);
+        decimal? ToPln(string code) => FxRate.On(fxRates, code, today);
         var project = ToPln(currency);
         var usd = ToPln("USD");
         var missing = new[] { (Code: currency, Rate: project), (Code: "USD", Rate: usd) }.Where(x => x.Rate is null).Select(x => x.Code).Distinct().ToList();
@@ -241,7 +239,7 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
                 .Select(c => (Code: c, Rate: ToPln(c))).Where(x => x.Rate is not null)
                 .ToDictionary(x => x.Code, x => x.Rate!.Value / toProject, StringComparer.OrdinalIgnoreCase);
         return new EtcRates(rates, year, currency, project is { } p1 ? 1 / p1 : null, project is { } p2 && usd is { } u ? u / p2 : null,
-            missing.Count > 0 ? $"brak kursu {string.Join(", ", missing)} w „Kursy walut” do okresu {period}" : null, factors);
+            missing.Count > 0 ? $"brak kursu {string.Join(", ", missing)} w „Kursy walut” obowiązującego {today:yyyy-MM-dd}" : null, factors);
     }
 
     /// <summary>Grupy narzutowe CAS do wyboru w kolumnie „Grupa narzutowa CAS” Cost Category projektu (identyfikator → nazwa).</summary>
@@ -533,6 +531,8 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
             DateOnly.TryParseExact(value, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var d) ? d : null;
         static object? Round(decimal? value) => value is { } v ? Math.Round(v, 2) : null;
         static object? NonZero(decimal value) => value == 0 ? null : value;
+        // Kwota ACWP – zaokrąglona jak pozostałe kwoty (koszt CAS po narzutach ma pełną precyzję obliczeń); 0 – puste.
+        static object? Amount(decimal value) => value == 0 ? null : Math.Round(value, 2);
         var budget = r.Wps.Count > 0;
         return key switch
         {
@@ -571,10 +571,10 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
             StructureColumns.NextDeliveryYear => r.NextDeliveryYear,
             StructureColumns.PvCost => Round(r.PvCost),
             StructureColumns.EvCost => Round(r.EvCost),
-            StructureColumns.AcwpLabor => NonZero(r.AcwpLabor),
-            StructureColumns.AcwpMaterial => NonZero(r.AcwpMaterial),
-            StructureColumns.AcwpOther => NonZero(r.AcwpOther),
-            StructureColumns.Acwp => NonZero(r.Acwp),
+            StructureColumns.AcwpLabor => Amount(r.AcwpLabor),
+            StructureColumns.AcwpMaterial => Amount(r.AcwpMaterial),
+            StructureColumns.AcwpOther => Amount(r.AcwpOther),
+            StructureColumns.Acwp => Amount(r.Acwp),
             StructureColumns.ActualDlh => NonZero(r.ActualDlh),
             StructureColumns.DlhDelta => Round(r.DlhDelta),
             StructureColumns.Sv => Round(r.Sv),
@@ -654,8 +654,80 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
     /// ACWP (pole kwoty field) i Actual DLH (suma „Total Quantity” z tych samych wierszy) po elemencie CES – jedno wywołanie
     /// REP_ProjectCostsByElement (migracja 036; wcześniej dwa odczyty dużego zrzutu ACTUALS).
     /// </summary>
-    public ElementActuals CostsAndHoursByElement(string code, string field) =>
-        store.CostsAndHoursByElement(code, field, ActualsHours);
+    public ElementActuals CostsAndHoursByElement(string code, string field)
+    {
+        var process = Process(code, field);
+        var actuals = store.CostsAndHoursByElement(code, process.AmountField(field), ActualsHours);
+        if (!process.TransformsCosts)
+            return actuals;
+        // Koszt liczony procesem projektu z kosztów bazowych po okresach (np. CAS – narzuty, kurs CAS); Actual DLH – godziny
+        // z tych samych wierszy co dotąd.
+        var hours = actuals.Hours;
+        var data = store.CasCosts(code);
+        var result = process.Costs(CostRows(data), LastPeriod(data));
+        if (result.Error is { } error)
+            throw new InvalidOperationException(error);
+        var kinds = EditableRows(GlobalDictionaries.CostCategory, code).Select(x => x.Row)
+            .Where(r => r["Numer elementu kosztowego"] is not null)
+            .GroupBy(r => r["Numer elementu kosztowego"]!, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.First()[GlobalDictionaries.CostKindColumn], StringComparer.OrdinalIgnoreCase);
+        IReadOnlyDictionary<string, decimal> Sum(Func<CasCostRow, bool> include) =>
+            data.Select((r, i) => (Row: r, Cost: result.Costs[i])).Where(x => include(x.Row))
+                .GroupBy(x => x.Row.WbsElement, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(g => g.Key, g => g.Sum(x => x.Cost), StringComparer.OrdinalIgnoreCase);
+        string? Kind(CasCostRow r) => r.CostElement is { } ce ? kinds.GetValueOrDefault(ce) : null;
+        return new ElementActuals(Sum(_ => true), hours, Sum(r => Kind(r) == GlobalDictionaries.LaborKind), Sum(r => Kind(r) == GlobalDictionaries.MaterialKind));
+    }
+
+    /// <summary>
+    /// Waluta kosztów projektu CAS: zestaw walutowy z „Parametrów projektu” – Object currency (PLN) albo Report currency
+    /// (np. USD); kwoty zawsze z PLN (Value in Obj. Crcy), USD – kursem CAS, nie kwotą USD z SAP.
+    /// </summary>
+    public string CasCurrency(string code, string field)
+    {
+        var (currency, problem) = ProjectCurrency(code, field);
+        if (problem is not null)
+            throw new InvalidOperationException(problem);
+        return currency ?? "PLN";
+    }
+
+    /// <summary>
+    /// Kalkulator kosztu CAS projektu (CasCosts): pule, grupy, formuły i wskaźniki ze słowników globalnych narzutów CAS, grupa
+    /// narzutowa cost elementu z efektywnego słownika Cost Category projektu, kurs CAS z „Kursy walut”.
+    /// </summary>
+    public CasCosts CasCalculator(string code, string currency)
+    {
+        IReadOnlyList<DictRow> Global(string dictionary) => _dictionaries.Load(GlobalDictionaries.Get(dictionary));
+        var mapping = EditableRows(GlobalDictionaries.CostCategory, code).Select(x => x.Row)
+            .Where(r => r["Numer elementu kosztowego"] is not null)
+            .GroupBy(r => r["Numer elementu kosztowego"]!, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.First()[GlobalDictionaries.BurdenGroupColumn], StringComparer.OrdinalIgnoreCase);
+        return new CasCosts(CasBurden.PoolsFrom(Global(GlobalDictionaries.CasPools)),
+            CasBurden.GroupsFrom(Global(GlobalDictionaries.CasBurdenGroups), Global(GlobalDictionaries.CasBurdenFormulas)),
+            CasBurden.RatesFrom(Global(GlobalDictionaries.CasBurdenRates)), mapping, FxRates(), currency);
+    }
+
+    private static IReadOnlyList<CostRow> CostRows(IReadOnlyList<CasCostRow> data) =>
+        data.Select(r => new CostRow(r.WbsElement, r.CostElement, r.FiscalYear, r.Period, r.Amount)).ToList();
+
+    /// <summary>
+    /// Proces projektu (docs/architektura.md, rozdz. 6.1) – jedyne miejsce wyboru wariantu według typu projektu: CAS – narzuty
+    /// CAS i kurs CAS (CasProcess), pozostałe typy – proces bazowy (SAC – do czasu własnych reguł). field – pole kwoty
+    /// ACTUALS projektu (null – z „Parametrów projektu”).
+    /// </summary>
+    public ProjectProcess Process(string code, string? field = null) => Process(code, Find(code)?.Type, field);
+
+    /// <summary>Proces projektu o znanym typie (bez odczytu projektu); kalkulator wariantu tworzony przy pierwszym użyciu.</summary>
+    public ProjectProcess Process(string code, string? type, string? field) => type switch
+    {
+        ProjectTypes.Cas => new CasProcess(() => CasCalculator(code, CasCurrency(code, field ?? ActualsAmount(code)))),
+        _ => ProjectProcess.Default,
+    };
+
+    /// <summary>Ostatni okres w danych ACTUALS (kolumna okresu raportu); bez niego – najpóźniejszy okres kosztów projektu.</summary>
+    private static (int Year, int Period) LastPeriod(IReadOnlyList<CasCostRow> data) =>
+        data.FirstOrDefault(r => r.LastYear is not null) is { LastYear: { } year, LastPeriod: { } period } ? (year, period)
+        : data.Count == 0 ? (DateTime.Today.Year, DateTime.Today.Month) : data.Max(r => (r.FiscalYear, r.Period));
 
     /// <summary>Pole kwoty ACTUALS projektu – słownik „Parametry projektu” (brak – ValueObjCrcy).</summary>
     public string ActualsAmount(string code) => ProjectDictionaries.ActualsAmount(Rows(ProjectDictionaries.Settings, code));
@@ -905,7 +977,15 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
     /// </summary>
     public (int Rows, int Notes) ExportCasCostReport(string path, string code)
     {
-        var (columns, rows) = store.CostReport(code, ActualsAmount(code));
+        // Koszt bazowy zawsze z PLN (Value in Obj. Crcy), w walucie projektu kursem CAS okresu kosztu – jak ACWP struktury.
+        var currency = CasCurrency(code, ActualsAmount(code));
+        var data = store.CasCosts(code);
+        var calculator = CasCalculator(code, currency);
+        var missing = data.Select(r => (r.FiscalYear, r.Period)).Distinct().Where(p => calculator.Fx(p.FiscalYear, p.Period) is null)
+            .Select(p => $"{p.FiscalYear}-{Math.Clamp(p.Period, 1, 12):00}").Distinct().Order().ToList();
+        if (missing.Count > 0)
+            throw new InvalidOperationException(new CasCosts.Result([], missing, []).Error);
+        var (columns, rows) = CasCostReport.Table(data, data.Select(r => r.Amount * calculator.Fx(r.FiscalYear, r.Period)!.Value).ToList(), LastPeriod(data));
         var mapping = EditableRows(GlobalDictionaries.CostCategory, code).Select(x => x.Row)
             .Where(r => r["Numer elementu kosztowego"] is not null)
             .GroupBy(r => r["Numer elementu kosztowego"]!, StringComparer.OrdinalIgnoreCase)
@@ -914,13 +994,16 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
         var result = CasCostReport.Build(columns, rows, mapping,
             CasBurden.PoolsFrom(Global(GlobalDictionaries.CasPools)),
             CasBurden.GroupsFrom(Global(GlobalDictionaries.CasBurdenGroups), Global(GlobalDictionaries.CasBurdenFormulas)),
-            CasCostReport.RatesFrom(Global(GlobalDictionaries.CasBurdenRates)));
+            CasBurden.RatesFrom(Global(GlobalDictionaries.CasBurdenRates)));
+        List<string> notes = [.. result.Notes];
+        if (!string.Equals(currency, "PLN", StringComparison.OrdinalIgnoreCase))
+            notes.Insert(0, $"Kwoty w {currency}: koszt PLN z ACTUALS (Value in Obj. Crcy) przeliczony kursem CAS („Kursy walut”, {GlobalDictionaries.CasFxColumn}) obowiązującym w okresie kosztu, narzuty od kwot w {currency}.");
         List<ExcelTableWriter.ReportSheet> sheets = [result.Report, result.Rates];
-        if (result.Notes.Count > 0)
-            sheets.Add(new ExcelTableWriter.ReportSheet("Uwagi", ["Uwaga"], result.Notes.Select(n => (IReadOnlyList<object?>)[n])));
+        if (notes.Count > 0)
+            sheets.Add(new ExcelTableWriter.ReportSheet("Uwagi", ["Uwaga"], notes.Select(n => (IReadOnlyList<object?>)[n])));
         ExcelTableWriter.WriteReport(path, sheets);
-        journal.Add(Area, $"{code}: raport kosztów CES pobrany do Excela ({rows.Count} wierszy, uwagi: {result.Notes.Count})", code);
-        return (rows.Count, result.Notes.Count);
+        journal.Add(Area, $"{code}: raport kosztów CES pobrany do Excela ({rows.Count} wierszy, {currency}, uwagi: {notes.Count})", code);
+        return (rows.Count, notes.Count);
     }
 
     // ---------- gotowość, baza analityczna ----------

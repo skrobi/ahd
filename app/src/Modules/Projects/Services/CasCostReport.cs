@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.RegularExpressions;
+using PzlEv.Modules.Projects.Models;
 using PzlEv.Shared.Models.Dictionaries;
 using PzlEv.Shared.Utils.Dictionaries;
 using PzlEv.Shared.Utils.Files;
@@ -27,9 +28,6 @@ public static partial class CasCostReport
     private const string AmountFormat = "#,##0.00";
     private const string RateFormat = "0.0000%";
 
-    /// <summary>Wskaźnik puli (identyfikator puli) obowiązujący od – do (To null – bezterminowo).</summary>
-    public sealed record Rate(long Pool, DateOnly From, DateOnly? To, decimal Value);
-
     /// <summary>Arkusz raportu i arkusze pomocnicze: użyte wskaźniki, uwagi (braki mapowania, formuł i wskaźników).</summary>
     public sealed record Result(ExcelTableWriter.ReportSheet Report, ExcelTableWriter.ReportSheet Rates, IReadOnlyList<string> Notes);
 
@@ -42,7 +40,7 @@ public static partial class CasCostReport
     /// <param name="pools">Pule w kolejności kolumn (CasBurden.PoolsFrom).</param>
     /// <param name="groups">Grupy z formułami pul (CasBurden.GroupsFrom).</param>
     public static Result Build(IReadOnlyList<string> columns, IReadOnlyList<IReadOnlyList<object?>> rows, IReadOnlyDictionary<string, string?> mapping,
-        IReadOnlyList<CasBurden.Pool> pools, IReadOnlyList<CasBurden.Group> groups, IReadOnlyList<Rate> rates)
+        IReadOnlyList<CasBurden.Pool> pools, IReadOnlyList<CasBurden.Group> groups, IReadOnlyList<CasBurden.Rate> rates)
     {
         var notes = new List<string>();
         var blocks = Blocks(columns);
@@ -51,8 +49,6 @@ public static partial class CasCostReport
         string Key(string? value) => ValueFormat.TryNormalize(costElement, value, out var canonical, out _) ? canonical ?? "" : value ?? "";
         var groupOf = mapping.GroupBy(m => Key(m.Key), StringComparer.OrdinalIgnoreCase).ToDictionary(g => g.Key, g => g.First().Value, StringComparer.OrdinalIgnoreCase);
         var index = pools.Select((p, i) => (p.Id, i)).ToDictionary(x => x.Id, x => x.i);
-        var names = pools.ToDictionary(p => p.Id, p => p.Name);
-        var known = pools.Select(p => p.Id).ToHashSet();
         var width = pools.Count + 2;
 
         // Kolumny: opis, grupa narzutowa, koszt bazowy bloków, bloki (pule, TOTAL COST, TOTAL FCCOM).
@@ -74,27 +70,13 @@ public static partial class CasCostReport
         }
 
         // Formuły grup: pula spoza słownika pul, formuła błędna albo zapętlona – bez narzutu, z uwagą.
-        var usable = new Dictionary<long, List<(int Pool, IReadOnlyList<CasFormula.Token> Tokens)>>();
+        var usable = new Dictionary<long, IReadOnlyList<(int Pool, IReadOnlyList<CasFormula.Token> Tokens)>>();
         var used = new HashSet<long>();
         IReadOnlyList<(int Pool, IReadOnlyList<CasFormula.Token> Tokens)> FormulasOf(CasBurden.Group group)
         {
             if (usable.TryGetValue(group.Id, out var ready))
                 return ready;
-            var cycles = CasBurden.Cycles(group.Formulas);
-            var list = new List<(int, IReadOnlyList<CasFormula.Token>)>();
-            foreach (var (pool, tokens) in group.Formulas)
-            {
-                if (!index.TryGetValue(pool, out var p))
-                    notes.Add($"Grupa {group.Name}: formuła puli usuniętej ze słownika „Pule narzutu CAS” – pominięta");
-                else if (CasFormula.Error(tokens, known) is { } error)
-                    notes.Add($"Grupa {group.Name}, pula {names[pool]}: {error} – bez narzutu");
-                else if (cycles.Contains(pool))
-                    notes.Add($"Grupa {group.Name}: narzut puli {names[pool]} zależy od niego samego (zapętlenie formuł) – bez narzutu");
-                else
-                    list.Add((p, tokens));
-            }
-            list.Sort((x, y) => x.Item1.CompareTo(y.Item1));
-            return usable[group.Id] = list;
+            return usable[group.Id] = CasBurden.Usable(group, pools, notes);
         }
 
         var costPools = pools.Select((p, i) => (p, i)).Where(x => !x.p.IsFccom).Select(x => x.i).ToList();
@@ -150,7 +132,7 @@ public static partial class CasCostReport
         {
             foreach (var (pool, p) in pools.Select((x, i) => (x, i)))
             {
-                var (rate, changes) = RateFor(rates, pool.Id, block.Months);
+                var (rate, changes) = CasBurden.RateFor(rates, pool.Id, block.Months);
                 if (rate is not null)
                 {
                     rateRow[Pool(b, p) - 1] = new ExcelTableWriter.Formatted(rate.Value, RateFormat);
@@ -172,34 +154,45 @@ public static partial class CasCostReport
         return new Result(report, rateSheet, notes);
     }
 
+    /// <summary>
+    /// Raport kosztów (układ REP_ProjectCosts: 6 kolumn opisu, „Period MM/RRRR” – ostatni okres danych, lata od najnowszego)
+    /// z kosztów bazowych projektu CAS po okresach (REP_ProjectCasCosts) – amounts: kwota wiersza w walucie projektu (kurs CAS
+    /// okresu kosztu). Wiersz: Grouping × Project definition × Cost Element (bez cost elementu – poza raportem), w kolejności
+    /// drzewa nakładki.
+    /// </summary>
+    public static (IReadOnlyList<string> Columns, IReadOnlyList<IReadOnlyList<object?>> Rows) Table(IReadOnlyList<CasCostRow> data,
+        IReadOnlyList<decimal> amounts, (int Year, int Period) last)
+    {
+        var years = data.Where(r => r.FiscalYear > 0).Select(r => r.FiscalYear).Distinct().OrderDescending().ToList();
+        List<string> columns =
+        [
+            "Grouping", "Project definition", "Project definition description", "Cost Element", "Cost Elem. Descr.", "Cost grouping",
+            $"Period {last.Period:00}/{last.Year}", .. years.Select(y => y.ToString(CultureInfo.InvariantCulture)),
+        ];
+        var rows = data.Select((r, i) => (Row: r, Amount: amounts[i])).Where(x => x.Row.CostElement is not null)
+            .GroupBy(x => (x.Row.Grouping, x.Row.GroupingOrder, x.Row.ProjectDefinition, x.Row.CostElement))
+            .OrderBy(g => g.Key.GroupingOrder ?? int.MaxValue).ThenBy(g => g.Key.Grouping, StringComparer.Ordinal)
+            .ThenBy(g => g.Key.ProjectDefinition, StringComparer.Ordinal).ThenBy(g => g.Key.CostElement, StringComparer.Ordinal)
+            .Select(g =>
+            {
+                decimal? Sum(Func<CasCostRow, bool> include) => g.Any(x => include(x.Row)) ? g.Where(x => include(x.Row)).Sum(x => x.Amount) : null;
+                var first = g.First().Row;
+                return (IReadOnlyList<object?>)
+                [
+                    first.Grouping, first.ProjectDefinition, first.ProjectDefinitionDescription, first.CostElement, first.CostElementDescription,
+                    first.CostGrouping, Sum(r => r.FiscalYear == last.Year && r.Period == last.Period),
+                    .. years.Select(y => (object?)Sum(r => r.FiscalYear == y)),
+                ];
+            })
+            .ToList();
+        return (columns, rows);
+    }
+
     /// <summary>Komórki sumy w wierszu: kolumny kolejne – zakres (K4:V4), inaczej lista (K4,M4).</summary>
     private static string Range(IReadOnlyList<int> columns, int row) =>
         columns[^1] - columns[0] == columns.Count - 1
             ? $"{Letter(columns[0])}{row}:{Letter(columns[^1])}{row}"
             : string.Join(",", columns.Select(c => $"{Letter(c)}{row}"));
-
-    /// <summary>Wskaźniki z wierszy słownika „Wskaźniki narzutu CAS” (zapis kanoniczny: daty RRRR-MM-DD, liczba z kropką).</summary>
-    public static IReadOnlyList<Rate> RatesFrom(IEnumerable<DictRow> rows) =>
-        rows.Where(r => r["Pula"] is not null && r["Od"] is not null && r["Wskaźnik"] is not null)
-            .Where(r => CasBurden.Id(r["Pula"]) is not null)
-            .Select(r => new Rate(CasBurden.Id(r["Pula"])!.Value, Date(r["Od"]!), r["Do"] is { } to ? Date(to) : null,
-                decimal.Parse(r["Wskaźnik"]!, NumberStyles.Number, CultureInfo.InvariantCulture)))
-            .ToList();
-
-    private static DateOnly Date(string canonical) => DateOnly.ParseExact(canonical, "yyyy-MM-dd", CultureInfo.InvariantCulture);
-
-    /// <summary>
-    /// Wskaźnik puli dla miesięcy kolumny: wersja obowiązująca w ostatnim miesiącu, dla którego jakaś obowiązuje
-    /// (w miesiącu kilka – najpóźniej rozpoczęta); changes – w miesiącach kolumny obowiązują różne wskaźniki.
-    /// </summary>
-    private static (Rate? Rate, bool Changes) RateFor(IReadOnlyList<Rate> rates, long pool, IReadOnlyList<DateOnly> months)
-    {
-        var found = months.Select(m => rates
-                .Where(r => r.Pool == pool && r.From <= m.AddMonths(1).AddDays(-1) && (r.To is null || r.To >= m))
-                .MaxBy(r => r.From))
-            .OfType<Rate>().ToList();
-        return found.Count == 0 ? (null, false) : (found[^1], found.Select(r => r.Value).Distinct().Count() > 1);
-    }
 
     /// <summary>Kolumny kwot raportu kosztów: „Period MM/RRRR” (miesiąc) i „RRRR” (rok – do ostatniego okresu danych).</summary>
     private static List<Block> Blocks(IReadOnlyList<string> columns)

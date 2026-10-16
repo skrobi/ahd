@@ -128,8 +128,8 @@ public sealed class DictionaryStoreContract : IDisposable
     {
         var (store, _, _) = Create(presets: true);
 
-        store.Save(GlobalDictionaries.FxRates, null, [new RowChange(RowChangeKind.Added, null, null, "USD | 2026-10",
-            new Dictionary<string, string?> { ["Waluta"] = "USD", ["Okres"] = "2026-10", ["Kurs"] = "3.98765432" })]);
+        store.Save(GlobalDictionaries.FxRates, null, [new RowChange(RowChangeKind.Added, null, null, "EUR | 2026-10-01",
+            new Dictionary<string, string?> { ["Waluta"] = "EUR", ["Od"] = "2026-10-01", ["Do"] = null, ["Kurs"] = "3.98765432", ["Kurs CAS"] = "3.7512" })]);
         store.Save(GlobalDictionaries.Persons, null, [new RowChange(RowChangeKind.Added, null, null, @"PZL\jan.kowalski",
             new Dictionary<string, string?> { ["USRID"] = "e123456", ["Imię i nazwisko"] = "Jan Kowalski" })]);
 
@@ -139,7 +139,9 @@ public sealed class DictionaryStoreContract : IDisposable
         Assert.Equal(expected[0], calendar[0].Values);                      // daty RRRR-MM-DD, tak / nie, liczby całkowite
         Assert.Contains(calendar, r => r.Values["Zamykający"] == "tak");
         Assert.Equal(35, store.Current(GlobalDictionaries.CostCategory).Count);
-        Assert.Equal("3.98765432", Assert.Single(store.Current(GlobalDictionaries.FxRates)).Values["Kurs"]);
+        Assert.Equal(34, store.Current(GlobalDictionaries.FxRates).Count(r => r.Values["Waluta"] == "USD"));   // 046 – USD 2024-01 … 2026-10
+        var fx = Assert.Single(store.Current(GlobalDictionaries.FxRates), r => r.Values["Waluta"] == "EUR").Values;
+        Assert.Equal(("3.98765432", "3.7512", "2026-10-01", (string?)null), (fx["Kurs"], fx["Kurs CAS"], fx["Od"], fx["Do"]));
         Assert.Equal("Jan Kowalski", Assert.Single(store.Current(GlobalDictionaries.Persons)).Values["Imię i nazwisko"]);
     }
 }

@@ -40,7 +40,8 @@ Powiązane: `docs/architektura.md` (rozdz. 6 – dostęp do bazy przez procedury
 ## 4. Egzekwowanie
 
 - Interfejs pokazuje tylko funkcje roli użytkownika; warstwa aplikacji sprawdza rolę przed każdą akcją.
-- Baza: rola bazy `pzl_ev_user` (Analityk) ma wyłącznie prawo wykonywania procedur i odczytu widoków
+- Baza (stan docelowy – F10.2; dziś magazyny piszą do tabel, rola potrzebuje praw do tabel – `docs/architektura.md`,
+  rozdz. 6): rola bazy `pzl_ev_user` (Analityk) ma wyłącznie prawo wykonywania procedur i odczytu widoków
   (`docs/architektura.md`, rozdz. 6). CAM w v2 otrzymuje osobną rolę bazy z procedurami ograniczonymi do jego
   projektów.
 - Każda akcja jest zapisywana w dzienniku z kontem AD.

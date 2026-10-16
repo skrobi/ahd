@@ -122,7 +122,7 @@ public static class StructureColumns
         new(Cv, "CV", FinancialEv, "BCWP − ACWP.", FromView: true),
         new(Spi, "SPI", FinancialEv, "BCWP ÷ BCWS.", 80, FromView: true),
         new(Cpi, "CPI", FinancialEv, "BCWP ÷ ACWP.", 80, FromView: true),
-        new(EtcCost, "ETC Cost", FinancialEv, "Koszt do poniesienia: ETC Hours × Labor Rate × Overhead MPK (bieżący rok) + Material ETC – w walucie projektu (kurs ze słownika „Kursy walut”, bieżący okres).", FromView: true),
+        new(EtcCost, "ETC Cost", FinancialEv, "Koszt do poniesienia: ETC Hours × Labor Rate × Overhead MPK (bieżący rok) + Material ETC – w walucie projektu (kurs ze słownika „Kursy walut” obowiązujący dziś).", FromView: true),
         new(Eac, "EAC", FinancialEv, "ACWP + ETC Cost.", FromView: true),
         new(Vac, "VAC", FinancialEv, "BAC Cost − EAC.", FromView: true),
         new(PercentSpent, "% Spent", FinancialEv, "ACWP ÷ BAC Cost × 100.", 90, FromView: true),

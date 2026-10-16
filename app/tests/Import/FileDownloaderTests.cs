@@ -46,6 +46,22 @@ public sealed class FileDownloaderTests : IDisposable
             Task.FromResult(Send(request, cancellationToken));
     }
 
+    /// <summary>Nazwa pliku z listingu serwera ze znakami ścieżki – odrzucona, nic nie jest zapisywane poza folderem pobrania.</summary>
+    [Theory]
+    [InlineData(@"..\ACTUALS_PAF_01.csv")]
+    [InlineData("../ACTUALS_PAF_01.csv")]
+    [InlineData(@"C:\Temp\ACTUALS_PAF_01.csv")]
+    [InlineData("..")]
+    public void File_name_with_path_characters_is_rejected(string name)
+    {
+        var file = Source("ACTUALS_PAF_01.csv");
+        using var downloader = new FileDownloader(Path.Combine(_root, "pobrane"));
+
+        Assert.Throws<InvalidDataException>(() => downloader.Download(new ImportLocation("Do_importu", file.DirectoryName!, true, file.DirectoryName!),
+            new SourceFile(name, file.Length, file.LastWriteTimeUtc, file.FullName), (_, _) => { }, CancellationToken.None));
+        Assert.False(Directory.Exists(Path.Combine(_root, "pobrane")) && Directory.EnumerateFileSystemEntries(Path.Combine(_root, "pobrane")).Any());
+    }
+
     [Fact]
     public void Manual_folder_file_is_copied_with_hash_and_removed_after_use()
     {

@@ -153,8 +153,12 @@ public sealed class SqlImportStore(SqlDatabase db) : IImportStore
                 connection.Execute(db.Table(DbTables.BuildActualsBalance), new { FileId = id }, transaction,
                     commandTimeout: LongTimeout, commandType: System.Data.CommandType.StoredProcedure);
                 stage?.Invoke("zatwierdzanie zapisu");
-                connection.Execute($"UPDATE {_files} SET DataRows = @rows, CanonicalRows = @rows, CanonicalStatus = @created WHERE FileId = @id",
-                    new { id, rows = totals.Rows, created = CanonicalStatuses.Created }, transaction);
+                var updated = connection.Execute(
+                    $"UPDATE {_files} SET DataRows = @rows, CanonicalRows = @rows, CanonicalStatus = @created WHERE FileId = @id AND CanonicalStatus = @inProgress",
+                    new { id, rows = totals.Rows, created = CanonicalStatuses.Created, inProgress = CanonicalStatuses.InProgress }, transaction);
+                // Wersja pliku usunięta w trakcie zapisu (inny import uznał ten za przerwany) – bez „utworzone”; wiersze pliku usuwa Discard.
+                if (updated != 1)
+                    throw new InvalidOperationException($"wersja pliku #{id} usunięta w trakcie zapisu przez inny import (import uznany za przerwany) – zapis wycofany");
                 transaction.Commit();
             }
             return stored;

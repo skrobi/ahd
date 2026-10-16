@@ -18,6 +18,7 @@ Każda reguła jest opisana w jednym dokumencie; pozostałe dokumenty do niego o
 | Dokument | Zawartość |
 |---|---|
 | `readme.md` | cel, kontekst biznesowy, pojęcia, mapa dokumentacji (ten plik) |
+| `CLAUDE.md` | zasady pracy nad projektem |
 | `docs/architektura.md` | technologia, uruchomienie i dystrybucja, warstwy i moduły aplikacji, podział logiki między aplikację i bazę, dysk sieciowy, środowiska, wymagania niefunkcjonalne, ryzyka |
 | `docs/model-danych.md` | warstwy danych, schematy i encje MS SQL, historia i wersjonowanie, przebieg, znacznik stanu i rewizja (kontrakt przebiegu) |
 | `docs/zrodla-danych.md` | źródła danych i definicja źródła (kontrakt danych): RABIT, raport kosztów CES, struktura P1S i drzewo, zaawansowanie z produkcji, pliki CAM |
@@ -28,8 +29,11 @@ Każda reguła jest opisana w jednym dokumencie; pozostałe dokumenty do niego o
 | `docs/uprawnienia.md` | konto AD, role, zakres danych (kontrakt RBAC) |
 | `docs/funkcjonalnosc.md` | użytkownicy, ekrany, funkcje, pliki generowane, scenariusze, zakres wersji |
 | `app/` | aplikacja PZL-EV (C#/.NET 10 + WPF): kod w strukturze modułów (`docs/architektura.md`, rozdz. 5.3), testy, budowa `build.cmd`; dane w bazie MS SQL (`app/pzl-ev.json`) |
-| `tasks/` | plan budowy: fazy i zadania (kontrakt implementacyjny – `CLAUDE.md`, rozdz. 9) |
+| `tasks/` | plan budowy: fazy i zadania (kontrakt implementacyjny – `CLAUDE.md`, rozdz. 8) |
+| `tasks/audyt-2026-10-15.md` | raport audytu 2026-10-15: ustalenia, naprawy, rejestr decyzji do akceptacji (D1–D27) |
 | `sql/mssql/` | migracje bazy MS SQL (`NNN_*.sql`) – wbudowane w aplikację (`docs/architektura.md`, rozdz. 8) |
+| `sql/pzlprod/` | zapytania tylko do odczytu do PZLPROD – wbudowane w exe |
+| `app/testdata/` | dane wzorcowe testów (`app/testdata/README.md`) |
 | `prototyp/*.html` | klikalne prototypy koncepcji na danych przykładowych; nie odpowiadają aplikacji – obowiązuje dokumentacja |
 | `dependencies.csv`, `resolved_objects.csv`, `export_log.txt` | eksport metadanych obiektów SQL z `splmcd03` (`PZLPROD.LOG`, `PZL_SAP`) |
 
@@ -86,7 +90,8 @@ poświęcanego na przygotowanie danych.
 ## Typy projektów EV
 
 W PZL-EV wszystkie typy przechodzą ten sam przebieg; typ wyznacza zestaw słowników pobieranych do przebiegu
-(`docs/slowniki.md`, rozdz. 4).
+(`docs/slowniki.md`, rozdz. 4) i wariant procesu – reguły liczenia kosztu odmienne od ścieżki wspólnej, np. narzuty
+i kurs CAS (`docs/architektura.md`, rozdz. 6.1).
 
 ### 1. Projekty Sikorsky (SAC)
 

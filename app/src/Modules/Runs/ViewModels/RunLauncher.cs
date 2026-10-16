@@ -32,15 +32,25 @@ public sealed class RunLauncher(RunService service, IRunStore store, Func<ISourc
     {
         if (!_running.TryAdd(project, true))
             return "Przebieg projektu już trwa.";
-        if (service.Running(project) is { } holder)
+        try
         {
-            _running.TryRemove(project, out _);
-            return $"Przebieg projektu trwa: {holder.Text}.";
+            if (service.Running(project) is { } holder)
+            {
+                _running.TryRemove(project, out _);
+                return $"Przebieg projektu trwa: {holder.Text}.";
+            }
+            if (imports() is { } import && store.ProjectSources(project).Count > 0 && !await import.SignIn())
+            {
+                _running.TryRemove(project, out _);
+                return "Przebieg nie rozpoczęty – logowanie do SharePoint anulowane.";
+            }
         }
-        if (imports() is { } import && store.ProjectSources(project).Count > 0 && !await import.SignIn())
+        catch (Exception ex) when (ex is not OutOfMemoryException)
         {
+            // Błąd przed startem (baza, dysk sieciowy, SharePoint) – projekt nie zostaje „w toku” do restartu aplikacji.
             _running.TryRemove(project, out _);
-            return "Przebieg nie rozpoczęty – logowanie do SharePoint anulowane.";
+            Serilog.Log.Error(ex, "Przebieg projektu {Project} nie rozpoczęty", project);
+            return $"Przebieg nie rozpoczęty – {ex.Message}";
         }
         var dispatcher = Application.Current?.Dispatcher;
         var progress = new Progress<string>(text => Progress?.Invoke(project, text));

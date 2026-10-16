@@ -286,6 +286,66 @@ public sealed class ImportServiceTests : IDisposable
     }
 
     [SqlFact]
+    public void Import_of_another_project_during_an_import_does_not_take_over_its_downloader()
+    {
+        Use();
+        Assert.True(_config.SaveDefinition(new DefinitionInput(null, null, "ACTUALS_PROGRAM1", "ACTUALS_PROGRAM1_", "Koszty programu 1", ActualsLayout.Parser, true)).Success);
+        CopySample(ImportFolder, "ACTUALS_PAF_01.csv");
+        File.Copy(Path.Combine(ImportFolder, "ACTUALS_PAF_01.csv"), Path.Combine(ImportFolder, "ACTUALS_PROGRAM1_01.csv"));
+        // Drugi import (przebieg innego projektu) dostaje pobieranie, które nie zadziała: korzeń pobierania jest plikiem.
+        var broken = Path.Combine(_root, "pobieranie-niedostepne");
+        File.WriteAllText(broken, "");
+        var downloaders = 0;
+        var shared = new ImportService(_store, _app, () => new FileDownloader(Interlocked.Increment(ref downloaders) == 1 ? null : broken));
+        ImportRunResult? other = null;
+        var progress = new SyncProgress(p =>
+        {
+            if (p.FileName is not null && other is null)   // pierwszy plik pierwszego importu – w tym czasie startuje drugi
+                other = shared.Run(sources: new HashSet<string> { "ACTUALS_PAF" });
+        });
+
+        var run = shared.Run(progress, sources: new HashSet<string> { "ACTUALS_PROGRAM1" });
+
+        Assert.Equal(FileDecisions.Error, Assert.Single(other!.Files).Decision);
+        Assert.Equal(FileDecisions.Imported, Assert.Single(run.Files).Decision);
+    }
+
+    /// <summary>
+    /// Inny import uznaje trwający za przerwany i usuwa jego plik „w toku” w trakcie zapisu: zapis kończy się błędem
+    /// (nie „zaimportowany” bez pliku w bazie), wiersze CAN_Row pliku nie zostają.
+    /// </summary>
+    [SqlFact]
+    public void File_removed_during_its_write_is_an_error_without_orphan_rows()
+    {
+        Use();
+        CopySample(ImportFolder, "ACTUALS_PAF_01.csv");
+        long? fileId = null;
+        var progress = new SyncProgress(p =>
+        {
+            if (fileId is not null || p.Status?.Contains("zestawienie ACTUALS") != true)
+                return;
+            using var connection = _database!.Sql.Open();   // jak SqlImportStore.AbandonRunning innej sesji: wpis pliku usunięty
+            fileId = Dapper.SqlMapper.ExecuteScalar<long>(connection,
+                $"SELECT FileId FROM {_database.Sql.Table("meta.SourceFile")} WHERE CanonicalStatus = N'w toku'; " +
+                $"DELETE FROM {_database.Sql.Table("meta.SourceFile")} WHERE CanonicalStatus = N'w toku'");
+        });
+
+        var result = Assert.Single(_import.Run(progress).Files);
+
+        Assert.NotNull(fileId);
+        Assert.Equal(FileDecisions.Error, result.Decision);
+        Assert.Contains("usunięta w trakcie zapisu", result.Description);
+        using var check = _database!.Sql.Open();
+        Assert.Equal(0, Dapper.SqlMapper.ExecuteScalar<int>(check, $"SELECT COUNT(*) FROM {_database.Sql.Table("can.Row")} WHERE FileId = @fileId", new { fileId }));
+    }
+
+    /// <summary>Postęp wywoływany synchronicznie (Progress&lt;T&gt; wysyła do puli wątków).</summary>
+    private sealed class SyncProgress(Action<ImportProgress> report) : IProgress<ImportProgress>
+    {
+        public void Report(ImportProgress value) => report(value);
+    }
+
+    [SqlFact]
     public void File_left_in_progress_by_a_crashed_import_is_removed_with_its_rows()
     {
         Use();
