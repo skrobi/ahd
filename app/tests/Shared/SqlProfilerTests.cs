@@ -70,9 +70,12 @@ public sealed class SqlProfilerTests
     [Fact]
     public void Step_timer_lists_steps_from_the_longest()
     {
+        // Rozgrzewka: pierwsze wywołanie (JIT, SqlProfiler.Operation) potrafi trwać kilkadziesiąt ms na wolniejszej maszynie –
+        // „krótki” nie może przez nie przegonić „długiego”; „długi” z wyraźnym zapasem (300 ms).
+        new StepTimer().Time("rozgrzewka", () => 0);
         var steps = new StepTimer();
         steps.Time("krótki", () => 1);
-        steps.Time("długi", () => { Thread.Sleep(50); return 2; });
+        steps.Time("długi", () => { Thread.Sleep(300); return 2; });
 
         Assert.Matches(@"^\d+ ms – długi \d+ ms, krótki \d+ ms$", steps.Summary);
     }
