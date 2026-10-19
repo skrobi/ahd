@@ -63,10 +63,10 @@ Słowniki, kreator projektu), `docs/zrodla-danych.md` (struktura P1S).
 | Stawki wydziałów | `MPK` (miejsce powstawania kosztów), `Department` (opis MPK, opcjonalny), `Year`, `Labor Rate`, `Overhead` (opcjonalny) | `MPK` + `Year` | łączenie źródeł – godziny na koszt (P3) |
 | Kursy walut | waluta, `Od` – `Do` (`Do` puste – bezterminowo), `Kurs` (do PLN: ile PLN za jednostkę), `Kurs CAS` (projekty CAS – rozdz. 6.1); wiersz ma Kurs albo Kurs CAS; okresy jednej waluty się nie nakładają (migracja 045 – wcześniej okres RRRR-MM); dane startowe 046 – przybliżone kursy USD 2024-01 … 2026-10 do zastąpienia kursami finansów | waluta + `Od` | Kurs – przeliczenia walut w strukturze projektu (kurs obowiązujący w dniu stanu), P3, P8; Kurs CAS – koszty projektów CAS |
 | Cost Category | numer elementu kosztowego → Opis, Obszar, Cost Category, Rozliczeniowy, Rodzaj kosztu (Hours / Materials / Other, puste – Other: podział ACWP na ACWP Hours / ACWP Materials / ACWP Other w strukturze projektu, suma = ACWP; migracja 038 – wstępnie wg Cost Category zawierającego „labor” / „material”; 040 – konta materiałowe 0051105550 PZL Mat Consump, 0051102550 PZL Mat Comsump-SAC, 0051103550 IC Profit Mat-SAC jako Materials), Grupa narzutowa CAS (wybór z „Grup narzutowych CAS” – zapisany identyfikator grupy) (rozdz. 6) | numer elementu kosztowego | walidacja (P2), łączenie źródeł (P3), raport kosztów CES |
-| Pule narzutu CAS | pula → `Kolejność` kolumny w raporcie, `Rodzaj` (Koszt – TOTAL COST, FCCOM – TOTAL FCCOM), opis (rozdz. 6.1) | pula | raport kosztów CES, formuły, wskaźniki |
+| Kategorie narzutu CAS | pula → `Kolejność` kolumny w raporcie, `Rodzaj` (Koszt – TOTAL COST, FCCOM – TOTAL FCCOM), opis (rozdz. 6.1) | pula | raport kosztów CES, formuły, wskaźniki |
 | Grupy narzutowe CAS | grupa narzutowa elementu kosztowego → opis (rozdz. 6.1) | grupa | raport kosztów CES, formuły, Cost Category |
 | Formuły narzutów CAS | grupa + pula → formuła z klocków; wiersz = pula naliczana w grupie; bez pozycji na liście ekranu Słowniki – edycja tylko w oknie „Formuły narzutów” (rozdz. 6.1) | grupa + pula | raport kosztów CES |
-| Wskaźniki narzutu CAS | pula → `Wskaźnik` obowiązujący `Od` – `Do` (zwykle rok; `Do` puste – bezterminowo) (rozdz. 6.1) | pula + `Od` | raport kosztów CES |
+| Wskaźniki narzutu CAS | kategoria (pula) → `Wskaźnik` obowiązujący `Od` – `Do` (zwykle rok; `Do` puste – bezterminowo) (rozdz. 6.1) | `Kategoria` + `Od` | raport kosztów CES |
 | Osoby | pracownicy z HR – „Dodaj z HR” (PZLHRPROD `HR.ORG`, osoby z niepustym `USRID`): okno szukania po USRID, PERNR, imieniu i nazwisku, e-mailu, dziale; „Dodaj” przy wyniku odkłada osobę na listę, „Zatwierdź” – podgląd z samymi nowymi osobami (nic nie jest usuwane): USRID (numer znaczka, login), imię i nazwisko, imię, nazwisko, e-mail, MPK (`KOSTL`), dział (`SHORT`, `LONG`), stanowisko (`STEXT`), pion, manager, PERNR | USRID | wybór CAM w strukturze projektu i słowniku „WP i CAM” (zapisywany USRID) |
 | Wskaźniki DJK | prefiks grupy stanowisk (IPT, np. `W2`, `W51`) → `Udział DJK` (0–1) – godziny jakości doliczane do godzin TECH / TECH_PON; liczy się najdłuższy pasujący prefiks; dane startowe (migracja 023): W2–W4 10%, W5 15%, W6 20% | grupa stanowisk | Operational EV struktury projektu (`docs/zrodla-danych.md`, rozdz. 6) |
 | Parametry produkcji | `Okno produktywności IPT (mies.)` (12), `Statusy materiałów dostarczonych` (DOST, WYD), `Wartość materiałów ÷ (1 + Z_CLO)` (tak); puste słowniki – wartości raportu S70MR (informacja na ekranie projektu) | parametr | odczyt danych produkcyjnych (`sql/pzlprod/produkcja.sql`) |
@@ -112,7 +112,7 @@ pobieranych do przebiegu oraz wymaganych do jego uruchomienia:
 | Typ | Słowniki projektu wymagane | Słowniki szczególne | Waluta wyniku | Wynik dodatkowy |
 |---|---|---|---|---|
 | SAC (Sikorsky) | WP i CAM, Harmonogram i budżet | Stawki wydziałów (bieżące), Kursy walut (USD) | USD | plik dla Cobra |
-| CAS Compliance | WP i CAM, Harmonogram i budżet | narzuty CAS – słowniki globalne (rozdz. 6.1): Pule, Grupy, Formuły i Wskaźniki narzutu CAS, grupa narzutowa w Cost Category, Kurs CAS w „Kursy walut” – koszty po narzutach (TOTAL COST) | PLN | – |
+| CAS Compliance | WP i CAM, Harmonogram i budżet | narzuty CAS – słowniki globalne (rozdz. 6.1): Kategorie, Grupy, Formuły i Wskaźniki narzutu CAS, grupa narzutowa w Cost Category, Kurs CAS w „Kursy walut” – koszty po narzutach (TOTAL COST) | PLN | – |
 | Wewnętrzny | WP i CAM, Harmonogram i budżet | – | PLN | – |
 
 Słowniki globalne (rozdz. 2) i „Cost Category – zmiany w projekcie” są pobierane dla każdego typu.
@@ -171,8 +171,8 @@ Kontekst biznesowy typów – `readme.md`.
 | numer elementu kosztowego unikalny w słowniku (globalnym / zmianach projektu); zapisywany jako tekst – numer liczbowy uzupełniany zerami do 10 znaków | ERROR |
 | numer w słowniku bez Cost Category | WARNING |
 | „Grupa narzutowa CAS” spoza słownika „Grupy narzutowe CAS” albo pusta | uwaga w raporcie kosztów CES (wiersz bez narzutów) |
-| „Wskaźniki narzutu CAS”: pula z listy, `Od` wymagane, `Wskaźnik` ≥ 0 (15 cyfr znaczących, jak w Excelu); okresy `Od`–`Do` jednej puli bez nakładania | ERROR |
-| „Pule narzutu CAS”: nazwa bez „+” i inna niż „Base cost elements”; `Kolejność` i `Rodzaj` wymagane / kolejność powtórzona | ERROR / WARNING |
+| „Wskaźniki narzutu CAS”: `Kategoria` (pula) z listy, `Od` wymagane, `Wskaźnik` ≥ 0 (15 cyfr znaczących, jak w Excelu); okresy `Od`–`Do` jednej puli bez nakładania | ERROR |
+| „Kategorie narzutu CAS”: nazwa bez „+” i inna niż „Base cost elements”; `Kolejność` i `Rodzaj` wymagane / kolejność powtórzona | ERROR / WARNING |
 | „Formuły narzutów CAS”: formuła poprawnie zbudowana (składnik – operator – składnik, nawiasy domknięte); narzut puli zależny od niego samego (wprost albo przez narzuty innych pul grupy) | ERROR |
 | usunięcie puli albo grupy używanej w formułach, wskaźnikach albo Cost Category (globalnie lub w projekcie) | ERROR |
 | pula albo składnik formuły spoza „Pul narzutu CAS”, brak wskaźnika naliczanej puli | uwaga w raporcie kosztów CES |
@@ -235,7 +235,7 @@ te same wskaźniki dla wszystkich projektów, zmienne w czasie. Reguła odwzorow
 po Cost Elementach dla lat 2025–2026).
 
 - **Powiązania identyfikatorem:** pule i grupy narzutowe są wskazywane identyfikatorem wiersza słownika (RowId), nie
-  nazwą – formuły, wskaźniki („Pula”) i Cost Category („Grupa narzutowa CAS”) zapisują identyfikator, a tabele, historia,
+  nazwą – formuły („Pula”), wskaźniki („Kategoria”) i Cost Category („Grupa narzutowa CAS”) zapisują identyfikator, a tabele, historia,
   Excel i raport pokazują bieżącą nazwę. Zmiana nazwy puli albo grupy w jej słowniku jest od razu widoczna wszędzie;
   puli ani grupy używanej gdzie indziej nie można usunąć (ERROR z nazwą słownika, który jej używa). W Excelu kolumny
   powiązane mają nazwy (lista w arkuszu „Listy”) – wczytanie zamienia nazwę na identyfikator.
@@ -244,7 +244,7 @@ po Cost Elementach dla lat 2025–2026).
   (ENG Fringe + ENG OH) albo ENG LL labor (praca leasingowana – bez ENG Fringe).
 - **Grupy narzutowe CAS** (dane startowe – migracja 034): MFG labor, ENG labor, ENG LL labor, MSV labor, GS labor,
   MTL labor, Direct Materials, Direct Services, Travel, ODC (bez formuł – bez narzutów).
-- **Pule narzutu CAS** (dane startowe – migracja 034; kolejność kolumn raportu): MFG Fringe, MFG OH, ENG Fringe,
+- **Kategorie narzutu CAS** (dane startowe – migracja 034; kolejność kolumn raportu): MFG Fringe, MFG OH, ENG Fringe,
   ENG OH, MTL Fringe, Material Handling (MTL), Miscellaneous Material Pool (MMP), General Services (GS), GS Fringe,
   MSV Fringe, General & Administrative (GA), Corporate Flowdowns (FD) – rodzaj Koszt, sumowane w `TOTAL COST`
   z kosztem bazowym; FCCOM MFG, FCCOM ENG, FCCOM MTL, FCCOM GS, FCCOM G&A – rodzaj FCCOM, w `TOTAL FCCOM`. Nowa pula

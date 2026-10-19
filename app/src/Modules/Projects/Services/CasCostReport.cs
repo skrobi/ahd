@@ -10,7 +10,7 @@ namespace PzlEv.Modules.Projects.Services;
 /// <summary>
 /// Raport kosztów CES (docs/slowniki.md, rozdz. 6.1): raport kosztów projektu (REP_ProjectCosts) z narzutami CAS
 /// liczonymi formułami Excela – po kolumnach kosztu bazowego (ostatni okres, lata) blok na każdą kolumnę: pule
-/// („Pule narzutu CAS”, w kolejności), TOTAL COST (koszt + pule rodzaju Koszt) i TOTAL FCCOM (pule FCCOM). Formułę puli
+/// („Kategorie narzutu CAS”, w kolejności), TOTAL COST (koszt + pule rodzaju Koszt) i TOTAL FCCOM (pule FCCOM). Formułę puli
 /// w wierszu wyznacza grupa narzutowa elementu kosztowego (Cost Category → „Formuły narzutów CAS”): klocki formuły
 /// (CasFormula) zamieniane na komórki – koszt bazowy kolumny, narzut puli w bloku, wskaźnik puli z wiersza wskaźników
 /// nad nagłówkiem („Wskaźniki narzutu CAS” obowiązujące w okresie kolumny; można go zmienić w pliku).

@@ -5,7 +5,7 @@ using PzlEv.Shared.Models.Dictionaries;
 namespace PzlEv.Shared.Utils.Dictionaries;
 
 /// <summary>
-/// Narzuty CAS jako dane (docs/slowniki.md, rozdz. 6.1): pule („Pule narzutu CAS”), grupy („Grupy narzutowe CAS”)
+/// Narzuty CAS jako dane (docs/slowniki.md, rozdz. 6.1): pule („Kategorie narzutu CAS”), grupy („Grupy narzutowe CAS”)
 /// i formuły („Formuły narzutów CAS”: grupa + pula → formuła z klocków – CasFormula). Grupy, pule, wskaźniki i mapowanie
 /// w Cost Category wskazują pulę / grupę identyfikatorem wiersza (RowId), nie nazwą: zmiana nazwy w słowniku pul albo
 /// grup jest od razu widoczna w formułach, wskaźnikach, Cost Category i raporcie. Reguł podstaw nie ma w kodzie.
@@ -29,7 +29,7 @@ public static class CasBurden
 
     public static string Ref(long id) => id.ToString(CultureInfo.InvariantCulture);
 
-    /// <summary>Pule ze słownika „Pule narzutu CAS” w kolejności kolumn (Kolejność, potem nazwa); wiersze zapisane (z RowId).</summary>
+    /// <summary>Pule ze słownika „Kategorie narzutu CAS” w kolejności kolumn (Kolejność, potem nazwa); wiersze zapisane (z RowId).</summary>
     public static IReadOnlyList<Pool> PoolsFrom(IEnumerable<DictRow> rows) =>
         rows.Where(r => r.RowId is not null && r["Pula"] is not null)
             .Select(r => new Pool(r.RowId!.Value, r["Pula"]!, int.TryParse(r["Kolejność"], out var order) ? order : int.MaxValue,
@@ -82,9 +82,9 @@ public static class CasBurden
 
     /// <summary>Wskaźniki z wierszy słownika „Wskaźniki narzutu CAS” (zapis kanoniczny: daty RRRR-MM-DD, liczba z kropką).</summary>
     public static IReadOnlyList<Rate> RatesFrom(IEnumerable<DictRow> rows) =>
-        rows.Where(r => r["Pula"] is not null && r["Od"] is not null && r["Wskaźnik"] is not null)
-            .Where(r => Id(r["Pula"]) is not null)
-            .Select(r => new Rate(Id(r["Pula"])!.Value, Date(r["Od"]!), r["Do"] is { } to ? Date(to) : null,
+        rows.Where(r => r["Kategoria"] is not null && r["Od"] is not null && r["Wskaźnik"] is not null)
+            .Where(r => Id(r["Kategoria"]) is not null)
+            .Select(r => new Rate(Id(r["Kategoria"])!.Value, Date(r["Od"]!), r["Do"] is { } to ? Date(to) : null,
                 decimal.Parse(r["Wskaźnik"]!, NumberStyles.Number, CultureInfo.InvariantCulture)))
             .ToList();
 
@@ -116,7 +116,7 @@ public static class CasBurden
         foreach (var (pool, tokens) in group.Formulas)
         {
             if (!index.TryGetValue(pool, out var p))
-                notes.Add($"Grupa {group.Name}: formuła puli usuniętej ze słownika „Pule narzutu CAS” – pominięta");
+                notes.Add($"Grupa {group.Name}: formuła puli usuniętej ze słownika „Kategorie narzutu CAS” – pominięta");
             else if (CasFormula.Error(tokens, known) is { } error)
                 notes.Add($"Grupa {group.Name}, pula {pools[p].Name}: {error} – bez narzutu");
             else if (cycles.Contains(pool))

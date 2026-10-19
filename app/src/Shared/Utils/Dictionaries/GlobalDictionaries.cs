@@ -156,8 +156,8 @@ public static partial class GlobalDictionaries
         new()
         {
             Code = CasPools,
-            Name = "Pule narzutu CAS",
-            Description = "Pule narzutu CAS – kolumny raportu kosztów CES w kolejności „Kolejność”; Rodzaj: Koszt – w TOTAL COST, FCCOM – w TOTAL FCCOM. Formuły, wskaźniki i raport wskazują pulę identyfikatorem – zmiana nazwy jest od razu widoczna wszędzie; puli używanej w formułach albo wskaźnikach nie można usunąć.",
+            Name = "Kategorie narzutu CAS",
+            Description = "Kategorie narzutu CAS – kolumny raportu kosztów CES w kolejności „Kolejność”; Rodzaj: Koszt – w TOTAL COST, FCCOM – w TOTAL FCCOM. Formuły, wskaźniki i raport wskazują pulę identyfikatorem – zmiana nazwy jest od razu widoczna wszędzie; puli używanej w formułach albo wskaźnikach nie można usunąć.",
             Columns =
             [
                 new("Pula", ColumnType.Text, Key: true, CheckSimilar: true),
@@ -166,7 +166,7 @@ public static partial class GlobalDictionaries
                 new("Opis", ColumnType.Text),
             ],
             Rules = CasPoolRules,
-            ReferencedBy = [(CasBurdenFormulas, "Pula", CasBurden.References), (CasBurdenFormulas, "Formuła", CasBurden.References), (CasBurdenRates, "Pula", CasBurden.References)],
+            ReferencedBy = [(CasBurdenFormulas, "Pula", CasBurden.References), (CasBurdenFormulas, "Formuła", CasBurden.References), (CasBurdenRates, "Kategoria", CasBurden.References)],
         },
         new()
         {
@@ -198,10 +198,10 @@ public static partial class GlobalDictionaries
         {
             Code = CasBurdenRates,
             Name = "Wskaźniki narzutu CAS",
-            Description = "Wskaźnik puli narzutu CAS obowiązujący od – do (zwykle rok: 2026-01-01 – 2026-12-31; Do puste – bezterminowo); pula z listy słownika „Pule narzutu CAS” (zapisany identyfikator – zmiana nazwy puli jest od razu widoczna). Raport kosztów CES bierze wskaźnik obowiązujący w okresie kolumny (okres, rok).",
+            Description = "Wskaźnik puli narzutu CAS obowiązujący od – do (zwykle rok: 2026-01-01 – 2026-12-31; Do puste – bezterminowo); kategoria z listy słownika „Kategorie narzutu CAS” (zapisany identyfikator – zmiana nazwy puli jest od razu widoczna). Raport kosztów CES bierze wskaźnik obowiązujący w okresie kolumny (okres, rok).",
             Columns =
             [
-                new("Pula", ColumnType.Text, Key: true, Lookup: CasPools, IdLookup: true),
+                new("Kategoria", ColumnType.Text, Key: true, Lookup: CasPools, IdLookup: true),
                 new("Od", ColumnType.Date, Key: true),
                 new("Do", ColumnType.Date),
                 new("Wskaźnik", ColumnType.Decimal, Required: true, Decimals: 18),
@@ -236,7 +236,7 @@ public static partial class GlobalDictionaries
         new(Get(CasPools), "dict.CasPool", [("Pula", "Pool"), ("Kolejność", "SortOrder"), ("Rodzaj", "Kind"), ("Opis", "Description")]),
         new(Get(CasBurdenGroups), "dict.CasBurdenGroup", [("Grupa", "BurdenGroup"), ("Opis", "Description")]),
         new(Get(CasBurdenFormulas), "dict.CasFormula", [("Grupa", "GroupId"), ("Pula", "PoolId"), ("Formuła", "Formula")]),
-        new(Get(CasBurdenRates), "dict.CasBurdenRate", [("Pula", "PoolId"), ("Od", "ValidFrom"), ("Do", "ValidTo"), ("Wskaźnik", "Rate"), ("Opis", "Description")]),
+        new(Get(CasBurdenRates), "dict.CasBurdenRate", [("Kategoria", "PoolId"), ("Od", "ValidFrom"), ("Do", "ValidTo"), ("Wskaźnik", "Rate"), ("Opis", "Description")]),
     ];
 
     private static IEnumerable<Issue> CalendarRules(IReadOnlyList<DictRow> rows)

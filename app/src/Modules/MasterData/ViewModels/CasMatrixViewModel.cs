@@ -75,7 +75,7 @@ public sealed class CasMatrixViewModel : ObservableObject
             Loaded?.Invoke();
             Status = status.Length > 0 ? status
                 : groups.Count == 0 ? "Brak grup – dodaj grupy w słowniku „Grupy narzutowe CAS”."
-                : pools.Count == 0 ? "Brak pul – dodaj pule w słowniku „Pule narzutu CAS”." : "";
+                : pools.Count == 0 ? "Brak pul – dodaj pule w słowniku „Kategorie narzutu CAS”." : "";
             OnPropertyChanged(nameof(HasChanges));
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)

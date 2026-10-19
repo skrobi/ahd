@@ -972,7 +972,7 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
 
     /// <summary>
     /// Raport kosztów CES do Excela (projekty CAS): raport kosztów z narzutami CAS w formułach – grupa narzutowa
-    /// z efektywnego słownika Cost Category projektu, pule i formuły ze słowników „Pule narzutu CAS”, „Grupy narzutowe CAS”
+    /// z efektywnego słownika Cost Category projektu, pule i formuły ze słowników „Kategorie narzutu CAS”, „Grupy narzutowe CAS”
     /// i „Formuły narzutów CAS”, wskaźniki ze „Wskaźników narzutu CAS” (CasCostReport); arkusze „Wskaźniki” i „Uwagi” (braki mapowania i wskaźników). Zwraca liczbę wierszy i uwag.
     /// </summary>
     public (int Rows, int Notes) ExportCasCostReport(string path, string code)

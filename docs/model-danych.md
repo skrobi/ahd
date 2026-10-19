@@ -362,7 +362,7 @@ finansów; grupa narzutowa elementów kosztowych arkusza w globalnym Cost Catego
 (grupa ustawiona wcześniej zostaje).
 
 **Migracja `sql/mssql/031_formuly_narzutow_cas.sql`:** formuły narzutów CAS jako dane (`docs/slowniki.md`, rozdz. 6.1):
-`DICT_CasPool` – „Pule narzutu CAS” (pula, `SortOrder`, `Kind`: Koszt / FCCOM); `DICT_CasBurdenFormula` – „Formuły
+`DICT_CasPool` – „Kategorie narzutu CAS” (pula, `SortOrder`, `Kind`: Koszt / FCCOM); `DICT_CasBurdenFormula` – „Formuły
 narzutów CAS” (grupa, pula, `Basis` – składniki połączone „ + ”; klucz projekt + grupa + pula); z `DICT_CasBurdenGroup`
 usunięte kolumny pul i `BaseInGsGa` (029) – zostają grupa i opis. Wymaga aplikacji 0.47.0.
 

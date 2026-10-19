@@ -469,7 +469,7 @@ public sealed partial class CasCostReportTests : IDisposable
                 Row(2, ("Grupa", "109"), ("Pula", "11"), ("Formuła", "nieczytelna")),   // pominięta
                 Row(3, ("Grupa", "555"), ("Pula", "1"), ("Formuła", "base * r:1")),      // grupa spoza słownika grup
             ]);
-        var rates = CasBurden.RatesFrom([Row(5, ("Pula", "17"), ("Od", "2026-01-01"), ("Do", null), ("Wskaźnik", "0.000057456819309837"))]);
+        var rates = CasBurden.RatesFrom([Row(5, ("Kategoria", "17"), ("Od", "2026-01-01"), ("Do", null), ("Wskaźnik", "0.000057456819309837"))]);
 
         Assert.Equal([new CasBurden.Pool(1, "MFG Fringe", 10, false), new CasBurden.Pool(17, "FCCOM G&A", 170, true)], pools);
         Assert.Equal(["Travel", "Pusta"], groups.Select(g => g.Name));
@@ -486,7 +486,7 @@ public sealed partial class CasCostReportTests : IDisposable
     {
         var spec = GlobalDictionaries.Get(GlobalDictionaries.CasBurdenRates);
         DictRow Row(string pool, string from, string? to, string rate) =>
-            new(null, null, new Dictionary<string, string?> { ["Pula"] = pool, ["Od"] = from, ["Do"] = to, ["Wskaźnik"] = rate, ["Opis"] = null });
+            new(null, null, new Dictionary<string, string?> { ["Kategoria"] = pool, ["Od"] = from, ["Do"] = to, ["Wskaźnik"] = rate, ["Opis"] = null });
 
         var issues = DictionaryValidator.Validate(spec,
         [
@@ -648,7 +648,7 @@ public sealed partial class CasCostReportTests : IDisposable
         var rate2024 = pools.ToDictionary(p => p.Name, p => Math.Round(0.01m + (decimal)random.NextDouble(), 6));
         var added = pools.Select(p => new DictRow(null, null, new Dictionary<string, string?>
         {
-            ["Pula"] = CasBurden.Ref(p.Id), ["Od"] = "2024-01-01", ["Do"] = "2024-12-31",
+            ["Kategoria"] = CasBurden.Ref(p.Id), ["Od"] = "2024-01-01", ["Do"] = "2024-12-31",
             ["Wskaźnik"] = rate2024[p.Name].ToString(System.Globalization.CultureInfo.InvariantCulture), ["Opis"] = "test",
         }));
         Assert.Equal(SaveStatus.Saved, dictionaries.Save(rateSpec, [.. current, .. added], [], confirmWarnings: true).Status);
