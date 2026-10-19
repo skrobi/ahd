@@ -177,13 +177,26 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
     /// Parametry projektu – pola kwoty ACTUALS; Cost Category – grupy narzutowe CAS (identyfikator → nazwa).
     /// </summary>
     public static IReadOnlyDictionary<string, IReadOnlyList<LookupOption>> Lookups(IReadOnlyList<LookupOption> persons, IReadOnlyList<LookupOption> categories,
-        IReadOnlyList<LookupOption>? sources = null, IReadOnlyList<LookupOption>? burdenGroups = null, IReadOnlyList<LookupOption>? mpks = null) =>
+        IReadOnlyList<LookupOption>? sources = null, IReadOnlyList<LookupOption>? burdenGroups = null, IReadOnlyList<LookupOption>? mpks = null,
+        IReadOnlyList<RunDefinitionHeaderRow>? runTemplates = null) =>
         new Dictionary<string, IReadOnlyList<LookupOption>>
         {
             [GlobalDictionaries.Persons] = persons, [ProjectDictionaries.WbsCategories] = categories, [ProjectDictionaries.Sources] = sources ?? [],
             [GlobalDictionaries.CasBurdenGroups] = burdenGroups ?? [], [GlobalDictionaries.DepartmentRates] = mpks ?? [],
-            [ProjectDictionaries.Settings] = CurrencySetOptions,
+            [ProjectDictionaries.Settings] = [.. CurrencySetOptions, .. RunTemplateOptions(runTemplates ?? [])],
         };
+
+    /// <summary>
+    /// Szablony przebiegów do wyboru w programie (Parametry programu → „Przebieg”, kreator): aktywne, z etapami – słowniki globalne
+    /// „Definicje przebiegów”, „Etapy przebiegów” (ekran Przebiegi).
+    /// </summary>
+    public IReadOnlyList<RunDefinitionHeaderRow> RunTemplates() =>
+        RunDefinitions.Available(RunDefinitionRows.Headers(_dictionaries.Load(GlobalDictionaries.Get(GlobalDictionaries.RunDefinitionHeaders))),
+            RunDefinitionRows.Steps(_dictionaries.Load(GlobalDictionaries.Get(GlobalDictionaries.RunSteps))));
+
+    /// <summary>Szablon → opcja wyboru („CAS – domyślny dla CAS”).</summary>
+    public static IReadOnlyList<LookupOption> RunTemplateOptions(IEnumerable<RunDefinitionHeaderRow> templates) =>
+        templates.Select(t => new LookupOption(t.Code, $"{t.Code} (przebieg; domyślny dla: {t.ProjectType})")).ToList();
 
     /// <summary>Stawki wydziałów (MPK × rok: Labor Rate, Overhead) – lista MPK w „WP i CAM” i stawka ETC Cost struktury.</summary>
     public IReadOnlyList<DictRow> DepartmentRates() => _dictionaries.Load(GlobalDictionaries.Get(GlobalDictionaries.DepartmentRates));
@@ -1095,7 +1108,7 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
     /// </summary>
     /// <param name="previews">Wczytane słowniki projektu: kod słownika → plik (ścieżka, arkusz).</param>
     public CreateOutcome Create(string code, string name, string type, PoTree tree, IReadOnlyDictionary<string, (string Path, string? Sheet)> previews,
-        string? actualsAmount = null)
+        string? actualsAmount = null, string? runDefinition = null)
     {
         var issues = ValidateBasics(code, name, type);
         issues.AddRange(ValidateObjectives(code, tree));
@@ -1126,16 +1139,28 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
                 problems.Add(Issue.Error($"{ProjectDictionaries.Item(dictionary).Name} nie zapisany: {outcome.Message}", dictionary));
         }
 
-        // Zestaw walutowy ACTUALS wybrany w kreatorze – „Parametry projektu” (gdy skoroszyt nie podał parametru).
-        if (actualsAmount is not null && !loaded.ContainsKey(ProjectDictionaries.Settings))
+        // Zestaw walutowy ACTUALS i przebieg wybrane w kreatorze – „Parametry projektu” (gdy skoroszyt nie podał parametrów).
+        if ((actualsAmount is not null || runDefinition is not null) && !loaded.ContainsKey(ProjectDictionaries.Settings))
         {
-            var setting = new DictRow(null, null, new Dictionary<string, string?>
-            {
-                ["Parametr"] = ProjectSettings.ActualsAmount, ["Wartość"] = ProjectSettings.ActualsAmountOf(actualsAmount), ["Opis"] = null,
-            });
-            var saved = SaveStructureDictionary(ProjectDictionaries.Settings, context, [setting], [], code);
+            var settings = new List<DictRow>();
+            if (actualsAmount is not null)
+                settings.Add(new DictRow(null, null, new Dictionary<string, string?>
+                {
+                    ["Parametr"] = ProjectSettings.ActualsAmount, ["Wartość"] = ProjectSettings.ActualsAmountOf(actualsAmount), ["Opis"] = null,
+                }));
+            if (runDefinition is not null)
+                settings.Add(new DictRow(null, null, new Dictionary<string, string?>
+                {
+                    ["Parametr"] = ProjectSettings.RunDefinition, ["Wartość"] = runDefinition, ["Opis"] = null,
+                }));
+            var saved = SaveStructureDictionary(ProjectDictionaries.Settings, context, settings, [], code);
             if (saved.Status is SaveStatus.Saved or SaveStatus.NoChanges)
-                steps.Add($"Zestaw walutowy ACTUALS: {ProjectSettings.SetOf(ProjectSettings.ActualsAmountOf(actualsAmount)).Label}");
+            {
+                if (actualsAmount is not null)
+                    steps.Add($"Zestaw walutowy ACTUALS: {ProjectSettings.SetOf(ProjectSettings.ActualsAmountOf(actualsAmount)).Label}");
+                if (runDefinition is not null)
+                    steps.Add($"Przebieg: {runDefinition}");
+            }
             else
                 problems.Add(Issue.Error($"Parametry programu nie zapisane: {saved.Message}", ProjectDictionaries.Settings));
         }

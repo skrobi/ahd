@@ -36,19 +36,25 @@ public sealed record RunMatrixRow(string CheckName, IReadOnlyList<RunMatrixCell>
 public sealed record RunMatrix(IReadOnlyList<RunMatrixColumn> Columns, IReadOnlyList<RunMatrixRow> Rows);
 
 /// <summary>
-/// Wiersz definicji przebiegu programu (zakładka „Definicja przebiegu”): etap (numer, nazwa, akcja, bramka) i element kontrolny
-/// z ustawieniem (aktywny, poziom, próg albo warunek reguły uzgodnień) i źródłem ustawienia.
+/// Wiersz porównania dwóch uruchomień: wyniki kontroli o tej samej kontroli i elemencie – poziom (najgorszy), liczba i kwota (suma)
+/// „było” i „jest”; Status – nowy, rozwiązany, zmieniony, bez zmian; Issue – wynik „jest” (albo „było”) do „Pokaż zmiany”.
 /// </summary>
-public sealed record RunWorkflowRow(int StepNo, string Step, string Action, string Gate, string Element, string Check, string Setting, string Source,
-    string Description);
+public sealed record RunCompareRow(string CheckName, string? Element, string Status, CheckLevel? LevelBefore, CheckLevel? LevelAfter,
+    decimal? AmountBefore, decimal? AmountAfter, string Message, RunIssueView Issue)
+{
+    public const string New = "nowy";
+    public const string Resolved = "rozwiązany";
+    public const string Changed = "zmieniony";
+    public const string Same = "bez zmian";
 
-/// <summary>Program na przeglądzie przebiegów: ostatnie uruchomienie, etap, na którym stoi, liczby wyników.</summary>
-public sealed record RunProgramRow(string Code, string Name, string ProjectType, string? Run, string? Status, string? Stop, int Errors, int Warnings,
-    DateTimeOffset? StartedAt, string? StartedBy);
+    public decimal? Difference => AmountBefore is null && AmountAfter is null ? null : (AmountAfter ?? 0) - (AmountBefore ?? 0);
+
+    public CheckLevel? Level => LevelAfter ?? LevelBefore;
+}
 
 /// <summary>
-/// Ekran Przebiegi (docs/funkcjonalnosc.md, F06): macierz wyników kontroli kolejnych uruchomień programu, definicja przebiegu
-/// programu (etapy i elementy kontrolne z ustawieniami), przegląd programów, reguły uzgodnień, zakres okna „Zmiany ACWP” wyniku.
+/// Przebieg programu (zakładka Przebieg programu – docs/funkcjonalnosc.md, F06): macierz wyników kontroli kolejnych uruchomień,
+/// porównanie dwóch uruchomień, zakres okna „Zmiany ACWP” wyniku; reguły uzgodnień i ustawienia kontroli (ekran Przebiegi).
 /// </summary>
 public static class RunOverview
 {
@@ -83,60 +89,33 @@ public static class RunOverview
     }
 
     /// <summary>
-    /// Definicja przebiegu jako wiersze: etap bez elementów – jeden wiersz (akcja); element katalogu – ustawienie etapu
-    /// (RunWorkflowEngine.Settings: element, słownik „Kontrole przebiegu”, katalog); „Uzgodnienie: *” – reguły uzgodnień typu
-    /// programu i wariantu; reguła uzgodnień – warunek, poziom i tolerancja.
+    /// Porównanie wyników kontroli dwóch uruchomień (before – „było”, after – „jest”) po kontroli i elemencie: tylko w „jest” – nowy,
+    /// tylko w „było” – rozwiązany, inny najgorszy poziom, liczba wyników albo kwota (różnica ≥ 0,01) – zmieniony, inaczej bez zmian.
+    /// Kolejność: od najgorszego poziomu, nowe i zmienione przed rozwiązanymi i bez zmian.
     /// </summary>
-    public static IReadOnlyList<RunWorkflowRow> Workflow(RunDefinition definition, IReadOnlyDictionary<string, RunCheckSetting> defaults,
-        IReadOnlyList<RunReconciliationRow> library, string projectType, bool isClosing)
+    public static IReadOnlyList<RunCompareRow> Compare(IReadOnlyList<RunIssueRow> before, IReadOnlyList<RunIssueRow> after, string project)
     {
-        var rows = new List<RunWorkflowRow>();
-        foreach (var step in definition.Steps)
+        static (string, string) Key(RunIssueRow i) => (i.CheckName, i.Element ?? "");
+        var was = before.GroupBy(Key).ToDictionary(g => g.Key, g => g.ToList());
+        var now = after.GroupBy(Key).ToDictionary(g => g.Key, g => g.ToList());
+        static decimal? Sum(List<RunIssueRow>? rows) => rows is null || rows.All(r => r.Amount is null) ? null : rows.Sum(r => r.Amount ?? 0);
+        static RunIssueRow Worst(List<RunIssueRow> rows) => rows.OrderByDescending(r => r.Level).ThenBy(r => r.Id).First();
+        var rows = was.Keys.Union(now.Keys).Select(key =>
         {
-            var gate = step.NeedsApproval ? "zatwierdzenie ręczne" : step.Action == RunActions.Checks ? $"ERROR – stop; WARNING – {step.WarningGate.ToLowerInvariant()}" : "ERROR – stop";
-            RunWorkflowRow Row(string element, string check, string setting, string source, string? description) =>
-                new(step.No, step.Name, step.Action, gate, element, check, setting, source, description ?? "");
-            if (step.Elements.Count == 0)
-            {
-                rows.Add(Row("–", "", "", "", step.Description));
-                continue;
-            }
-            var settings = RunWorkflowEngine.Settings(step, defaults, definition.BuiltIn);
-            foreach (var element in step.Elements)
-            {
-                if (RunCheckRules.ByName(element.Element) is { } rule)
-                    rows.Add(Row(rule.Name, rule.Check, Show(settings[rule.Code]),
-                        element.Level is not null || element.Threshold is not null || !element.Active ? "definicja" : "domyślne", rule.Description));
-                else if (RunDefinitions.IsReconciliation(element.Element))
-                {
-                    var (rules, missing) = RunWorkflowEngine.Reconciliations(step with { Elements = [element] }, library, projectType, isClosing);
-                    rows.AddRange(rules.Select(r => Row(RunDefinitions.ReconciliationPrefix + r.Name, RunReconciliations.CheckName,
-                        $"{RunReconciliations.Condition(r)} – {r.Level}", element.Element.Trim() == RunDefinitions.AllReconciliations ? "reguły uzgodnień" : "definicja", null)));
-                    rows.AddRange(missing.Select(m => Row(RunDefinitions.ReconciliationPrefix + m, RunReconciliations.CheckName, "brak reguły w słowniku", "definicja", null)));
-                    if (!element.Active)
-                        rows.Add(Row(element.Element, RunReconciliations.CheckName, "wyłączona", "definicja", null));
-                    else if (rules.Count == 0 && missing.Count == 0)
-                        rows.Add(Row(element.Element, RunReconciliations.CheckName, "brak aktywnych reguł uzgodnień dla typu programu", "reguły uzgodnień", null));
-                }
-                else
-                    rows.Add(Row(element.Element, "", "nieznany element", "definicja", null));
-            }
-        }
-        return rows;
+            var b = was.GetValueOrDefault(key);
+            var a = now.GetValueOrDefault(key);
+            var status = b is null ? RunCompareRow.New : a is null ? RunCompareRow.Resolved
+                : Worst(a).Level != Worst(b).Level || a.Count != b.Count || Math.Abs((Sum(a) ?? 0) - (Sum(b) ?? 0)) >= 0.01m ? RunCompareRow.Changed
+                : RunCompareRow.Same;
+            var shown = Worst(a ?? b!);
+            return new RunCompareRow(key.Item1, key.Item2.Length == 0 ? null : key.Item2, status, b is null ? null : Worst(b).Level,
+                a is null ? null : Worst(a).Level, Sum(b), Sum(a), (a ?? b)!.Count > 1 ? $"{shown.Message} (+{(a ?? b)!.Count - 1})" : shown.Message,
+                new RunIssueView(shown, ChangesFor(shown, project)));
+        });
+        static int Order(string status) => status switch { RunCompareRow.New => 0, RunCompareRow.Changed => 1, RunCompareRow.Resolved => 2, _ => 3 };
+        return rows.OrderByDescending(r => r.Level).ThenBy(r => Order(r.Status)).ThenBy(r => r.CheckName, StringComparer.CurrentCulture)
+            .ThenBy(r => r.Element, StringComparer.CurrentCulture).ToList();
     }
-
-    /// <summary>Przegląd przebiegów: programy z ostatnim uruchomieniem i etapem, na którym stoi.</summary>
-    public static IReadOnlyList<RunProgramRow> Programs(IReadOnlyList<RunProjectRow> projects, IReadOnlyDictionary<string, RunPinRow> latest,
-        IReadOnlyDictionary<long, IReadOnlyList<RunStepRow>> steps) =>
-        projects.Select(p =>
-        {
-            if (!latest.TryGetValue(p.Code, out var pin))
-                return new RunProgramRow(p.Code, p.Name, p.ProjectType, null, null, null, 0, 0, null, null);
-            var stop = steps.GetValueOrDefault(pin.PinId)?.OrderBy(s => s.StepNo).FirstOrDefault(s => s.Status != RunStepStatuses.Done);
-            return new RunProgramRow(p.Code, p.Name, p.ProjectType, $"{pin.Code} #{pin.PinNo}", pin.Status,
-                stop is null ? steps.ContainsKey(pin.PinId) ? "wszystkie etapy zakończone" : null : $"{stop.StepNo}. {stop.Name} – {stop.Status.ToLowerInvariant()}",
-                pin.Errors, pin.Warnings, pin.StartedAt, pin.StartedBy);
-        }).ToList();
 
     /// <summary>Kontrole kosztów, dla których okno „Zmiany ACWP” pokazuje przyczynę.</summary>
     private static readonly HashSet<string> CostChecks =

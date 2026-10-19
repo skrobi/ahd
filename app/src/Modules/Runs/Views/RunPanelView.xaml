@@ -5,6 +5,40 @@
 
     <!-- Przebieg programu (DataContext: RunPanelViewModel) – etapy uruchomienia, bramki, potwierdzenie; docs/pipeline-fazy.md, rozdz. 1.1–1.2. -->
     <UserControl.Resources>
+        <!-- Komórka macierzy: kolor według najgorszego poziomu wyniku kontroli w uruchomieniu. -->
+        <Style x:Key="MatrixCell" TargetType="Button">
+            <Setter Property="Width" Value="128" />
+            <Setter Property="Height" Value="30" />
+            <Setter Property="Margin" Value="0,0,4,4" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Background" Value="{StaticResource Surface2}" />
+            <Setter Property="Foreground" Value="{StaticResource Muted}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}" CornerRadius="4" BorderBrush="{StaticResource Line}" BorderThickness="1">
+                            <TextBlock Text="{Binding Text}" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                       FontWeight="SemiBold" Foreground="{TemplateBinding Foreground}" />
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding Level}" Value="Pass">
+                    <Setter Property="Background" Value="{StaticResource OkSoft}" />
+                    <Setter Property="Foreground" Value="{StaticResource Ok}" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Level}" Value="Warning">
+                    <Setter Property="Background" Value="{StaticResource WarnSoft}" />
+                    <Setter Property="Foreground" Value="{StaticResource Warn}" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Level}" Value="Error">
+                    <Setter Property="Background" Value="{StaticResource CritSoft}" />
+                    <Setter Property="Foreground" Value="{StaticResource Crit}" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
         <!-- Znacznik statusu etapu: kolor wg statusu (RunStepStatuses). -->
         <Style x:Key="StepStatus" TargetType="Border">
             <Setter Property="CornerRadius" Value="4" />
@@ -37,6 +71,8 @@
                         ToolTip="Nowe uruchomienie wg definicji przebiegu programu – etapy wykonują się automatycznie do pierwszej bramki" />
                 <Button Content="Dalsze etapy" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding Continue}"
                         ToolTip="Wykonaj kolejne etapy ostatniego uruchomienia do najbliższej bramki" />
+                <Button Content="Zmiany ACWP" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding OpenAcwpChanges}"
+                        ToolTip="Co doszło albo się zmieniło w ACWP Hours / Materials / Other – dwa uruchomienia albo okres do okresu, drzewo zmian, linie źródłowe" />
                 <Button Content="Odśwież" Style="{StaticResource Btn}" Command="{Binding Refresh}" />
             </StackPanel>
             <StackPanel Orientation="Horizontal">
@@ -54,6 +90,7 @@
                 </ComboBox>
             </StackPanel>
         </DockPanel>
+        <TextBlock Text="{Binding Assigned}" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,0,0,6" />
         <partials:BusyBar DataContext="{Binding Busy}" />
         <Border Background="{StaticResource CritSoft}" CornerRadius="6" Padding="12,8" Margin="0,0,0,8"
                 Visibility="{Binding HasError, Converter={StaticResource BoolToVisibility}}">
@@ -64,77 +101,222 @@
         <TextBlock Style="{StaticResource MutedText}" Text="Brak uruchomień przebiegu programu – „Nowy przebieg”." TextWrapping="Wrap"
                    Visibility="{Binding NoRuns, Converter={StaticResource BoolToVisibility}}" />
 
-        <Grid>
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="320" />
-                <ColumnDefinition Width="*" />
-            </Grid.ColumnDefinitions>
+        <TabControl>
+            <!-- Etapy wybranego uruchomienia: status, bramka, potwierdzenie, ponowne wykonanie, wyniki etapu -->
+            <TabItem Header="Etapy" Padding="12,4">
+                <Grid Margin="0,12,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="320" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
 
-            <!-- Etapy uruchomienia -->
-            <ListBox ItemsSource="{Binding Steps}" SelectedItem="{Binding SelectedStep}" BorderThickness="0" Background="Transparent"
-                     ScrollViewer.HorizontalScrollBarVisibility="Disabled" AutomationProperties.Name="Etapy przebiegu">
-                <ListBox.ItemTemplate>
-                    <DataTemplate>
-                        <StackPanel Margin="0,4">
-                            <DockPanel>
-                                <Border DockPanel.Dock="Right" Style="{StaticResource StepStatus}">
-                                    <TextBlock Text="{Binding Row.Status}" FontWeight="SemiBold" />
-                                </Border>
-                                <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" Margin="0,0,8,0" />
-                            </DockPanel>
-                            <TextBlock Text="{Binding Results}" Style="{StaticResource MutedText}" />
-                            <TextBlock Text="{Binding When}" Style="{StaticResource MutedText}" />
+                    <!-- Etapy uruchomienia -->
+                    <ListBox ItemsSource="{Binding Steps}" SelectedItem="{Binding SelectedStep}" BorderThickness="0" Background="Transparent"
+                             ScrollViewer.HorizontalScrollBarVisibility="Disabled" AutomationProperties.Name="Etapy przebiegu">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <StackPanel Margin="0,4">
+                                    <DockPanel>
+                                        <Border DockPanel.Dock="Right" Style="{StaticResource StepStatus}">
+                                            <TextBlock Text="{Binding Row.Status}" FontWeight="SemiBold" />
+                                        </Border>
+                                        <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" Margin="0,0,8,0" />
+                                    </DockPanel>
+                                    <TextBlock Text="{Binding Results}" Style="{StaticResource MutedText}" />
+                                    <TextBlock Text="{Binding When}" Style="{StaticResource MutedText}" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+
+                    <!-- Wybrany etap: bramka, elementy kontrolne, akcje, wyniki -->
+                    <StackPanel Grid.Column="1" Margin="16,0,0,0">
+                        <TextBlock Text="{Binding SelectedStep.Title}" Style="{StaticResource H2}" Margin="0,0,0,4" />
+                        <TextBlock Style="{StaticResource MutedText}" TextWrapping="Wrap">
+                            <Run Text="{Binding SelectedStep.Row.Action, Mode=OneWay}" FontWeight="SemiBold" />
+                            <Run Text="{Binding SelectedStep.Gate, Mode=OneWay}" />
+                        </TextBlock>
+                        <TextBlock Text="{Binding SelectedStep.Description}" Style="{StaticResource MutedText}" TextWrapping="Wrap" />
+                        <TextBlock Text="{Binding SelectedStep.Elements, StringFormat='Elementy kontrolne: {0}'}" Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="0,4,0,0" />
+                        <TextBlock Text="{Binding SelectedStep.Row.Comment, StringFormat='Komentarz: {0}'}" TextWrapping="Wrap" Margin="0,4,0,0" />
+
+                        <DockPanel Margin="0,10,0,10">
+                            <Button DockPanel.Dock="Right" Content="Wykonaj ponownie" Style="{StaticResource Btn}" Margin="8,0,0,0" Command="{Binding Rerun}"
+                                    ToolTip="Ponowne wykonanie etapu (np. po poprawie danych lub słowników); późniejsze etapy stają się nieaktualne" />
+                            <Button DockPanel.Dock="Right" Content="Potwierdź i dalej" Style="{StaticResource BtnPrimary}" Margin="8,0,0,0" Command="{Binding Confirm}"
+                                    ToolTip="Etap wymagający akcji: potwierdzenie ostrzeżeń / zatwierdzenie z komentarzem (dziennik), potem kolejne etapy" />
+                            <TextBox Style="{StaticResource Input}" Text="{Binding Comment, UpdateSourceTrigger=PropertyChanged}"
+                                     AutomationProperties.Name="Komentarz potwierdzenia" ToolTip="Komentarz potwierdzenia etapu (wymagany)" />
+                        </DockPanel>
+
+                        <DataGrid Style="{StaticResource DataTable}" ItemsSource="{Binding Issues}" IsReadOnly="True" MaxHeight="520">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Poziom" Binding="{Binding Issue.Level}" />
+                                <DataGridTextColumn Header="Kontrola" Binding="{Binding Issue.CheckName}" />
+                                <DataGridTextColumn Header="Element" Binding="{Binding Issue.Element}" />
+                                <DataGridTextColumn Header="Opis" Binding="{Binding Issue.Message}" Width="*">
+                                    <DataGridTextColumn.ElementStyle>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="TextWrapping" Value="Wrap" />
+                                        </Style>
+                                    </DataGridTextColumn.ElementStyle>
+                                </DataGridTextColumn>
+                                <DataGridTextColumn Header="Kwota" Binding="{Binding Issue.Amount, StringFormat=#\,0.00}" />
+                                <DataGridTemplateColumn Header="">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <Button Content="Pokaż zmiany" Style="{StaticResource Btn}" Padding="8,2" CommandParameter="{Binding}"
+                                                    Command="{Binding DataContext.ShowChanges, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                    Visibility="{Binding CanShowChanges, Converter={StaticResource BoolToVisibility}}"
+                                                    ToolTip="Okno „Zmiany ACWP” dla tego wyniku" />
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </StackPanel>
+                </Grid>
+            </TabItem>
+
+            <!-- Macierz kontrola × ostatnie uruchomienia; klik w komórkę – wyniki kontroli w uruchomieniu -->
+            <TabItem Header="Kontrole – macierz" Padding="12,4">
+                <StackPanel Margin="0,12,0,0">
+                    <TextBlock Style="{StaticResource MutedText}" Text="Brak zakończonych uruchomień przebiegu programu." TextWrapping="Wrap"
+                               Visibility="{Binding NoRuns, Converter={StaticResource BoolToVisibility}}" />
+                    <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+                        <StackPanel>
+                            <!-- Nagłówek: uruchomienia od najstarszego -->
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                <TextBlock Width="260" Text="Kontrola" Style="{StaticResource MutedText}" VerticalAlignment="Bottom" />
+                                <ItemsControl ItemsSource="{Binding Matrix.Columns}">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Width="132" Text="{Binding Label}" ToolTip="{Binding Detail}" FontWeight="SemiBold"
+                                                       TextAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                            <ItemsControl ItemsSource="{Binding Matrix.Rows}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Width="260" Text="{Binding CheckName}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                                                       ToolTip="{Binding CheckName}" />
+                                            <ItemsControl ItemsSource="{Binding Cells}">
+                                                <ItemsControl.ItemsPanel>
+                                                    <ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate>
+                                                </ItemsControl.ItemsPanel>
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <Button Style="{StaticResource MatrixCell}" CommandParameter="{Binding}"
+                                                                Command="{Binding DataContext.SelectCell, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                                ToolTip="Wyniki kontroli w tym uruchomieniu" />
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
                         </StackPanel>
-                    </DataTemplate>
-                </ListBox.ItemTemplate>
-            </ListBox>
+                    </ScrollViewer>
 
-            <!-- Wybrany etap: bramka, elementy kontrolne, akcje, wyniki -->
-            <StackPanel Grid.Column="1" Margin="16,0,0,0">
-                <TextBlock Text="{Binding SelectedStep.Title}" Style="{StaticResource H2}" Margin="0,0,0,4" />
-                <TextBlock Style="{StaticResource MutedText}" TextWrapping="Wrap">
-                    <Run Text="{Binding SelectedStep.Row.Action, Mode=OneWay}" FontWeight="SemiBold" />
-                    <Run Text="{Binding SelectedStep.Gate, Mode=OneWay}" />
-                </TextBlock>
-                <TextBlock Text="{Binding SelectedStep.Description}" Style="{StaticResource MutedText}" TextWrapping="Wrap" />
-                <TextBlock Text="{Binding SelectedStep.Elements, StringFormat='Elementy kontrolne: {0}'}" Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="0,4,0,0" />
-                <TextBlock Text="{Binding SelectedStep.Row.Comment, StringFormat='Komentarz: {0}'}" TextWrapping="Wrap" Margin="0,4,0,0" />
+                    <TextBlock Text="{Binding CellTitle}" Style="{StaticResource H2}" Margin="0,16,0,6" TextWrapping="Wrap" />
+                    <DataGrid Style="{StaticResource DataTable}" ItemsSource="{Binding CellIssues}" IsReadOnly="True" MaxHeight="420">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Poziom" Binding="{Binding Issue.Level}" />
+                            <DataGridTextColumn Header="Element" Binding="{Binding Issue.Element}" />
+                            <DataGridTextColumn Header="Opis" Binding="{Binding Issue.Message}" Width="*">
+                                <DataGridTextColumn.ElementStyle>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="TextWrapping" Value="Wrap" />
+                                    </Style>
+                                </DataGridTextColumn.ElementStyle>
+                            </DataGridTextColumn>
+                            <DataGridTextColumn Header="Kwota" Binding="{Binding Issue.Amount, StringFormat=#\,0.00}" />
+                            <DataGridTemplateColumn Header="">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <Button Content="Pokaż zmiany" Style="{StaticResource Btn}" Padding="8,2" CommandParameter="{Binding}"
+                                                Command="{Binding DataContext.ShowChanges, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                Visibility="{Binding CanShowChanges, Converter={StaticResource BoolToVisibility}}"
+                                                ToolTip="Okno „Zmiany ACWP” dla tego wyniku: rodzaj kosztu, cost element albo element WBS; to uruchomienie i poprzednie" />
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </StackPanel>
+            </TabItem>
 
-                <DockPanel Margin="0,10,0,10">
-                    <Button DockPanel.Dock="Right" Content="Wykonaj ponownie" Style="{StaticResource Btn}" Margin="8,0,0,0" Command="{Binding Rerun}"
-                            ToolTip="Ponowne wykonanie etapu (np. po poprawie danych lub słowników); późniejsze etapy stają się nieaktualne" />
-                    <Button DockPanel.Dock="Right" Content="Potwierdź i dalej" Style="{StaticResource BtnPrimary}" Margin="8,0,0,0" Command="{Binding Confirm}"
-                            ToolTip="Etap wymagający akcji: potwierdzenie ostrzeżeń / zatwierdzenie z komentarzem (dziennik), potem kolejne etapy" />
-                    <TextBox Style="{StaticResource Input}" Text="{Binding Comment, UpdateSourceTrigger=PropertyChanged}"
-                             AutomationProperties.Name="Komentarz potwierdzenia" ToolTip="Komentarz potwierdzenia etapu (wymagany)" />
-                </DockPanel>
-
-                <DataGrid Style="{StaticResource DataTable}" ItemsSource="{Binding Issues}" IsReadOnly="True" MaxHeight="520">
-                    <DataGrid.Columns>
-                        <DataGridTextColumn Header="Poziom" Binding="{Binding Issue.Level}" />
-                        <DataGridTextColumn Header="Kontrola" Binding="{Binding Issue.CheckName}" />
-                        <DataGridTextColumn Header="Element" Binding="{Binding Issue.Element}" />
-                        <DataGridTextColumn Header="Opis" Binding="{Binding Issue.Message}" Width="*">
-                            <DataGridTextColumn.ElementStyle>
-                                <Style TargetType="TextBlock">
-                                    <Setter Property="TextWrapping" Value="Wrap" />
-                                </Style>
-                            </DataGridTextColumn.ElementStyle>
-                        </DataGridTextColumn>
-                        <DataGridTextColumn Header="Kwota" Binding="{Binding Issue.Amount, StringFormat=#\,0.00}" />
-                        <DataGridTemplateColumn Header="">
-                            <DataGridTemplateColumn.CellTemplate>
+            <!-- Porównanie dwóch uruchomień: nowe, zmienione, rozwiązane wyniki kontroli -->
+            <TabItem Header="Porównanie uruchomień" Padding="12,4">
+                <StackPanel Margin="0,12,0,0">
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                        <TextBlock Text="Było" VerticalAlignment="Center" Margin="0,0,6,0" />
+                        <ComboBox ItemsSource="{Binding Pins}" SelectedItem="{Binding BeforePin}" Width="300" AutomationProperties.Name="Uruchomienie było">
+                            <ComboBox.ItemTemplate>
                                 <DataTemplate>
-                                    <Button Content="Pokaż zmiany" Style="{StaticResource Btn}" Padding="8,2" CommandParameter="{Binding}"
-                                            Command="{Binding DataContext.ShowChanges, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                            Visibility="{Binding CanShowChanges, Converter={StaticResource BoolToVisibility}}"
-                                            ToolTip="Okno „Zmiany ACWP” dla tego wyniku" />
+                                    <TextBlock>
+                                        <Run Text="{Binding Code, Mode=OneWay}" FontWeight="SemiBold" />
+                                        <Run Text="{Binding PinNo, Mode=OneWay, StringFormat='#{0}'}" />
+                                        <Run Text="{Binding Status, Mode=OneWay, StringFormat='– {0}'}" Foreground="{StaticResource Muted}" />
+                                    </TextBlock>
                                 </DataTemplate>
-                            </DataGridTemplateColumn.CellTemplate>
-                        </DataGridTemplateColumn>
-                    </DataGrid.Columns>
-                </DataGrid>
-            </StackPanel>
-        </Grid>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+                        <Button Content="⇄" Style="{StaticResource Btn}" Margin="6,0" Command="{Binding SwapCompare}" ToolTip="Zamień uruchomienia" />
+                        <TextBlock Text="Jest" VerticalAlignment="Center" Margin="0,0,6,0" />
+                        <ComboBox ItemsSource="{Binding Pins}" SelectedItem="{Binding AfterPin}" Width="300" Margin="0,0,16,0" AutomationProperties.Name="Uruchomienie jest">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate>
+                                    <TextBlock>
+                                        <Run Text="{Binding Code, Mode=OneWay}" FontWeight="SemiBold" />
+                                        <Run Text="{Binding PinNo, Mode=OneWay, StringFormat='#{0}'}" />
+                                        <Run Text="{Binding Status, Mode=OneWay, StringFormat='– {0}'}" Foreground="{StaticResource Muted}" />
+                                    </TextBlock>
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+                        <CheckBox Content="Tylko zmiany" IsChecked="{Binding OnlyChanges}" VerticalAlignment="Center"
+                                  ToolTip="Nowe, zmienione (poziom, liczba wyników, kwota) i rozwiązane wyniki kontroli; bez wyników bez zmian" />
+                    </StackPanel>
+                    <TextBlock Text="{Binding CompareNote}" Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="0,0,0,8" />
+                    <DataGrid Style="{StaticResource DataTable}" ItemsSource="{Binding Compare}" IsReadOnly="True" MaxHeight="560">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Zmiana" Binding="{Binding Status}" />
+                            <DataGridTextColumn Header="Kontrola" Binding="{Binding CheckName}" />
+                            <DataGridTextColumn Header="Element" Binding="{Binding Element}" />
+                            <DataGridTextColumn Header="Było" Binding="{Binding LevelBefore}" />
+                            <DataGridTextColumn Header="Jest" Binding="{Binding LevelAfter}" />
+                            <DataGridTextColumn Header="Kwota było" Binding="{Binding AmountBefore, StringFormat=#\,0.00}" />
+                            <DataGridTextColumn Header="Kwota jest" Binding="{Binding AmountAfter, StringFormat=#\,0.00}" />
+                            <DataGridTextColumn Header="Różnica" Binding="{Binding Difference, StringFormat=#\,0.00}" />
+                            <DataGridTextColumn Header="Opis" Binding="{Binding Message}" Width="*">
+                                <DataGridTextColumn.ElementStyle>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="TextWrapping" Value="Wrap" />
+                                    </Style>
+                                </DataGridTextColumn.ElementStyle>
+                            </DataGridTextColumn>
+                            <DataGridTemplateColumn Header="">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <Button Content="Pokaż zmiany" Style="{StaticResource Btn}" Padding="8,2" CommandParameter="{Binding Issue}"
+                                                Command="{Binding DataContext.ShowChanges, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                Visibility="{Binding Issue.CanShowChanges, Converter={StaticResource BoolToVisibility}}"
+                                                ToolTip="Okno „Zmiany ACWP” dla tego wyniku" />
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </StackPanel>
+            </TabItem>
+        </TabControl>
     </StackPanel>
 </UserControl>

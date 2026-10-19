@@ -126,4 +126,10 @@ public interface IRunStore
 
     /// <summary>Pole kwoty ACTUALS projektu – słownik „Parametry projektu” (brak – ValueObjCrcy).</summary>
     string ActualsAmount(string project);
+
+    /// <summary>Przebieg wybrany w programie (Parametry programu → „Przebieg”); null – szablon domyślny dla typu.</summary>
+    string? AssignedDefinition(string project);
+
+    /// <summary>Przebiegi wybrane w programach: program → szablon.</summary>
+    IReadOnlyDictionary<string, string> DefinitionAssignments();
 }

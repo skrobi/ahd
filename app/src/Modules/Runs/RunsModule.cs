@@ -14,8 +14,8 @@ using PzlEv.Shared.Views.Partials;
 namespace PzlEv.Modules.Runs;
 
 /// <summary>
-/// Przebiegi (F06): ekran z przebiegiem programu (etapy, bramki), przeglądem programów, macierzą wyników kontroli, definicją przebiegu
-/// i edycją definicji i reguł (RunsView); panel przebiegu (IRunPanels) i przebieg w tle (IRunLauncher) także na ekranie programu.
+/// Przebiegi (F06): ekran administracji szablonów przebiegów – etapy w kafelkach, okno Kontrole (RunsView); przebieg programu
+/// uruchamia i analizuje ekran programu – panel przebiegu (IRunPanels), przebieg w tle (IRunLauncher), okno „Zmiany ACWP” (IAcwpChanges).
 /// Kroki i etapy P3–P9, Z – do implementacji (F5–F9).
 /// </summary>
 public sealed class RunsModule : IModule
@@ -40,7 +40,7 @@ public sealed class RunsModule : IModule
         var store = _store = new SqlRunStore(services.Sql);
         ISourceImport? Imports() => services.Contracts.Get<ISourceImport>();
         IProjectProcessSource? Processes() => services.Contracts.Get<IProjectProcessSource>();
-        var launcher = _launcher = new RunLauncher(new RunService(store, services, Imports, Processes), store, Imports);
+        var launcher = new RunLauncher(new RunService(store, services, Imports, Processes), store, Imports);
         services.Contracts.Register<IRunLauncher>(launcher);
         services.Contracts.Register<IAcwpChanges>(_acwpChanges = new AcwpChangesLauncher(store, Processes));
         services.Contracts.Register<IRunPanels>(new RunPanels(store, launcher, () => _acwpChanges));
@@ -48,14 +48,18 @@ public sealed class RunsModule : IModule
     }
 
     private SqlRunStore? _store;
-    private RunLauncher? _launcher;
     private IAcwpChanges? _acwpChanges;
     private SqlDictionaryStore? _dictionaries;
 
-    public FrameworkElement CreateView(ModuleContext context) =>
-        new RunsView
+    public FrameworkElement CreateView(ModuleContext context)
+    {
+        var dictionaries = new DictionaryService(_dictionaries!, context.Services.Journal);
+        var templates = new RunTemplateService(dictionaries, _store!);
+        return new RunsView
         {
-            DataContext = new RunsViewModel(_store!, project => new RunPanelViewModel(_store!, _launcher!, _acwpChanges, project), _acwpChanges,
-                new RunDictionaryEditorViewModel(new DictionaryService(_dictionaries!, context.Services.Journal), new FileDialogs())),
+            DataContext = new RunsViewModel(templates, _store!, saved => RunChecksWindow.Open(
+                new RunChecksViewModel(templates, new RunDictionaryEditorViewModel(dictionaries, new FileDialogs(),
+                    [GlobalDictionaries.RunReconciliations, GlobalDictionaries.RunChecks])), saved)),
         };
+    }
 }

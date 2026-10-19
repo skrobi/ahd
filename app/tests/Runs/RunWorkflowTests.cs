@@ -105,37 +105,91 @@ public sealed class RunWorkflowTests
         Assert.Equal(["Brak"], named.Missing);
     }
 
-    private static RunDefinitionHeaderRow Header(string code, string type, string? program = null, string run = RunCheckRules.AnyRun, bool active = true) =>
-        new(code, type, program, run, active, null);
+    private static RunDefinitionHeaderRow Header(string code, string type, bool active = true) => new(code, type, active, null);
 
     [Fact]
-    public void Program_gets_most_specific_active_definition_with_steps_else_built_in()
+    public void Program_gets_assigned_template_else_default_for_type_else_built_in()
     {
         RunDefinitionHeaderRow[] headers =
         [
-            Header("Ogólna", RunCheckRules.AllTypes), Header("CAS", "CAS"), Header("CAS zamykający", "CAS", run: RunCheckRules.ClosingRun),
-            Header("PAF", "CAS", program: "PAF"), Header("Bez etapów", "SAC"), Header("Wyłączona", "WEWNETRZNY", active: false),
+            Header(RunDefinitions.InternalCode, RunCheckRules.AllTypes), Header("CAS", "CAS"), Header("Specjalny", "SAC"), Header("Bez etapów", "SAC"),
+            Header("Wyłączony", "WEWNETRZNY", active: false),
         ];
         RunStepRowData[] steps =
         [
-            .. new[] { "Ogólna", "CAS", "CAS zamykający", "PAF", "Wyłączona" }.Select(d => new RunStepRowData(d, 2, "Kontrole", RunActions.Checks, RunGates.Confirm, false, null)),
+            .. new[] { RunDefinitions.InternalCode, "CAS", "Specjalny", "Wyłączony" }.Select(d => new RunStepRowData(d, 2, "Kontrole", RunActions.Checks, RunGates.Confirm, false, null)),
             new("CAS", 1, "Przypięcie", RunActions.Pin, RunGates.Info, false, null),
         ];
         RunStepElementRow[] elements = [new("CAS", "Kontrole", RunCheckRules.NetZeroBalance.Name, true, "WARNING", 3m), new("CAS", "Inny etap", "x", true, null, null)];
 
-        var cas = RunDefinitions.For(headers, steps, elements, "M28", "CAS", isClosing: false);
+        var cas = RunDefinitions.For(headers, steps, elements, null, "CAS");
 
         Assert.Equal("CAS", cas.Code);
         Assert.Equal([("Przypięcie", RunActions.Pin), ("Kontrole", RunActions.Checks)], cas.Steps.Select(s => (s.Name, s.Action)));
         Assert.Equal(new RunElementSetting(RunCheckRules.NetZeroBalance.Name, true, CheckLevel.Warning, 3m), Assert.Single(cas.Steps[1].Elements));
-        Assert.Equal("CAS zamykający", RunDefinitions.For(headers, steps, elements, "M28", "CAS", isClosing: true).Code);
-        Assert.Equal("PAF", RunDefinitions.For(headers, steps, elements, "PAF", "CAS", isClosing: true).Code);   // program przed wariantem
-        Assert.Equal("Ogólna", RunDefinitions.For(headers, steps, elements, "S70", "SAC", false).Code);         // „Bez etapów” pominięta
-        Assert.Equal("Ogólna", RunDefinitions.For(headers, steps, elements, "X", "WEWNETRZNY", false).Code);   // wyłączona pominięta
-        Assert.True(RunDefinitions.For([], [], [], "X", "SAC", false).BuiltIn);
+        Assert.Equal("Specjalny", RunDefinitions.For(headers, steps, elements, "specjalny", "CAS").Code);              // wybrany w programie
+        Assert.Equal("Specjalny", RunDefinitions.For(headers, steps, elements, null, "SAC").Code);                     // typ przed „Wszystkie”
+        Assert.Equal(RunDefinitions.InternalCode, RunDefinitions.For(headers, steps, elements, null, "WEWNETRZNY").Code);
+        Assert.Equal(RunDefinitions.InternalCode, RunDefinitions.For(headers, steps, elements, "Wyłączony", "WEWNETRZNY").Code);   // nieaktywny – domyślny
+        Assert.Equal("CAS", RunDefinitions.For(headers, steps, elements, "Bez etapów", "CAS").Code);                   // bez etapów – domyślny
+        Assert.Equal(["CAS", "Specjalny", RunDefinitions.InternalCode], RunDefinitions.Available(headers, steps).Select(h => h.Code));
+        Assert.True(RunDefinitions.For([], [], [], "X", "SAC").BuiltIn);
         var restored = RunWorkflowEngine.Deserialize(RunWorkflowEngine.Serialize(cas))!;
         Assert.Equal(cas.Steps.Count, restored.Steps.Count);
         Assert.Equal(cas.Steps[1].Elements, restored.Steps[1].Elements);
+    }
+
+    [Fact]
+    public void Template_structure_requires_fixed_steps_first_and_checks_in_validation_steps()
+    {
+        Assert.Empty(RunDefinitions.Validate(RunDefinitions.Starters[0]));
+        var broken = new RunDefinition(" ", RunCheckRules.AllTypes,
+        [
+            RunDefinitions.FixedSteps[1] with { No = 1 },
+            RunDefinitions.FixedSteps[0] with { No = 2 },
+            new(3, "Walidacja", RunActions.Checks, RunGates.Confirm, false, [new(RunCheckRules.NetZeroBalance.Name, Active: false)]),
+            new(4, "walidacja", RunActions.Checks, RunGates.Confirm, false, [new("Nieznana"), new("Uzgodnienie: *"), new("uzgodnienie: *")]),
+            new(5, "Zatwierdzenie", RunActions.Approval, RunGates.Confirm, true, [new(RunCheckRules.NetZeroBalance.Name)]),
+        ]);
+
+        var issues = RunDefinitions.Validate(broken).Select(i => i.Message).ToList();
+
+        Assert.Contains("Szablon bez nazwy", issues);
+        Assert.Contains($"Etap stały „{RunActions.Import}” – dokładnie jeden, jako etap 1", issues);
+        Assert.Contains($"Etap stały „{RunActions.Pin}” – dokładnie jeden, jako etap 2", issues);
+        Assert.Contains("Etap „Walidacja” bez kontroli – dodaj kontrole albo usuń etap", issues);
+        Assert.Contains("Nazwa etapu „walidacja” powtórzona", issues);
+        Assert.Contains("Nieznana kontrola „Nieznana”", issues);
+        Assert.Contains("Kontrola „Uzgodnienie: *” dwa razy w etapie „walidacja”", issues);
+        Assert.Contains("Etap „Zatwierdzenie” (Zatwierdzenie) nie ma kontroli – kontrole tylko w etapach walidacji", issues);
+    }
+
+    [Fact]
+    public void Template_rows_round_trip_and_replace_keeps_row_ids_of_same_keys()
+    {
+        var starter = RunDefinitions.Starters[1] with
+        {
+            Steps = [.. RunDefinitions.Starters[1].Steps.Select(s => s.No == 3 ? s with { Elements = [new(RunCheckRules.NetZeroBalance.Name, true, CheckLevel.Warning, 2.5m)] } : s)],
+        };
+        var header = RunDefinitionRows.Headers([new DictRow(1, 1, RunDefinitionRows.Header(starter, isActive: true))]).Single();
+        var steps = RunDefinitionRows.Steps(RunDefinitionRows.StepValues(starter).Select(v => new DictRow(null, null, v)));
+        var elements = RunDefinitionRows.Elements(RunDefinitionRows.ElementValues(starter).Select(v => new DictRow(null, null, v)));
+
+        var built = RunDefinitions.Build(header, steps, elements);
+
+        Assert.Equal((starter.Code, "CAS", true), (header.Code, header.ProjectType, header.IsActive));
+        Assert.Equal(starter.Steps.Select(s => (s.No, s.Name, s.Action, s.WarningGate, s.Approval)), built.Steps.Select(s => (s.No, s.Name, s.Action, s.WarningGate, s.Approval)));
+        Assert.Equal(starter.Steps.SelectMany(s => s.Elements), built.Steps.SelectMany(s => s.Elements));
+
+        var spec = GlobalDictionaries.Get(GlobalDictionaries.RunSteps);
+        DictRow Step(long id, string definition, int no, string name) => new(id, 1, new Dictionary<string, string?>
+            { ["Definicja"] = definition, ["Kolejność"] = no.ToString(), ["Etap"] = name, ["Akcja"] = RunActions.Checks, ["Bramka WARNING"] = RunGates.Confirm, ["Zatwierdzenie"] = "nie", ["Opis"] = null });
+        DictRow[] current = [Step(1, "CAS", 1, "A"), Step(2, "CAS", 2, "B"), Step(3, "CAS", 3, "C"), Step(4, "Inny", 1, "A")];
+        var (working, removed) = RunDefinitionRows.Replace(spec, current, "cas", [Step(0, "CAS", 1, "X").Values, Step(0, "CAS", 2, "B").Values]);
+
+        Assert.Equal([4L, 1L, 2L], working.Select(r => r.RowId ?? 0));
+        Assert.Equal("X", working[1]["Etap"]);
+        Assert.Equal([3L], removed.Select(r => r.RowId ?? 0));
     }
 
     [Fact]
@@ -151,7 +205,7 @@ public sealed class RunWorkflowTests
     }
 
     [Fact]
-    public void Definition_dictionaries_validate_scope_step_names_and_elements()
+    public void Definition_dictionaries_validate_default_type_step_names_and_elements()
     {
         DictRow Row(params (string Column, string? Value)[] values) => new(null, null, values.ToDictionary(v => v.Column, v => v.Value));
         var definitions = DictionaryValidator.Validate(GlobalDictionaries.Get(GlobalDictionaries.RunDefinitionHeaders),
@@ -172,7 +226,7 @@ public sealed class RunWorkflowTests
             Row(("Definicja", "A"), ("Etap", "Kontrole"), ("Element", RunCheckRules.NetZeroBalance.Name), ("Aktywny", "tak"), ("Poziom", "WARNING"), ("Próg", "5"), ("Opis", null)),
         ]);
 
-        Assert.Single(definitions, i => i.Level == CheckLevel.Error && i.Message.StartsWith("Aktywna definicja o tym samym zakresie co „A”"));
+        Assert.Single(definitions, i => i.Level == CheckLevel.Error && i.Message.StartsWith("Aktywny szablon „A” jest już domyślny dla typu programu CAS"));
         Assert.Single(steps, i => i.Level == CheckLevel.Error && i.Message.StartsWith("Etap „kontrole” już jest"));
         Assert.Contains(elements, i => i.Level == CheckLevel.Error && i.Message.StartsWith("Element „Nieznana”"));
         Assert.Contains(elements, i => i.Level == CheckLevel.Error && i.Message == "Próg nie może być ujemny");

@@ -93,10 +93,11 @@ public static class ProjectDictionaries
         Code = Settings,
         Name = "Parametry programu",
         Description = $"Parametry programu: {ProjectSettings.ActualsAmount} – pole kwoty parsera ACTUALS dla ACWP struktury, raportu kosztów i przebiegu "
-                      + "(ValueObjCrcy – waluta obiektu (PLN), ValueRepCur – waluta raportu); brak wiersza – ValueObjCrcy.",
+                      + "(ValueObjCrcy – waluta obiektu (PLN), ValueRepCur – waluta raportu); brak wiersza – ValueObjCrcy. "
+                      + $"{ProjectSettings.RunDefinition} – szablon przebiegu programu (ekran Przebiegi); brak wiersza – szablon domyślny dla typu programu.",
         Columns =
         [
-            new("Parametr", ColumnType.Choice, Key: true, Choices: [ProjectSettings.ActualsAmount]),
+            new("Parametr", ColumnType.Choice, Key: true, Choices: [ProjectSettings.ActualsAmount, ProjectSettings.RunDefinition]),
             new("Wartość", ColumnType.Text, Required: true, Lookup: Settings),
             new("Opis", ColumnType.Text),
         ],
@@ -320,6 +321,10 @@ public static class ProjectDictionaries
                     DictionaryValidator.RowElement(i));
         }
     }
+
+    /// <summary>Przebieg programu z wierszy słownika „Parametry projektu” (null – szablon domyślny dla typu programu).</summary>
+    public static string? RunDefinition(IEnumerable<DictRow> settings) =>
+        settings.FirstOrDefault(r => r["Parametr"] == ProjectSettings.RunDefinition)?["Wartość"]?.Trim() is { Length: > 0 } code ? code : null;
 
     /// <summary>Pole kwoty ACTUALS z wierszy słownika „Parametry projektu” (brak – ValueObjCrcy).</summary>
     public static string ActualsAmount(IEnumerable<DictRow> settings) =>

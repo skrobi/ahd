@@ -73,6 +73,12 @@
                     <TextBlock Text="Waluta kosztów (zestaw walutowy ACTUALS)" Style="{StaticResource MutedText}" Margin="0,12,0,4" />
                     <ComboBox ItemsSource="{Binding CurrencySets}" SelectedItem="{Binding CurrencySet}" DisplayMemberPath="Label" Width="480" HorizontalAlignment="Left"
                               ToolTip="Kolumna waluty i kwoty raportu ACTUALS, w których program liczy ACWP, raport kosztów, ETC Cost i EAC; walutę odczytuje z danych. Zmiana później – Konfiguracja → „Parametry programu”." />
+                    <!-- Przebieg programu: szablon z ekranu Przebiegi (zmiana później – Konfiguracja → „Parametry programu” → Przebieg) -->
+                    <TextBlock Text="Przebieg" Style="{StaticResource MutedText}" Margin="0,12,0,4" />
+                    <ComboBox ItemsSource="{Binding RunTemplates}" SelectedItem="{Binding RunTemplate}" DisplayMemberPath="Label" Width="480" HorizontalAlignment="Left"
+                              ToolTip="Szablon przebiegu (ekran Przebiegi): etapy i kontrole uruchamiane na ekranie programu. Domyślnie – szablon domyślny dla typu programu. Zmiana później – Konfiguracja → „Parametry programu” → Przebieg." />
+                    <TextBlock Text="Brak szablonów przebiegów – program użyje definicji wbudowanej (szablony – ekran Przebiegi)." Style="{StaticResource MutedText}" Margin="0,4,0,0"
+                               Visibility="{Binding NoRunTemplates, Converter={StaticResource BoolToVisibility}}" />
                     <ItemsControl ItemsSource="{Binding BasicIssues}" Margin="0,8,0,0" />
                 </StackPanel>
 

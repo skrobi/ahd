@@ -445,13 +445,14 @@ public sealed class ProjectDetailViewModel : ObservableObject, IDisposable
                 var definitions = steps.Time("definicje źródeł", _service.SourceDefinitions);
                 var sources = ProjectService.SourceOptions(definitions);
                 var burdenGroups = steps.Time("grupy narzutowe CAS", _service.BurdenGroupLookups);
+                var runTemplates = steps.Time("szablony przebiegów", _service.RunTemplates);
                 var projectSources = (rows.GetValueOrDefault(ProjectDictionaries.Sources) ?? []).Select(r => r["Definicja źródła"]).OfType<string>()
                     .ToHashSet(StringComparer.OrdinalIgnoreCase);
                 var actuals = cachedActuals ?? steps.Time("data danych ACTUALS", ReadActuals);
                 return new Snapshot(tree, mapping, owners, readiness,
                     states.ToDictionary(s => s.Key, s => (s.Value.Rows.Count, s.Value.LastChange)), structure, ProjectService.PersonOptions(persons, wpCam),
                     ProjectService.CategoryOptions(categories, wpCam), editable,
-                    ProjectService.Lookups(persons, categories, sources, burdenGroups, mpks), costs, costsError, costsField, currency, currencyProblem, mpks, persons, folderChecks, actuals, production,
+                    ProjectService.Lookups(persons, categories, sources, burdenGroups, mpks, runTemplates), costs, costsError, costsField, currency, currencyProblem, mpks, persons, folderChecks, actuals, production,
                     definitions.Where(d => projectSources.Contains(d.Code)).ToList());
             });
             Logger.Information("Program {Code}: wczytanie {Steps}", Code, steps.Summary);

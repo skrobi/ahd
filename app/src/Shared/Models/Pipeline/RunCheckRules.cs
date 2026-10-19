@@ -127,4 +127,12 @@ public static class RunCheckRules
     public static RunCheckRule? ByName(string? name) => All.FirstOrDefault(r => string.Equals(r.Name, name?.Trim(), StringComparison.OrdinalIgnoreCase));
 
     public static RunCheckSetting Default(RunCheckRule rule) => new(true, rule.Level, rule.Threshold);
+
+    /// <summary>Grupa kontroli (okno Kontrole, dobór kontroli etapu): Walidacja ACTUALS, Spójność ze słownikami, Rodzaje kosztu.</summary>
+    public const string ActualsArea = "Walidacja ACTUALS";
+
+    public static IReadOnlyList<string> Areas { get; } = [ActualsArea, Dictionaries, CostKinds];
+
+    /// <summary>Grupa kontroli reguły: kontrole danych ACTUALS (liczba danych, odchylenia, nowe cost elementy, netowanie, okresy zamknięte, jakość) albo sama kontrola.</summary>
+    public static string AreaOf(RunCheckRule rule) => rule.Check is Dictionaries or CostKinds ? rule.Check : ActualsArea;
 }

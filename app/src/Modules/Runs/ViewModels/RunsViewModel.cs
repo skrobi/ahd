@@ -1,287 +1,360 @@
+using System.Collections.ObjectModel;
 using System.Windows.Input;
 using PzlEv.Modules.Runs.Data;
 using PzlEv.Modules.Runs.Services;
-using PzlEv.Shared.Models.Db;
+using PzlEv.Shared.Models;
+using PzlEv.Shared.Models.Dictionaries;
 using PzlEv.Shared.Models.Pipeline;
-using PzlEv.Shared.Utils.Data;
 using PzlEv.Shared.Utils.Ui.Mvvm;
 using Serilog;
 
 namespace PzlEv.Modules.Runs.ViewModels;
 
 /// <summary>
-/// Ekran Przebiegi (docs/funkcjonalnosc.md, F06): przebieg wybranego programu (panel etapów – RunPanelViewModel), przegląd programów
-/// (ostatnie uruchomienie i etap, na którym stoi), macierz wyników kontroli ostatnich uruchomień (klik w komórkę – wyniki tej
-/// kontroli), definicja przebiegu programu (etapy i elementy kontrolne z ustawieniami, wariant przebiegu) oraz edycja definicji
-/// przebiegów, reguł uzgodnień i ustawień kontroli (RunDictionaryEditorViewModel).
+/// Ekran Przebiegi (docs/funkcjonalnosc.md, F06) – administracja szablonów przebiegów: lista szablonów (Wewnętrzny, CAS, własne),
+/// etapy szablonu w kafelkach (Import źródeł i Przypięcie stanu – stałe; etapy walidacji z kontrolami z katalogu; zatwierdzenie),
+/// okno Kontrole (ustawienia domyślne kontroli, reguły uzgodnień). Program wybiera szablon w Konfiguracji; przebieg uruchamia
+/// i analizuje się na ekranie programu.
 /// </summary>
 public sealed class RunsViewModel : ObservableObject
 {
     private static readonly ILogger Logger = Log.ForContext("Module", "runs");
 
-    /// <summary>Liczba uruchomień w macierzy.</summary>
-    public const int PinCount = 8;
-
+    private readonly RunTemplateService _service;
     private readonly IRunStore _store;
-    private readonly Func<string, RunPanelViewModel> _panels;
-    private IReadOnlyList<RunProjectRow> _projects = [];
-    private RunProjectRow? _selectedProject;
-    private RunPanelViewModel? _panel;
-    private IReadOnlyList<RunProgramRow> _programs = [];
-    private RunMatrix _matrix = new([], []);
-    private Rules _rules = new(([], [], []), [], []);
-    private bool _closing;
-    private int _selectedTab;
-    private IReadOnlyList<RunWorkflowRow> _workflow = [];
-    private IReadOnlyList<RunReconciliationView> _reconciliations = [];
-    private IReadOnlyList<RunIssueView> _cellIssues = [];
-    private string _cellTitle = "";
-    private string _workflowNote = "";
-    private string? _error;
-    private Dictionary<long, IReadOnlyList<RunIssueRow>> _issues = [];
-    private Dictionary<long, string> _pinLabels = [];
+    private IReadOnlyDictionary<string, RunCheckSetting> _defaults = new Dictionary<string, RunCheckSetting>();
+    private IReadOnlyList<string> _reconciliations = [];
+    private IReadOnlyList<RunTemplate> _templates = [];
+    private RunTemplate? _selectedTemplate;
+    private RunStepTileViewModel? _selectedStep;
+    private string _code = "";
+    private string _projectType = RunCheckRules.AllTypes;
+    private bool _isActive = true;
+    private string _description = "";
+    private bool _isNew;
+    private bool _isDirty;
+    private bool _loading;
+    private string _status = "";
+    private IReadOnlyList<Issue> _issues = [];
 
-    public RunsViewModel(IRunStore store, Func<string, RunPanelViewModel> panels, IAcwpChanges? acwpChanges, RunDictionaryEditorViewModel editor)
+    public RunsViewModel(RunTemplateService service, IRunStore store, Action<Action> openChecks)
     {
+        _service = service;
         _store = store;
-        _panels = panels;
-        Editor = editor;
-        Editor.Saved += () => _ = ReloadRules();
-        Refresh = new AsyncRelayCommand(LoadProjects, () => !Busy.IsBusy);
-        OpenAcwpChanges = new RelayCommand(_ => acwpChanges?.Show(new AcwpChangesRequest(SelectedProject!.Code, Scope: "cały program")),
-            _ => acwpChanges is not null && SelectedProject is not null && Matrix.Columns.Count > 0);
-        ShowChanges = new RelayCommand(p => { if (p is RunIssueView { Changes: { } request }) acwpChanges?.Show(request); }, _ => acwpChanges is not null);
-        SelectCell = new RelayCommand(p => ShowCell(p as RunMatrixCell));
-        OpenProgram = new RelayCommand(p =>
-        {
-            if (p is RunProgramRow row && Projects.FirstOrDefault(r => r.Code == row.Code) is { } project)
-            {
-                SelectedProject = project;
-                SelectedTab = 0;
-            }
-        });
-        _ = LoadProjects();
+        Refresh = new AsyncRelayCommand(() => Load(_selectedTemplate?.Definition.Code), () => !Busy.IsBusy);
+        CreateStarters = new AsyncRelayCommand(DoCreateStarters, () => !Busy.IsBusy && !IsDirty && MissingStarters);
+        NewTemplate = new RelayCommand(_ => StartNew(null), _ => !Busy.IsBusy && !IsDirty);
+        CopyTemplate = new RelayCommand(_ => StartNew(_selectedTemplate), _ => !Busy.IsBusy && !IsDirty && _selectedTemplate is not null);
+        DeleteTemplate = new AsyncRelayCommand(DoDelete, () => !Busy.IsBusy && !IsDirty && _selectedTemplate is not null);
+        AddValidation = new RelayCommand(_ => AddStep(new RunStepDefinition(0, NextName("Walidacja"), RunActions.Checks, RunGates.Confirm, false, [])), _ => HasEditor);
+        AddApproval = new RelayCommand(_ => AddStep(new RunStepDefinition(0, NextName("Zatwierdzenie"), RunActions.Approval, RunGates.Confirm, true, [],
+            "Analityk zatwierdza wynik przebiegu (komentarz w dzienniku).")), _ => HasEditor);
+        MoveLeft = new RelayCommand(p => Move(p as RunStepTileViewModel, -1), p => CanMove(p as RunStepTileViewModel, -1));
+        MoveRight = new RelayCommand(p => Move(p as RunStepTileViewModel, 1), p => CanMove(p as RunStepTileViewModel, 1));
+        RemoveStep = new RelayCommand(p => Remove(p as RunStepTileViewModel), p => p is RunStepTileViewModel { IsFixed: false });
+        Save = new AsyncRelayCommand(DoSave, () => !Busy.IsBusy && HasEditor && IsDirty);
+        Discard = new AsyncRelayCommand(() => { IsDirty = false; return Load(_isNew ? null : _selectedTemplate?.Definition.Code); }, () => !Busy.IsBusy && IsDirty);
+        OpenChecks = new RelayCommand(_ => openChecks(() => _ = Load(_selectedTemplate?.Definition.Code)), _ => !Busy.IsBusy);
+        _ = Load(null);
     }
 
     public BusyState Busy { get; } = new();
 
     public ICommand Refresh { get; }
+    public ICommand CreateStarters { get; }
+    public ICommand NewTemplate { get; }
+    public ICommand CopyTemplate { get; }
+    public ICommand DeleteTemplate { get; }
+    public ICommand AddValidation { get; }
+    public ICommand AddApproval { get; }
+    public ICommand MoveLeft { get; }
+    public ICommand MoveRight { get; }
+    public ICommand RemoveStep { get; }
+    public ICommand Save { get; }
+    public ICommand Discard { get; }
 
-    public ICommand SelectCell { get; }
+    /// <summary>Okno Kontrole: ustawienia domyślne kontroli, reguły uzgodnień, miary.</summary>
+    public ICommand OpenChecks { get; }
 
-    /// <summary>Przegląd programów – przejście do przebiegu programu.</summary>
-    public ICommand OpenProgram { get; }
+    public IReadOnlyList<RunTemplate> Templates { get => _templates; private set => SetProperty(ref _templates, value); }
 
-    /// <summary>„Pokaż zmiany” przy wyniku kontroli – okno „Zmiany ACWP” z zakresem wyniku (RunOverview.ChangesFor).</summary>
-    public ICommand ShowChanges { get; }
-
-    /// <summary>Okno „Zmiany ACWP” programu (porównanie uruchomień albo okresów).</summary>
-    public ICommand OpenAcwpChanges { get; }
-
-    /// <summary>Definicje przebiegów, etapy, elementy kontrolne, reguły uzgodnień, ustawienia kontroli – edycja słowników.</summary>
-    public RunDictionaryEditorViewModel Editor { get; }
-
-    public int SelectedTab { get => _selectedTab; set => SetProperty(ref _selectedTab, value); }
-
-    public IReadOnlyList<RunProjectRow> Projects { get => _projects; private set => SetProperty(ref _projects, value); }
-
-    public RunProjectRow? SelectedProject
+    public RunTemplate? SelectedTemplate
     {
-        get => _selectedProject;
+        get => _selectedTemplate;
         set
         {
-            if (SetProperty(ref _selectedProject, value))
-                _ = LoadProject(value);
-        }
-    }
-
-    /// <summary>Przebieg wybranego programu (etapy, potwierdzenia, ponowne wykonanie).</summary>
-    public RunPanelViewModel? Panel
-    {
-        get => _panel;
-        private set
-        {
-            var previous = _panel;
-            if (SetProperty(ref _panel, value))
-                previous?.Dispose();
-        }
-    }
-
-    /// <summary>Wszystkie programy: ostatnie uruchomienie i etap, na którym stoi.</summary>
-    public IReadOnlyList<RunProgramRow> Programs { get => _programs; private set => SetProperty(ref _programs, value); }
-
-    public RunMatrix Matrix
-    {
-        get => _matrix;
-        private set
-        {
-            if (SetProperty(ref _matrix, value))
-                OnPropertyChanged(nameof(NoRuns));
-        }
-    }
-
-    public bool NoRuns => SelectedProject is not null && Matrix.Columns.Count == 0;
-
-    /// <summary>Wariant definicji przebiegu na zakładce „Definicja przebiegu”: zamykający okres albo w środku okresu.</summary>
-    public bool ShowClosing
-    {
-        get => _closing;
-        set
-        {
-            if (SetProperty(ref _closing, value))
-                ShowWorkflow();
-        }
-    }
-
-    /// <summary>Definicja przebiegu programu: etapy i elementy kontrolne z ustawieniami.</summary>
-    public IReadOnlyList<RunWorkflowRow> Workflow { get => _workflow; private set => SetProperty(ref _workflow, value); }
-
-    /// <summary>Opis definicji: nazwa, zakres, źródło (słownik albo wbudowana).</summary>
-    public string WorkflowNote { get => _workflowNote; private set => SetProperty(ref _workflowNote, value); }
-
-    /// <summary>Reguły uzgodnień dla typu programu.</summary>
-    public IReadOnlyList<RunReconciliationView> Reconciliations { get => _reconciliations; private set => SetProperty(ref _reconciliations, value); }
-
-    /// <summary>Miary dostępne w formułach reguł uzgodnień.</summary>
-    public IReadOnlyList<RunMeasure> Measures => RunMeasures.All;
-
-    public IReadOnlyList<RunIssueView> CellIssues { get => _cellIssues; private set => SetProperty(ref _cellIssues, value); }
-
-    public string CellTitle { get => _cellTitle; private set => SetProperty(ref _cellTitle, value); }
-
-    public string? Error
-    {
-        get => _error;
-        private set
-        {
-            if (SetProperty(ref _error, value))
-                OnPropertyChanged(nameof(HasError));
-        }
-    }
-
-    public bool HasError => Error is not null;
-
-    private async Task LoadProjects()
-    {
-        await Try(async () =>
-        {
-            var selected = SelectedProject?.Code;
-            var loaded = await Busy.Run<Overview>("Wczytywanie programów i przebiegów…", () =>
-            {
-                var projects = _store.Projects();
-                var latest = _store.Latest();
-                return new Overview(projects, latest, latest.Values.ToDictionary(p => p.PinId, p => _store.Steps(p.PinId)), LoadRules());
-            });
-            Projects = loaded.Projects;
-            Programs = RunOverview.Programs(loaded.Projects, loaded.Latest, loaded.Steps);
-            _rules = loaded.Rules;
-            // Odśwież – ten sam program wczytany ponownie (rekord nowej listy jest równy poprzedniemu, setter by go pominął).
-            _selectedProject = Projects.FirstOrDefault(p => p.Code == selected) ?? Projects.FirstOrDefault();
-            OnPropertyChanged(nameof(SelectedProject));
-            await LoadProject(_selectedProject);
-        });
-    }
-
-    /// <summary>Słowniki przebiegu: definicje (etapy, elementy), „Kontrole przebiegu”, reguły uzgodnień.</summary>
-    private Rules LoadRules() => new(_store.DefinitionRows(), _store.CheckSettings(), _store.Reconciliations());
-
-    /// <summary>Po zapisie słowników przebiegu: definicja przebiegu programu i reguły uzgodnień od nowa.</summary>
-    private async Task ReloadRules()
-    {
-        await Try(async () =>
-        {
-            _rules = await Busy.Run("Wczytywanie definicji przebiegów…", LoadRules);
-            ShowWorkflow();
-        });
-    }
-
-    private async Task LoadProject(RunProjectRow? project)
-    {
-        CellIssues = [];
-        CellTitle = "";
-        Panel = project is null ? null : _panels(project.Code);
-        ShowWorkflow();
-        if (project is null)
-        {
-            Matrix = new([], []);
-            return;
-        }
-        await Try(async () =>
-        {
-            var loaded = await Busy.Run<Loaded>($"Wczytywanie przebiegów programu {project.Code}…", () =>
-            {
-                var pins = _store.Pins(project.Code, PinCount);
-                return new Loaded(pins, pins.ToDictionary(p => p.PinId, p => _store.Issues(p.PinId)));
-            });
-            if (!ReferenceEquals(project, _selectedProject))
+            if (ReferenceEquals(value, _selectedTemplate))
                 return;
-            _issues = loaded.Issues;
-            _pinLabels = loaded.Pins.ToDictionary(p => p.PinId, p => $"{p.Code} #{p.PinNo}");
-            Matrix = RunOverview.Matrix(loaded.Pins, loaded.Issues);
-            var worst = Matrix.Rows.SelectMany(r => r.Cells).Where(c => c.PinId == Matrix.Columns.LastOrDefault()?.PinId && c.Level is not null)
-                .OrderByDescending(c => c.Level).FirstOrDefault();
-            ShowCell(worst);
-        });
-    }
-
-    /// <summary>Definicja przebiegu wybranego programu w wybranym wariancie (jak w RunService: program, typ, wariant; brak – wbudowana).</summary>
-    private void ShowWorkflow()
-    {
-        if (_selectedProject is not { } project)
-        {
-            Workflow = [];
-            Reconciliations = [];
-            WorkflowNote = "";
-            return;
+            if (IsDirty)
+            {
+                Status = "Masz niezapisane zmiany szablonu – zapisz albo odrzuć je przed wyborem innego.";
+                OnPropertyChanged();
+                return;
+            }
+            _selectedTemplate = value;
+            OnPropertyChanged();
+            Edit(value);
         }
-        var (headers, steps, elements) = _rules.Definitions;
-        var definition = RunDefinitions.For(headers, steps, elements, project.Code, project.ProjectType, _closing);
-        Workflow = RunOverview.Workflow(definition, RunChecks.Settings(_rules.Checks, project.ProjectType, _closing), _rules.Reconciliations,
-            project.ProjectType, _closing);
-        Reconciliations = RunOverview.Reconciliations(_rules.Reconciliations, project.ProjectType);
-        var scope = definition.BuiltIn ? "brak aktywnej definicji w słownikach dla programu i typu"
-            : $"typ {definition.ProjectType}{(definition.Project is { } p ? $", program {p}" : "")}, przebieg {definition.RunKind}";
-        WorkflowNote = $"Program {project.Code} (typ {project.ProjectType}), przebieg {(_closing ? "zamykający okres" : "w środku okresu")}: "
-            + $"definicja „{definition.Code}” – {scope}; etapy: {definition.Steps.Count}. {definition.Description}";
     }
 
-    /// <summary>Przegląd programów: programy, ostatnie uruchomienia, ich etapy, słowniki przebiegu.</summary>
-    private sealed record Overview(IReadOnlyList<RunProjectRow> Projects, IReadOnlyDictionary<string, RunPinRow> Latest,
-        Dictionary<long, IReadOnlyList<RunStepRow>> Steps, Rules Rules);
+    public bool NoTemplates => _templates.Count == 0;
 
-    /// <summary>Słowniki przebiegu: definicje przebiegów, „Kontrole przebiegu”, „Reguły uzgodnień”.</summary>
-    private sealed record Rules(
-        (IReadOnlyList<RunDefinitionHeaderRow> Headers, IReadOnlyList<RunStepRowData> Steps, IReadOnlyList<RunStepElementRow> Elements) Definitions,
-        IReadOnlyList<RunCheckRow> Checks, IReadOnlyList<RunReconciliationRow> Reconciliations);
+    /// <summary>Brakuje któregoś z szablonów startowych (Wewnętrzny, CAS).</summary>
+    public bool MissingStarters => RunDefinitions.Starters.Any(s => _templates.All(t => !string.Equals(t.Definition.Code, s.Code, StringComparison.OrdinalIgnoreCase)));
 
-    /// <summary>Dane programu z bazy: uruchomienia i ich wyniki.</summary>
-    private sealed record Loaded(IReadOnlyList<RunPinRow> Pins, Dictionary<long, IReadOnlyList<RunIssueRow>> Issues);
+    public bool HasEditor => _isNew || _selectedTemplate is not null;
 
-    private void ShowCell(RunMatrixCell? cell)
+    public IReadOnlyList<string> ProjectTypes => RunCheckRules.ProjectTypes;
+
+    /// <summary>Nazwa szablonu – zmiana tylko dla nowego (programy wskazują szablon po nazwie).</summary>
+    public string Code { get => _code; set { if (SetProperty(ref _code, value ?? "")) Touch(); } }
+
+    public bool IsNew { get => _isNew; private set { if (SetProperty(ref _isNew, value)) { OnPropertyChanged(nameof(HasEditor)); OnPropertyChanged(nameof(Programs)); } } }
+
+    /// <summary>Typ programu, dla którego szablon jest domyślny (program bez wybranego przebiegu).</summary>
+    public string ProjectType { get => _projectType; set { if (SetProperty(ref _projectType, value ?? RunCheckRules.AllTypes)) Touch(); } }
+
+    public bool IsActive { get => _isActive; set { if (SetProperty(ref _isActive, value)) Touch(); } }
+
+    public string Description { get => _description; set { if (SetProperty(ref _description, value ?? "")) Touch(); } }
+
+    /// <summary>Programy, które wybrały szablon (Konfiguracja → Parametry programu → „Przebieg”).</summary>
+    public string Programs => _isNew || _selectedTemplate is null ? ""
+        : _selectedTemplate.Programs.Count == 0 ? "Żaden program nie wybrał tego szablonu (programy bez wyboru – szablon domyślny dla typu)."
+        : $"Wybrany w programach: {string.Join(", ", _selectedTemplate.Programs)}";
+
+    public ObservableCollection<RunStepTileViewModel> Steps { get; } = [];
+
+    public RunStepTileViewModel? SelectedStep
     {
-        if (cell is null)
+        get => _selectedStep;
+        set
         {
-            CellIssues = [];
-            CellTitle = "";
-            return;
+            if (SetProperty(ref _selectedStep, value))
+                OnPropertyChanged(nameof(HasSelectedStep));
         }
-        CellIssues = (_issues.GetValueOrDefault(cell.PinId) ?? []).Where(i => i.CheckName == cell.CheckName)
-            .OrderBy(i => i.Level == CheckLevel.Error ? 0 : i.Level == CheckLevel.Warning ? 1 : 2).ThenBy(i => i.Id)
-            .Select(i => new RunIssueView(i, SelectedProject is { } project ? RunOverview.ChangesFor(i, project.Code) : null)).ToList();
-        CellTitle = $"{cell.CheckName} – {_pinLabels.GetValueOrDefault(cell.PinId)}: {cell.Text}";
     }
 
-    private async Task Try(Func<Task> action)
+    public bool HasSelectedStep => _selectedStep is not null;
+
+    public bool IsDirty
+    {
+        get => _isDirty;
+        private set
+        {
+            if (SetProperty(ref _isDirty, value))
+                CommandManager.InvalidateRequerySuggested();
+        }
+    }
+
+    public string Status { get => _status; private set => SetProperty(ref _status, value); }
+
+    public IReadOnlyList<Issue> Issues { get => _issues; private set => SetProperty(ref _issues, value); }
+
+    private void Touch()
+    {
+        if (!_loading)
+            IsDirty = true;
+    }
+
+    /// <summary>Szablony, ustawienia domyślne kontroli, nazwy reguł uzgodnień; wybór – code albo pierwszy.</summary>
+    private async Task Load(string? code)
     {
         try
         {
-            Error = null;
-            await action();
+            var loaded = await Busy.Run<Loaded>("Wczytywanie szablonów przebiegów…",
+                () => new Loaded(_service.Load(), _service.CheckDefaults(), _store.Reconciliations().Select(r => r.Name).Distinct(StringComparer.OrdinalIgnoreCase).ToList()));
+            _defaults = loaded.Defaults;
+            _reconciliations = loaded.Reconciliations;
+            Templates = loaded.Templates;
+            OnPropertyChanged(nameof(NoTemplates));
+            OnPropertyChanged(nameof(MissingStarters));
+            IsDirty = false;
+            IsNew = false;
+            _selectedTemplate = Templates.FirstOrDefault(t => string.Equals(t.Definition.Code, code, StringComparison.OrdinalIgnoreCase)) ?? Templates.FirstOrDefault();
+            OnPropertyChanged(nameof(SelectedTemplate));
+            Edit(_selectedTemplate);
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
-            Logger.Error(ex, "Przebiegi");
-            Error = $"Nie udało się wczytać przebiegów: {ex.Message}";
+            Logger.Error(ex, "Szablony przebiegów");
+            Status = $"Nie udało się wczytać szablonów: {ex.Message}";
+        }
+    }
+
+    private sealed record Loaded(IReadOnlyList<RunTemplate> Templates, IReadOnlyDictionary<string, RunCheckSetting> Defaults, IReadOnlyList<string> Reconciliations);
+
+    /// <summary>Szablon w edytorze: pola i kafelki etapów; null – pusty edytor.</summary>
+    private void Edit(RunTemplate? template)
+    {
+        _loading = true;
+        Code = template?.Definition.Code ?? "";
+        ProjectType = template?.Definition.ProjectType ?? RunCheckRules.AllTypes;
+        IsActive = template?.IsActive ?? true;
+        Description = template?.Definition.Description ?? "";
+        Fill(template?.Definition.Steps ?? []);
+        _loading = false;
+        Issues = [];
+        OnPropertyChanged(nameof(HasEditor));
+        OnPropertyChanged(nameof(Programs));
+    }
+
+    private void Fill(IEnumerable<RunStepDefinition> steps)
+    {
+        Steps.Clear();
+        foreach (var step in steps.OrderBy(s => s.No))
+            Steps.Add(Tile(step));
+        Renumber();
+        SelectedStep = Steps.FirstOrDefault(s => s.IsChecks) ?? Steps.FirstOrDefault();
+    }
+
+    private RunStepTileViewModel Tile(RunStepDefinition step)
+    {
+        var tile = new RunStepTileViewModel(step, _defaults, _reconciliations);
+        tile.Changed += Touch;
+        return tile;
+    }
+
+    /// <summary>Nowy szablon: kopia wybranego (nazwa „… – kopia”) albo etapy stałe, walidacja i zatwierdzenie.</summary>
+    private void StartNew(RunTemplate? source)
+    {
+        _selectedTemplate = null;
+        OnPropertyChanged(nameof(SelectedTemplate));
+        IsNew = true;
+        _loading = true;
+        var names = _templates.Select(t => t.Definition.Code).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var basis = source is null ? "Nowy przebieg" : $"{source.Definition.Code} – kopia";
+        Code = Enumerable.Range(1, 99).Select(i => i == 1 ? basis : $"{basis} {i}").First(n => !names.Contains(n));
+        ProjectType = source?.Definition.ProjectType ?? RunCheckRules.AllTypes;
+        IsActive = false;
+        Description = source?.Definition.Description ?? "";
+        Fill(source?.Definition.Steps ??
+        [
+            .. RunDefinitions.FixedSteps,
+            new(3, "Walidacja ACTUALS", RunActions.Checks, RunGates.Confirm, false, []),
+            new(4, "Zatwierdzenie analityka", RunActions.Approval, RunGates.Confirm, true, [], "Analityk zatwierdza wynik przebiegu (komentarz w dzienniku)."),
+        ]);
+        _loading = false;
+        IsDirty = true;
+        Issues = [];
+        Status = "Nowy szablon (nieaktywny) – ustaw etapy i kontrole, zaznacz Aktywny i zapisz.";
+    }
+
+    private string NextName(string basis)
+    {
+        var names = Steps.Select(s => s.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        return Enumerable.Range(1, 99).Select(i => i == 1 ? basis : $"{basis} {i}").First(n => !names.Contains(n));
+    }
+
+    private void AddStep(RunStepDefinition step)
+    {
+        var tile = Tile(step);
+        Steps.Add(tile);
+        Renumber();
+        SelectedStep = tile;
+        IsDirty = true;
+    }
+
+    private bool CanMove(RunStepTileViewModel? tile, int delta)
+    {
+        if (tile is not { IsFixed: false })
+            return false;
+        var target = Steps.IndexOf(tile) + delta;
+        return target >= 0 && target < Steps.Count && !Steps[target].IsFixed;
+    }
+
+    private void Move(RunStepTileViewModel? tile, int delta)
+    {
+        if (!CanMove(tile, delta))
+            return;
+        var index = Steps.IndexOf(tile!);
+        Steps.Move(index, index + delta);
+        Renumber();
+        IsDirty = true;
+    }
+
+    private void Remove(RunStepTileViewModel? tile)
+    {
+        if (tile is not { IsFixed: false })
+            return;
+        Steps.Remove(tile);
+        Renumber();
+        if (ReferenceEquals(SelectedStep, tile))
+            SelectedStep = Steps.LastOrDefault();
+        IsDirty = true;
+    }
+
+    private void Renumber()
+    {
+        for (var i = 0; i < Steps.Count; i++)
+            Steps[i].No = i + 1;
+    }
+
+    private async Task DoSave()
+    {
+        var thresholds = Steps.SelectMany(s => s.InvalidThresholds).ToList();
+        if (thresholds.Count > 0)
+        {
+            Issues = thresholds.Select(t => Issue.Error($"{t} – liczba nieujemna albo puste")).ToList();
+            Status = "Popraw progi kontroli.";
+            return;
+        }
+        if (_isNew && _templates.Any(t => string.Equals(t.Definition.Code, Code.Trim(), StringComparison.OrdinalIgnoreCase)))
+        {
+            Status = $"Szablon „{Code.Trim()}” już jest – zmień nazwę.";
+            return;
+        }
+        var definition = new RunDefinition(Code.Trim(), ProjectType, [.. Steps.Select(s => s.ToStep())], Description.Trim().Length == 0 ? null : Description.Trim());
+        var active = IsActive;
+        try
+        {
+            var outcome = await Busy.Run($"Zapisywanie szablonu „{definition.Code}”…", () => _service.Save(definition, active));
+            Issues = outcome.Issues;
+            if (outcome.Status is SaveStatus.Saved or SaveStatus.NoChanges)
+            {
+                IsDirty = false;
+                await Load(definition.Code);
+                Issues = outcome.Issues;
+            }
+            Status = outcome.Message;
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            Logger.Error(ex, "Zapis szablonu {Template}", definition.Code);
+            Status = $"Zapis nieudany: {ex.Message}";
+        }
+    }
+
+    private async Task DoDelete()
+    {
+        var code = _selectedTemplate!.Definition.Code;
+        try
+        {
+            var outcome = await Busy.Run($"Usuwanie szablonu „{code}”…", () => _service.Delete(code));
+            if (outcome.Status is SaveStatus.Saved or SaveStatus.NoChanges)
+                await Load(null);
+            Issues = outcome.Issues;
+            Status = outcome.Message;
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            Logger.Error(ex, "Usunięcie szablonu {Template}", code);
+            Status = $"Usunięcie nieudane: {ex.Message}";
+        }
+    }
+
+    private async Task DoCreateStarters()
+    {
+        try
+        {
+            var message = await Busy.Run("Tworzenie szablonów startowych…", _service.CreateStarters);
+            await Load(_selectedTemplate?.Definition.Code);
+            Status = message;
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            Logger.Error(ex, "Szablony startowe");
+            Status = $"Nie udało się utworzyć szablonów: {ex.Message}";
         }
     }
 }

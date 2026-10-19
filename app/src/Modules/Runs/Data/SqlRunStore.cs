@@ -264,7 +264,7 @@ public sealed class SqlRunStore(SqlDatabase db) : IRunStore
         const string Current = "WHERE Project IS NULL AND SupersededAt IS NULL";
         return (
             connection.Query<RunDefinitionHeaderRow>(
-                $"SELECT Code, ProjectType, ProgramCode AS Project, RunKind, IsActive, Description FROM {db.Table("dict.RunDefinition")} {Current}").ToList(),
+                $"SELECT Code, ProjectType, IsActive, Description FROM {db.Table("dict.RunDefinition")} {Current}").ToList(),
             connection.Query<RunStepRowData>(
                 $"SELECT Definition, StepNo AS No, Name, Action, WarningGate, Approval, Description FROM {db.Table("dict.RunStep")} {Current}").ToList(),
             connection.Query<RunStepElementRow>(
@@ -339,6 +339,23 @@ public sealed class SqlRunStore(SqlDatabase db) : IRunStore
     {
         using var connection = db.Open();
         connection.Execute($"UPDATE {_pins} SET Rows = @rows, GrossCost = @grossCost, Balance = @balance WHERE PinId = @pinId", new { pinId, rows, grossCost, balance });
+    }
+
+    public IReadOnlyDictionary<string, string> DefinitionAssignments()
+    {
+        using var connection = db.Open();
+        return connection.Query<(string Project, string Value)>(
+                $"SELECT Project, Value FROM {db.Table("dict.ProjectSetting")} WHERE Project IS NOT NULL AND Name = @name AND SupersededAt IS NULL AND Value IS NOT NULL",
+                new { name = ProjectSettings.RunDefinition })
+            .GroupBy(r => r.Project, StringComparer.OrdinalIgnoreCase).ToDictionary(g => g.Key, g => g.First().Value.Trim(), StringComparer.OrdinalIgnoreCase);
+    }
+
+    public string? AssignedDefinition(string project)
+    {
+        using var connection = db.Open();
+        return connection.QueryFirstOrDefault<string?>(
+            $"SELECT Value FROM {db.Table("dict.ProjectSetting")} WHERE Project = @project AND Name = @name AND SupersededAt IS NULL",
+            new { project, name = ProjectSettings.RunDefinition })?.Trim() is { Length: > 0 } code ? code : null;
     }
 
     public string ActualsAmount(string project)

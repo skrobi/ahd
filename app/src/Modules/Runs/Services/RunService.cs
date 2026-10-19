@@ -65,8 +65,8 @@ public sealed class RunService(IRunStore store, AppServices services, Func<ISour
     }
 
     /// <summary>
-    /// Nowe uruchomienie przebiegu programu: tydzień z kalendarza okresów, definicja przebiegu programu (RunDefinitions.For – słowniki
-    /// definicji, bez nich definicja wbudowana) zapisana w uruchomieniu, etapy – potem wykonanie etapów do najbliższej bramki.
+    /// Nowe uruchomienie przebiegu programu: tydzień z kalendarza okresów, przebieg wybrany w programie albo domyślny dla typu
+    /// (RunDefinitions.For; bez szablonów – definicja wbudowana) zapisany w uruchomieniu, etapy – potem wykonanie etapów do najbliższej bramki.
     /// </summary>
     public RunOutcome Execute(string project, IProgress<string>? progress = null, CancellationToken cancellation = default) =>
         Locked(project, () =>
@@ -75,10 +75,14 @@ public sealed class RunService(IRunStore store, AppServices services, Func<ISour
             if (week is null)
                 return new RunOutcome(project, null, RunStatuses.Failed, 1, 0, $"Dzień {services.Clock.Now:yyyy-MM-dd} nie ma tygodnia w kalendarzu okresów (Słowniki → Kalendarz okresów)");
             var (headers, steps, elements) = store.DefinitionRows();
-            var definition = RunDefinitions.For(headers, steps, elements, project, store.ProjectType(project) ?? "", week.IsClosing);
+            var assigned = store.AssignedDefinition(project);
+            var definition = RunDefinitions.For(headers, steps, elements, assigned, store.ProjectType(project) ?? "");
             var pin = store.StartPin(project, week, services.Clock.Now, services.User.Account, Environment.MachineName);
             store.StartSteps(pin.PinId, RunWorkflowEngine.Serialize(definition), definition.Steps);
-            services.Journal.Add(Area, $"Przebieg {pin.Code} #{pin.PinNo} rozpoczęty – definicja „{definition.Code}” ({definition.Steps.Count} etapów)", pin.Code);
+            var note = assigned is not null && !string.Equals(assigned, definition.Code, StringComparison.OrdinalIgnoreCase)
+                ? $"; wybrany przebieg „{assigned}” nieaktywny albo bez etapów – użyto „{definition.Code}”" : "";
+            services.Journal.Add(Area, $"Przebieg {pin.Code} #{pin.PinNo} ({(week.IsClosing ? "zamykający okres" : "w środku okresu")}) rozpoczęty – "
+                + $"przebieg „{definition.Code}” ({definition.Steps.Count} etapów){note}", pin.Code);
             return Advance(pin, progress, cancellation);
         });
 

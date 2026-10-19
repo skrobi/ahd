@@ -43,47 +43,34 @@ public sealed class RunOverviewTests
     }
 
     [Fact]
-    public void Workflow_lists_steps_with_element_settings_reconciliations_and_steps_without_elements()
+    public void Compare_marks_new_resolved_changed_and_same_results_by_check_and_element()
     {
-        var definition = new RunDefinition("CAS", "CAS", null, RunCheckRules.AnyRun,
+        RunIssueRow Row(long id, long pin, string check, CheckLevel level, string? element, decimal? amount) => new(id, pin, check, level, element, $"opis {id}", amount);
+        RunIssueRow[] before =
         [
-            new(1, "Przypięcie", RunActions.Pin, RunGates.Info, false, [], "opis"),
-            new(2, "Kontrole", RunActions.Checks, RunGates.Confirm, false,
-            [
-                new(RunCheckRules.NetZeroBalance.Name, Level: CheckLevel.Warning), new(RunCheckRules.NoWbsElement.Name),
-                new(RunDefinitions.AllReconciliations), new("Uzgodnienie: Brak"),
-            ]),
-            new(3, "Zatwierdzenie", RunActions.Approval, RunGates.Confirm, true, []),
-        ]);
-        RunReconciliationRow[] library = [new(RunCheckRules.AllTypes, "Budżet", RunCheckRules.AnyRun, true, "[Koszt brutto]", "<=", "[BAC]", null, "WARNING")];
-        var defaults = RunCheckRules.All.ToDictionary(r => r.Code, RunCheckRules.Default);
+            Row(1, 1, RunChecks.NetZero, CheckLevel.Error, "P-1", 100m), Row(2, 1, RunChecks.Quality, CheckLevel.Warning, "P-2", null),
+            Row(3, 1, RunChecks.Volume, CheckLevel.Warning, null, 50m), Row(4, 1, RunChecks.CostKinds, CheckLevel.Warning, "Hours", 10m),
+        ];
+        RunIssueRow[] after =
+        [
+            Row(11, 2, RunChecks.NetZero, CheckLevel.Error, "P-1", 100.004m), Row(12, 2, RunChecks.Volume, CheckLevel.Warning, null, 70m),
+            Row(13, 2, RunChecks.CostKinds, CheckLevel.Warning, "Hours", 10m), Row(14, 2, RunChecks.CostKinds, CheckLevel.Warning, "Hours", 5m),
+            Row(15, 2, RunChecks.NewCostElements, CheckLevel.Error, "0051100000", null),
+        ];
 
-        var rows = RunOverview.Workflow(definition, defaults, library, "CAS", isClosing: false);
+        var rows = RunOverview.Compare(before, after, "PAF");
 
-        Assert.Equal((1, "–", "opis"), (rows[0].StepNo, rows[0].Element, rows[0].Description));
-        var net = rows.Single(r => r.Element == RunCheckRules.NetZeroBalance.Name);
-        Assert.Equal(("WARNING, próg 1,00", "definicja", "ERROR – stop; WARNING – potwierdzenie"), (net.Setting, net.Source, net.Gate));
-        Assert.Equal(("WARNING", "domyślne"), (rows.Single(r => r.Element == RunCheckRules.NoWbsElement.Name).Setting, rows.Single(r => r.Element == RunCheckRules.NoWbsElement.Name).Source));
-        Assert.Equal("[Koszt brutto] <= [BAC] – WARNING", rows.Single(r => r.Element == "Uzgodnienie: Budżet").Setting);
-        Assert.Equal("brak reguły w słowniku", rows.Single(r => r.Element == "Uzgodnienie: Brak").Setting);
-        Assert.Equal("zatwierdzenie ręczne", rows[^1].Gate);
-    }
-
-    [Fact]
-    public void Program_overview_shows_latest_run_and_step_where_it_stops()
-    {
-        RunProjectRow[] projects = [new("PAF", "PAF", "CAS"), new("M28", "M28", "SAC")];
-        var pin = Pin(5, "R-PAF-2026-10-T41", 1, 9) with { Status = RunStatuses.NeedsAction, Errors = 0, Warnings = 2 };
-        var steps = new Dictionary<long, IReadOnlyList<RunStepRow>>
-        {
-            [5] = [new(5, 1, "Import", RunActions.Import, RunStepStatuses.Done, null, null, null, 0, 0, null),
-                   new(5, 2, "Kontrole", RunActions.Checks, RunStepStatuses.NeedsAction, null, null, null, 0, 2, null)],
-        };
-
-        var rows = RunOverview.Programs(projects, new Dictionary<string, RunPinRow> { ["PAF"] = pin }, steps);
-
-        Assert.Equal(("R-PAF-2026-10-T41 #1", RunStatuses.NeedsAction, "2. Kontrole – wymaga akcji", 2), (rows[0].Run, rows[0].Status, rows[0].Stop, rows[0].Warnings));
-        Assert.Null(rows[1].Run);
+        string Status(string check, string? element) => rows.Single(r => r.CheckName == check && r.Element == element).Status;
+        Assert.Equal(RunCompareRow.Same, Status(RunChecks.NetZero, "P-1"));
+        Assert.Equal(RunCompareRow.Resolved, Status(RunChecks.Quality, "P-2"));
+        Assert.Equal(RunCompareRow.Changed, Status(RunChecks.Volume, null));
+        Assert.Equal(RunCompareRow.Changed, Status(RunChecks.CostKinds, "Hours"));   // dwa wyniki zamiast jednego
+        Assert.Equal(RunCompareRow.New, Status(RunChecks.NewCostElements, "0051100000"));
+        Assert.Equal((RunChecks.NewCostElements, CheckLevel.Error), (rows[0].CheckName, rows[0].Level!.Value));   // ERROR, nowy przed bez zmian
+        var volume = rows.Single(r => r.CheckName == RunChecks.Volume);
+        Assert.Equal((50m, 70m, 20m), (volume.AmountBefore!.Value, volume.AmountAfter!.Value, volume.Difference!.Value));
+        Assert.Equal("opis 13 (+1)", rows.Single(r => r.CheckName == RunChecks.CostKinds).Message);
+        Assert.Equal(("Hours", 2L), (rows.Single(r => r.CheckName == RunChecks.CostKinds).Issue.Changes!.Kind, rows.Single(r => r.CheckName == RunChecks.CostKinds).Issue.Changes!.PinId!.Value));
     }
 
     [Fact]

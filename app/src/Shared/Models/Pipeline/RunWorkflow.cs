@@ -1,3 +1,5 @@
+using PzlEv.Shared.Models;
+
 namespace PzlEv.Shared.Models.Pipeline;
 
 /// <summary>Akcja etapu przebiegu (słownik „Etapy przebiegów”, kolumna Akcja).</summary>
@@ -51,22 +53,22 @@ public sealed record RunStepDefinition(int No, string Name, string Action, strin
 }
 
 /// <summary>
-/// Definicja przebiegu (workflow): kod, zakres (typ programu, program – null: wszystkie programy typu, wariant przebiegu), etapy
-/// w kolejności. BuiltIn – definicja wbudowana (bez definicji w słownikach).
+/// Definicja przebiegu (workflow) – szablon etapów (ekran Przebiegi): nazwa, typ programu, dla którego jest domyślna (program bez
+/// wybranego przebiegu; „Wszystkie” – każdy typ bez własnej), etapy w kolejności. BuiltIn – definicja wbudowana (bez szablonów).
 /// </summary>
-public sealed record RunDefinition(string Code, string ProjectType, string? Project, string RunKind, IReadOnlyList<RunStepDefinition> Steps,
-    string? Description = null, bool BuiltIn = false);
+public sealed record RunDefinition(string Code, string ProjectType, IReadOnlyList<RunStepDefinition> Steps, string? Description = null, bool BuiltIn = false);
 
-/// <summary>Wiersze słowników definicji przebiegów (moduł Przebiegi): definicje, etapy, elementy kontrolne etapów.</summary>
-public sealed record RunDefinitionHeaderRow(string Code, string ProjectType, string? Project, string RunKind, bool IsActive, string? Description);
+/// <summary>Wiersze słowników definicji przebiegów (moduł Przebiegi): szablony, etapy, elementy kontrolne etapów.</summary>
+public sealed record RunDefinitionHeaderRow(string Code, string ProjectType, bool IsActive, string? Description);
 
 public sealed record RunStepRowData(string Definition, int No, string Name, string Action, string WarningGate, bool Approval, string? Description);
 
 public sealed record RunStepElementRow(string Definition, string Step, string Element, bool IsActive, string? Level, decimal? Threshold);
 
 /// <summary>
-/// Definicje przebiegów (docs/pipeline-fazy.md, rozdz. 4.1): wybór definicji dla programu i wariantu przebiegu, definicja wbudowana
-/// (bez definicji w słownikach – zakres kontroli jak dotąd, rozłożony na etapy).
+/// Definicje przebiegów (docs/pipeline-fazy.md, rozdz. 4.1): przebieg programu – szablon wybrany w programie (Parametry programu →
+/// „Przebieg”), bez wyboru – szablon domyślny dla typu programu; bez szablonów – definicja wbudowana. Etapy Import źródeł i Przypięcie
+/// stanu są stałe (konfiguracja programu) – zawsze pierwsze.
 /// </summary>
 public static class RunDefinitions
 {
@@ -77,6 +79,10 @@ public static class RunDefinitions
 
     public const string BuiltInCode = "Standardowy (wbudowany)";
 
+    /// <summary>Szablony startowe: programy wewnętrzne (i SAC – „Wszystkie”) oraz CAS.</summary>
+    public const string InternalCode = "Wewnętrzny";
+    public const string CasCode = "CAS";
+
     /// <summary>Elementy do wyboru w kolumnie Element: reguły katalogu, wszystkie reguły uzgodnień, reguły uzgodnień po nazwie.</summary>
     public static IReadOnlyList<string> Elements(IEnumerable<string> reconciliations) =>
         [.. RunCheckRules.All.Select(r => r.Name), AllReconciliations, .. reconciliations.Distinct(StringComparer.OrdinalIgnoreCase).Order().Select(n => ReconciliationPrefix + n)];
@@ -85,14 +91,22 @@ public static class RunDefinitions
 
     public static string ReconciliationName(string element) => element[ReconciliationPrefix.Length..].Trim();
 
-    /// <summary>Definicja wbudowana: import, przypięcie, trzy etapy kontroli (bramka – potwierdzenie WARNING), zatwierdzenie analityka.</summary>
-    public static RunDefinition BuiltIn { get; } = new(BuiltInCode, RunCheckRules.AllTypes, null, RunCheckRules.AnyRun,
+    /// <summary>Etap stały (klocek predefiniowany): import źródeł i przypięcie stanu – korzystają z konfiguracji programu, zawsze na początku.</summary>
+    public static bool IsFixed(string action) => action is RunActions.Import or RunActions.Pin;
+
+    /// <summary>Etapy stałe na początku każdej definicji.</summary>
+    public static IReadOnlyList<RunStepDefinition> FixedSteps { get; } =
     [
         new(1, "Import źródeł", RunActions.Import, RunGates.Info, false, [], "Import plików ze słownika programu „Źródła danych”."),
         new(2, "Przypięcie stanu", RunActions.Pin, RunGates.Info, false, [], "Dane ACTUALS programu w chwili przebiegu; porównanie z poprzednim przebiegiem."),
+    ];
+
+    /// <summary>Etapy definicji wbudowanej i szablonów startowych: stałe, trzy etapy kontroli (bramka – potwierdzenie WARNING), zatwierdzenie analityka.</summary>
+    public static IReadOnlyList<RunStepDefinition> StandardSteps { get; } =
+    [
+        .. FixedSteps,
         new(3, "Walidacja ACTUALS", RunActions.Checks, RunGates.Confirm, false,
-            [.. new[] { RunCheckRules.Volume, RunCheckRules.Deviations, RunCheckRules.NewCostElements, RunCheckRules.NetZero, RunCheckRules.ClosedPeriods, RunCheckRules.Quality }
-                .SelectMany(check => RunCheckRules.All.Where(r => r.Check == check)).Select(r => new RunElementSetting(r.Name))],
+            [.. RunCheckRules.All.Where(r => RunCheckRules.AreaOf(r) == RunCheckRules.ActualsArea).Select(r => new RunElementSetting(r.Name))],
             "Kontrole danych ACTUALS względem poprzedniego przebiegu i okresów zamkniętych."),
         new(4, "Spójność ze słownikami", RunActions.Checks, RunGates.Confirm, false,
             [.. RunCheckRules.All.Where(r => r.Check == RunCheckRules.Dictionaries).Select(r => new RunElementSetting(r.Name))],
@@ -101,36 +115,86 @@ public static class RunDefinitions
             [.. RunCheckRules.All.Where(r => r.Check == RunCheckRules.CostKinds).Select(r => new RunElementSetting(r.Name)), new RunElementSetting(AllReconciliations)],
             "Rodzaje kosztu (Hours / Materials / Other) i reguły uzgodnień."),
         new(6, "Zatwierdzenie analityka", RunActions.Approval, RunGates.Confirm, true, [], "Analityk potwierdza wynik przebiegu (komentarz w dzienniku)."),
-    ], "Definicja wbudowana – obowiązuje, dopóki dla programu nie ma aktywnej definicji w słowniku „Definicje przebiegów”.", BuiltIn: true);
+    ];
+
+    /// <summary>Definicja wbudowana – obowiązuje, dopóki nie ma aktywnego szablonu (ekran Przebiegi).</summary>
+    public static RunDefinition BuiltIn { get; } = new(BuiltInCode, RunCheckRules.AllTypes, StandardSteps,
+        "Definicja wbudowana – obowiązuje, dopóki na ekranie Przebiegi nie ma aktywnego szablonu przebiegu.", BuiltIn: true);
+
+    /// <summary>Szablony startowe (ekran Przebiegi, „Utwórz szablony startowe”): Wewnętrzny – domyślny dla wszystkich typów, CAS – dla CAS.</summary>
+    public static IReadOnlyList<RunDefinition> Starters { get; } =
+    [
+        new(InternalCode, RunCheckRules.AllTypes, StandardSteps, "Przebieg programów wewnętrznych i SAC."),
+        new(CasCode, "CAS", StandardSteps, "Przebieg programów CAS (koszty po narzutach CAS)."),
+    ];
 
     /// <summary>
-    /// Definicja przebiegu programu: aktywna definicja z etapami – program przed typem programu przed „Wszystkie”, wariant przebiegu
-    /// (zamykający / w środku okresu) przed „Każdy”; brak – definicja wbudowana.
+    /// Definicja przebiegu programu: aktywny szablon z etapami wybrany w programie (assigned); bez wyboru albo wybrany nieaktywny /
+    /// bez etapów – szablon domyślny dla typu programu (typ przed „Wszystkie”); brak – definicja wbudowana.
     /// </summary>
     public static RunDefinition For(IReadOnlyList<RunDefinitionHeaderRow> headers, IReadOnlyList<RunStepRowData> steps, IReadOnlyList<RunStepElementRow> elements,
-        string project, string projectType, bool isClosing)
+        string? assigned, string projectType)
     {
-        static bool Is(string? value, string expected) => string.Equals(value?.Trim(), expected, StringComparison.OrdinalIgnoreCase);
-        var kind = isClosing ? RunCheckRules.ClosingRun : RunCheckRules.MidPeriodRun;
-        int Score(RunDefinitionHeaderRow h) =>
-            (string.IsNullOrWhiteSpace(h.Project) ? Is(h.ProjectType, projectType) ? 20 : Is(h.ProjectType, RunCheckRules.AllTypes) ? 10 : -1000
-                : Is(h.Project, project) ? 30 : -1000)
-            + (Is(h.RunKind, kind) ? 2 : Is(h.RunKind, RunCheckRules.AnyRun) ? 1 : -1000);
-        var header = headers.Where(h => h.IsActive && steps.Any(s => Is(s.Definition, h.Code)))
-            .Select(h => (Header: h, Score: Score(h))).Where(x => x.Score > 0)
-            .OrderByDescending(x => x.Score).ThenBy(x => x.Header.Code, StringComparer.OrdinalIgnoreCase).Select(x => x.Header).FirstOrDefault();
+        var header = Available(headers, steps).FirstOrDefault(h => Is(h.Code, assigned ?? "")) ?? DefaultFor(headers, steps, projectType);
         return header is null ? BuiltIn : Build(header, steps, elements);
     }
 
+    /// <summary>Szablon domyślny dla typu programu (aktywny, z etapami): typ programu przed „Wszystkie”; null – brak (definicja wbudowana).</summary>
+    public static RunDefinitionHeaderRow? DefaultFor(IReadOnlyList<RunDefinitionHeaderRow> headers, IReadOnlyList<RunStepRowData> steps, string projectType) =>
+        DefaultFor(Available(headers, steps), projectType);
+
+    /// <summary>Szablon domyślny dla typu programu spośród szablonów do wyboru (Available).</summary>
+    public static RunDefinitionHeaderRow? DefaultFor(IReadOnlyList<RunDefinitionHeaderRow> available, string projectType) =>
+        available.Where(h => Is(h.ProjectType, projectType) || Is(h.ProjectType, RunCheckRules.AllTypes))
+            .OrderByDescending(h => Is(h.ProjectType, projectType)).ThenBy(h => h.Code, StringComparer.OrdinalIgnoreCase).FirstOrDefault();
+
+    /// <summary>Szablony do wyboru w programie: aktywne, z etapami.</summary>
+    public static IReadOnlyList<RunDefinitionHeaderRow> Available(IReadOnlyList<RunDefinitionHeaderRow> headers, IReadOnlyList<RunStepRowData> steps) =>
+        headers.Where(h => h.IsActive && steps.Any(s => Is(s.Definition, h.Code))).OrderBy(h => h.Code, StringComparer.OrdinalIgnoreCase).ToList();
+
     /// <summary>Definicja ze słowników: etapy w kolejności, elementy etapu (po nazwie etapu).</summary>
-    public static RunDefinition Build(RunDefinitionHeaderRow header, IReadOnlyList<RunStepRowData> steps, IReadOnlyList<RunStepElementRow> elements)
-    {
-        static bool Is(string? value, string expected) => string.Equals(value?.Trim(), expected, StringComparison.OrdinalIgnoreCase);
-        return new RunDefinition(header.Code, header.ProjectType, string.IsNullOrWhiteSpace(header.Project) ? null : header.Project.Trim(), header.RunKind,
+    public static RunDefinition Build(RunDefinitionHeaderRow header, IReadOnlyList<RunStepRowData> steps, IReadOnlyList<RunStepElementRow> elements) =>
+        new(header.Code, header.ProjectType,
             steps.Where(s => Is(s.Definition, header.Code)).OrderBy(s => s.No)
                 .Select(s => new RunStepDefinition(s.No, s.Name, s.Action, s.WarningGate, s.Approval,
                     elements.Where(e => Is(e.Definition, header.Code) && Is(e.Step, s.Name))
                         .Select(e => new RunElementSetting(e.Element.Trim(), e.IsActive, RunCheckRules.LevelOf(e.Level), e.Threshold)).ToList(), s.Description))
                 .ToList(), header.Description);
+
+    /// <summary>
+    /// Kontrola szablonu przed zapisem: nazwa; etapy stałe (Import źródeł, Przypięcie stanu) – po jednym, na początku; nazwy etapów
+    /// niepuste i bez powtórzeń; etap kontroli bez aktywnego elementu – ERROR; elementy tylko w etapach kontroli.
+    /// </summary>
+    public static IReadOnlyList<Issue> Validate(RunDefinition definition)
+    {
+        var issues = new List<Issue>();
+        if (string.IsNullOrWhiteSpace(definition.Code))
+            issues.Add(Issue.Error("Szablon bez nazwy"));
+        var steps = definition.Steps.OrderBy(s => s.No).ToList();
+        foreach (var (action, index) in new[] { (RunActions.Import, 0), (RunActions.Pin, 1) })
+        {
+            var count = steps.Count(s => s.Action == action);
+            if (count != 1 || steps.Count <= index || steps[index].Action != action)
+                issues.Add(Issue.Error($"Etap stały „{action}” – dokładnie jeden, jako etap {index + 1}"));
+        }
+        foreach (var step in steps)
+        {
+            var at = $"etap {step.No}";
+            if (string.IsNullOrWhiteSpace(step.Name))
+                issues.Add(Issue.Error("Etap bez nazwy", at));
+            else if (steps.Count(s => Is(s.Name, step.Name)) > 1 && steps.First(s => Is(s.Name, step.Name)) != step)
+                issues.Add(Issue.Error($"Nazwa etapu „{step.Name}” powtórzona", at));
+            if (step.Action == RunActions.Checks && !step.Elements.Any(e => e.Active))
+                issues.Add(Issue.Error($"Etap „{step.Name}” bez kontroli – dodaj kontrole albo usuń etap", at));
+            if (step.Action != RunActions.Checks && step.Elements.Count > 0)
+                issues.Add(Issue.Error($"Etap „{step.Name}” ({step.Action}) nie ma kontroli – kontrole tylko w etapach walidacji", at));
+            foreach (var element in step.Elements.GroupBy(e => e.Element.Trim(), StringComparer.OrdinalIgnoreCase).Where(g => g.Count() > 1))
+                issues.Add(Issue.Error($"Kontrola „{element.Key}” dwa razy w etapie „{step.Name}”", at));
+            foreach (var element in step.Elements.Where(e => RunCheckRules.ByName(e.Element) is null && !IsReconciliation(e.Element)))
+                issues.Add(Issue.Error($"Nieznana kontrola „{element.Element}”", at));
+        }
+        return issues;
     }
+
+    private static bool Is(string? value, string expected) => string.Equals(value?.Trim(), expected.Trim(), StringComparison.OrdinalIgnoreCase);
 }

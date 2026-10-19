@@ -61,6 +61,7 @@ public sealed class WizardViewModel : ObservableObject
         BuildPanels();
         GoTo(0);
         _ = InitAsync();
+        _ = LoadRunTemplates();
     }
 
     public BusyState Busy { get; }
@@ -140,6 +141,45 @@ public sealed class WizardViewModel : ObservableObject
                 return;
             BuildPanels();
             _ = RefreshDictionaries();
+            RunTemplate = DefaultTemplate();
+        }
+    }
+
+    /// <summary>Szablony przebiegów do wyboru (ekran Przebiegi; aktywne, z etapami); pusta lista – definicja wbudowana.</summary>
+    public IReadOnlyList<LookupOption> RunTemplates
+    {
+        get => _runTemplates;
+        private set
+        {
+            if (SetProperty(ref _runTemplates, value))
+                OnPropertyChanged(nameof(NoRunTemplates));
+        }
+    }
+
+    public bool NoRunTemplates => _runTemplates.Count == 0;
+
+    /// <summary>Przebieg programu – zapisywany w „Parametrach programu”; domyślnie szablon domyślny dla typu; zmiana później – Konfiguracja.</summary>
+    public LookupOption? RunTemplate { get => _runTemplate; set => SetProperty(ref _runTemplate, value); }
+
+    private IReadOnlyList<LookupOption> _runTemplates = [];
+    private IReadOnlyList<RunDefinitionHeaderRow> _templates = [];
+    private LookupOption? _runTemplate;
+
+    private LookupOption? DefaultTemplate() =>
+        RunDefinitions.DefaultFor(_templates, _type.Code) is { } header ? _runTemplates.FirstOrDefault(o => o.Value == header.Code) : _runTemplates.FirstOrDefault();
+
+    /// <summary>Szablony przebiegów z bazy (w tle); wybór – domyślny dla typu programu.</summary>
+    private async Task LoadRunTemplates()
+    {
+        try
+        {
+            _templates = await Task.Run(_service.RunTemplates);
+            RunTemplates = ProjectService.RunTemplateOptions(_templates);
+            RunTemplate = DefaultTemplate();
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            Logger.Warning(ex, "Szablony przebiegów do kreatora");
         }
     }
 
@@ -387,11 +427,11 @@ public sealed class WizardViewModel : ObservableObject
 
     private async Task DoCreate()
     {
-        var (code, name, type, tree, files, amount) = (Code, Name, Type.Code, Objectives.Tree.Copy(), new Dictionary<string, (string Path, string? Sheet)>(_files),
-            CurrencySet.Value);
+        var (code, name, type, tree, files, amount, run) = (Code, Name, Type.Code, Objectives.Tree.Copy(), new Dictionary<string, (string Path, string? Sheet)>(_files),
+            CurrencySet.Value, RunTemplate?.Value);
         await Try(async () =>
         {
-            _outcome = await Busy.Run($"Tworzenie programu {code}: zapis w bazie, słowniki, foldery…", () => _service.Create(code, name, type, tree, files, amount));
+            _outcome = await Busy.Run($"Tworzenie programu {code}: zapis w bazie, słowniki, foldery…", () => _service.Create(code, name, type, tree, files, amount, run));
             SetAll(CreateIssues, _outcome.Issues);
             CreatedSteps.Clear();
             foreach (var step in _outcome.Steps)

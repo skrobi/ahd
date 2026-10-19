@@ -320,7 +320,7 @@ app/
     │   ├── Dashboard/           Pulpit: import, źródła, słowniki, otwarte problemy, dziennik (z bazy)
     │   ├── Diagnostics/         test stosu, konfiguracja środowiska, migracje, sprawdzenie PZLPROD
     │   ├── Projects/            Projekty (F4): kreator, Performance Objectives, słowniki projektu, gotowość, struktura, przebiegi projektu
-    │   ├── Runs/                przebieg programu etapami wg definicji (RunService, RunWorkflowEngine – bramki; RunChecks – reguły kontroli); panel przebiegu (RunPanel, kontrakt IRunPanels); ekran „Przebiegi” – przebieg, przegląd programów, macierz kontroli, definicja przebiegu, definicje i reguły (RunOverview, RunDictionaryEditor); okno „Zmiany ACWP” (AcwpChanges)
+    │   ├── Runs/                przebieg programu etapami wg szablonu (RunService, RunWorkflowEngine – bramki; RunChecks – reguły kontroli); panel przebiegu programu – etapy, macierz kontroli, porównanie uruchomień (RunPanel, kontrakt IRunPanels, RunOverview); ekran „Przebiegi” – szablony w kafelkach, okno Kontrole (RunTemplateService, RunStepTile, RunChecks*); okno „Zmiany ACWP” (AcwpChanges)
     │   └── Reconciliation/ Progress/ Evm/ Export/   pozostałe moduły: plik wejścia + etapy, bez pozycji w menu
     └── Shared/
         ├── Utils/Ui/            MVVM, konwertery, okna wyboru pliku, kontrakt modułu, tabela słownika do edycji (WPF)

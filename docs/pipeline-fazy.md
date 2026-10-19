@@ -205,33 +205,43 @@ brak kursu CAS – ERROR „Koszty po narzutach CAS” i kontrole na kosztach be
 bieżącym okresem kalendarza, a w pierwszych 7 dniach okresu – przed poprzednim (rozliczenie poprzedniego okresu trwa);
 okresy 13–16 liczone jak 12.
 
-**Definicja przebiegu (workflow).** Co dzieje się na którym etapie, określa definicja przebiegu – szablon w słownikach globalnych
-edytowanych na ekranie Przebiegi, zakładka „Definicje i reguły” (`docs/slowniki.md`, rozdz. 2): „Definicje przebiegów” (zakres:
-typ programu albo program, wariant przebiegu – zamykający / w środku okresu / każdy; aktywna), „Etapy przebiegów” (kolejność,
-nazwa, akcja: import źródeł / przypięcie stanu / kontrole / zatwierdzenie; bramka WARNING: „Potwierdzenie” – wstrzymuje do
-potwierdzenia z komentarzem, „Informacja” – przebieg idzie dalej; zatwierdzenie ręczne) i „Elementy kontrolne etapów” (etap
-akcji Kontrole: reguła katalogu albo reguła uzgodnień – „Uzgodnienie: nazwa”, „Uzgodnienie: *” – wszystkie aktywne reguły typu
-programu i wariantu; aktywny, poziom, próg). Wybór definicji przy starcie przebiegu: aktywna definicja z etapami – program przed
-typem programu przed „Wszystkie”, wariant przebiegu przed „Każdy”; brak – **definicja wbudowana** „Standardowy (wbudowany)”:
-1 Import źródeł → 2 Przypięcie stanu → 3 Walidacja ACTUALS (liczba danych, odchylenia, nowe cost elementy, netowanie, okresy
-zamknięte, jakość danych) → 4 Spójność ze słownikami → 5 Rodzaje kosztu i uzgodnienia (`Uzgodnienie: *`) → 6 Zatwierdzenie
-analityka; etapy kontroli z bramką „Potwierdzenie”. „Kopia definicji wbudowanej” zapisuje ją w słownikach (nieaktywna) do
-dostosowania. Definicja (z etapami i elementami) zapisuje się w uruchomieniu (`META_RunPin.Definition`, JSON) – zmiana słowników
-nie zmienia trwającego przebiegu. Model – `Shared/Models/Pipeline/RunWorkflow.cs` (`RunDefinitions.For`, `BuiltIn`).
+**Definicja przebiegu (workflow).** Co dzieje się na którym etapie, określa szablon przebiegu – ekran Przebiegi (menu): lista
+szablonów (startowe: „Wewnętrzny” – domyślny dla wszystkich typów, w tym SAC; „CAS” – domyślny dla CAS; „Utwórz szablony
+startowe”), etapy szablonu w kafelkach i okno „Kontrole”. Klocki predefiniowane **Import źródeł** i **Przypięcie stanu** korzystają
+z konfiguracji programu (Źródła danych, Parametry programu) – zawsze etapy 1 i 2, bez zmian i przesuwania. Dalej etapy dokładane
+w edytorze: **etap walidacji** (kontrole wybrane z katalogu w grupach – Walidacja ACTUALS, Spójność ze słownikami, Rodzaje kosztu –
+i reguły uzgodnień: „Uzgodnienie: *” albo reguła po nazwie; poziom i próg kontroli w tym szablonie, puste – ustawienie domyślne
+z okna Kontrole; bramka WARNING: „Potwierdzenie” – wstrzymuje do potwierdzenia z komentarzem, „Informacja” – przebieg idzie dalej;
+opcjonalnie zatwierdzenie po etapie) i **zatwierdzenie** (przebieg czeka na analityka). Zapis sprawdza strukturę
+(`RunDefinitions.Validate`: etapy stałe na początku, nazwy etapów bez powtórzeń, etap walidacji z kontrolą) i zapisuje szablon
+w słownikach globalnych „Definicje przebiegów”, „Etapy przebiegów”, „Elementy kontrolne etapów” (historia; `docs/slowniki.md`,
+rozdz. 2; `Modules/Runs/Services/RunTemplateService.cs`). Szablonu wybranego w programach nie można usunąć.
 
-Przebieg prowadzi się na poziomie programu: ekran programu, zakładka „Przebieg” (i ekran Przebiegi, zakładka „Przebieg”) –
-etapy uruchomienia ze statusem, wyniki etapu, akcje „Nowy przebieg”, „Dalsze etapy”, „Potwierdź i dalej” (komentarz wymagany),
-„Wykonaj ponownie” (`docs/funkcjonalnosc.md`, F06). Kolejne akcje etapów (np. powiadomienie CAM o uzupełnieniu danych do ETC –
-P6) – nowe akcje w `RunActions` i ich wykonanie w `RunService.ExecuteStep`.
+Program wybiera przebieg w kreatorze (krok 1) albo w Konfiguracji → „Parametry programu” → `Przebieg`. Wybór definicji przy starcie
+przebiegu (`RunDefinitions.For`): wybrany szablon (aktywny, z etapami); bez wyboru (albo wybrany nieaktywny) – aktywny szablon
+domyślny dla typu programu (typ przed „Wszystkie”); bez szablonów – **definicja wbudowana** „Standardowy (wbudowany)”: 1 Import
+źródeł → 2 Przypięcie stanu → 3 Walidacja ACTUALS → 4 Spójność ze słownikami → 5 Rodzaje kosztu i uzgodnienia (`Uzgodnienie: *`) →
+6 Zatwierdzenie analityka (etapy kontroli z bramką „Potwierdzenie”; szablony startowe mają te same etapy). Przebieg zamykający okres
+i w środku okresu mają tę samą definicję – wariant to informacja dla analityka (dziennik, ekran programu). Definicja (z etapami
+i elementami) zapisuje się w uruchomieniu (`META_RunPin.Definition`, JSON) – zmiana szablonu nie zmienia trwającego przebiegu.
+Model – `Shared/Models/Pipeline/RunWorkflow.cs`.
+
+Przebieg prowadzi się na poziomie programu: ekran programu, zakładka „Przebieg” – przebieg programu (wybrany / domyślny), etapy
+uruchomienia ze statusem, wyniki etapu, akcje „Nowy przebieg”, „Dalsze etapy”, „Potwierdź i dalej” (komentarz wymagany),
+„Wykonaj ponownie”; porównania: macierz kontroli, porównanie dwóch uruchomień, okno „Zmiany ACWP” (`docs/funkcjonalnosc.md`, F06).
+Kolejne akcje etapów (np. kafelek warunkowy „jeśli przebieg zamykający – powiadomienie CAM o uzupełnieniu danych do ETC” – P6) –
+nowe akcje w `RunActions` i ich wykonanie w `RunService.ExecuteStep`.
 
 **Reguły kontroli.** Kontrole poniżej to reguły katalogu (`Shared/Models/Pipeline/RunCheckRules.cs` –
 kod, kontrola, nazwa, opis, poziom i próg domyślny; implementacja po kodzie – `Modules/Runs/Services/RunChecks.cs`). Etap
-kontroli liczy tylko reguły ze swoich elementów kontrolnych. Ustawienie reguły: poziom i próg elementu etapu, a puste – słownik
+kontroli liczy tylko reguły ze swoich elementów kontrolnych. Ustawienie reguły: poziom i próg elementu etapu, a puste – ustawienie
+domyślne z okna „Kontrole” (ekran Przebiegi: katalog w grupach – aktywna, poziom, próg dla wszystkich programów; zapis – wiersz
+„Wszystkie”, „Każdy” słownika „Kontrole przebiegu” tylko dla reguł innych niż w katalogu) albo – zaawansowane – słownik
 globalny „Kontrole przebiegu” (`docs/slowniki.md`, rozdz. 2) dla typu programu i wariantu przebiegu (zamykający okres / w środku
 okresu – kalendarz okresów): aktywna, poziom wyniku, próg (kwota); bez wiersza – ustawienie domyślne (tabela niżej). W definicji
 wbudowanej reguła wyłączona w „Kontrolach przebiegu” nie jest liczona. Nowa kontrola = reguła w katalogu i jej implementacja;
-zmiana poziomu, progu, etapu albo wyłączenie – wiersz słownika, bez zmiany kodu. Ekran Przebiegi pokazuje definicję przebiegu
-programu (etapy, elementy, ustawienia i ich źródło) i macierz wyników kontroli kolejnych uruchomień.
+zmiana poziomu, progu, etapu albo wyłączenie – okno Kontrole albo kafelek szablonu, bez zmiany kodu. Ekran programu (zakładka
+Przebieg) pokazuje macierz wyników kontroli kolejnych uruchomień i porównanie dwóch uruchomień.
 
 | Reguła (słownik) | Kontrola | Poziom domyślny | Próg domyślny |
 |---|---|---|---|

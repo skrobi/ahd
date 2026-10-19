@@ -29,8 +29,6 @@ public static partial class GlobalDictionaries
     public const string RunSteps = "run-steps";
     public const string RunStepElements = "run-step-elements";
 
-    /// <summary>Słowniki przebiegu – edycja na ekranie Przebiegi (na ekranie Słowniki ukryte).</summary>
-    public static IReadOnlyList<string> RunDictionaries { get; } = [RunDefinitionHeaders, RunSteps, RunStepElements, RunReconciliations, RunChecks];
 
     /// <summary>Kolumna słownika Cost Category z rodzajem kosztu (Hours / Materials / Other; puste – Other) – podział ACWP w strukturze.</summary>
     public const string CostKindColumn = "Rodzaj kosztu";
@@ -263,7 +261,7 @@ public static partial class GlobalDictionaries
             Code = RunDefinitionHeaders,
             Name = "Definicje przebiegów",
             Hidden = true,
-            Description = "Definicja przebiegu (workflow) – szablon etapów (słownik „Etapy przebiegów”) dla zakresu: typ programu (albo „Wszystkie”), program (puste – wszystkie programy typu) i wariant przebiegu (zamykający okres / w środku okresu / każdy). Programowi przysługuje aktywna definicja najbardziej szczegółowa: program przed typem przed „Wszystkie”, wariant przed „Każdy”; bez definicji – definicja wbudowana.",
+            Description = "Szablon przebiegu (workflow, ekran Przebiegi) – etapy w słowniku „Etapy przebiegów”. Program wybiera szablon w Parametrach programu („Przebieg”); bez wyboru – aktywny szablon domyślny dla typu programu (typ przed „Wszystkie”); bez szablonów – definicja wbudowana. Program i Przebieg – nieużywane (puste, „Każdy”).",
             Columns =
             [
                 new("Definicja", ColumnType.Text, Key: true, CheckSimilar: true),
@@ -453,14 +451,13 @@ public static partial class GlobalDictionaries
             yield return Issue.Warning($"Kolejność {order.Key} ma kilka kategorii ({string.Join(", ", order.Select(r => r["Pula"]))}) – kolumny ułożone po nazwie", "Kolejność");
     }
 
-    /// <summary>„Definicje przebiegów”: dwie aktywne definicje o tym samym zakresie (typ, program, przebieg) – ERROR (nie wiadomo, która obowiązuje).</summary>
+    /// <summary>„Definicje przebiegów”: dwa aktywne szablony domyślne dla tego samego typu programu – ERROR (nie wiadomo, który obowiązuje).</summary>
     private static IEnumerable<Issue> RunDefinitionRules(IReadOnlyList<DictRow> rows)
     {
         var active = rows.Select((r, i) => (Row: r, Index: i)).Where(x => x.Row["Aktywna"] == "tak").ToList();
-        foreach (var group in active.GroupBy(x => (Type: x.Row["Typ programu"]?.Trim().ToUpperInvariant(), Program: x.Row["Program"]?.Trim().ToUpperInvariant() ?? "",
-                     Run: x.Row["Przebieg"]?.Trim().ToUpperInvariant())).Where(g => g.Count() > 1))
+        foreach (var group in active.GroupBy(x => x.Row["Typ programu"]?.Trim().ToUpperInvariant()).Where(g => g.Count() > 1))
             foreach (var x in group.Skip(1))
-                yield return Issue.Error($"Aktywna definicja o tym samym zakresie co „{group.First().Row["Definicja"]}” (typ, program, przebieg) – wyłącz jedną albo zmień zakres",
+                yield return Issue.Error($"Aktywny szablon „{group.First().Row["Definicja"]}” jest już domyślny dla typu programu {group.First().Row["Typ programu"]} – wyłącz jeden albo zmień typ",
                     DictionaryValidator.RowElement(x.Index));
     }
 
