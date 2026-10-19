@@ -135,12 +135,19 @@ Lista kontrolna na ekranie projektu:
   projektu (uruchomienia i wyniki kontroli wybranego uruchomienia).
 - Ekran **Przebiegi** (wdrożony): macierz wyników kontroli kolejnych uruchomień programu i definicja przebiegu – tabela
   ekranów (rozdz. 2); uruchomienie zapisuje ustawienia reguł, z którymi liczyło (migracja 048).
-- Okno **Zmiany ACWP** (wdrożone; z ekranu Przebiegi – przycisk „Zmiany ACWP”, ze struktury programu – dwuklik w komórce
-  ACWP, ACWP Hours, ACWP Materials albo ACWP Other wiersza: rodzaj kosztu kolumny, elementy WBS wiersza z poddrzewem):
+- Okno **Zmiany ACWP** (wdrożone; z ekranu Przebiegi – przycisk „Zmiany ACWP” i „Pokaż zmiany” przy wyniku kontroli kosztów:
+  rodzaj kosztu, cost element albo element WBS wyniku, para uruchomień jak w przebiegu – uruchomienie wyniku i poprzednie
+  uruchomienie wcześniejszego tygodnia; ze struktury programu – dwuklik w komórce ACWP, ACWP Hours, ACWP Materials albo
+  ACWP Other wiersza: rodzaj kosztu kolumny, elementy WBS wiersza z poddrzewem):
   - warianty: **dwa uruchomienia** – stan narastająco „było” i „jest” (domyślnie ostatnie uruchomienie wcześniejszego okresu
     i najnowsze; przycisk zamiany) albo **okres do okresu** – koszt zaksięgowany w dwóch okresach jednego uruchomienia;
     filtr rodzaju (Hours / Materials / Other / wszystkie), „Tylko zmiany”, „Wszystkie pozycje”;
   - kafelki ACWP rodzajów: było, jest, zmiana, zmiana %;
+  - **przyrosty miesięczne** każdego rodzaju (koszt zaksięgowany w okresie, 12 okresów do ostatniego okresu danych
+    uruchomienia „jest”) – słupki, skok w kolorze ostrzeżenia: przyrost > próg × średni przyrost z 6 poprzednich okresów (próg
+    reguły „Skok przyrostu kosztu” ze słownika „Kontrole przebiegu” dla typu programu, domyślnie 3); podpowiedź – kwota i średnia;
+  - **Do Excela** – arkusze: wszystkie liście drzewa zmian bez limitu (rodzaj, cost element, element WBS, okres, było, jest,
+    zmiana – do filtrów i tabel przestawnych), kafelki rodzajów, przyrosty ze skokami, opis porównania;
   - drzewo zmian: rodzaj → cost element (z opisem z Cost Category) → element WBS → okres (w wariancie okres do okresu liść
     – element WBS), od największej zmiany; na każdym poziomie 50 pozycji i wiersz „pozostałe: N pozycji” z sumą – duże programy
     otwierają się szybko, gałęzie rozwijane na żądanie;

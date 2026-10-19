@@ -3,6 +3,7 @@ using System.Text.Json;
 using PzlEv.Modules.Runs.Data;
 using PzlEv.Shared.Models.Db;
 using PzlEv.Shared.Models.Pipeline;
+using PzlEv.Shared.Utils.Data;
 
 namespace PzlEv.Modules.Runs.Services;
 
@@ -10,6 +11,12 @@ namespace PzlEv.Modules.Runs.Services;
 public sealed record RunReconciliationView(string Name, string RunKind, string Condition, string Level, bool IsActive)
 {
     public string State => IsActive ? "aktywna" : "wyłączona";
+}
+
+/// <summary>Wynik kontroli na ekranie Przebiegi z zakresem okna „Zmiany ACWP” (null – akcja „Pokaż zmiany” niedostępna).</summary>
+public sealed record RunIssueView(RunIssueRow Issue, AcwpChangesRequest? Changes)
+{
+    public bool CanShowChanges => Changes is not null;
 }
 
 /// <summary>Kolumna macierzy kontroli: uruchomienie przebiegu (kod tygodnia i numer, start, stan).</summary>
@@ -97,6 +104,32 @@ public static class RunOverview
             || string.Equals(r.ProjectType?.Trim(), RunCheckRules.AllTypes, StringComparison.OrdinalIgnoreCase);
         return RunCheckRules.All.Select(rule => new RunDefinitionRow(rule, mid[rule.Code], closing[rule.Code],
             rows.Any(r => Matches(r) && RunCheckRules.ByName(r.RuleName) == rule), inRun?.GetValueOrDefault(rule.Code))).ToList();
+    }
+
+    /// <summary>Kontrole kosztów, dla których okno „Zmiany ACWP” pokazuje przyczynę.</summary>
+    private static readonly HashSet<string> CostChecks =
+    [
+        RunCheckRules.Volume, RunCheckRules.Deviations, RunCheckRules.NewCostElements, RunCheckRules.NetZero, RunCheckRules.ClosedPeriods,
+        RunCheckRules.Quality, RunCheckRules.CostKinds, RunReconciliations.CheckName,
+    ];
+
+    /// <summary>
+    /// Zakres okna „Zmiany ACWP” dla wyniku kontroli uruchomienia: element – rodzaj kosztu (Rodzaje kosztu), cost element (Nowe cost
+    /// elementy, odchylenia po cost elemencie) albo element WBS (pozostałe kontrole kosztów); bez elementu – cały program. Para
+    /// uruchomień jak w przebiegu (uruchomienie wyniku i poprzednie). Kontrole spoza kosztów (import, słowniki) – null.
+    /// </summary>
+    public static AcwpChangesRequest? ChangesFor(RunIssueRow issue, string project)
+    {
+        if (!CostChecks.Contains(issue.CheckName))
+            return null;
+        var element = issue.Element;
+        if (string.IsNullOrEmpty(element) || issue.CheckName == RunReconciliations.CheckName)
+            return new(project, PinId: issue.PinId, Scope: issue.CheckName);
+        if (RunMeasures.Kinds.Contains(element))
+            return new(project, Kind: element, PinId: issue.PinId, Scope: $"{issue.CheckName}: {element}");
+        if (issue.CheckName == RunCheckRules.NewCostElements || issue.CheckName == RunCheckRules.Deviations && issue.Message.StartsWith("cost element"))
+            return new(project, CostElement: element, PinId: issue.PinId, Scope: $"cost element {element}");
+        return new(project, WbsElements: [element], PinId: issue.PinId, Scope: $"element WBS {element}");
     }
 
     /// <summary>Reguły uzgodnień dla typu programu (oba warianty przebiegu).</summary>

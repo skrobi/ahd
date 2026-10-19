@@ -119,16 +119,26 @@
                     <TextBlock Text="{Binding CellTitle}" Style="{StaticResource H2}" Margin="0,16,0,6" TextWrapping="Wrap" />
                     <DataGrid Style="{StaticResource DataTable}" ItemsSource="{Binding CellIssues}" IsReadOnly="True" MaxHeight="480">
                         <DataGrid.Columns>
-                            <DataGridTextColumn Header="Poziom" Binding="{Binding Level}" />
-                            <DataGridTextColumn Header="Element" Binding="{Binding Element}" />
-                            <DataGridTextColumn Header="Opis" Binding="{Binding Message}" Width="*">
+                            <DataGridTextColumn Header="Poziom" Binding="{Binding Issue.Level}" />
+                            <DataGridTextColumn Header="Element" Binding="{Binding Issue.Element}" />
+                            <DataGridTextColumn Header="Opis" Binding="{Binding Issue.Message}" Width="*">
                                 <DataGridTextColumn.ElementStyle>
                                     <Style TargetType="TextBlock">
                                         <Setter Property="TextWrapping" Value="Wrap" />
                                     </Style>
                                 </DataGridTextColumn.ElementStyle>
                             </DataGridTextColumn>
-                            <DataGridTextColumn Header="Kwota" Binding="{Binding Amount, StringFormat=#\,0.00}" />
+                            <DataGridTextColumn Header="Kwota" Binding="{Binding Issue.Amount, StringFormat=#\,0.00}" />
+                            <DataGridTemplateColumn Header="">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <Button Content="Pokaż zmiany" Style="{StaticResource Btn}" Padding="8,2" CommandParameter="{Binding}"
+                                                Command="{Binding DataContext.ShowChanges, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                Visibility="{Binding CanShowChanges, Converter={StaticResource BoolToVisibility}}"
+                                                ToolTip="Okno „Zmiany ACWP” dla tego wyniku: rodzaj kosztu, cost element albo element WBS; to uruchomienie i poprzednie" />
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
                         </DataGrid.Columns>
                     </DataGrid>
                 </StackPanel>

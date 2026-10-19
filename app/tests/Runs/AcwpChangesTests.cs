@@ -1,5 +1,6 @@
 using PzlEv.Modules.Runs.Services;
 using PzlEv.Shared.Models.Db;
+using PzlEv.Shared.Models.Pipeline;
 using Xunit;
 
 namespace PzlEv.Tests.Runs;
@@ -66,5 +67,55 @@ public sealed class AcwpChangesTests
         Assert.Empty(leaves[0].Children);
         Assert.Equal(new AcwpLineKey("A.1", "51105550", (2026, 8), (2026, 9)), leaves[0].Line);
         Assert.Equal([(2026, 9), (2026, 8), (2026, 7), (2025, 12)], AcwpChanges.PeriodsOf(rows));   // okres 14 jak 12
+    }
+
+    [Fact]
+    public void Increments_cover_12_periods_up_to_last_data_period_and_mark_jumps_over_factor_times_average()
+    {
+        // Materials: 10 w okresach 2026/01–06, 31 w 2026/07 (> 3 × 10), 25 w 2026/08 (średnia z 02–07 = 13,5 – bez skoku).
+        RunBalanceRow[] rows = [.. Enumerable.Range(1, 6).Select(p => Row("A.1", "51105550", p, 10m)), Row("A.1", "51105550", 7, 31m), Row("A.1", "51105550", 8, 25m),
+            Row("A.1", "91902551", 8, -500m, settlement: true)];
+
+        var series = AcwpChanges.Increments(rows, Kinds, "Materials", null, null, factor: 3m);
+
+        var materials = Assert.Single(series).Increments;
+        Assert.Equal(12, materials.Count);
+        Assert.Equal(("2025/09", "2026/08"), (materials[0].Label, materials[^1].Label));
+        // 2026/02 – drugi okres kosztu: średnia z 6 okresów przed nim 10 / 6, więc 10 to skok (jak reguła przebiegu przy rozruchu).
+        Assert.Equal(["2026/02", "2026/07"], materials.Where(i => i.IsJump).Select(i => i.Label));
+        Assert.Equal((31m, 10m), (materials[^2].Amount, materials[^2].Average));
+        Assert.Equal(13.5m, materials[^1].Average);
+        Assert.Empty(AcwpChanges.Increments(rows, Kinds, null, new HashSet<string> { "X" }, null, 3m));
+    }
+
+    [Fact]
+    public void Cost_element_filter_and_flatten_for_excel_skip_remainder()
+    {
+        RunBalanceRow[] after = [Row("A.1", "51105550", 9, 30m), Row("A.2", "51105550", 9, 20m), Row("A.1", "92212550", 9, 5m)];
+
+        var one = AcwpChanges.Runs([], after, Kinds, null, null, null, onlyChanges: true, costElement: "92212550");
+        var flat = AcwpChanges.Flatten(AcwpChanges.Runs([], after, Kinds, Names, null, null, onlyChanges: true, top: 1).Tree);
+
+        Assert.Equal([("Hours", 5m), ("Materials", 0m), ("Other", 0m)], one.Totals.Select(t => (t.Kind, t.After)));
+        var row = Assert.Single(flat.Where(r => r.Kind == "Materials"));   // A.2 w „pozostałe” – pominięty
+        Assert.Equal(("51105550 – Materiały", "A.1", "2026/09", 30m), (row.CostElement, row.WbsElement, row.Period, row.Delta));
+        Assert.Equal("", Assert.Single(AcwpChanges.Flatten(AcwpChanges.Periods(after, (2026, 8), (2026, 9), Kinds, null, null, null, true, costElement: "92212550").Tree)).Period);
+    }
+
+    [Fact]
+    public void Run_issue_opens_changes_for_its_kind_cost_element_or_wbs_element_and_its_run()
+    {
+        RunIssueRow Issue(string check, string? element, string message = "x") => new(1, 77, check, CheckLevel.Warning, element, message, null);
+
+        Assert.Equal(new PzlEv.Shared.Utils.Data.AcwpChangesRequest("PAF", Kind: "Other", PinId: 77, Scope: "Rodzaje kosztu: Other"),
+            RunOverview.ChangesFor(Issue(RunChecks.CostKinds, "Other"), "PAF"));
+        Assert.Equal("99999999", RunOverview.ChangesFor(Issue(RunChecks.NewCostElements, "99999999"), "PAF")!.CostElement);
+        Assert.Equal("51105550", RunOverview.ChangesFor(Issue(RunChecks.Deviations, "51105550", "cost element 51105550: zmiana"), "PAF")!.CostElement);
+        Assert.Equal(["A.1"], RunOverview.ChangesFor(Issue(RunChecks.Deviations, "A.1", "element WBS A.1: zmiana"), "PAF")!.WbsElements);
+        Assert.Equal(["A.1"], RunOverview.ChangesFor(Issue(RunChecks.NetZero, "A.1"), "PAF")!.WbsElements);
+        var program = RunOverview.ChangesFor(Issue(RunChecks.Volume, null), "PAF")!;
+        Assert.Equal((null, null, (long?)77), (program.Kind, program.WbsElements, program.PinId));
+        Assert.Null(RunOverview.ChangesFor(Issue("Import", null), "PAF"));
+        Assert.Null(RunOverview.ChangesFor(Issue(RunChecks.Dictionaries, "WP-1"), "PAF"));
     }
 }

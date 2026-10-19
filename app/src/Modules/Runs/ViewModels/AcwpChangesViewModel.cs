@@ -5,7 +5,9 @@ using PzlEv.Shared.Models.Db;
 using PzlEv.Shared.Models.Dictionaries;
 using PzlEv.Shared.Models.Pipeline;
 using PzlEv.Shared.Utils.Data;
+using PzlEv.Shared.Utils.Files;
 using PzlEv.Shared.Utils.Process;
+using PzlEv.Shared.Utils.Ui.Dialogs;
 using PzlEv.Shared.Utils.Ui.Mvvm;
 using Serilog;
 
@@ -21,6 +23,15 @@ public sealed record AcwpPinOption(RunPinRow Pin)
 public sealed record AcwpPeriodOption(int Year, int Period)
 {
     public string Label => $"{Year}/{Period:00}";
+}
+
+/// <summary>Słupek wykresu przyrostów: wysokość (px), skok, podpowiedź.</summary>
+public sealed record AcwpBar(string Label, double Height, bool IsJump, string ToolTip);
+
+/// <summary>Wiersz wykresu: rodzaj kosztu i słupki okresów.</summary>
+public sealed record AcwpBarSeries(string Kind, IReadOnlyList<AcwpBar> Bars, int Jumps)
+{
+    public string Title => Jumps == 0 ? $"ACWP {Kind}" : $"ACWP {Kind} – skoki: {Jumps}";
 }
 
 /// <summary>Linia źródłowa w oknie: strona porównania („było” / „jest”) i linia.</summary>
@@ -41,10 +52,17 @@ public sealed class AcwpChangesViewModel : ObservableObject
 
     public const string AllKinds = "Wszystkie";
 
+    /// <summary>Wysokość najwyższego słupka wykresu (px).</summary>
+    private const double BarHeight = 70;
+
     private readonly IRunStore _store;
     private readonly Func<IProjectProcessSource?> _processes;
+    private readonly IFileDialogs _dialogs;
+    private readonly AcwpChangesRequest _request;
     private readonly string _project;
     private readonly IReadOnlySet<string>? _wbsElements;
+    private decimal _jumpFactor = RunCheckRules.CostKindJump.Threshold ?? 3m;
+    private IReadOnlyList<AcwpBarSeries> _chart = [];
     private readonly Dictionary<long, IReadOnlyList<RunBalanceRow>> _balances = [];
     private RunDictionaryData? _dictionaries;
     private bool _periodMode;
@@ -65,17 +83,28 @@ public sealed class AcwpChangesViewModel : ObservableObject
     private string _note = "";
     private int _version;
 
-    public AcwpChangesViewModel(IRunStore store, Func<IProjectProcessSource?> processes, string project, string? kind, IReadOnlyCollection<string>? wbsElements,
-        string scope)
+    public AcwpChangesViewModel(IRunStore store, Func<IProjectProcessSource?> processes, AcwpChangesRequest request, IFileDialogs dialogs)
     {
         _store = store;
         _processes = processes;
-        _project = project;
-        _wbsElements = wbsElements is null ? null : new HashSet<string>(wbsElements, StringComparer.OrdinalIgnoreCase);
-        _kind = kind ?? AllKinds;
-        Title = $"Zmiany ACWP – {project}" + (string.IsNullOrWhiteSpace(scope) ? "" : $" – {scope}");
+        _dialogs = dialogs;
+        _request = request;
+        _project = request.Project;
+        _wbsElements = request.WbsElements is null ? null : new HashSet<string>(request.WbsElements, StringComparer.OrdinalIgnoreCase);
+        _kind = request.Kind ?? AllKinds;
+        Title = $"Zmiany ACWP – {_project}" + (string.IsNullOrWhiteSpace(request.Scope) ? "" : $" – {request.Scope}");
         Swap = new RelayCommand(_ => (BeforePin, AfterPin) = (AfterPin, BeforePin));
+        Export = new AsyncRelayCommand(DoExport, () => !Busy.IsBusy && Pins.Count > 0);
     }
+
+    /// <summary>Drzewo zmian (wszystkie pozycje, bez limitu) i przyrosty do Excela.</summary>
+    public ICommand Export { get; }
+
+    /// <summary>Przyrosty miesięczne rodzajów (12 okresów do ostatniego okresu danych „jest”), skoki – próg reguły „Skok przyrostu kosztu”.</summary>
+    public IReadOnlyList<AcwpBarSeries> Chart { get => _chart; private set => SetProperty(ref _chart, value); }
+
+    public string ChartNote => $"Koszt zaksięgowany w okresie (uruchomienie „jest”); kolor ostrzeżenia – skok: przyrost > {_jumpFactor:0.##} × średni przyrost "
+                               + $"z {RunCheckRules.IncrementPeriods} poprzednich okresów (próg – słownik „Kontrole przebiegu”, reguła „Skok przyrostu kosztu”).";
 
     public string Title { get; }
 
@@ -162,10 +191,13 @@ public sealed class AcwpChangesViewModel : ObservableObject
     {
         await Try(async () =>
         {
-            var (pins, dictionaries) = await Busy.Run("Wczytywanie uruchomień przebiegu…", () =>
+            var (pins, dictionaries, jump) = await Busy.Run("Wczytywanie uruchomień przebiegu…", () =>
                 (_store.Pins(_project, 60).Where(p => p.Rows > 0 && p.Status is not (RunStatuses.Running or RunStatuses.Failed or RunStatuses.Abandoned)).ToList(),
-                    _store.Dictionaries(_project, DateTime.Today.Year)));
+                    _store.Dictionaries(_project, DateTime.Today.Year),
+                    RunChecks.Settings(_store.CheckSettings(), _store.ProjectType(_project) ?? "", isClosing: false)[RunCheckRules.CostKindJump.Code]));
             _dictionaries = dictionaries;
+            _jumpFactor = jump.Threshold ?? _jumpFactor;
+            OnPropertyChanged(nameof(ChartNote));
             Pins = pins.Select(p => new AcwpPinOption(p)).ToList();
             OnPropertyChanged(nameof(Pins));
             if (Pins.Count == 0)
@@ -173,8 +205,14 @@ public sealed class AcwpChangesViewModel : ObservableObject
                 Error = "Program nie ma zakończonych uruchomień przebiegu z danymi – „Uruchom przebieg” na ekranie programu.";
                 return;
             }
-            var latest = Pins[0];
-            var previousPeriod = Pins.FirstOrDefault(p => string.CompareOrdinal(Period(p.Pin.Code), Period(latest.Pin.Code)) < 0) ?? Pins.ElementAtOrDefault(1) ?? latest;
+            // Wynik kontroli: uruchomienie wyniku i poprzednie uruchomienie wcześniejszego tygodnia (jak porównanie w przebiegu); inaczej
+            // najnowsze i ostatnie uruchomienie wcześniejszego okresu.
+            var latest = Pins.FirstOrDefault(p => p.Pin.PinId == _request.PinId) ?? Pins[0];
+            var older = Pins.SkipWhile(p => p != latest).Skip(1).ToList();
+            var previousPeriod = (_request.PinId is not null
+                    ? older.FirstOrDefault(p => p.Pin.Code != latest.Pin.Code)
+                    : older.FirstOrDefault(p => string.CompareOrdinal(Period(p.Pin.Code), Period(latest.Pin.Code)) < 0))
+                ?? older.FirstOrDefault() ?? latest;
             _afterPin = latest;
             _beforePin = previousPeriod;
             _periodPin = latest;
@@ -219,12 +257,14 @@ public sealed class AcwpChangesViewModel : ObservableObject
                 if (BeforePeriod is null || AfterPeriod is null)
                     return;
                 Compare(AcwpChanges.Periods(_balances[PeriodPin!.Pin.PinId], (BeforePeriod.Year, BeforePeriod.Period), (AfterPeriod.Year, AfterPeriod.Period),
-                    _dictionaries?.CostKinds, _dictionaries?.CostElementNames, kind, _wbsElements, OnlyChanges, top),
+                    _dictionaries?.CostKinds, _dictionaries?.CostElementNames, kind, _wbsElements, OnlyChanges, top, _request.CostElement),
                     $"Koszt zaksięgowany w okresie {BeforePeriod.Label} (było) i {AfterPeriod.Label} (jest) – {PeriodPin.Label}.");
             }
             else
                 Compare(AcwpChanges.Runs(_balances[BeforePin!.Pin.PinId], _balances[AfterPin!.Pin.PinId], _dictionaries?.CostKinds, _dictionaries?.CostElementNames,
-                    kind, _wbsElements, OnlyChanges, top), $"Stan narastająco: było – {BeforePin.Label}, jest – {AfterPin.Label}.");
+                    kind, _wbsElements, OnlyChanges, top, _request.CostElement), $"Stan narastająco: było – {BeforePin.Label}, jest – {AfterPin.Label}.");
+            Chart = Bars(AcwpChanges.Increments(_balances[(PeriodMode ? PeriodPin! : AfterPin!).Pin.PinId], _dictionaries?.CostKinds, kind, _wbsElements,
+                _request.CostElement, _jumpFactor));
         });
     }
 
@@ -277,6 +317,49 @@ public sealed class AcwpChangesViewModel : ObservableObject
             LinesTitle = $"Linie źródłowe {key.WbsElement} × {key.CostElement} (dane ACTUALS, pole kwoty uruchomienia): "
                 + string.Join("; ", result.Select(r => $"{r.Side} – {r.Lines.Count} linii, suma {r.Lines.Sum:#,0.00}"
                                                        + (r.Lines.Count > r.Lines.Rows.Count ? $", pokazano {r.Lines.Rows.Count} największych" : "")));
+        });
+    }
+
+    private static IReadOnlyList<AcwpBarSeries> Bars(IReadOnlyList<AcwpIncrementSeries> series)
+    {
+        var max = series.SelectMany(s => s.Increments).Select(i => i.Amount).DefaultIfEmpty(0).Max();
+        return series.Select(s => new AcwpBarSeries(s.Kind, s.Increments.Select(i => new AcwpBar(i.Label,
+            max <= 0 || i.Amount <= 0 ? 1 : Math.Max(1, (double)(i.Amount / max) * BarHeight), i.IsJump,
+            $"{i.Label}: {i.Amount:#,0.00} (średni przyrost {RunCheckRules.IncrementPeriods} poprzednich okresów {i.Average:#,0.00})"
+            + (i.IsJump ? " – skok" : ""))).ToList(), s.Increments.Count(i => i.IsJump))).ToList();
+    }
+
+    private async Task DoExport()
+    {
+        if (Pins.Count == 0 || (PeriodMode ? PeriodPin : AfterPin) is null)
+            return;
+        var path = _dialogs.SaveExcel("Zmiany ACWP do Excela", $"{_project}_zmiany_ACWP.xlsx");
+        if (path is null)
+            return;
+        await Try(async () =>
+        {
+            var kind = Kind == AllKinds ? null : Kind;
+            var full = PeriodMode
+                ? AcwpChanges.Periods(_balances[PeriodPin!.Pin.PinId], (BeforePeriod!.Year, BeforePeriod.Period), (AfterPeriod!.Year, AfterPeriod.Period),
+                    _dictionaries?.CostKinds, _dictionaries?.CostElementNames, kind, _wbsElements, OnlyChanges, int.MaxValue, _request.CostElement)
+                : AcwpChanges.Runs(_balances[BeforePin!.Pin.PinId], _balances[AfterPin!.Pin.PinId], _dictionaries?.CostKinds, _dictionaries?.CostElementNames,
+                    kind, _wbsElements, OnlyChanges, int.MaxValue, _request.CostElement);
+            var increments = AcwpChanges.Increments(_balances[(PeriodMode ? PeriodPin! : AfterPin!).Pin.PinId], _dictionaries?.CostKinds, kind, _wbsElements,
+                _request.CostElement, _jumpFactor);
+            await Busy.Run("Zapis zmian ACWP do Excela…", () =>
+            {
+                ExcelTableWriter.WriteSheets(path,
+                [
+                    ("Zmiany", ["Rodzaj", "Cost element", "Element WBS", "Okres", "Było", "Jest", "Zmiana"],
+                        AcwpChanges.Flatten(full.Tree).Select(r => (IReadOnlyList<object?>)[r.Kind, r.CostElement, r.WbsElement, r.Period, r.Before, r.After, r.Delta])),
+                    ("Rodzaje", ["Rodzaj", "Było", "Jest", "Zmiana", "Zmiana %"],
+                        full.Totals.Select(t => (IReadOnlyList<object?>)[t.Kind, t.Before, t.After, t.Delta, t.Percent])),
+                    ("Przyrosty", ["Rodzaj", "Okres", "Przyrost", "Średni przyrost", "Skok"],
+                        increments.SelectMany(s => s.Increments.Select(i => (IReadOnlyList<object?>)[s.Kind, i.Label, i.Amount, i.Average, i.IsJump ? "tak" : ""]))),
+                    ("Opis", ["Opis"], [[Title], [Note]]),
+                ]);
+                return true;
+            });
         });
     }
 

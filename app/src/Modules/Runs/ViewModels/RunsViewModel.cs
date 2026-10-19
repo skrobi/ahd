@@ -28,7 +28,7 @@ public sealed class RunsViewModel : ObservableObject
     private RunMatrix _matrix = new([], []);
     private IReadOnlyList<RunDefinitionRow> _definition = [];
     private IReadOnlyList<RunReconciliationView> _reconciliations = [];
-    private IReadOnlyList<RunIssueRow> _cellIssues = [];
+    private IReadOnlyList<RunIssueView> _cellIssues = [];
     private string _cellTitle = "";
     private string _definitionNote = "";
     private string? _error;
@@ -39,8 +39,9 @@ public sealed class RunsViewModel : ObservableObject
     {
         _store = store;
         Refresh = new AsyncRelayCommand(LoadProjects, () => !Busy.IsBusy);
-        OpenAcwpChanges = new RelayCommand(_ => acwpChanges?.Show(SelectedProject!.Code, null, null, "cały program"),
+        OpenAcwpChanges = new RelayCommand(_ => acwpChanges?.Show(new AcwpChangesRequest(SelectedProject!.Code, Scope: "cały program")),
             _ => acwpChanges is not null && SelectedProject is not null && Matrix.Columns.Count > 0);
+        ShowChanges = new RelayCommand(p => { if (p is RunIssueView { Changes: { } request }) acwpChanges?.Show(request); }, _ => acwpChanges is not null);
         SelectCell = new RelayCommand(p => ShowCell(p as RunMatrixCell));
         _ = LoadProjects();
     }
@@ -50,6 +51,9 @@ public sealed class RunsViewModel : ObservableObject
     public ICommand Refresh { get; }
 
     public ICommand SelectCell { get; }
+
+    /// <summary>„Pokaż zmiany” przy wyniku kontroli – okno „Zmiany ACWP” z zakresem wyniku (RunOverview.ChangesFor).</summary>
+    public ICommand ShowChanges { get; }
 
     /// <summary>Okno „Zmiany ACWP” programu (porównanie uruchomień albo okresów).</summary>
     public ICommand OpenAcwpChanges { get; }
@@ -89,7 +93,7 @@ public sealed class RunsViewModel : ObservableObject
     /// <summary>Opis definicji: typ programu i uruchomienie, z którego pochodzi kolumna „Ostatnie uruchomienie”.</summary>
     public string DefinitionNote { get => _definitionNote; private set => SetProperty(ref _definitionNote, value); }
 
-    public IReadOnlyList<RunIssueRow> CellIssues { get => _cellIssues; private set => SetProperty(ref _cellIssues, value); }
+    public IReadOnlyList<RunIssueView> CellIssues { get => _cellIssues; private set => SetProperty(ref _cellIssues, value); }
 
     public string CellTitle { get => _cellTitle; private set => SetProperty(ref _cellTitle, value); }
 
@@ -169,7 +173,8 @@ public sealed class RunsViewModel : ObservableObject
             return;
         }
         CellIssues = (_issues.GetValueOrDefault(cell.PinId) ?? []).Where(i => i.CheckName == cell.CheckName)
-            .OrderBy(i => i.Level == CheckLevel.Error ? 0 : i.Level == CheckLevel.Warning ? 1 : 2).ThenBy(i => i.Id).ToList();
+            .OrderBy(i => i.Level == CheckLevel.Error ? 0 : i.Level == CheckLevel.Warning ? 1 : 2).ThenBy(i => i.Id)
+            .Select(i => new RunIssueView(i, SelectedProject is { } project ? RunOverview.ChangesFor(i, project.Code) : null)).ToList();
         CellTitle = $"{cell.CheckName} – {_pinLabels.GetValueOrDefault(cell.PinId)}: {cell.Text}";
     }
 

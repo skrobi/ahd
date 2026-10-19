@@ -365,7 +365,7 @@ public sealed class ProjectDetailViewModel : ObservableObject, IDisposable
             _ => null,
         };
         var elements = Structure.WbsElementsOf(row);
-        window.Show(Code, kind, elements.Count == 0 ? null : elements, row.Row.Name);
+        window.Show(new AcwpChangesRequest(Code, kind, elements.Count == 0 ? null : elements, Scope: row.Row.Name));
     }
 
     private async Task LoadRuns()

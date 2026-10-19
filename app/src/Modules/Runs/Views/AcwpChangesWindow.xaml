@@ -34,8 +34,10 @@
             <TextBlock Text="Rodzaj" VerticalAlignment="Center" Margin="0,0,6,0" />
             <ComboBox ItemsSource="{Binding Kinds}" SelectedItem="{Binding Kind}" Width="110" Margin="0,0,16,0" />
             <CheckBox Content="Tylko zmiany" IsChecked="{Binding OnlyChanges}" VerticalAlignment="Center" Margin="0,0,12,0" />
-            <CheckBox Content="Wszystkie pozycje" IsChecked="{Binding ShowAll}" VerticalAlignment="Center"
+            <CheckBox Content="Wszystkie pozycje" IsChecked="{Binding ShowAll}" VerticalAlignment="Center" Margin="0,0,16,0"
                       ToolTip="Bez zaznaczenia – 50 pozycji z największą zmianą na każdym poziomie i wiersz „pozostałe”" />
+            <Button Content="Do Excela" Style="{StaticResource Btn}" Command="{Binding Export}"
+                    ToolTip="Wszystkie pozycje drzewa zmian (bez limitu), kafelki rodzajów i przyrosty miesięczne – arkusze do filtrowania i tabel przestawnych" />
         </WrapPanel>
         <partials:BusyBar DockPanel.Dock="Top" DataContext="{Binding Busy}" />
         <Border DockPanel.Dock="Top" Background="{StaticResource CritSoft}" CornerRadius="6" Padding="12,8" Margin="0,0,0,8"
@@ -66,6 +68,43 @@
                 </DataTemplate>
             </ItemsControl.ItemTemplate>
         </ItemsControl>
+
+        <!-- Przyrosty miesięczne rodzajów: słupki, skoki w kolorze ostrzeżenia -->
+        <Expander DockPanel.Dock="Top" Header="Przyrosty miesięczne" IsExpanded="True" Margin="0,0,0,10">
+            <StackPanel Margin="0,6,0,0">
+                <TextBlock Text="{Binding ChartNote}" Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="0,0,0,6" />
+                <ItemsControl ItemsSource="{Binding Chart}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <DockPanel Margin="0,0,0,8">
+                                <TextBlock DockPanel.Dock="Left" Width="200" Text="{Binding Title}" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                <ItemsControl ItemsSource="{Binding Bars}">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <StackPanel Width="58" Margin="0,0,4,0" ToolTip="{Binding ToolTip}">
+                                                <Grid Height="72">
+                                                    <Border x:Name="Bar" VerticalAlignment="Bottom" Height="{Binding Height}" Margin="8,0"
+                                                            Background="{StaticResource Accent}" CornerRadius="2,2,0,0" />
+                                                </Grid>
+                                                <TextBlock Text="{Binding Label}" FontSize="10" TextAlignment="Center" Foreground="{StaticResource Muted}" />
+                                            </StackPanel>
+                                            <DataTemplate.Triggers>
+                                                <DataTrigger Binding="{Binding IsJump}" Value="True">
+                                                    <Setter TargetName="Bar" Property="Background" Value="{StaticResource Warn}" />
+                                                </DataTrigger>
+                                            </DataTemplate.Triggers>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </DockPanel>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+        </Expander>
 
         <Grid>
             <Grid.RowDefinitions>
