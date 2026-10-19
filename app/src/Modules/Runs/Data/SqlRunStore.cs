@@ -164,10 +164,10 @@ public sealed class SqlRunStore(SqlDatabase db) : IRunStore
     {
         using var connection = db.Open();
         // Cost Category efektywny: wiersz projektu przed globalnym (jak RUN_PinBalance – cost elementy rozliczeniowe).
-        var effective = connection.Query<(string CostElement, string? CostCategory, string? CostKind)>(
+        var effective = connection.Query<(string CostElement, string? CostCategory, string? CostKind, string? Description)>(
                 $"""
-                SELECT CostElement, NULLIF(LTRIM(RTRIM(CostCategory)), N'') AS CostCategory, NULLIF(LTRIM(RTRIM(CostKind)), N'') AS CostKind
-                FROM (SELECT CostElement, CostCategory, CostKind,
+                SELECT CostElement, NULLIF(LTRIM(RTRIM(CostCategory)), N'') AS CostCategory, NULLIF(LTRIM(RTRIM(CostKind)), N'') AS CostKind, Description
+                FROM (SELECT CostElement, CostCategory, CostKind, Description,
                              ROW_NUMBER() OVER (PARTITION BY CostElement ORDER BY CASE WHEN Project IS NULL THEN 1 ELSE 0 END) AS rn
                       FROM {db.Table("dict.CostCategory")} WHERE SupersededAt IS NULL AND (Project = @project OR Project IS NULL)) c
                 WHERE c.rn = 1
@@ -175,6 +175,7 @@ public sealed class SqlRunStore(SqlDatabase db) : IRunStore
             .ToList();
         var categories = effective.ToDictionary(r => r.CostElement, r => r.CostCategory, StringComparer.OrdinalIgnoreCase);
         var kinds = effective.Where(r => r.CostKind is not null).ToDictionary(r => r.CostElement, r => r.CostKind!, StringComparer.OrdinalIgnoreCase);
+        var names = effective.Where(r => !string.IsNullOrWhiteSpace(r.Description)).ToDictionary(r => r.CostElement, r => r.Description!, StringComparer.OrdinalIgnoreCase);
         var wps = connection.Query<RunWpRow>(
                 $"""
                 SELECT w.Wp, w.Mpk,
@@ -196,7 +197,36 @@ public sealed class SqlRunStore(SqlDatabase db) : IRunStore
             SELECT ISNULL(SUM(Bac), 0) AS Bac, ISNULL(SUM(BacHours), 0) AS BacHours, ISNULL(SUM(BacMaterial), 0) AS BacMaterial
             FROM {db.Table("dict.ScheduleBudget")} WHERE Project = @project AND SupersededAt IS NULL
             """, new { project });
-        return new RunDictionaryData(categories, wps, rated, year, budget, kinds);
+        return new RunDictionaryData(categories, wps, rated, year, budget, kinds, names);
+    }
+
+    public RunLines ActualsLines(string wbsElement, string costElement, int year, int period, DateTimeOffset asOf, string amountField, int top)
+    {
+        using var connection = db.Open();
+        var parser = SqlCanonical.CurrentParser(connection, db, "ACTUALS") ?? throw new InvalidOperationException("Nie ma parsera ACTUALS.");
+        // Pole parsera bez slotu (usunięte z parsera) – NULL: warunek bez wierszy, kolumna pusta.
+        string Slot(string field) => SqlCanonical.SlotOrNull(parser, field) is var slot && slot == "NULL" ? "NULL" : "r." + slot;
+        string Text(string field) => Slot(field) is var slot && slot == "NULL" ? "NULL" : $"CAST({slot} AS NVARCHAR(400))";
+        string Number(string field) => Slot(field) is var slot && slot == "NULL" ? "NULL" : $"TRY_CONVERT(DECIMAL(28,8), {slot})";
+        var from =
+            $"""
+            FROM {db.Table("can.LatestFiles")}('ACTUALS', NULL, @asOf) f
+            JOIN {db.Table(DbTables.CanonicalRow)} r ON r.FileId = f.FileId AND r.ParserId = @parserId
+            WHERE {Slot("WbsElement")} = @wbsElement AND {Slot("CostElement")} = @costElement
+              AND TRY_CONVERT(INT, {Slot("FiscalYear")}) = @year AND TRY_CONVERT(INT, {Slot("Period")}) = @period
+            """;
+        var args = new { asOf, parserId = parser.ParserId, wbsElement, costElement, year, period, top };
+        var rows = connection.Query<RunLineRow>(
+            $"""
+            SELECT TOP (@top) f.FileName, r.RowNumber, {Text("CreatedOn")} AS CreatedOn, {Number(amountField)} AS Amount, {Number("TotalQuantity")} AS Quantity,
+                   {Text("CostElementName")} AS CostElementName, {Text("CoObjectName")} AS CoObjectName, {Text("PartnerObject")} AS PartnerObject,
+                   {Text("PurchaseOrderNumber")} AS PurchaseOrderNumber, {Text("InvoiceNumber")} AS InvoiceNumber, {Text("OriginalOrderNumber")} AS OriginalOrderNumber
+            {from}
+            ORDER BY ABS(ISNULL({Number(amountField)}, 0)) DESC, f.FileName, r.RowNumber
+            """, args, commandTimeout: LongTimeout).ToList();
+        var (count, sum) = connection.QuerySingle<(int, decimal)>(
+            $"SELECT COUNT(*), ISNULL(SUM({Number(amountField)}), 0) {from}", args, commandTimeout: LongTimeout);
+        return new RunLines(rows, count, sum);
     }
 
     public IReadOnlyList<RunReconciliationRow> Reconciliations()

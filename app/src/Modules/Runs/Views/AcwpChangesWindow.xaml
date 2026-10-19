@@ -1,0 +1,138 @@
+<Window x:Class="PzlEv.Modules.Runs.Views.AcwpChangesWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:partials="clr-namespace:PzlEv.Shared.Views.Partials"
+        xmlns:services="clr-namespace:PzlEv.Modules.Runs.Services"
+        Title="{Binding Title}" Width="1280" Height="820" MinWidth="900" MinHeight="520"
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="False" Background="{StaticResource Surface}">
+    <!-- Okno „Zmiany ACWP” (DataContext: AcwpChangesViewModel) – docs/funkcjonalnosc.md, F06 -->
+    <DockPanel Margin="16">
+        <TextBlock DockPanel.Dock="Top" Text="{Binding Title}" Style="{StaticResource H2}" />
+        <TextBlock DockPanel.Dock="Top" Text="{Binding Note}" Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="0,0,0,8" />
+
+        <!-- Wariant porównania i filtry -->
+        <WrapPanel DockPanel.Dock="Top" Margin="0,0,0,8">
+            <RadioButton Content="Dwa uruchomienia" IsChecked="{Binding RunMode}" VerticalAlignment="Center" Margin="0,0,12,0"
+                         ToolTip="Stan narastająco w dwóch uruchomieniach przebiegu (np. koniec poprzedniego okresu i najnowsze); liść – okres" />
+            <RadioButton Content="Okres do okresu" IsChecked="{Binding PeriodMode}" VerticalAlignment="Center" Margin="0,0,16,0"
+                         ToolTip="Koszt zaksięgowany w dwóch okresach w jednym uruchomieniu; liść – element WBS" />
+            <StackPanel Orientation="Horizontal" Visibility="{Binding RunMode, Converter={StaticResource BoolToVisibility}}">
+                <TextBlock Text="Było" VerticalAlignment="Center" Margin="0,0,6,0" />
+                <ComboBox ItemsSource="{Binding Pins}" SelectedItem="{Binding BeforePin}" DisplayMemberPath="Label" Width="270" />
+                <Button Content="⇄" Style="{StaticResource Btn}" Margin="6,0" Command="{Binding Swap}" ToolTip="Zamień uruchomienia" />
+                <TextBlock Text="Jest" VerticalAlignment="Center" Margin="0,0,6,0" />
+                <ComboBox ItemsSource="{Binding Pins}" SelectedItem="{Binding AfterPin}" DisplayMemberPath="Label" Width="270" Margin="0,0,16,0" />
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" Visibility="{Binding PeriodMode, Converter={StaticResource BoolToVisibility}}">
+                <TextBlock Text="Uruchomienie" VerticalAlignment="Center" Margin="0,0,6,0" />
+                <ComboBox ItemsSource="{Binding Pins}" SelectedItem="{Binding PeriodPin}" DisplayMemberPath="Label" Width="270" Margin="0,0,12,0" />
+                <TextBlock Text="Było" VerticalAlignment="Center" Margin="0,0,6,0" />
+                <ComboBox ItemsSource="{Binding Periods}" SelectedItem="{Binding BeforePeriod}" DisplayMemberPath="Label" Width="90" Margin="0,0,12,0" />
+                <TextBlock Text="Jest" VerticalAlignment="Center" Margin="0,0,6,0" />
+                <ComboBox ItemsSource="{Binding Periods}" SelectedItem="{Binding AfterPeriod}" DisplayMemberPath="Label" Width="90" Margin="0,0,16,0" />
+            </StackPanel>
+            <TextBlock Text="Rodzaj" VerticalAlignment="Center" Margin="0,0,6,0" />
+            <ComboBox ItemsSource="{Binding Kinds}" SelectedItem="{Binding Kind}" Width="110" Margin="0,0,16,0" />
+            <CheckBox Content="Tylko zmiany" IsChecked="{Binding OnlyChanges}" VerticalAlignment="Center" Margin="0,0,12,0" />
+            <CheckBox Content="Wszystkie pozycje" IsChecked="{Binding ShowAll}" VerticalAlignment="Center"
+                      ToolTip="Bez zaznaczenia – 50 pozycji z największą zmianą na każdym poziomie i wiersz „pozostałe”" />
+        </WrapPanel>
+        <partials:BusyBar DockPanel.Dock="Top" DataContext="{Binding Busy}" />
+        <Border DockPanel.Dock="Top" Background="{StaticResource CritSoft}" CornerRadius="6" Padding="12,8" Margin="0,0,0,8"
+                Visibility="{Binding HasError, Converter={StaticResource BoolToVisibility}}">
+            <TextBlock Text="{Binding Error}" Foreground="{StaticResource Crit}" FontWeight="SemiBold" TextWrapping="Wrap" />
+        </Border>
+
+        <!-- Kafelki rodzajów kosztu -->
+        <ItemsControl DockPanel.Dock="Top" ItemsSource="{Binding Totals}" Margin="0,0,0,10">
+            <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+                <DataTemplate DataType="{x:Type services:AcwpKindTotal}">
+                    <Border Style="{StaticResource Panel}" Padding="12,8" Margin="0,0,10,0" MinWidth="220">
+                        <StackPanel>
+                            <TextBlock Text="{Binding Kind, StringFormat='ACWP {0}'}" FontWeight="SemiBold" />
+                            <TextBlock Style="{StaticResource MutedText}">
+                                <Run Text="było" /> <Run Text="{Binding Before, Mode=OneWay, StringFormat=#\,0.00}" />
+                                <Run Text=" · jest" /> <Run Text="{Binding After, Mode=OneWay, StringFormat=#\,0.00}" />
+                            </TextBlock>
+                            <TextBlock FontSize="16" FontWeight="SemiBold">
+                                <Run Text="{Binding Delta, Mode=OneWay, StringFormat=+#\,0.00;-#\,0.00;0}" />
+                                <Run Text="{Binding Percent, Mode=OneWay, StringFormat='({0:+0.0;-0.0;0}%)'}" Foreground="{StaticResource Muted}" FontSize="12" />
+                            </TextBlock>
+                        </StackPanel>
+                    </Border>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="3*" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="2*" />
+            </Grid.RowDefinitions>
+            <!-- Nagłówek kolumn drzewa -->
+            <Grid Margin="22,0,0,4">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="150" />
+                    <ColumnDefinition Width="150" />
+                    <ColumnDefinition Width="150" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Text="Rodzaj → cost element → element WBS → okres" Style="{StaticResource MutedText}" />
+                <TextBlock Grid.Column="1" Text="Było" Style="{StaticResource MutedText}" TextAlignment="Right" />
+                <TextBlock Grid.Column="2" Text="Jest" Style="{StaticResource MutedText}" TextAlignment="Right" />
+                <TextBlock Grid.Column="3" Text="Zmiana" Style="{StaticResource MutedText}" TextAlignment="Right" />
+            </Grid>
+            <TextBlock Grid.Row="1" Text="Brak zmian w wybranym zakresie." Style="{StaticResource MutedText}" Margin="0,8,0,0"
+                       Visibility="{Binding IsEmpty, Converter={StaticResource BoolToVisibility}}" />
+            <TreeView Grid.Row="1" ItemsSource="{Binding Tree}" SelectedItemChanged="OnSelectedItemChanged"
+                      VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling">
+                <TreeView.ItemTemplate>
+                    <HierarchicalDataTemplate DataType="{x:Type services:AcwpChangeNode}" ItemsSource="{Binding Children}">
+                        <Grid ToolTip="{Binding Level}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" MinWidth="420" />
+                                <ColumnDefinition Width="150" />
+                                <ColumnDefinition Width="150" />
+                                <ColumnDefinition Width="150" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock x:Name="Label" Text="{Binding Label}" TextTrimming="CharacterEllipsis" />
+                            <TextBlock Grid.Column="1" Text="{Binding Before, StringFormat=#\,0.00}" TextAlignment="Right" FontFamily="{StaticResource FMono}" />
+                            <TextBlock Grid.Column="2" Text="{Binding After, StringFormat=#\,0.00}" TextAlignment="Right" FontFamily="{StaticResource FMono}" />
+                            <TextBlock Grid.Column="3" Text="{Binding Delta, StringFormat=+#\,0.00;-#\,0.00;0}" TextAlignment="Right" FontFamily="{StaticResource FMono}"
+                                       FontWeight="SemiBold" />
+                        </Grid>
+                        <HierarchicalDataTemplate.Triggers>
+                            <DataTrigger Binding="{Binding Remainder}" Value="True">
+                                <Setter TargetName="Label" Property="FontStyle" Value="Italic" />
+                                <Setter TargetName="Label" Property="Foreground" Value="{StaticResource Muted}" />
+                            </DataTrigger>
+                        </HierarchicalDataTemplate.Triggers>
+                    </HierarchicalDataTemplate>
+                </TreeView.ItemTemplate>
+            </TreeView>
+
+            <TextBlock Grid.Row="2" Text="{Binding LinesTitle}" Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="0,10,0,6" />
+            <DataGrid Grid.Row="3" Style="{StaticResource DataTable}" ItemsSource="{Binding Lines}" IsReadOnly="True">
+                <DataGrid.Columns>
+                    <DataGridTextColumn Header="Stan" Binding="{Binding Side}" />
+                    <DataGridTextColumn Header="Kwota" Binding="{Binding Line.Amount, StringFormat=#\,0.00}" />
+                    <DataGridTextColumn Header="Ilość" Binding="{Binding Line.Quantity, StringFormat=#\,0.###}" />
+                    <DataGridTextColumn Header="Created on" Binding="{Binding Line.CreatedOn}" />
+                    <DataGridTextColumn Header="Cost element name" Binding="{Binding Line.CostElementName}" />
+                    <DataGridTextColumn Header="CO object name" Binding="{Binding Line.CoObjectName}" Width="*" />
+                    <DataGridTextColumn Header="Partner object" Binding="{Binding Line.PartnerObject}" />
+                    <DataGridTextColumn Header="Zamówienie" Binding="{Binding Line.PurchaseOrderNumber}" />
+                    <DataGridTextColumn Header="Faktura" Binding="{Binding Line.InvoiceNumber}" />
+                    <DataGridTextColumn Header="Zlecenie" Binding="{Binding Line.OriginalOrderNumber}" />
+                    <DataGridTextColumn Header="Plik" Binding="{Binding Line.FileName}" />
+                    <DataGridTextColumn Header="Wiersz" Binding="{Binding Line.RowNumber}" />
+                </DataGrid.Columns>
+            </DataGrid>
+        </Grid>
+    </DockPanel>
+</Window>

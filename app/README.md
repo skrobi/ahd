@@ -317,7 +317,7 @@ app/
     │   ├── Dashboard/           Pulpit: import, źródła, słowniki, otwarte problemy, dziennik (z bazy)
     │   ├── Diagnostics/         test stosu, konfiguracja środowiska, migracje, sprawdzenie PZLPROD
     │   ├── Projects/            Projekty (F4): kreator, Performance Objectives, słowniki projektu, gotowość, struktura, przebiegi projektu
-    │   ├── Runs/                przebieg projektu P0–P2 (RunService, RunChecks – reguły kontroli); ekran „Przebiegi” – macierz kontroli i definicja przebiegu (RunOverview)
+    │   ├── Runs/                przebieg projektu P0–P2 (RunService, RunChecks – reguły kontroli); ekran „Przebiegi” – macierz kontroli i definicja przebiegu (RunOverview); okno „Zmiany ACWP” (AcwpChanges)
     │   └── Reconciliation/ Progress/ Evm/ Export/   pozostałe moduły: plik wejścia + etapy, bez pozycji w menu
     └── Shared/
         ├── Utils/Ui/            MVVM, konwertery, okna wyboru pliku, kontrakt modułu, tabela słownika do edycji (WPF)

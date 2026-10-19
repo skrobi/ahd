@@ -4,6 +4,7 @@ using PzlEv.Modules.Runs.Data;
 using PzlEv.Modules.Runs.Services;
 using PzlEv.Shared.Models.Db;
 using PzlEv.Shared.Models.Pipeline;
+using PzlEv.Shared.Utils.Data;
 using PzlEv.Shared.Utils.Ui.Mvvm;
 using Serilog;
 
@@ -34,10 +35,12 @@ public sealed class RunsViewModel : ObservableObject
     private Dictionary<long, IReadOnlyList<RunIssueRow>> _issues = [];
     private Dictionary<long, string> _pinLabels = [];
 
-    public RunsViewModel(IRunStore store)
+    public RunsViewModel(IRunStore store, IAcwpChanges? acwpChanges = null)
     {
         _store = store;
         Refresh = new AsyncRelayCommand(LoadProjects, () => !Busy.IsBusy);
+        OpenAcwpChanges = new RelayCommand(_ => acwpChanges?.Show(SelectedProject!.Code, null, null, "cały program"),
+            _ => acwpChanges is not null && SelectedProject is not null && Matrix.Columns.Count > 0);
         SelectCell = new RelayCommand(p => ShowCell(p as RunMatrixCell));
         _ = LoadProjects();
     }
@@ -47,6 +50,9 @@ public sealed class RunsViewModel : ObservableObject
     public ICommand Refresh { get; }
 
     public ICommand SelectCell { get; }
+
+    /// <summary>Okno „Zmiany ACWP” programu (porównanie uruchomień albo okresów).</summary>
+    public ICommand OpenAcwpChanges { get; }
 
     public IReadOnlyList<RunProjectRow> Projects { get => _projects; private set => SetProperty(ref _projects, value); }
 

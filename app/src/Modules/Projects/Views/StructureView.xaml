@@ -57,7 +57,7 @@
                   VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling"
                   BeginningEdit="OnBeginningEdit" PreparingCellForEdit="OnPreparingCellForEdit" CellEditEnding="OnCellEditEnding"
                   RowEditEnding="OnRowEditEnding" CurrentCellChanged="OnCurrentCellChanged" PreviewKeyDown="OnPreviewKeyDown"
-                  LostKeyboardFocus="OnLostKeyboardFocus" IsVisibleChanged="OnIsVisibleChanged">
+                  LostKeyboardFocus="OnLostKeyboardFocus" IsVisibleChanged="OnIsVisibleChanged" MouseDoubleClick="OnMouseDoubleClick">
             <DataGrid.RowStyle>
                 <Style TargetType="DataGridRow">
                     <Style.Triggers>

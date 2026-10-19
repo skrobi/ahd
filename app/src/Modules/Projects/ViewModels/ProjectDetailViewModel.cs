@@ -68,7 +68,7 @@ public sealed class ProjectDetailViewModel : ObservableObject, IDisposable
         Busy = busy;
         Project = project;
         // Edycja struktury także w trakcie zapisu – zapisy idą po kolei (CommitRow), niezapisane zmiany trwają po odświeżeniu.
-        Structure = new StructureViewModel { Commit = CommitRow, CanEditNow = () => !IsEditingObjectives };
+        Structure = new StructureViewModel { Commit = CommitRow, CanEditNow = () => !IsEditingObjectives, OpenAcwpChanges = ShowAcwpChanges };
         Structure.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(StructureViewModel.Notice)) OnPropertyChanged(nameof(StatusLine)); };
         // Edycja nakładki tym samym edytorem co w kreatorze (przeciąganie, przesuwanie, usuwanie, węzły wirtualne);
         // „Wczytaj Excel” podmienia strukturę (elementy o tym samym WBS element zachowują historię).
@@ -347,6 +347,25 @@ public sealed class ProjectDetailViewModel : ObservableObject, IDisposable
         RunProgress = "";
         CommandManager.InvalidateRequerySuggested();   // „Uruchom przebieg” znów dostępny
         _ = LoadRuns();
+    }
+
+    /// <summary>Okno „Zmiany ACWP” (moduł Przebiegi) dla wiersza struktury i rodzaju kosztu kolumny; wiersz bez elementów WBS – cały program.</summary>
+    private void ShowAcwpChanges(StructureRowViewModel row, string column)
+    {
+        if (_service.AcwpChanges is not { } window)
+        {
+            Status = "Okno „Zmiany ACWP” niedostępne – moduł Przebiegi nie jest uruchomiony.";
+            return;
+        }
+        var kind = column switch
+        {
+            StructureColumns.AcwpLabor => GlobalDictionaries.LaborKind,
+            StructureColumns.AcwpMaterial => GlobalDictionaries.MaterialKind,
+            StructureColumns.AcwpOther => GlobalDictionaries.OtherKind,
+            _ => null,
+        };
+        var elements = Structure.WbsElementsOf(row);
+        window.Show(Code, kind, elements.Count == 0 ? null : elements, row.Row.Name);
     }
 
     private async Task LoadRuns()

@@ -18,10 +18,18 @@ public sealed record RunBudgetTotals(decimal Bac, decimal BacHours, decimal BacM
 /// <summary>
 /// Słowniki kontroli P2 (docs/pipeline-fazy.md, P2): Cost Category efektywny dla programu (cost element → kategoria; null – pusta),
 /// WP programu, MPK ze stawką w „Stawki wydziałów” na rok RateYear; Budget – sumy budżetu (miary reguł uzgodnień); CostKinds – rodzaj
-/// kosztu cost elementu (Hours / Materials / Other; brak – Other) z Cost Category efektywnego.
+/// kosztu cost elementu (Hours / Materials / Other; brak – Other) z Cost Category efektywnego; CostElementNames – opis cost elementu.
 /// </summary>
 public sealed record RunDictionaryData(IReadOnlyDictionary<string, string?> CostCategories, IReadOnlyList<RunWpRow> Wps,
-    IReadOnlySet<string> RatedCostCenters, int RateYear, RunBudgetTotals? Budget = null, IReadOnlyDictionary<string, string>? CostKinds = null);
+    IReadOnlySet<string> RatedCostCenters, int RateYear, RunBudgetTotals? Budget = null, IReadOnlyDictionary<string, string>? CostKinds = null,
+    IReadOnlyDictionary<string, string>? CostElementNames = null);
+
+/// <summary>Linia źródłowa ACTUALS (okno „Zmiany ACWP”): plik, wiersz, data utworzenia, kwota pola kwoty uruchomienia, ilość, opisy.</summary>
+public sealed record RunLineRow(string FileName, int RowNumber, string? CreatedOn, decimal? Amount, decimal? Quantity, string? CostElementName,
+    string? CoObjectName, string? PartnerObject, string? PurchaseOrderNumber, string? InvoiceNumber, string? OriginalOrderNumber);
+
+/// <summary>Linie źródłowe komórki: pierwsze linie wg |kwoty| oraz liczba i suma wszystkich.</summary>
+public sealed record RunLines(IReadOnlyList<RunLineRow> Rows, int Count, decimal Sum);
 
 /// <summary>Wiersz słownika „Reguły uzgodnień” (dict.RunReconciliation).</summary>
 public sealed record RunReconciliationRow(string ProjectType, string Name, string RunKind, bool IsActive, string LeftFormula, string Comparison,
@@ -68,6 +76,12 @@ public interface IRunStore
 
     /// <summary>Słowniki kontroli spójności (P2): Cost Category efektywny, WP i CAM z budżetem, MPK ze stawką na rok year.</summary>
     RunDictionaryData Dictionaries(string project, int year);
+
+    /// <summary>
+    /// Linie ACTUALS elementu WBS × cost element × rok × okres z najnowszych wersji plików zaimportowanych do asOf (stan uruchomienia),
+    /// kwota z pola amountField; pierwsze top linii wg |kwoty|.
+    /// </summary>
+    RunLines ActualsLines(string wbsElement, string costElement, int year, int period, DateTimeOffset asOf, string amountField, int top);
 
     /// <summary>Słownik globalny „Reguły uzgodnień” – bieżące wiersze.</summary>
     IReadOnlyList<RunReconciliationRow> Reconciliations();

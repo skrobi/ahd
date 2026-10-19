@@ -36,12 +36,14 @@ public sealed class RunsModule : IModule
     {
         var store = _store = new SqlRunStore(services.Sql);
         ISourceImport? Imports() => services.Contracts.Get<ISourceImport>();
-        services.Contracts.Register<IRunLauncher>(new RunLauncher(new RunService(store, services, Imports, () => services.Contracts.Get<IProjectProcessSource>()),
-            store, Imports));
+        IProjectProcessSource? Processes() => services.Contracts.Get<IProjectProcessSource>();
+        services.Contracts.Register<IRunLauncher>(new RunLauncher(new RunService(store, services, Imports, Processes), store, Imports));
+        services.Contracts.Register<IAcwpChanges>(_acwpChanges = new AcwpChangesLauncher(store, Processes));
     }
 
     private SqlRunStore? _store;
+    private IAcwpChanges? _acwpChanges;
 
     public FrameworkElement CreateView(ModuleContext context) =>
-        new RunsView { DataContext = new RunsViewModel(_store ?? new SqlRunStore(context.Services.Sql)) };
+        new RunsView { DataContext = new RunsViewModel(_store ?? new SqlRunStore(context.Services.Sql), _acwpChanges) };
 }
