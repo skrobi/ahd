@@ -164,15 +164,17 @@ public sealed class SqlRunStore(SqlDatabase db) : IRunStore
     {
         using var connection = db.Open();
         // Cost Category efektywny: wiersz projektu przed globalnym (jak RUN_PinBalance – cost elementy rozliczeniowe).
-        var categories = connection.Query<(string CostElement, string? CostCategory)>(
+        var effective = connection.Query<(string CostElement, string? CostCategory, string? CostKind)>(
                 $"""
-                SELECT CostElement, NULLIF(LTRIM(RTRIM(CostCategory)), N'') AS CostCategory
-                FROM (SELECT CostElement, CostCategory,
+                SELECT CostElement, NULLIF(LTRIM(RTRIM(CostCategory)), N'') AS CostCategory, NULLIF(LTRIM(RTRIM(CostKind)), N'') AS CostKind
+                FROM (SELECT CostElement, CostCategory, CostKind,
                              ROW_NUMBER() OVER (PARTITION BY CostElement ORDER BY CASE WHEN Project IS NULL THEN 1 ELSE 0 END) AS rn
                       FROM {db.Table("dict.CostCategory")} WHERE SupersededAt IS NULL AND (Project = @project OR Project IS NULL)) c
                 WHERE c.rn = 1
                 """, new { project })
-            .ToDictionary(r => r.CostElement, r => r.CostCategory, StringComparer.OrdinalIgnoreCase);
+            .ToList();
+        var categories = effective.ToDictionary(r => r.CostElement, r => r.CostCategory, StringComparer.OrdinalIgnoreCase);
+        var kinds = effective.Where(r => r.CostKind is not null).ToDictionary(r => r.CostElement, r => r.CostKind!, StringComparer.OrdinalIgnoreCase);
         var wps = connection.Query<RunWpRow>(
                 $"""
                 SELECT w.Wp, w.Mpk,
@@ -194,7 +196,7 @@ public sealed class SqlRunStore(SqlDatabase db) : IRunStore
             SELECT ISNULL(SUM(Bac), 0) AS Bac, ISNULL(SUM(BacHours), 0) AS BacHours, ISNULL(SUM(BacMaterial), 0) AS BacMaterial
             FROM {db.Table("dict.ScheduleBudget")} WHERE Project = @project AND SupersededAt IS NULL
             """, new { project });
-        return new RunDictionaryData(categories, wps, rated, year, budget);
+        return new RunDictionaryData(categories, wps, rated, year, budget, kinds);
     }
 
     public IReadOnlyList<RunReconciliationRow> Reconciliations()

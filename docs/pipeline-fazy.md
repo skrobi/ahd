@@ -218,9 +218,14 @@ Przebiegi (`docs/funkcjonalnosc.md`, F06) pokazuje je obok bieżącej definicji 
 | MPK bez stawki wydziału na rok | Spójność ze słownikami | ERROR | – |
 | WP bez MPK | Spójność ze słownikami | WARNING | – |
 | WP bez budżetu | Spójność ze słownikami | WARNING | – |
+| Nowy rodzaj kosztu w programie | Rodzaje kosztu | WARNING | 1,00 |
+| Skok przyrostu kosztu | Rodzaje kosztu | WARNING | 3 (× średni przyrost z 6 okresów) |
+| Spadek kosztu narastająco w rodzaju | Rodzaje kosztu | WARNING | 1,00 |
+| Zmiana rodzaju kosztu w zamkniętych okresach | Rodzaje kosztu | WARNING | 1,00 |
 | Netowanie do 0 w okresach zamkniętych | Netowanie programu do 0 | ERROR | 1,00 |
 | Koszt utworzony po rozliczeniu | Netowanie programu do 0 | WARNING | – (gdy program nie netuje się do 0) |
 | Zmiana salda okresu zamkniętego | Spójność ze słownikami (P2) | ERROR / WARNING | cost element kosztu (bez rozliczeniowych) z pustą Cost Category w słowniku efektywnym programu – WARNING; MPK WP („WP i CAM”) bez wiersza w „Stawki wydziałów” na rok bieżącego okresu (ETC Cost bez stawki) – ERROR z listą WP; WP bez MPK w „WP i CAM” – WARNING; WP bez BAC, BAC HOURS i BAC MATERIAL (puste albo 0) w „Harmonogram i budżet” – WARNING. Słowniki w stanie z chwili przebiegu (nie są przypinane – P1) |
+| Rodzaje kosztu | WARNING | rodzaj kosztu cost elementu – kolumna „Rodzaj kosztu” Cost Category efektywnego (Hours / Materials; inny albo brak – Other, jak ACWP Hours / Materials / Other struktury), koszt bez rozliczenia wychodzącego: rodzaj z kosztem, którego w poprzednim przebiegu nie było; przyrost rodzaju w bieżącym okresie (koszt zaksięgowany w okresie) większy niż próg × średni przyrost z 6 okresów przed bieżącym (okresy bez kosztu – 0; średnia ≤ 0 – bez wyniku); koszt rodzaju narastająco mniejszy niż w poprzednim przebiegu; koszt rodzaju w okresach zamkniętych zmieniony względem poprzedniego przebiegu (3 okresy z największą zmianą). Szczegóły zmian – okno „Zmiany ACWP” (planowane) |
 | Zmiany w zamkniętych okresach | WARNING | 1,00 |
 | Ujemny koszt elementu WBS | Jakość danych | WARNING | 1,00 |
 | Wiersze w okresach przyszłych | Jakość danych | WARNING | – |
@@ -247,6 +252,9 @@ katalog `RunMeasures` i wartość w `RunReconciliations.Measures`):
 | `[Koszt bez elementu WBS]` | koszt brutto wierszy bez elementu WBS |
 | `[BAC]`, `[BAC HOURS]`, `[BAC MATERIAL]` | sumy WP w „Harmonogram i budżet” (kwoty w walucie wpisów, bez przeliczenia) |
 | `[Liczba WP]`, `[Liczba WP bez budżetu]` | WP w „WP i CAM”; bez BAC, BAC HOURS i BAC MATERIAL |
+| `[ACWP Hours]`, `[ACWP Materials]`, `[ACWP Other]` | koszt brutto rodzaju narastająco (jak ACWP struktury) |
+| `[Przyrost okresu Hours]` … `Materials`, `Other` | koszt brutto rodzaju zaksięgowany w bieżącym okresie |
+| `[Średni przyrost Hours]` … `Materials`, `Other` | średni koszt rodzaju na okres w 6 okresach przed bieżącym, np. `[Przyrost okresu Materials] <= [Średni przyrost Materials] * 2` |
 
 Miary struktury programu (ACWP struktury z podziałem, Material Value, BCWP, ETC) – po liście kontroli finansów (kontrakt modułu
 Projekty dla przebiegu).

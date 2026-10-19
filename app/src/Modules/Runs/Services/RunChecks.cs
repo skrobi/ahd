@@ -33,6 +33,7 @@ public static class RunChecks
     public const string ClosedPeriods = RunCheckRules.ClosedPeriods;
     public const string Quality = RunCheckRules.Quality;
     public const string Dictionaries = RunCheckRules.Dictionaries;
+    public const string CostKinds = RunCheckRules.CostKinds;
 
     /// <summary>Tolerancja salda (zaokrąglenia) w walucie obiektu.</summary>
     public const decimal Tolerance = RunCheckRules.Tolerance;
@@ -55,6 +56,10 @@ public static class RunChecks
             [RunCheckRules.CostCenterWithoutRate.Code] = CostCenterWithoutRate,
             [RunCheckRules.WpWithoutCostCenter.Code] = WpWithoutCostCenter,
             [RunCheckRules.WpWithoutBudget.Code] = WpWithoutBudget,
+            [RunCheckRules.NewCostKind.Code] = NewCostKind,
+            [RunCheckRules.CostKindJump.Code] = CostKindJump,
+            [RunCheckRules.CostKindDecrease.Code] = CostKindDecrease,
+            [RunCheckRules.CostKindClosedChanges.Code] = CostKindClosedChanges,
             [RunCheckRules.NetZeroBalance.Code] = NetZeroBalance,
             [RunCheckRules.PostedAfterSettlement.Code] = PostedAfterSettlement,
             [RunCheckRules.ClosedPeriodChanges.Code] = ClosedPeriodChanges,
@@ -196,6 +201,72 @@ public static class RunChecks
             : d.Wps.GroupBy(w => w.Wp, StringComparer.OrdinalIgnoreCase).Where(g => !g.Any(w => w.HasBudget))
                 .Select(g => new RunIssue(Dictionaries, s.Level, g.Key,
                     $"WP {g.Key} bez budżetu (BAC, BAC HOURS, BAC MATERIAL) w „Harmonogram i budżet” – WP bez podstawy BCWS i BCWP"));
+
+    // Rodzaje kosztu: rodzaj z kosztem, którego w poprzednim przebiegu nie było.
+    private static IEnumerable<RunIssue> NewCostKind(RunCheckContext c, RunCheckSetting s)
+    {
+        if (c.Previous is null)
+            return [];
+        var kinds = c.Dictionaries?.CostKinds;
+        var now = RunCostKinds.Totals(c.Current, kinds);
+        var then = RunCostKinds.Totals(c.Previous, kinds);
+        return RunMeasures.Kinds.Where(k => Math.Abs(now[k]) > s.Threshold!.Value && Math.Abs(then[k]) <= s.Threshold!.Value)
+            .Select(k => new RunIssue(CostKinds, s.Level, k,
+                $"Nowy rodzaj kosztu {k}: {Amount(now[k])} (w poprzednim przebiegu {Amount(then[k])}) – sprawdź cost elementy rodzaju {k}", now[k]));
+    }
+
+    // Rodzaje kosztu: przyrost bieżącego okresu większy niż K × średni przyrost z N poprzednich okresów.
+    private static IEnumerable<RunIssue> CostKindJump(RunCheckContext c, RunCheckSetting s)
+    {
+        var kinds = c.Dictionaries?.CostKinds;
+        foreach (var kind in RunMeasures.Kinds)
+        {
+            var increment = RunCostKinds.InPeriod(c.Current, kinds, kind, c.Today);
+            var average = RunCostKinds.AverageBefore(c.Current, kinds, kind, c.Today, RunCheckRules.IncrementPeriods);
+            if (average > 0 && increment > s.Threshold!.Value * average)
+                yield return new RunIssue(CostKinds, s.Level, kind,
+                    $"Skok przyrostu {kind} w okresie {c.Today.Year}/{c.Today.Period:00}: {Amount(increment)} – {Amount(increment / average)} × średni przyrost " +
+                    $"{Amount(average)} z {RunCheckRules.IncrementPeriods} poprzednich okresów (próg {Amount(s.Threshold!.Value)} ×)", increment - average);
+        }
+    }
+
+    // Rodzaje kosztu: koszt rodzaju narastająco mniejszy niż w poprzednim przebiegu.
+    private static IEnumerable<RunIssue> CostKindDecrease(RunCheckContext c, RunCheckSetting s)
+    {
+        if (c.Previous is null)
+            return [];
+        var kinds = c.Dictionaries?.CostKinds;
+        var now = RunCostKinds.Totals(c.Current, kinds);
+        var then = RunCostKinds.Totals(c.Previous, kinds);
+        return RunMeasures.Kinds.Where(k => now[k] < then[k] - s.Threshold!.Value)
+            .Select(k => new RunIssue(CostKinds, s.Level, k,
+                $"Koszt {k} narastająco mniejszy niż w poprzednim przebiegu: {Amount(now[k])} < {Amount(then[k])} (storno, przeksięgowanie, zmiana rodzaju w Cost Category?)",
+                now[k] - then[k]));
+    }
+
+    // Rodzaje kosztu: koszt rodzaju w okresach zamkniętych zmieniony względem poprzedniego przebiegu; 3 okresy z największą zmianą.
+    private static IEnumerable<RunIssue> CostKindClosedChanges(RunCheckContext c, RunCheckSetting s)
+    {
+        if (c.Previous is null)
+            yield break;
+        var kinds = c.Dictionaries?.CostKinds;
+        foreach (var kind in RunMeasures.Kinds)
+        {
+            Dictionary<(int, int), decimal> ByPeriod(IEnumerable<RunBalanceRow> rows) => rows
+                .Where(r => !r.IsSettlement && c.Closed(r) && RunCostKinds.Of(r, kinds) == kind)
+                .GroupBy(r => (r.FiscalYear, Math.Min(r.Period, 12))).ToDictionary(g => g.Key, g => g.Sum(r => r.Amount));
+            var now = ByPeriod(c.Current);
+            var then = ByPeriod(c.Previous);
+            var delta = now.Values.Sum() - then.Values.Sum();
+            if (Math.Abs(delta) <= s.Threshold!.Value)
+                continue;
+            var periods = now.Keys.Union(then.Keys).Select(p => (Period: p, Delta: now.GetValueOrDefault(p) - then.GetValueOrDefault(p)))
+                .Where(x => x.Delta != 0).OrderByDescending(x => Math.Abs(x.Delta)).Take(3)
+                .Select(x => $"{x.Period.Item1}/{x.Period.Item2:00} {Amount(x.Delta)}");
+            yield return new RunIssue(CostKinds, s.Level, kind,
+                $"Koszt {kind} w okresach zamkniętych zmienił się o {Amount(delta)} od poprzedniego przebiegu; okresy: {string.Join(", ", periods)}", delta);
+        }
+    }
 
     // Dane źródłowe ACTUALS w okresach zamkniętych (projekt CAS – koszty bez narzutów z rozliczeniem), nie koszty po narzutach.
     private static List<RunBalanceRow> ClosedSource(RunCheckContext c) => (c.Source ?? c.Current).Where(c.Closed).ToList();

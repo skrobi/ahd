@@ -24,7 +24,9 @@ public static class RunReconciliations
         var data = source ?? current;
         bool Closed(RunBalanceRow r) => (r.FiscalYear, Math.Min(r.Period, 12)).CompareTo(closedBefore) < 0;
         var wps = dictionaries?.Wps.GroupBy(w => w.Wp, StringComparer.OrdinalIgnoreCase).ToList();
-        return new Dictionary<string, decimal?>
+        var kinds = dictionaries?.CostKinds;
+        var totals = RunCostKinds.Totals(current, kinds);
+        var measures = new Dictionary<string, decimal?>
         {
             [RunMeasures.GrossCost.Name] = RunChecks.GrossCost(current),
             [RunMeasures.Settlement.Name] = data.Where(r => r.IsSettlement).Sum(r => r.Amount),
@@ -40,6 +42,13 @@ public static class RunReconciliations
             [RunMeasures.WpCount.Name] = wps?.Count,
             [RunMeasures.WpWithoutBudgetCount.Name] = wps?.Count(g => !g.Any(w => w.HasBudget)),
         };
+        foreach (var kind in RunMeasures.Kinds)
+        {
+            measures[RunMeasures.KindAcwp(kind)] = totals[kind];
+            measures[RunMeasures.KindIncrement(kind)] = RunCostKinds.InPeriod(current, kinds, kind, today);
+            measures[RunMeasures.KindAverageIncrement(kind)] = RunCostKinds.AverageBefore(current, kinds, kind, today, RunCheckRules.IncrementPeriods);
+        }
+        return measures;
     }
 
     /// <summary>Reguły słownika dla typu programu („Wszystkie” albo typ) i wariantu przebiegu („Każdy” albo wariant), w kolejności nazw.</summary>

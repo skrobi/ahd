@@ -98,6 +98,7 @@ public sealed class RunChecksTests
             Row("A.2", "92212550", 10, -50m),                                                       // pierwszy raz, ujemny koszt
             Row("A.6", "51105550", 12, 3m, currency: "USD"),                                        // okres przyszły, inna waluta
             Row("", "51105550", 9, 2m),                                                             // bez elementu WBS
+            Row("A.7", "51105550", 10, 40m),                                                        // skok przyrostu Materials
         ],
         [Row("A.1", "51105550", 3, 100m, rows: 10)]
     );
@@ -106,7 +107,8 @@ public sealed class RunChecksTests
     private static RunDictionaryData Dictionaries() => new(
         new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase) { ["51105550"] = "Materials", ["92212550"] = null, ["91902551"] = null },
         [new("WP-1", "PZW20", true), new("WP-2", "PZW30", false), new("WP-3", null, true)],
-        new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "PZW20" }, 2026);
+        new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "PZW20" }, 2026,
+        CostKinds: new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["51105550"] = "Materials", ["92212550"] = "Hours" });
 
     [Fact]
     public void Dictionary_consistency_rules_find_cost_element_without_category_cost_center_without_rate_and_wp_without_budget()
@@ -132,6 +134,31 @@ public sealed class RunChecksTests
         var noMpk = Assert.Single(issues, i => i.Message.Contains("bez MPK"));
         Assert.Equal(("WP-3", CheckLevel.Warning), (noMpk.Element, noMpk.Level));
         Assert.Empty(Of(without, RunChecks.Dictionaries));   // bez słowników – bez wyników
+    }
+
+    [Fact]
+    public void Cost_kind_rules_find_new_kind_jump_over_average_decrease_and_closed_period_change()
+    {
+        // Materials: 6 okresów przed 2026/10 po 10 (średnio 10), w 2026/10 – 31 > 3 × 10; Other – nowy; Hours – spadek i zmiana w zamkniętym 2026/05.
+        RunBalanceRow[] previous = [.. Enumerable.Range(4, 6).Select(p => Row("A.1", "51105550", p, 10m)), Row("A.2", "92212550", 5, 100m)];
+        RunBalanceRow[] current = [.. previous.Where(r => r.CostElement == "51105550"), Row("A.1", "51105550", 10, 31m), Row("A.2", "92212550", 5, 60m),
+            Row("A.3", "99999999", 10, 5m), Row("A.1", "91902551", 10, -500m, settlement: true)];
+
+        var issues = Of(RunChecks.Check(current, previous, Dictionary, ClosedBefore, Today, dictionaries: Dictionaries()), RunChecks.CostKinds);
+        var jumpAt30 = RunChecks.Check(current, previous, Dictionary, ClosedBefore, Today, dictionaries: Dictionaries(),
+            settings: new Dictionary<string, RunCheckSetting> { [RunCheckRules.CostKindJump.Code] = new(true, CheckLevel.Warning, 3.2m) });
+
+        var jump = Assert.Single(issues, i => i.Message.StartsWith("Skok"));
+        Assert.Equal(("Materials", 21m), (jump.Element, jump.Amount));
+        Assert.Contains("2026/10: 31 – 3,1 × średni przyrost 10 z 6 poprzednich okresów", jump.Message.Replace('\u00A0', ' '));
+        Assert.DoesNotContain(jumpAt30, i => i.Message.StartsWith("Skok"));
+        Assert.Equal(("Other", 5m), (Assert.Single(issues, i => i.Message.StartsWith("Nowy")).Element, Assert.Single(issues, i => i.Message.StartsWith("Nowy")).Amount));
+        Assert.Equal(("Hours", -40m), (Assert.Single(issues, i => i.Message.StartsWith("Koszt Hours narastająco")).Element,
+            Assert.Single(issues, i => i.Message.StartsWith("Koszt Hours narastająco")).Amount));
+        var closed = Assert.Single(issues, i => i.Message.Contains("w okresach zamkniętych"));
+        Assert.Equal(("Hours", -40m), (closed.Element, closed.Amount));
+        Assert.EndsWith("okresy: 2026/05 -40", closed.Message);
+        Assert.DoesNotContain(issues, i => i.Element == "Materials" && !i.Message.StartsWith("Skok"));   // rozliczenie poza rodzajami
     }
 
     [Fact]

@@ -23,6 +23,10 @@ public static class RunCheckRules
     public const string ClosedPeriods = "Zmiany w zamkniętych okresach";
     public const string Quality = "Jakość danych";
     public const string Dictionaries = "Spójność ze słownikami";
+    public const string CostKinds = "Rodzaje kosztu";
+
+    /// <summary>Liczba okresów przed bieżącym, z których liczony jest średni przyrost rodzaju kosztu (skok przyrostu, miary średniego przyrostu).</summary>
+    public const int IncrementPeriods = 6;
 
     /// <summary>Tolerancja kwot (zaokrąglenia) – próg domyślny reguł z progiem.</summary>
     public const decimal Tolerance = 1m;
@@ -76,6 +80,20 @@ public static class RunCheckRules
     public static RunCheckRule WpWithoutBudget { get; } = new("wp-without-budget", Dictionaries, "WP bez budżetu",
         "WP ze słownika „WP i CAM” bez BAC, BAC HOURS i BAC MATERIAL (puste albo 0) w „Harmonogram i budżet”.", CheckLevel.Warning);
 
+    public static RunCheckRule NewCostKind { get; } = new("new-cost-kind", CostKinds, "Nowy rodzaj kosztu w programie",
+        "Koszt rodzaju (Hours / Materials / Other – Rodzaj kosztu w Cost Category, puste – Other), którego w poprzednim przebiegu nie było (|koszt| ≤ próg).",
+        CheckLevel.Warning, Tolerance);
+
+    public static RunCheckRule CostKindJump { get; } = new("cost-kind-jump", CostKinds, "Skok przyrostu kosztu",
+        "Przyrost rodzaju kosztu w bieżącym okresie większy niż próg × średni przyrost z 6 poprzednich okresów (koszt zaksięgowany w okresie; średnia ≤ 0 – bez wyniku).",
+        CheckLevel.Warning, 3m);
+
+    public static RunCheckRule CostKindDecrease { get; } = new("cost-kind-decrease", CostKinds, "Spadek kosztu narastająco w rodzaju",
+        "Koszt rodzaju narastająco mniejszy niż w poprzednim przebiegu o więcej niż próg (kwota).", CheckLevel.Warning, Tolerance);
+
+    public static RunCheckRule CostKindClosedChanges { get; } = new("cost-kind-closed-changes", CostKinds, "Zmiana rodzaju kosztu w zamkniętych okresach",
+        "Koszt rodzaju w okresach zamkniętych inny niż w poprzednim przebiegu o więcej niż próg (kwota); okresy z największą zmianą.", CheckLevel.Warning, Tolerance);
+
     public static RunCheckRule NetZeroBalance { get; } = new("net-zero", NetZero, "Netowanie do 0 w okresach zamkniętych",
         "Suma wszystkich wierszy programu w okresach zamkniętych różna od 0 o więcej niż próg (kwota); 10 elementów WBS z największym saldem i przyczyną.",
         CheckLevel.Error, Tolerance);
@@ -103,7 +121,7 @@ public static class RunCheckRules
     public static IReadOnlyList<RunCheckRule> All { get; } =
     [
         RowsDecrease, CostDecrease, TopDeviations, CostElementOutside, CostElementFirst, CostElementWithoutCategory, CostCenterWithoutRate,
-        WpWithoutCostCenter, WpWithoutBudget, NetZeroBalance, PostedAfterSettlement, ClosedPeriodChanges, NegativeCost, FuturePeriods, OtherCurrency, NoWbsElement,
+        WpWithoutCostCenter, WpWithoutBudget, NewCostKind, CostKindJump, CostKindDecrease, CostKindClosedChanges, NetZeroBalance, PostedAfterSettlement, ClosedPeriodChanges, NegativeCost, FuturePeriods, OtherCurrency, NoWbsElement,
     ];
 
     public static RunCheckRule? ByName(string? name) => All.FirstOrDefault(r => string.Equals(r.Name, name?.Trim(), StringComparison.OrdinalIgnoreCase));

@@ -66,6 +66,8 @@ public sealed class RunReconciliationsTests
         Assert.Equal((80m, 4m, 4m), (m["Koszt brutto poprzedniego przebiegu"], m["Wiersze"], m["Wiersze poprzedniego przebiegu"]));
         Assert.Equal(5m, m["Koszt bez elementu WBS"]);
         Assert.Equal((1000m, 50m, 300m, 2m, 1m), (m["BAC"], m["BAC HOURS"], m["BAC MATERIAL"], m["Liczba WP"], m["Liczba WP bez budżetu"]));
+        Assert.Equal((105m, 0m, 5m), (m["ACWP Other"], m["ACWP Hours"], m["Przyrost okresu Other"]));   // bez rodzajów w słowniku – Other
+        Assert.Equal(0m, m["Średni przyrost Other"]);   // koszt z 2026/03 – poza 6 okresami przed 2026/10
         Assert.Null(first["Koszt brutto poprzedniego przebiegu"]);
         Assert.Null(first["BAC"]);
     }

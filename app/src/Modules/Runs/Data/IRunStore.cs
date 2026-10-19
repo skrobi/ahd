@@ -17,10 +17,11 @@ public sealed record RunBudgetTotals(decimal Bac, decimal BacHours, decimal BacM
 
 /// <summary>
 /// Słowniki kontroli P2 (docs/pipeline-fazy.md, P2): Cost Category efektywny dla programu (cost element → kategoria; null – pusta),
-/// WP programu, MPK ze stawką w „Stawki wydziałów” na rok RateYear; Budget – sumy budżetu (miary reguł uzgodnień).
+/// WP programu, MPK ze stawką w „Stawki wydziałów” na rok RateYear; Budget – sumy budżetu (miary reguł uzgodnień); CostKinds – rodzaj
+/// kosztu cost elementu (Hours / Materials / Other; brak – Other) z Cost Category efektywnego.
 /// </summary>
 public sealed record RunDictionaryData(IReadOnlyDictionary<string, string?> CostCategories, IReadOnlyList<RunWpRow> Wps,
-    IReadOnlySet<string> RatedCostCenters, int RateYear, RunBudgetTotals? Budget = null);
+    IReadOnlySet<string> RatedCostCenters, int RateYear, RunBudgetTotals? Budget = null, IReadOnlyDictionary<string, string>? CostKinds = null);
 
 /// <summary>Wiersz słownika „Reguły uzgodnień” (dict.RunReconciliation).</summary>
 public sealed record RunReconciliationRow(string ProjectType, string Name, string RunKind, bool IsActive, string LeftFormula, string Comparison,

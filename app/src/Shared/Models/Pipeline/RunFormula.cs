@@ -25,10 +25,23 @@ public static class RunMeasures
     public static RunMeasure WpCount { get; } = new("Liczba WP", "Liczba WP w „WP i CAM”.");
     public static RunMeasure WpWithoutBudgetCount { get; } = new("Liczba WP bez budżetu", "Liczba WP bez BAC, BAC HOURS i BAC MATERIAL w „Harmonogram i budżet”.");
 
+    /// <summary>Rodzaje kosztu (Cost Category, kolumna Rodzaj kosztu; puste – Other) – miary ACWP, przyrostu i średniego przyrostu.</summary>
+    public static IReadOnlyList<string> Kinds { get; } =
+        [Utils.Dictionaries.GlobalDictionaries.LaborKind, Utils.Dictionaries.GlobalDictionaries.MaterialKind, Utils.Dictionaries.GlobalDictionaries.OtherKind];
+
+    public static string KindAcwp(string kind) => $"ACWP {kind}";
+
+    public static string KindIncrement(string kind) => $"Przyrost okresu {kind}";
+
+    public static string KindAverageIncrement(string kind) => $"Średni przyrost {kind}";
+
     public static IReadOnlyList<RunMeasure> All { get; } =
     [
         GrossCost, Settlement, ClosedBalance, CurrentPeriodCost, PreviousGrossCost, Rows, PreviousRows, NoWbsCost, Bac, BacHours, BacMaterial,
         WpCount, WpWithoutBudgetCount,
+        .. Kinds.Select(k => new RunMeasure(KindAcwp(k), $"Koszt brutto rodzaju {k} narastająco (jak ACWP {k} struktury).")),
+        .. Kinds.Select(k => new RunMeasure(KindIncrement(k), $"Koszt brutto rodzaju {k} zaksięgowany w bieżącym okresie kalendarza.")),
+        .. Kinds.Select(k => new RunMeasure(KindAverageIncrement(k), $"Średni koszt rodzaju {k} na okres w 6 okresach przed bieżącym.")),
     ];
 
     public static RunMeasure? ByName(string name) => All.FirstOrDefault(m => string.Equals(m.Name, name.Trim(), StringComparison.OrdinalIgnoreCase));
