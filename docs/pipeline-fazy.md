@@ -227,6 +227,30 @@ Przebiegi (`docs/funkcjonalnosc.md`, F06) pokazuje je obok bieżącej definicji 
 | Waluta inna niż waluta kosztów | Jakość danych | WARNING | – |
 | Wiersze bez elementu WBS | Jakość danych | WARNING | – |
 
+**Reguły uzgodnień (własne kontrole).** Słownik globalny „Reguły uzgodnień” (`docs/slowniki.md`, rozdz. 2) dopisuje kontrole
+bez zmiany programu: lewa strona, warunek (`=` – różnica ≤ tolerancja, `<=` / `>=` – z tolerancją, `<>` – różnica > tolerancja),
+prawa strona; strony to formuły z miar programu (`[Miara]`), liczb (przecinek albo kropka), `+ - * /` i nawiasów
+(`Shared/Models/Pipeline/RunFormula.cs`; liczy `Modules/Runs/Services/RunReconciliations.cs`). Reguła dla typu programu (albo
+„Wszystkie”) i wariantu przebiegu (albo „Każdy”) – każdy wiersz to osobna reguła. Wynik – kontrola „Reguły uzgodnień”,
+element – nazwa reguły: spełniona – INFO z wartościami stron, niespełniona – poziom reguły (kwota – różnica stron), miara bez
+wartości (np. pierwszy przebieg) albo dzielenie przez 0 – WARNING „reguła niesprawdzona”. Miary (podstawowy zestaw; nowa miara –
+katalog `RunMeasures` i wartość w `RunReconciliations.Measures`):
+
+| Miara | Wartość |
+|---|---|
+| `[Koszt brutto]` | koszt ACTUALS bez rozliczenia wychodzącego, waluta kosztów przebiegu (CAS – po narzutach) |
+| `[Rozliczenie]` | suma wierszy rozliczeniowych (dane źródłowe) |
+| `[Saldo okresów zamkniętych]` | suma wszystkich wierszy w okresach zamkniętych (dane źródłowe) |
+| `[Koszt bieżącego okresu]` | koszt brutto w bieżącym okresie kalendarza |
+| `[Koszt brutto poprzedniego przebiegu]`, `[Wiersze poprzedniego przebiegu]` | ostatnie uruchomienie wcześniejszego tygodnia (pierwszy przebieg – bez wartości) |
+| `[Wiersze]` | liczba wierszy ACTUALS programu |
+| `[Koszt bez elementu WBS]` | koszt brutto wierszy bez elementu WBS |
+| `[BAC]`, `[BAC HOURS]`, `[BAC MATERIAL]` | sumy WP w „Harmonogram i budżet” (kwoty w walucie wpisów, bez przeliczenia) |
+| `[Liczba WP]`, `[Liczba WP bez budżetu]` | WP w „WP i CAM”; bez BAC, BAC HOURS i BAC MATERIAL |
+
+Miary struktury programu (ACWP struktury z podziałem, Material Value, BCWP, ETC) – po liście kontroli finansów (kontrakt modułu
+Projekty dla przebiegu).
+
 | Kontrola | Poziom | Opis |
 |---|---|---|
 | Liczba danych | ERROR / WARNING | wierszy mniej niż w poprzednim przebiegu (zrzut jest narastający) – ERROR; koszt brutto (bez rozliczenia wychodzącego) mniejszy – WARNING |

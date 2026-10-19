@@ -155,6 +155,33 @@
                             </DataGridTextColumn>
                         </DataGrid.Columns>
                     </DataGrid>
+
+                    <!-- Reguły uzgodnień – własne kontrole ze słownika i miary do formuł -->
+                    <TextBlock Text="Reguły uzgodnień" Style="{StaticResource H2}" Margin="0,20,0,4" />
+                    <TextBlock Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="0,0,0,8"
+                               Text="Własne kontrole bez zmiany programu: Słowniki → „Reguły uzgodnień” – lewa strona, warunek (=, &lt;=, &gt;=, &lt;&gt;), prawa strona i tolerancja; strony to formuły z miar w nawiasach kwadratowych, liczb, + - * / i nawiasów, np. [Koszt brutto] &lt;= [BAC] * 1,1." />
+                    <DataGrid Style="{StaticResource DataTable}" ItemsSource="{Binding Reconciliations}" IsReadOnly="True" MaxHeight="320">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Nazwa" Binding="{Binding Name}" />
+                            <DataGridTextColumn Header="Przebieg" Binding="{Binding RunKind}" />
+                            <DataGridTextColumn Header="Warunek" Binding="{Binding Condition}" Width="*" />
+                            <DataGridTextColumn Header="Poziom" Binding="{Binding Level}" />
+                            <DataGridTextColumn Header="Stan" Binding="{Binding State}" />
+                        </DataGrid.Columns>
+                    </DataGrid>
+                    <TextBlock Text="Miary do formuł" Style="{StaticResource H2}" Margin="0,20,0,6" />
+                    <DataGrid Style="{StaticResource DataTable}" ItemsSource="{Binding Measures}" IsReadOnly="True">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Miara" Binding="{Binding Name, StringFormat='[{0}]'}" />
+                            <DataGridTextColumn Header="Opis" Binding="{Binding Description}" Width="*">
+                                <DataGridTextColumn.ElementStyle>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="TextWrapping" Value="Wrap" />
+                                    </Style>
+                                </DataGridTextColumn.ElementStyle>
+                            </DataGridTextColumn>
+                        </DataGrid.Columns>
+                    </DataGrid>
                 </StackPanel>
             </TabItem>
         </TabControl>

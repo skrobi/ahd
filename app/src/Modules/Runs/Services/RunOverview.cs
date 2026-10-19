@@ -6,6 +6,12 @@ using PzlEv.Shared.Models.Pipeline;
 
 namespace PzlEv.Modules.Runs.Services;
 
+/// <summary>Reguła uzgodnień w definicji przebiegu (słownik „Reguły uzgodnień”, wiersze dla typu programu).</summary>
+public sealed record RunReconciliationView(string Name, string RunKind, string Condition, string Level, bool IsActive)
+{
+    public string State => IsActive ? "aktywna" : "wyłączona";
+}
+
 /// <summary>Kolumna macierzy kontroli: uruchomienie przebiegu (kod tygodnia i numer, start, stan).</summary>
 public sealed record RunMatrixColumn(long PinId, string Label, string Detail);
 
@@ -66,7 +72,8 @@ public static class RunOverview
         var columns = ordered.Select(p => new RunMatrixColumn(p.PinId, $"{Week(p.Code)} #{p.PinNo}",
             $"{p.Code} #{p.PinNo}, {p.StartedAt.ToLocalTime():yyyy-MM-dd HH:mm}, {p.StartedBy} – {p.Status}")).ToList();
         var catalog = RunCheckRules.All.Select(r => r.Check).Distinct().ToList();
-        int Rank(string check) => check == Import ? 0 : check == Run ? 1000 : catalog.IndexOf(check) is var i and >= 0 ? 10 + i : 5;
+        int Rank(string check) => check == Import ? 0 : check == Run ? 1000 : check == RunReconciliations.CheckName ? 900
+            : catalog.IndexOf(check) is var i and >= 0 ? 10 + i : 5;
         var checks = catalog.Concat(issues.Values.SelectMany(l => l).Select(i => i.CheckName)).Distinct()
             .OrderBy(Rank).ThenBy(c => c, StringComparer.CurrentCulture).ToList();
         var rows = checks.Select(check => new RunMatrixRow(check, ordered.Select(pin =>
@@ -91,6 +98,11 @@ public static class RunOverview
         return RunCheckRules.All.Select(rule => new RunDefinitionRow(rule, mid[rule.Code], closing[rule.Code],
             rows.Any(r => Matches(r) && RunCheckRules.ByName(r.RuleName) == rule), inRun?.GetValueOrDefault(rule.Code))).ToList();
     }
+
+    /// <summary>Reguły uzgodnień dla typu programu (oba warianty przebiegu).</summary>
+    public static IReadOnlyList<RunReconciliationView> Reconciliations(IEnumerable<RunReconciliationRow> rows, string projectType) =>
+        RunReconciliations.Applicable(rows, projectType, isClosing: null)
+            .Select(r => new RunReconciliationView(r.Name, r.RunKind, RunReconciliations.Condition(r), r.Level, r.IsActive)).ToList();
 
     /// <summary>Opis ustawienia: wyłączona albo poziom i próg.</summary>
     public static string Show(RunCheckSetting setting) =>

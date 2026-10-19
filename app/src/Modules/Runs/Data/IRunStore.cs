@@ -12,12 +12,19 @@ public sealed record RunCheckRow(string ProjectType, string RuleName, string Run
 /// <summary>WP programu ze słownika „WP i CAM”: MPK (null – brak) i czy ma budżet w „Harmonogram i budżet” (BAC, BAC HOURS albo BAC MATERIAL ≠ 0).</summary>
 public sealed record RunWpRow(string Wp, string? Mpk, bool HasBudget);
 
+/// <summary>Sumy budżetu WP programu w „Harmonogram i budżet” (kwoty w walucie wpisów, bez przeliczenia).</summary>
+public sealed record RunBudgetTotals(decimal Bac, decimal BacHours, decimal BacMaterial);
+
 /// <summary>
 /// Słowniki kontroli P2 (docs/pipeline-fazy.md, P2): Cost Category efektywny dla programu (cost element → kategoria; null – pusta),
-/// WP programu, MPK ze stawką w „Stawki wydziałów” na rok RateYear.
+/// WP programu, MPK ze stawką w „Stawki wydziałów” na rok RateYear; Budget – sumy budżetu (miary reguł uzgodnień).
 /// </summary>
 public sealed record RunDictionaryData(IReadOnlyDictionary<string, string?> CostCategories, IReadOnlyList<RunWpRow> Wps,
-    IReadOnlySet<string> RatedCostCenters, int RateYear);
+    IReadOnlySet<string> RatedCostCenters, int RateYear, RunBudgetTotals? Budget = null);
+
+/// <summary>Wiersz słownika „Reguły uzgodnień” (dict.RunReconciliation).</summary>
+public sealed record RunReconciliationRow(string ProjectType, string Name, string RunKind, bool IsActive, string LeftFormula, string Comparison,
+    string RightFormula, decimal? Tolerance, string Level);
 
 /// <summary>Program (meta.Project): kod, nazwa, typ.</summary>
 public sealed record RunProjectRow(string Code, string Name, string ProjectType);
@@ -60,6 +67,9 @@ public interface IRunStore
 
     /// <summary>Słowniki kontroli spójności (P2): Cost Category efektywny, WP i CAM z budżetem, MPK ze stawką na rok year.</summary>
     RunDictionaryData Dictionaries(string project, int year);
+
+    /// <summary>Słownik globalny „Reguły uzgodnień” – bieżące wiersze.</summary>
+    IReadOnlyList<RunReconciliationRow> Reconciliations();
 
     /// <summary>Aktywne programy (ekran Przebiegi).</summary>
     IReadOnlyList<RunProjectRow> Projects();

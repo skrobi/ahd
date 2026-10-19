@@ -21,7 +21,8 @@ public sealed class RunOverviewTests
         var issues = new Dictionary<long, IReadOnlyList<RunIssueRow>>
         {
             [1] = [Issue(1, RunChecks.NetZero, CheckLevel.Error, 1), Issue(1, RunChecks.NetZero, CheckLevel.Error, 2), Issue(1, "Import", CheckLevel.Warning, 3)],
-            [2] = [Issue(2, RunChecks.NetZero, CheckLevel.Pass, 4), Issue(2, "Koszty po narzutach CAS", CheckLevel.Pass, 5), Issue(2, "Przebieg", CheckLevel.Error, 6)],
+            [2] = [Issue(2, RunChecks.NetZero, CheckLevel.Pass, 4), Issue(2, "Koszty po narzutach CAS", CheckLevel.Pass, 5), Issue(2, "Przebieg", CheckLevel.Error, 6),
+                  Issue(2, RunReconciliations.CheckName, CheckLevel.Warning, 7)],
         };
 
         var matrix = RunOverview.Matrix(pins, issues);
@@ -31,7 +32,8 @@ public sealed class RunOverviewTests
         Assert.Equal("Import", checks[0]);
         Assert.Equal("Koszty po narzutach CAS", checks[1]);
         Assert.Equal("Przebieg", checks[^1]);
-        Assert.Equal(RunCheckRules.All.Select(r => r.Check).Distinct(), checks.Skip(2).SkipLast(1));
+        Assert.Equal(RunReconciliations.CheckName, checks[^2]);
+        Assert.Equal(RunCheckRules.All.Select(r => r.Check).Distinct(), checks.Skip(2).SkipLast(2));
         var net = matrix.Rows.Single(r => r.CheckName == RunChecks.NetZero).Cells;
         Assert.Equal(("2 ERROR", CheckLevel.Error), (net[0].Text, net[0].Level));
         Assert.Equal(("OK", CheckLevel.Pass), (net[1].Text, net[1].Level));
@@ -61,5 +63,22 @@ public sealed class RunOverviewTests
         Assert.Equal("–", RunOverview.Definition(rows, "SAC")[0].InRunText);
         Assert.Null(RunOverview.Deserialize("nie json"));
         Assert.Null(RunOverview.Deserialize(null));
+    }
+
+    [Fact]
+    public void Definition_lists_reconciliation_rules_of_program_type_with_condition()
+    {
+        RunReconciliationRow[] rules =
+        [
+            new(RunCheckRules.AllTypes, "Budżet", RunCheckRules.AnyRun, true, "[Koszt brutto]", "<=", "[BAC] * 1,1", 5m, "WARNING"),
+            new("CAS", "CAS", RunCheckRules.ClosingRun, false, "[BAC]", ">=", "0", null, "ERROR"),
+        ];
+
+        var sac = Assert.Single(RunOverview.Reconciliations(rules, "SAC"));
+        var cas = RunOverview.Reconciliations(rules, "CAS");
+
+        Assert.Equal(("Budżet", "[Koszt brutto] <= [BAC] * 1,1 ± 5", "aktywna"), (sac.Name, sac.Condition, sac.State));
+        Assert.Equal(["Budżet", "CAS"], cas.Select(r => r.Name));
+        Assert.Equal("wyłączona", cas[1].State);
     }
 }

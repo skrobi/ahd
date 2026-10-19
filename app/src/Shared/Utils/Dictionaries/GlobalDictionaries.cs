@@ -24,6 +24,7 @@ public static partial class GlobalDictionaries
     public const string CasBurdenFormulas = "cas-burden-formulas";
     public const string CasBurdenRates = "cas-burden-rates";
     public const string RunChecks = "run-checks";
+    public const string RunReconciliations = "run-reconciliations";
 
     /// <summary>Kolumna słownika Cost Category z rodzajem kosztu (Hours / Materials / Other; puste – Other) – podział ACWP w strukturze.</summary>
     public const string CostKindColumn = "Rodzaj kosztu";
@@ -229,6 +230,26 @@ public static partial class GlobalDictionaries
             ],
             Rules = RunCheckSettingRules,
         },
+        new()
+        {
+            Code = RunReconciliations,
+            Name = "Reguły uzgodnień",
+            Description = "Własne kontrole przebiegu bez zmiany programu: lewa strona, warunek (=, <=, >=, <>) i prawa strona z tolerancją; strony to formuły z miar programu w nawiasach kwadratowych, liczb, + - * / i nawiasów, np. [Koszt brutto] <= [BAC] * 1,1. Miary – ekran Przebiegi → Definicja przebiegu. Reguła dla typu programu (albo „Wszystkie”) i wariantu przebiegu (albo „Każdy”); wynik – kontrola „Reguły uzgodnień”: warunek niespełniony – poziom reguły, spełniony – INFO.",
+            Columns =
+            [
+                new("Typ programu", ColumnType.Choice, Key: true, Choices: RunCheckRules.ProjectTypes),
+                new("Nazwa", ColumnType.Text, Key: true),
+                new("Przebieg", ColumnType.Choice, Key: true, Choices: RunCheckRules.RunKinds),
+                new("Aktywna", ColumnType.Boolean, Required: true),
+                new("Lewa strona", ColumnType.Text, Required: true),
+                new("Warunek", ColumnType.Choice, Required: true, Choices: RunMeasures.Comparisons),
+                new("Prawa strona", ColumnType.Text, Required: true),
+                new("Tolerancja", ColumnType.Decimal),
+                new("Poziom", ColumnType.Choice, Required: true, Choices: RunCheckRules.Levels),
+                new("Opis", ColumnType.Text),
+            ],
+            Rules = RunReconciliationRules,
+        },
     ];
 
     public static DictionarySpec Get(string code) => All.First(s => s.Code == code);
@@ -258,6 +279,9 @@ public static partial class GlobalDictionaries
         new(Get(CasBurdenRates), "dict.CasBurdenRate", [("Kategoria", "PoolId"), ("Od", "ValidFrom"), ("Do", "ValidTo"), ("Wskaźnik", "Rate"), ("Opis", "Description")]),
         new(Get(RunChecks), "dict.RunCheck",
             [("Typ programu", "ProjectType"), ("Reguła", "RuleName"), ("Przebieg", "RunKind"), ("Aktywna", "IsActive"), ("Poziom", "Level"), ("Próg", "Threshold"), ("Opis", "Description")]),
+        new(Get(RunReconciliations), "dict.RunReconciliation",
+            [("Typ programu", "ProjectType"), ("Nazwa", "Name"), ("Przebieg", "RunKind"), ("Aktywna", "IsActive"), ("Lewa strona", "LeftFormula"),
+             ("Warunek", "Comparison"), ("Prawa strona", "RightFormula"), ("Tolerancja", "Tolerance"), ("Poziom", "Level"), ("Opis", "Description")]),
     ];
 
     private static IEnumerable<Issue> CalendarRules(IReadOnlyList<DictRow> rows)
@@ -358,6 +382,20 @@ public static partial class GlobalDictionaries
         }
         foreach (var order in rows.Where(r => r["Kolejność"] is not null).GroupBy(r => r["Kolejność"]!).Where(g => g.Count() > 1))
             yield return Issue.Warning($"Kolejność {order.Key} ma kilka kategorii ({string.Join(", ", order.Select(r => r["Pula"]))}) – kolumny ułożone po nazwie", "Kolejność");
+    }
+
+    /// <summary>„Reguły uzgodnień”: formuły stron poprawne (znane miary, składnia), tolerancja nieujemna.</summary>
+    private static IEnumerable<Issue> RunReconciliationRules(IReadOnlyList<DictRow> rows)
+    {
+        for (var i = 0; i < rows.Count; i++)
+        {
+            var at = DictionaryValidator.RowElement(i);
+            foreach (var side in new[] { "Lewa strona", "Prawa strona" })
+                if (rows[i][side] is { } text && RunFormula.Parse(text).Error is { } error)
+                    yield return Issue.Error($"{side}: {error}", at);
+            if (Dec(rows[i]["Tolerancja"]) is < 0)
+                yield return Issue.Error("Tolerancja nie może być ujemna", at);
+        }
     }
 
     /// <summary>„Kontrole przebiegu”: próg nieujemny; próg reguły bez progu – ostrzeżenie (pomijany).</summary>

@@ -455,6 +455,11 @@ Wymaga aplikacji 0.56.0.
 aktywna, poziom, próg) – ustawienia reguł kontroli użyte w uruchomieniu (słownik „Kontrole przebiegu” w chwili przebiegu);
 NULL – uruchomienie sprzed migracji. Wymaga aplikacji 0.56.0.
 
+**Migracja `sql/mssql/049_reguly_uzgodnien.sql`:** słownik globalny `DICT_RunReconciliation` – „Reguły uzgodnień” (`ProjectType`,
+`Name`, `RunKind`, `IsActive`, `LeftFormula`, `Comparison` =, <=, >=, <>, `RightFormula`, `Tolerance`, `Level`, `Description`; klucz
+bieżących wersji `Project`, `ProjectType`, `Name`, `RunKind`) – własne kontrole przebiegu na miarach programu
+(`docs/pipeline-fazy.md`, rozdz. 4.1); bez danych startowych. Wymaga aplikacji 0.56.0.
+
 `META_SourceFile.CanonicalStatus`: „utworzone” – dane kanoniczne zapisane i sprawdzone (widoczne dla odczytów),
 „w toku” – zapis wierszy trwa (odczyty pomijają plik; po awarii wpis i wiersze są usuwane), inna wartość – powód
 braku danych (źródło bez parsera).

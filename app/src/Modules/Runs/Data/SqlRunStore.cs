@@ -189,7 +189,20 @@ public sealed class SqlRunStore(SqlDatabase db) : IRunStore
                 $"SELECT DISTINCT CostCenter FROM {db.Table("dict.DepartmentRate")} WHERE Project IS NULL AND SupersededAt IS NULL AND Year = @year",
                 new { year })
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
-        return new RunDictionaryData(categories, wps, rated, year);
+        var budget = connection.QuerySingle<RunBudgetTotals>(
+            $"""
+            SELECT ISNULL(SUM(Bac), 0) AS Bac, ISNULL(SUM(BacHours), 0) AS BacHours, ISNULL(SUM(BacMaterial), 0) AS BacMaterial
+            FROM {db.Table("dict.ScheduleBudget")} WHERE Project = @project AND SupersededAt IS NULL
+            """, new { project });
+        return new RunDictionaryData(categories, wps, rated, year, budget);
+    }
+
+    public IReadOnlyList<RunReconciliationRow> Reconciliations()
+    {
+        using var connection = db.Open();
+        return connection.Query<RunReconciliationRow>(
+            $"SELECT ProjectType, Name, RunKind, IsActive, LeftFormula, Comparison, RightFormula, Tolerance, Level FROM {db.Table("dict.RunReconciliation")} " +
+            "WHERE Project IS NULL AND SupersededAt IS NULL ORDER BY Name").ToList();
     }
 
     public IReadOnlyList<RunProjectRow> Projects()

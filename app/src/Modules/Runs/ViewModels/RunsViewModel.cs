@@ -26,6 +26,7 @@ public sealed class RunsViewModel : ObservableObject
     private RunProjectRow? _selectedProject;
     private RunMatrix _matrix = new([], []);
     private IReadOnlyList<RunDefinitionRow> _definition = [];
+    private IReadOnlyList<RunReconciliationView> _reconciliations = [];
     private IReadOnlyList<RunIssueRow> _cellIssues = [];
     private string _cellTitle = "";
     private string _definitionNote = "";
@@ -73,6 +74,12 @@ public sealed class RunsViewModel : ObservableObject
 
     public IReadOnlyList<RunDefinitionRow> Definition { get => _definition; private set => SetProperty(ref _definition, value); }
 
+    /// <summary>Reguły uzgodnień dla typu programu.</summary>
+    public IReadOnlyList<RunReconciliationView> Reconciliations { get => _reconciliations; private set => SetProperty(ref _reconciliations, value); }
+
+    /// <summary>Miary dostępne w formułach reguł uzgodnień.</summary>
+    public IReadOnlyList<RunMeasure> Measures => RunMeasures.All;
+
     /// <summary>Opis definicji: typ programu i uruchomienie, z którego pochodzi kolumna „Ostatnie uruchomienie”.</summary>
     public string DefinitionNote { get => _definitionNote; private set => SetProperty(ref _definitionNote, value); }
 
@@ -113,6 +120,7 @@ public sealed class RunsViewModel : ObservableObject
         {
             Matrix = new([], []);
             Definition = [];
+            Reconciliations = [];
             return;
         }
         await Try(async () =>
@@ -122,7 +130,7 @@ public sealed class RunsViewModel : ObservableObject
                 var pins = _store.Pins(project.Code, PinCount);
                 var latest = pins.FirstOrDefault(p => p.Status != RunStatuses.Running);
                 return new Loaded(pins, pins.ToDictionary(p => p.PinId, p => _store.Issues(p.PinId)), _store.CheckSettings(),
-                    latest, latest is null ? null : _store.CheckSettingsOf(latest.PinId));
+                    latest, latest is null ? null : _store.CheckSettingsOf(latest.PinId), _store.Reconciliations());
             });
             if (!ReferenceEquals(project, _selectedProject))
                 return;
@@ -131,6 +139,7 @@ public sealed class RunsViewModel : ObservableObject
             Matrix = RunOverview.Matrix(loaded.Pins, loaded.Issues);
             var stored = RunOverview.Deserialize(loaded.LatestSettings);
             Definition = RunOverview.Definition(loaded.Settings, project.ProjectType, stored);
+            Reconciliations = RunOverview.Reconciliations(loaded.Reconciliations, project.ProjectType);
             DefinitionNote = $"Typ programu: {project.ProjectType}. Kolumna „Ostatnie uruchomienie” – "
                 + (loaded.Latest is not { } latest ? "brak uruchomień."
                     : stored is null ? $"{latest.Code} #{latest.PinNo} bez zapisanych ustawień (sprzed migracji 048)."
@@ -141,9 +150,9 @@ public sealed class RunsViewModel : ObservableObject
         });
     }
 
-    /// <summary>Dane programu z bazy: uruchomienia, ich wyniki, słownik „Kontrole przebiegu”, ustawienia ostatniego zakończonego uruchomienia.</summary>
+    /// <summary>Dane programu z bazy: uruchomienia, ich wyniki, słownik „Kontrole przebiegu”, ustawienia ostatniego zakończonego uruchomienia, reguły uzgodnień.</summary>
     private sealed record Loaded(IReadOnlyList<RunPinRow> Pins, Dictionary<long, IReadOnlyList<RunIssueRow>> Issues, IReadOnlyList<RunCheckRow> Settings,
-        RunPinRow? Latest, string? LatestSettings);
+        RunPinRow? Latest, string? LatestSettings, IReadOnlyList<RunReconciliationRow> Reconciliations);
 
     private void ShowCell(RunMatrixCell? cell)
     {

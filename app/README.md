@@ -93,7 +93,9 @@ zmieni). Brak pliku albo błąd w nim = komunikat przy starcie z nazwą pola –
   tylko miesiące bez kursu USD, wiersze `RecordedBy = migracja 046 – kursy przybliżone` – do zastąpienia kursami finansów;
 - `047_kontrole_przebiegu.sql` – słownik globalny „Kontrole przebiegu” (`DICT_RunCheck`): reguły kontroli przebiegu dla typu
   programu i wariantu przebiegu (aktywna, poziom, próg); bez danych startowych;
-- `048_definicja_w_uruchomieniu.sql` – `META_RunPin.CheckSettings`: ustawienia reguł kontroli użyte w uruchomieniu (ekran Przebiegi).
+- `048_definicja_w_uruchomieniu.sql` – `META_RunPin.CheckSettings`: ustawienia reguł kontroli użyte w uruchomieniu (ekran Przebiegi);
+- `049_reguly_uzgodnien.sql` – słownik globalny „Reguły uzgodnień” (`DICT_RunReconciliation`): własne kontrole przebiegu z formuł
+  na miarach programu; bez danych startowych.
 
 Migracje wykonuje przycisk **Diagnostyka → Migracja** – uruchamia po kolei skrypty, których numeru nie ma
 w `META_SchemaVersion`, a wykonane pomija. Lista na tym ekranie pokazuje, które skrypty są wykonane (kiedy, kto)
