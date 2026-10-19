@@ -102,13 +102,43 @@ public sealed class RunChecksTests
         [Row("A.1", "51105550", 3, 100m, rows: 10)]
     );
 
+    /// <summary>Słowniki P2: 92212550 bez kategorii, MPK PZW30 bez stawki na 2026 (WP-2), WP-2 bez budżetu.</summary>
+    private static RunDictionaryData Dictionaries() => new(
+        new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase) { ["51105550"] = "Materials", ["92212550"] = null, ["91902551"] = null },
+        [new("WP-1", "PZW20", true), new("WP-2", "PZW30", false), new("WP-3", null, true)],
+        new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "PZW20" }, 2026);
+
+    [Fact]
+    public void Dictionary_consistency_rules_find_cost_element_without_category_cost_center_without_rate_and_wp_without_budget()
+    {
+        RunBalanceRow[] current =
+        [
+            Row("A.1", "51105550", 3, 100m), Row("A.2", "92212550", 4, 30m), Row("A.2", "92212550", 5, 12m),
+            Row("A.1", "91902551", 3, -100m, settlement: true),   // rozliczeniowy bez kategorii – bez wyniku
+            Row("A.3", "99999999", 4, 5m),                         // spoza słownika – reguła „spoza słownika”, nie „bez kategorii”
+        ];
+
+        var issues = Of(RunChecks.Check(current, null, Dictionary, ClosedBefore, Today, dictionaries: Dictionaries()), RunChecks.Dictionaries);
+        var without = RunChecks.Check(current, null, Dictionary, ClosedBefore, Today);
+
+        var category = Assert.Single(issues, i => i.Message.StartsWith("Cost element"));
+        Assert.Equal(("92212550", CheckLevel.Warning, 42m), (category.Element, category.Level, category.Amount));
+        var rate = Assert.Single(issues, i => i.Message.StartsWith("MPK"));
+        Assert.Equal(("PZW30", CheckLevel.Error), (rate.Element, rate.Level));
+        Assert.Contains("na rok 2026", rate.Message);
+        Assert.EndsWith("WP: WP-2", rate.Message);
+        var budget = Assert.Single(issues, i => i.Message.StartsWith("WP"));
+        Assert.Equal(("WP-2", CheckLevel.Warning), (budget.Element, budget.Level));
+        Assert.Empty(Of(without, RunChecks.Dictionaries));   // bez słowników – bez wyników
+    }
+
     [Fact]
     public void Every_catalog_rule_has_an_implementation_and_a_finding_with_its_default_level()
     {
         Assert.Equal(RunCheckRules.All.Select(r => r.Code).Order(), RunChecks.Rules.Keys.Order());
         Assert.Equal(RunCheckRules.All.Count, RunCheckRules.All.Select(r => r.Name).Distinct().Count());
         var (current, previous) = AllFindings();
-        var context = new RunCheckContext(current, previous, Dictionary, ClosedBefore, Today, "PLN", null, RunCheckRules.Default);
+        var context = new RunCheckContext(current, previous, Dictionary, ClosedBefore, Today, "PLN", null, RunCheckRules.Default, Dictionaries());
 
         foreach (var rule in RunCheckRules.All)
         {

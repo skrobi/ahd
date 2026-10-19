@@ -139,7 +139,8 @@ public sealed class RunService(IRunStore store, AppServices services, Func<ISour
             // Reguły kontroli dla typu programu i wariantu przebiegu – słownik „Kontrole przebiegu” (brak wiersza – ustawienia domyślne).
             var settings = RunChecks.Settings(store.CheckSettings(), store.ProjectType(project) ?? "", week.IsClosing);
             issues.AddRange(RunChecks.Check(current, previous, store.CostElements(project), closedBefore, today,
-                current != source ? process.Currency : amountField == ProjectSettings.DefaultActualsAmount ? "PLN" : null, source, settings));
+                current != source ? process.Currency : amountField == ProjectSettings.DefaultActualsAmount ? "PLN" : null, source, settings,
+                store.Dictionaries(project, today.Year)));
 
             var errors = issues.Count(i => i.Level == CheckLevel.Error);
             var warnings = issues.Count(i => i.Level == CheckLevel.Warning);

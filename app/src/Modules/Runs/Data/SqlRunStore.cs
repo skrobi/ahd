@@ -160,6 +160,38 @@ public sealed class SqlRunStore(SqlDatabase db) : IRunStore
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
     }
 
+    public RunDictionaryData Dictionaries(string project, int year)
+    {
+        using var connection = db.Open();
+        // Cost Category efektywny: wiersz projektu przed globalnym (jak RUN_PinBalance – cost elementy rozliczeniowe).
+        var categories = connection.Query<(string CostElement, string? CostCategory)>(
+                $"""
+                SELECT CostElement, NULLIF(LTRIM(RTRIM(CostCategory)), N'') AS CostCategory
+                FROM (SELECT CostElement, CostCategory,
+                             ROW_NUMBER() OVER (PARTITION BY CostElement ORDER BY CASE WHEN Project IS NULL THEN 1 ELSE 0 END) AS rn
+                      FROM {db.Table("dict.CostCategory")} WHERE SupersededAt IS NULL AND (Project = @project OR Project IS NULL)) c
+                WHERE c.rn = 1
+                """, new { project })
+            .ToDictionary(r => r.CostElement, r => r.CostCategory, StringComparer.OrdinalIgnoreCase);
+        var wps = connection.Query<RunWpRow>(
+                $"""
+                SELECT w.Wp, w.Mpk,
+                       CAST(CASE WHEN EXISTS (SELECT 1 FROM {db.Table("dict.ScheduleBudget")} b
+                                              WHERE b.Project = @project AND b.SupersededAt IS NULL AND b.Wp = w.Wp
+                                                AND (ISNULL(b.Bac, 0) <> 0 OR ISNULL(b.BacHours, 0) <> 0 OR ISNULL(b.BacMaterial, 0) <> 0))
+                                 THEN 1 ELSE 0 END AS BIT) AS HasBudget
+                FROM (SELECT DISTINCT Wp, NULLIF(LTRIM(RTRIM(Mpk)), N'') AS Mpk FROM {db.Table("dict.WpCam")}
+                      WHERE Project = @project AND SupersededAt IS NULL) w
+                ORDER BY w.Wp
+                """, new { project })
+            .ToList();
+        var rated = connection.Query<string>(
+                $"SELECT DISTINCT CostCenter FROM {db.Table("dict.DepartmentRate")} WHERE Project IS NULL AND SupersededAt IS NULL AND Year = @year",
+                new { year })
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        return new RunDictionaryData(categories, wps, rated, year);
+    }
+
     public string? ProjectType(string project)
     {
         using var connection = db.Open();

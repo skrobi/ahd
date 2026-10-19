@@ -12,7 +12,7 @@ public sealed record RunIssue(string Check, CheckLevel Level, string? Element, s
 /// <summary>Dane kontroli przebiegu (opis – RunChecks.Check).</summary>
 internal sealed record RunCheckContext(IReadOnlyList<RunBalanceRow> Current, IReadOnlyList<RunBalanceRow>? Previous,
     IReadOnlySet<string> CostElementsInDictionary, (int Year, int Period) ClosedBefore, (int Year, int Period) Today, string? Currency,
-    IReadOnlyList<RunBalanceRow>? Source, Func<RunCheckRule, RunCheckSetting> Setting)
+    IReadOnlyList<RunBalanceRow>? Source, Func<RunCheckRule, RunCheckSetting> Setting, RunDictionaryData? Dictionaries = null)
 {
     public bool Closed(RunBalanceRow r) => (r.FiscalYear, Math.Min(r.Period, 12)).CompareTo(ClosedBefore) < 0;
 }
@@ -32,6 +32,7 @@ public static class RunChecks
     public const string NetZero = RunCheckRules.NetZero;
     public const string ClosedPeriods = RunCheckRules.ClosedPeriods;
     public const string Quality = RunCheckRules.Quality;
+    public const string Dictionaries = RunCheckRules.Dictionaries;
 
     /// <summary>Tolerancja salda (zaokrąglenia) w walucie obiektu.</summary>
     public const decimal Tolerance = RunCheckRules.Tolerance;
@@ -50,6 +51,9 @@ public static class RunChecks
             [RunCheckRules.TopDeviations.Code] = TopDeviations,
             [RunCheckRules.CostElementOutside.Code] = CostElementOutside,
             [RunCheckRules.CostElementFirst.Code] = CostElementFirst,
+            [RunCheckRules.CostElementWithoutCategory.Code] = CostElementWithoutCategory,
+            [RunCheckRules.CostCenterWithoutRate.Code] = CostCenterWithoutRate,
+            [RunCheckRules.WpWithoutBudget.Code] = WpWithoutBudget,
             [RunCheckRules.NetZeroBalance.Code] = NetZeroBalance,
             [RunCheckRules.PostedAfterSettlement.Code] = PostedAfterSettlement,
             [RunCheckRules.ClosedPeriodChanges.Code] = ClosedPeriodChanges,
@@ -87,13 +91,16 @@ public static class RunChecks
         static bool Is(string? value, string expected) => string.Equals(value?.Trim(), expected, StringComparison.OrdinalIgnoreCase);
     }
 
-    /// <summary>Kontrole z ustawieniami reguł (settings – kod reguły → ustawienie; brak – domyślne); wyniki w kolejności katalogu.</summary>
+    /// <summary>
+    /// Kontrole z ustawieniami reguł (settings – kod reguły → ustawienie; brak – domyślne); wyniki w kolejności katalogu.
+    /// dictionaries – słowniki kontroli spójności (P2); null – reguły spójności ze słownikami bez wyników.
+    /// </summary>
     public static IReadOnlyList<RunIssue> Check(IReadOnlyList<RunBalanceRow> current, IReadOnlyList<RunBalanceRow>? previous,
         IReadOnlySet<string> costElementsInDictionary, (int Year, int Period) closedBefore, (int Year, int Period) today, string? currency = "PLN",
-        IReadOnlyList<RunBalanceRow>? source = null, IReadOnlyDictionary<string, RunCheckSetting>? settings = null)
+        IReadOnlyList<RunBalanceRow>? source = null, IReadOnlyDictionary<string, RunCheckSetting>? settings = null, RunDictionaryData? dictionaries = null)
     {
         RunCheckSetting Setting(RunCheckRule rule) => settings?.GetValueOrDefault(rule.Code) ?? RunCheckRules.Default(rule);
-        var context = new RunCheckContext(current, previous, costElementsInDictionary, closedBefore, today, currency, source, Setting);
+        var context = new RunCheckContext(current, previous, costElementsInDictionary, closedBefore, today, currency, source, Setting, dictionaries);
         return RunCheckRules.All.Where(rule => Setting(rule).Active).SelectMany(rule => Rules[rule.Code](context, Setting(rule))).ToList();
     }
 
@@ -158,6 +165,30 @@ public static class RunChecks
         return CostElementGroups(c).Where(g => c.CostElementsInDictionary.Contains(g.Key) && !known.Contains(g.Key))
             .Select(g => new RunIssue(NewCostElements, s.Level, g.Key, $"Cost element {g.Key} pierwszy raz w programie", g.Sum(r => r.Amount)));
     }
+
+    // Spójność ze słownikami: cost element kosztu (bez rozliczeniowych) z pustą Cost Category w słowniku efektywnym programu.
+    private static IEnumerable<RunIssue> CostElementWithoutCategory(RunCheckContext c, RunCheckSetting s) =>
+        c.Dictionaries is not { } d ? []
+            : CostElementGroups(c).Where(g => g.Any(r => !r.IsSettlement) && d.CostCategories.TryGetValue(g.Key, out var category) && category is null)
+                .Select(g => new RunIssue(Dictionaries, s.Level, g.Key,
+                    $"Cost element {g.Key} bez Cost Category w słowniku Cost Category – koszt poza raportem po kategoriach (Słowniki → Cost Category albo zmiana programu)",
+                    g.Where(r => !r.IsSettlement).Sum(r => r.Amount)));
+
+    // Spójność ze słownikami: MPK WP („WP i CAM”) bez stawki w „Stawki wydziałów” na rok – ETC Cost bez stawki.
+    private static IEnumerable<RunIssue> CostCenterWithoutRate(RunCheckContext c, RunCheckSetting s) =>
+        c.Dictionaries is not { } d ? []
+            : d.Wps.Where(w => w.Mpk is not null && !d.RatedCostCenters.Contains(w.Mpk))
+                .GroupBy(w => w.Mpk!, StringComparer.OrdinalIgnoreCase).OrderBy(g => g.Key, StringComparer.OrdinalIgnoreCase)
+                .Select(g => new RunIssue(Dictionaries, s.Level, g.Key,
+                    $"MPK {g.Key} bez stawki w „Stawki wydziałów” na rok {d.RateYear} – ETC Cost bez stawki; WP: " +
+                    string.Join(", ", g.Select(w => w.Wp).Distinct().Take(Top)) + (g.Select(w => w.Wp).Distinct().Count() > Top ? "…" : "")));
+
+    // Spójność ze słownikami: WP bez budżetu w „Harmonogram i budżet”.
+    private static IEnumerable<RunIssue> WpWithoutBudget(RunCheckContext c, RunCheckSetting s) =>
+        c.Dictionaries is not { } d ? []
+            : d.Wps.GroupBy(w => w.Wp, StringComparer.OrdinalIgnoreCase).Where(g => !g.Any(w => w.HasBudget))
+                .Select(g => new RunIssue(Dictionaries, s.Level, g.Key,
+                    $"WP {g.Key} bez budżetu (BAC, BAC HOURS, BAC MATERIAL) w „Harmonogram i budżet” – WP bez podstawy BCWS i BCWP"));
 
     // Dane źródłowe ACTUALS w okresach zamkniętych (projekt CAS – koszty bez narzutów z rozliczeniem), nie koszty po narzutach.
     private static List<RunBalanceRow> ClosedSource(RunCheckContext c) => (c.Source ?? c.Current).Where(c.Closed).ToList();

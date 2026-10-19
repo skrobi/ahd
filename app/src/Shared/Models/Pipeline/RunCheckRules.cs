@@ -22,6 +22,7 @@ public static class RunCheckRules
     public const string NetZero = "Netowanie programu do 0";
     public const string ClosedPeriods = "Zmiany w zamkniętych okresach";
     public const string Quality = "Jakość danych";
+    public const string Dictionaries = "Spójność ze słownikami";
 
     /// <summary>Tolerancja kwot (zaokrąglenia) – próg domyślny reguł z progiem.</summary>
     public const decimal Tolerance = 1m;
@@ -62,6 +63,16 @@ public static class RunCheckRules
     public static RunCheckRule CostElementFirst { get; } = new("cost-element-first", NewCostElements, "Cost element pierwszy raz w programie",
         "Cost element, którego nie było w danych poprzedniego przebiegu.", CheckLevel.Pass);
 
+    public static RunCheckRule CostElementWithoutCategory { get; } = new("cost-element-without-category", Dictionaries, "Cost element bez Cost Category",
+        "Cost element kosztu (bez rozliczeniowych) ze słownika Cost Category efektywnego dla programu z pustą kolumną Cost Category – koszt poza raportem po kategoriach.",
+        CheckLevel.Warning);
+
+    public static RunCheckRule CostCenterWithoutRate { get; } = new("mpk-without-rate", Dictionaries, "MPK bez stawki wydziału na rok",
+        "MPK WP ze słownika „WP i CAM” bez wiersza w „Stawki wydziałów” na rok bieżącego okresu – ETC Cost WP bez stawki.", CheckLevel.Error);
+
+    public static RunCheckRule WpWithoutBudget { get; } = new("wp-without-budget", Dictionaries, "WP bez budżetu",
+        "WP ze słownika „WP i CAM” bez BAC, BAC HOURS i BAC MATERIAL (puste albo 0) w „Harmonogram i budżet”.", CheckLevel.Warning);
+
     public static RunCheckRule NetZeroBalance { get; } = new("net-zero", NetZero, "Netowanie do 0 w okresach zamkniętych",
         "Suma wszystkich wierszy programu w okresach zamkniętych różna od 0 o więcej niż próg (kwota); 10 elementów WBS z największym saldem i przyczyną.",
         CheckLevel.Error, Tolerance);
@@ -88,8 +99,8 @@ public static class RunCheckRules
     /// <summary>Reguły w kolejności wyników przebiegu.</summary>
     public static IReadOnlyList<RunCheckRule> All { get; } =
     [
-        RowsDecrease, CostDecrease, TopDeviations, CostElementOutside, CostElementFirst, NetZeroBalance, PostedAfterSettlement,
-        ClosedPeriodChanges, NegativeCost, FuturePeriods, OtherCurrency, NoWbsElement,
+        RowsDecrease, CostDecrease, TopDeviations, CostElementOutside, CostElementFirst, CostElementWithoutCategory, CostCenterWithoutRate,
+        WpWithoutBudget, NetZeroBalance, PostedAfterSettlement, ClosedPeriodChanges, NegativeCost, FuturePeriods, OtherCurrency, NoWbsElement,
     ];
 
     public static RunCheckRule? ByName(string? name) => All.FirstOrDefault(r => string.Equals(r.Name, name?.Trim(), StringComparison.OrdinalIgnoreCase));
