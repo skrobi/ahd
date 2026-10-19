@@ -118,9 +118,6 @@ public interface IRunStore
     /// <summary>Aktywne programy (ekran Przebiegi).</summary>
     IReadOnlyList<RunProjectRow> Projects();
 
-    /// <summary>Ustawienia reguł zapisane w uruchomieniu; null – brak zapisu.</summary>
-    string? CheckSettingsOf(long pinId);
-
     /// <summary>Typ projektu (META_Project.ProjectType); null – brak projektu.</summary>
     string? ProjectType(string project);
 

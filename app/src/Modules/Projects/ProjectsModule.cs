@@ -35,7 +35,8 @@ public sealed class ProjectsModule : IModule
             services.PzlProd is null ? null : new SqlPzlProdSource(services.PzlProd),
             () => services.Contracts.Get<ISourceImport>(),
             () => services.Contracts.Get<IRunLauncher>(),
-            () => services.Contracts.Get<IAcwpChanges>());
+            () => services.Contracts.Get<IAcwpChanges>(),
+            () => services.Contracts.Get<IRunPanels>());
         services.Contracts.Register<IProjectProcessSource>(new ProjectProcessSource(_service));
     }
 

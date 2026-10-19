@@ -34,7 +34,7 @@ public sealed class ProjectDetailViewModel : ObservableObject, IDisposable
     private readonly IFileDialogs _dialogs;
     private string _status = "";
     private Pill _readiness = new("muted", "");
-    private RunPinRow? _selectedPin;
+    private readonly IRunPanel? _runPanel;
     private string _runProgress = "";
     private P1sInputs _mapping = P1sInputs.None;
     private PoTree _saved = new();
@@ -95,8 +95,8 @@ public sealed class ProjectDetailViewModel : ObservableObject, IDisposable
             launcher.Finished += OnRunFinished;
             if (launcher.IsRunning(Code))
                 RunProgress = "Przebieg trwa…";
-            _ = LoadRuns();
         }
+        _runPanel = _service.RunPanels?.Create(Code);
         foreach (var item in ProjectDictionaries.ForType(project.Type))
         {
             var panel = new DictionaryPanelViewModel(item, project.Type);
@@ -292,26 +292,13 @@ public sealed class ProjectDetailViewModel : ObservableObject, IDisposable
 
     public string ItRequest => _service.Folders.ItRequest(Code);
 
-    /// <summary>Uruchomienia przebiegów projektu (od najnowszego) – zakładka Przebiegi.</summary>
-    public ObservableCollection<RunPinRow> RunPins { get; } = [];
-
-    /// <summary>Wyniki kontroli wybranego uruchomienia (błędy i ostrzeżenia przed informacjami).</summary>
-    public ObservableCollection<RunIssueRow> RunIssues { get; } = [];
-
-    public RunPinRow? SelectedPin
-    {
-        get => _selectedPin;
-        set
-        {
-            if (SetProperty(ref _selectedPin, value))
-                _ = LoadIssues(value);
-        }
-    }
+    /// <summary>Przebieg programu – zakładka Przebieg (panel modułu Przebiegi: etapy, potwierdzenia, ponowne wykonanie); null – moduł niedostępny.</summary>
+    public object? RunPanel => _runPanel?.View;
 
     /// <summary>Postęp przebiegu w tle (pusty – przebieg nie trwa).</summary>
     public string RunProgress { get => _runProgress; private set => SetProperty(ref _runProgress, value); }
 
-    /// <summary>„Uruchom przebieg” – w tle; wynik w zakładce Przebiegi, na liście projektów i w powiadomieniu.</summary>
+    /// <summary>„Uruchom przebieg” – w tle; etapy i wynik w zakładce Przebieg, na liście projektów i w powiadomieniu.</summary>
     public ICommand StartRun { get; }
 
     private async Task DoStartRun()
@@ -327,6 +314,7 @@ public sealed class ProjectDetailViewModel : ObservableObject, IDisposable
     /// <summary>Odpięcie od zdarzeń przebiegów przy zmianie strony modułu.</summary>
     public void Dispose()
     {
+        _runPanel?.Dispose();
         if (_service.Runs is { } runs)
         {
             runs.Progress -= OnRunProgress;
@@ -346,7 +334,6 @@ public sealed class ProjectDetailViewModel : ObservableObject, IDisposable
             return;
         RunProgress = "";
         CommandManager.InvalidateRequerySuggested();   // „Uruchom przebieg” znów dostępny
-        _ = LoadRuns();
     }
 
     /// <summary>Okno „Zmiany ACWP” (moduł Przebiegi) dla wiersza struktury i rodzaju kosztu kolumny; wiersz bez elementów WBS – cały program.</summary>
@@ -366,35 +353,6 @@ public sealed class ProjectDetailViewModel : ObservableObject, IDisposable
         };
         var elements = Structure.WbsElementsOf(row);
         window.Show(new AcwpChangesRequest(Code, kind, elements.Count == 0 ? null : elements, Scope: row.Row.Name));
-    }
-
-    private async Task LoadRuns()
-    {
-        if (_service.Runs is not { } runs)
-            return;
-        await Try(async () =>
-        {
-            var pins = await Task.Run(() => runs.Pins(Code, 20));
-            RunPins.Clear();
-            foreach (var pin in pins)
-                RunPins.Add(pin);
-            SelectedPin = RunPins.FirstOrDefault();
-        });
-    }
-
-    private async Task LoadIssues(RunPinRow? pin)
-    {
-        RunIssues.Clear();
-        if (pin is null || _service.Runs is not { } runs)
-            return;
-        await Try(async () =>
-        {
-            var issues = await Task.Run(() => runs.Issues(pin.PinId));
-            if (!ReferenceEquals(pin, _selectedPin))
-                return;
-            foreach (var issue in issues.OrderBy(i => i.Level == CheckLevel.Error ? 0 : i.Level == CheckLevel.Warning ? 1 : 2).ThenBy(i => i.Id))
-                RunIssues.Add(issue);
-        });
     }
 
     public ICommand Back { get; }

@@ -57,7 +57,7 @@
                     <TextBlock Text="{Binding RunProgress}" Style="{StaticResource MutedText}" VerticalAlignment="Center" Margin="0,0,12,0" MaxWidth="320"
                                TextTrimming="CharacterEllipsis" ToolTip="{Binding RunProgress}" />
                     <Button Content="Uruchom przebieg" Style="{StaticResource BtnPrimary}" Margin="0,0,12,0" Command="{Binding StartRun}"
-                            ToolTip="Przebieg w tle: import źródeł programu, przypięcie danych ACTUALS, kontrole (liczba danych, odchylenia, nowe cost elementy, netowanie do 0); powiadomienie Windows po zakończeniu" />
+                            ToolTip="Przebieg w tle wg definicji przebiegu programu: etapy (import, przypięcie, kontrole, zatwierdzenie) wykonują się do pierwszej bramki; stan i potwierdzenia – zakładka Przebieg; powiadomienie Windows po zakończeniu" />
                     <ContentControl Content="{Binding ReadinessPill}" VerticalAlignment="Center" Margin="0,0,12,0"
                                     ToolTip="Gotowość do przebiegu – szczegóły w zakładce Wskaźniki" />
                     <Button Content="← Lista programów" Style="{StaticResource Btn}" Command="{Binding Back}" />
@@ -302,43 +302,10 @@
                 </ScrollViewer>
             </TabItem>
 
-            <!-- Przebiegi -->
-            <TabItem Header="Przebiegi" Padding="12,4">
+            <!-- Przebieg programu: panel modułu Przebiegi (etapy, bramki, potwierdzenie, ponowne wykonanie) -->
+            <TabItem Header="Przebieg" Padding="12,4">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
-                <Grid>
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="*" />
-                    </Grid.RowDefinitions>
-                    <DataGrid Style="{StaticResource DataTable}" ItemsSource="{Binding RunPins}" SelectedItem="{Binding SelectedPin}" IsReadOnly="True" MaxHeight="220">
-                        <DataGrid.Columns>
-                            <DataGridTextColumn Header="Przebieg" Binding="{Binding Code}" />
-                            <DataGridTextColumn Header="#" Binding="{Binding PinNo}" />
-                            <DataGridTextColumn Header="Start" Binding="{Binding StartedAt, StringFormat=yyyy-MM-dd HH:mm}" />
-                            <DataGridTextColumn Header="Kto" Binding="{Binding StartedBy}" />
-                            <DataGridTextColumn Header="Stan" Binding="{Binding Status}" />
-                            <DataGridTextColumn Header="Błędy" Binding="{Binding Errors}" />
-                            <DataGridTextColumn Header="Ostrz." Binding="{Binding Warnings}" />
-                            <DataGridTextColumn Header="Wiersze" Binding="{Binding Rows, StringFormat=#\,0}" />
-                            <DataGridTextColumn Header="Podsumowanie" Binding="{Binding Summary}" Width="*" />
-                        </DataGrid.Columns>
-                    </DataGrid>
-                    <DataGrid Grid.Row="1" Style="{StaticResource DataTable}" ItemsSource="{Binding RunIssues}" IsReadOnly="True" Margin="0,12,0,0" MaxHeight="520">
-                        <DataGrid.Columns>
-                            <DataGridTextColumn Header="Poziom" Binding="{Binding Level}" />
-                            <DataGridTextColumn Header="Kontrola" Binding="{Binding CheckName}" />
-                            <DataGridTextColumn Header="Element" Binding="{Binding Element}" />
-                            <DataGridTextColumn Header="Opis" Binding="{Binding Message}" Width="*">
-                                <DataGridTextColumn.ElementStyle>
-                                    <Style TargetType="TextBlock">
-                                        <Setter Property="TextWrapping" Value="Wrap" />
-                                    </Style>
-                                </DataGridTextColumn.ElementStyle>
-                            </DataGridTextColumn>
-                            <DataGridTextColumn Header="Kwota" Binding="{Binding Amount, StringFormat=#\,0.00}" />
-                        </DataGrid.Columns>
-                    </DataGrid>
-                </Grid>
+                    <ContentControl Content="{Binding RunPanel}" />
                 </ScrollViewer>
             </TabItem>
 

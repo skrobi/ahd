@@ -25,7 +25,7 @@ Każda faza i każdy etap mają ten sam kształt:
 | **Zapis stanu** | status etapu, kto, kiedy – `meta.EtapPrzebiegu` i dziennik |
 | **Idempotencja** | ponowne wykonanie z tymi samymi wejściami daje ten sam wynik i nie dubluje danych |
 | **Unieważnienie** | ponowne wykonanie etapu albo zmiana jego wejść oznacza etapy późniejsze jako **Nieaktualne** |
-| **Uruchomienie** | każdy etap uruchamia użytkownik – analityk zachowuje kontrolę nad przebiegiem; nic nie wykonuje się automatycznie |
+| **Uruchomienie** | użytkownik uruchamia przebieg; etapy wykonują się kolejno do najbliższej bramki (ERROR, WARNING przy bramce „Potwierdzenie”, zatwierdzenie ręczne) – dalej decyduje analityk (potwierdzenie z komentarzem, poprawa i ponowne wykonanie etapu); kolejność etapów i bramki – definicja przebiegu (rozdz. 4.1) |
 
 Etapy komunikują się przez bazę, więc mogą je wykonywać różne osoby, w różne dni, z różnych komputerów.
 
@@ -43,6 +43,12 @@ Etapy komunikują się przez bazę, więc mogą je wykonywać różne osoby, w r
 
 - Stan przebiegu wynika ze stanów etapów – pierwszy niezakończony etap wyznacza „co dalej”.
 - Każda zmiana statusu trafia do dziennika (kto, kiedy, co).
+- Wdrożone (przebieg etapowy, rozdz. 4.1): etapy uruchomienia w `META_RunStep` (migracja 050), wyniki kontroli z numerem etapu
+  (`RUN_Issue.StepNo`). Po wykonaniu etapu: ERROR – **Błąd** (przebieg stoi; po poprawie – ponowne wykonanie etapu);
+  zatwierdzenie ręczne albo WARNING przy bramce „Potwierdzenie” – **Wymaga akcji** (potwierdzenie z komentarzem → Zakończony,
+  dalsze etapy); inaczej – **Zakończony** i następny etap. Ponowne wykonanie etapu oznacza późniejsze etapy jako Nieaktualne.
+  Stan uruchomienia (`META_RunPin.Status`): w toku / wymaga akcji / zatrzymany – błąd / zakończony (z ostrzeżeniami). Logika –
+  `Modules/Runs/Services/RunWorkflowEngine.cs`, wykonanie – `RunService` (Execute, Continue, Confirm, Rerun).
 
 ### 1.3 Problemy (kontrola jakości danych)
 
@@ -199,13 +205,33 @@ brak kursu CAS – ERROR „Koszty po narzutach CAS” i kontrole na kosztach be
 bieżącym okresem kalendarza, a w pierwszych 7 dniach okresu – przed poprzednim (rozliczenie poprzedniego okresu trwa);
 okresy 13–16 liczone jak 12.
 
-**Reguły kontroli i definicja przebiegu.** Kontrole poniżej to reguły katalogu (`Shared/Models/Pipeline/RunCheckRules.cs` –
-kod, kontrola, nazwa, opis, poziom i próg domyślny; implementacja po kodzie – `Modules/Runs/Services/RunChecks.cs`). Słownik
-globalny „Kontrole przebiegu” (`docs/slowniki.md`, rozdz. 2) ustawia regułę dla typu programu i wariantu przebiegu (zamykający
-okres / w środku okresu – kalendarz okresów): aktywna, poziom wyniku, próg (kwota); bez wiersza – ustawienie domyślne (tabela
-niżej). Nowa kontrola = reguła w katalogu i jej implementacja; zmiana poziomu, progu albo wyłączenie – wiersz słownika, bez
-zmiany kodu. Uruchomienie zapisuje ustawienia reguł, z którymi liczyło (`META_RunPin.CheckSettings`, migracja 048) – ekran
-Przebiegi (`docs/funkcjonalnosc.md`, F06) pokazuje je obok bieżącej definicji i macierz wyników kontroli kolejnych uruchomień.
+**Definicja przebiegu (workflow).** Co dzieje się na którym etapie, określa definicja przebiegu – szablon w słownikach globalnych
+edytowanych na ekranie Przebiegi, zakładka „Definicje i reguły” (`docs/slowniki.md`, rozdz. 2): „Definicje przebiegów” (zakres:
+typ programu albo program, wariant przebiegu – zamykający / w środku okresu / każdy; aktywna), „Etapy przebiegów” (kolejność,
+nazwa, akcja: import źródeł / przypięcie stanu / kontrole / zatwierdzenie; bramka WARNING: „Potwierdzenie” – wstrzymuje do
+potwierdzenia z komentarzem, „Informacja” – przebieg idzie dalej; zatwierdzenie ręczne) i „Elementy kontrolne etapów” (etap
+akcji Kontrole: reguła katalogu albo reguła uzgodnień – „Uzgodnienie: nazwa”, „Uzgodnienie: *” – wszystkie aktywne reguły typu
+programu i wariantu; aktywny, poziom, próg). Wybór definicji przy starcie przebiegu: aktywna definicja z etapami – program przed
+typem programu przed „Wszystkie”, wariant przebiegu przed „Każdy”; brak – **definicja wbudowana** „Standardowy (wbudowany)”:
+1 Import źródeł → 2 Przypięcie stanu → 3 Walidacja ACTUALS (liczba danych, odchylenia, nowe cost elementy, netowanie, okresy
+zamknięte, jakość danych) → 4 Spójność ze słownikami → 5 Rodzaje kosztu i uzgodnienia (`Uzgodnienie: *`) → 6 Zatwierdzenie
+analityka; etapy kontroli z bramką „Potwierdzenie”. „Kopia definicji wbudowanej” zapisuje ją w słownikach (nieaktywna) do
+dostosowania. Definicja (z etapami i elementami) zapisuje się w uruchomieniu (`META_RunPin.Definition`, JSON) – zmiana słowników
+nie zmienia trwającego przebiegu. Model – `Shared/Models/Pipeline/RunWorkflow.cs` (`RunDefinitions.For`, `BuiltIn`).
+
+Przebieg prowadzi się na poziomie programu: ekran programu, zakładka „Przebieg” (i ekran Przebiegi, zakładka „Przebieg”) –
+etapy uruchomienia ze statusem, wyniki etapu, akcje „Nowy przebieg”, „Dalsze etapy”, „Potwierdź i dalej” (komentarz wymagany),
+„Wykonaj ponownie” (`docs/funkcjonalnosc.md`, F06). Kolejne akcje etapów (np. powiadomienie CAM o uzupełnieniu danych do ETC –
+P6) – nowe akcje w `RunActions` i ich wykonanie w `RunService.ExecuteStep`.
+
+**Reguły kontroli.** Kontrole poniżej to reguły katalogu (`Shared/Models/Pipeline/RunCheckRules.cs` –
+kod, kontrola, nazwa, opis, poziom i próg domyślny; implementacja po kodzie – `Modules/Runs/Services/RunChecks.cs`). Etap
+kontroli liczy tylko reguły ze swoich elementów kontrolnych. Ustawienie reguły: poziom i próg elementu etapu, a puste – słownik
+globalny „Kontrole przebiegu” (`docs/slowniki.md`, rozdz. 2) dla typu programu i wariantu przebiegu (zamykający okres / w środku
+okresu – kalendarz okresów): aktywna, poziom wyniku, próg (kwota); bez wiersza – ustawienie domyślne (tabela niżej). W definicji
+wbudowanej reguła wyłączona w „Kontrolach przebiegu” nie jest liczona. Nowa kontrola = reguła w katalogu i jej implementacja;
+zmiana poziomu, progu, etapu albo wyłączenie – wiersz słownika, bez zmiany kodu. Ekran Przebiegi pokazuje definicję przebiegu
+programu (etapy, elementy, ustawienia i ich źródło) i macierz wyników kontroli kolejnych uruchomień.
 
 | Reguła (słownik) | Kontrola | Poziom domyślny | Próg domyślny |
 |---|---|---|---|
@@ -236,7 +262,8 @@ Przebiegi (`docs/funkcjonalnosc.md`, F06) pokazuje je obok bieżącej definicji 
 bez zmiany programu: lewa strona, warunek (`=` – różnica ≤ tolerancja, `<=` / `>=` – z tolerancją, `<>` – różnica > tolerancja),
 prawa strona; strony to formuły z miar programu (`[Miara]`), liczb (przecinek albo kropka), `+ - * /` i nawiasów
 (`Shared/Models/Pipeline/RunFormula.cs`; liczy `Modules/Runs/Services/RunReconciliations.cs`). Reguła dla typu programu (albo
-„Wszystkie”) i wariantu przebiegu (albo „Każdy”) – każdy wiersz to osobna reguła. Wynik – kontrola „Reguły uzgodnień”,
+„Wszystkie”) i wariantu przebiegu (albo „Każdy”) – każdy wiersz to osobna reguła; w przebiegu liczy ją etap z elementem
+„Uzgodnienie: nazwa” albo „Uzgodnienie: *” (definicja przebiegu). Wynik – kontrola „Reguły uzgodnień”,
 element – nazwa reguły: spełniona – INFO z wartościami stron, niespełniona – poziom reguły (kwota – różnica stron), miara bez
 wartości (np. pierwszy przebieg) albo dzielenie przez 0 – WARNING „reguła niesprawdzona”. Miary (podstawowy zestaw; nowa miara –
 katalog `RunMeasures` i wartość w `RunReconciliations.Measures`):

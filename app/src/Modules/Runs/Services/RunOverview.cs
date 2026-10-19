@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.Text.Json;
 using PzlEv.Modules.Runs.Data;
 using PzlEv.Shared.Models.Db;
 using PzlEv.Shared.Models.Pipeline;
@@ -37,29 +36,19 @@ public sealed record RunMatrixRow(string CheckName, IReadOnlyList<RunMatrixCell>
 public sealed record RunMatrix(IReadOnlyList<RunMatrixColumn> Columns, IReadOnlyList<RunMatrixRow> Rows);
 
 /// <summary>
-/// Reguła w definicji przebiegu programu: ustawienie w środku okresu i w przebiegu zamykającym (słownik „Kontrole przebiegu”
-/// albo domyślne), FromDictionary – reguła ma wiersz słownika dla typu programu; InRun – ustawienie zapisane w uruchomieniu (null – brak).
+/// Wiersz definicji przebiegu programu (zakładka „Definicja przebiegu”): etap (numer, nazwa, akcja, bramka) i element kontrolny
+/// z ustawieniem (aktywny, poziom, próg albo warunek reguły uzgodnień) i źródłem ustawienia.
 /// </summary>
-public sealed record RunDefinitionRow(RunCheckRule Rule, RunCheckSetting MidPeriod, RunCheckSetting Closing, bool FromDictionary, RunCheckSetting? InRun)
-{
-    public string Check => Rule.Check;
+public sealed record RunWorkflowRow(int StepNo, string Step, string Action, string Gate, string Element, string Check, string Setting, string Source,
+    string Description);
 
-    public string Name => Rule.Name;
-
-    public string Description => Rule.Description;
-
-    public string MidPeriodText => RunOverview.Show(MidPeriod);
-
-    public string ClosingText => RunOverview.Show(Closing);
-
-    public string Source => FromDictionary ? "słownik" : "domyślne";
-
-    public string InRunText => InRun is null ? "–" : RunOverview.Show(InRun);
-}
+/// <summary>Program na przeglądzie przebiegów: ostatnie uruchomienie, etap, na którym stoi, liczby wyników.</summary>
+public sealed record RunProgramRow(string Code, string Name, string ProjectType, string? Run, string? Status, string? Stop, int Errors, int Warnings,
+    DateTimeOffset? StartedAt, string? StartedBy);
 
 /// <summary>
-/// Ekran Przebiegi (docs/funkcjonalnosc.md, F06): macierz wyników kontroli kolejnych uruchomień programu i definicja przebiegu
-/// (reguły kontroli z ustawieniami dla typu programu); ustawienia reguł użyte w uruchomieniu – zapis JSON (META_RunPin.CheckSettings).
+/// Ekran Przebiegi (docs/funkcjonalnosc.md, F06): macierz wyników kontroli kolejnych uruchomień programu, definicja przebiegu
+/// programu (etapy i elementy kontrolne z ustawieniami), przegląd programów, reguły uzgodnień, zakres okna „Zmiany ACWP” wyniku.
 /// </summary>
 public static class RunOverview
 {
@@ -93,18 +82,61 @@ public static class RunOverview
         return new RunMatrix(columns, rows);
     }
 
-    /// <summary>Definicja przebiegu dla typu programu: reguły katalogu z ustawieniami obu wariantów przebiegu i ustawieniem z uruchomienia.</summary>
-    public static IReadOnlyList<RunDefinitionRow> Definition(IReadOnlyList<RunCheckRow> rows, string projectType,
-        IReadOnlyDictionary<string, RunCheckSetting>? inRun = null)
+    /// <summary>
+    /// Definicja przebiegu jako wiersze: etap bez elementów – jeden wiersz (akcja); element katalogu – ustawienie etapu
+    /// (RunWorkflowEngine.Settings: element, słownik „Kontrole przebiegu”, katalog); „Uzgodnienie: *” – reguły uzgodnień typu
+    /// programu i wariantu; reguła uzgodnień – warunek, poziom i tolerancja.
+    /// </summary>
+    public static IReadOnlyList<RunWorkflowRow> Workflow(RunDefinition definition, IReadOnlyDictionary<string, RunCheckSetting> defaults,
+        IReadOnlyList<RunReconciliationRow> library, string projectType, bool isClosing)
     {
-        var mid = RunChecks.Settings(rows, projectType, isClosing: false);
-        var closing = RunChecks.Settings(rows, projectType, isClosing: true);
-        bool Matches(RunCheckRow r) =>
-            string.Equals(r.ProjectType?.Trim(), projectType, StringComparison.OrdinalIgnoreCase)
-            || string.Equals(r.ProjectType?.Trim(), RunCheckRules.AllTypes, StringComparison.OrdinalIgnoreCase);
-        return RunCheckRules.All.Select(rule => new RunDefinitionRow(rule, mid[rule.Code], closing[rule.Code],
-            rows.Any(r => Matches(r) && RunCheckRules.ByName(r.RuleName) == rule), inRun?.GetValueOrDefault(rule.Code))).ToList();
+        var rows = new List<RunWorkflowRow>();
+        foreach (var step in definition.Steps)
+        {
+            var gate = step.NeedsApproval ? "zatwierdzenie ręczne" : step.Action == RunActions.Checks ? $"ERROR – stop; WARNING – {step.WarningGate.ToLowerInvariant()}" : "ERROR – stop";
+            RunWorkflowRow Row(string element, string check, string setting, string source, string? description) =>
+                new(step.No, step.Name, step.Action, gate, element, check, setting, source, description ?? "");
+            if (step.Elements.Count == 0)
+            {
+                rows.Add(Row("–", "", "", "", step.Description));
+                continue;
+            }
+            var settings = RunWorkflowEngine.Settings(step, defaults, definition.BuiltIn);
+            foreach (var element in step.Elements)
+            {
+                if (RunCheckRules.ByName(element.Element) is { } rule)
+                    rows.Add(Row(rule.Name, rule.Check, Show(settings[rule.Code]),
+                        element.Level is not null || element.Threshold is not null || !element.Active ? "definicja" : "domyślne", rule.Description));
+                else if (RunDefinitions.IsReconciliation(element.Element))
+                {
+                    var (rules, missing) = RunWorkflowEngine.Reconciliations(step with { Elements = [element] }, library, projectType, isClosing);
+                    rows.AddRange(rules.Select(r => Row(RunDefinitions.ReconciliationPrefix + r.Name, RunReconciliations.CheckName,
+                        $"{RunReconciliations.Condition(r)} – {r.Level}", element.Element.Trim() == RunDefinitions.AllReconciliations ? "reguły uzgodnień" : "definicja", null)));
+                    rows.AddRange(missing.Select(m => Row(RunDefinitions.ReconciliationPrefix + m, RunReconciliations.CheckName, "brak reguły w słowniku", "definicja", null)));
+                    if (!element.Active)
+                        rows.Add(Row(element.Element, RunReconciliations.CheckName, "wyłączona", "definicja", null));
+                    else if (rules.Count == 0 && missing.Count == 0)
+                        rows.Add(Row(element.Element, RunReconciliations.CheckName, "brak aktywnych reguł uzgodnień dla typu programu", "reguły uzgodnień", null));
+                }
+                else
+                    rows.Add(Row(element.Element, "", "nieznany element", "definicja", null));
+            }
+        }
+        return rows;
     }
+
+    /// <summary>Przegląd przebiegów: programy z ostatnim uruchomieniem i etapem, na którym stoi.</summary>
+    public static IReadOnlyList<RunProgramRow> Programs(IReadOnlyList<RunProjectRow> projects, IReadOnlyDictionary<string, RunPinRow> latest,
+        IReadOnlyDictionary<long, IReadOnlyList<RunStepRow>> steps) =>
+        projects.Select(p =>
+        {
+            if (!latest.TryGetValue(p.Code, out var pin))
+                return new RunProgramRow(p.Code, p.Name, p.ProjectType, null, null, null, 0, 0, null, null);
+            var stop = steps.GetValueOrDefault(pin.PinId)?.OrderBy(s => s.StepNo).FirstOrDefault(s => s.Status != RunStepStatuses.Done);
+            return new RunProgramRow(p.Code, p.Name, p.ProjectType, $"{pin.Code} #{pin.PinNo}", pin.Status,
+                stop is null ? steps.ContainsKey(pin.PinId) ? "wszystkie etapy zakończone" : null : $"{stop.StepNo}. {stop.Name} – {stop.Status.ToLowerInvariant()}",
+                pin.Errors, pin.Warnings, pin.StartedAt, pin.StartedBy);
+        }).ToList();
 
     /// <summary>Kontrole kosztów, dla których okno „Zmiany ACWP” pokazuje przyczynę.</summary>
     private static readonly HashSet<string> CostChecks =
@@ -142,29 +174,6 @@ public static class RunOverview
         !setting.Active ? "wyłączona"
             : (setting.Level switch { CheckLevel.Error => "ERROR", CheckLevel.Warning => "WARNING", _ => "INFO" })
               + (setting.Threshold is { } t ? $", próg {t.ToString("#,0.00", Pl)}" : "");
-
-    private sealed record StoredSetting(bool Active, string Level, decimal? Threshold);
-
-    /// <summary>Ustawienia reguł uruchomienia (kod reguły → ustawienie) do zapisu w META_RunPin.CheckSettings.</summary>
-    public static string Serialize(IReadOnlyDictionary<string, RunCheckSetting> settings) =>
-        JsonSerializer.Serialize(settings.ToDictionary(s => s.Key, s => new StoredSetting(s.Value.Active, s.Value.Level.ToString(), s.Value.Threshold)));
-
-    /// <summary>Ustawienia zapisane w uruchomieniu; null – brak zapisu (uruchomienie sprzed migracji 048) albo zapis nieczytelny.</summary>
-    public static IReadOnlyDictionary<string, RunCheckSetting>? Deserialize(string? json)
-    {
-        if (string.IsNullOrWhiteSpace(json))
-            return null;
-        try
-        {
-            return JsonSerializer.Deserialize<Dictionary<string, StoredSetting>>(json)?
-                .ToDictionary(s => s.Key, s => new RunCheckSetting(s.Value.Active, Enum.TryParse<CheckLevel>(s.Value.Level, out var level) ? level : CheckLevel.Pass,
-                    s.Value.Threshold));
-        }
-        catch (JsonException)
-        {
-            return null;
-        }
-    }
 
     // „R-PAF-2026-10-T41” → „2026-10 T41”.
     private static string Week(string code)

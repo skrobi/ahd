@@ -70,10 +70,17 @@ Słowniki, kreator projektu), `docs/zrodla-danych.md` (struktura P1S).
 | Osoby | pracownicy z HR – „Dodaj z HR” (PZLHRPROD `HR.ORG`, osoby z niepustym `USRID`): okno szukania po USRID, PERNR, imieniu i nazwisku, e-mailu, dziale; „Dodaj” przy wyniku odkłada osobę na listę, „Zatwierdź” – podgląd z samymi nowymi osobami (nic nie jest usuwane): USRID (numer znaczka, login), imię i nazwisko, imię, nazwisko, e-mail, MPK (`KOSTL`), dział (`SHORT`, `LONG`), stanowisko (`STEXT`), pion, manager, PERNR | USRID | wybór CAM w strukturze projektu i słowniku „WP i CAM” (zapisywany USRID) |
 | Wskaźniki DJK | prefiks grupy stanowisk (IPT, np. `W2`, `W51`) → `Udział DJK` (0–1) – godziny jakości doliczane do godzin TECH / TECH_PON; liczy się najdłuższy pasujący prefiks; dane startowe (migracja 023): W2–W4 10%, W5 15%, W6 20% | grupa stanowisk | Operational EV struktury projektu (`docs/zrodla-danych.md`, rozdz. 6) |
 | Parametry produkcji | `Okno produktywności IPT (mies.)` (12), `Statusy materiałów dostarczonych` (DOST, WYD), `Wartość materiałów ÷ (1 + Z_CLO)` (tak); puste słowniki – wartości raportu S70MR (informacja na ekranie projektu) | parametr | odczyt danych produkcyjnych (`sql/pzlprod/produkcja.sql`) |
-| Kontrole przebiegu | definicja przebiegu: reguła kontroli danych przebiegu (`docs/pipeline-fazy.md`, rozdz. 4.1) dla `Typ programu` (Wszystkie / WEWNETRZNY / SAC / CAS) i wariantu `Przebieg` (Każdy / Zamykający / W środku okresu) → `Aktywna`, `Poziom` (ERROR / WARNING / INFO; puste – domyślny reguły), `Próg` (kwota; puste – domyślny); wiersz typu przed „Wszystkie”, wariant przed „Każdy”; reguła bez wiersza – ustawienie domyślne; bez danych startowych | typ + reguła + przebieg | kontrole przebiegu (P0–P2) |
+| Definicje przebiegów | definicja przebiegu (workflow, `docs/pipeline-fazy.md`, rozdz. 4.1): `Definicja` → `Typ programu` (Wszystkie / WEWNETRZNY / SAC / CAS), `Program` (puste – wszystkie programy typu), `Przebieg` (Każdy / Zamykający / W środku okresu), `Aktywna`, `Opis`; wybór: program przed typem przed „Wszystkie”, wariant przed „Każdy”; brak aktywnej definicji z etapami – definicja wbudowana; bez danych startowych | definicja | przebieg – etapy i bramki (P0–P2) |
+| Etapy przebiegów | `Definicja`, `Kolejność` → `Etap` (nazwa), `Akcja` (Import źródeł / Przypięcie stanu / Kontrole / Zatwierdzenie), `Bramka WARNING` (Potwierdzenie / Informacja), `Zatwierdzenie` (tak – etap czeka na potwierdzenie), `Opis` | definicja + kolejność | etapy przebiegu |
+| Elementy kontrolne etapów | `Definicja`, `Etap`, `Element` (reguła katalogu kontroli, „Uzgodnienie: nazwa” – reguła uzgodnień, „Uzgodnienie: *” – wszystkie aktywne reguły uzgodnień typu i wariantu) → `Aktywny`, `Poziom`, `Próg` (puste – „Kontrole przebiegu” / domyślne reguły, a reguła uzgodnień – jej poziom i tolerancja), `Opis` | definicja + etap + element | etapy kontroli przebiegu |
+| Kontrole przebiegu | ustawienia domyślne reguł: reguła kontroli danych przebiegu (`docs/pipeline-fazy.md`, rozdz. 4.1) dla `Typ programu` (Wszystkie / WEWNETRZNY / SAC / CAS) i wariantu `Przebieg` (Każdy / Zamykający / W środku okresu) → `Aktywna`, `Poziom` (ERROR / WARNING / INFO; puste – domyślny reguły), `Próg` (kwota; puste – domyślny); wiersz typu przed „Wszystkie”, wariant przed „Każdy”; reguła bez wiersza – ustawienie domyślne; element etapu z poziomem / progiem ma pierwszeństwo; bez danych startowych | typ + reguła + przebieg | kontrole przebiegu (P0–P2) |
 | Reguły uzgodnień | własne kontrole przebiegu bez zmiany programu: `Typ programu`, `Nazwa`, `Przebieg` → `Aktywna`, `Lewa strona`, `Warunek` (=, <=, >=, <>), `Prawa strona`, `Tolerancja`, `Poziom`; strony to formuły z miar programu w nawiasach kwadratowych, liczb, + - * / i nawiasów (np. `[Koszt brutto] <= [BAC] * 1,1`; miary – `docs/pipeline-fazy.md`, rozdz. 4.1); bez danych startowych | typ + nazwa + przebieg | kontrola „Reguły uzgodnień” przebiegu |
 
 Definicje źródeł i ich prefiksy są konfiguracją importu – `docs/zrodla-danych.md`, rozdz. 2.
+
+Słowniki przebiegu (Definicje przebiegów, Etapy przebiegów, Elementy kontrolne etapów, Kontrole przebiegu, Reguły uzgodnień)
+nie są na liście ekranu Słowniki – edycja na ekranie Przebiegi, zakładka „Definicje i reguły” (ta sama tabela słownika: historia,
+walidacja przy zapisie, Excel; `docs/funkcjonalnosc.md`, rozdz. 2).
 
 Na ekranie Słowniki przycisk **„Struktura P1S (PZLPROD)”** otwiera drzewo `LOG.WBS` (Z_KAT_ZBIORCZA → Z_KATEGORIA →
 Z_OPIS → PROJORG → elementy) z wyszukiwarką – tylko do odczytu, to nie jest słownik (`docs/zrodla-danych.md`, rozdz. 5.3).
@@ -197,6 +204,9 @@ Wydzielenia godzin z elementu P1S (np. Paint) to węzły wirtualne nakładki z k
 | „Wskaźniki DJK”: udział od 0 do 1; prefiks zawarty w innym (W5 i W51) | ERROR / WARNING |
 | „Parametry produkcji”: okno 1–120 miesięcy; statusy niepuste; Z_CLO – tak / nie | ERROR |
 | „Kontrole przebiegu”: próg ujemny – ERROR; próg reguły bez progu – WARNING (pominięty) | ERROR / WARNING |
+| „Definicje przebiegów”: dwie aktywne definicje o tym samym zakresie (typ, program, przebieg) | ERROR |
+| „Etapy przebiegów”: kolejność nie jest liczbą od 1; nazwa etapu powtórzona w definicji | ERROR |
+| „Elementy kontrolne etapów”: element spoza katalogu kontroli i bez prefiksu „Uzgodnienie: ”; próg ujemny – ERROR; próg reguły bez progu – WARNING (pominięty) | ERROR / WARNING |
 | „Reguły uzgodnień”: formuła strony niepoprawna (nieznana miara, składnia) albo tolerancja ujemna | ERROR |
 
 ### 5.8 Kategorie WBS

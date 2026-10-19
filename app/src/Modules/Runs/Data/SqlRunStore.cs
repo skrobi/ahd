@@ -226,12 +226,6 @@ public sealed class SqlRunStore(SqlDatabase db) : IRunStore
             $"SELECT Code, Name, ProjectType FROM {db.Table("meta.Project")} WHERE SupersededAt IS NULL AND Active = 1 ORDER BY Code").ToList();
     }
 
-    public string? CheckSettingsOf(long pinId)
-    {
-        using var connection = db.Open();
-        return connection.QueryFirstOrDefault<string?>($"SELECT CheckSettings FROM {_pins} WHERE PinId = @pinId", new { pinId });
-    }
-
     public string? ProjectType(string project)
     {
         using var connection = db.Open();

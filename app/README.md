@@ -95,7 +95,10 @@ zmieni). Brak pliku albo błąd w nim = komunikat przy starcie z nazwą pola –
   programu i wariantu przebiegu (aktywna, poziom, próg); bez danych startowych;
 - `048_definicja_w_uruchomieniu.sql` – `META_RunPin.CheckSettings`: ustawienia reguł kontroli użyte w uruchomieniu (ekran Przebiegi);
 - `049_reguly_uzgodnien.sql` – słownik globalny „Reguły uzgodnień” (`DICT_RunReconciliation`): własne kontrole przebiegu z formuł
-  na miarach programu; bez danych startowych.
+  na miarach programu; bez danych startowych;
+- `050_definicje_przebiegow.sql` – definicje przebiegów (workflow): słowniki „Definicje przebiegów”, „Etapy przebiegów”,
+  „Elementy kontrolne etapów”; etapy uruchomienia `META_RunStep`, definicja w uruchomieniu (`META_RunPin.Definition`), etap
+  wyniku (`RUN_Issue.StepNo`); bez danych startowych (definicja wbudowana).
 
 Migracje wykonuje przycisk **Diagnostyka → Migracja** – uruchamia po kolei skrypty, których numeru nie ma
 w `META_SchemaVersion`, a wykonane pomija. Lista na tym ekranie pokazuje, które skrypty są wykonane (kiedy, kto)
@@ -317,7 +320,7 @@ app/
     │   ├── Dashboard/           Pulpit: import, źródła, słowniki, otwarte problemy, dziennik (z bazy)
     │   ├── Diagnostics/         test stosu, konfiguracja środowiska, migracje, sprawdzenie PZLPROD
     │   ├── Projects/            Projekty (F4): kreator, Performance Objectives, słowniki projektu, gotowość, struktura, przebiegi projektu
-    │   ├── Runs/                przebieg projektu P0–P2 (RunService, RunChecks – reguły kontroli); ekran „Przebiegi” – macierz kontroli i definicja przebiegu (RunOverview); okno „Zmiany ACWP” (AcwpChanges)
+    │   ├── Runs/                przebieg programu etapami wg definicji (RunService, RunWorkflowEngine – bramki; RunChecks – reguły kontroli); panel przebiegu (RunPanel, kontrakt IRunPanels); ekran „Przebiegi” – przebieg, przegląd programów, macierz kontroli, definicja przebiegu, definicje i reguły (RunOverview, RunDictionaryEditor); okno „Zmiany ACWP” (AcwpChanges)
     │   └── Reconciliation/ Progress/ Evm/ Export/   pozostałe moduły: plik wejścia + etapy, bez pozycji w menu
     └── Shared/
         ├── Utils/Ui/            MVVM, konwertery, okna wyboru pliku, kontrakt modułu, tabela słownika do edycji (WPF)

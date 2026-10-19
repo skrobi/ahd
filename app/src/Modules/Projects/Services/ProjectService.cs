@@ -19,7 +19,8 @@ namespace PzlEv.Modules.Projects.Services;
 /// projektu i folderami; utrzymanie nakładki i słowników projektu; gotowość; baza analityczna i eksport do Excela.
 /// </summary>
 public sealed class ProjectService(IProjectStore store, IDictionaryStore dictionaries, IJournal journal, ProjectFolders folders,
-    IPzlProdSource? pzlProd, Func<ISourceImport?>? imports = null, Func<IRunLauncher?>? runs = null, Func<IAcwpChanges?>? acwpChanges = null)
+    IPzlProdSource? pzlProd, Func<ISourceImport?>? imports = null, Func<IRunLauncher?>? runs = null, Func<IAcwpChanges?>? acwpChanges = null,
+    Func<IRunPanels?>? runPanels = null)
 {
     private const string Area = "Programy";
 
@@ -264,6 +265,9 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
 
     /// <summary>Okno „Zmiany ACWP” (moduł Przebiegi); null – moduł niedostępny.</summary>
     public IAcwpChanges? AcwpChanges => acwpChanges?.Invoke();
+
+    /// <summary>Panel przebiegu programu (moduł Przebiegi); null – moduł niedostępny.</summary>
+    public IRunPanels? RunPanels => runPanels?.Invoke();
 
     /// <summary>Import źródeł projektu (kontrakt modułu Import); null – moduł Import niedostępny.</summary>
     public ISourceImport? Imports => imports?.Invoke();

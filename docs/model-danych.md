@@ -453,12 +453,22 @@ Wymaga aplikacji 0.56.0.
 
 **Migracja `sql/mssql/048_definicja_w_uruchomieniu.sql`:** `META_RunPin.CheckSettings` (`NVARCHAR(MAX)`, JSON: kod reguły →
 aktywna, poziom, próg) – ustawienia reguł kontroli użyte w uruchomieniu (słownik „Kontrole przebiegu” w chwili przebiegu);
-NULL – uruchomienie sprzed migracji. Wymaga aplikacji 0.56.0.
+NULL – uruchomienie sprzed migracji. Od migracji 050 aplikacja nie zapisuje kolumny – ustawienia są w definicji przebiegu
+uruchomienia (`META_RunPin.Definition`). Wymaga aplikacji 0.56.0.
 
 **Migracja `sql/mssql/049_reguly_uzgodnien.sql`:** słownik globalny `DICT_RunReconciliation` – „Reguły uzgodnień” (`ProjectType`,
 `Name`, `RunKind`, `IsActive`, `LeftFormula`, `Comparison` =, <=, >=, <>, `RightFormula`, `Tolerance`, `Level`, `Description`; klucz
 bieżących wersji `Project`, `ProjectType`, `Name`, `RunKind`) – własne kontrole przebiegu na miarach programu
 (`docs/pipeline-fazy.md`, rozdz. 4.1); bez danych startowych. Wymaga aplikacji 0.56.0.
+
+**Migracja `sql/mssql/050_definicje_przebiegow.sql`:** definicje przebiegów (workflow, `docs/pipeline-fazy.md`, rozdz. 4.1) –
+słowniki globalne `DICT_RunDefinition` – „Definicje przebiegów” (`Code`, `ProjectType`, `ProgramCode` – NULL: wszystkie programy
+typu, `RunKind`, `IsActive`, `Description`), `DICT_RunStep` – „Etapy przebiegów” (`Definition`, `StepNo`, `Name`, `Action`,
+`WarningGate`, `Approval`, `Description`), `DICT_RunStepElement` – „Elementy kontrolne etapów” (`Definition`, `Step`, `Element`,
+`IsActive`, `Level`, `Threshold`, `Description`); `META_RunStep` – etapy uruchomienia (klucz `PinId` + `StepNo`: nazwa, akcja,
+status, start, koniec, kto, liczba błędów i ostrzeżeń, komentarz potwierdzenia); `META_RunPin.Definition` (`NVARCHAR(MAX)`, JSON –
+definicja przebiegu użyta w uruchomieniu; NULL – uruchomienie sprzed migracji, bez etapów); `RUN_Issue.StepNo` – etap wyniku.
+Bez danych startowych – bez definicji obowiązuje definicja wbudowana. Wymaga aplikacji 0.57.0.
 
 `META_SourceFile.CanonicalStatus`: „utworzone” – dane kanoniczne zapisane i sprawdzone (widoczne dla odczytów),
 „w toku” – zapis wierszy trwa (odczyty pomijają plik; po awarii wpis i wiersze są usuwane), inna wartość – powód

@@ -43,26 +43,47 @@ public sealed class RunOverviewTests
     }
 
     [Fact]
-    public void Definition_shows_both_run_variants_source_and_settings_stored_in_run()
+    public void Workflow_lists_steps_with_element_settings_reconciliations_and_steps_without_elements()
     {
-        RunCheckRow[] rows =
+        var definition = new RunDefinition("CAS", "CAS", null, RunCheckRules.AnyRun,
         [
-            new("CAS", RunCheckRules.NetZeroBalance.Name, RunCheckRules.ClosingRun, true, "WARNING", 10m),
-            new("SAC", RunCheckRules.NoWbsElement.Name, RunCheckRules.AnyRun, false, null, null),
-        ];
-        var stored = RunChecks.Settings(rows, "CAS", isClosing: true);
+            new(1, "Przypięcie", RunActions.Pin, RunGates.Info, false, [], "opis"),
+            new(2, "Kontrole", RunActions.Checks, RunGates.Confirm, false,
+            [
+                new(RunCheckRules.NetZeroBalance.Name, Level: CheckLevel.Warning), new(RunCheckRules.NoWbsElement.Name),
+                new(RunDefinitions.AllReconciliations), new("Uzgodnienie: Brak"),
+            ]),
+            new(3, "Zatwierdzenie", RunActions.Approval, RunGates.Confirm, true, []),
+        ]);
+        RunReconciliationRow[] library = [new(RunCheckRules.AllTypes, "Budżet", RunCheckRules.AnyRun, true, "[Koszt brutto]", "<=", "[BAC]", null, "WARNING")];
+        var defaults = RunCheckRules.All.ToDictionary(r => r.Code, RunCheckRules.Default);
 
-        var definition = RunOverview.Definition(rows, "CAS", RunOverview.Deserialize(RunOverview.Serialize(stored)));
+        var rows = RunOverview.Workflow(definition, defaults, library, "CAS", isClosing: false);
 
-        Assert.Equal(RunCheckRules.All.Count, definition.Count);
-        var net = definition.Single(d => d.Rule == RunCheckRules.NetZeroBalance);
-        Assert.Equal(("ERROR, próg 1,00", "WARNING, próg 10,00", "słownik", "WARNING, próg 10,00"), (net.MidPeriodText, net.ClosingText, net.Source, net.InRunText));
-        var noWbs = definition.Single(d => d.Rule == RunCheckRules.NoWbsElement);   // wiersz innego typu programu
-        Assert.Equal(("WARNING", "domyślne"), (noWbs.MidPeriodText, noWbs.Source));
-        Assert.Equal("wyłączona", RunOverview.Definition(rows, "SAC").Single(d => d.Rule == RunCheckRules.NoWbsElement).ClosingText);
-        Assert.Equal("–", RunOverview.Definition(rows, "SAC")[0].InRunText);
-        Assert.Null(RunOverview.Deserialize("nie json"));
-        Assert.Null(RunOverview.Deserialize(null));
+        Assert.Equal((1, "–", "opis"), (rows[0].StepNo, rows[0].Element, rows[0].Description));
+        var net = rows.Single(r => r.Element == RunCheckRules.NetZeroBalance.Name);
+        Assert.Equal(("WARNING, próg 1,00", "definicja", "ERROR – stop; WARNING – potwierdzenie"), (net.Setting, net.Source, net.Gate));
+        Assert.Equal(("WARNING", "domyślne"), (rows.Single(r => r.Element == RunCheckRules.NoWbsElement.Name).Setting, rows.Single(r => r.Element == RunCheckRules.NoWbsElement.Name).Source));
+        Assert.Equal("[Koszt brutto] <= [BAC] – WARNING", rows.Single(r => r.Element == "Uzgodnienie: Budżet").Setting);
+        Assert.Equal("brak reguły w słowniku", rows.Single(r => r.Element == "Uzgodnienie: Brak").Setting);
+        Assert.Equal("zatwierdzenie ręczne", rows[^1].Gate);
+    }
+
+    [Fact]
+    public void Program_overview_shows_latest_run_and_step_where_it_stops()
+    {
+        RunProjectRow[] projects = [new("PAF", "PAF", "CAS"), new("M28", "M28", "SAC")];
+        var pin = Pin(5, "R-PAF-2026-10-T41", 1, 9) with { Status = RunStatuses.NeedsAction, Errors = 0, Warnings = 2 };
+        var steps = new Dictionary<long, IReadOnlyList<RunStepRow>>
+        {
+            [5] = [new(5, 1, "Import", RunActions.Import, RunStepStatuses.Done, null, null, null, 0, 0, null),
+                   new(5, 2, "Kontrole", RunActions.Checks, RunStepStatuses.NeedsAction, null, null, null, 0, 2, null)],
+        };
+
+        var rows = RunOverview.Programs(projects, new Dictionary<string, RunPinRow> { ["PAF"] = pin }, steps);
+
+        Assert.Equal(("R-PAF-2026-10-T41 #1", RunStatuses.NeedsAction, "2. Kontrole – wymaga akcji", 2), (rows[0].Run, rows[0].Status, rows[0].Stop, rows[0].Warnings));
+        Assert.Null(rows[1].Run);
     }
 
     [Fact]

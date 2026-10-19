@@ -6,14 +6,17 @@ using PzlEv.Modules.Runs.Views;
 using PzlEv.Shared.Models;
 using PzlEv.Shared.Models.Pipeline;
 using PzlEv.Shared.Utils.Data;
+using PzlEv.Shared.Utils.Dictionaries;
+using PzlEv.Shared.Utils.Ui.Dialogs;
 using PzlEv.Shared.Utils.Ui.Modularity;
 using PzlEv.Shared.Views.Partials;
 
 namespace PzlEv.Modules.Runs;
 
 /// <summary>
-/// Przebiegi (F06): ekran z macierzą wyników kontroli uruchomień programu i definicją przebiegu (RunsView); przebieg w tle
-/// (IRunLauncher) uruchamia ekran programu. Kroki i etapy P3–P9, Z – do implementacji (F5–F9).
+/// Przebiegi (F06): ekran z przebiegiem programu (etapy, bramki), przeglądem programów, macierzą wyników kontroli, definicją przebiegu
+/// i edycją definicji i reguł (RunsView); panel przebiegu (IRunPanels) i przebieg w tle (IRunLauncher) także na ekranie programu.
+/// Kroki i etapy P3–P9, Z – do implementacji (F5–F9).
 /// </summary>
 public sealed class RunsModule : IModule
 {
@@ -31,19 +34,28 @@ public sealed class RunsModule : IModule
         new("Z", "Zamknięcie okresu", "Zamrożenie", StageScope.Run, CanAutoRun: false),
     ];
 
-    /// <summary>Kontrakt IRunLauncher (przebieg projektu w tle) dla ekranu projektu.</summary>
+    /// <summary>Kontrakty IRunLauncher (przebieg programu w tle), IRunPanels (panel przebiegu) i IAcwpChanges dla ekranu programu.</summary>
     public void Initialize(AppServices services)
     {
         var store = _store = new SqlRunStore(services.Sql);
         ISourceImport? Imports() => services.Contracts.Get<ISourceImport>();
         IProjectProcessSource? Processes() => services.Contracts.Get<IProjectProcessSource>();
-        services.Contracts.Register<IRunLauncher>(new RunLauncher(new RunService(store, services, Imports, Processes), store, Imports));
+        var launcher = _launcher = new RunLauncher(new RunService(store, services, Imports, Processes), store, Imports);
+        services.Contracts.Register<IRunLauncher>(launcher);
         services.Contracts.Register<IAcwpChanges>(_acwpChanges = new AcwpChangesLauncher(store, Processes));
+        services.Contracts.Register<IRunPanels>(new RunPanels(store, launcher, () => _acwpChanges));
+        _dictionaries = new SqlDictionaryStore(services.Sql, services.Clock, services.User, GlobalDictionaries.Tables);
     }
 
     private SqlRunStore? _store;
+    private RunLauncher? _launcher;
     private IAcwpChanges? _acwpChanges;
+    private SqlDictionaryStore? _dictionaries;
 
     public FrameworkElement CreateView(ModuleContext context) =>
-        new RunsView { DataContext = new RunsViewModel(_store ?? new SqlRunStore(context.Services.Sql), _acwpChanges) };
+        new RunsView
+        {
+            DataContext = new RunsViewModel(_store!, project => new RunPanelViewModel(_store!, _launcher!, _acwpChanges, project), _acwpChanges,
+                new RunDictionaryEditorViewModel(new DictionaryService(_dictionaries!, context.Services.Journal), new FileDialogs())),
+        };
 }
