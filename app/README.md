@@ -90,7 +90,9 @@ zmieni). Brak pliku albo błąd w nim = komunikat przy starcie z nazwą pola –
 - `045_koszty_cas_z_narzutami.sql` – „Kursy walut” od – do z kolumną Kurs CAS; koszt bazowy projektu CAS po okresach
   (`REP_ProjectCasCosts`) – ACWP, raport CES i przebieg CAS po narzutach.
 - `046_dane_kursy_usd.sql` (dane startowe) – przybliżone kursy USD (Kurs = Kurs CAS) miesięcy 2024-01 … 2026-10 w „Kursy walut”;
-  tylko miesiące bez kursu USD, wiersze `RecordedBy = migracja 046 – kursy przybliżone` – do zastąpienia kursami finansów.
+  tylko miesiące bez kursu USD, wiersze `RecordedBy = migracja 046 – kursy przybliżone` – do zastąpienia kursami finansów;
+- `047_kontrole_przebiegu.sql` – słownik globalny „Kontrole przebiegu” (`DICT_RunCheck`): reguły kontroli przebiegu dla typu
+  programu i wariantu przebiegu (aktywna, poziom, próg); bez danych startowych.
 
 Migracje wykonuje przycisk **Diagnostyka → Migracja** – uruchamia po kolei skrypty, których numeru nie ma
 w `META_SchemaVersion`, a wykonane pomija. Lista na tym ekranie pokazuje, które skrypty są wykonane (kiedy, kto)
@@ -312,7 +314,7 @@ app/
     │   ├── Dashboard/           Pulpit: import, źródła, słowniki, otwarte problemy, dziennik (z bazy)
     │   ├── Diagnostics/         test stosu, konfiguracja środowiska, migracje, sprawdzenie PZLPROD
     │   ├── Projects/            Projekty (F4): kreator, Performance Objectives, słowniki projektu, gotowość, struktura, przebiegi projektu
-    │   ├── Runs/                przebieg projektu P0–P2 (RunService, RunChecks); ekran „Przebiegi” – zastępczy
+    │   ├── Runs/                przebieg projektu P0–P2 (RunService, RunChecks – reguły kontroli); ekran „Przebiegi” – zastępczy
     │   └── Reconciliation/ Progress/ Evm/ Export/   pozostałe moduły: plik wejścia + etapy, bez pozycji w menu
     └── Shared/
         ├── Utils/Ui/            MVVM, konwertery, okna wyboru pliku, kontrakt modułu, tabela słownika do edycji (WPF)

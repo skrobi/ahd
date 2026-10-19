@@ -70,6 +70,7 @@ Słowniki, kreator projektu), `docs/zrodla-danych.md` (struktura P1S).
 | Osoby | pracownicy z HR – „Dodaj z HR” (PZLHRPROD `HR.ORG`, osoby z niepustym `USRID`): okno szukania po USRID, PERNR, imieniu i nazwisku, e-mailu, dziale; „Dodaj” przy wyniku odkłada osobę na listę, „Zatwierdź” – podgląd z samymi nowymi osobami (nic nie jest usuwane): USRID (numer znaczka, login), imię i nazwisko, imię, nazwisko, e-mail, MPK (`KOSTL`), dział (`SHORT`, `LONG`), stanowisko (`STEXT`), pion, manager, PERNR | USRID | wybór CAM w strukturze projektu i słowniku „WP i CAM” (zapisywany USRID) |
 | Wskaźniki DJK | prefiks grupy stanowisk (IPT, np. `W2`, `W51`) → `Udział DJK` (0–1) – godziny jakości doliczane do godzin TECH / TECH_PON; liczy się najdłuższy pasujący prefiks; dane startowe (migracja 023): W2–W4 10%, W5 15%, W6 20% | grupa stanowisk | Operational EV struktury projektu (`docs/zrodla-danych.md`, rozdz. 6) |
 | Parametry produkcji | `Okno produktywności IPT (mies.)` (12), `Statusy materiałów dostarczonych` (DOST, WYD), `Wartość materiałów ÷ (1 + Z_CLO)` (tak); puste słowniki – wartości raportu S70MR (informacja na ekranie projektu) | parametr | odczyt danych produkcyjnych (`sql/pzlprod/produkcja.sql`) |
+| Kontrole przebiegu | definicja przebiegu: reguła kontroli danych przebiegu (`docs/pipeline-fazy.md`, rozdz. 4.1) dla `Typ programu` (Wszystkie / WEWNETRZNY / SAC / CAS) i wariantu `Przebieg` (Każdy / Zamykający / W środku okresu) → `Aktywna`, `Poziom` (ERROR / WARNING / INFO; puste – domyślny reguły), `Próg` (kwota; puste – domyślny); wiersz typu przed „Wszystkie”, wariant przed „Każdy”; reguła bez wiersza – ustawienie domyślne; bez danych startowych | typ + reguła + przebieg | kontrole przebiegu (P0–P2) |
 
 Definicje źródeł i ich prefiksy są konfiguracją importu – `docs/zrodla-danych.md`, rozdz. 2.
 
@@ -194,6 +195,7 @@ Wydzielenia godzin z elementu P1S (np. Paint) to węzły wirtualne nakładki z k
 |---|---|
 | „Wskaźniki DJK”: udział od 0 do 1; prefiks zawarty w innym (W5 i W51) | ERROR / WARNING |
 | „Parametry produkcji”: okno 1–120 miesięcy; statusy niepuste; Z_CLO – tak / nie | ERROR |
+| „Kontrole przebiegu”: próg ujemny – ERROR; próg reguły bez progu – WARNING (pominięty) | ERROR / WARNING |
 
 ### 5.8 Kategorie WBS
 

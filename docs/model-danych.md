@@ -445,6 +445,12 @@ pierwszy, `ValidTo` – ostatni dzień miesiąca, `Rate` = `CasRate`) – warto�
 urzędowe), do testów i uruchomienia projektów w USD; miesiąc z kursem USD obowiązującym wcześniej zostaje bez zmian. Wiersze
 rozpoznawalne po `RecordedBy = N'migracja 046 – kursy przybliżone'` – przed rozliczeniem zastąpić kursami finansów.
 
+**Migracja `sql/mssql/047_kontrole_przebiegu.sql`:** słownik globalny `DICT_RunCheck` – „Kontrole przebiegu” (`ProjectType`:
+Wszystkie / WEWNETRZNY / SAC / CAS, `RuleName` – nazwa reguły katalogu, `RunKind`: Każdy / Zamykający / W środku okresu,
+`IsActive`, `Level` ERROR / WARNING / INFO, `Threshold`, `Description`; klucz bieżących wersji `Project`, `ProjectType`,
+`RuleName`, `RunKind`); bez danych startowych – reguła bez wiersza ma ustawienie domyślne (`docs/pipeline-fazy.md`, rozdz. 4.1).
+Wymaga aplikacji 0.56.0.
+
 `META_SourceFile.CanonicalStatus`: „utworzone” – dane kanoniczne zapisane i sprawdzone (widoczne dla odczytów),
 „w toku” – zapis wierszy trwa (odczyty pomijają plik; po awarii wpis i wiersze są usuwane), inna wartość – powód
 braku danych (źródło bez parsera).

@@ -199,6 +199,28 @@ brak kursu CAS – ERROR „Koszty po narzutach CAS” i kontrole na kosztach be
 bieżącym okresem kalendarza, a w pierwszych 7 dniach okresu – przed poprzednim (rozliczenie poprzedniego okresu trwa);
 okresy 13–16 liczone jak 12.
 
+**Reguły kontroli i definicja przebiegu.** Kontrole poniżej to reguły katalogu (`Shared/Models/Pipeline/RunCheckRules.cs` –
+kod, kontrola, nazwa, opis, poziom i próg domyślny; implementacja po kodzie – `Modules/Runs/Services/RunChecks.cs`). Słownik
+globalny „Kontrole przebiegu” (`docs/slowniki.md`, rozdz. 2) ustawia regułę dla typu programu i wariantu przebiegu (zamykający
+okres / w środku okresu – kalendarz okresów): aktywna, poziom wyniku, próg (kwota); bez wiersza – ustawienie domyślne (tabela
+niżej). Nowa kontrola = reguła w katalogu i jej implementacja; zmiana poziomu, progu albo wyłączenie – wiersz słownika, bez
+zmiany kodu.
+
+| Reguła (słownik) | Kontrola | Poziom domyślny | Próg domyślny |
+|---|---|---|---|
+| Mniej wierszy niż w poprzednim przebiegu | Liczba danych | ERROR | – |
+| Koszt brutto mniejszy niż w poprzednim przebiegu | Liczba danych | WARNING | 1,00 |
+| Największe odchylenia raport do raportu | Odchylenia raport do raportu | INFO | 1,00 (najmniejsza zmiana) |
+| Cost element spoza słownika Cost Category | Nowe cost elementy | ERROR | – |
+| Cost element pierwszy raz w programie | Nowe cost elementy | INFO | – |
+| Netowanie do 0 w okresach zamkniętych | Netowanie programu do 0 | ERROR | 1,00 |
+| Koszt utworzony po rozliczeniu | Netowanie programu do 0 | WARNING | – (gdy program nie netuje się do 0) |
+| Zmiana salda okresu zamkniętego | Zmiany w zamkniętych okresach | WARNING | 1,00 |
+| Ujemny koszt elementu WBS | Jakość danych | WARNING | 1,00 |
+| Wiersze w okresach przyszłych | Jakość danych | WARNING | – |
+| Waluta inna niż waluta kosztów | Jakość danych | WARNING | – |
+| Wiersze bez elementu WBS | Jakość danych | WARNING | – |
+
 | Kontrola | Poziom | Opis |
 |---|---|---|
 | Liczba danych | ERROR / WARNING | wierszy mniej niż w poprzednim przebiegu (zrzut jest narastający) – ERROR; koszt brutto (bez rozliczenia wychodzącego) mniejszy – WARNING |

@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Text.RegularExpressions;
 using PzlEv.Shared.Models.Dictionaries;
 using PzlEv.Shared.Models;
+using PzlEv.Shared.Models.Pipeline;
 using PzlEv.Shared.Utils.Data;
 
 namespace PzlEv.Shared.Utils.Dictionaries;
@@ -22,6 +23,7 @@ public static partial class GlobalDictionaries
     public const string CasBurdenGroups = "cas-burden-groups";
     public const string CasBurdenFormulas = "cas-burden-formulas";
     public const string CasBurdenRates = "cas-burden-rates";
+    public const string RunChecks = "run-checks";
 
     /// <summary>Kolumna słownika Cost Category z rodzajem kosztu (Hours / Materials / Other; puste – Other) – podział ACWP w strukturze.</summary>
     public const string CostKindColumn = "Rodzaj kosztu";
@@ -210,6 +212,23 @@ public static partial class GlobalDictionaries
             Validity = ("Od", "Do"),
             Rules = CasRateRules,
         },
+        new()
+        {
+            Code = RunChecks,
+            Name = "Kontrole przebiegu",
+            Description = "Definicja przebiegu: reguły kontroli danych przebiegu (docs/pipeline-fazy.md, rozdz. 4.1) dla typu programu i wariantu przebiegu (zamykający okres / w środku okresu) – aktywna, poziom wyniku (ERROR / WARNING / INFO), próg (kwota). Wiersz typu programu ma pierwszeństwo przed „Wszystkie”, wariant przebiegu – przed „Każdy”; reguła bez wiersza – ustawienie domyślne (aktywna, poziom i próg z opisu reguły).",
+            Columns =
+            [
+                new("Typ programu", ColumnType.Choice, Key: true, Choices: RunCheckRules.ProjectTypes),
+                new("Reguła", ColumnType.Choice, Key: true, Choices: [.. RunCheckRules.All.Select(r => r.Name)]),
+                new("Przebieg", ColumnType.Choice, Key: true, Choices: RunCheckRules.RunKinds),
+                new("Aktywna", ColumnType.Boolean, Required: true),
+                new("Poziom", ColumnType.Choice, Choices: RunCheckRules.Levels),
+                new("Próg", ColumnType.Decimal),
+                new("Opis", ColumnType.Text),
+            ],
+            Rules = RunCheckSettingRules,
+        },
     ];
 
     public static DictionarySpec Get(string code) => All.First(s => s.Code == code);
@@ -237,6 +256,8 @@ public static partial class GlobalDictionaries
         new(Get(CasBurdenGroups), "dict.CasBurdenGroup", [("Grupa", "BurdenGroup"), ("Opis", "Description")]),
         new(Get(CasBurdenFormulas), "dict.CasFormula", [("Grupa", "GroupId"), ("Kategoria", "PoolId"), ("Formuła", "Formula")]),
         new(Get(CasBurdenRates), "dict.CasBurdenRate", [("Kategoria", "PoolId"), ("Od", "ValidFrom"), ("Do", "ValidTo"), ("Wskaźnik", "Rate"), ("Opis", "Description")]),
+        new(Get(RunChecks), "dict.RunCheck",
+            [("Typ programu", "ProjectType"), ("Reguła", "RuleName"), ("Przebieg", "RunKind"), ("Aktywna", "IsActive"), ("Poziom", "Level"), ("Próg", "Threshold"), ("Opis", "Description")]),
     ];
 
     private static IEnumerable<Issue> CalendarRules(IReadOnlyList<DictRow> rows)
@@ -337,6 +358,21 @@ public static partial class GlobalDictionaries
         }
         foreach (var order in rows.Where(r => r["Kolejność"] is not null).GroupBy(r => r["Kolejność"]!).Where(g => g.Count() > 1))
             yield return Issue.Warning($"Kolejność {order.Key} ma kilka kategorii ({string.Join(", ", order.Select(r => r["Pula"]))}) – kolumny ułożone po nazwie", "Kolejność");
+    }
+
+    /// <summary>„Kontrole przebiegu”: próg nieujemny; próg reguły bez progu – ostrzeżenie (pomijany).</summary>
+    private static IEnumerable<Issue> RunCheckSettingRules(IReadOnlyList<DictRow> rows)
+    {
+        for (var i = 0; i < rows.Count; i++)
+        {
+            var at = DictionaryValidator.RowElement(i);
+            if (Dec(rows[i]["Próg"]) is not { } threshold)
+                continue;
+            if (threshold < 0)
+                yield return Issue.Error("Próg nie może być ujemny", at);
+            else if (RunCheckRules.ByName(rows[i]["Reguła"]) is { Threshold: null } rule)
+                yield return Issue.Warning($"Reguła „{rule.Name}” nie ma progu – próg pominięty", at);
+        }
     }
 
     /// <summary>„Wskaźniki narzutu CAS”: wskaźnik nieujemny (okresy obowiązywania – DictionaryValidator, Validity).</summary>

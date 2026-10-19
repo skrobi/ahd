@@ -160,6 +160,21 @@ public sealed class SqlRunStore(SqlDatabase db) : IRunStore
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
     }
 
+    public string? ProjectType(string project)
+    {
+        using var connection = db.Open();
+        return connection.QueryFirstOrDefault<string?>(
+            $"SELECT ProjectType FROM {db.Table("meta.Project")} WHERE Code = @project AND SupersededAt IS NULL", new { project });
+    }
+
+    public IReadOnlyList<RunCheckRow> CheckSettings()
+    {
+        using var connection = db.Open();
+        return connection.Query<RunCheckRow>(
+            $"SELECT ProjectType, RuleName, RunKind, IsActive, Level, Threshold FROM {db.Table("dict.RunCheck")} WHERE Project IS NULL AND SupersededAt IS NULL")
+            .ToList();
+    }
+
     public string ActualsAmount(string project)
     {
         using var connection = db.Open();

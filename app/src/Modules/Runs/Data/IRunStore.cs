@@ -6,6 +6,9 @@ namespace PzlEv.Modules.Runs.Data;
 /// <summary>Tydzień kalendarza okresów (dict.Calendar, globalny).</summary>
 public sealed record CalendarWeek(int Year, int Week, string Period, DateTime DateFrom, DateTime DateTo, bool IsClosing);
 
+/// <summary>Wiersz słownika „Kontrole przebiegu” (dict.RunCheck): typ programu, reguła, wariant przebiegu, ustawienie.</summary>
+public sealed record RunCheckRow(string ProjectType, string RuleName, string RunKind, bool IsActive, string? Level, decimal? Threshold);
+
 /// <summary>Przebiegi w bazie: meta.Run, meta.RunPin, run.Balance, run.Issue (migracja 027).</summary>
 public interface IRunStore
 {
@@ -41,6 +44,12 @@ public interface IRunStore
 
     /// <summary>Definicje źródeł ze słownika projektu „Źródła danych”.</summary>
     IReadOnlySet<string> ProjectSources(string project);
+
+    /// <summary>Typ projektu (META_Project.ProjectType); null – brak projektu.</summary>
+    string? ProjectType(string project);
+
+    /// <summary>Słownik globalny „Kontrole przebiegu” – bieżące wiersze.</summary>
+    IReadOnlyList<RunCheckRow> CheckSettings();
 
     /// <summary>Pole kwoty ACTUALS projektu – słownik „Parametry projektu” (brak – ValueObjCrcy).</summary>
     string ActualsAmount(string project);
