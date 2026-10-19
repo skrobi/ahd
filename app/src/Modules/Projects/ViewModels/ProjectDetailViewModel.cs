@@ -144,10 +144,10 @@ public sealed class ProjectDetailViewModel : ObservableObject, IDisposable
     }
 
     public string CurrencyDetails => _currencyProblem
-        ?? $"Zestaw walutowy ACTUALS (Konfiguracja → „Parametry projektu”): kwota {ProjectSettings.SetOf(_costsField).AmountColumn}, waluta z kolumny "
-           + $"{ProjectSettings.SetOf(_costsField).CurrencyColumn} ostatniego importu ACTUALS projektu{(_currency is null ? " – brak danych" : "")}. "
+        ?? $"Zestaw walutowy ACTUALS (Konfiguracja → „Parametry programu”): kwota {ProjectSettings.SetOf(_costsField).AmountColumn}, waluta z kolumny "
+           + $"{ProjectSettings.SetOf(_costsField).CurrencyColumn} ostatniego importu ACTUALS programu{(_currency is null ? " – brak danych" : "")}. "
            + "W tej walucie: ACWP, raport kosztów, materiały z vAPD (USD przeliczone kursem bieżącym), BAC Material, BAC Cost, ETC Cost i EAC; "
-           + "kwoty „Harmonogram i budżet” zapisują walutę projektu (wpisane w innej walucie – przeliczone).";
+           + "kwoty „Harmonogram i budżet” zapisują walutę programu (wpisane w innej walucie – przeliczone).";
 
     public string ProductionInfo => _production is null ? "Produkcja: wczytywanie…"
         : _production.Error is null ? $"Produkcja (PZLPROD) {_production.ReadAt:yyyy-MM-dd HH:mm}" : "Produkcja: brak danych";
@@ -438,14 +438,14 @@ public sealed class ProjectDetailViewModel : ObservableObject, IDisposable
         await Try(async () =>
         {
             var steps = new StepTimer();
-            var snapshot = await Busy.Run(refreshMapping ? "Odświeżanie struktury P1S, kosztów i struktury projektu…" : "Wczytywanie projektu i struktury…", () =>
+            var snapshot = await Busy.Run(refreshMapping ? "Odświeżanie struktury P1S, kosztów i struktury programu…" : "Wczytywanie programu i struktury…", () =>
             {
                 // koszty (PZLTEST) – równolegle z odczytami PZLPROD (struktura P1S, potem produkcja); z pamięci, gdy pole kwoty
                 // („Parametry projektu”) się nie zmieniło
                 var costsRead = Task.Run(() => ReadCosts(steps, refreshMapping ? null : cachedCosts));
                 var tree = steps.Time("nakładka Performance Objectives", () => _service.Objectives(Code));
                 var mapping = steps.Time("struktura P1S (PZLPROD LOG.WBS)", () => _service.Mapping(refreshMapping));
-                var states = steps.Time("słowniki projektu", () => codes.ToDictionary(c => c, c => _service.DictionaryState(c, Code)));
+                var states = steps.Time("słowniki programu", () => codes.ToDictionary(c => c, c => _service.DictionaryState(c, Code)));
                 var rows = states.ToDictionary(s => s.Key, s => s.Value.Rows);
                 var wpCam = rows.GetValueOrDefault(ProjectDictionaries.WpCam) ?? [];
                 var production = cachedProduction ?? steps.Time("produkcja (PZLPROD vAHDD, vAPD)", () => _service.Production(tree, mapping));
@@ -462,7 +462,7 @@ public sealed class ProjectDetailViewModel : ObservableObject, IDisposable
                 var categories = ProjectService.CategoryLookups(rows.GetValueOrDefault(ProjectDictionaries.WbsCategories) ?? []);
                 var readiness = steps.Time("gotowość", () => ProjectService.Readiness(Project, tree, mapping, rows,
                     persons.Select(p => p.Value).ToHashSet(StringComparer.OrdinalIgnoreCase), folderChecks));
-                var owners = cachedOwners ?? steps.Time("nakładki innych projektów", () => _service.WbsOwners(Code));
+                var owners = cachedOwners ?? steps.Time("nakładki innych programów", () => _service.WbsOwners(Code));
                 var editable = table is null ? null : steps.Time("tabela słownika", () =>
                     _service.EditableRows(table, rows.TryGetValue(table, out var tableRows) ? tableRows : _service.Rows(table, Code)));
                 var definitions = steps.Time("definicje źródeł", _service.SourceDefinitions);
@@ -477,7 +477,7 @@ public sealed class ProjectDetailViewModel : ObservableObject, IDisposable
                     ProjectService.Lookups(persons, categories, sources, burdenGroups, mpks), costs, costsError, costsField, currency, currencyProblem, mpks, persons, folderChecks, actuals, production,
                     definitions.Where(d => projectSources.Contains(d.Code)).ToList());
             });
-            Logger.Information("Projekt {Code}: wczytanie {Steps}", Code, steps.Summary);
+            Logger.Information("Program {Code}: wczytanie {Steps}", Code, steps.Summary);
             if (version != _reloads)
                 return;   // w międzyczasie ruszyło nowsze odświeżenie – starszy wynik pomijany
             _saved = snapshot.Tree;
@@ -529,7 +529,7 @@ public sealed class ProjectDetailViewModel : ObservableObject, IDisposable
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
-            Logger.Warning(ex, "Daty danych ACTUALS projektu {Code}", Code);
+            Logger.Warning(ex, "Daty danych ACTUALS programu {Code}", Code);
             return new ActualsFreshness([], ex.Message);
         }
     }
@@ -551,12 +551,12 @@ public sealed class ProjectDetailViewModel : ObservableObject, IDisposable
             if (cached is { } c && c.Field == field)
                 return c;
             var actuals = steps.Time("koszty ACWP i godziny Actual DLH (ACTUALS)", () => _service.CostsAndHoursByElement(Code, field));
-            var (currency, problem) = steps.Time("waluta projektu (ACTUALS)", () => _service.ProjectCurrency(Code, field));
+            var (currency, problem) = steps.Time("waluta programu (ACTUALS)", () => _service.ProjectCurrency(Code, field));
             return new CostData(actuals, null, field, currency, problem);
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
-            Logger.Warning(ex, "Koszty projektu {Code}", Code);
+            Logger.Warning(ex, "Koszty programu {Code}", Code);
             return new CostData(ElementActuals.Empty, $"koszty (ACWP) niedostępne: {ex.Message}", field);
         }
     }
@@ -708,12 +708,12 @@ public sealed class ProjectDetailViewModel : ObservableObject, IDisposable
     /// <summary>Raport kosztów projektu z ostatniego importu ACTUALS do Excela (procedura REP_ProjectCosts).</summary>
     private async Task DoExportCostReport()
     {
-        var path = _dialogs.SaveExcel("Raport kosztów projektu", $"{Code}_koszty.xlsx");
+        var path = _dialogs.SaveExcel("Raport kosztów programu", $"{Code}_koszty.xlsx");
         if (path is null)
             return;
         await Try(async () =>
         {
-            var rows = await Busy.Run("Raport kosztów – ostatni import ACTUALS projektu…", () => _service.ExportCostReport(path, Code));
+            var rows = await Busy.Run("Raport kosztów – ostatni import ACTUALS programu…", () => _service.ExportCostReport(path, Code));
             Status = $"Zapisano {path} – {rows} wierszy (Project definition × Cost Element).";
         });
     }
@@ -737,12 +737,12 @@ public sealed class ProjectDetailViewModel : ObservableObject, IDisposable
     {
         if (!StructureSettled("pobraniem struktury do Excela") || _structure is not { } current)
             return;
-        var path = _dialogs.SaveExcel("Pobierz strukturę projektu", $"{Code}_struktura.xlsx");
+        var path = _dialogs.SaveExcel("Pobierz strukturę programu", $"{Code}_struktura.xlsx");
         if (path is null)
             return;
         await Try(async () =>
         {
-            var rows = await Busy.Run("Zapisywanie struktury projektu do Excela…", () => _service.ExportStructure(path, Code, current.Structure, current.Persons, Structure.Mpks.ToList()));
+            var rows = await Busy.Run("Zapisywanie struktury programu do Excela…", () => _service.ExportStructure(path, Code, current.Structure, current.Persons, Structure.Mpks.ToList()));
             Status = $"Zapisano {path} – {rows} wierszy struktury.";
         });
     }
@@ -755,7 +755,7 @@ public sealed class ProjectDetailViewModel : ObservableObject, IDisposable
     {
         if (!StructureSettled("wczytaniem struktury z Excela") || _structure is not { } current)
             return;
-        var path = _dialogs.OpenExcel($"Wczytaj strukturę projektu {Code} z Excela (arkusz „Struktura” pobrany z aplikacji)");
+        var path = _dialogs.OpenExcel($"Wczytaj strukturę programu {Code} z Excela (arkusz „Struktura” pobrany z aplikacji)");
         if (path is null)
             return;
         await Try(async () =>
@@ -766,7 +766,7 @@ public sealed class ProjectDetailViewModel : ObservableObject, IDisposable
             var shown = string.Join("\n", problems.Take(10)) + (problems.Count > 10 ? $"\n… (+{problems.Count - 10})" : "");
             if (file.Edits.Count == 0)
             {
-                Status = problems.Count == 0 ? $"{Path.GetFileName(path)}: brak zmian względem projektu." : $"{Path.GetFileName(path)}: brak zmian do zapisu – {problems[0]}";
+                Status = problems.Count == 0 ? $"{Path.GetFileName(path)}: brak zmian względem programu." : $"{Path.GetFileName(path)}: brak zmian do zapisu – {problems[0]}";
                 return;
             }
             var budget = file.Edits.Count(e => e.Changes.Keys.Any(StructureEdits.ScheduleColumns.Contains));
@@ -794,7 +794,7 @@ public sealed class ProjectDetailViewModel : ObservableObject, IDisposable
     /// <summary>Dołożenie elementów z kolejnego eksportu SAP (np. nowe Project definition) – istniejąca nakładka bez zmian.</summary>
     private async Task DoAddFromExcel()
     {
-        var path = _dialogs.OpenExcel($"Dołóż elementy do projektu {Code} – eksport struktury WBS z SAP");
+        var path = _dialogs.OpenExcel($"Dołóż elementy do programu {Code} – eksport struktury WBS z SAP");
         if (path is null)
             return;
         await Try(async () =>
@@ -840,7 +840,7 @@ public sealed class ProjectDetailViewModel : ObservableObject, IDisposable
             Status = "Masz niezapisane zmiany słownika – zapisz albo odrzuć je przed wczytaniem z Excela.";
             return;
         }
-        var path = _dialogs.OpenExcel($"Wczytaj słownik „{panel.Name}” projektu {Code}");
+        var path = _dialogs.OpenExcel($"Wczytaj słownik „{panel.Name}” programu {Code}");
         if (path is null)
             return;
         var context = Context(panel.Item.Code);
@@ -876,7 +876,7 @@ public sealed class ProjectDetailViewModel : ObservableObject, IDisposable
         var (removed, _) = Table.RemoveSelected();
         Status = removed == 0 ? ""
             : _selectedDictionary?.Item.Code == PzlEv.Shared.Utils.Dictionaries.GlobalDictionaries.CostCategory
-                ? "Zmiany projektu usunięte z tabeli – po zapisie obowiązują pozycje ze słownika globalnego."
+                ? "Zmiany programu usunięte z tabeli – po zapisie obowiązują pozycje ze słownika globalnego."
                 : "Wiersze usunięte z tabeli – zapisz, aby zamknąć ich obowiązywanie (historia zostaje).";
     }
 
@@ -911,13 +911,13 @@ public sealed class ProjectDetailViewModel : ObservableObject, IDisposable
 
     private async Task DoExportDictionaries()
     {
-        var path = _dialogs.SaveExcel("Pobierz słowniki projektu", $"{Code}_slowniki_projektu.xlsx");
+        var path = _dialogs.SaveExcel("Pobierz słowniki programu", $"{Code}_slowniki_programu.xlsx");
         if (path is null)
             return;
         var (tree, mapping) = (_saved, _mapping);
         await Try(async () =>
         {
-            await Busy.Run("Zapisywanie słowników projektu do Excela…", () => _service.ExportDictionaries(path, Code, Project.Type, tree, mapping));
+            await Busy.Run("Zapisywanie słowników programu do Excela…", () => _service.ExportDictionaries(path, Code, Project.Type, tree, mapping));
             Status = $"Zapisano {path} – popraw w Excelu i wczytaj ponownie (przed zapisem zobaczysz różnice).";
         });
     }
@@ -926,10 +926,10 @@ public sealed class ProjectDetailViewModel : ObservableObject, IDisposable
     {
         await Try(async () =>
         {
-            var created = await Busy.Run("Tworzenie folderów projektu…", () => _service.Folders.Create(Code));
+            var created = await Busy.Run("Tworzenie folderów programu…", () => _service.Folders.Create(Code));
             _folderChecks = null;   // ponowna kontrola folderów
             await Reload(refreshMapping: false);
-            Status = created.Count == 0 ? "Wszystkie foldery projektu istnieją." : $"Utworzono foldery: {string.Join(", ", created)}.";
+            Status = created.Count == 0 ? "Wszystkie foldery programu istnieją." : $"Utworzono foldery: {string.Join(", ", created)}.";
         });
     }
 
@@ -942,10 +942,10 @@ public sealed class ProjectDetailViewModel : ObservableObject, IDisposable
         Structure.CommitEdits();
         var import = _service.Imports!;
         IReadOnlySet<string> sources = new HashSet<string>();
-        await Try(async () => sources = await Busy.Run("Odczyt źródeł projektu…", () => _service.ProjectSources(Code)));
+        await Try(async () => sources = await Busy.Run("Odczyt źródeł programu…", () => _service.ProjectSources(Code)));
         if (sources.Count == 0)
         {
-            Status = "Projekt nie ma źródeł danych – dodaj definicje źródeł w słowniku projektu „Źródła danych”.";
+            Status = "Program nie ma źródeł danych – dodaj definicje źródeł w słowniku programu „Źródła danych”.";
             return;
         }
         if (!await import.SignIn())
@@ -954,13 +954,13 @@ public sealed class ProjectDetailViewModel : ObservableObject, IDisposable
             return;
         }
         SourceImportResult? result = null;
-        await Try(async () => result = await Busy.Run($"Import źródeł projektu ({string.Join(", ", sources.Order())})…",
+        await Try(async () => result = await Busy.Run($"Import źródeł programu ({string.Join(", ", sources.Order())})…",
             () => import.Import(sources, null, CancellationToken.None)));
         if (result is null)
             return;
         await Reload(refreshMapping: true);
         var errors = result.Issues.Where(i => i.Level == CheckLevel.Error).Select(i => i.Message).Take(3).ToList();
-        Status = $"Import źródeł projektu #{result.BatchId}: {result.Summary}" + (errors.Count > 0 ? $" – {string.Join("; ", errors)}" : "");
+        Status = $"Import źródeł programu #{result.BatchId}: {result.Summary}" + (errors.Count > 0 ? $" – {string.Join("; ", errors)}" : "");
     }
 
     private async Task Try(Func<Task> action)
@@ -971,12 +971,12 @@ public sealed class ProjectDetailViewModel : ObservableObject, IDisposable
         }
         catch (Exception ex) when (FileInUse.Is(ex))
         {
-            Logger.Warning("{Context}: plik otwarty w innym programie – {Message}", "Projekt " + Code, ex.Message);
+            Logger.Warning("{Context}: plik otwarty w innym programie – {Message}", "Program " + Code, ex.Message);
             Status = FileInUse.Describe(ex);
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
-            Logger.Error(ex, "Projekt {Code}", Code);
+            Logger.Error(ex, "Program {Code}", Code);
             Status = $"Nie udało się: {ex.Message}";
         }
     }

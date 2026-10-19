@@ -50,7 +50,7 @@ public sealed class ProjectDictionariesTests
     {
         Assert.True(HasError(Validate(ProjectDictionaries.WpCam, Wp("AC-CAB.7.01", "WP-1", "Anna Nowak")), "poza zakresem"));
         Assert.True(HasError(Validate(ProjectDictionaries.WpCam, Wp("AC-CAB.6.380", "WP-1", "Anna Nowak")), "poza zakresem"));
-        Assert.True(HasError(Validate(ProjectDictionaries.WpCam, Wp("AC-CAB.6.38.09", "WP-1", "Anna Nowak")), "należy do projektu S70I"));
+        Assert.True(HasError(Validate(ProjectDictionaries.WpCam, Wp("AC-CAB.6.38.09", "WP-1", "Anna Nowak")), "należy do programu S70I"));
         Assert.True(HasError(Validate(ProjectDictionaries.WpCam, Wp("AC-CAB.6.38.01", "WP-1", "Anna Nowak"), Wp("AC-CAB.6.38.01", "WP-2", "Anna Nowak")), "Duplikat klucza"));
         // WP bez CAM – zapis dozwolony (CAM uzupełnia się później), ostrzeżenie; przebieg blokuje gotowość projektu.
         var withoutCam = Validate(ProjectDictionaries.WpCam, Wp("AC-CAB.6.38.01", "WP-1", null));

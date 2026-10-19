@@ -3,18 +3,18 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:partials="clr-namespace:PzlEv.Shared.Views.Partials">
     <StackPanel>
-        <partials:PageHeader Title="Projekty">
+        <partials:PageHeader Title="Programy">
             <partials:PageHeader.Actions>
                 <StackPanel Orientation="Horizontal">
                     <Button Content="Odśwież" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding Refresh}" />
-                    <Button Content="+ Nowy projekt" Style="{StaticResource BtnPrimary}" Command="{Binding NewProject}" />
+                    <Button Content="+ Nowy program" Style="{StaticResource BtnPrimary}" Command="{Binding NewProject}" />
                 </StackPanel>
             </partials:PageHeader.Actions>
         </partials:PageHeader>
         <partials:BusyBar DataContext="{Binding Busy}" />
         <TextBlock Text="{Binding Status}" TextWrapping="Wrap" Margin="0,0,0,8" />
         <Border Style="{StaticResource Panel}" Visibility="{Binding IsEmpty, Converter={StaticResource BoolToVisibility}}">
-            <TextBlock Style="{StaticResource MutedText}" Text="Brak projektów." TextWrapping="Wrap" />
+            <TextBlock Style="{StaticResource MutedText}" Text="Brak programów." TextWrapping="Wrap" />
         </Border>
         <DataGrid x:Name="ProjectsGrid" Style="{StaticResource DataTable}" ItemsSource="{Binding Items}" SelectedItem="{Binding Selected}" IsReadOnly="True"
                   MouseDoubleClick="OnDoubleClick">

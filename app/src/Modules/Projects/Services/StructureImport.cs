@@ -85,7 +85,7 @@ public static class StructureImport
             if (!rows.TryGetValue(MappingKeys.Key(p1s), out var row))
             {
                 if (Inputs.Any(h => Cell(h) is not null))
-                    issues.Add(Issue.Warning($"Elementu P1S {p1s} nie ma w strukturze projektu – wiersz pominięty", at));
+                    issues.Add(Issue.Warning($"Elementu P1S {p1s} nie ma w strukturze programu – wiersz pominięty", at));
                 continue;
             }
             var changes = new Dictionary<string, string?>();

@@ -41,7 +41,7 @@ public sealed class DictRowViewModel : INotifyPropertyChanged
     public bool IsModified => _cells.Where((c, i) => (c ?? "") != (_original[i] ?? "")).Any();
 
     public string State => IsNew ? "nowy"
-        : IsInherited ? IsModified ? "zmiana w projekcie" : "globalny"
+        : IsInherited ? IsModified ? "zmiana w programie" : "globalny"
         : IsModified ? "zmieniony" : "";
 
     /// <summary>Zmiana komórki (wiersz, kolumna, poprzednia wartość) – historia Ctrl+Z tabeli.</summary>

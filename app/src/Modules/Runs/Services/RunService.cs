@@ -68,7 +68,7 @@ public sealed class RunService(IRunStore store, AppServices services, Func<ISour
     {
         using var lease = services.Locks.TryAcquire(ProjectLock(project), out var holder);
         if (lease is null)
-            return new RunOutcome(project, null, RunStatuses.Failed, 1, 0, $"Przebieg projektu {project} trwa: {holder?.Text ?? "?"}");
+            return new RunOutcome(project, null, RunStatuses.Failed, 1, 0, $"Przebieg programu {project} trwa: {holder?.Text ?? "?"}");
         store.AbandonRunning(id => services.Locks.Holder(PinLock(id)) is not null, services.Clock.Now);
         var week = store.Week(services.Clock.Now.Date);
         if (week is null)
@@ -91,10 +91,10 @@ public sealed class RunService(IRunStore store, AppServices services, Func<ISour
             // 1. Import źródeł projektu (słownik „Źródła danych”) – pliki zapisują się raz, wspólnie dla projektów.
             var sources = store.ProjectSources(project);
             if (sources.Count == 0)
-                issues.Add(new RunIssue("Import", CheckLevel.Warning, null, "Projekt nie ma źródeł danych (słownik „Źródła danych”) – przebieg na danych ostatniego importu"));
+                issues.Add(new RunIssue("Import", CheckLevel.Warning, null, "Program nie ma źródeł danych (słownik „Źródła danych”) – przebieg na danych ostatniego importu"));
             else if (imports?.Invoke() is { } import)
             {
-                progress?.Report($"Import źródeł projektu ({string.Join(", ", sources.Order())})…");
+                progress?.Report($"Import źródeł programu ({string.Join(", ", sources.Order())})…");
                 var imported = import.Import(sources, progress, cancellation);
                 batchId = imported.BatchId == 0 ? null : imported.BatchId;
                 issues.Add(new RunIssue("Import", imported.Errors > 0 ? CheckLevel.Error : CheckLevel.Pass, null, $"Import #{imported.BatchId}: {imported.Summary}"));
@@ -104,7 +104,7 @@ public sealed class RunService(IRunStore store, AppServices services, Func<ISour
             cancellation.ThrowIfCancellationRequested();
 
             // 2. Przypięcie stanu: dane ACTUALS projektu w chwili przebiegu.
-            progress?.Report("Przypięcie danych projektu…");
+            progress?.Report("Przypięcie danych programu…");
             // Proces projektu: pole kwoty i ewentualne przekształcenie kosztów (np. CAS – PLN, narzuty, kurs CAS).
             var process = processes?.Invoke()?.For(project) ?? ProjectProcess.Default;
             var amountField = process.AmountField(store.ActualsAmount(project));
@@ -114,7 +114,7 @@ public sealed class RunService(IRunStore store, AppServices services, Func<ISour
             var previous = previousPin is null || previousField != amountField ? null : store.Balance(previousPin.PinId);
             if (previousPin is not null && previous is null)
                 issues.Add(new RunIssue(RunChecks.Volume, CheckLevel.Warning, null,
-                    $"Pole kwoty ACTUALS zmienione ({previousField} → {amountField}, „Parametry projektu”) – bez porównania z przebiegiem {previousPin.Code} #{previousPin.PinNo}"));
+                    $"Pole kwoty ACTUALS zmienione ({previousField} → {amountField}, „Parametry programu”) – bez porównania z przebiegiem {previousPin.Code} #{previousPin.PinNo}"));
             else if (previousPin is not null)
                 issues.Add(new RunIssue(RunChecks.Volume, CheckLevel.Pass, null, $"Porównanie z przebiegiem {previousPin.Code} #{previousPin.PinNo} ({previousPin.StartedAt.ToLocalTime():yyyy-MM-dd HH:mm})"));
 

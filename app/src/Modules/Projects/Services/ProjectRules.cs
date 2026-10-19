@@ -20,21 +20,21 @@ public static partial class ProjectRules
     {
         var issues = new List<Issue>();
         if (code.Length == 0)
-            issues.Add(Issue.Error("Podaj kod projektu", "Kod"));
+            issues.Add(Issue.Error("Podaj kod programu", "Kod"));
         else if (code.Length > CodeMaxLength)
             issues.Add(Issue.Error($"Kod może mieć najwyżej {CodeMaxLength} znaków", "Kod"));
         else if (!CodePattern().IsMatch(code))
             issues.Add(Issue.Error("Kod: tylko litery A–Z, cyfry, „-” i „_” (używany w nazwach folderów i plików)", "Kod"));
         else if (existingCodes.Contains(code, StringComparer.OrdinalIgnoreCase))
-            issues.Add(Issue.Error($"Projekt o kodzie {code} już istnieje", "Kod"));
+            issues.Add(Issue.Error($"Program o kodzie {code} już istnieje", "Kod"));
 
         if (name.Trim().Length == 0)
-            issues.Add(Issue.Error("Podaj nazwę projektu", "Nazwa"));
+            issues.Add(Issue.Error("Podaj nazwę programu", "Nazwa"));
         else if (name.Trim().Length > NameMaxLength)
             issues.Add(Issue.Error($"Nazwa może mieć najwyżej {NameMaxLength} znaków", "Nazwa"));
 
         if (!ProjectTypes.IsKnown(type))
-            issues.Add(Issue.Error("Wybierz typ projektu", "Typ"));
+            issues.Add(Issue.Error("Wybierz typ programu", "Typ"));
         return issues;
     }
 

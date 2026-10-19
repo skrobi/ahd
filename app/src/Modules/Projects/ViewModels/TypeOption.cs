@@ -10,6 +10,6 @@ public sealed record TypeOption(string Code)
 
     public string Description => ProjectTypes.Description(Code);
 
-    public string Required => "Wymagane słowniki projektu: "
+    public string Required => "Wymagane słowniki programu: "
         + string.Join(", ", ProjectDictionaries.ForType(Code).Where(i => i.IsRequired(Code)).Select(i => i.Name));
 }

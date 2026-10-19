@@ -4,7 +4,7 @@ Aplikacja PZL-EV rozwijana według planu w `tasks/` (`tasks/README.md`). Powsta�
 i nadal służy do sprawdzenia uruchomienia jednego `PZL-EV.exe` z dysku sieciowego (O6, sekcja „Test stosu”).
 
 Stan: **Słowniki** (słowniki globalne – F1), **Import RABIT** i **Administracja** (import plików, definicje
-źródeł, parsery, lokalizacje – F2), **Projekty** (kreator, Performance Objectives, słowniki
+źródeł, parsery, lokalizacje – F2), **Programy** (kreator, Performance Objectives, słowniki
 projektu, gotowość, foldery – F4), **Przebiegi** (przebieg P0–P2 uruchamia „Uruchom przebieg” na ekranie
 projektu, historia – zakładka Przebiegi – F5), **Pulpit** (stan z bazy, otwarte problemy) i **Diagnostyka**.
 Pozycja menu „Przebiegi” pokazuje na razie ekran
@@ -139,11 +139,11 @@ na ekranie **Diagnostyka** i w stopce okna.
 8. **Pulpit → Wymaga uwagi** – otwarte problemy wszystkich obszarów, błędy najpierw. Plik z błędem → import (problem)
    → poprawiony plik → import: problem poprzedniego importu znika sam. **Rozwiązane** przy problemie – zamknięcie
    ręczne (wpis w dzienniku).
-9. **Projekty** – **+ Nowy projekt**: kod `M28`, nazwa, typ → **Performance Objectives**: **Wczytaj Excel**
+9. **Programy** – **+ Nowy program**: kod `M28`, nazwa, typ → **Performance Objectives**: **Wczytaj Excel**
    `testdata/Projekty/PO_M28.xlsx` (8 elementów; strona P1S – kolumna Legacy WBS), dodaj węzeł wirtualny i przeciągnij do niego elementy →
-   **Słowniki projektu**: **Pobierz szablon Excel** (arkusz „WP i CAM” z elementami P1S z zakresu) albo
+   **Słowniki programu**: **Pobierz szablon Excel** (arkusz „WP i CAM” z elementami P1S z zakresu) albo
    **Wczytaj skoroszyt** `testdata/Projekty/Slowniki_M28.xlsx` → **Foldery** → **Podsumowanie**: baza analityczna
-   (3 WP, 2 250 h, 75 000,50 materiałów) → **Utwórz projekt**. Bez słowników projekt powstaje, ale jest niegotowy
+   (3 WP, 2 250 h, 75 000,50 materiałów) → **Utwórz program**. Bez słowników projekt powstaje, ale jest niegotowy
    (ERROR „WP i CAM”); po wczytaniu słowników na ekranie projektu – gotowy. Drugi projekt z tym samym kodem albo z tym
    samym elementem CES – odrzucony.
 

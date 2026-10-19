@@ -25,7 +25,7 @@ public static class ObjectivesValidator
             if (string.IsNullOrWhiteSpace(node.WbsElement))
                 issues.Add(Issue.Error("Element CES bez WBS element", node.Name));
             else if (wbsOwners.TryGetValue(node.WbsElement, out var owner))
-                issues.Add(Issue.Error($"Element CES należy już do nakładki projektu {owner}", node.WbsElement));
+                issues.Add(Issue.Error($"Element CES należy już do nakładki programu {owner}", node.WbsElement));
         }
         foreach (var group in tree.Nodes.Where(n => !n.IsVirtual && !string.IsNullOrWhiteSpace(n.WbsElement))
                      .GroupBy(n => n.WbsElement!, StringComparer.OrdinalIgnoreCase).Where(g => g.Count() > 1))

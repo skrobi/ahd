@@ -31,13 +31,13 @@ public sealed class RunLauncher(RunService service, IRunStore store, Func<ISourc
     public async Task<string?> Start(string project)
     {
         if (!_running.TryAdd(project, true))
-            return "Przebieg projektu już trwa.";
+            return "Przebieg programu już trwa.";
         try
         {
             if (service.Running(project) is { } holder)
             {
                 _running.TryRemove(project, out _);
-                return $"Przebieg projektu trwa: {holder.Text}.";
+                return $"Przebieg programu trwa: {holder.Text}.";
             }
             if (imports() is { } import && store.ProjectSources(project).Count > 0 && !await import.SignIn())
             {
@@ -49,7 +49,7 @@ public sealed class RunLauncher(RunService service, IRunStore store, Func<ISourc
         {
             // Błąd przed startem (baza, dysk sieciowy, SharePoint) – projekt nie zostaje „w toku” do restartu aplikacji.
             _running.TryRemove(project, out _);
-            Serilog.Log.Error(ex, "Przebieg projektu {Project} nie rozpoczęty", project);
+            Serilog.Log.Error(ex, "Przebieg programu {Project} nie rozpoczęty", project);
             return $"Przebieg nie rozpoczęty – {ex.Message}";
         }
         var dispatcher = Application.Current?.Dispatcher;

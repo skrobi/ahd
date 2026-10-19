@@ -57,10 +57,10 @@
                     <TextBlock Text="{Binding RunProgress}" Style="{StaticResource MutedText}" VerticalAlignment="Center" Margin="0,0,12,0" MaxWidth="320"
                                TextTrimming="CharacterEllipsis" ToolTip="{Binding RunProgress}" />
                     <Button Content="Uruchom przebieg" Style="{StaticResource BtnPrimary}" Margin="0,0,12,0" Command="{Binding StartRun}"
-                            ToolTip="Przebieg w tle: import źródeł projektu, przypięcie danych ACTUALS, kontrole (liczba danych, odchylenia, nowe cost elementy, netowanie do 0); powiadomienie Windows po zakończeniu" />
+                            ToolTip="Przebieg w tle: import źródeł programu, przypięcie danych ACTUALS, kontrole (liczba danych, odchylenia, nowe cost elementy, netowanie do 0); powiadomienie Windows po zakończeniu" />
                     <ContentControl Content="{Binding ReadinessPill}" VerticalAlignment="Center" Margin="0,0,12,0"
                                     ToolTip="Gotowość do przebiegu – szczegóły w zakładce Wskaźniki" />
-                    <Button Content="← Lista projektów" Style="{StaticResource Btn}" Command="{Binding Back}" />
+                    <Button Content="← Lista programów" Style="{StaticResource Btn}" Command="{Binding Back}" />
                 </StackPanel>
             </partials:PageHeader.Actions>
         </partials:PageHeader>
@@ -156,7 +156,7 @@
                                         ToolTip="Edytuj Performance Objectives – edytor jak w kreatorze: przeciąganie, przesuwanie, usuwanie, węzły wirtualne, podmiana z Excela" />
                                 <Button Content="&#xE710;" Style="{StaticResource BtnIcon}" Command="{Binding AddFromExcel}"
                                         AutomationProperties.Name="Dołóż z Excela (eksport SAP)"
-                                        ToolTip="Dołóż z Excela (eksport SAP) – dokłada elementy, których projekt jeszcze nie ma (np. kolejne Project definition); istniejąca struktura zostaje bez zmian" />
+                                        ToolTip="Dołóż z Excela (eksport SAP) – dokłada elementy, których program jeszcze nie ma (np. kolejne Project definition); istniejąca struktura zostaje bez zmian" />
                                 <Button Content="&#xE896;" Style="{StaticResource BtnIcon}" Command="{Binding ExportStructure}"
                                         AutomationProperties.Name="Pobierz strukturę do Excela"
                                         ToolTip="Pobierz strukturę do Excela – całe drzewo (także zwinięte wiersze) ze wszystkimi kolumnami: WP, CAM, Cost Category, budżet, daty, ACWP, braki; kolumny do uzupełnienia wyróżnione na żółto" />
@@ -168,8 +168,8 @@
                                 <Button Content="&#xE70E;" Style="{StaticResource BtnIcon}" Margin="0,0,12,0" Command="{Binding Structure.CollapseAll}"
                                         AutomationProperties.Name="Zwiń wszystko" ToolTip="Zwiń wszystko" />
                                 <Button Content="&#xE8B5;" Style="{StaticResource BtnIcon}" Command="{Binding ImportSources}"
-                                        AutomationProperties.Name="Importuj źródła projektu"
-                                        ToolTip="Importuj źródła projektu – pliki definicji ze słownika „Źródła danych” (tylko nowe wersje), potem odświeżenie kosztów i produkcji" />
+                                        AutomationProperties.Name="Importuj źródła programu"
+                                        ToolTip="Importuj źródła programu – pliki definicji ze słownika „Źródła danych” (tylko nowe wersje), potem odświeżenie kosztów i produkcji" />
                                 <Button Content="&#xE72C;" Style="{StaticResource BtnIcon}" Command="{Binding RefreshMapping}"
                                         AutomationProperties.Name="Odśwież P1S i koszty"
                                         ToolTip="Odśwież P1S i koszty – ponowny odczyt struktury P1S (PZLPROD), produkcji i kosztów ACWP z ostatniego importu ACTUALS" />
@@ -217,7 +217,7 @@
                         <Button Grid.Column="0" Content="Raport kosztów (Excel)" Style="{StaticResource Btn}" HorizontalAlignment="Left"
                                 VerticalAlignment="Center" Margin="12" Command="{Binding ExportCostReport}" />
                         <TextBlock Grid.Column="1" VerticalAlignment="Center" Margin="0,12,12,12" TextWrapping="Wrap"
-                                   Text="Koszty ostatniego importu ACTUALS: Project definition × Cost Element, ostatni okres i lata (PLN), bez wykluczeń projektu." />
+                                   Text="Koszty ostatniego importu ACTUALS: Project definition × Cost Element, ostatni okres i lata (PLN), bez wykluczeń programu." />
                         <Button Grid.Row="1" Grid.Column="0" Content="Raport kosztów CES (Excel)" Style="{StaticResource Btn}" HorizontalAlignment="Left"
                                 VerticalAlignment="Center" Margin="12,0,12,12" Command="{Binding ExportCasCostReport}"
                                 Visibility="{Binding HasBurdenReport, Converter={StaticResource BoolToVisibility}}" />
@@ -230,7 +230,7 @@
             </TabItem>
 
             <!-- Słowniki projektu: lista słowników i tabela wybranego słownika z edycją w komórkach (jak ekran Słowniki) -->
-            <TabItem Header="Słowniki projektu" Padding="12,4" IsSelected="{Binding DictionaryTabOpen, Mode=OneWayToSource}">
+            <TabItem Header="Słowniki programu" Padding="12,4" IsSelected="{Binding DictionaryTabOpen, Mode=OneWayToSource}">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                 <Grid>
                     <Grid.ColumnDefinitions>
@@ -254,7 +254,7 @@
                         </Border>
                         <Button Content="Pobierz słowniki (Excel)" Style="{StaticResource Btn}" HorizontalAlignment="Left" Margin="0,10,0,0"
                                 Command="{Binding ExportDictionaries}"
-                                ToolTip="Wszystkie słowniki projektu w jednym skoroszycie – popraw i wczytaj ponownie (przed zapisem zobaczysz różnice)" />
+                                ToolTip="Wszystkie słowniki programu w jednym skoroszycie – popraw i wczytaj ponownie (przed zapisem zobaczysz różnice)" />
                     </StackPanel>
 
                     <ContentControl Grid.Column="1" Content="{Binding}" ContentTemplate="{StaticResource DictionaryEditor}" />
@@ -287,7 +287,7 @@
 
                     <StackPanel Grid.Column="1">
                         <ContentControl Content="{Binding}" ContentTemplate="{StaticResource DictionaryEditor}" />
-                        <TextBlock Text="Definicje źródeł projektu (Administracja)" Style="{StaticResource Eyebrow}" Margin="0,16,0,6" />
+                        <TextBlock Text="Definicje źródeł programu (Administracja)" Style="{StaticResource Eyebrow}" Margin="0,16,0,6" />
                         <DataGrid Style="{StaticResource DataTable}" ItemsSource="{Binding SourceDefinitions}" IsReadOnly="True" HorizontalAlignment="Left" MinWidth="480">
                             <DataGrid.Columns>
                                 <DataGridTextColumn Header="Definicja" Binding="{Binding Code}" />

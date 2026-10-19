@@ -181,7 +181,7 @@ public sealed class ProjectStoreAndServiceTests : IDisposable
         other.AddElement(null, "4D06WX", "inny", "AC-CAB.6.38");
         var item = ProjectDictionaries.Item(ProjectDictionaries.WpCam);
         var preview = _service.PreviewDictionary(item.Code, _service.Context("S70I", other, null, _service.Mapping()), Dictionaries, "S70I", ProjectService.FindSheet(Dictionaries, item));
-        Assert.Contains(preview.Issues, i => i.Level == CheckLevel.Error && i.Message.Contains("należy do projektu M28"));
+        Assert.Contains(preview.Issues, i => i.Level == CheckLevel.Error && i.Message.Contains("należy do programu M28"));
     }
 
     [SqlFact]
@@ -506,7 +506,7 @@ public sealed class ProjectStoreAndServiceTests : IDisposable
             [new DictRow(null, null, new Dictionary<string, string?> { ["Element P1S"] = "AC-CAB.6.38.01", ["WP"] = "WP-S", ["CAM"] = "e1", ["Cost Category"] = null })], [], true, "S70I").Status);
         var owned = _service.SaveStructureEdit("M28", inputs, Row("4D06WP000001"), new Dictionary<string, string?> { [StructureEdits.Wp] = "true" });
         Assert.False(owned.Saved);
-        Assert.Contains("należy do projektu S70I", owned.Message);
+        Assert.Contains("należy do programu S70I", owned.Message);
         Assert.Equal(SaveStatus.Saved, dictionaries.Save(ProjectDictionaries.Base(ProjectDictionaries.WpCam), [],
             dictionaries.Load(ProjectDictionaries.Base(ProjectDictionaries.WpCam), "S70I"), true, "S70I").Status);
         var assigned = _service.SaveStructureEdit("M28", inputs, Row("4D06WP000001"),

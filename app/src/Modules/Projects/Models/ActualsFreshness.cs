@@ -44,7 +44,7 @@ public sealed record ActualsFreshness(IReadOnlyList<ActualsFile> Files, string? 
         ? $"Odczyt dat danych ACTUALS nieudany: {Error}"
         : Files.Count == 0
             ? "Brak zaimportowanych plików ACTUALS – koszty (ACWP) nie są dostępne. Import RABIT – ekran Import."
-            : "Koszty (ACWP) – najnowsza zaimportowana wersja każdego pliku ACTUALS (zrzut RABIT, wszystkie projekty):\n" + string.Join("\n",
+            : "Koszty (ACWP) – najnowsza zaimportowana wersja każdego pliku ACTUALS (zrzut RABIT, wszystkie programy):\n" + string.Join("\n",
                 Files.OrderBy(f => f.FileName, StringComparer.OrdinalIgnoreCase).Select(f =>
                     $"• {f.FileName}: raport RABIT {Time(f.ReportAt)}, import {Time(f.ImportedAt)}"
                     + (f.CheckedAt is { } c && c > f.ImportedAt ? $"; sprawdzony {Time(c)} – bez zmian (raport RABIT {Time(f.DataAt)})" : "")))

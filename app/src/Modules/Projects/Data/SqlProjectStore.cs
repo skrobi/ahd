@@ -68,7 +68,7 @@ public sealed class SqlProjectStore(SqlDatabase db, IClock clock, ICurrentUser u
                 var taken = connection.ExecuteScalar<int>(
                     $"SELECT COUNT(*) FROM {ProjectTable} WITH (UPDLOCK, HOLDLOCK) WHERE SupersededAt IS NULL AND Code = @code", new { code }, transaction);
                 if (taken > 0)
-                    return StoreResult.Rejected($"Projekt o kodzie {code} już istnieje.");
+                    return StoreResult.Rejected($"Program o kodzie {code} już istnieje.");
                 if (OwnerConflict(connection, transaction, code, objectives) is { } conflict)
                     return StoreResult.Rejected(conflict);
 
@@ -82,7 +82,7 @@ public sealed class SqlProjectStore(SqlDatabase db, IClock clock, ICurrentUser u
         }
         catch (SqlException ex) when (SqlDatabase.IsDuplicateKey(ex))
         {
-            return StoreResult.Rejected($"Projekt o kodzie {code} albo element nakładki został w międzyczasie zapisany przez inną osobę – odśwież dane.");
+            return StoreResult.Rejected($"Program o kodzie {code} albo element nakładki został w międzyczasie zapisany przez inną osobę – odśwież dane.");
         }
     }
 
@@ -176,7 +176,7 @@ public sealed class SqlProjectStore(SqlDatabase db, IClock clock, ICurrentUser u
             .Where(n => !n.IsVirtual && n.WbsElement is not null && owners.ContainsKey(n.WbsElement))
             .Select(n => $"{n.WbsElement} ({owners[n.WbsElement!]})")
             .ToList();
-        return taken.Count == 0 ? null : $"Elementy CES należą już do nakładki innego projektu: {string.Join(", ", taken.Take(10))}{(taken.Count > 10 ? "…" : "")}";
+        return taken.Count == 0 ? null : $"Elementy CES należą już do nakładki innego programu: {string.Join(", ", taken.Take(10))}{(taken.Count > 10 ? "…" : "")}";
     }
 
     private Dictionary<string, string> Owners(SqlConnection connection, SqlTransaction? transaction, string exceptCode) =>

@@ -19,7 +19,7 @@ public static class RunChecks
     public const string Volume = "Liczba danych";
     public const string Deviations = "Odchylenia raport do raportu";
     public const string NewCostElements = "Nowe cost elementy";
-    public const string NetZero = "Netowanie projektu do 0";
+    public const string NetZero = "Netowanie programu do 0";
     public const string ClosedPeriods = "Zmiany w zamkniętych okresach";
     public const string Quality = "Jakość danych";
 
@@ -54,7 +54,7 @@ public static class RunChecks
                 issues.Add(new RunIssue(Volume, CheckLevel.Warning, null, $"Koszt brutto mniejszy niż w poprzednim przebiegu: {Amount(cost)} < {Amount(costBefore)}", cost - costBefore));
         }
         else
-            issues.Add(new RunIssue(Volume, CheckLevel.Pass, null, $"Pierwszy przebieg projektu – brak danych do porównania ({rows:#,0} wierszy)"));
+            issues.Add(new RunIssue(Volume, CheckLevel.Pass, null, $"Pierwszy przebieg programu – brak danych do porównania ({rows:#,0} wierszy)"));
 
         // 2. Największe odchylenia raport do raportu – koszt brutto po elemencie WBS i po cost elemencie.
         if (previous is not null)
@@ -80,7 +80,7 @@ public static class RunChecks
                 issues.Add(new RunIssue(NewCostElements, CheckLevel.Error, group.Key,
                     $"Cost element {group.Key} spoza słownika Cost Category – dodaj go (Słowniki → Cost Category → Uzupełnij z ACTUALS)", group.Sum(r => r.Amount)));
             else if (known is not null && !known.Contains(group.Key))
-                issues.Add(new RunIssue(NewCostElements, CheckLevel.Pass, group.Key, $"Cost element {group.Key} pierwszy raz w projekcie", group.Sum(r => r.Amount)));
+                issues.Add(new RunIssue(NewCostElements, CheckLevel.Pass, group.Key, $"Cost element {group.Key} pierwszy raz w programie", group.Sum(r => r.Amount)));
         }
 
         // 4. Projekt netuje się do 0 w zamkniętych okresach; inaczej – gdzie: elementy WBS z saldem narastającym ≠ 0. Dane
@@ -88,10 +88,10 @@ public static class RunChecks
         var closed = (source ?? current).Where(Closed).ToList();
         var balance = closed.Sum(r => r.Amount);
         if (Math.Abs(balance) <= Tolerance)
-            issues.Add(new RunIssue(NetZero, CheckLevel.Pass, null, $"Projekt netuje się do 0 w okresach zamkniętych (do {closedBefore.Year}/{closedBefore.Period:00} bez niego): saldo {Amount(balance)}", balance));
+            issues.Add(new RunIssue(NetZero, CheckLevel.Pass, null, $"Program netuje się do 0 w okresach zamkniętych (do {closedBefore.Year}/{closedBefore.Period:00} bez niego): saldo {Amount(balance)}", balance));
         else
         {
-            issues.Add(new RunIssue(NetZero, CheckLevel.Error, null, $"Projekt nie netuje się do 0 w okresach zamkniętych: saldo {Amount(balance)}", balance));
+            issues.Add(new RunIssue(NetZero, CheckLevel.Error, null, $"Program nie netuje się do 0 w okresach zamkniętych: saldo {Amount(balance)}", balance));
             foreach (var wbs in closed.GroupBy(r => r.WbsElement)
                          .Select(g => (Element: g.Key, Balance: g.Sum(r => r.Amount), Cost: g.Where(r => !r.IsSettlement).Sum(r => r.Amount),
                              Settled: g.Where(r => r.IsSettlement).Sum(r => r.Amount), Rows: g.ToList()))
@@ -146,7 +146,7 @@ public static class RunChecks
                 $"Waluta inna niż {expected}: {string.Join(", ", currencies.Select(r => r.Currency).Distinct())} ({currencies.Sum(r => r.Rows)} wierszy) – saldo w różnych walutach"));
         var noWbs = current.Where(r => r.WbsElement.Length == 0).ToList();
         if (noWbs.Count > 0)
-            issues.Add(new RunIssue(Quality, CheckLevel.Warning, null, $"Wiersze bez elementu WBS: {noWbs.Sum(r => r.Rows)} (sieci, zlecenia przypisane do projektu)", noWbs.Sum(r => r.Amount)));
+            issues.Add(new RunIssue(Quality, CheckLevel.Warning, null, $"Wiersze bez elementu WBS: {noWbs.Sum(r => r.Rows)} (sieci, zlecenia przypisane do programu)", noWbs.Sum(r => r.Amount)));
         return issues;
     }
 

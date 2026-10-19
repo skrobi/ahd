@@ -579,7 +579,7 @@ public sealed partial class CasCostReportTests : IDisposable
         Assert.Contains(used.Issues, i => i.Message.Contains("jest używane w słowniku „Wskaźniki narzutu CAS”"));
         var odcRow = dictionaries.Load(groupSpec).Where(r => r["Grupa"] == "ODC").ToList();
         var group = dictionaries.Save(groupSpec, dictionaries.Load(groupSpec).Except(odcRow).ToList(), odcRow, true);
-        Assert.Contains(group.Issues, i => i.Message.Contains("„ODC” jest używane w słowniku „Cost Category”") && i.Message.Contains("także w projektach"));
+        Assert.Contains(group.Issues, i => i.Message.Contains("„ODC” jest używane w słowniku „Cost Category”") && i.Message.Contains("także w programach"));
 
         // Excel słownika wskaźników: nazwa puli zamiast identyfikatora; wczytanie zamienia nazwę z powrotem na identyfikator.
         var rateSpec = GlobalDictionaries.Get(GlobalDictionaries.CasBurdenRates);

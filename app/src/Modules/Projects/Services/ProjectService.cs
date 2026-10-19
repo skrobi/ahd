@@ -21,7 +21,7 @@ namespace PzlEv.Modules.Projects.Services;
 public sealed class ProjectService(IProjectStore store, IDictionaryStore dictionaries, IJournal journal, ProjectFolders folders,
     IPzlProdSource? pzlProd, Func<ISourceImport?>? imports = null, Func<IRunLauncher?>? runs = null)
 {
-    private const string Area = "Projekty";
+    private const string Area = "Programy";
 
     private readonly DictionaryService _dictionaries = new(dictionaries, journal);
     private readonly object _mappingLock = new();
@@ -210,7 +210,7 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
         {
             0 => (null, null),
             1 => (codes[0], null),
-            _ => (null, $"kilka walut w kolumnie {set.CurrencyColumn}: {string.Join(", ", codes)} – kwoty w różnych walutach się nie sumują; wybierz inny zestaw walutowy w „Parametrach projektu”"),
+            _ => (null, $"kilka walut w kolumnie {set.CurrencyColumn}: {string.Join(", ", codes)} – kwoty w różnych walutach się nie sumują; wybierz inny zestaw walutowy w „Parametrach programu”"),
         };
     }
 
@@ -229,7 +229,7 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
             .GroupBy(r => r["MPK"]!, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(g => g.Key, g => Dec(g.First()["Labor Rate"])!.Value * (Dec(g.First()["Overhead"]) ?? 1), StringComparer.OrdinalIgnoreCase);
         if (currency is null)
-            return new EtcRates(rates, year, null, null, null, currencyProblem ?? "waluta projektu nieznana – brak danych ACTUALS projektu");
+            return new EtcRates(rates, year, null, null, null, currencyProblem ?? "waluta programu nieznana – brak danych ACTUALS programu");
         decimal? ToPln(string code) => FxRate.On(fxRates, code, today);
         var project = ToPln(currency);
         var usd = ToPln("USD");
@@ -413,7 +413,7 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
             sheets.Add((item.Sheet, columns, data));
         }
         ExcelTableWriter.WriteTemplate(path, sheets);
-        journal.Add(Area, $"{(code.Length > 0 ? code : "nowy projekt")}: słowniki projektu pobrane do Excela", code.Length > 0 ? code : null);
+        journal.Add(Area, $"{(code.Length > 0 ? code : "nowy program")}: słowniki programu pobrane do Excela", code.Length > 0 ? code : null);
     }
 
     /// <summary>Słowniki globalne z bieżącym stanem (krok „Słowniki projektu” kreatora): nazwa, wiersze, ostatnia zmiana.</summary>
@@ -602,7 +602,7 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
             StructureImport.WpHeader => new(header, Note: "Do uzupełnienia: wpisz cokolwiek (np. x) przy elemencie P1S, który jest WP – kod WP = kod elementu. Pusta komórka – bez zmiany.", Input: true),
             StructureImport.CamHeader => new(header, Note: "Do uzupełnienia: numer znaczka (USRID) CAM – lista w arkuszu „Listy”. Pusta komórka – bez zmiany.",
                 Lookup: persons.Select(p => (p.Value, p.Label)).ToList(), Input: true),
-            StructureImport.CategoryHeader => new(header, Note: "Do uzupełnienia: kategoria ze słownika „Kategorie WBS” projektu. Pusta komórka – bez zmiany.", Input: true),
+            StructureImport.CategoryHeader => new(header, Note: "Do uzupełnienia: kategoria ze słownika „Kategorie WBS” programu. Pusta komórka – bez zmiany.", Input: true),
             StructureImport.MpkHeader => new(header, Note: "Do uzupełnienia: MPK WP ze słownika „Stawki wydziałów” (stawka ETC Cost). Pusta komórka – bez zmiany.",
                 Lookup: mpks?.Select(m => (m.Value, m.Label)).ToList(), Input: true),
             StructureImport.StartHeader or StructureImport.FinishHeader or StructureImport.ForecastStartHeader or StructureImport.ForecastFinishHeader
@@ -625,7 +625,7 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
     public int ExportStructure(string path, string code, ProjectStructure structure, IReadOnlyList<LookupOption> persons, IReadOnlyList<LookupOption>? mpks = null)
     {
         ExcelTableWriter.WriteTemplate(path, [("Struktura", StructureSheetColumns(persons, mpks), StructureRows(structure, persons))]);
-        journal.Add(Area, $"{code}: struktura projektu pobrana do Excela ({structure.Rows.Count} wierszy)", code);
+        journal.Add(Area, $"{code}: struktura programu pobrana do Excela ({structure.Rows.Count} wierszy)", code);
         return structure.Rows.Count;
     }
 
@@ -1077,7 +1077,7 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
             ("Wg CAM", ["CAM", "WP", "BAC HOURS", material, "Start", "Koniec"],
                 analytic.ByCam.Select(c => (IReadOnlyList<object?>)new object?[] { c.Cam, c.Wps, c.BacHours, c.BacMaterial, c.Start, c.Finish })),
         ]);
-        journal.Add(Area, $"{(code.Length > 0 ? code : "nowy projekt")}: baza analityczna pobrana do Excela", code.Length > 0 ? code : null);
+        journal.Add(Area, $"{(code.Length > 0 ? code : "nowy program")}: baza analityczna pobrana do Excela", code.Length > 0 ? code : null);
     }
 
     // ---------- utworzenie projektu ----------
@@ -1104,8 +1104,8 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
         var created = store.Create(code, name.Trim(), type, tree);
         if (!created.Success)
             return new CreateOutcome(false, [], [Issue.Error(created.Conflict!, code)]);
-        steps.Add($"Zarejestrowano projekt {code} ({ProjectTypes.Label(type)}) z nakładką: {tree.ElementCount} elementów CES, {tree.VirtualCount} węzłów wirtualnych");
-        journal.Add(Area, $"{code}: utworzono projekt „{name.Trim()}” ({ProjectTypes.Label(type)})", code);
+        steps.Add($"Zarejestrowano program {code} ({ProjectTypes.Label(type)}) z nakładką: {tree.ElementCount} elementów CES, {tree.VirtualCount} węzłów wirtualnych");
+        journal.Add(Area, $"{code}: utworzono program „{name.Trim()}” ({ProjectTypes.Label(type)})", code);
 
         var problems = new List<Issue>();
         var wpRows = loaded.TryGetValue(ProjectDictionaries.WpCam, out var wpPreview) ? wpPreview.Working : null;
@@ -1130,7 +1130,7 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
             if (saved.Status is SaveStatus.Saved or SaveStatus.NoChanges)
                 steps.Add($"Zestaw walutowy ACTUALS: {ProjectSettings.SetOf(ProjectSettings.ActualsAmountOf(actualsAmount)).Label}");
             else
-                problems.Add(Issue.Error($"Parametry projektu nie zapisane: {saved.Message}", ProjectDictionaries.Settings));
+                problems.Add(Issue.Error($"Parametry programu nie zapisane: {saved.Message}", ProjectDictionaries.Settings));
         }
 
         try

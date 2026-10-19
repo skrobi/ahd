@@ -19,7 +19,7 @@ public sealed class ProjectsModule : IModule
 
     public string Key => ModuleKeys.Projects;
 
-    public string? NavLabel => "Projekty";
+    public string? NavLabel => "Programy";
 
     public string Doc => "docs/funkcjonalnosc.md (F01, F02), docs/performance-objectives.md, docs/slowniki.md (rozdz. 3–7)";
 

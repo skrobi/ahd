@@ -74,7 +74,7 @@ public sealed class RunServiceTests : IDisposable
         // Przebieg projektu u innej osoby – drugi nie startuje.
         var other = _services.App(_root, _database.Sql);
         using (other.Locks.TryAcquire(RunService.ProjectLock("PAF"), out _))
-            Assert.StartsWith("Przebieg projektu PAF trwa", service.Execute("PAF").Summary);
+            Assert.StartsWith("Przebieg programu PAF trwa", service.Execute("PAF").Summary);
     }
 
     /// <summary>

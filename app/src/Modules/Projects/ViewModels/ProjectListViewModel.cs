@@ -59,7 +59,7 @@ public sealed class ProjectListViewModel : ObservableObject, IDisposable
         try
         {
             // Sam odczyt projektów – nakładka, gotowość i mapowanie dopiero na ekranie projektu.
-            var items = await Busy.Run("Wczytywanie projektów…", () =>
+            var items = await Busy.Run("Wczytywanie programów…", () =>
             {
                 var runs = _service.Runs?.Latest() ?? new Dictionary<string, RunPinRow>();
                 return _service.Projects().Select(project => runs.GetValueOrDefault(project.Code) is { } run
@@ -77,8 +77,8 @@ public sealed class ProjectListViewModel : ObservableObject, IDisposable
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
-            Logger.Error(ex, "Lista projektów");
-            Status = $"Nie udało się wczytać projektów: {ex.Message}";
+            Logger.Error(ex, "Lista programów");
+            Status = $"Nie udało się wczytać programów: {ex.Message}";
         }
         _loaded = true;
         OnPropertyChanged(nameof(IsEmpty));

@@ -169,7 +169,7 @@ public sealed class DictionaryTableViewModel : ObservableObject
         _selectedRows = [];
         var inherited = rows.Count - removable.Count;
         Notice = (removable.Count == 0 ? "" : $"Usunięto z tabeli wierszy: {removable.Count} – zapisz, aby zamknąć ich obowiązywanie (Ctrl+Z cofa).")
-            + (inherited == 0 ? "" : $" Pominięto pozycje słownika globalnego: {inherited} – w projekcie można je zmienić (zapis tworzy zmianę projektu), usuwa się je na ekranie Słowniki.");
+            + (inherited == 0 ? "" : $" Pominięto pozycje słownika globalnego: {inherited} – w programie można je zmienić (zapis tworzy zmianę programu), usuwa się je na ekranie Słowniki.");
         return (removable.Count, inherited);
     }
 

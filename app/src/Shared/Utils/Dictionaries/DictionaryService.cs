@@ -37,7 +37,7 @@ public sealed class DictionaryService(IDictionaryStore store, IJournal journal)
         issues.AddRange(DictionaryValidator.Validate(spec, rows));
         if (knownErrors is { Count: > 0 })
             issues = issues.Select(i => i.Level == CheckLevel.Error && knownErrors.Contains(Signature(spec, rows, i))
-                ? Issue.Warning($"{i.Message} (błąd był już w słowniku – popraw go w zakładce Słowniki projektu)", i.Element)
+                ? Issue.Warning($"{i.Message} (błąd był już w słowniku – popraw go w zakładce Słowniki programu)", i.Element)
                 : i).ToList();
 
         issues.AddRange(ReferenceIssues(spec, removed));
@@ -89,7 +89,7 @@ public sealed class DictionaryService(IDictionaryStore store, IJournal journal)
                 var used = rows.Where(r => references(r.Values.GetValueOrDefault(column), id)).ToList();
                 if (used.Count > 0)
                     yield return Issue.Error($"„{key}” jest używane w słowniku „{GlobalDictionaries.Get(dictionary).Name}” ({used.Count} "
-                        + $"{(used.Count == 1 ? "wiersz" : "wierszy")}{(used.Any(r => r.Project is not null) ? ", także w projektach" : "")}) – najpierw zmień tamte wiersze", key);
+                        + $"{(used.Count == 1 ? "wiersz" : "wierszy")}{(used.Any(r => r.Project is not null) ? ", także w programach" : "")}) – najpierw zmień tamte wiersze", key);
             }
         }
     }
@@ -210,7 +210,7 @@ public sealed class DictionaryService(IDictionaryStore store, IJournal journal)
                 .Select(x => x.i).ToHashSet();
             if (same.Count > 0)
             {
-                issues.Add(Issue.Warning($"Pominięto wiersze identyczne ze słownikiem globalnym (obowiązują bez zmiany w projekcie): {same.Count}", fileName));
+                issues.Add(Issue.Warning($"Pominięto wiersze identyczne ze słownikiem globalnym (obowiązują bez zmiany w programie): {same.Count}", fileName));
                 normalized = normalized.Where((_, i) => !same.Contains(i)).ToList();
                 rowNumbers = rowNumbers?.Where((_, i) => !same.Contains(i)).ToList();
             }
@@ -301,7 +301,7 @@ public sealed class DictionaryService(IDictionaryStore store, IJournal journal)
         else if (column.Lookup is { } person && GlobalDictionaries.All.Any(s => s.Code == person))
             parts.Add($"wartość ze słownika {GlobalDictionaries.Get(person).Name} (arkusz „Listy”); imię i nazwisko zamieniane na USRID");
         else if (column.Lookup is not null)
-            parts.Add("wartość ze słownika projektu (arkusz „Listy”)");
+            parts.Add("wartość ze słownika programu (arkusz „Listy”)");
         if (column.PadNumericTo is { } pad)
             parts.Add($"numer uzupełniany zerami do {pad} znaków");
         return string.Join("; ", parts);

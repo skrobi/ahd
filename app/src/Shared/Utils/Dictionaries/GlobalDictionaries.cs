@@ -77,7 +77,7 @@ public static partial class GlobalDictionaries
         {
             Code = FxRates,
             Name = "Kursy walut",
-            Description = "Kurs waluty (do PLN: ile PLN za jednostkę waluty) obowiązujący od – do (Do puste – bezterminowo). „Kurs” – przeliczenia walut w strukturze projektu (materiały, budżety, ETC), łączeniu źródeł (P3) i obliczeniu EV (P8); „Kurs CAS” – projekty CAS w walucie innej niż PLN: koszt PLN z ACTUALS po narzutach CAS przeliczany kursem CAS obowiązującym w okresie kosztu (kurs zakupu waluty); brak kursu CAS dla okresu z kosztem – błąd.",
+            Description = "Kurs waluty (do PLN: ile PLN za jednostkę waluty) obowiązujący od – do (Do puste – bezterminowo). „Kurs” – przeliczenia walut w strukturze programu (materiały, budżety, ETC), łączeniu źródeł (P3) i obliczeniu EV (P8); „Kurs CAS” – programy CAS w walucie innej niż PLN: koszt PLN z ACTUALS po narzutach CAS przeliczany kursem CAS obowiązującym w okresie kosztu (kurs zakupu waluty); brak kursu CAS dla okresu z kosztem – błąd.",
             Columns =
             [
                 new("Waluta", ColumnType.Text, Key: true),
@@ -93,7 +93,7 @@ public static partial class GlobalDictionaries
         {
             Code = CostCategory,
             Name = "Cost Category",
-            Description = "Numer elementu kosztowego → opis, obszar, Cost Category; „Rozliczeniowy” – cost element rozliczenia (settlement), pomijany w ACWP jako rozliczenie wychodzące; „Rodzaj kosztu” – Hours / Materials / Other (puste – Other): podział ACWP w strukturze projektu na ACWP Hours, ACWP Materials i ACWP Other. Numer liczbowy uzupełniany zerami do 10 znaków.",
+            Description = "Numer elementu kosztowego → opis, obszar, Cost Category; „Rozliczeniowy” – cost element rozliczenia (settlement), pomijany w ACWP jako rozliczenie wychodzące; „Rodzaj kosztu” – Hours / Materials / Other (puste – Other): podział ACWP w strukturze programu na ACWP Hours, ACWP Materials i ACWP Other. Numer liczbowy uzupełniany zerami do 10 znaków.",
             Columns =
             [
                 new("Numer elementu kosztowego", ColumnType.Text, Key: true, PadNumericTo: 10),
@@ -110,7 +110,7 @@ public static partial class GlobalDictionaries
         {
             Code = Persons,
             Name = "Osoby",
-            Description = "Pracownicy z HR (PZLHRPROD, HR.ORG – „Dodaj z HR”): USRID (numer znaczka, login) → imię i nazwisko, MPK, dział, stanowisko. CAM w strukturze projektu wybiera się z tej listy (zapisywany USRID).",
+            Description = "Pracownicy z HR (PZLHRPROD, HR.ORG – „Dodaj z HR”): USRID (numer znaczka, login) → imię i nazwisko, MPK, dział, stanowisko. CAM w strukturze programu wybiera się z tej listy (zapisywany USRID).",
             Columns =
             [
                 new("USRID", ColumnType.Text, Key: true, Aliases: ["Konto AD"]),
@@ -131,7 +131,7 @@ public static partial class GlobalDictionaries
         {
             Code = DjkRates,
             Name = "Wskaźniki DJK",
-            Description = "Godziny jakości DJK doliczane do godzin produkcji: udział godzin TECH / TECH_PON według prefiksu grupy stanowisk (IPT, np. W2, W51 – najdłuższy pasujący prefiks). Odczyt danych produkcyjnych struktury projektu (vAHDD).",
+            Description = "Godziny jakości DJK doliczane do godzin produkcji: udział godzin TECH / TECH_PON według prefiksu grupy stanowisk (IPT, np. W2, W51 – najdłuższy pasujący prefiks). Odczyt danych produkcyjnych struktury programu (vAHDD).",
             Columns =
             [
                 new("Grupa stanowisk", ColumnType.Text, Key: true),
@@ -144,7 +144,7 @@ public static partial class GlobalDictionaries
         {
             Code = ProductionParameters,
             Name = "Parametry produkcji",
-            Description = "Parametry odczytu danych produkcyjnych z PZLPROD (struktura projektu): okno produktywności IPT w miesiącach, statusy vAPD liczone jako dostarczone (po przecinku), dzielenie wartości materiałów przez (1 + Z_CLO) – tak / nie.",
+            Description = "Parametry odczytu danych produkcyjnych z PZLPROD (struktura programu): okno produktywności IPT w miesiącach, statusy vAPD liczone jako dostarczone (po przecinku), dzielenie wartości materiałów przez (1 + Z_CLO) – tak / nie.",
             Columns =
             [
                 new("Parametr", ColumnType.Choice, Key: true, Choices: [ProductivityMonths, DeliveredStatuses, DivideByZClo]),
