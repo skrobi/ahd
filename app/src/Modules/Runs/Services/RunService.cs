@@ -138,6 +138,7 @@ public sealed class RunService(IRunStore store, AppServices services, Func<ISour
             var (closedBefore, today) = Periods(week.Period, services.Clock.Now.Date);
             // Reguły kontroli dla typu programu i wariantu przebiegu – słownik „Kontrole przebiegu” (brak wiersza – ustawienia domyślne).
             var settings = RunChecks.Settings(store.CheckSettings(), store.ProjectType(project) ?? "", week.IsClosing);
+            store.SaveCheckSettings(pin.PinId, RunOverview.Serialize(settings));
             issues.AddRange(RunChecks.Check(current, previous, store.CostElements(project), closedBefore, today,
                 current != source ? process.Currency : amountField == ProjectSettings.DefaultActualsAmount ? "PLN" : null, source, settings,
                 store.Dictionaries(project, today.Year)));

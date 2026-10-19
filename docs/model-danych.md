@@ -451,6 +451,10 @@ Wszystkie / WEWNETRZNY / SAC / CAS, `RuleName` – nazwa reguły katalogu, `RunK
 `RuleName`, `RunKind`); bez danych startowych – reguła bez wiersza ma ustawienie domyślne (`docs/pipeline-fazy.md`, rozdz. 4.1).
 Wymaga aplikacji 0.56.0.
 
+**Migracja `sql/mssql/048_definicja_w_uruchomieniu.sql`:** `META_RunPin.CheckSettings` (`NVARCHAR(MAX)`, JSON: kod reguły →
+aktywna, poziom, próg) – ustawienia reguł kontroli użyte w uruchomieniu (słownik „Kontrole przebiegu” w chwili przebiegu);
+NULL – uruchomienie sprzed migracji. Wymaga aplikacji 0.56.0.
+
 `META_SourceFile.CanonicalStatus`: „utworzone” – dane kanoniczne zapisane i sprawdzone (widoczne dla odczytów),
 „w toku” – zapis wierszy trwa (odczyty pomijają plik; po awarii wpis i wiersze są usuwane), inna wartość – powód
 braku danych (źródło bez parsera).

@@ -192,6 +192,25 @@ public sealed class SqlRunStore(SqlDatabase db) : IRunStore
         return new RunDictionaryData(categories, wps, rated, year);
     }
 
+    public IReadOnlyList<RunProjectRow> Projects()
+    {
+        using var connection = db.Open();
+        return connection.Query<RunProjectRow>(
+            $"SELECT Code, Name, ProjectType FROM {db.Table("meta.Project")} WHERE SupersededAt IS NULL AND Active = 1 ORDER BY Code").ToList();
+    }
+
+    public void SaveCheckSettings(long pinId, string json)
+    {
+        using var connection = db.Open();
+        connection.Execute($"UPDATE {_pins} SET CheckSettings = @json WHERE PinId = @pinId", new { pinId, json });
+    }
+
+    public string? CheckSettingsOf(long pinId)
+    {
+        using var connection = db.Open();
+        return connection.QueryFirstOrDefault<string?>($"SELECT CheckSettings FROM {_pins} WHERE PinId = @pinId", new { pinId });
+    }
+
     public string? ProjectType(string project)
     {
         using var connection = db.Open();

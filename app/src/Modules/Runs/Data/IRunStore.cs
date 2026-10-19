@@ -19,6 +19,9 @@ public sealed record RunWpRow(string Wp, string? Mpk, bool HasBudget);
 public sealed record RunDictionaryData(IReadOnlyDictionary<string, string?> CostCategories, IReadOnlyList<RunWpRow> Wps,
     IReadOnlySet<string> RatedCostCenters, int RateYear);
 
+/// <summary>Program (meta.Project): kod, nazwa, typ.</summary>
+public sealed record RunProjectRow(string Code, string Name, string ProjectType);
+
 /// <summary>Przebiegi w bazie: meta.Run, meta.RunPin, run.Balance, run.Issue (migracja 027).</summary>
 public interface IRunStore
 {
@@ -57,6 +60,15 @@ public interface IRunStore
 
     /// <summary>Słowniki kontroli spójności (P2): Cost Category efektywny, WP i CAM z budżetem, MPK ze stawką na rok year.</summary>
     RunDictionaryData Dictionaries(string project, int year);
+
+    /// <summary>Aktywne programy (ekran Przebiegi).</summary>
+    IReadOnlyList<RunProjectRow> Projects();
+
+    /// <summary>Ustawienia reguł kontroli użyte w uruchomieniu (JSON – RunOverview.Serialize) – META_RunPin.CheckSettings.</summary>
+    void SaveCheckSettings(long pinId, string json);
+
+    /// <summary>Ustawienia reguł zapisane w uruchomieniu; null – brak zapisu.</summary>
+    string? CheckSettingsOf(long pinId);
 
     /// <summary>Typ projektu (META_Project.ProjectType); null – brak projektu.</summary>
     string? ProjectType(string project);

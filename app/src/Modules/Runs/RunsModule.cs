@@ -2,6 +2,7 @@ using System.Windows;
 using PzlEv.Modules.Runs.Data;
 using PzlEv.Modules.Runs.Services;
 using PzlEv.Modules.Runs.ViewModels;
+using PzlEv.Modules.Runs.Views;
 using PzlEv.Shared.Models;
 using PzlEv.Shared.Models.Pipeline;
 using PzlEv.Shared.Utils.Data;
@@ -10,7 +11,10 @@ using PzlEv.Shared.Views.Partials;
 
 namespace PzlEv.Modules.Runs;
 
-/// <summary>Przebiegi (F06): lista przebiegów, ekran przebiegu z krokami i etapami, przypięcie stanu, walidacja, zamknięcie okresu. Ekran zastępczy do czasu implementacji (F5).</summary>
+/// <summary>
+/// Przebiegi (F06): ekran z macierzą wyników kontroli uruchomień programu i definicją przebiegu (RunsView); przebieg w tle
+/// (IRunLauncher) uruchamia ekran programu. Kroki i etapy P3–P9, Z – do implementacji (F5–F9).
+/// </summary>
 public sealed class RunsModule : IModule
 {
     public string Key => ModuleKeys.Runs;
@@ -30,11 +34,14 @@ public sealed class RunsModule : IModule
     /// <summary>Kontrakt IRunLauncher (przebieg projektu w tle) dla ekranu projektu.</summary>
     public void Initialize(AppServices services)
     {
-        var store = new SqlRunStore(services.Sql);
+        var store = _store = new SqlRunStore(services.Sql);
         ISourceImport? Imports() => services.Contracts.Get<ISourceImport>();
         services.Contracts.Register<IRunLauncher>(new RunLauncher(new RunService(store, services, Imports, () => services.Contracts.Get<IProjectProcessSource>()),
             store, Imports));
     }
 
-    public FrameworkElement CreateView(ModuleContext context) => PlaceholderView.Create(this, context.Navigator);
+    private SqlRunStore? _store;
+
+    public FrameworkElement CreateView(ModuleContext context) =>
+        new RunsView { DataContext = new RunsViewModel(_store ?? new SqlRunStore(context.Services.Sql)) };
 }

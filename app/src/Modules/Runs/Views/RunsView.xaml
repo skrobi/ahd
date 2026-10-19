@@ -1,0 +1,162 @@
+<UserControl x:Class="PzlEv.Modules.Runs.Views.RunsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:partials="clr-namespace:PzlEv.Shared.Views.Partials">
+
+    <!-- Ekran Przebiegi (DataContext: RunsViewModel) – docs/funkcjonalnosc.md, F06; reguły kontroli – docs/pipeline-fazy.md, rozdz. 4.1. -->
+    <UserControl.Resources>
+        <!-- Komórka macierzy: kolor według najgorszego poziomu wyniku kontroli w uruchomieniu. -->
+        <Style x:Key="MatrixCell" TargetType="Button">
+            <Setter Property="Width" Value="128" />
+            <Setter Property="Height" Value="30" />
+            <Setter Property="Margin" Value="0,0,4,4" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Background" Value="{StaticResource Surface2}" />
+            <Setter Property="Foreground" Value="{StaticResource Muted}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}" CornerRadius="4" BorderBrush="{StaticResource Line}" BorderThickness="1">
+                            <TextBlock Text="{Binding Text}" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                       FontWeight="SemiBold" Foreground="{TemplateBinding Foreground}" />
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding Level}" Value="Pass">
+                    <Setter Property="Background" Value="{StaticResource OkSoft}" />
+                    <Setter Property="Foreground" Value="{StaticResource Ok}" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Level}" Value="Warning">
+                    <Setter Property="Background" Value="{StaticResource WarnSoft}" />
+                    <Setter Property="Foreground" Value="{StaticResource Warn}" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Level}" Value="Error">
+                    <Setter Property="Background" Value="{StaticResource CritSoft}" />
+                    <Setter Property="Foreground" Value="{StaticResource Crit}" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+    </UserControl.Resources>
+
+    <StackPanel>
+        <partials:PageHeader Title="Przebiegi" Subtitle="Wyniki kontroli kolejnych uruchomień programu i definicja przebiegu (słownik „Kontrole przebiegu”). Przebieg uruchamia ekran programu.">
+            <partials:PageHeader.Actions>
+                <StackPanel Orientation="Horizontal">
+                    <ComboBox ItemsSource="{Binding Projects}" SelectedItem="{Binding SelectedProject}" Width="260" Margin="0,0,8,0"
+                              AutomationProperties.Name="Program">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate>
+                                <TextBlock>
+                                    <Run Text="{Binding Code, Mode=OneWay}" FontWeight="SemiBold" />
+                                    <Run Text="{Binding Name, Mode=OneWay}" />
+                                    <Run Text="{Binding ProjectType, Mode=OneWay, StringFormat=({0})}" Foreground="{StaticResource Muted}" />
+                                </TextBlock>
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
+                    <Button Content="Odśwież" Style="{StaticResource Btn}" Command="{Binding Refresh}" />
+                </StackPanel>
+            </partials:PageHeader.Actions>
+        </partials:PageHeader>
+        <partials:BusyBar DataContext="{Binding Busy}" />
+        <Border Background="{StaticResource CritSoft}" CornerRadius="6" Padding="12,8" Margin="0,0,0,12"
+                Visibility="{Binding HasError, Converter={StaticResource BoolToVisibility}}">
+            <TextBlock Text="{Binding Error}" Foreground="{StaticResource Crit}" FontWeight="SemiBold" TextWrapping="Wrap" />
+        </Border>
+
+        <TabControl>
+            <!-- Macierz kontrola × uruchomienia; klik w komórkę – wyniki kontroli w uruchomieniu poniżej -->
+            <TabItem Header="Kontrole" Padding="12,4">
+                <StackPanel Margin="0,12,0,0">
+                    <TextBlock Style="{StaticResource MutedText}" Text="Brak uruchomień przebiegu programu – „Uruchom przebieg” na ekranie programu." TextWrapping="Wrap"
+                               Visibility="{Binding NoRuns, Converter={StaticResource BoolToVisibility}}" />
+                    <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+                        <StackPanel>
+                            <!-- Nagłówek: uruchomienia od najstarszego -->
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                <TextBlock Width="260" Text="Kontrola" Style="{StaticResource MutedText}" VerticalAlignment="Bottom" />
+                                <ItemsControl ItemsSource="{Binding Matrix.Columns}">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Width="132" Text="{Binding Label}" ToolTip="{Binding Detail}" FontWeight="SemiBold"
+                                                       TextAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                            <ItemsControl ItemsSource="{Binding Matrix.Rows}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Width="260" Text="{Binding CheckName}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                                                       ToolTip="{Binding CheckName}" />
+                                            <ItemsControl ItemsSource="{Binding Cells}">
+                                                <ItemsControl.ItemsPanel>
+                                                    <ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate>
+                                                </ItemsControl.ItemsPanel>
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <Button Style="{StaticResource MatrixCell}" CommandParameter="{Binding}"
+                                                                Command="{Binding DataContext.SelectCell, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                                ToolTip="Wyniki kontroli w tym uruchomieniu" />
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </ScrollViewer>
+
+                    <TextBlock Text="{Binding CellTitle}" Style="{StaticResource H2}" Margin="0,16,0,6" TextWrapping="Wrap" />
+                    <DataGrid Style="{StaticResource DataTable}" ItemsSource="{Binding CellIssues}" IsReadOnly="True" MaxHeight="480">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Poziom" Binding="{Binding Level}" />
+                            <DataGridTextColumn Header="Element" Binding="{Binding Element}" />
+                            <DataGridTextColumn Header="Opis" Binding="{Binding Message}" Width="*">
+                                <DataGridTextColumn.ElementStyle>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="TextWrapping" Value="Wrap" />
+                                    </Style>
+                                </DataGridTextColumn.ElementStyle>
+                            </DataGridTextColumn>
+                            <DataGridTextColumn Header="Kwota" Binding="{Binding Amount, StringFormat=#\,0.00}" />
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </StackPanel>
+            </TabItem>
+
+            <!-- Definicja przebiegu: reguły katalogu z ustawieniami dla typu programu -->
+            <TabItem Header="Definicja przebiegu" Padding="12,4">
+                <StackPanel Margin="0,12,0,0">
+                    <TextBlock Text="{Binding DefinitionNote}" Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="0,0,0,4" />
+                    <TextBlock Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="0,0,0,8"
+                               Text="Zmiana: Słowniki → „Kontrole przebiegu” (typ programu, reguła, wariant przebiegu – aktywna, poziom, próg). Bez wiersza – ustawienie domyślne reguły." />
+                    <DataGrid Style="{StaticResource DataTable}" ItemsSource="{Binding Definition}" IsReadOnly="True" MaxHeight="640">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Kontrola" Binding="{Binding Check}" />
+                            <DataGridTextColumn Header="Reguła" Binding="{Binding Name}" />
+                            <DataGridTextColumn Header="W środku okresu" Binding="{Binding MidPeriodText}" />
+                            <DataGridTextColumn Header="Zamykający" Binding="{Binding ClosingText}" />
+                            <DataGridTextColumn Header="Źródło" Binding="{Binding Source}" />
+                            <DataGridTextColumn Header="Ostatnie uruchomienie" Binding="{Binding InRunText}" />
+                            <DataGridTextColumn Header="Opis" Binding="{Binding Description}" Width="*">
+                                <DataGridTextColumn.ElementStyle>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="TextWrapping" Value="Wrap" />
+                                    </Style>
+                                </DataGridTextColumn.ElementStyle>
+                            </DataGridTextColumn>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </StackPanel>
+            </TabItem>
+        </TabControl>
+    </StackPanel>
+</UserControl>

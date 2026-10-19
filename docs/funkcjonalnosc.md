@@ -31,7 +31,7 @@ Menu modułów po lewej (Pulpit, Import RABIT, Programy, Przebiegi, Słowniki, A
 | **Programy** | lista programów: kod, nazwa, typ, ostatni przebieg (kod, numer uruchomienia, stan, data), problemy przebiegu (liczba błędów i ostrzeżeń, kolor; podsumowanie w podpowiedzi), folder – sam odczyt projektów (nakładka i gotowość – na ekranie projektu) | nowy program |
 | **Program** | zakładki: Wskaźniki (wskaźniki programu w grupach Operational EV, Materials, Financial EV; gotowość F02 zwinięta; znacznik gotowości i data danych RABIT w nagłówku), Struktura (nakładka z rozwinięciem P1S, WP, CAM, Cost Category, budżet i daty – `docs/performance-objectives.md`, rozdz. 4.2), Raporty, Słowniki programu, Konfiguracja (Źródła danych, Parametry programu – `docs/slowniki.md`, rozdz. 3), Przebiegi, Foldery | edycja w komórkach struktury (zapis od razu); dołożenie elementów z kolejnego eksportu SAP; Raport kosztów (Excel) na zakładce Raporty (`docs/model-danych.md`, migracja 013), w projektach CAS także Raport kosztów CES – narzuty CAS w formułach Excela (`docs/slowniki.md`, rozdz. 6.1); struktura do Excela i wczytanie uzupełnionej struktury (WP, CAM, budżet, daty); import źródeł projektu (F05); nowy przebieg; edycja słowników projektu w tabeli (Cost Category – pozycje globalne i zmiany projektu, `docs/slowniki.md`, rozdz. 6); pobierz / wczytaj słowniki z Excela |
 | **Kreator programu** | 5 kroków (F01) | utwórz program |
-| **Przebiegi** | wszystkie przebiegi wszystkich projektów: tydzień, czy zamykający, stan, osoba | przejście do przebiegu |
+| **Przebiegi** | wybór programu; zakładka **Kontrole** – macierz kontrola × ostatnie 8 uruchomień (kolor i liczba wyników ERROR / WARNING, „OK”, „–” bez wyników), klik w komórkę – wyniki kontroli w uruchomieniu; zakładka **Definicja przebiegu** – reguły kontroli z ustawieniami dla typu programu (w środku okresu, zamykający, źródło: słownik / domyślne, ustawienia ostatniego uruchomienia). Docelowo także wszystkie przebiegi wszystkich projektów (tydzień, czy zamykający, stan, osoba) | odśwież; zmiana definicji – słownik „Kontrole przebiegu” |
 | **Przebieg** | kroki i etapy (F06), panel wybranego etapu, znacznik stanu, problemy, rewizje, dziennik | akcje etapów |
 | **Słowniki** | słowniki globalne i projektu: tabela z filtrowaniem, historia zmian (F03); struktura P1S z `PZLPROD` (tylko odczyt) | dodaj / edytuj / zamknij ważność wiersza; pobierz / wczytaj Excel; „Dodaj z HR” (Osoby); „Formuły narzutów” (narzuty CAS – macierz grupy × kategorie, edytor formuły z klocków, `docs/slowniki.md`, rozdz. 6.1); „Struktura P1S (PZLPROD)” |
 | **Administracja** | definicje źródeł, parsery, lokalizacje RABIT, role i grupy AD (F08) | dodaj / zmień |
@@ -133,7 +133,9 @@ Lista kontrolna na ekranie projektu:
   nowe przypięcie tego przebiegu. Jeden przebieg projektu naraz (blokada `run-<Projekt>`, także między komputerami).
 - Po zakończeniu: powiadomienie systemowe Windows z liczbą błędów i ostrzeżeń; stan na liście projektów i w zakładce **Przebiegi**
   projektu (uruchomienia i wyniki kontroli wybranego uruchomienia).
-- Ekran przebiegu: kroki (Przygotowanie przebiegu, Walidacja, Uzgodnienie, Przegląd finansów, Zaawansowanie,
+- Ekran **Przebiegi** (wdrożony): macierz wyników kontroli kolejnych uruchomień programu i definicja przebiegu – tabela
+  ekranów (rozdz. 2); uruchomienie zapisuje ustawienia reguł, z którymi liczyło (migracja 048).
+- Ekran przebiegu (docelowo): kroki (Przygotowanie przebiegu, Walidacja, Uzgodnienie, Przegląd finansów, Zaawansowanie,
   Obliczenie i przegląd, Publikacja, Zamrożenie) z etapami P0–P9 i Z (`docs/pipeline-fazy.md`, rozdz. 4);
   panel wybranego etapu z jego akcją; znacznik stanu i zmiany po przypięciu; problemy; rewizje EV; dziennik.
 - Przebieg zamykający okres jest wyraźnie oznaczony.

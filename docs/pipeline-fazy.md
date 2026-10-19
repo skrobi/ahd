@@ -204,7 +204,8 @@ kod, kontrola, nazwa, opis, poziom i próg domyślny; implementacja po kodzie �
 globalny „Kontrole przebiegu” (`docs/slowniki.md`, rozdz. 2) ustawia regułę dla typu programu i wariantu przebiegu (zamykający
 okres / w środku okresu – kalendarz okresów): aktywna, poziom wyniku, próg (kwota); bez wiersza – ustawienie domyślne (tabela
 niżej). Nowa kontrola = reguła w katalogu i jej implementacja; zmiana poziomu, progu albo wyłączenie – wiersz słownika, bez
-zmiany kodu.
+zmiany kodu. Uruchomienie zapisuje ustawienia reguł, z którymi liczyło (`META_RunPin.CheckSettings`, migracja 048) – ekran
+Przebiegi (`docs/funkcjonalnosc.md`, F06) pokazuje je obok bieżącej definicji i macierz wyników kontroli kolejnych uruchomień.
 
 | Reguła (słownik) | Kontrola | Poziom domyślny | Próg domyślny |
 |---|---|---|---|
