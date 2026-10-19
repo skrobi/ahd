@@ -98,7 +98,9 @@ zmieni). Brak pliku albo błąd w nim = komunikat przy starcie z nazwą pola –
   na miarach programu; bez danych startowych;
 - `050_definicje_przebiegow.sql` – definicje przebiegów (workflow): słowniki „Definicje przebiegów”, „Etapy przebiegów”,
   „Elementy kontrolne etapów”; etapy uruchomienia `META_RunStep`, definicja w uruchomieniu (`META_RunPin.Definition`), etap
-  wyniku (`RUN_Issue.StepNo`); bez danych startowych (definicja wbudowana).
+  wyniku (`RUN_Issue.StepNo`); bez danych startowych (definicja wbudowana);
+- `051_reguly_walidacji.sql` – słownik globalny „Reguły walidacji” (`DICT_RunValidation`): reguły walidacji ACTUALS z formułami
+  (okno Kontrole na ekranie Przebiegi); bez danych startowych (reguły startowe aplikacji).
 
 Migracje wykonuje przycisk **Diagnostyka → Migracja** – uruchamia po kolei skrypty, których numeru nie ma
 w `META_SchemaVersion`, a wykonane pomija. Lista na tym ekranie pokazuje, które skrypty są wykonane (kiedy, kto)
@@ -320,7 +322,7 @@ app/
     │   ├── Dashboard/           Pulpit: import, źródła, słowniki, otwarte problemy, dziennik (z bazy)
     │   ├── Diagnostics/         test stosu, konfiguracja środowiska, migracje, sprawdzenie PZLPROD
     │   ├── Projects/            Projekty (F4): kreator, Performance Objectives, słowniki projektu, gotowość, struktura, przebiegi projektu
-    │   ├── Runs/                przebieg programu etapami wg szablonu (RunService, RunWorkflowEngine – bramki; RunChecks – reguły kontroli); panel przebiegu programu – etapy, macierz kontroli, porównanie uruchomień (RunPanel, kontrakt IRunPanels, RunOverview); ekran „Przebiegi” – szablony w kafelkach, okno Kontrole (RunTemplateService, RunStepTile, RunChecks*); okno „Zmiany ACWP” (AcwpChanges)
+    │   ├── Runs/                przebieg programu etapami wg szablonu (RunService, RunWorkflowEngine – bramki; reguły walidacji ACTUALS – formuły, RunValidation*; RunChecks – reguły wbudowane Walidacja EV); panel przebiegu programu – etapy, macierz kontroli, porównanie uruchomień (RunPanel, kontrakt IRunPanels, RunOverview); ekran „Przebiegi” – szablony w kafelkach, okno Kontrole (RunTemplateService, RunStepTile, RunChecks*); okno „Zmiany ACWP” (AcwpChanges)
     │   └── Reconciliation/ Progress/ Evm/ Export/   pozostałe moduły: plik wejścia + etapy, bez pozycji w menu
     └── Shared/
         ├── Utils/Ui/            MVVM, konwertery, okna wyboru pliku, kontrakt modułu, tabela słownika do edycji (WPF)

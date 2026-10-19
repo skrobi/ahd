@@ -80,7 +80,8 @@ public sealed class RunStepTileViewModel : ObservableObject
     private bool _approval;
     private string _description;
 
-    public RunStepTileViewModel(RunStepDefinition step, IReadOnlyDictionary<string, RunCheckSetting> defaults, IReadOnlyList<string> reconciliations)
+    public RunStepTileViewModel(RunStepDefinition step, IReadOnlyDictionary<string, RunCheckSetting> defaults, IReadOnlyList<string> reconciliations,
+        IReadOnlyList<RunValidationRule> validations)
     {
         _no = step.No;
         _name = step.Name;
@@ -88,7 +89,7 @@ public sealed class RunStepTileViewModel : ObservableObject
         _warningGate = step.WarningGate;
         _approval = step.Approval;
         _description = step.Description ?? "";
-        Areas = IsChecks ? BuildAreas(step, defaults, reconciliations) : [];
+        Areas = IsChecks ? BuildAreas(step, defaults, reconciliations, validations) : [];
         foreach (var choice in Areas.SelectMany(a => a.Choices))
             choice.Changed += () => { OnPropertyChanged(nameof(Summary)); Changed?.Invoke(); };
     }
@@ -145,8 +146,12 @@ public sealed class RunStepTileViewModel : ObservableObject
 
     public IEnumerable<string> InvalidThresholds => Areas.SelectMany(a => a.Choices).Where(c => c.InvalidThreshold).Select(c => $"{Name}: próg „{c.Threshold}” ({c.Name})");
 
-    /// <summary>Grupy kontroli: katalog w grupach, reguły uzgodnień (wszystkie aktywne i po nazwie); elementy spoza nich – „Inne” (nie giną przy zapisie).</summary>
-    private static IReadOnlyList<RunCheckArea> BuildAreas(RunStepDefinition step, IReadOnlyDictionary<string, RunCheckSetting> defaults, IReadOnlyList<string> reconciliations)
+    /// <summary>
+    /// Grupy kontroli: Walidacja ACTUALS (reguły z formułami), Walidacja EV (reguły wbudowane w grupach), reguły uzgodnień (wszystkie
+    /// aktywne i po nazwie); elementy spoza nich – „Inne” (nie giną przy zapisie).
+    /// </summary>
+    private static IReadOnlyList<RunCheckArea> BuildAreas(RunStepDefinition step, IReadOnlyDictionary<string, RunCheckSetting> defaults, IReadOnlyList<string> reconciliations,
+        IReadOnlyList<RunValidationRule> validations)
     {
         var used = step.Elements.ToDictionary(e => e.Element.Trim(), StringComparer.OrdinalIgnoreCase);
         RunCheckChoice Choice(string element, string name, string? check, string description, string defaultText, bool hasThreshold)
@@ -156,9 +161,16 @@ public sealed class RunStepTileViewModel : ObservableObject
             used.Remove(element);
             return choice;
         }
-        var areas = RunCheckRules.Areas.Select(area => new RunCheckArea(area, RunCheckRules.All.Where(r => RunCheckRules.AreaOf(r) == area)
+        static string Level(CheckLevel level) => level switch { CheckLevel.Error => "ERROR", CheckLevel.Warning => "WARNING", _ => "INFO" };
+        var areas = new List<RunCheckArea>
+        {
+            new(RunValidationRules.Area, [.. validations.Select(r => Choice(r.Name, r.Name, r.Check, r.Description ?? r.Condition,
+                (r.IsActive ? "" : "wyłączona w oknie Kontrole; ") + Level(r.Level) + (r.Threshold is { } t ? $", próg {RunValidationLanguage.Show(t)}" : ""),
+                $"{r.Filter} {r.Condition} {r.Amount} {r.Message}".Contains("[Próg]", StringComparison.OrdinalIgnoreCase)))]),
+        };
+        areas.AddRange(RunCheckRules.Areas.Select(area => new RunCheckArea($"{RunCheckRules.EvArea} – {area}", RunCheckRules.All.Where(r => RunCheckRules.AreaOf(r) == area)
             .Select(r => Choice(r.Name, r.Name, r.Check, r.Description, RunOverview.Show(defaults.GetValueOrDefault(r.Code) ?? RunCheckRules.Default(r)), r.Threshold is not null))
-            .ToList())).ToList();
+            .ToList())));
         areas.Add(new RunCheckArea(RunReconciliations.CheckName,
         [
             Choice(RunDefinitions.AllReconciliations, "Wszystkie aktywne reguły uzgodnień", null, "Każda aktywna reguła uzgodnień typu programu (okno Kontrole → Reguły uzgodnień).", "poziom reguły", false),

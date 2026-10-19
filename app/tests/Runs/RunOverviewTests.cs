@@ -33,7 +33,7 @@ public sealed class RunOverviewTests
         Assert.Equal("Koszty po narzutach CAS", checks[1]);
         Assert.Equal("Przebieg", checks[^1]);
         Assert.Equal(RunReconciliations.CheckName, checks[^2]);
-        Assert.Equal(RunCheckRules.All.Select(r => r.Check).Distinct(), checks.Skip(2).SkipLast(2));
+        Assert.Equal(RunValidationRules.Checks.Concat(RunCheckRules.All.Select(r => r.Check)).Distinct(), checks.Skip(2).SkipLast(2));
         var net = matrix.Rows.Single(r => r.CheckName == RunChecks.NetZero).Cells;
         Assert.Equal(("2 ERROR", CheckLevel.Error), (net[0].Text, net[0].Level));
         Assert.Equal(("OK", CheckLevel.Pass), (net[1].Text, net[1].Level));

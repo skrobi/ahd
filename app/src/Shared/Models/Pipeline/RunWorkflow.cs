@@ -83,9 +83,10 @@ public static class RunDefinitions
     public const string InternalCode = "Wewnętrzny";
     public const string CasCode = "CAS";
 
-    /// <summary>Elementy do wyboru w kolumnie Element: reguły katalogu, wszystkie reguły uzgodnień, reguły uzgodnień po nazwie.</summary>
+    /// <summary>Elementy do wyboru w kolumnie Element: reguły walidacji (startowe), reguły katalogu, wszystkie reguły uzgodnień, reguły uzgodnień po nazwie.</summary>
     public static IReadOnlyList<string> Elements(IEnumerable<string> reconciliations) =>
-        [.. RunCheckRules.All.Select(r => r.Name), AllReconciliations, .. reconciliations.Distinct(StringComparer.OrdinalIgnoreCase).Order().Select(n => ReconciliationPrefix + n)];
+        [.. RunValidationRules.Starters.Select(r => r.Name), .. RunCheckRules.All.Select(r => r.Name), AllReconciliations,
+         .. reconciliations.Distinct(StringComparer.OrdinalIgnoreCase).Order().Select(n => ReconciliationPrefix + n)];
 
     public static bool IsReconciliation(string element) => element.StartsWith(ReconciliationPrefix, StringComparison.OrdinalIgnoreCase);
 
@@ -101,20 +102,17 @@ public static class RunDefinitions
         new(2, "Przypięcie stanu", RunActions.Pin, RunGates.Info, false, [], "Dane ACTUALS programu w chwili przebiegu; porównanie z poprzednim przebiegiem."),
     ];
 
-    /// <summary>Etapy definicji wbudowanej i szablonów startowych: stałe, trzy etapy kontroli (bramka – potwierdzenie WARNING), zatwierdzenie analityka.</summary>
+    /// <summary>Etapy definicji wbudowanej i szablonów startowych: stałe, Walidacja ACTUALS, Walidacja EV (bramka – potwierdzenie WARNING), zatwierdzenie analityka.</summary>
     public static IReadOnlyList<RunStepDefinition> StandardSteps { get; } =
     [
         .. FixedSteps,
-        new(3, "Walidacja ACTUALS", RunActions.Checks, RunGates.Confirm, false,
-            [.. RunCheckRules.All.Where(r => RunCheckRules.AreaOf(r) == RunCheckRules.ActualsArea).Select(r => new RunElementSetting(r.Name))],
-            "Kontrole danych ACTUALS względem poprzedniego przebiegu i okresów zamkniętych."),
-        new(4, "Spójność ze słownikami", RunActions.Checks, RunGates.Confirm, false,
-            [.. RunCheckRules.All.Where(r => r.Check == RunCheckRules.Dictionaries).Select(r => new RunElementSetting(r.Name))],
-            "Cost Category, MPK i stawki, WP i budżet."),
-        new(5, "Rodzaje kosztu i uzgodnienia", RunActions.Checks, RunGates.Confirm, false,
-            [.. RunCheckRules.All.Where(r => r.Check == RunCheckRules.CostKinds).Select(r => new RunElementSetting(r.Name)), new RunElementSetting(AllReconciliations)],
-            "Rodzaje kosztu (Hours / Materials / Other) i reguły uzgodnień."),
-        new(6, "Zatwierdzenie analityka", RunActions.Approval, RunGates.Confirm, true, [], "Analityk potwierdza wynik przebiegu (komentarz w dzienniku)."),
+        new(3, RunValidationRules.Area, RunActions.Checks, RunGates.Confirm, false,
+            [.. RunValidationRules.Starters.Select(r => new RunElementSetting(r.Name))],
+            "Spójność danych ACTUALS na całej puli (przed narzutami, bez Wykluczeń) – reguły walidacji z formułami (okno Kontrole)."),
+        new(4, RunCheckRules.EvArea, RunActions.Checks, RunGates.Confirm, false,
+            [.. RunCheckRules.All.Select(r => new RunElementSetting(r.Name)), new RunElementSetting(AllReconciliations)],
+            "Dane jak w strukturze (bez rozliczeniowych, po Wykluczeniach, CAS po narzutach): spójność ze słownikami, rodzaje kosztu, reguły uzgodnień."),
+        new(5, "Zatwierdzenie analityka", RunActions.Approval, RunGates.Confirm, true, [], "Analityk potwierdza wynik przebiegu (komentarz w dzienniku)."),
     ];
 
     /// <summary>Definicja wbudowana – obowiązuje, dopóki nie ma aktywnego szablonu (ekran Przebiegi).</summary>
@@ -163,10 +161,12 @@ public static class RunDefinitions
 
     /// <summary>
     /// Kontrola szablonu przed zapisem: nazwa; etapy stałe (Import źródeł, Przypięcie stanu) – po jednym, na początku; nazwy etapów
-    /// niepuste i bez powtórzeń; etap kontroli bez aktywnego elementu – ERROR; elementy tylko w etapach kontroli.
+    /// niepuste i bez powtórzeń; etap kontroli bez aktywnego elementu – ERROR; elementy tylko w etapach kontroli; element – reguła
+    /// walidacji (validations; null – reguły startowe), reguła wbudowana albo reguła uzgodnień.
     /// </summary>
-    public static IReadOnlyList<Issue> Validate(RunDefinition definition)
+    public static IReadOnlyList<Issue> Validate(RunDefinition definition, IReadOnlyCollection<string>? validations = null)
     {
+        var known = new HashSet<string>(validations ?? RunValidationRules.Starters.Select(r => r.Name), StringComparer.OrdinalIgnoreCase);
         var issues = new List<Issue>();
         if (string.IsNullOrWhiteSpace(definition.Code))
             issues.Add(Issue.Error("Szablon bez nazwy"));
@@ -190,7 +190,7 @@ public static class RunDefinitions
                 issues.Add(Issue.Error($"Etap „{step.Name}” ({step.Action}) nie ma kontroli – kontrole tylko w etapach walidacji", at));
             foreach (var element in step.Elements.GroupBy(e => e.Element.Trim(), StringComparer.OrdinalIgnoreCase).Where(g => g.Count() > 1))
                 issues.Add(Issue.Error($"Kontrola „{element.Key}” dwa razy w etapie „{step.Name}”", at));
-            foreach (var element in step.Elements.Where(e => RunCheckRules.ByName(e.Element) is null && !IsReconciliation(e.Element)))
+            foreach (var element in step.Elements.Where(e => RunCheckRules.ByName(e.Element) is null && !IsReconciliation(e.Element) && !known.Contains(e.Element.Trim())))
                 issues.Add(Issue.Error($"Nieznana kontrola „{element.Element}”", at));
         }
         return issues;

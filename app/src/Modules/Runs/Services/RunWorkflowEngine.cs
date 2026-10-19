@@ -78,6 +78,26 @@ public static class RunWorkflowEngine
         });
 
     /// <summary>
+    /// Reguły walidacji etapu (formuły – słownik „Reguły walidacji”): element etapu z nazwą reguły – reguła aktywna z poziomem i progiem
+    /// elementu (puste – reguły); reguła wyłączona w słowniku albo element nieaktywny – pominięte; Missing – nazwy spoza słownika
+    /// i katalogu reguł wbudowanych.
+    /// </summary>
+    public static (IReadOnlyList<RunValidationRule> Rules, IReadOnlyList<string> Missing) Validations(RunStepDefinition step, IReadOnlyList<RunValidationRule> library)
+    {
+        var rules = new List<RunValidationRule>();
+        var missing = new List<string>();
+        foreach (var element in step.Elements.Where(e => !RunDefinitions.IsReconciliation(e.Element) && RunCheckRules.ByName(e.Element) is null))
+        {
+            var rule = library.FirstOrDefault(r => string.Equals(r.Name, element.Element.Trim(), StringComparison.OrdinalIgnoreCase));
+            if (rule is null)
+                missing.Add(element.Element.Trim());
+            else if (element.Active && rule.IsActive)
+                rules.Add(rule with { Level = element.Level ?? rule.Level, Threshold = element.Threshold ?? rule.Threshold });
+        }
+        return (rules, missing);
+    }
+
+    /// <summary>
     /// Reguły uzgodnień etapu: „Uzgodnienie: *” – aktywne reguły typu programu i wariantu; „Uzgodnienie: nazwa” – reguła o tej nazwie
     /// (wiersz typu i wariantu przed innymi) z poziomem i tolerancją elementu; Missing – nazwy reguł, których nie ma w słowniku.
     /// </summary>

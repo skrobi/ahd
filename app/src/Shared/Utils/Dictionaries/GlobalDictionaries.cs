@@ -28,6 +28,7 @@ public static partial class GlobalDictionaries
     public const string RunDefinitionHeaders = "run-definitions";
     public const string RunSteps = "run-steps";
     public const string RunStepElements = "run-step-elements";
+    public const string RunValidations = "run-validations";
 
 
     /// <summary>Kolumna słownika Cost Category z rodzajem kosztu (Hours / Materials / Other; puste – Other) – podział ACWP w strukturze.</summary>
@@ -309,6 +310,30 @@ public static partial class GlobalDictionaries
             ],
             Rules = RunStepElementRules,
         },
+        new()
+        {
+            Code = RunValidations,
+            Name = "Reguły walidacji",
+            Hidden = true,
+            Description = "Reguły walidacji ACTUALS zapisane formułami (okno Kontrole na ekranie Przebiegi): filtr wierszy, grupowanie (pola po średniku), warunek grupy, kwota, komunikat z wyrażeniami w {…}, komunikat OK, najwyżej N wyników, poziom, próg ([Próg]). Dane – cała pula ACTUALS programu przed narzutami CAS. Pusty słownik – reguły startowe.",
+            Columns =
+            [
+                new("Nazwa", ColumnType.Text, Key: true, CheckSimilar: true),
+                new("Kontrola", ColumnType.Text, Required: true),
+                new("Aktywna", ColumnType.Boolean, Required: true),
+                new("Filtr", ColumnType.Text),
+                new("Grupuj", ColumnType.Text),
+                new("Warunek", ColumnType.Text, Required: true),
+                new("Kwota", ColumnType.Text),
+                new("Komunikat", ColumnType.Text, Required: true),
+                new("Komunikat OK", ColumnType.Text),
+                new("Najwyżej", ColumnType.Integer),
+                new("Poziom", ColumnType.Choice, Required: true, Choices: RunCheckRules.Levels),
+                new("Próg", ColumnType.Decimal),
+                new("Opis", ColumnType.Text),
+            ],
+            Rules = ValidationRuleRules,
+        },
     ];
 
     public static DictionarySpec Get(string code) => All.First(s => s.Code == code);
@@ -346,6 +371,10 @@ public static partial class GlobalDictionaries
         new(Get(RunSteps), "dict.RunStep",
             [("Definicja", "Definition"), ("Kolejność", "StepNo"), ("Etap", "Name"), ("Akcja", "Action"), ("Bramka WARNING", "WarningGate"),
              ("Zatwierdzenie", "Approval"), ("Opis", "Description")]),
+        new(Get(RunValidations), "dict.RunValidation",
+            [("Nazwa", "Name"), ("Kontrola", "CheckName"), ("Aktywna", "IsActive"), ("Filtr", "RowFilter"), ("Grupuj", "GroupBy"), ("Warunek", "Condition"),
+             ("Kwota", "AmountFormula"), ("Komunikat", "Message"), ("Komunikat OK", "OkMessage"), ("Najwyżej", "TopN"), ("Poziom", "Level"), ("Próg", "Threshold"),
+             ("Opis", "Description")]),
         new(Get(RunStepElements), "dict.RunStepElement",
             [("Definicja", "Definition"), ("Etap", "Step"), ("Element", "Element"), ("Aktywny", "IsActive"), ("Poziom", "Level"), ("Próg", "Threshold"),
              ("Opis", "Description")]),
@@ -474,7 +503,25 @@ public static partial class GlobalDictionaries
                     DictionaryValidator.RowElement(x.Index));
     }
 
-    /// <summary>„Elementy kontrolne etapów”: element z katalogu albo reguła uzgodnień, próg nieujemny; próg reguły bez progu – ostrzeżenie.</summary>
+    /// <summary>„Elementy kontrolne etapów”: element niepusty, próg nieujemny; próg reguły wbudowanej bez progu – ostrzeżenie.</summary>
+    /// <summary>„Reguły walidacji”: składnia formuł (RunValidationLanguage), nazwa spoza reguł wbudowanych, Najwyżej ≥ 0, próg ≥ 0.</summary>
+    private static IEnumerable<Issue> ValidationRuleRules(IReadOnlyList<DictRow> rows)
+    {
+        for (var i = 0; i < rows.Count; i++)
+        {
+            var at = DictionaryValidator.RowElement(i);
+            if (RunCheckRules.ByName(rows[i]["Nazwa"]) is not null)
+                yield return Issue.Error($"Nazwa „{rows[i]["Nazwa"]}” zajęta przez regułę wbudowaną (Walidacja EV)", at);
+            if (Int(rows[i]["Najwyżej"]) is < 0)
+                yield return Issue.Error("Najwyżej – liczba od 0 (0 – wszystkie wyniki)", at);
+            if (Dec(rows[i]["Próg"]) is < 0)
+                yield return Issue.Error("Próg nie może być ujemny", at);
+            if (RunValidationRows.Rule(rows[i]) is { } rule)
+                foreach (var error in RunValidationLanguage.Validate(rule))
+                    yield return Issue.Error(error, at);
+        }
+    }
+
     private static IEnumerable<Issue> RunStepElementRules(IReadOnlyList<DictRow> rows)
     {
         for (var i = 0; i < rows.Count; i++)
@@ -482,8 +529,9 @@ public static partial class GlobalDictionaries
             var at = DictionaryValidator.RowElement(i);
             var element = rows[i]["Element"]?.Trim() ?? "";
             var rule = RunCheckRules.ByName(element);
-            if (rule is null && !RunDefinitions.IsReconciliation(element))
-                yield return Issue.Error($"Element „{element}” – reguła z katalogu kontroli albo „{RunDefinitions.ReconciliationPrefix}nazwa reguły uzgodnień”", at);
+            // Nazwy reguł walidacji (słownik „Reguły walidacji”) sprawdza zapis szablonu (RunDefinitions.Validate z bieżącymi regułami).
+            if (element.Length == 0)
+                yield return Issue.Error("Element pusty – reguła walidacji, reguła wbudowana albo „Uzgodnienie: nazwa”", at);
             if (Dec(rows[i]["Próg"]) is { } threshold)
             {
                 if (threshold < 0)

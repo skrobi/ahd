@@ -73,7 +73,7 @@ public static class RunOverview
         var ordered = pins.OrderBy(p => p.StartedAt).ToList();
         var columns = ordered.Select(p => new RunMatrixColumn(p.PinId, $"{Week(p.Code)} #{p.PinNo}",
             $"{p.Code} #{p.PinNo}, {p.StartedAt.ToLocalTime():yyyy-MM-dd HH:mm}, {p.StartedBy} – {p.Status}")).ToList();
-        var catalog = RunCheckRules.All.Select(r => r.Check).Distinct().ToList();
+        var catalog = RunValidationRules.Checks.Concat(RunCheckRules.All.Select(r => r.Check)).Distinct().ToList();
         int Rank(string check) => check == Import ? 0 : check == Run ? 1000 : check == RunReconciliations.CheckName ? 900
             : catalog.IndexOf(check) is var i and >= 0 ? 10 + i : 5;
         var checks = catalog.Concat(issues.Values.SelectMany(l => l).Select(i => i.CheckName)).Distinct()

@@ -470,6 +470,11 @@ status, start, koniec, kto, liczba błędów i ostrzeżeń, komentarz potwierdze
 definicja przebiegu użyta w uruchomieniu; NULL – uruchomienie sprzed migracji, bez etapów); `RUN_Issue.StepNo` – etap wyniku.
 Bez danych startowych – bez definicji obowiązuje definicja wbudowana. Wymaga aplikacji 0.57.0.
 
+**Migracja `sql/mssql/051_reguly_walidacji.sql`:** słownik globalny `DICT_RunValidation` – „Reguły walidacji” (`Name`, `CheckName`,
+`IsActive`, `RowFilter`, `GroupBy`, `Condition`, `AmountFormula`, `Message`, `OkMessage`, `TopN`, `Level`, `Threshold`,
+`Description`; klucz bieżących wersji `Project`, `Name`) – reguły walidacji ACTUALS zapisane formułami (`docs/pipeline-fazy.md`,
+rozdz. 4.1); bez danych startowych – pusty słownik oznacza reguły startowe aplikacji. Wymaga aplikacji 0.58.0.
+
 `META_SourceFile.CanonicalStatus`: „utworzone” – dane kanoniczne zapisane i sprawdzone (widoczne dla odczytów),
 „w toku” – zapis wierszy trwa (odczyty pomijają plik; po awarii wpis i wiersze są usuwane), inna wartość – powód
 braku danych (źródło bez parsera).

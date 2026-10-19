@@ -255,8 +255,9 @@ public sealed class RunService(IRunStore store, AppServices services, Func<ISour
         return issues;
     }
 
-    // Kontrole etapu: reguły katalogu z elementów etapu (ustawienia – element, słownik „Kontrole przebiegu”, katalog) i reguły
-    // uzgodnień etapu na danych przypiętych w uruchomieniu (koszty procesu programu; netowanie do 0 – na danych źródłowych).
+    // Kontrole etapu (docs/pipeline-fazy.md, rozdz. 4.1): reguły walidacji (formuły) na całej puli ACTUALS przed narzutami, bez
+    // Wykluczeń; reguły wbudowane (Walidacja EV) na danych jak w strukturze – bez rozliczeniowych, po Wykluczeniach, CAS po
+    // narzutach; reguły uzgodnień – na kosztach procesu programu (netowanie – dane źródłowe).
     private List<RunIssue> ChecksStep(RunPinRow pin, RunStepDefinition step, RunDefinition definition)
     {
         var source = store.Balance(pin.PinId);
@@ -265,24 +266,63 @@ public sealed class RunService(IRunStore store, AppServices services, Func<ISour
         var process = Process(pin.Project);
         var amountField = pin.AmountField ?? ProjectSettings.DefaultActualsAmount;
         var previousPin = store.Previous(pin.Project, pin.RunId);
-        var previous = previousPin is null || (previousPin.AmountField ?? ProjectSettings.DefaultActualsAmount) != amountField ? null : store.Balance(previousPin.PinId);
-        var current = source;
-        if (process.TransformsCosts && Transformed(process, source) is { Error: null } transformed)
-        {
-            current = transformed.Rows;
-            previous = previous is null ? null : Transformed(process, previous) is { Error: null } before ? before.Rows : null;
-        }
+        var previousSource = previousPin is null || (previousPin.AmountField ?? ProjectSettings.DefaultActualsAmount) != amountField ? null : store.Balance(previousPin.PinId);
         var week = store.RunWeek(pin.RunId);
         var (closedBefore, today) = Periods(week.Period, services.Clock.Now.Date);
         var projectType = store.ProjectType(pin.Project) ?? "";
+        var issues = new List<RunIssue>();
+
+        // Walidacja ACTUALS – reguły z formułami (słownik „Reguły walidacji”).
+        var (validations, missing) = RunWorkflowEngine.Validations(step, store.ValidationRules());
+        if (validations.Count > 0)
+        {
+            var data = new RunValidationData(source, previousSource, store.CostElements(pin.Project), closedBefore, today,
+                amountField == ProjectSettings.DefaultActualsAmount ? "PLN" : null);
+            foreach (var rule in validations)
+            {
+                var (results, error) = RunValidationLanguage.Evaluate(rule, data);
+                issues.AddRange(error is null
+                    ? results.Select(r => new RunIssue(rule.Check, r.Level, r.Element, r.Message, r.Amount))
+                    : [new RunIssue(rule.Check, CheckLevel.Error, rule.Name, $"Reguła walidacji „{rule.Name}” niepoliczona: {error} – popraw ją w oknie Kontrole (ekran Przebiegi)")]);
+            }
+        }
+        issues.AddRange(missing.Select(name => new RunIssue(RunValidationRules.Area, CheckLevel.Warning, name,
+            $"Kontrola „{name}” z definicji przebiegu nie istnieje w słowniku „Reguły walidacji” ani w regułach wbudowanych – niesprawdzona")));
+
+        // Walidacja EV – reguły wbudowane na danych jak w strukturze programu.
         var settings = RunWorkflowEngine.Settings(step, RunChecks.Settings(store.CheckSettings(), projectType, week.IsClosing), definition.BuiltIn);
         var dictionaries = store.Dictionaries(pin.Project, today.Year);
-        var issues = RunChecks.Check(current, previous, store.CostElements(pin.Project), closedBefore, today,
-            current != source ? process.Currency : amountField == ProjectSettings.DefaultActualsAmount ? "PLN" : null, source, settings, dictionaries).ToList();
-        var (rules, missing) = RunWorkflowEngine.Reconciliations(step, store.Reconciliations(), projectType, week.IsClosing);
+        if (settings.Values.Any(s => s.Active))
+        {
+            var exclusions = store.Exclusions(pin.Project);
+            List<RunBalanceRow> Ev(IEnumerable<RunBalanceRow> rows) => rows.Where(r => !r.IsSettlement && !exclusions.Any(x => x.Covers(r))).ToList();
+            IReadOnlyList<RunBalanceRow> current = Ev(source);
+            IReadOnlyList<RunBalanceRow>? previous = previousSource is null ? null : Ev(previousSource);
+            if (process.TransformsCosts && Transformed(process, current) is { Error: null } transformed)
+            {
+                current = transformed.Rows;
+                previous = previous is null ? null : Transformed(process, previous) is { Error: null } before ? before.Rows : null;
+            }
+            issues.AddRange(RunChecks.Check(current, previous, closedBefore, today, settings, dictionaries));
+            if (exclusions.Any(x => x.PartnerObject is not null))
+                issues.Add(new RunIssue(RunCheckRules.EvArea, CheckLevel.Pass, null,
+                    $"Wykluczenia z Partner object ({exclusions.Count(x => x.PartnerObject is not null)}) nie są stosowane w walidacji – dane przypięte nie mają partnera"));
+        }
+
+        // Reguły uzgodnień – koszty procesu programu (jak dotąd).
+        var (rules, missingRules) = RunWorkflowEngine.Reconciliations(step, store.Reconciliations(), projectType, week.IsClosing);
         if (rules.Count > 0)
-            issues.AddRange(RunReconciliations.CheckRules(rules, RunReconciliations.Measures(current, source, previous, closedBefore, today, dictionaries)));
-        issues.AddRange(missing.Select(name => new RunIssue(RunReconciliations.CheckName, CheckLevel.Warning, name,
+        {
+            var costs = source;
+            var previousCosts = previousSource;
+            if (process.TransformsCosts && Transformed(process, source) is { Error: null } transformed)
+            {
+                costs = transformed.Rows;
+                previousCosts = previousSource is null ? null : Transformed(process, previousSource) is { Error: null } before ? before.Rows : null;
+            }
+            issues.AddRange(RunReconciliations.CheckRules(rules, RunReconciliations.Measures(costs, source, previousCosts, closedBefore, today, dictionaries)));
+        }
+        issues.AddRange(missingRules.Select(name => new RunIssue(RunReconciliations.CheckName, CheckLevel.Warning, name,
             $"Reguła uzgodnień „{name}” z definicji przebiegu nie istnieje w słowniku „Reguły uzgodnień” – niesprawdzona")));
         return issues;
     }

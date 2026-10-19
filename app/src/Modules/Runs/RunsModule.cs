@@ -59,7 +59,7 @@ public sealed class RunsModule : IModule
         {
             DataContext = new RunsViewModel(templates, _store!, saved => RunChecksWindow.Open(
                 new RunChecksViewModel(templates, new RunDictionaryEditorViewModel(dictionaries, new FileDialogs(),
-                    [GlobalDictionaries.RunReconciliations, GlobalDictionaries.RunChecks])), saved)),
+                    [GlobalDictionaries.RunReconciliations, GlobalDictionaries.RunChecks]), new RunValidationEditorViewModel(templates, _store!)), saved)),
         };
     }
 }

@@ -67,21 +67,21 @@ public sealed class RunWorkflowTests
     public void Step_settings_enable_only_its_elements_with_element_then_dictionary_then_catalog_values()
     {
         var step = Def(RunGates.Confirm, false, RunActions.Checks,
-            new RunElementSetting(RunCheckRules.NetZeroBalance.Name, Level: CheckLevel.Warning),
-            new RunElementSetting(RunCheckRules.NoWbsElement.Name, Active: false),
-            new RunElementSetting(RunCheckRules.CostDecrease.Name));
+            new RunElementSetting(RunCheckRules.CostKindDecrease.Name, Level: CheckLevel.Warning),
+            new RunElementSetting(RunCheckRules.WpWithoutBudget.Name, Active: false),
+            new RunElementSetting(RunCheckRules.NewCostKind.Name));
         var defaults = RunCheckRules.All.ToDictionary(r => r.Code, RunCheckRules.Default);
-        defaults[RunCheckRules.CostDecrease.Code] = new RunCheckSetting(true, CheckLevel.Error, 50m);   // „Kontrole przebiegu”
-        defaults[RunCheckRules.NetZeroBalance.Code] = new RunCheckSetting(false, CheckLevel.Error, 5m);
+        defaults[RunCheckRules.NewCostKind.Code] = new RunCheckSetting(true, CheckLevel.Error, 50m);   // „Kontrole przebiegu”
+        defaults[RunCheckRules.CostKindDecrease.Code] = new RunCheckSetting(false, CheckLevel.Error, 5m);
 
         var custom = RunWorkflowEngine.Settings(step, defaults, builtIn: false);
         var builtIn = RunWorkflowEngine.Settings(step, defaults, builtIn: true);
 
-        Assert.Equal(new RunCheckSetting(true, CheckLevel.Warning, 5m), custom[RunCheckRules.NetZeroBalance.Code]);
-        Assert.Equal(new RunCheckSetting(true, CheckLevel.Error, 50m), custom[RunCheckRules.CostDecrease.Code]);
-        Assert.False(custom[RunCheckRules.NoWbsElement.Code].Active);
-        Assert.False(custom[RunCheckRules.RowsDecrease.Code].Active);                   // spoza etapu
-        Assert.False(builtIn[RunCheckRules.NetZeroBalance.Code].Active);                // wbudowana – słownik „Kontrole przebiegu” wyłącza
+        Assert.Equal(new RunCheckSetting(true, CheckLevel.Warning, 5m), custom[RunCheckRules.CostKindDecrease.Code]);
+        Assert.Equal(new RunCheckSetting(true, CheckLevel.Error, 50m), custom[RunCheckRules.NewCostKind.Code]);
+        Assert.False(custom[RunCheckRules.WpWithoutBudget.Code].Active);
+        Assert.False(custom[RunCheckRules.CostCenterWithoutRate.Code].Active);                   // spoza etapu
+        Assert.False(builtIn[RunCheckRules.CostKindDecrease.Code].Active);                // wbudowana – słownik „Kontrole przebiegu” wyłącza
         Assert.Equal(RunCheckRules.All.Count, custom.Count);
     }
 
@@ -120,13 +120,13 @@ public sealed class RunWorkflowTests
             .. new[] { RunDefinitions.InternalCode, "CAS", "Specjalny", "Wyłączony" }.Select(d => new RunStepRowData(d, 2, "Kontrole", RunActions.Checks, RunGates.Confirm, false, null)),
             new("CAS", 1, "Przypięcie", RunActions.Pin, RunGates.Info, false, null),
         ];
-        RunStepElementRow[] elements = [new("CAS", "Kontrole", RunCheckRules.NetZeroBalance.Name, true, "WARNING", 3m), new("CAS", "Inny etap", "x", true, null, null)];
+        RunStepElementRow[] elements = [new("CAS", "Kontrole", RunCheckRules.CostKindDecrease.Name, true, "WARNING", 3m), new("CAS", "Inny etap", "x", true, null, null)];
 
         var cas = RunDefinitions.For(headers, steps, elements, null, "CAS");
 
         Assert.Equal("CAS", cas.Code);
         Assert.Equal([("Przypięcie", RunActions.Pin), ("Kontrole", RunActions.Checks)], cas.Steps.Select(s => (s.Name, s.Action)));
-        Assert.Equal(new RunElementSetting(RunCheckRules.NetZeroBalance.Name, true, CheckLevel.Warning, 3m), Assert.Single(cas.Steps[1].Elements));
+        Assert.Equal(new RunElementSetting(RunCheckRules.CostKindDecrease.Name, true, CheckLevel.Warning, 3m), Assert.Single(cas.Steps[1].Elements));
         Assert.Equal("Specjalny", RunDefinitions.For(headers, steps, elements, "specjalny", "CAS").Code);              // wybrany w programie
         Assert.Equal("Specjalny", RunDefinitions.For(headers, steps, elements, null, "SAC").Code);                     // typ przed „Wszystkie”
         Assert.Equal(RunDefinitions.InternalCode, RunDefinitions.For(headers, steps, elements, null, "WEWNETRZNY").Code);
@@ -147,9 +147,9 @@ public sealed class RunWorkflowTests
         [
             RunDefinitions.FixedSteps[1] with { No = 1 },
             RunDefinitions.FixedSteps[0] with { No = 2 },
-            new(3, "Walidacja", RunActions.Checks, RunGates.Confirm, false, [new(RunCheckRules.NetZeroBalance.Name, Active: false)]),
+            new(3, "Walidacja", RunActions.Checks, RunGates.Confirm, false, [new(RunCheckRules.CostKindDecrease.Name, Active: false)]),
             new(4, "walidacja", RunActions.Checks, RunGates.Confirm, false, [new("Nieznana"), new("Uzgodnienie: *"), new("uzgodnienie: *")]),
-            new(5, "Zatwierdzenie", RunActions.Approval, RunGates.Confirm, true, [new(RunCheckRules.NetZeroBalance.Name)]),
+            new(5, "Zatwierdzenie", RunActions.Approval, RunGates.Confirm, true, [new(RunCheckRules.CostKindDecrease.Name)]),
         ]);
 
         var issues = RunDefinitions.Validate(broken).Select(i => i.Message).ToList();
@@ -169,7 +169,7 @@ public sealed class RunWorkflowTests
     {
         var starter = RunDefinitions.Starters[1] with
         {
-            Steps = [.. RunDefinitions.Starters[1].Steps.Select(s => s.No == 3 ? s with { Elements = [new(RunCheckRules.NetZeroBalance.Name, true, CheckLevel.Warning, 2.5m)] } : s)],
+            Steps = [.. RunDefinitions.Starters[1].Steps.Select(s => s.No == 3 ? s with { Elements = [new(RunCheckRules.CostKindDecrease.Name, true, CheckLevel.Warning, 2.5m)] } : s)],
         };
         var header = RunDefinitionRows.Headers([new DictRow(1, 1, RunDefinitionRows.Header(starter, isActive: true))]).Single();
         var steps = RunDefinitionRows.Steps(RunDefinitionRows.StepValues(starter).Select(v => new DictRow(null, null, v)));
@@ -193,12 +193,13 @@ public sealed class RunWorkflowTests
     }
 
     [Fact]
-    public void Built_in_definition_covers_every_catalog_rule_in_check_steps_and_ends_with_approval()
+    public void Built_in_definition_covers_every_validation_and_catalog_rule_in_check_steps_and_ends_with_approval()
     {
         var builtIn = RunDefinitions.BuiltIn;
         var rules = builtIn.Steps.SelectMany(s => s.Elements).Select(e => e.Element).ToList();
 
-        Assert.Equal(RunCheckRules.All.Select(r => r.Name).Order(), rules.Where(r => !RunDefinitions.IsReconciliation(r)).Order());
+        Assert.Equal(RunValidationRules.Starters.Select(r => r.Name).Concat(RunCheckRules.All.Select(r => r.Name)).Order(),
+            rules.Where(r => !RunDefinitions.IsReconciliation(r)).Order());
         Assert.Contains(RunDefinitions.AllReconciliations, rules);
         Assert.Equal([RunActions.Import, RunActions.Pin], builtIn.Steps.Take(2).Select(s => s.Action));
         Assert.True(builtIn.Steps[^1].NeedsApproval);
@@ -223,13 +224,12 @@ public sealed class RunWorkflowTests
         [
             Row(("Definicja", "A"), ("Etap", "Kontrole"), ("Element", "Nieznana"), ("Aktywny", "tak"), ("Poziom", null), ("Próg", null), ("Opis", null)),
             Row(("Definicja", "A"), ("Etap", "Kontrole"), ("Element", "Uzgodnienie: Budżet"), ("Aktywny", "tak"), ("Poziom", null), ("Próg", "-1"), ("Opis", null)),
-            Row(("Definicja", "A"), ("Etap", "Kontrole"), ("Element", RunCheckRules.NetZeroBalance.Name), ("Aktywny", "tak"), ("Poziom", "WARNING"), ("Próg", "5"), ("Opis", null)),
+            Row(("Definicja", "A"), ("Etap", "Kontrole"), ("Element", RunCheckRules.CostKindDecrease.Name), ("Aktywny", "tak"), ("Poziom", "WARNING"), ("Próg", "5"), ("Opis", null)),
         ]);
 
         Assert.Single(definitions, i => i.Level == CheckLevel.Error && i.Message.StartsWith("Aktywny szablon „A” jest już domyślny dla typu programu CAS"));
         Assert.Single(steps, i => i.Level == CheckLevel.Error && i.Message.StartsWith("Etap „kontrole” już jest"));
-        Assert.Contains(elements, i => i.Level == CheckLevel.Error && i.Message.StartsWith("Element „Nieznana”"));
         Assert.Contains(elements, i => i.Level == CheckLevel.Error && i.Message == "Próg nie może być ujemny");
-        Assert.Equal(2, elements.Count(i => i.Level == CheckLevel.Error));
+        Assert.Equal(1, elements.Count(i => i.Level == CheckLevel.Error));   // nieznana kontrola – zapis szablonu (RunDefinitions.Validate)
     }
 }

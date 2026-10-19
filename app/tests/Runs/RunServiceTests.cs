@@ -49,7 +49,7 @@ public sealed class RunServiceTests : IDisposable
         Assert.Equal((4L, first.Status), (pin.Rows, pin.Status));   // 4 z 6 wierszy pliku – Project definition 2DI473
         Assert.Equal(4, store.Balance(pin.PinId).Sum(r => r.Rows));
         // Definicja wbudowana: import, przypięcie – zakończone; walidacja ACTUALS – błąd netowania zatrzymuje przebieg, dalsze etapy czekają.
-        Assert.Equal([RunStepStatuses.Done, RunStepStatuses.Done, RunStepStatuses.Failed, RunStepStatuses.Waiting, RunStepStatuses.Waiting, RunStepStatuses.Waiting],
+        Assert.Equal([RunStepStatuses.Done, RunStepStatuses.Done, RunStepStatuses.Failed, RunStepStatuses.Waiting, RunStepStatuses.Waiting],
             store.Steps(pin.PinId).Select(s => s.Status));
         Assert.Equal(RunStatuses.Blocked, pin.Status);
         Assert.Contains("Nie wymaga potwierdzenia".ToLowerInvariant(), service.Confirm(pin.PinId, 3, "ok").Summary.ToLowerInvariant());
@@ -119,7 +119,8 @@ public sealed class RunServiceTests : IDisposable
         Assert.Equal(8884.51m, pin.Balance);                                             // saldo okresów zamkniętych – dane źródłowe
         var issues = store.Issues(pin.PinId);
         Assert.Contains(issues, i => i.CheckName == "Koszty po narzutach CAS" && i.Level == CheckLevel.Pass && i.Message.Contains("w PLN"));
-        Assert.Contains(issues, i => i.CheckName == RunChecks.NetZero && i.Level == CheckLevel.Error && i.Amount == 8884.51m);
+        Assert.Contains(issues, i => i.CheckName == RunChecks.NetZero && i.Level == CheckLevel.Error
+            && i.Message.Replace('\u00a0', ' ').Contains("saldo programu 8 884,51"));   // Walidacja ACTUALS – dane źródłowe (przed narzutami)
         Assert.NotEqual(RunStatuses.Failed, outcome.Status);
     }
 

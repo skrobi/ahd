@@ -209,8 +209,8 @@ okresy 13–16 liczone jak 12.
 szablonów (startowe: „Wewnętrzny” – domyślny dla wszystkich typów, w tym SAC; „CAS” – domyślny dla CAS; „Utwórz szablony
 startowe”), etapy szablonu w kafelkach i okno „Kontrole”. Klocki predefiniowane **Import źródeł** i **Przypięcie stanu** korzystają
 z konfiguracji programu (Źródła danych, Parametry programu) – zawsze etapy 1 i 2, bez zmian i przesuwania. Dalej etapy dokładane
-w edytorze: **etap walidacji** (kontrole wybrane z katalogu w grupach – Walidacja ACTUALS, Spójność ze słownikami, Rodzaje kosztu –
-i reguły uzgodnień: „Uzgodnienie: *” albo reguła po nazwie; poziom i próg kontroli w tym szablonie, puste – ustawienie domyślne
+w edytorze: **etap walidacji** (kontrole wybrane w grupach – Walidacja ACTUALS: reguły z formułami; Walidacja EV: spójność ze
+słownikami, rodzaje kosztu – i reguły uzgodnień: „Uzgodnienie: *” albo reguła po nazwie; poziom i próg kontroli w tym szablonie, puste – ustawienie domyślne
 z okna Kontrole; bramka WARNING: „Potwierdzenie” – wstrzymuje do potwierdzenia z komentarzem, „Informacja” – przebieg idzie dalej;
 opcjonalnie zatwierdzenie po etapie) i **zatwierdzenie** (przebieg czeka na analityka). Zapis sprawdza strukturę
 (`RunDefinitions.Validate`: etapy stałe na początku, nazwy etapów bez powtórzeń, etap walidacji z kontrolą) i zapisuje szablon
@@ -220,8 +220,8 @@ rozdz. 2; `Modules/Runs/Services/RunTemplateService.cs`). Szablonu wybranego w p
 Program wybiera przebieg w kreatorze (krok 1) albo w Konfiguracji → „Parametry programu” → `Przebieg`. Wybór definicji przy starcie
 przebiegu (`RunDefinitions.For`): wybrany szablon (aktywny, z etapami); bez wyboru (albo wybrany nieaktywny) – aktywny szablon
 domyślny dla typu programu (typ przed „Wszystkie”); bez szablonów – **definicja wbudowana** „Standardowy (wbudowany)”: 1 Import
-źródeł → 2 Przypięcie stanu → 3 Walidacja ACTUALS → 4 Spójność ze słownikami → 5 Rodzaje kosztu i uzgodnienia (`Uzgodnienie: *`) →
-6 Zatwierdzenie analityka (etapy kontroli z bramką „Potwierdzenie”; szablony startowe mają te same etapy). Przebieg zamykający okres
+źródeł → 2 Przypięcie stanu → 3 Walidacja ACTUALS (reguły walidacji) → 4 Walidacja EV (reguły wbudowane, `Uzgodnienie: *`) →
+5 Zatwierdzenie analityka (etapy kontroli z bramką „Potwierdzenie”; szablony startowe mają te same etapy). Przebieg zamykający okres
 i w środku okresu mają tę samą definicję – wariant to informacja dla analityka (dziennik, ekran programu). Definicja (z etapami
 i elementami) zapisuje się w uruchomieniu (`META_RunPin.Definition`, JSON) – zmiana szablonu nie zmienia trwającego przebiegu.
 Model – `Shared/Models/Pipeline/RunWorkflow.cs`.
@@ -232,41 +232,65 @@ uruchomienia ze statusem, wyniki etapu, akcje „Nowy przebieg”, „Dalsze eta
 Kolejne akcje etapów (np. kafelek warunkowy „jeśli przebieg zamykający – powiadomienie CAM o uzupełnieniu danych do ETC” – P6) –
 nowe akcje w `RunActions` i ich wykonanie w `RunService.ExecuteStep`.
 
-**Reguły kontroli.** Kontrole poniżej to reguły katalogu (`Shared/Models/Pipeline/RunCheckRules.cs` –
-kod, kontrola, nazwa, opis, poziom i próg domyślny; implementacja po kodzie – `Modules/Runs/Services/RunChecks.cs`). Etap
-kontroli liczy tylko reguły ze swoich elementów kontrolnych. Ustawienie reguły: poziom i próg elementu etapu, a puste – ustawienie
-domyślne z okna „Kontrole” (ekran Przebiegi: katalog w grupach – aktywna, poziom, próg dla wszystkich programów; zapis – wiersz
-„Wszystkie”, „Każdy” słownika „Kontrole przebiegu” tylko dla reguł innych niż w katalogu) albo – zaawansowane – słownik
-globalny „Kontrole przebiegu” (`docs/slowniki.md`, rozdz. 2) dla typu programu i wariantu przebiegu (zamykający okres / w środku
-okresu – kalendarz okresów): aktywna, poziom wyniku, próg (kwota); bez wiersza – ustawienie domyślne (tabela niżej). W definicji
-wbudowanej reguła wyłączona w „Kontrolach przebiegu” nie jest liczona. Nowa kontrola = reguła w katalogu i jej implementacja;
-zmiana poziomu, progu, etapu albo wyłączenie – okno Kontrole albo kafelek szablonu, bez zmiany kodu. Ekran programu (zakładka
-Przebieg) pokazuje macierz wyników kontroli kolejnych uruchomień i porównanie dwóch uruchomień.
+**Walidacja ACTUALS – reguły z formułami.** Reguły walidacji danych ACTUALS są zapisane formułami w słowniku globalnym „Reguły
+walidacji” (`docs/slowniki.md`, rozdz. 2; migracja 051) i edytowane w oknie „Kontrole” ekranu Przebiegi (lista reguł, formuły,
+kontrola składni przy każdej zmianie, ściąga pól i funkcji, **Testuj na programie** – reguła, także niezapisana, liczona na
+ostatnim uruchomieniu programu z przypiętymi danymi i poprzednim, bez zapisu wyników). Pusty słownik – reguły startowe aplikacji
+(`Shared/Models/Pipeline/RunValidationRules.cs`); zapis w oknie tworzy wiersze do edycji. Dane – **cała pula ACTUALS programu**
+(wszystkie wiersze przypięte, także cost elementy rozliczeniowe), kwoty przed narzutami CAS, bez Wykluczeń; poprzedni przebieg –
+ostatnie uruchomienie wcześniejszego tygodnia z tym samym polem kwoty. Reguła: **kontrola** (wiersz macierzy wyników), **filtr**
+(warunek na wierszu), **grupuj** (pola po średniku; puste – cały program), **warunek** (kiedy grupa jest wynikiem), **kwota**,
+**komunikat** (tekst z wyrażeniami w `{…}`), **komunikat OK** (wynik INFO, gdy żadna grupa nie spełnia warunku), **najwyżej N**
+(od największej |kwoty|; 0 – wszystkie), poziom, próg (`[Próg]`), aktywna. Element wyniku – wartość pierwszego pola grupowania.
+Szablon może zmienić poziom i próg reguły na kafelku etapu. Język (`Shared/Models/Pipeline/RunValidation.cs`):
 
-| Reguła (słownik) | Kontrola | Poziom domyślny | Próg domyślny |
+| Element | Znaczenie |
+|---|---|
+| pola wiersza | `[Element WBS]`, `[Cost element]`, `[Rok]`, `[Okres]`, `[Rok/okres]` (tekst RRRR/OO), `[Rozliczeniowy]`, `[Waluta]`, `[Wiersze]` (wiersze źródłowe w pozycji), `[Kwota]`, `[Utworzono]`, `[Okres zamknięty]`, `[Okres przyszły]`, `[Okres bieżący]`, `[W Cost Category]` |
+| wartości przebiegu | `[Próg]`, `[Jest poprzedni]`, `[Waluta kosztów]`, `[Bieżący okres]`, `[Pierwszy otwarty okres]` |
+| agregaty grupy | `SUMA(x; warunek)`, `LICZBA(warunek)`, `MAKS(x; warunek)`, `MIN(x; warunek)`, `LISTA(x; n)`, `NAJWIĘKSZE(klucz; wartość; n; warunek)`; przedrostek `POPRZ.` – dane poprzedniego przebiegu tej samej grupy, `CAŁOŚĆ.` – wszystkie wiersze po filtrze |
+| funkcje i operatory | `ABS`, `JEŻELI(w; tak; nie)`, `PUSTE`, `ZAOKR(x; n)`, `TEKST`; `+ - * /`, `&` (łączenie tekstu), `= <> < <= > >=`, `ORAZ`, `LUB`, `NIE`, `PRAWDA`, `FAŁSZ`; teksty w cudzysłowie, liczby z przecinkiem |
+
+Pole wiersza poza grupowaniem w warunku, kwocie i komunikacie – tylko w agregacie (błąd składni). Reguły startowe:
+
+| Reguła | Kontrola | Poziom, próg | Logika (skrót formuł) |
 |---|---|---|---|
-| Mniej wierszy niż w poprzednim przebiegu | Liczba danych | ERROR | – |
-| Koszt brutto mniejszy niż w poprzednim przebiegu | Liczba danych | WARNING | 1,00 |
-| Największe odchylenia raport do raportu | Odchylenia raport do raportu | INFO | 1,00 (najmniejsza zmiana) |
-| Cost element spoza słownika Cost Category | Nowe cost elementy | ERROR | – |
-| Cost element pierwszy raz w programie | Nowe cost elementy | INFO | – |
-| Cost element bez Cost Category | Spójność ze słownikami | WARNING | – |
-| MPK bez stawki wydziału na rok | Spójność ze słownikami | ERROR | – |
-| WP bez MPK | Spójność ze słownikami | WARNING | – |
-| WP bez budżetu | Spójność ze słownikami | WARNING | – |
-| Nowy rodzaj kosztu w programie | Rodzaje kosztu | WARNING | 1,00 |
-| Skok przyrostu kosztu | Rodzaje kosztu | WARNING | 3 (× średni przyrost z 6 okresów) |
-| Spadek kosztu narastająco w rodzaju | Rodzaje kosztu | WARNING | 1,00 |
-| Zmiana rodzaju kosztu w zamkniętych okresach | Rodzaje kosztu | WARNING | 1,00 |
-| Netowanie do 0 w okresach zamkniętych | Netowanie programu do 0 | ERROR | 1,00 |
-| Koszt utworzony po rozliczeniu | Netowanie programu do 0 | WARNING | – (gdy program nie netuje się do 0) |
-| Zmiana salda okresu zamkniętego | Spójność ze słownikami (P2) | ERROR / WARNING | cost element kosztu (bez rozliczeniowych) z pustą Cost Category w słowniku efektywnym programu – WARNING; MPK WP („WP i CAM”) bez wiersza w „Stawki wydziałów” na rok bieżącego okresu (ETC Cost bez stawki) – ERROR z listą WP; WP bez MPK w „WP i CAM” – WARNING; WP bez BAC, BAC HOURS i BAC MATERIAL (puste albo 0) w „Harmonogram i budżet” – WARNING. Słowniki w stanie z chwili przebiegu (nie są przypinane – P1) |
-| Rodzaje kosztu | WARNING | rodzaj kosztu cost elementu – kolumna „Rodzaj kosztu” Cost Category efektywnego (Hours / Materials; inny albo brak – Other, jak ACWP Hours / Materials / Other struktury), koszt bez rozliczenia wychodzącego: rodzaj z kosztem, którego w poprzednim przebiegu nie było; przyrost rodzaju w bieżącym okresie (koszt zaksięgowany w okresie) większy niż próg × średni przyrost z 6 okresów przed bieżącym (okresy bez kosztu – 0; średnia ≤ 0 – bez wyniku); koszt rodzaju narastająco mniejszy niż w poprzednim przebiegu; koszt rodzaju w okresach zamkniętych zmieniony względem poprzedniego przebiegu (3 okresy z największą zmianą). Szczegóły zmian – okno „Zmiany ACWP” (`docs/funkcjonalnosc.md`, F06): „Pokaż zmiany” przy wyniku kontroli kosztów na ekranie Przebiegi, wykres przyrostów ze skokami |
-| Zmiany w zamkniętych okresach | WARNING | 1,00 |
-| Ujemny koszt elementu WBS | Jakość danych | WARNING | 1,00 |
-| Wiersze w okresach przyszłych | Jakość danych | WARNING | – |
-| Waluta inna niż waluta kosztów | Jakość danych | WARNING | – |
-| Wiersze bez elementu WBS | Jakość danych | WARNING | – |
+| Mniej wierszy niż w poprzednim przebiegu | Liczba danych | ERROR | `SUMA([Wiersze]) < POPRZ.SUMA([Wiersze])`; OK – liczba wierszy albo „pierwszy przebieg” |
+| Koszt brutto mniejszy niż w poprzednim przebiegu | Liczba danych | WARNING, 1,00 | filtr `NIE [Rozliczeniowy]` (koszt brutto); `SUMA([Kwota]) < POPRZ.SUMA([Kwota]) - [Próg]` |
+| Największe odchylenia raport do raportu | Odchylenia raport do raportu | INFO, 1,00 | grupuj `[Element WBS]`; \|zmiana salda\| ≥ próg; najwyżej 10 |
+| Największe odchylenia raport do raportu – cost element | Odchylenia raport do raportu | INFO, 1,00 | jak wyżej po `[Cost element]` |
+| Cost element spoza słownika Cost Category | Nowe cost elementy | ERROR | filtr `NIE [W Cost Category]`; grupuj `[Cost element]` |
+| Cost element pierwszy raz w programie | Nowe cost elementy | INFO | grupuj `[Cost element]`; `POPRZ.LICZBA() = 0` |
+| Netowanie do 0 w okresach zamkniętych | Netowanie programu do 0 | ERROR, 1,00 | filtr `[Okres zamknięty]`; grupuj `[Element WBS]`; saldo programu i elementu > próg; przyczyna, ostatni okres z ruchem, główne cost elementy; OK – program netuje się do 0 |
+| Koszt utworzony po rozliczeniu | Netowanie programu do 0 | WARNING, 1,00 | filtr `[Okres zamknięty]`; grupuj `[Element WBS]; [Rok/okres]`; program nie netuje się do 0 i `MAKS([Utworzono]; NIE [Rozliczeniowy]) > MAKS([Utworzono]; [Rozliczeniowy])` |
+| Zmiana salda okresu zamkniętego | Zmiany w zamkniętych okresach | WARNING, 1,00 | filtr `[Okres zamknięty]`; grupuj `[Element WBS]; [Rok/okres]`; \|zmiana\| > próg |
+| Ujemny koszt elementu WBS | Jakość danych | WARNING, 1,00 | grupuj `[Element WBS]`; `SUMA([Kwota]) < -[Próg]` (cała pula – koszt i rozliczenie) |
+| Wiersze w okresach przyszłych | Jakość danych | WARNING | filtr `[Okres przyszły]` |
+| Waluta inna niż waluta kosztów | Jakość danych | WARNING | filtr `[Waluta] <> [Waluta kosztów]` |
+| Wiersze bez elementu WBS | Jakość danych | WARNING | filtr `PUSTE([Element WBS])` |
+
+**Walidacja EV – reguły wbudowane.** Reguły katalogu (`Shared/Models/Pipeline/RunCheckRules.cs`; implementacja po kodzie –
+`Modules/Runs/Services/RunChecks.cs`) liczą na danych jak w strukturze programu: bez cost elementów rozliczeniowych, po
+Wykluczeniach (wiersze z cost elementem / elementem WBS; wykluczenia z Partner object nie są stosowane – dane przypięte nie mają
+partnera, informacja w wynikach), CAS – po narzutach CAS; słowniki programu w stanie z chwili przebiegu. Ustawienie reguły: poziom
+i próg elementu etapu, a puste – ustawienie domyślne z okna „Kontrole” (zapis – wiersz „Wszystkie”, „Każdy” słownika „Kontrole
+przebiegu” tylko dla reguł innych niż w katalogu) albo – zaawansowane – słownik „Kontrole przebiegu” dla typu programu i wariantu;
+w definicji wbudowanej reguła wyłączona w „Kontrolach przebiegu” nie jest liczona. Nowa reguła wbudowana = pozycja katalogu i jej
+implementacja. Ekran programu (zakładka Przebieg) pokazuje macierz wyników kontroli kolejnych uruchomień i porównanie dwóch uruchomień.
+
+| Reguła | Kontrola | Poziom domyślny | Próg domyślny | Logika |
+|---|---|---|---|---|
+| Cost element bez Cost Category | Spójność ze słownikami | WARNING | – | cost element z pustą Cost Category w słowniku efektywnym programu |
+| MPK bez stawki wydziału na rok | Spójność ze słownikami | ERROR | – | MPK WP („WP i CAM”) bez wiersza w „Stawki wydziałów” na rok bieżącego okresu (ETC Cost bez stawki), lista WP |
+| WP bez MPK | Spójność ze słownikami | WARNING | – | WP bez MPK w „WP i CAM” |
+| WP bez budżetu | Spójność ze słownikami | WARNING | – | WP bez BAC, BAC HOURS i BAC MATERIAL w „Harmonogram i budżet” |
+| Nowy rodzaj kosztu w programie | Rodzaje kosztu | WARNING | 1,00 | rodzaj (Hours / Materials / Other – Cost Category) z kosztem, którego w poprzednim przebiegu nie było |
+| Skok przyrostu kosztu | Rodzaje kosztu | WARNING | 3 (× średni przyrost z 6 okresów) | przyrost rodzaju w bieżącym okresie > próg × średni przyrost z 6 okresów przed bieżącym |
+| Spadek kosztu narastająco w rodzaju | Rodzaje kosztu | WARNING | 1,00 | koszt rodzaju narastająco mniejszy niż w poprzednim przebiegu |
+| Zmiana rodzaju kosztu w zamkniętych okresach | Rodzaje kosztu | WARNING | 1,00 | koszt rodzaju w okresach zamkniętych zmieniony (3 okresy z największą zmianą) |
+
+Szczegóły zmian kosztów – okno „Zmiany ACWP” (`docs/funkcjonalnosc.md`, F06): „Pokaż zmiany” przy wyniku kontroli kosztów
+w zakładce Przebieg programu, wykres przyrostów ze skokami.
 
 **Reguły uzgodnień (własne kontrole).** Słownik globalny „Reguły uzgodnień” (`docs/slowniki.md`, rozdz. 2) dopisuje kontrole
 bez zmiany programu: lewa strona, warunek (`=` – różnica ≤ tolerancja, `<=` / `>=` – z tolerancją, `<>` – różnica > tolerancja),

@@ -11,8 +11,9 @@ public sealed record RunCheckRule(string Code, string Check, string Name, string
 public sealed record RunCheckSetting(bool Active, CheckLevel Level, decimal? Threshold);
 
 /// <summary>
-/// Katalog reguł kontroli przebiegu i wartości słownika „Kontrole przebiegu” (docs/slowniki.md, rozdz. 2). Pusty słownik –
-/// ustawienia domyślne reguł; nowa reguła = pozycja katalogu i jej implementacja w RunChecks.
+/// Katalog reguł wbudowanych przebiegu – grupa „Walidacja EV” – i wartości słownika „Kontrole przebiegu” (docs/slowniki.md, rozdz. 2).
+/// Pusty słownik – ustawienia domyślne reguł; nowa reguła = pozycja katalogu i jej implementacja w RunChecks. Reguły ACTUALS –
+/// formuły (RunValidationRules, słownik „Reguły walidacji”).
 /// </summary>
 public static class RunCheckRules
 {
@@ -52,21 +53,6 @@ public static class RunCheckRules
         _ => null,
     };
 
-    public static RunCheckRule RowsDecrease { get; } = new("rows-decrease", Volume, "Mniej wierszy niż w poprzednim przebiegu",
-        "Zrzut ACTUALS jest narastający: mniej wierszy niż w poprzednim przebiegu to niepełny zrzut albo zmiana zakresu.", CheckLevel.Error);
-
-    public static RunCheckRule CostDecrease { get; } = new("cost-decrease", Volume, "Koszt brutto mniejszy niż w poprzednim przebiegu",
-        "Koszt brutto (bez rozliczenia wychodzącego) mniejszy niż w poprzednim przebiegu o więcej niż próg (kwota).", CheckLevel.Warning, Tolerance);
-
-    public static RunCheckRule TopDeviations { get; } = new("deviations", Deviations, "Największe odchylenia raport do raportu",
-        "10 największych zmian kosztu brutto po elemencie WBS i po cost elemencie; próg – najmniejsza pokazywana zmiana (kwota).", CheckLevel.Pass, Tolerance);
-
-    public static RunCheckRule CostElementOutside { get; } = new("cost-element-outside", NewCostElements, "Cost element spoza słownika Cost Category",
-        "Cost element danych bez wpisu w słowniku Cost Category efektywnym dla programu.", CheckLevel.Error);
-
-    public static RunCheckRule CostElementFirst { get; } = new("cost-element-first", NewCostElements, "Cost element pierwszy raz w programie",
-        "Cost element, którego nie było w danych poprzedniego przebiegu.", CheckLevel.Pass);
-
     public static RunCheckRule CostElementWithoutCategory { get; } = new("cost-element-without-category", Dictionaries, "Cost element bez Cost Category",
         "Cost element kosztu (bez rozliczeniowych) ze słownika Cost Category efektywnego dla programu z pustą kolumną Cost Category – koszt poza raportem po kategoriach.",
         CheckLevel.Warning);
@@ -94,45 +80,23 @@ public static class RunCheckRules
     public static RunCheckRule CostKindClosedChanges { get; } = new("cost-kind-closed-changes", CostKinds, "Zmiana rodzaju kosztu w zamkniętych okresach",
         "Koszt rodzaju w okresach zamkniętych inny niż w poprzednim przebiegu o więcej niż próg (kwota); okresy z największą zmianą.", CheckLevel.Warning, Tolerance);
 
-    public static RunCheckRule NetZeroBalance { get; } = new("net-zero", NetZero, "Netowanie do 0 w okresach zamkniętych",
-        "Suma wszystkich wierszy programu w okresach zamkniętych różna od 0 o więcej niż próg (kwota); 10 elementów WBS z największym saldem i przyczyną.",
-        CheckLevel.Error, Tolerance);
-
-    public static RunCheckRule PostedAfterSettlement { get; } = new("posted-after-settlement", NetZero, "Koszt utworzony po rozliczeniu",
-        "Gdy program nie netuje się do 0: koszt elementu utworzony (Created on) po jego rozliczeniu w tym okresie – wymaga ponownego rozliczenia.",
-        CheckLevel.Warning);
-
-    public static RunCheckRule ClosedPeriodChanges { get; } = new("closed-period-changes", ClosedPeriods, "Zmiana salda okresu zamkniętego",
-        "Saldo elementu WBS w okresie zamkniętym inne niż w poprzednim przebiegu o więcej niż próg (kwota).", CheckLevel.Warning, Tolerance);
-
-    public static RunCheckRule NegativeCost { get; } = new("negative-cost", Quality, "Ujemny koszt elementu WBS",
-        "Koszt elementu WBS narastająco poniżej minus próg (kwota) – storno po rozliczeniu.", CheckLevel.Warning, Tolerance);
-
-    public static RunCheckRule FuturePeriods { get; } = new("future-periods", Quality, "Wiersze w okresach przyszłych",
-        "Wiersze w okresach późniejszych niż bieżący okres kalendarza.", CheckLevel.Warning);
-
-    public static RunCheckRule OtherCurrency { get; } = new("other-currency", Quality, "Waluta inna niż waluta kosztów",
-        "Wiersze w walucie innej niż PLN (pole Value in Obj. Crcy) albo niż przeważająca waluta danych (inne pola kwoty).", CheckLevel.Warning);
-
-    public static RunCheckRule NoWbsElement { get; } = new("no-wbs", Quality, "Wiersze bez elementu WBS",
-        "Wiersze bez elementu WBS (sieci, zlecenia przypisane do programu).", CheckLevel.Warning);
-
-    /// <summary>Reguły w kolejności wyników przebiegu.</summary>
+    /// <summary>Reguły w kolejności wyników przebiegu (grupa „Walidacja EV”; reguły ACTUALS – formuły, RunValidationRules).</summary>
     public static IReadOnlyList<RunCheckRule> All { get; } =
     [
-        RowsDecrease, CostDecrease, TopDeviations, CostElementOutside, CostElementFirst, CostElementWithoutCategory, CostCenterWithoutRate,
-        WpWithoutCostCenter, WpWithoutBudget, NewCostKind, CostKindJump, CostKindDecrease, CostKindClosedChanges, NetZeroBalance, PostedAfterSettlement, ClosedPeriodChanges, NegativeCost, FuturePeriods, OtherCurrency, NoWbsElement,
+        CostElementWithoutCategory, CostCenterWithoutRate, WpWithoutCostCenter, WpWithoutBudget, NewCostKind, CostKindJump, CostKindDecrease, CostKindClosedChanges,
     ];
 
     public static RunCheckRule? ByName(string? name) => All.FirstOrDefault(r => string.Equals(r.Name, name?.Trim(), StringComparison.OrdinalIgnoreCase));
 
     public static RunCheckSetting Default(RunCheckRule rule) => new(true, rule.Level, rule.Threshold);
 
-    /// <summary>Grupa kontroli (okno Kontrole, dobór kontroli etapu): Walidacja ACTUALS, Spójność ze słownikami, Rodzaje kosztu.</summary>
-    public const string ActualsArea = "Walidacja ACTUALS";
+    /// <summary>
+    /// Grupa „Walidacja EV” (okno Kontrole, dobór kontroli etapu): reguły wbudowane na danych jak w strukturze programu – bez cost
+    /// elementów rozliczeniowych, po Wykluczeniach, CAS po narzutach; podgrupy – kontrola reguły (Spójność ze słownikami, Rodzaje kosztu).
+    /// </summary>
+    public const string EvArea = "Walidacja EV";
 
-    public static IReadOnlyList<string> Areas { get; } = [ActualsArea, Dictionaries, CostKinds];
+    public static IReadOnlyList<string> Areas { get; } = [Dictionaries, CostKinds];
 
-    /// <summary>Grupa kontroli reguły: kontrole danych ACTUALS (liczba danych, odchylenia, nowe cost elementy, netowanie, okresy zamknięte, jakość) albo sama kontrola.</summary>
-    public static string AreaOf(RunCheckRule rule) => rule.Check is Dictionaries or CostKinds ? rule.Check : ActualsArea;
+    public static string AreaOf(RunCheckRule rule) => rule.Check;
 }

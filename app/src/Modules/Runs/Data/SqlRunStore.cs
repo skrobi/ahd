@@ -85,6 +85,28 @@ public sealed class SqlRunStore(SqlDatabase db) : IRunStore
             new { project, runId, excluded = new[] { RunStatuses.Running, RunStatuses.Failed } });
     }
 
+    public IReadOnlyList<RunValidationRule> ValidationRules()
+    {
+        using var connection = db.Open();
+        var rules = connection.Query<ValidationRow>(
+                $"SELECT Name, CheckName, IsActive, RowFilter, GroupBy, Condition, AmountFormula, Message, OkMessage, TopN, Level, Threshold, Description " +
+                $"FROM {db.Table("dict.RunValidation")} WHERE Project IS NULL AND SupersededAt IS NULL ORDER BY Id")
+            .Select(r => new RunValidationRule(r.Name, r.CheckName, r.IsActive, r.RowFilter, r.GroupBy, r.Condition, r.AmountFormula, r.Message, r.OkMessage,
+                r.TopN ?? 0, RunCheckRules.LevelOf(r.Level) ?? CheckLevel.Warning, r.Threshold, r.Description))
+            .ToList();
+        return rules.Count == 0 ? RunValidationRules.Starters : rules;
+    }
+
+    private sealed record ValidationRow(string Name, string CheckName, bool IsActive, string? RowFilter, string? GroupBy, string Condition, string? AmountFormula,
+        string Message, string? OkMessage, int? TopN, string Level, decimal? Threshold, string? Description);
+
+    public IReadOnlyList<RunExclusionRow> Exclusions(string project)
+    {
+        using var connection = db.Open();
+        return connection.Query<RunExclusionRow>(
+            $"SELECT CostElement, WbsElement, PartnerObject FROM {db.Table("dict.Exclusion")} WHERE Project = @project AND SupersededAt IS NULL", new { project }).ToList();
+    }
+
     public IReadOnlySet<string> CostElements(string project)
     {
         using var connection = db.Open();

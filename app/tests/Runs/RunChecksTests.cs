@@ -7,12 +7,11 @@ using Xunit;
 
 namespace PzlEv.Tests.Runs;
 
-/// <summary>Kontrole danych przebiegu (RunChecks, reguły RunCheckRules) – kwoty w walucie obiektu, okresy zamknięte przed 2026/09.</summary>
+/// <summary>Reguły wbudowane – Walidacja EV (RunChecks, reguły RunCheckRules) – okresy zamknięte przed 2026/09; reguły ACTUALS – RunValidationTests.</summary>
 public sealed class RunChecksTests
 {
     private static readonly (int, int) ClosedBefore = (2026, 9);
     private static readonly (int, int) Today = (2026, 10);
-    private static readonly HashSet<string> Dictionary = new(StringComparer.OrdinalIgnoreCase) { "51105550", "92212550", "91902551" };
 
     private static RunBalanceRow Row(string wbs, string ce, int period, decimal amount, bool settlement = false, int rows = 1, string currency = "PLN",
         DateTime? created = null, int year = 2026) =>
@@ -20,73 +19,6 @@ public sealed class RunChecksTests
 
     private static List<RunIssue> Of(IReadOnlyList<RunIssue> issues, string check, CheckLevel? level = null) =>
         issues.Where(i => i.Check == check && (level is null || i.Level == level)).ToList();
-
-    [Fact]
-    public void Settled_project_nets_to_zero_and_first_run_has_nothing_to_compare()
-    {
-        RunBalanceRow[] current = [Row("A.1", "51105550", 3, 100m), Row("A.1", "91902551", 3, -100m, settlement: true), Row("A.1", "51105550", 10, 50m)];
-
-        var issues = RunChecks.Check(current, null, Dictionary, ClosedBefore, Today);
-
-        Assert.Equal(CheckLevel.Pass, Assert.Single(Of(issues, RunChecks.NetZero)).Level);   // okres 10 otwarty – poza saldem
-        Assert.Contains("Pierwszy przebieg", Assert.Single(Of(issues, RunChecks.Volume)).Message);
-        Assert.DoesNotContain(issues, i => i.Level != CheckLevel.Pass);
-        Assert.Equal(150m, RunChecks.GrossCost(current));
-    }
-
-    [Fact]
-    public void Not_netting_project_shows_elements_with_balance_and_reason()
-    {
-        RunBalanceRow[] current =
-        [
-            Row("A.1", "51105550", 3, 100m), Row("A.1", "91902551", 3, -60m, settlement: true),   // rozliczenie niepełne
-            Row("A.2", "92212550", 4, 30m),                                                        // brak rozliczenia
-            Row("A.3", "51105550", 5, 10m), Row("A.3", "91902551", 5, -25m, settlement: true),    // rozliczenie większe niż koszt
-            Row("A.4", "51105550", 6, 5m, created: new DateTime(2026, 7, 3)),
-            Row("A.4", "91902551", 6, -5m, settlement: true, created: new DateTime(2026, 7, 1)),  // koszt po rozliczeniu
-        ];
-
-        var issues = RunChecks.Check(current, null, Dictionary, ClosedBefore, Today);
-
-        var net = Of(issues, RunChecks.NetZero, CheckLevel.Error);
-        Assert.Equal(55m, net[0].Amount);   // saldo projektu
-        Assert.Equal(["A.1", "A.2", "A.3"], net.Skip(1).Select(i => i.Element));   // od największego salda
-        Assert.Contains("rozliczenie niepełne", net[1].Message);
-        Assert.Contains("brak rozliczenia", net[2].Message);
-        Assert.Contains("rozliczenie większe niż koszt", net[3].Message);
-        var late = Assert.Single(Of(issues, RunChecks.NetZero, CheckLevel.Warning));
-        Assert.Equal("A.4", late.Element);
-        Assert.Contains("po rozliczeniu z 2026-07-01", late.Message);
-    }
-
-    [Fact]
-    public void Comparison_with_previous_run_finds_less_data_deviations_new_cost_elements_and_changed_closed_periods()
-    {
-        RunBalanceRow[] previous = [Row("A.1", "51105550", 3, 100m, rows: 10), Row("A.2", "92212550", 4, 40m, rows: 5)];
-        RunBalanceRow[] current =
-        [
-            Row("A.1", "51105550", 3, 70m, rows: 3),                       // zamknięty okres zmieniony, mniej wierszy
-            Row("A.2", "92212550", 4, 40m, rows: 5),
-            Row("A.5", "99999999", 10, 7m),                                 // cost element spoza słownika
-            Row("A.2", "91902551", 10, -1m, settlement: true),              // pierwszy raz w projekcie
-            Row("A.6", "51105550", 12, 3m, currency: "USD"),                // okres przyszły, inna waluta
-            Row("", "51105550", 9, 2m),                                     // bez elementu WBS
-        ];
-
-        var issues = RunChecks.Check(current, previous, Dictionary, ClosedBefore, Today);
-
-        Assert.StartsWith("Mniej wierszy danych niż w poprzednim przebiegu: 12 < 15", Of(issues, RunChecks.Volume, CheckLevel.Error).Single().Message);
-        Assert.Equal(-30m + 7m + 3m + 2m, Of(issues, RunChecks.Volume, CheckLevel.Warning).Single().Amount);   // koszt brutto 122 < 140
-        Assert.Equal(["A.1", "A.5", "A.6", ""], Of(issues, RunChecks.Deviations).Where(i => i.Message.StartsWith("element WBS")).Select(i => i.Element));
-        Assert.Equal("99999999", Of(issues, RunChecks.NewCostElements, CheckLevel.Error).Single().Element);
-        Assert.Equal("91902551", Of(issues, RunChecks.NewCostElements, CheckLevel.Pass).Single().Element);
-        var closed = Of(issues, RunChecks.ClosedPeriods).Single();
-        Assert.Equal(("A.1", -30m), (closed.Element, closed.Amount));
-        var quality = Of(issues, RunChecks.Quality).Select(i => i.Message).ToList();
-        Assert.Contains(quality, q => q.StartsWith("Wiersze w okresach przyszłych: 1 (2026/12)"));
-        Assert.Contains(quality, q => q.StartsWith("Waluta inna niż PLN: USD"));
-        Assert.Contains(quality, q => q.StartsWith("Wiersze bez elementu WBS: 1"));
-    }
 
     /// <summary>Dane z wynikiem każdej reguły katalogu (poprzedni przebieg – previous).</summary>
     private static (RunBalanceRow[] Current, RunBalanceRow[] Previous) AllFindings() =>
@@ -120,8 +52,8 @@ public sealed class RunChecksTests
             Row("A.3", "99999999", 4, 5m),                         // spoza słownika – reguła „spoza słownika”, nie „bez kategorii”
         ];
 
-        var issues = Of(RunChecks.Check(current, null, Dictionary, ClosedBefore, Today, dictionaries: Dictionaries()), RunChecks.Dictionaries);
-        var without = RunChecks.Check(current, null, Dictionary, ClosedBefore, Today);
+        var issues = Of(RunChecks.Check(current, null, ClosedBefore, Today, dictionaries: Dictionaries()), RunChecks.Dictionaries);
+        var without = RunChecks.Check(current, null, ClosedBefore, Today);
 
         var category = Assert.Single(issues, i => i.Message.StartsWith("Cost element"));
         Assert.Equal(("92212550", CheckLevel.Warning, 42m), (category.Element, category.Level, category.Amount));
@@ -144,8 +76,8 @@ public sealed class RunChecksTests
         RunBalanceRow[] current = [.. previous.Where(r => r.CostElement == "51105550"), Row("A.1", "51105550", 10, 31m), Row("A.2", "92212550", 5, 60m),
             Row("A.3", "99999999", 10, 5m), Row("A.1", "91902551", 10, -500m, settlement: true)];
 
-        var issues = Of(RunChecks.Check(current, previous, Dictionary, ClosedBefore, Today, dictionaries: Dictionaries()), RunChecks.CostKinds);
-        var jumpAt30 = RunChecks.Check(current, previous, Dictionary, ClosedBefore, Today, dictionaries: Dictionaries(),
+        var issues = Of(RunChecks.Check(current, previous, ClosedBefore, Today, dictionaries: Dictionaries()), RunChecks.CostKinds);
+        var jumpAt30 = RunChecks.Check(current, previous, ClosedBefore, Today, dictionaries: Dictionaries(),
             settings: new Dictionary<string, RunCheckSetting> { [RunCheckRules.CostKindJump.Code] = new(true, CheckLevel.Warning, 3.2m) });
 
         var jump = Assert.Single(issues, i => i.Message.StartsWith("Skok"));
@@ -167,7 +99,7 @@ public sealed class RunChecksTests
         Assert.Equal(RunCheckRules.All.Select(r => r.Code).Order(), RunChecks.Rules.Keys.Order());
         Assert.Equal(RunCheckRules.All.Count, RunCheckRules.All.Select(r => r.Name).Distinct().Count());
         var (current, previous) = AllFindings();
-        var context = new RunCheckContext(current, previous, Dictionary, ClosedBefore, Today, "PLN", null, RunCheckRules.Default, Dictionaries());
+        var context = new RunCheckContext(current, previous, ClosedBefore, Today, RunCheckRules.Default, Dictionaries());
 
         foreach (var rule in RunCheckRules.All)
         {
@@ -183,19 +115,18 @@ public sealed class RunChecksTests
     {
         var (current, previous) = AllFindings();
         var settings = RunCheckRules.All.ToDictionary(r => r.Code, RunCheckRules.Default);
-        settings[RunCheckRules.CostElementOutside.Code] = new RunCheckSetting(false, CheckLevel.Error, null);    // wyłączona
-        settings[RunCheckRules.NoWbsElement.Code] = new RunCheckSetting(true, CheckLevel.Error, null);           // WARNING → ERROR
-        settings[RunCheckRules.NetZeroBalance.Code] = new RunCheckSetting(true, CheckLevel.Error, 20m);         // saldo 10 w tolerancji
+        settings[RunCheckRules.CostElementWithoutCategory.Code] = new RunCheckSetting(false, CheckLevel.Warning, null);   // wyłączona
+        settings[RunCheckRules.WpWithoutBudget.Code] = new RunCheckSetting(true, CheckLevel.Error, null);                // WARNING → ERROR
+        settings[RunCheckRules.CostKindJump.Code] = new RunCheckSetting(true, CheckLevel.Warning, 1000m);                // skok w progu
 
-        var defaults = RunChecks.Check(current, previous, Dictionary, ClosedBefore, Today);
-        var issues = RunChecks.Check(current, previous, Dictionary, ClosedBefore, Today, settings: settings);
+        var defaults = RunChecks.Check(current, previous, ClosedBefore, Today, dictionaries: Dictionaries());
+        var issues = RunChecks.Check(current, previous, ClosedBefore, Today, settings: settings, dictionaries: Dictionaries());
 
-        Assert.Contains(defaults, i => i.Check == RunChecks.NewCostElements && i.Level == CheckLevel.Error);
-        Assert.DoesNotContain(issues, i => i.Check == RunChecks.NewCostElements && i.Level == CheckLevel.Error);
-        Assert.Equal(CheckLevel.Error, Assert.Single(issues, i => i.Message.StartsWith("Wiersze bez elementu WBS")).Level);
-        Assert.Equal(CheckLevel.Error, Of(defaults, RunChecks.NetZero)[0].Level);
-        Assert.Equal(CheckLevel.Pass, Assert.Single(Of(issues, RunChecks.NetZero)).Level);   // netuje się; bez „koszt po rozliczeniu”
-        Assert.Contains(Of(defaults, RunChecks.NetZero), i => i.Level == CheckLevel.Warning);
+        Assert.Contains(defaults, i => i.Message.StartsWith("Cost element 92212550 bez Cost Category"));
+        Assert.DoesNotContain(issues, i => i.Message.StartsWith("Cost element 92212550 bez Cost Category"));
+        Assert.Equal(CheckLevel.Error, Assert.Single(issues, i => i.Message.Contains("bez budżetu")).Level);
+        Assert.Contains(defaults, i => i.Message.StartsWith("Skok"));
+        Assert.DoesNotContain(issues, i => i.Message.StartsWith("Skok"));
     }
 
     private static RunCheckRow Setting(string type, RunCheckRule rule, string run, bool active = true, string? level = null, decimal? threshold = null) =>
@@ -206,11 +137,11 @@ public sealed class RunChecksTests
     {
         RunCheckRow[] rows =
         [
-            Setting(RunCheckRules.AllTypes, RunCheckRules.NetZeroBalance, RunCheckRules.AnyRun, level: "WARNING", threshold: 5m),
-            Setting("CAS", RunCheckRules.NetZeroBalance, RunCheckRules.AnyRun, level: "ERROR"),
-            Setting("CAS", RunCheckRules.NetZeroBalance, RunCheckRules.ClosingRun, threshold: 0m),
-            Setting(RunCheckRules.AllTypes, RunCheckRules.NoWbsElement, RunCheckRules.MidPeriodRun, active: false),
-            Setting(RunCheckRules.AllTypes, RunCheckRules.FuturePeriods, RunCheckRules.AnyRun, level: "INFO", threshold: 3m),   // reguła bez progu
+            Setting(RunCheckRules.AllTypes, RunCheckRules.CostKindDecrease, RunCheckRules.AnyRun, level: "WARNING", threshold: 5m),
+            Setting("CAS", RunCheckRules.CostKindDecrease, RunCheckRules.AnyRun, level: "ERROR"),
+            Setting("CAS", RunCheckRules.CostKindDecrease, RunCheckRules.ClosingRun, threshold: 0m),
+            Setting(RunCheckRules.AllTypes, RunCheckRules.WpWithoutBudget, RunCheckRules.MidPeriodRun, active: false),
+            Setting(RunCheckRules.AllTypes, RunCheckRules.WpWithoutCostCenter, RunCheckRules.AnyRun, level: "INFO", threshold: 3m),   // reguła bez progu
             new(RunCheckRules.AllTypes, "nieznana reguła", RunCheckRules.AnyRun, false, null, null),
         ];
 
@@ -218,13 +149,13 @@ public sealed class RunChecksTests
         var casMid = RunChecks.Settings(rows, "CAS", isClosing: false);
         var casClosing = RunChecks.Settings(rows, "CAS", isClosing: true);
 
-        Assert.Equal(new RunCheckSetting(true, CheckLevel.Warning, 5m), sac[RunCheckRules.NetZeroBalance.Code]);
-        Assert.Equal(new RunCheckSetting(true, CheckLevel.Error, 1m), casMid[RunCheckRules.NetZeroBalance.Code]);        // próg domyślny
-        Assert.Equal(new RunCheckSetting(true, CheckLevel.Error, 0m), casClosing[RunCheckRules.NetZeroBalance.Code]);    // poziom domyślny
-        Assert.False(sac[RunCheckRules.NoWbsElement.Code].Active);
-        Assert.True(casClosing[RunCheckRules.NoWbsElement.Code].Active);
-        Assert.Equal(new RunCheckSetting(true, CheckLevel.Pass, null), sac[RunCheckRules.FuturePeriods.Code]);
-        Assert.Equal(RunCheckRules.Default(RunCheckRules.RowsDecrease), sac[RunCheckRules.RowsDecrease.Code]);
+        Assert.Equal(new RunCheckSetting(true, CheckLevel.Warning, 5m), sac[RunCheckRules.CostKindDecrease.Code]);
+        Assert.Equal(new RunCheckSetting(true, CheckLevel.Error, 1m), casMid[RunCheckRules.CostKindDecrease.Code]);        // próg domyślny
+        Assert.Equal(new RunCheckSetting(true, CheckLevel.Warning, 0m), casClosing[RunCheckRules.CostKindDecrease.Code]);  // poziom domyślny
+        Assert.False(sac[RunCheckRules.WpWithoutBudget.Code].Active);
+        Assert.True(casClosing[RunCheckRules.WpWithoutBudget.Code].Active);
+        Assert.Equal(new RunCheckSetting(true, CheckLevel.Pass, null), sac[RunCheckRules.WpWithoutCostCenter.Code]);
+        Assert.Equal(RunCheckRules.Default(RunCheckRules.CostCenterWithoutRate), sac[RunCheckRules.CostCenterWithoutRate.Code]);
         Assert.Equal(RunCheckRules.All.Count, RunChecks.Settings([], "SAC", false).Count);
     }
 
@@ -239,10 +170,10 @@ public sealed class RunChecksTests
         });
 
         var issues = PzlEv.Shared.Utils.Dictionaries.DictionaryValidator.Validate(spec,
-            [Row(RunCheckRules.NetZeroBalance, "-1"), Row(RunCheckRules.FuturePeriods, "2"), Row(RunCheckRules.CostDecrease, "100")]);
+            [Row(RunCheckRules.CostKindDecrease, "-1"), Row(RunCheckRules.WpWithoutCostCenter, "2"), Row(RunCheckRules.CostKindJump, "100")]);
 
         Assert.Contains(issues, i => i.Level == CheckLevel.Error && i.Message.StartsWith("Próg nie może być ujemny"));
-        Assert.Contains(issues, i => i.Level == CheckLevel.Warning && i.Message.Contains(RunCheckRules.FuturePeriods.Name));
+        Assert.Contains(issues, i => i.Level == CheckLevel.Warning && i.Message.Contains(RunCheckRules.WpWithoutCostCenter.Name));
         Assert.Equal(2, issues.Count(i => i.Level != CheckLevel.Pass));
     }
 }

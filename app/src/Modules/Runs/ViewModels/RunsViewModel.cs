@@ -24,6 +24,7 @@ public sealed class RunsViewModel : ObservableObject
     private readonly IRunStore _store;
     private IReadOnlyDictionary<string, RunCheckSetting> _defaults = new Dictionary<string, RunCheckSetting>();
     private IReadOnlyList<string> _reconciliations = [];
+    private IReadOnlyList<RunValidationRule> _validations = [];
     private IReadOnlyList<RunTemplate> _templates = [];
     private RunTemplate? _selectedTemplate;
     private RunStepTileViewModel? _selectedStep;
@@ -163,8 +164,10 @@ public sealed class RunsViewModel : ObservableObject
         try
         {
             var loaded = await Busy.Run<Loaded>("Wczytywanie szablonów przebiegów…",
-                () => new Loaded(_service.Load(), _service.CheckDefaults(), _store.Reconciliations().Select(r => r.Name).Distinct(StringComparer.OrdinalIgnoreCase).ToList()));
+                () => new Loaded(_service.Load(), _service.CheckDefaults(), _store.Reconciliations().Select(r => r.Name).Distinct(StringComparer.OrdinalIgnoreCase).ToList(),
+                    _service.ValidationRules().Rules));
             _defaults = loaded.Defaults;
+            _validations = loaded.Validations;
             _reconciliations = loaded.Reconciliations;
             Templates = loaded.Templates;
             OnPropertyChanged(nameof(NoTemplates));
@@ -182,7 +185,8 @@ public sealed class RunsViewModel : ObservableObject
         }
     }
 
-    private sealed record Loaded(IReadOnlyList<RunTemplate> Templates, IReadOnlyDictionary<string, RunCheckSetting> Defaults, IReadOnlyList<string> Reconciliations);
+    private sealed record Loaded(IReadOnlyList<RunTemplate> Templates, IReadOnlyDictionary<string, RunCheckSetting> Defaults, IReadOnlyList<string> Reconciliations,
+        IReadOnlyList<RunValidationRule> Validations);
 
     /// <summary>Szablon w edytorze: pola i kafelki etapów; null – pusty edytor.</summary>
     private void Edit(RunTemplate? template)
@@ -210,7 +214,7 @@ public sealed class RunsViewModel : ObservableObject
 
     private RunStepTileViewModel Tile(RunStepDefinition step)
     {
-        var tile = new RunStepTileViewModel(step, _defaults, _reconciliations);
+        var tile = new RunStepTileViewModel(step, _defaults, _reconciliations, _validations);
         tile.Changed += Touch;
         return tile;
     }
@@ -231,7 +235,7 @@ public sealed class RunsViewModel : ObservableObject
         Fill(source?.Definition.Steps ??
         [
             .. RunDefinitions.FixedSteps,
-            new(3, "Walidacja ACTUALS", RunActions.Checks, RunGates.Confirm, false, []),
+            new(3, RunValidationRules.Area, RunActions.Checks, RunGates.Confirm, false, []),
             new(4, "Zatwierdzenie analityka", RunActions.Approval, RunGates.Confirm, true, [], "Analityk zatwierdza wynik przebiegu (komentarz w dzienniku)."),
         ]);
         _loading = false;

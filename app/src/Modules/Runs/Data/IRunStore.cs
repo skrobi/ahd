@@ -38,6 +38,15 @@ public sealed record RunReconciliationRow(string ProjectType, string Name, strin
 /// <summary>Program (meta.Project): kod, nazwa, typ.</summary>
 public sealed record RunProjectRow(string Code, string Name, string ProjectType);
 
+/// <summary>Wiersz słownika „Wykluczenia” programu (puste pole – dowolna wartość).</summary>
+public sealed record RunExclusionRow(string? CostElement, string? WbsElement, string? PartnerObject)
+{
+    /// <summary>Wiersz danych przypiętych objęty wykluczeniem bez partnera (partnera nie ma w danych przypiętych).</summary>
+    public bool Covers(RunBalanceRow row) => PartnerObject is null
+        && (CostElement is null || string.Equals(CostElement, row.CostElement, StringComparison.OrdinalIgnoreCase))
+        && (WbsElement is null || string.Equals(WbsElement, row.WbsElement, StringComparison.OrdinalIgnoreCase));
+}
+
 /// <summary>Przebiegi w bazie: meta.Run, meta.RunPin, run.Balance, run.Issue (migracja 027).</summary>
 public interface IRunStore
 {
@@ -82,6 +91,12 @@ public interface IRunStore
 
     /// <summary>Słownik globalny „Reguły uzgodnień” – bieżące wiersze.</summary>
     IReadOnlyList<RunReconciliationRow> Reconciliations();
+
+    /// <summary>Reguły walidacji ACTUALS (słownik „Reguły walidacji”); pusty słownik – reguły startowe (RunValidationRules.Starters).</summary>
+    IReadOnlyList<RunValidationRule> ValidationRules();
+
+    /// <summary>Wykluczenia programu (słownik „Wykluczenia”): cost element, element WBS, partner – puste: dowolny.</summary>
+    IReadOnlyList<RunExclusionRow> Exclusions(string project);
 
     /// <summary>Uruchomienie po identyfikatorze; null – brak.</summary>
     RunPinRow? Pin(long pinId);

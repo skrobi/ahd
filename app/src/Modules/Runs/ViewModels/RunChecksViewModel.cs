@@ -54,13 +54,13 @@ public sealed class RunCheckDefaultViewModel : ObservableObject
     private static string Name(CheckLevel level) => level switch { CheckLevel.Error => "ERROR", CheckLevel.Warning => "WARNING", _ => "INFO" };
 }
 
-/// <summary>Grupa kontroli w oknie Kontrole (Walidacja ACTUALS, Spójność ze słownikami, Rodzaje kosztu).</summary>
+/// <summary>Grupa reguł wbudowanych w oknie Kontrole (Walidacja EV: Spójność ze słownikami, Rodzaje kosztu).</summary>
 public sealed record RunCheckGroup(string Name, IReadOnlyList<RunCheckDefaultViewModel> Rules);
 
 /// <summary>
-/// Okno Kontrole (ekran Przebiegi): katalog kontroli w grupach z ustawieniem domyślnym dla wszystkich programów (słownik „Kontrole
-/// przebiegu”: „Wszystkie”, „Każdy”) – szablon może je zmienić na kafelku etapu; reguły uzgodnień i ustawienia kontroli dla typów
-/// programów (tabela słownika), miary do formuł.
+/// Okno Kontrole (ekran Przebiegi): reguły walidacji ACTUALS z formułami (edytor, test na programie); reguły wbudowane „Walidacja EV”
+/// w grupach z ustawieniem domyślnym dla wszystkich programów (słownik „Kontrole przebiegu”: „Wszystkie”, „Każdy”) – szablon może je
+/// zmienić na kafelku etapu; reguły uzgodnień i ustawienia dla typów programów (tabela słownika), miary do formuł uzgodnień.
 /// </summary>
 public sealed class RunChecksViewModel : ObservableObject
 {
@@ -70,11 +70,13 @@ public sealed class RunChecksViewModel : ObservableObject
     private IReadOnlyList<RunCheckGroup> _groups = [];
     private string _status = "";
 
-    public RunChecksViewModel(RunTemplateService service, RunDictionaryEditorViewModel editor)
+    public RunChecksViewModel(RunTemplateService service, RunDictionaryEditorViewModel editor, RunValidationEditorViewModel validations)
     {
         _service = service;
         Editor = editor;
+        Validations = validations;
         Editor.Saved += () => Saved?.Invoke();
+        Validations.Saved += () => Saved?.Invoke();
         Save = new AsyncRelayCommand(DoSave, () => !Busy.IsBusy);
         Reset = new RelayCommand(p => (p as RunCheckDefaultViewModel)?.Reset());
         _ = Load();
@@ -83,6 +85,9 @@ public sealed class RunChecksViewModel : ObservableObject
     public BusyState Busy { get; } = new();
 
     public RunDictionaryEditorViewModel Editor { get; }
+
+    /// <summary>Reguły walidacji ACTUALS – formuły (edytor, test na programie).</summary>
+    public RunValidationEditorViewModel Validations { get; }
 
     public IReadOnlyList<RunCheckGroup> Groups { get => _groups; private set => SetProperty(ref _groups, value); }
 
