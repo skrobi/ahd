@@ -13,6 +13,7 @@ public sealed class SqlRunStore(SqlDatabase db) : IRunStore
     private readonly string _pins = db.Table(DbTables.RunPin);
     private readonly string _balance = db.Table(DbTables.RunBalance);
     private readonly string _issues = db.Table(DbTables.RunIssue);
+    private readonly string _steps = db.Table("meta.RunStep");
 
     private const int LongTimeout = 1800;
 
@@ -76,12 +77,12 @@ public sealed class SqlRunStore(SqlDatabase db) : IRunStore
         return connection.QueryFirstOrDefault<RunPinRow>(
             $"""
             SELECT TOP (1) {PinColumns} FROM {PinFrom}
-            WHERE r.Project = @project AND r.RunId <> @runId AND p.Status IN @finished
+            WHERE r.Project = @project AND r.RunId <> @runId AND p.Rows IS NOT NULL AND p.Status NOT IN @excluded
               AND (r.Year < (SELECT Year FROM {_runs} WHERE RunId = @runId)
                    OR (r.Year = (SELECT Year FROM {_runs} WHERE RunId = @runId) AND r.Week < (SELECT Week FROM {_runs} WHERE RunId = @runId)))
             ORDER BY r.Year DESC, r.Week DESC, p.PinNo DESC
             """,
-            new { project, runId, finished = new[] { RunStatuses.Ok, RunStatuses.Warnings, RunStatuses.Errors } });
+            new { project, runId, excluded = new[] { RunStatuses.Running, RunStatuses.Failed } });
     }
 
     public IReadOnlySet<string> CostElements(string project)
@@ -93,36 +94,17 @@ public sealed class SqlRunStore(SqlDatabase db) : IRunStore
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
     }
 
-    public void Finish(long pinId, DateTimeOffset at, string status, long? importBatchId, long rows, decimal grossCost, decimal balance,
-        IReadOnlyList<(string Check, CheckLevel Level, string? Element, string Message, decimal? Amount)> issues, string summary) =>
-        db.InTransaction((connection, transaction) =>
-        {
-            connection.Execute($"DELETE FROM {_issues} WHERE PinId = @pinId", new { pinId }, transaction);
-            connection.Execute(
-                $"INSERT INTO {_issues} (PinId, CheckName, Level, Element, Message, Amount) VALUES (@pinId, @Check, @Level, @Element, @Message, @Amount)",
-                issues.Select(i => new { pinId, i.Check, Level = i.Level.ToString(), i.Element, i.Message, i.Amount }), transaction);
-            connection.Execute(
-                $"""
-                UPDATE {_pins} SET FinishedAt = @at, Status = @status, ImportBatchId = @importBatchId, Rows = @rows, GrossCost = @grossCost,
-                    Balance = @balance, Errors = @errors, Warnings = @warnings, Summary = @summary
-                WHERE PinId = @pinId
-                """,
-                new
-                {
-                    pinId, at, status, importBatchId, rows, grossCost, balance, summary,
-                    errors = issues.Count(i => i.Level == CheckLevel.Error), warnings = issues.Count(i => i.Level == CheckLevel.Warning),
-                }, transaction);
-            return true;
-        });
-
     public void AbandonRunning(Func<long, bool> isAlive, DateTimeOffset at)
     {
         using var connection = db.Open();
         var dead = connection.Query<long>($"SELECT PinId FROM {_pins} WHERE Status = @running", new { running = RunStatuses.Running })
             .Where(id => !isAlive(id)).ToList();
-        if (dead.Count > 0)
-            connection.Execute($"UPDATE {_pins} SET Status = @abandoned, FinishedAt = @at WHERE PinId IN @dead AND Status = @running",
-                new { dead, at, abandoned = RunStatuses.Abandoned, running = RunStatuses.Running });
+        if (dead.Count == 0)
+            return;
+        connection.Execute($"UPDATE {_pins} SET Status = @abandoned, FinishedAt = @at WHERE PinId IN @dead AND Status = @running",
+            new { dead, at, abandoned = RunStatuses.Abandoned, running = RunStatuses.Running });
+        connection.Execute($"UPDATE {_steps} SET Status = @failed, FinishedAt = @at WHERE PinId IN @dead AND Status = @running",
+            new { dead, at, failed = RunStepStatuses.Failed, running = RunStepStatuses.Running });
     }
 
     public IReadOnlyDictionary<string, RunPinRow> Latest()
@@ -147,9 +129,9 @@ public sealed class SqlRunStore(SqlDatabase db) : IRunStore
     public IReadOnlyList<RunIssueRow> Issues(long pinId)
     {
         using var connection = db.Open();
-        return connection.Query<(long Id, long PinId, string CheckName, string Level, string? Element, string Message, decimal? Amount)>(
-                $"SELECT Id, PinId, CheckName, Level, Element, Message, Amount FROM {_issues} WHERE PinId = @pinId ORDER BY Id", new { pinId })
-            .Select(i => new RunIssueRow(i.Id, i.PinId, i.CheckName, Enum.Parse<CheckLevel>(i.Level), i.Element, i.Message, i.Amount))
+        return connection.Query<(long Id, long PinId, string CheckName, string Level, string? Element, string Message, decimal? Amount, int? StepNo)>(
+                $"SELECT Id, PinId, CheckName, Level, Element, Message, Amount, StepNo FROM {_issues} WHERE PinId = @pinId ORDER BY Id", new { pinId })
+            .Select(i => new RunIssueRow(i.Id, i.PinId, i.CheckName, Enum.Parse<CheckLevel>(i.Level), i.Element, i.Message, i.Amount, i.StepNo))
             .ToList();
     }
 
@@ -244,12 +226,6 @@ public sealed class SqlRunStore(SqlDatabase db) : IRunStore
             $"SELECT Code, Name, ProjectType FROM {db.Table("meta.Project")} WHERE SupersededAt IS NULL AND Active = 1 ORDER BY Code").ToList();
     }
 
-    public void SaveCheckSettings(long pinId, string json)
-    {
-        using var connection = db.Open();
-        connection.Execute($"UPDATE {_pins} SET CheckSettings = @json WHERE PinId = @pinId", new { pinId, json });
-    }
-
     public string? CheckSettingsOf(long pinId)
     {
         using var connection = db.Open();
@@ -269,6 +245,106 @@ public sealed class SqlRunStore(SqlDatabase db) : IRunStore
         return connection.Query<RunCheckRow>(
             $"SELECT ProjectType, RuleName, RunKind, IsActive, Level, Threshold FROM {db.Table("dict.RunCheck")} WHERE Project IS NULL AND SupersededAt IS NULL")
             .ToList();
+    }
+
+    public RunPinRow? Pin(long pinId)
+    {
+        using var connection = db.Open();
+        return connection.QueryFirstOrDefault<RunPinRow>($"SELECT {PinColumns} FROM {PinFrom} WHERE p.PinId = @pinId", new { pinId });
+    }
+
+    public CalendarWeek RunWeek(long runId)
+    {
+        using var connection = db.Open();
+        var run = connection.QuerySingle<(int Year, int Week, string Period, bool IsClosing)>(
+            $"SELECT Year, Week, Period, IsClosing FROM {_runs} WHERE RunId = @runId", new { runId });
+        var week = connection.QueryFirstOrDefault<CalendarWeek>(
+            $"SELECT TOP (1) Year, Week, Period, DateFrom, DateTo, IsClosing FROM {db.Table("dict.Calendar")} " +
+            "WHERE Project IS NULL AND SupersededAt IS NULL AND Year = @Year AND Week = @Week", new { run.Year, run.Week });
+        return week ?? new CalendarWeek(run.Year, run.Week, run.Period, DateTime.MinValue, DateTime.MinValue, run.IsClosing);
+    }
+
+    public (IReadOnlyList<RunDefinitionHeaderRow> Headers, IReadOnlyList<RunStepRowData> Steps, IReadOnlyList<RunStepElementRow> Elements) DefinitionRows()
+    {
+        using var connection = db.Open();
+        const string Current = "WHERE Project IS NULL AND SupersededAt IS NULL";
+        return (
+            connection.Query<RunDefinitionHeaderRow>(
+                $"SELECT Code, ProjectType, ProgramCode AS Project, RunKind, IsActive, Description FROM {db.Table("dict.RunDefinition")} {Current}").ToList(),
+            connection.Query<RunStepRowData>(
+                $"SELECT Definition, StepNo AS No, Name, Action, WarningGate, Approval, Description FROM {db.Table("dict.RunStep")} {Current}").ToList(),
+            connection.Query<RunStepElementRow>(
+                $"SELECT Definition, Step, Element, IsActive, Level, Threshold FROM {db.Table("dict.RunStepElement")} {Current}").ToList());
+    }
+
+    public void StartSteps(long pinId, string definitionJson, IReadOnlyList<RunStepDefinition> steps) =>
+        db.InTransaction((connection, transaction) =>
+        {
+            connection.Execute($"UPDATE {_pins} SET Definition = @definitionJson WHERE PinId = @pinId", new { pinId, definitionJson }, transaction);
+            connection.Execute($"DELETE FROM {_steps} WHERE PinId = @pinId", new { pinId }, transaction);
+            connection.Execute($"INSERT INTO {_steps} (PinId, StepNo, Name, Action, Status) VALUES (@pinId, @No, @Name, @Action, @Status)",
+                steps.Select((s, i) => new { pinId, s.No, s.Name, s.Action, Status = i == 0 ? RunStepStatuses.Ready : RunStepStatuses.Waiting }), transaction);
+            return true;
+        });
+
+    public string? DefinitionOf(long pinId)
+    {
+        using var connection = db.Open();
+        return connection.QueryFirstOrDefault<string?>($"SELECT Definition FROM {_pins} WHERE PinId = @pinId", new { pinId });
+    }
+
+    public IReadOnlyList<RunStepRow> Steps(long pinId)
+    {
+        using var connection = db.Open();
+        return connection.Query<RunStepRow>(
+            $"SELECT PinId, StepNo, Name, Action, Status, StartedAt, FinishedAt, ActedBy, Errors, Warnings, Comment FROM {_steps} WHERE PinId = @pinId ORDER BY StepNo",
+            new { pinId }).ToList();
+    }
+
+    public void SetStep(long pinId, int stepNo, string status, DateTimeOffset? startedAt, DateTimeOffset? finishedAt, string? actedBy, int errors, int warnings,
+        string? comment = null)
+    {
+        using var connection = db.Open();
+        connection.Execute(
+            $"""
+            UPDATE {_steps} SET Status = @status, StartedAt = @startedAt, FinishedAt = @finishedAt, ActedBy = @actedBy, Errors = @errors, Warnings = @warnings,
+                Comment = ISNULL(@comment, Comment)
+            WHERE PinId = @pinId AND StepNo = @stepNo
+            """, new { pinId, stepNo, status, startedAt, finishedAt, actedBy, errors, warnings, comment });
+    }
+
+    public void ReplaceStepIssues(long pinId, int stepNo, IReadOnlyList<(string Check, CheckLevel Level, string? Element, string Message, decimal? Amount)> issues) =>
+        db.InTransaction((connection, transaction) =>
+        {
+            connection.Execute($"DELETE FROM {_issues} WHERE PinId = @pinId AND StepNo = @stepNo", new { pinId, stepNo }, transaction);
+            connection.Execute(
+                $"INSERT INTO {_issues} (PinId, StepNo, CheckName, Level, Element, Message, Amount) VALUES (@pinId, @stepNo, @Check, @Level, @Element, @Message, @Amount)",
+                issues.Select(i => new { pinId, stepNo, i.Check, Level = i.Level.ToString(), i.Element, i.Message, i.Amount }), transaction);
+            return true;
+        });
+
+    public void SetPinState(long pinId, string status, DateTimeOffset? finishedAt, string summary)
+    {
+        using var connection = db.Open();
+        connection.Execute(
+            $"""
+            UPDATE {_pins} SET Status = @status, FinishedAt = @finishedAt, Summary = @summary,
+                Errors = (SELECT COUNT(*) FROM {_issues} WHERE PinId = @pinId AND Level = 'Error'),
+                Warnings = (SELECT COUNT(*) FROM {_issues} WHERE PinId = @pinId AND Level = 'Warning')
+            WHERE PinId = @pinId
+            """, new { pinId, status, finishedAt, summary });
+    }
+
+    public void SetPinImport(long pinId, long? importBatchId)
+    {
+        using var connection = db.Open();
+        connection.Execute($"UPDATE {_pins} SET ImportBatchId = @importBatchId WHERE PinId = @pinId", new { pinId, importBatchId });
+    }
+
+    public void SetPinBalance(long pinId, long rows, decimal grossCost, decimal balance)
+    {
+        using var connection = db.Open();
+        connection.Execute($"UPDATE {_pins} SET Rows = @rows, GrossCost = @grossCost, Balance = @balance WHERE PinId = @pinId", new { pinId, rows, grossCost, balance });
     }
 
     public string ActualsAmount(string project)

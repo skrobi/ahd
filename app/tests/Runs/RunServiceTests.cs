@@ -48,6 +48,13 @@ public sealed class RunServiceTests : IDisposable
         var pin = Assert.Single(store.Pins("PAF", 10));
         Assert.Equal((4L, first.Status), (pin.Rows, pin.Status));   // 4 z 6 wierszy pliku – Project definition 2DI473
         Assert.Equal(4, store.Balance(pin.PinId).Sum(r => r.Rows));
+        // Definicja wbudowana: import, przypięcie – zakończone; walidacja ACTUALS – błąd netowania zatrzymuje przebieg, dalsze etapy czekają.
+        Assert.Equal([RunStepStatuses.Done, RunStepStatuses.Done, RunStepStatuses.Failed, RunStepStatuses.Waiting, RunStepStatuses.Waiting, RunStepStatuses.Waiting],
+            store.Steps(pin.PinId).Select(s => s.Status));
+        Assert.Equal(RunStatuses.Blocked, pin.Status);
+        Assert.Contains("Nie wymaga potwierdzenia".ToLowerInvariant(), service.Confirm(pin.PinId, 3, "ok").Summary.ToLowerInvariant());
+        Assert.Equal(RunStepStatuses.Failed, store.Steps(pin.PinId)[2].Status);   // ponowne wykonanie bez poprawy danych – nadal błąd
+        Assert.Equal(RunStatuses.Blocked, service.Rerun(pin.PinId, 3).Status);
         var issues = store.Issues(pin.PinId);
         Assert.Contains(issues, i => i.CheckName == "Import" && i.Level == CheckLevel.Warning);              // projekt bez źródeł danych
         Assert.Contains(issues, i => i.CheckName == RunChecks.NetZero && i.Level == CheckLevel.Error && i.Element == "2DI473001001");   // dane bez rozliczenia

@@ -58,9 +58,6 @@ public interface IRunStore
     /// <summary>Cost elementy słownika Cost Category efektywnego dla projektu (globalne i zmiany projektu).</summary>
     IReadOnlySet<string> CostElements(string project);
 
-    void Finish(long pinId, DateTimeOffset at, string status, long? importBatchId, long rows, decimal grossCost, decimal balance,
-        IReadOnlyList<(string Check, CheckLevel Level, string? Element, string Message, decimal? Amount)> issues, string summary);
-
     /// <summary>Uruchomienia „w toku” bez działającego procesu → „przerwany”.</summary>
     void AbandonRunning(Func<long, bool> isAlive, DateTimeOffset at);
 
@@ -86,11 +83,40 @@ public interface IRunStore
     /// <summary>Słownik globalny „Reguły uzgodnień” – bieżące wiersze.</summary>
     IReadOnlyList<RunReconciliationRow> Reconciliations();
 
+    /// <summary>Uruchomienie po identyfikatorze; null – brak.</summary>
+    RunPinRow? Pin(long pinId);
+
+    /// <summary>Tydzień przebiegu (meta.Run) – okres i czy zamyka okres.</summary>
+    CalendarWeek RunWeek(long runId);
+
+    /// <summary>Słowniki definicji przebiegów: definicje, etapy, elementy kontrolne etapów (bieżące wiersze).</summary>
+    (IReadOnlyList<RunDefinitionHeaderRow> Headers, IReadOnlyList<RunStepRowData> Steps, IReadOnlyList<RunStepElementRow> Elements) DefinitionRows();
+
+    /// <summary>Definicja przebiegu użyta w uruchomieniu (JSON – RunWorkflowEngine.Serialize) i etapy uruchomienia (pierwszy – do wykonania).</summary>
+    void StartSteps(long pinId, string definitionJson, IReadOnlyList<RunStepDefinition> steps);
+
+    string? DefinitionOf(long pinId);
+
+    IReadOnlyList<RunStepRow> Steps(long pinId);
+
+    /// <summary>Stan etapu: status, chwile, kto, liczby wyników, komentarz (null – bez zmiany komentarza).</summary>
+    void SetStep(long pinId, int stepNo, string status, DateTimeOffset? startedAt, DateTimeOffset? finishedAt, string? actedBy, int errors, int warnings,
+        string? comment = null);
+
+    /// <summary>Wyniki kontroli etapu (poprzednie wyniki etapu usuwane – ponowne wykonanie).</summary>
+    void ReplaceStepIssues(long pinId, int stepNo, IReadOnlyList<(string Check, CheckLevel Level, string? Element, string Message, decimal? Amount)> issues);
+
+    /// <summary>Stan uruchomienia: status, zakończenie, podsumowanie; liczby błędów i ostrzeżeń – z wyników kontroli.</summary>
+    void SetPinState(long pinId, string status, DateTimeOffset? finishedAt, string summary);
+
+    /// <summary>Import źródeł uruchomienia (etap Import źródeł).</summary>
+    void SetPinImport(long pinId, long? importBatchId);
+
+    /// <summary>Zestawienie przypiętych danych (etap Przypięcie stanu): wiersze, koszt brutto, saldo okresów zamkniętych.</summary>
+    void SetPinBalance(long pinId, long rows, decimal grossCost, decimal balance);
+
     /// <summary>Aktywne programy (ekran Przebiegi).</summary>
     IReadOnlyList<RunProjectRow> Projects();
-
-    /// <summary>Ustawienia reguł kontroli użyte w uruchomieniu (JSON – RunOverview.Serialize) – META_RunPin.CheckSettings.</summary>
-    void SaveCheckSettings(long pinId, string json);
 
     /// <summary>Ustawienia reguł zapisane w uruchomieniu; null – brak zapisu.</summary>
     string? CheckSettingsOf(long pinId);

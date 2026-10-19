@@ -9,8 +9,8 @@ using PzlEv.Shared.Utils.Ui.Notifications;
 namespace PzlEv.Modules.Runs.ViewModels;
 
 /// <summary>
-/// Kontrakt IRunLauncher: przebieg projektu w tle aplikacji (osobny wątek), postęp i zakończenie na wątku UI,
-/// po zakończeniu powiadomienie Windows.
+/// Kontrakt IRunLauncher: przebieg programu w tle aplikacji (osobny wątek) – nowe uruchomienie, dalsze etapy, potwierdzenie
+/// i ponowne wykonanie etapu; postęp i zakończenie na wątku UI, po zakończeniu powiadomienie Windows.
 /// </summary>
 public sealed class RunLauncher(RunService service, IRunStore store, Func<ISourceImport?> imports) : IRunLauncher
 {
@@ -28,7 +28,22 @@ public sealed class RunLauncher(RunService service, IRunStore store, Func<ISourc
 
     public IReadOnlyList<RunIssueRow> Issues(long pinId) => store.Issues(pinId);
 
-    public async Task<string?> Start(string project)
+    public Task<string?> Start(string project) =>
+        Launch(project, (progress, cancellation) => service.Execute(project, progress, cancellation), "Przebieg uruchomiony…");
+
+    /// <summary>Dalsze etapy uruchomienia do najbliższej bramki.</summary>
+    public Task<string?> Continue(string project, long pinId) =>
+        Launch(project, (progress, cancellation) => service.Continue(pinId, progress, cancellation), "Przebieg – dalsze etapy…");
+
+    /// <summary>Potwierdzenie etapu z komentarzem, potem dalsze etapy.</summary>
+    public Task<string?> Confirm(string project, long pinId, int stepNo, string comment) =>
+        Launch(project, (progress, cancellation) => service.Confirm(pinId, stepNo, comment, progress, cancellation), $"Etap {stepNo} potwierdzony…");
+
+    /// <summary>Ponowne wykonanie etapu, potem dalsze etapy.</summary>
+    public Task<string?> Rerun(string project, long pinId, int stepNo) =>
+        Launch(project, (progress, cancellation) => service.Rerun(pinId, stepNo, progress, cancellation), $"Etap {stepNo} – ponowne wykonanie…");
+
+    private async Task<string?> Launch(string project, Func<IProgress<string>, CancellationToken, RunOutcome> work, string started)
     {
         if (!_running.TryAdd(project, true))
             return "Przebieg programu już trwa.";
@@ -47,7 +62,7 @@ public sealed class RunLauncher(RunService service, IRunStore store, Func<ISourc
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
-            // Błąd przed startem (baza, dysk sieciowy, SharePoint) – projekt nie zostaje „w toku” do restartu aplikacji.
+            // Błąd przed startem (baza, dysk sieciowy, SharePoint) – program nie zostaje „w toku” do restartu aplikacji.
             _running.TryRemove(project, out _);
             Serilog.Log.Error(ex, "Przebieg programu {Project} nie rozpoczęty", project);
             return $"Przebieg nie rozpoczęty – {ex.Message}";
@@ -59,7 +74,7 @@ public sealed class RunLauncher(RunService service, IRunStore store, Func<ISourc
             RunOutcome outcome;
             try
             {
-                outcome = service.Execute(project, progress);
+                outcome = work(progress, CancellationToken.None);
             }
             catch (Exception ex) when (ex is not OutOfMemoryException)
             {
@@ -69,11 +84,11 @@ public sealed class RunLauncher(RunService service, IRunStore store, Func<ISourc
             dispatcher?.BeginInvoke(() =>
             {
                 WindowsNotification.Show($"PZL-EV – przebieg {outcome.Code ?? project}", outcome.Summary,
-                    warning: outcome.Warnings > 0, error: outcome.Errors > 0);
+                    warning: outcome.Warnings > 0 || outcome.Status == RunStatuses.NeedsAction, error: outcome.Errors > 0);
                 Finished?.Invoke(project);
             });
         });
-        Progress?.Invoke(project, "Przebieg uruchomiony…");
+        Progress?.Invoke(project, started);
         return null;
     }
 }

@@ -11,7 +11,17 @@ public static class RunStatuses
     public const string Errors = "zakończony z błędami";
     public const string Failed = "przerwany błędem";
     public const string Abandoned = "przerwany (brak zakończenia)";
+
+    /// <summary>Przebieg etapowy wstrzymany na bramce: WARNING do potwierdzenia albo zatwierdzenie ręczne.</summary>
+    public const string NeedsAction = "wymaga akcji";
+
+    /// <summary>Przebieg etapowy zatrzymany: etap z ERROR – po poprawie „Wykonaj ponownie”.</summary>
+    public const string Blocked = "zatrzymany – błąd";
 }
+
+/// <summary>Etap uruchomienia przebiegu – meta.RunStep (status, kto, kiedy, wyniki, potwierdzenie z komentarzem).</summary>
+public sealed record RunStepRow(long PinId, int StepNo, string Name, string Action, string Status, DateTimeOffset? StartedAt, DateTimeOffset? FinishedAt,
+    string? ActedBy, int Errors, int Warnings, string? Comment);
 
 /// <summary>Uruchomienie (przypięcie stanu) przebiegu projektu – meta.Run + meta.RunPin.</summary>
 public sealed record RunPinRow(
@@ -38,7 +48,7 @@ public sealed record RunPinRow(
 }
 
 /// <summary>Wynik kontroli przebiegu – run.Issue.</summary>
-public sealed record RunIssueRow(long Id, long PinId, string CheckName, CheckLevel Level, string? Element, string Message, decimal? Amount);
+public sealed record RunIssueRow(long Id, long PinId, string CheckName, CheckLevel Level, string? Element, string Message, decimal? Amount, int? StepNo = null);
 
 /// <summary>
 /// Dane ACTUALS projektu w chwili przypięcia (run.Balance): element WBS × cost element × rok × okres × rozliczenie

@@ -25,6 +25,12 @@ public static partial class GlobalDictionaries
     public const string CasBurdenRates = "cas-burden-rates";
     public const string RunChecks = "run-checks";
     public const string RunReconciliations = "run-reconciliations";
+    public const string RunDefinitionHeaders = "run-definitions";
+    public const string RunSteps = "run-steps";
+    public const string RunStepElements = "run-step-elements";
+
+    /// <summary>Słowniki przebiegu – edycja na ekranie Przebiegi (na ekranie Słowniki ukryte).</summary>
+    public static IReadOnlyList<string> RunDictionaries { get; } = [RunDefinitionHeaders, RunSteps, RunStepElements, RunReconciliations, RunChecks];
 
     /// <summary>Kolumna słownika Cost Category z rodzajem kosztu (Hours / Materials / Other; puste – Other) – podział ACWP w strukturze.</summary>
     public const string CostKindColumn = "Rodzaj kosztu";
@@ -217,6 +223,7 @@ public static partial class GlobalDictionaries
         {
             Code = RunChecks,
             Name = "Kontrole przebiegu",
+            Hidden = true,
             Description = "Definicja przebiegu: reguły kontroli danych przebiegu (docs/pipeline-fazy.md, rozdz. 4.1) dla typu programu i wariantu przebiegu (zamykający okres / w środku okresu) – aktywna, poziom wyniku (ERROR / WARNING / INFO), próg (kwota). Wiersz typu programu ma pierwszeństwo przed „Wszystkie”, wariant przebiegu – przed „Każdy”; reguła bez wiersza – ustawienie domyślne (aktywna, poziom i próg z opisu reguły).",
             Columns =
             [
@@ -234,6 +241,7 @@ public static partial class GlobalDictionaries
         {
             Code = RunReconciliations,
             Name = "Reguły uzgodnień",
+            Hidden = true,
             Description = "Własne kontrole przebiegu bez zmiany programu: lewa strona, warunek (=, <=, >=, <>) i prawa strona z tolerancją; strony to formuły z miar programu w nawiasach kwadratowych, liczb, + - * / i nawiasów, np. [Koszt brutto] <= [BAC] * 1,1. Miary – ekran Przebiegi → Definicja przebiegu. Reguła dla typu programu (albo „Wszystkie”) i wariantu przebiegu (albo „Każdy”); wynik – kontrola „Reguły uzgodnień”: warunek niespełniony – poziom reguły, spełniony – INFO.",
             Columns =
             [
@@ -249,6 +257,59 @@ public static partial class GlobalDictionaries
                 new("Opis", ColumnType.Text),
             ],
             Rules = RunReconciliationRules,
+        },
+        new()
+        {
+            Code = RunDefinitionHeaders,
+            Name = "Definicje przebiegów",
+            Hidden = true,
+            Description = "Definicja przebiegu (workflow) – szablon etapów (słownik „Etapy przebiegów”) dla zakresu: typ programu (albo „Wszystkie”), program (puste – wszystkie programy typu) i wariant przebiegu (zamykający okres / w środku okresu / każdy). Programowi przysługuje aktywna definicja najbardziej szczegółowa: program przed typem przed „Wszystkie”, wariant przed „Każdy”; bez definicji – definicja wbudowana.",
+            Columns =
+            [
+                new("Definicja", ColumnType.Text, Key: true, CheckSimilar: true),
+                new("Typ programu", ColumnType.Choice, Required: true, Choices: RunCheckRules.ProjectTypes),
+                new("Program", ColumnType.Text),
+                new("Przebieg", ColumnType.Choice, Required: true, Choices: RunCheckRules.RunKinds),
+                new("Aktywna", ColumnType.Boolean, Required: true),
+                new("Opis", ColumnType.Text),
+            ],
+            Rules = RunDefinitionRules,
+        },
+        new()
+        {
+            Code = RunSteps,
+            Name = "Etapy przebiegów",
+            Hidden = true,
+            Description = "Etapy definicji przebiegu w kolejności: akcja (import źródeł, przypięcie stanu, kontrole – elementy kontrolne etapu, zatwierdzenie), bramka przy WARNING (potwierdzenie z komentarzem albo informacja; ERROR zawsze zatrzymuje przebieg), zatwierdzenie ręczne (przebieg czeka na analityka). Przebieg wykonuje etapy kolejno sam, do najbliższej bramki.",
+            Columns =
+            [
+                new("Definicja", ColumnType.Text, Key: true, Lookup: RunDefinitionHeaders),
+                new("Kolejność", ColumnType.Integer, Key: true),
+                new("Etap", ColumnType.Text, Required: true),
+                new("Akcja", ColumnType.Choice, Required: true, Choices: RunActions.All),
+                new("Bramka WARNING", ColumnType.Choice, Required: true, Choices: RunGates.All),
+                new("Zatwierdzenie", ColumnType.Boolean, Required: true),
+                new("Opis", ColumnType.Text),
+            ],
+            Rules = RunStepRules,
+        },
+        new()
+        {
+            Code = RunStepElements,
+            Name = "Elementy kontrolne etapów",
+            Hidden = true,
+            Description = "Elementy kontrolne etapu z akcją Kontrole: reguła katalogu kontroli przebiegu albo reguła uzgodnień („Uzgodnienie: nazwa”, „Uzgodnienie: *” – wszystkie aktywne reguły uzgodnień typu programu i wariantu); aktywna, poziom i próg (puste – ustawienie domyślne ze słownika „Kontrole przebiegu” albo z katalogu; reguła uzgodnień – jej poziom i tolerancja).",
+            Columns =
+            [
+                new("Definicja", ColumnType.Text, Key: true, Lookup: RunDefinitionHeaders),
+                new("Etap", ColumnType.Text, Key: true, Lookup: RunSteps),
+                new("Element", ColumnType.Text, Key: true, Lookup: RunReconciliations),
+                new("Aktywny", ColumnType.Boolean, Required: true),
+                new("Poziom", ColumnType.Choice, Choices: RunCheckRules.Levels),
+                new("Próg", ColumnType.Decimal),
+                new("Opis", ColumnType.Text),
+            ],
+            Rules = RunStepElementRules,
         },
     ];
 
@@ -282,6 +343,14 @@ public static partial class GlobalDictionaries
         new(Get(RunReconciliations), "dict.RunReconciliation",
             [("Typ programu", "ProjectType"), ("Nazwa", "Name"), ("Przebieg", "RunKind"), ("Aktywna", "IsActive"), ("Lewa strona", "LeftFormula"),
              ("Warunek", "Comparison"), ("Prawa strona", "RightFormula"), ("Tolerancja", "Tolerance"), ("Poziom", "Level"), ("Opis", "Description")]),
+        new(Get(RunDefinitionHeaders), "dict.RunDefinition",
+            [("Definicja", "Code"), ("Typ programu", "ProjectType"), ("Program", "ProgramCode"), ("Przebieg", "RunKind"), ("Aktywna", "IsActive"), ("Opis", "Description")]),
+        new(Get(RunSteps), "dict.RunStep",
+            [("Definicja", "Definition"), ("Kolejność", "StepNo"), ("Etap", "Name"), ("Akcja", "Action"), ("Bramka WARNING", "WarningGate"),
+             ("Zatwierdzenie", "Approval"), ("Opis", "Description")]),
+        new(Get(RunStepElements), "dict.RunStepElement",
+            [("Definicja", "Definition"), ("Etap", "Step"), ("Element", "Element"), ("Aktywny", "IsActive"), ("Poziom", "Level"), ("Próg", "Threshold"),
+             ("Opis", "Description")]),
     ];
 
     private static IEnumerable<Issue> CalendarRules(IReadOnlyList<DictRow> rows)
@@ -382,6 +451,50 @@ public static partial class GlobalDictionaries
         }
         foreach (var order in rows.Where(r => r["Kolejność"] is not null).GroupBy(r => r["Kolejność"]!).Where(g => g.Count() > 1))
             yield return Issue.Warning($"Kolejność {order.Key} ma kilka kategorii ({string.Join(", ", order.Select(r => r["Pula"]))}) – kolumny ułożone po nazwie", "Kolejność");
+    }
+
+    /// <summary>„Definicje przebiegów”: dwie aktywne definicje o tym samym zakresie (typ, program, przebieg) – ERROR (nie wiadomo, która obowiązuje).</summary>
+    private static IEnumerable<Issue> RunDefinitionRules(IReadOnlyList<DictRow> rows)
+    {
+        var active = rows.Select((r, i) => (Row: r, Index: i)).Where(x => x.Row["Aktywna"] == "tak").ToList();
+        foreach (var group in active.GroupBy(x => (Type: x.Row["Typ programu"]?.Trim().ToUpperInvariant(), Program: x.Row["Program"]?.Trim().ToUpperInvariant() ?? "",
+                     Run: x.Row["Przebieg"]?.Trim().ToUpperInvariant())).Where(g => g.Count() > 1))
+            foreach (var x in group.Skip(1))
+                yield return Issue.Error($"Aktywna definicja o tym samym zakresie co „{group.First().Row["Definicja"]}” (typ, program, przebieg) – wyłącz jedną albo zmień zakres",
+                    DictionaryValidator.RowElement(x.Index));
+    }
+
+    /// <summary>„Etapy przebiegów”: kolejność od 1, nazwy etapów definicji bez powtórzeń.</summary>
+    private static IEnumerable<Issue> RunStepRules(IReadOnlyList<DictRow> rows)
+    {
+        for (var i = 0; i < rows.Count; i++)
+            if (Int(rows[i]["Kolejność"]) is < 1)
+                yield return Issue.Error("Kolejność – liczba od 1", DictionaryValidator.RowElement(i));
+        foreach (var group in rows.Select((r, i) => (Row: r, Index: i))
+                     .GroupBy(x => (Definition: x.Row["Definicja"]?.Trim().ToUpperInvariant(), Name: x.Row["Etap"]?.Trim().ToUpperInvariant())).Where(g => g.Count() > 1))
+            foreach (var x in group.Skip(1))
+                yield return Issue.Error($"Etap „{x.Row["Etap"]}” już jest w definicji „{x.Row["Definicja"]}” – nazwa etapu wskazuje go w elementach kontrolnych",
+                    DictionaryValidator.RowElement(x.Index));
+    }
+
+    /// <summary>„Elementy kontrolne etapów”: element z katalogu albo reguła uzgodnień, próg nieujemny; próg reguły bez progu – ostrzeżenie.</summary>
+    private static IEnumerable<Issue> RunStepElementRules(IReadOnlyList<DictRow> rows)
+    {
+        for (var i = 0; i < rows.Count; i++)
+        {
+            var at = DictionaryValidator.RowElement(i);
+            var element = rows[i]["Element"]?.Trim() ?? "";
+            var rule = RunCheckRules.ByName(element);
+            if (rule is null && !RunDefinitions.IsReconciliation(element))
+                yield return Issue.Error($"Element „{element}” – reguła z katalogu kontroli albo „{RunDefinitions.ReconciliationPrefix}nazwa reguły uzgodnień”", at);
+            if (Dec(rows[i]["Próg"]) is { } threshold)
+            {
+                if (threshold < 0)
+                    yield return Issue.Error("Próg nie może być ujemny", at);
+                else if (rule is { Threshold: null })
+                    yield return Issue.Warning($"Reguła „{rule.Name}” nie ma progu – próg pominięty", at);
+            }
+        }
     }
 
     /// <summary>„Reguły uzgodnień”: formuły stron poprawne (znane miary, składnia), tolerancja nieujemna.</summary>
@@ -534,6 +647,10 @@ public static partial class GlobalDictionaries
         DepartmentRates => rows.Where(r => r["MPK"] is not null).GroupBy(r => r["MPK"]!, StringComparer.OrdinalIgnoreCase)
             .Select(g => new LookupOption(g.Key, g.Select(r => r["Department"]).FirstOrDefault(d => d is not null) is { } department ? $"{g.Key} – {department}" : g.Key))
             .OrderBy(o => o.Value, StringComparer.OrdinalIgnoreCase).ToList(),
+        // Element kontrolny etapu: reguły katalogu, wszystkie reguły uzgodnień, reguły uzgodnień po nazwie (wiersze „Reguły uzgodnień”).
+        RunReconciliations => RunDefinitions.Elements(rows.Select(r => r["Nazwa"]).OfType<string>()).Select(e => new LookupOption(e, e)).ToList(),
+        // Etap elementu kontrolnego: nazwy etapów (wszystkich definicji; definicję wskazuje kolumna Definicja).
+        RunSteps => rows.Select(r => r["Etap"]).OfType<string>().Distinct(StringComparer.OrdinalIgnoreCase).Order().Select(e => new LookupOption(e, e)).ToList(),
         _ => rows.Select(r => Get(code).KeyOf(r.Values)).Distinct().Select(k => new LookupOption(k, k)).ToList(),
     };
 

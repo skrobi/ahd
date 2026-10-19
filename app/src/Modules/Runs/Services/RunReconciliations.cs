@@ -65,10 +65,14 @@ public static class RunReconciliations
     /// miara bez wartości / dzielenie przez 0 – WARNING (reguła niesprawdzona).
     /// </summary>
     public static IReadOnlyList<RunIssue> Check(IEnumerable<RunReconciliationRow> rows, string projectType, bool isClosing,
-        IReadOnlyDictionary<string, decimal?> measures)
+        IReadOnlyDictionary<string, decimal?> measures) =>
+        CheckRules(Applicable(rows, projectType, isClosing), measures);
+
+    /// <summary>Wyniki aktywnych reguł z listy (reguły etapu przebiegu – RunWorkflowEngine.Reconciliations).</summary>
+    public static IReadOnlyList<RunIssue> CheckRules(IEnumerable<RunReconciliationRow> rules, IReadOnlyDictionary<string, decimal?> measures)
     {
         var issues = new List<RunIssue>();
-        foreach (var rule in Applicable(rows, projectType, isClosing).Where(r => r.IsActive))
+        foreach (var rule in rules.Where(r => r.IsActive))
         {
             var (left, leftError) = Side(rule.LeftFormula, measures);
             var (right, rightError) = Side(rule.RightFormula, measures);
