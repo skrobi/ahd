@@ -102,7 +102,7 @@ public sealed class RunChecksTests
         [Row("A.1", "51105550", 3, 100m, rows: 10)]
     );
 
-    /// <summary>Słowniki P2: 92212550 bez kategorii, MPK PZW30 bez stawki na 2026 (WP-2), WP-2 bez budżetu.</summary>
+    /// <summary>Słowniki P2: 92212550 bez kategorii, MPK PZW30 bez stawki na 2026 (WP-2), WP-2 bez budżetu, WP-3 bez MPK.</summary>
     private static RunDictionaryData Dictionaries() => new(
         new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase) { ["51105550"] = "Materials", ["92212550"] = null, ["91902551"] = null },
         [new("WP-1", "PZW20", true), new("WP-2", "PZW30", false), new("WP-3", null, true)],
@@ -127,8 +127,10 @@ public sealed class RunChecksTests
         Assert.Equal(("PZW30", CheckLevel.Error), (rate.Element, rate.Level));
         Assert.Contains("na rok 2026", rate.Message);
         Assert.EndsWith("WP: WP-2", rate.Message);
-        var budget = Assert.Single(issues, i => i.Message.StartsWith("WP"));
+        var budget = Assert.Single(issues, i => i.Message.Contains("bez budżetu"));
         Assert.Equal(("WP-2", CheckLevel.Warning), (budget.Element, budget.Level));
+        var noMpk = Assert.Single(issues, i => i.Message.Contains("bez MPK"));
+        Assert.Equal(("WP-3", CheckLevel.Warning), (noMpk.Element, noMpk.Level));
         Assert.Empty(Of(without, RunChecks.Dictionaries));   // bez słowników – bez wyników
     }
 

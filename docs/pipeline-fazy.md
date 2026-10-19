@@ -215,10 +215,11 @@ zmiany kodu.
 | Cost element pierwszy raz w programie | Nowe cost elementy | INFO | – |
 | Cost element bez Cost Category | Spójność ze słownikami | WARNING | – |
 | MPK bez stawki wydziału na rok | Spójność ze słownikami | ERROR | – |
+| WP bez MPK | Spójność ze słownikami | WARNING | – |
 | WP bez budżetu | Spójność ze słownikami | WARNING | – |
 | Netowanie do 0 w okresach zamkniętych | Netowanie programu do 0 | ERROR | 1,00 |
 | Koszt utworzony po rozliczeniu | Netowanie programu do 0 | WARNING | – (gdy program nie netuje się do 0) |
-| Zmiana salda okresu zamkniętego | Spójność ze słownikami (P2) | ERROR / WARNING | cost element kosztu (bez rozliczeniowych) z pustą Cost Category w słowniku efektywnym programu – WARNING; MPK WP („WP i CAM”) bez wiersza w „Stawki wydziałów” na rok bieżącego okresu (ETC Cost bez stawki) – ERROR z listą WP; WP bez BAC, BAC HOURS i BAC MATERIAL (puste albo 0) w „Harmonogram i budżet” – WARNING. Słowniki w stanie z chwili przebiegu (nie są przypinane – P1) |
+| Zmiana salda okresu zamkniętego | Spójność ze słownikami (P2) | ERROR / WARNING | cost element kosztu (bez rozliczeniowych) z pustą Cost Category w słowniku efektywnym programu – WARNING; MPK WP („WP i CAM”) bez wiersza w „Stawki wydziałów” na rok bieżącego okresu (ETC Cost bez stawki) – ERROR z listą WP; WP bez MPK w „WP i CAM” – WARNING; WP bez BAC, BAC HOURS i BAC MATERIAL (puste albo 0) w „Harmonogram i budżet” – WARNING. Słowniki w stanie z chwili przebiegu (nie są przypinane – P1) |
 | Zmiany w zamkniętych okresach | WARNING | 1,00 |
 | Ujemny koszt elementu WBS | Jakość danych | WARNING | 1,00 |
 | Wiersze w okresach przyszłych | Jakość danych | WARNING | – |
@@ -266,7 +267,7 @@ Kontrole wymagające innych danych spoza zrzutu (odbiorca rozliczenia, suma kont
 |---|---|
 | **Cel** | Nie dopuścić niespójnych danych i słowników do obliczeń. |
 | **Działanie** | Poprawność samych słowników zapewnia walidacja przy zapisie (`docs/slowniki.md`, rozdz. 5), a plików – import (`docs/zrodla-danych.md`, rozdz. 8). Tu: spójność danych projektu ze słownikami i okresem. |
-| **Wdrożone** | kontrole spójności ze słownikami w przebiegu (rozdz. 4.1): cost element spoza Cost Category (ERROR), cost element bez kategorii (WARNING), MPK WP bez stawki na rok (ERROR), WP bez budżetu (WARNING). Niewdrożone: daty księgowania względem okresu – zrzut ACTUALS nie ma daty księgowania (tylko `Created on`, które po rozliczeniu legalnie jest późniejsze; kontrola okresów przyszłych – rozdz. 4.1) i znaczenie okresu nie jest polem definicji źródła (`docs/zrodla-danych.md`, rozdz. 2); duplikaty między częściami źródła – klucz wiersza ACTUALS nieustalony (O27, O50). Programy CAS: koszt po narzutach CAS (słowniki globalne, O37 rozstrzygnięte) – ETC Cost liczy ta sama stawka MPK, więc kontrola MPK obowiązuje także w CAS (wyłączenie – słownik „Kontrole przebiegu”). |
+| **Wdrożone** | kontrole spójności ze słownikami w przebiegu (rozdz. 4.1): cost element spoza Cost Category (ERROR), cost element bez kategorii (WARNING), MPK WP bez stawki na rok (ERROR), WP bez MPK (WARNING), WP bez budżetu (WARNING). Niewdrożone: daty księgowania względem okresu – zrzut ACTUALS nie ma daty księgowania (tylko `Created on`, które po rozliczeniu legalnie jest późniejsze; kontrola okresów przyszłych – rozdz. 4.1) i znaczenie okresu nie jest polem definicji źródła (`docs/zrodla-danych.md`, rozdz. 2); duplikaty między częściami źródła – klucz wiersza ACTUALS nieustalony (O27, O50). Programy CAS: koszt po narzutach CAS (słowniki globalne, O37 rozstrzygnięte) – ETC Cost liczy ta sama stawka MPK, więc kontrola MPK obowiązuje także w CAS (wyłączenie – słownik „Kontrole przebiegu”). |
 | **Kontrole** | MPK z kosztów bez stawki na dany rok – stawki wydziałów (klucz MPK + rok) albo, w CAS, stawki CAS (ERROR); numer elementu kosztowego bez wpisu w efektywnym słowniku Cost Category (ERROR – O25; naprawa: pozycja w słowniku projektu); numer bez kategorii (WARNING); WP bez budżetu (WARNING); daty księgowania niezgodne z okresem przebiegu według znaczenia okresu w definicji źródła (ERROR); duplikaty wierszy między częściami źródła (ERROR). |
 | **Przy ERROR** | **Popraw w aplikacji** (ekran Słowniki z filtrem na problem) → **Przypnij ponownie** (P1) i waliduj. |
 | **Efekt** | Problemy przebiegu; WARNING trafiają do raportu przebiegu. |

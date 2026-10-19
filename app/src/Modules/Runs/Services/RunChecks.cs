@@ -53,6 +53,7 @@ public static class RunChecks
             [RunCheckRules.CostElementFirst.Code] = CostElementFirst,
             [RunCheckRules.CostElementWithoutCategory.Code] = CostElementWithoutCategory,
             [RunCheckRules.CostCenterWithoutRate.Code] = CostCenterWithoutRate,
+            [RunCheckRules.WpWithoutCostCenter.Code] = WpWithoutCostCenter,
             [RunCheckRules.WpWithoutBudget.Code] = WpWithoutBudget,
             [RunCheckRules.NetZeroBalance.Code] = NetZeroBalance,
             [RunCheckRules.PostedAfterSettlement.Code] = PostedAfterSettlement,
@@ -182,6 +183,12 @@ public static class RunChecks
                 .Select(g => new RunIssue(Dictionaries, s.Level, g.Key,
                     $"MPK {g.Key} bez stawki w „Stawki wydziałów” na rok {d.RateYear} – ETC Cost bez stawki; WP: " +
                     string.Join(", ", g.Select(w => w.Wp).Distinct().Take(Top)) + (g.Select(w => w.Wp).Distinct().Count() > Top ? "…" : "")));
+
+    // Spójność ze słownikami: WP bez MPK w „WP i CAM” (żaden wiersz WP nie ma MPK) – ETC Cost bez stawki.
+    private static IEnumerable<RunIssue> WpWithoutCostCenter(RunCheckContext c, RunCheckSetting s) =>
+        c.Dictionaries is not { } d ? []
+            : d.Wps.GroupBy(w => w.Wp, StringComparer.OrdinalIgnoreCase).Where(g => g.All(w => w.Mpk is null))
+                .Select(g => new RunIssue(Dictionaries, s.Level, g.Key, $"WP {g.Key} bez MPK w „WP i CAM” – ETC Cost bez stawki wydziału"));
 
     // Spójność ze słownikami: WP bez budżetu w „Harmonogram i budżet”.
     private static IEnumerable<RunIssue> WpWithoutBudget(RunCheckContext c, RunCheckSetting s) =>

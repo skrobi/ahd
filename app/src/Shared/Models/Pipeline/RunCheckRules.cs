@@ -70,6 +70,9 @@ public static class RunCheckRules
     public static RunCheckRule CostCenterWithoutRate { get; } = new("mpk-without-rate", Dictionaries, "MPK bez stawki wydziału na rok",
         "MPK WP ze słownika „WP i CAM” bez wiersza w „Stawki wydziałów” na rok bieżącego okresu – ETC Cost WP bez stawki.", CheckLevel.Error);
 
+    public static RunCheckRule WpWithoutCostCenter { get; } = new("wp-without-mpk", Dictionaries, "WP bez MPK",
+        "WP ze słownika „WP i CAM” bez MPK – ETC Cost WP bez stawki wydziału.", CheckLevel.Warning);
+
     public static RunCheckRule WpWithoutBudget { get; } = new("wp-without-budget", Dictionaries, "WP bez budżetu",
         "WP ze słownika „WP i CAM” bez BAC, BAC HOURS i BAC MATERIAL (puste albo 0) w „Harmonogram i budżet”.", CheckLevel.Warning);
 
@@ -100,7 +103,7 @@ public static class RunCheckRules
     public static IReadOnlyList<RunCheckRule> All { get; } =
     [
         RowsDecrease, CostDecrease, TopDeviations, CostElementOutside, CostElementFirst, CostElementWithoutCategory, CostCenterWithoutRate,
-        WpWithoutBudget, NetZeroBalance, PostedAfterSettlement, ClosedPeriodChanges, NegativeCost, FuturePeriods, OtherCurrency, NoWbsElement,
+        WpWithoutCostCenter, WpWithoutBudget, NetZeroBalance, PostedAfterSettlement, ClosedPeriodChanges, NegativeCost, FuturePeriods, OtherCurrency, NoWbsElement,
     ];
 
     public static RunCheckRule? ByName(string? name) => All.FirstOrDefault(r => string.Equals(r.Name, name?.Trim(), StringComparison.OrdinalIgnoreCase));
