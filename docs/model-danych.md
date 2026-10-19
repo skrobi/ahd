@@ -197,7 +197,7 @@ Bez metodologii EV; kolejne tabele dochodzą kolejnymi migracjami.
 | `DICT_Calendar`, `DICT_DepartmentRate`, `DICT_FxRate`, `DICT_CostCategory`, `DICT_Person`, `DICT_DjkRate`, `DICT_ProductionParameter` | słowniki globalne – tabela z typowanymi kolumnami na słownik; `Project` NULL = globalny (w Cost Category `Project` = zmiany w projekcie) |
 | `DICT_WpCam`, `DICT_ScheduleBudget`, `DICT_WbsCategory`, `DICT_Exclusion` | słowniki projektu (F4.3; `DICT_WbsCategory` – Kategorie WBS, migracja 019); „Cost Category – zmiany w projekcie” – `DICT_CostCategory` z kodem projektu (narzuty CAS – słowniki globalne, bez słownika projektu; O37) |
 | `DICT_ProjectSource` (026), `DICT_ProjectSetting` (028) | słowniki projektu „Źródła danych” i „Parametry projektu” |
-| `DICT_CasPool`, `DICT_CasBurdenGroup`, `DICT_CasBurdenRate`, `DICT_CasFormula` (029–034) | narzuty CAS: pule, grupy narzutowe, wskaźniki, formuły |
+| `DICT_CasPool`, `DICT_CasBurdenGroup`, `DICT_CasBurdenRate`, `DICT_CasFormula` (029–034) | narzuty CAS: kategorie, grupy narzutowe, wskaźniki, formuły |
 | `META_Run`, `META_RunPin`, `RUN_Balance`, `RUN_Issue` (027) | przebiegi (projekt + tydzień), uruchomienia (przypięcia), dane ACTUALS przypięte w uruchomieniu, wyniki kontroli przebiegu |
 
 **Dane startowe – migracja `sql/mssql/002_dane_startowe.sql`:** definicje źródeł `ACTUALS_PAF` i `ACTUALS_CES`
@@ -354,7 +354,7 @@ podaje `@Value` procedur `REP_ProjectCosts`, `REP_ProjectCostsByElement` i `RUN_
 **Migracja `sql/mssql/029_narzuty_cas.sql`:** narzuty CAS raportu kosztów CES (`docs/slowniki.md`, rozdz. 6.1):
 `DICT_CostCategory.BurdenGroup` – „Grupa narzutowa CAS” elementu kosztowego; `DICT_CasBurdenGroup` – „Grupy narzutowe
 CAS” (od migracji 031 – grupa i opis); `DICT_CasBurdenRate` – „Wskaźniki narzutu CAS”
-(pula, `ValidFrom`, `ValidTo`, `Rate DECIMAL(38,18)`; klucz projekt + pula + od). Raport liczy aplikacja
+(kategoria, `ValidFrom`, `ValidTo`, `Rate DECIMAL(38,18)`; klucz projekt + kategoria + od). Raport liczy aplikacja
 (`CasCostReport`) z wyniku `REP_ProjectCosts` – bez nowej procedury. Wymaga aplikacji 0.46.0.
 
 **Migracja `sql/mssql/030_dane_narzuty_cas.sql`** (dane startowe; od 034 tylko zapis wersji): 10 grup narzutowych i wskaźniki 2025 i 2026 z arkusza
@@ -362,21 +362,21 @@ finansów; grupa narzutowa elementów kosztowych arkusza w globalnym Cost Catego
 (grupa ustawiona wcześniej zostaje).
 
 **Migracja `sql/mssql/031_formuly_narzutow_cas.sql`:** formuły narzutów CAS jako dane (`docs/slowniki.md`, rozdz. 6.1):
-`DICT_CasPool` – „Kategorie narzutu CAS” (pula, `SortOrder`, `Kind`: Koszt / FCCOM); `DICT_CasBurdenFormula` – „Formuły
-narzutów CAS” (grupa, pula, `Basis` – składniki połączone „ + ”; klucz projekt + grupa + pula); z `DICT_CasBurdenGroup`
-usunięte kolumny pul i `BaseInGsGa` (029) – zostają grupa i opis. Wymaga aplikacji 0.47.0.
+`DICT_CasPool` – „Kategorie narzutu CAS” (kategoria, `SortOrder`, `Kind`: Koszt / FCCOM); `DICT_CasBurdenFormula` – „Formuły
+narzutów CAS” (grupa, kategoria, `Basis` – składniki połączone „ + ”; klucz projekt + grupa + kategoria); z `DICT_CasBurdenGroup`
+usunięte kolumny kategorii i `BaseInGsGa` (029) – zostają grupa i opis. Wymaga aplikacji 0.47.0.
 
-**Migracja `sql/mssql/032_dane_formuly_narzutow_cas.sql`** (dane startowe): wcześniej pule i formuły z nazwami; od 034
+**Migracja `sql/mssql/032_dane_formuly_narzutow_cas.sql`** (dane startowe): wcześniej kategorie i formuły z nazwami; od 034
 tylko zapis wersji (dane startowe narzutów CAS – 034).
 
 **Migracja `sql/mssql/033_narzuty_cas_identyfikatory.sql`:** narzuty CAS powiązane identyfikatorem (RowId), nie nazwą:
 `DICT_CasBurdenRate.PoolId` zamiast `Pool`, `DICT_CostCategory.BurdenGroupId` zamiast `BurdenGroup` (nazwy przekształcone
-na identyfikatory – nazwa szukana także w historii wierszy; wskaźnik puli spoza słownika – zamknięty), `DICT_CasFormula`
-(grupa, pula, formuła z klocków: `base`, `p:<pula>`, `r:<pula>`, `+ - * / ( )`) zamiast `DICT_CasBurdenFormula`; wskaźniki
+na identyfikatory – nazwa szukana także w historii wierszy; wskaźnik kategorii spoza słownika – zamknięty), `DICT_CasFormula`
+(grupa, kategoria, formuła z klocków: `base`, `p:<kategoria>`, `r:<kategoria>`, `+ - * / ( )`) zamiast `DICT_CasBurdenFormula`; wskaźniki
 zaokrąglone do 15 cyfr znaczących (jak w Excelu). Wymaga aplikacji 0.48.0.
 
-**Migracja `sql/mssql/034_dane_narzuty_cas.sql`** (dane startowe): 17 pul, 10 grup, wskaźniki 2025–2026, formuły grup
-i grupa narzutowa elementów kosztowych z arkusza finansów – pule i grupy dopasowane po nazwie bieżącej albo z historii
+**Migracja `sql/mssql/034_dane_narzuty_cas.sql`** (dane startowe): 17 kategorii, 10 grup, wskaźniki 2025–2026, formuły grup
+i grupa narzutowa elementów kosztowych z arkusza finansów – kategorie i grupy dopasowane po nazwie bieżącej albo z historii
 (przemianowane przez użytkownika nie są dodawane ponownie); formuły grupy tylko, gdy grupa nie ma żadnej formuły.
 
 **Migracja `sql/mssql/035_daty_rzeczywiste_wp.sql`:** kolumny `DICT_ScheduleBudget.ActualStart`, `ActualEnd` – daty

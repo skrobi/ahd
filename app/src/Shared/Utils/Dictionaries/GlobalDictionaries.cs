@@ -157,22 +157,22 @@ public static partial class GlobalDictionaries
         {
             Code = CasPools,
             Name = "Kategorie narzutu CAS",
-            Description = "Kategorie narzutu CAS – kolumny raportu kosztów CES w kolejności „Kolejność”; Rodzaj: Koszt – w TOTAL COST, FCCOM – w TOTAL FCCOM. Formuły, wskaźniki i raport wskazują pulę identyfikatorem – zmiana nazwy jest od razu widoczna wszędzie; puli używanej w formułach albo wskaźnikach nie można usunąć.",
+            Description = "Kategorie narzutu CAS – kolumny raportu kosztów CES w kolejności „Kolejność”; Rodzaj: Koszt – w TOTAL COST, FCCOM – w TOTAL FCCOM. Formuły, wskaźniki i raport wskazują kategorię identyfikatorem – zmiana nazwy jest od razu widoczna wszędzie; kategorii używanej w formułach albo wskaźnikach nie można usunąć.",
             Columns =
             [
-                new("Pula", ColumnType.Text, Key: true, CheckSimilar: true),
+                new("Kategoria", ColumnType.Text, Key: true, CheckSimilar: true),
                 new("Kolejność", ColumnType.Integer, Required: true),
                 new("Rodzaj", ColumnType.Choice, Required: true, Choices: [CasBurden.CostKind, CasBurden.FccomKind]),
                 new("Opis", ColumnType.Text),
             ],
             Rules = CasPoolRules,
-            ReferencedBy = [(CasBurdenFormulas, "Pula", CasBurden.References), (CasBurdenFormulas, "Formuła", CasBurden.References), (CasBurdenRates, "Kategoria", CasBurden.References)],
+            ReferencedBy = [(CasBurdenFormulas, "Kategoria", CasBurden.References), (CasBurdenFormulas, "Formuła", CasBurden.References), (CasBurdenRates, "Kategoria", CasBurden.References)],
         },
         new()
         {
             Code = CasBurdenGroups,
             Name = "Grupy narzutowe CAS",
-            Description = "Grupa narzutowa elementu kosztowego (kolumna „Grupa narzutowa CAS” słownika Cost Category – zapisany identyfikator grupy, zmiana nazwy jest od razu widoczna). Pule naliczane w grupie i ich formuły – przycisk „Formuły narzutów” (macierz grup i pul, edytor formuły z klocków).",
+            Description = "Grupa narzutowa elementu kosztowego (kolumna „Grupa narzutowa CAS” słownika Cost Category – zapisany identyfikator grupy, zmiana nazwy jest od razu widoczna). Kategorie naliczane w grupie i ich formuły – przycisk „Formuły narzutów” (macierz grup i kategorii, edytor formuły z klocków).",
             Columns =
             [
                 new("Grupa", ColumnType.Text, Key: true, CheckSimilar: true),
@@ -184,11 +184,11 @@ public static partial class GlobalDictionaries
         {
             Code = CasBurdenFormulas,
             Name = "Formuły narzutów CAS",
-            Description = "Formuła puli w grupie narzutowej z klocków: Base cost elements (koszt bazowy kolumny), narzuty pul, wskaźniki pul, + − × ÷ ( ). Wiersz = pula naliczana w grupie. Edycja tylko w oknie „Formuły narzutów” (macierz grup i pul).",
+            Description = "Formuła kategorii w grupie narzutowej z klocków: Base cost elements (koszt bazowy kolumny), narzuty kategorii, wskaźniki kategorii, + − × ÷ ( ). Wiersz = kategoria naliczana w grupie. Edycja tylko w oknie „Formuły narzutów” (macierz grup i kategorii).",
             Columns =
             [
                 new("Grupa", ColumnType.Text, Key: true, Lookup: CasBurdenGroups, IdLookup: true),
-                new("Pula", ColumnType.Text, Key: true, Lookup: CasPools, IdLookup: true),
+                new("Kategoria", ColumnType.Text, Key: true, Lookup: CasPools, IdLookup: true),
                 new("Formuła", ColumnType.Text, Required: true),
             ],
             Rules = CasBurden.FormulaRules,
@@ -198,7 +198,7 @@ public static partial class GlobalDictionaries
         {
             Code = CasBurdenRates,
             Name = "Wskaźniki narzutu CAS",
-            Description = "Wskaźnik puli narzutu CAS obowiązujący od – do (zwykle rok: 2026-01-01 – 2026-12-31; Do puste – bezterminowo); kategoria z listy słownika „Kategorie narzutu CAS” (zapisany identyfikator – zmiana nazwy puli jest od razu widoczna). Raport kosztów CES bierze wskaźnik obowiązujący w okresie kolumny (okres, rok).",
+            Description = "Wskaźnik kategorii narzutu CAS obowiązujący od – do (zwykle rok: 2026-01-01 – 2026-12-31; Do puste – bezterminowo); kategoria z listy słownika „Kategorie narzutu CAS” (zapisany identyfikator – zmiana nazwy kategorii jest od razu widoczna). Raport kosztów CES bierze wskaźnik obowiązujący w okresie kolumny (okres, rok).",
             Columns =
             [
                 new("Kategoria", ColumnType.Text, Key: true, Lookup: CasPools, IdLookup: true),
@@ -233,9 +233,9 @@ public static partial class GlobalDictionaries
         ]),
         new(Get(DjkRates), "dict.DjkRate", [("Grupa stanowisk", "WorkCenterGroup"), ("Udział DJK", "Share"), ("Opis", "Description")]),
         new(Get(ProductionParameters), "dict.ProductionParameter", [("Parametr", "Name"), ("Wartość", "Value"), ("Opis", "Description")]),
-        new(Get(CasPools), "dict.CasPool", [("Pula", "Pool"), ("Kolejność", "SortOrder"), ("Rodzaj", "Kind"), ("Opis", "Description")]),
+        new(Get(CasPools), "dict.CasPool", [("Kategoria", "Pool"), ("Kolejność", "SortOrder"), ("Rodzaj", "Kind"), ("Opis", "Description")]),
         new(Get(CasBurdenGroups), "dict.CasBurdenGroup", [("Grupa", "BurdenGroup"), ("Opis", "Description")]),
-        new(Get(CasBurdenFormulas), "dict.CasFormula", [("Grupa", "GroupId"), ("Pula", "PoolId"), ("Formuła", "Formula")]),
+        new(Get(CasBurdenFormulas), "dict.CasFormula", [("Grupa", "GroupId"), ("Kategoria", "PoolId"), ("Formuła", "Formula")]),
         new(Get(CasBurdenRates), "dict.CasBurdenRate", [("Kategoria", "PoolId"), ("Od", "ValidFrom"), ("Do", "ValidTo"), ("Wskaźnik", "Rate"), ("Opis", "Description")]),
     ];
 
@@ -332,11 +332,11 @@ public static partial class GlobalDictionaries
         for (var i = 0; i < rows.Count; i++)
         {
             var at = DictionaryValidator.RowElement(i);
-            if (rows[i]["Pula"] is { } pool && (pool.Contains('+') || string.Equals(pool, CasBurden.Base, StringComparison.OrdinalIgnoreCase)))
-                yield return Issue.Error($"Pula „{pool}” – nazwa nie może zawierać „+” ani być „{CasBurden.Base}”", at);
+            if (rows[i]["Kategoria"] is { } pool && (pool.Contains('+') || string.Equals(pool, CasBurden.Base, StringComparison.OrdinalIgnoreCase)))
+                yield return Issue.Error($"Kategoria „{pool}” – nazwa nie może zawierać „+” ani być „{CasBurden.Base}”", at);
         }
         foreach (var order in rows.Where(r => r["Kolejność"] is not null).GroupBy(r => r["Kolejność"]!).Where(g => g.Count() > 1))
-            yield return Issue.Warning($"Kolejność {order.Key} ma kilka pul ({string.Join(", ", order.Select(r => r["Pula"]))}) – kolumny ułożone po nazwie", "Kolejność");
+            yield return Issue.Warning($"Kolejność {order.Key} ma kilka kategorii ({string.Join(", ", order.Select(r => r["Pula"]))}) – kolumny ułożone po nazwie", "Kolejność");
     }
 
     /// <summary>„Wskaźniki narzutu CAS”: wskaźnik nieujemny (okresy obowiązywania – DictionaryValidator, Validity).</summary>
@@ -451,9 +451,9 @@ public static partial class GlobalDictionaries
             .OrderBy(o => o.Label, StringComparer.CurrentCulture)
             .ToList(),
         // Pule i grupy narzutowe CAS: zapisywany identyfikator wiersza (RowId), wyświetlana nazwa.
-        CasPools => rows.Where(r => r.RowId is not null && r["Pula"] is not null)
+        CasPools => rows.Where(r => r.RowId is not null && r["Kategoria"] is not null)
             .OrderBy(r => int.TryParse(r["Kolejność"], out var order) ? order : int.MaxValue)
-            .Select(r => new LookupOption(CasBurden.Ref(r.RowId!.Value), r["Pula"]!)).ToList(),
+            .Select(r => new LookupOption(CasBurden.Ref(r.RowId!.Value), r["Kategoria"]!)).ToList(),
         CasBurdenGroups => rows.Where(r => r.RowId is not null && r["Grupa"] is not null)
             .Select(r => new LookupOption(CasBurden.Ref(r.RowId!.Value), r["Grupa"]!)).OrderBy(o => o.Label, StringComparer.CurrentCulture).ToList(),
         // MPK ze stawek wydziałów (klucz MPK + rok) – raz na MPK, z opisem wydziału.

@@ -87,7 +87,7 @@ public static class CasFormula
                 if (!expectOperand)
                     return $"Brak operatora przed klockiem „{token.Code}” ({at}) – wstaw +, −, × albo ÷.";
                 if (token.Kind != Kind.Base && known is not null && !known.Contains(token.Id))
-                    return $"Pula usunięta ze słownika „Kategorie narzutu CAS” ({at}) – usuń klocek.";
+                    return $"Kategoria usunięta ze słownika „Kategorie narzutu CAS” ({at}) – usuń klocek.";
                 expectOperand = false;
             }
             else if (token.Kind == Kind.Operator)

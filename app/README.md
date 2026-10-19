@@ -69,11 +69,11 @@ zmieni). Brak pliku albo błąd w nim = komunikat przy starcie z nazwą pola –
 - `029_narzuty_cas.sql` – narzuty CAS raportu kosztów CES: „Grupa narzutowa CAS” w Cost Category, słowniki „Grupy narzutowe CAS”
   i „Wskaźniki narzutu CAS”;
 - `030_dane_narzuty_cas.sql` – (zastąpione przez 034) tylko zapis wersji;
-- `031_formuly_narzutow_cas.sql` – słowniki „Pule narzutu CAS” i „Formuły narzutów CAS” (podstawy pul w danych, edytor formuł);
-  grupy narzutowe bez kolumn pul;
+- `031_formuly_narzutow_cas.sql` – słowniki „Kategorie narzutu CAS” i „Formuły narzutów CAS” (podstawy kategorii w danych, edytor formuł);
+  grupy narzutowe bez kolumn kategorii;
 - `032_dane_formuly_narzutow_cas.sql` – (zastąpione przez 034) tylko zapis wersji;
-- `033_narzuty_cas_identyfikatory.sql` – narzuty CAS powiązane identyfikatorem puli / grupy zamiast nazwy; formuły z klocków (`DICT_CasFormula`);
-- `034_dane_narzuty_cas.sql` – dane startowe narzutów CAS z arkusza finansów (pule, grupy, wskaźniki, formuły, grupa elementów kosztowych);
+- `033_narzuty_cas_identyfikatory.sql` – narzuty CAS powiązane identyfikatorem kategorii / grupy zamiast nazwy; formuły z klocków (`DICT_CasFormula`);
+- `034_dane_narzuty_cas.sql` – dane startowe narzutów CAS z arkusza finansów (kategorie, grupy, wskaźniki, formuły, grupa elementów kosztowych);
 - `035_daty_rzeczywiste_wp.sql` – daty rzeczywiste WP (Actual Start / Actual Koniec) w „Harmonogram i budżet” – nadpisanie dat z produkcji;
 - `036_koszty_i_godziny_po_elementach.sql` – `REP_ProjectCostsByElement` z parametrem `@Hours`: kwota i godziny jednym odczytem;
 - `037_zestawienie_actuals.sql` – zestawienie ACTUALS po Project definition (`CAN_ActualsBalance`, liczone przy imporcie);

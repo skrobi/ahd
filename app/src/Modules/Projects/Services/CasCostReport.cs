@@ -150,7 +150,7 @@ public static partial class CasCostReport
             notes.Add($"Elementy kosztowe z grupą usuniętą ze słownika „Grupy narzutowe CAS” (bez narzutów): {string.Join(", ", unknown)}");
 
         var report = new ExcelTableWriter.ReportSheet("Koszty CES", headers, data, [blockRow, rateRow], FrozenColumns: DescriptionColumns + 1);
-        var rateSheet = new ExcelTableWriter.ReportSheet("Wskaźniki", ["Kolumna", "Pula", "Wskaźnik", "Od", "Do"], usedRates);
+        var rateSheet = new ExcelTableWriter.ReportSheet("Wskaźniki", ["Kolumna", "Kategoria", "Wskaźnik", "Od", "Do"], usedRates);
         return new Result(report, rateSheet, notes);
     }
 

@@ -33,7 +33,7 @@ Menu modułów po lewej (Pulpit, Import RABIT, Programy, Przebiegi, Słowniki, A
 | **Kreator programu** | 5 kroków (F01) | utwórz program |
 | **Przebiegi** | wszystkie przebiegi wszystkich projektów: tydzień, czy zamykający, stan, osoba | przejście do przebiegu |
 | **Przebieg** | kroki i etapy (F06), panel wybranego etapu, znacznik stanu, problemy, rewizje, dziennik | akcje etapów |
-| **Słowniki** | słowniki globalne i projektu: tabela z filtrowaniem, historia zmian (F03); struktura P1S z `PZLPROD` (tylko odczyt) | dodaj / edytuj / zamknij ważność wiersza; pobierz / wczytaj Excel; „Dodaj z HR” (Osoby); „Formuły narzutów” (narzuty CAS – macierz grupy × pule, edytor formuły z klocków, `docs/slowniki.md`, rozdz. 6.1); „Struktura P1S (PZLPROD)” |
+| **Słowniki** | słowniki globalne i projektu: tabela z filtrowaniem, historia zmian (F03); struktura P1S z `PZLPROD` (tylko odczyt) | dodaj / edytuj / zamknij ważność wiersza; pobierz / wczytaj Excel; „Dodaj z HR” (Osoby); „Formuły narzutów” (narzuty CAS – macierz grupy × kategorie, edytor formuły z klocków, `docs/slowniki.md`, rozdz. 6.1); „Struktura P1S (PZLPROD)” |
 | **Administracja** | definicje źródeł, parsery, lokalizacje RABIT, role i grupy AD (F08) | dodaj / zmień |
 | **Diagnostyka** | test stosu (runtime, pakiety, ścieżka, konto), połączenie z `PZLPROD`, wersja serwera i schematu (`docs/architektura.md`, rozdz. 8) | Migracja |
 

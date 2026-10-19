@@ -63,6 +63,6 @@ public sealed class CasFormulaDraft(long pool, IEnumerable<CasFormula.Token> tok
     /// <summary>Błąd formuły albo null (known – identyfikatory pul ze słownika).</summary>
     public string? Error(IReadOnlySet<long>? known = null) =>
         _tokens.Any(t => t.Kind == CasFormula.Kind.Pool && t.Id == Pool)
-            ? "Narzut puli nie może zależeć od niego samego – usuń klocek narzutu tej puli (wskaźnik puli jest dozwolony)."
+            ? "Narzut kategorii nie może zależeć od niego samego – usuń klocek narzutu tej kategorii (wskaźnik kategorii jest dozwolony)."
             : CasFormula.Error(_tokens, known);
 }

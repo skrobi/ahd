@@ -8,7 +8,7 @@
     <DockPanel Margin="16">
         <TextBlock DockPanel.Dock="Top" Text="Formuły narzutów CAS" Style="{StaticResource H2}" />
         <TextBlock DockPanel.Dock="Top" Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="0,0,0,10"
-                   Text="Wiersz – grupa narzutowa, kolumna – pula. Zaznaczone pole: pula naliczana w grupie. Kliknij pole, aby zbudować albo zmienić formułę z klocków (podpowiedź pokazuje formułę). Nazwy grup i pul zmienia się w ich słownikach – tu są widoczne od razu." />
+                   Text="Wiersz – grupa narzutowa, kolumna – kategoria. Zaznaczone pole: kategoria naliczana w grupie. Kliknij pole, aby zbudować albo zmienić formułę z klocków (podpowiedź pokazuje formułę). Nazwy grup i kategorii zmienia się w ich słownikach – tu są widoczne od razu." />
         <DockPanel DockPanel.Dock="Bottom" Margin="0,10,0,0">
             <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
                 <Button Content="Odrzuć zmiany" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding Discard}" />

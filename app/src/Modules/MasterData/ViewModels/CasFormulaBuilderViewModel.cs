@@ -46,9 +46,9 @@ public sealed class CasFormulaBuilderViewModel : ObservableObject
         _draft = new CasFormulaDraft(pool.Id, tokens ?? []);   // pula nienaliczana – pusta formuła
         CostBlocks = [new PaletteBlock(CasBurden.Base, CasFormula.Token.BaseCost, BlockCategory.Cost, Tip: "Koszt bazowy kolumny raportu (okres albo rok)")];
         PoolBlocks = pools.Select(p => new PaletteBlock(p.Name, CasFormula.Token.Pool(p.Id), BlockCategory.Pool, p.Id != pool.Id,
-            p.Id == pool.Id ? "Narzut tej puli – nie może wejść do własnej formuły" : $"Narzut puli {p.Name} w tym samym wierszu")).ToList();
+            p.Id == pool.Id ? "Narzut tej kategorii – nie może wejść do własnej formuły" : $"Narzut kategorii {p.Name} w tym samym wierszu")).ToList();
         RateBlocks = pools.Select(p => new PaletteBlock($"wsk. {p.Name}", CasFormula.Token.Rate(p.Id), BlockCategory.Rate,
-            Tip: $"Wskaźnik puli {p.Name} z wiersza wskaźników (słownik „Wskaźniki narzutu CAS”)")).OrderBy(b => b.Token.Id == pool.Id ? 0 : 1).ToList();
+            Tip: $"Wskaźnik kategorii {p.Name} z wiersza wskaźników (słownik „Wskaźniki narzutu CAS”)")).OrderBy(b => b.Token.Id == pool.Id ? 0 : 1).ToList();
         OperatorBlocks =
         [
             new("+", CasFormula.Token.Op('+'), BlockCategory.Operator), new("−", CasFormula.Token.Op('-'), BlockCategory.Operator),
@@ -68,7 +68,7 @@ public sealed class CasFormulaBuilderViewModel : ObservableObject
     /// <summary>Pula nie miała formuły w grupie (puste pole macierzy) – edytor zaczyna od pustej formuły.</summary>
     public bool IsNew { get; }
 
-    public string Title => IsNew ? $"Narzut {PoolName} w grupie {Group} – pula nienaliczana, nowa formuła" : $"Narzut {PoolName} w grupie {Group}";
+    public string Title => IsNew ? $"Narzut {PoolName} w grupie {Group} – kategoria nienaliczana, nowa formuła" : $"Narzut {PoolName} w grupie {Group}";
 
     public IReadOnlyList<PaletteBlock> CostBlocks { get; }
     public IReadOnlyList<PaletteBlock> PoolBlocks { get; }
@@ -118,7 +118,7 @@ public sealed class CasFormulaBuilderViewModel : ObservableObject
 
     public void End() => SetCursor(_draft.Tokens.Count);
 
-    private string Name(long id) => _names.TryGetValue(id, out var name) ? name : "(pula usunięta)";
+    private string Name(long id) => _names.TryGetValue(id, out var name) ? name : "(kategoria usunięta)";
 
     private void Change(Action action)
     {

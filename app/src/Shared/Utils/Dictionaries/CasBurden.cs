@@ -31,8 +31,8 @@ public static class CasBurden
 
     /// <summary>Pule ze słownika „Kategorie narzutu CAS” w kolejności kolumn (Kolejność, potem nazwa); wiersze zapisane (z RowId).</summary>
     public static IReadOnlyList<Pool> PoolsFrom(IEnumerable<DictRow> rows) =>
-        rows.Where(r => r.RowId is not null && r["Pula"] is not null)
-            .Select(r => new Pool(r.RowId!.Value, r["Pula"]!, int.TryParse(r["Kolejność"], out var order) ? order : int.MaxValue,
+        rows.Where(r => r.RowId is not null && r["Kategoria"] is not null)
+            .Select(r => new Pool(r.RowId!.Value, r["Kategoria"]!, int.TryParse(r["Kolejność"], out var order) ? order : int.MaxValue,
                 string.Equals(r["Rodzaj"], FccomKind, StringComparison.OrdinalIgnoreCase)))
             .OrderBy(p => p.Order).ThenBy(p => p.Name, StringComparer.OrdinalIgnoreCase)
             .ToList();
@@ -41,7 +41,7 @@ public static class CasBurden
     public static IReadOnlyList<Group> GroupsFrom(IEnumerable<DictRow> groups, IEnumerable<DictRow> formulas)
     {
         var byGroup = formulas
-            .Select(r => (Group: Id(r["Grupa"]), Pool: Id(r["Pula"]), Tokens: CasFormula.Parse(r["Formuła"])))
+            .Select(r => (Group: Id(r["Grupa"]), Pool: Id(r["Kategoria"]), Tokens: CasFormula.Parse(r["Formuła"])))
             .Where(f => f.Group is not null && f.Pool is not null && f.Tokens is not null)
             .GroupBy(f => f.Group!.Value)
             .ToDictionary(g => g.Key, g => (IReadOnlyDictionary<long, IReadOnlyList<CasFormula.Token>>)g
@@ -116,11 +116,11 @@ public static class CasBurden
         foreach (var (pool, tokens) in group.Formulas)
         {
             if (!index.TryGetValue(pool, out var p))
-                notes.Add($"Grupa {group.Name}: formuła puli usuniętej ze słownika „Kategorie narzutu CAS” – pominięta");
+                notes.Add($"Grupa {group.Name}: formuła kategorii usuniętej ze słownika „Kategorie narzutu CAS” – pominięta");
             else if (CasFormula.Error(tokens, known) is { } error)
-                notes.Add($"Grupa {group.Name}, pula {pools[p].Name}: {error} – bez narzutu");
+                notes.Add($"Grupa {group.Name}, kategoria {pools[p].Name}: {error} – bez narzutu");
             else if (cycles.Contains(pool))
-                notes.Add($"Grupa {group.Name}: narzut puli {pools[p].Name} zależy od niego samego (zapętlenie formuł) – bez narzutu");
+                notes.Add($"Grupa {group.Name}: narzut kategorii {pools[p].Name} zależy od niego samego (zapętlenie formuł) – bez narzutu");
             else
                 list.Add((p, tokens));
         }
@@ -139,12 +139,12 @@ public static class CasBurden
             else if (CasFormula.Error(tokens) is { } error)
                 yield return Issue.Error(error, DictionaryValidator.RowElement(i));
         }
-        foreach (var group in rows.Where(r => Id(r["Grupa"]) is not null && Id(r["Pula"]) is not null).GroupBy(r => Id(r["Grupa"])!.Value))
+        foreach (var group in rows.Where(r => Id(r["Grupa"]) is not null && Id(r["Kategoria"]) is not null).GroupBy(r => Id(r["Grupa"])!.Value))
         {
-            var formulas = group.Select(r => (Pool: Id(r["Pula"])!.Value, Tokens: CasFormula.Parse(r["Formuła"])))
+            var formulas = group.Select(r => (Pool: Id(r["Kategoria"])!.Value, Tokens: CasFormula.Parse(r["Formuła"])))
                 .Where(f => f.Tokens is not null).GroupBy(f => f.Pool).ToDictionary(f => f.Key, f => f.First().Tokens!);
             foreach (var pool in Cycles(formulas).Order())
-                yield return Issue.Error("Narzut puli zależy od niego samego (zapętlenie formuł) – usuń klocek puli z formuły", $"grupa {group.Key} / pula {pool}");
+                yield return Issue.Error("Narzut kategorii zależy od niego samego (zapętlenie formuł) – usuń klocek kategorii z formuły", $"grupa {group.Key} / kategoria {pool}");
         }
     }
 
@@ -161,7 +161,7 @@ public static class CasBurden
         var removed = new List<DictRow>();
         foreach (var change in changes)
         {
-            var index = working.FindIndex(r => Id(r["Grupa"]) == change.Group && Id(r["Pula"]) == change.Pool);
+            var index = working.FindIndex(r => Id(r["Grupa"]) == change.Group && Id(r["Kategoria"]) == change.Pool);
             if (change.Tokens is null)
             {
                 if (index >= 0)
@@ -173,7 +173,7 @@ public static class CasBurden
             }
             var values = new Dictionary<string, string?>
             {
-                ["Grupa"] = Ref(change.Group), ["Pula"] = Ref(change.Pool), ["Formuła"] = CasFormula.Serialize(change.Tokens),
+                ["Grupa"] = Ref(change.Group), ["Kategoria"] = Ref(change.Pool), ["Formuła"] = CasFormula.Serialize(change.Tokens),
             };
             if (index >= 0)
                 working[index] = new DictRow(working[index].RowId, working[index].Version, values);
