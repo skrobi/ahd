@@ -88,7 +88,8 @@ zmiana zakresu zadania w trakcie realizacji wymaga uzgodnienia.
 | [F5.3 Zmiana po przypięciu](F5.3-zmiana-po-przypieciu.md) | Runs | F5.2 | – | do zrobienia |
 | [F5.4 P2 Walidacja](F5.4-p2-walidacja.md) | Runs | F5.2 | O25 | w toku – P0/P1 i kontrole ACTUALS (RunService, RunChecks; migracje 027/028) |
 | [F5.5 Z Zamknięcie okresu](F5.5-z-zamkniecie-okresu.md) | Runs | F8.2 | – | do zrobienia |
-| [F5.6 Ekrany Przebiegi i Przebieg](F5.6-ekrany-przebiegi-i-przebieg.md) | Runs | F5.1–F5.4 | – | w toku – ekran Przebiegi: macierz kontroli i definicja przebiegu |
+| [F5.6 Ekrany Przebiegi i Przebieg](F5.6-ekrany-przebiegi-i-przebieg.md) | Runs | F5.1–F5.4 | – | w toku – szablony przebiegów (kafelki), przebieg w programie (etapy, macierz, porównanie), Zmiany ACWP |
+| [F5.7 Reguły walidacji w SQL – jeden edytor](F5.7-reguly-walidacji-sql.md) | Runs | F5.4, F5.6 | O52, O53, O54 | do zrobienia – zakres uzgodniony 2026-10-20 |
 
 ## F6. Uzgodnienie (P3, P4)
 

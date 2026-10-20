@@ -477,3 +477,6 @@ Zamrożonego przebiegu zmiany nie dotyczą.
 | O33 | Element CES z kosztem bez przypisania (spoza nakładki albo bez WP) w przebiegu zamykającym: czy dopuścić zamknięcie, czy wymagać przypisania (ERROR – P3)? Rekomendacja: wymagać przypisania |
 | O34 | CAM nie odesłał pliku w przebiegu zamykającym: blokada etapu (dziś) czy przyjęcie wartości z produkcji z oznaczeniem pochodzenia? |
 | O50 | Kontrole przebiegu wymagające kolumn spoza zrzutu ACTUALS: numer dokumentu CO i pozycja (stały klucz porównania przebiegów), odbiorca rozliczenia (PA, centrum kosztów, środek trwały w budowie), suma kontrolna projektu i okresu z niezależnego raportu SAP |
+| O52 | Reguły walidacji w SQL (F5.7): wystarczy blokada w aplikacji (tylko SELECT, transakcja wycofywana, limity), czy osobny login bazy tylko do odczytu (DBA)? |
+| O53 | Reguły walidacji w SQL (F5.7): sposób pokazywania błędów i analizy wyników w programie (tabela kolumn zapytania, Excel, porównanie uruchomień) – do uzgodnienia |
+| O54 | Reguły walidacji w SQL (F5.7): stare słowniki „Kontrole przebiegu” (047), „Reguły uzgodnień” (049), „Reguły walidacji” z formułami (051) – zostawić nieużywane czy usunąć; czy migracja 051 była wykonana na TEST |
