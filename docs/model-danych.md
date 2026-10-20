@@ -482,6 +482,13 @@ Wykluczeniach, CAS po narzutach – zapisuje aplikacja przy przypięciu i przed 
 i `DICT_RunStepElement.Level` / `Threshold` (050).
 Wymaga aplikacji 0.59.0.
 
+**Migracja `sql/mssql/052_dane_reguly_i_przebiegi.sql` (dane startowe):** 22 reguły startowe w `DICT_RunValidation` (13 Walidacja
+ACTUALS, 8 Walidacja EV, przykładowe uzgodnienie; treść jak `RunRules.Starters` – test `SqlPresetsTests`; reguła o tej samej nazwie
+zostaje), szablony przebiegów „Wewnętrzny” (Wszystkie) i „CAS” w `DICT_RunDefinition` / `DICT_RunStep` / `DICT_RunStepElement`
+(etapy jak definicja wbudowana; szablon o tej nazwie zostaje; aktywny, gdy typ nie ma innego aktywnego szablonu), usunięcie
+elementów etapów „Uzgodnienie: …” (historia zostaje). Wiersze `RecordedBy = N'migracja 052 – reguły i szablony startowe'`. Wymaga
+aplikacji 0.59.0.
+
 `META_SourceFile.CanonicalStatus`: „utworzone” – dane kanoniczne zapisane i sprawdzone (widoczne dla odczytów),
 „w toku” – zapis wierszy trwa (odczyty pomijają plik; po awarii wpis i wiersze są usuwane), inna wartość – powód
 braku danych (źródło bez parsera).

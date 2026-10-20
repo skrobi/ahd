@@ -271,7 +271,7 @@ reguła (także niezapisana) na ostatnim uruchomieniu wybranego programu z przyp
 uruchomienia), bez zapisu wyników: tabela kolumn zwróconych przez SQL i opis wyniku; błąd SQL Server z numerem linii; nieznane kolumny
 w opisie wyniku.
 
-Reguły startowe (obowiązują, dopóki słownik jest pusty; te same nieprawidłowości co dawne reguły z formułami i reguły wbudowane – testy
+Reguły startowe (migracja 052 zapisuje je do słownika razem z szablonami „Wewnętrzny” i „CAS”; bez niej obowiązują, dopóki słownik jest pusty; te same nieprawidłowości co dawne reguły z formułami i reguły wbudowane – testy
 na bazie `RunRulesSqlTests`):
 
 | Reguła | Poziom | Dane | Logika |
