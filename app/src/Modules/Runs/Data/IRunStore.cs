@@ -63,6 +63,9 @@ public interface IRunStore
     /// <summary>Pliki ACTUALS z wierszami programu (Project definition nakładki) – najnowsze wersje zaimportowane do asOf (informacja przypięcia).</summary>
     IReadOnlyList<RunPinFile> PinFiles(string project, DateTimeOffset asOf);
 
+    /// <summary>Słowniki używane w przebiegu zmienione po chwili since (wiersze programu i globalne): słownik, liczba wierszy, ostatnia zmiana.</summary>
+    IReadOnlyList<RunDictionaryChange> DictionaryChanges(string project, DateTimeOffset since);
+
     IReadOnlyList<RunBalanceRow> Balance(long pinId);
 
     /// <summary>Ostatnie zakończone uruchomienie wcześniejszego przebiegu projektu (poprzedni tydzień z danymi); null – pierwszy przebieg.</summary>

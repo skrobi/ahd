@@ -443,7 +443,7 @@ Kontrole wymagające innych danych spoza zrzutu (odbiorca rozliczenia, suma kont
 
 | Zdarzenie | Zachowanie |
 |---|---|
-| **Zmiana po przypięciu** – nowe wersje plików, zmiany słowników | Baner w przebiegu: co się zmieniło, kto, kiedy, liczba zmian. **Kontynuuj na przypiętym stanie** – decyzja w dzienniku, baner znika dla tych zmian. **Przypnij ponownie** – nowy znacznik stanu (P1); etapy od P2 – Nieaktualne. |
+| **Zmiana po przypięciu** – nowe wersje plików, zmiany słowników | Wdrożone w wersji informacyjnej (F5.3): w zakładce Przebieg, dla ostatniego uruchomienia (nie w toku), baner – nowe wersje plików ACTUALS z danymi programu zaimportowane po przypięciu (plik, import) i słowniki przebiegu zmienione po przypięciu (Cost Category, Wykluczenia, WP i CAM, Harmonogram i budżet, Stawki wydziałów, Kursy walut, Reguły walidacji – liczba wierszy, kto, kiedy; `RunOverview.ChangesSincePin`). Bez decyzji i unieważniania etapów: przebieg liczy na przypiętym stanie; słowniki – „Wykonaj ponownie” etapu walidacji, nowe pliki – „Nowy przebieg” (kolejne przypięcie). |
 | **Kontynuacja przez inną osobę** | Każdy Analityk może wykonać dowolną akcję w dowolnym przebiegu. Ekran przebiegu pokazuje, kto ostatnio pracował; każda akcja jest w dzienniku z kontem AD. |
 
 Zamrożonego przebiegu zmiany nie dotyczą.

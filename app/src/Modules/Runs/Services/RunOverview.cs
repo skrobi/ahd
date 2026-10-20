@@ -194,6 +194,25 @@ public static class RunOverview
             .OrderByDescending(r => r.Level).ThenByDescending(r => r.Problems).ThenBy(r => r.Name, StringComparer.CurrentCulture).ToList();
 
     /// <summary>
+    /// Informacja o zmianach po przypięciu (docs/pipeline-fazy.md, rozdz. 5 – wersja informacyjna): nowe wersje plików ACTUALS z danymi
+    /// programu (zaimportowane po przypięciu) i zmienione słowniki przebiegu; null – bez zmian. Przebieg liczy dalej na przypiętym stanie.
+    /// </summary>
+    public static string? ChangesSincePin(RunPinRow pin, DateTimeOffset pinnedAt, IReadOnlyList<RunPinFile> files, IReadOnlyList<RunDictionaryChange> dictionaries)
+    {
+        static string Time(DateTimeOffset value) => value.ToLocalTime().ToString("yyyy-MM-dd HH:mm", System.Globalization.CultureInfo.InvariantCulture);
+        var newFiles = files.Where(f => f.ImportedAt > pinnedAt).OrderBy(f => f.FileName, StringComparer.OrdinalIgnoreCase).ToList();
+        if (newFiles.Count == 0 && dictionaries.Count == 0)
+            return null;
+        var parts = new List<string>();
+        if (newFiles.Count > 0)
+            parts.Add($"nowe pliki ACTUALS: {string.Join(", ", newFiles.Select(f => $"{f.FileName} (import {Time(f.ImportedAt)})"))}");
+        if (dictionaries.Count > 0)
+            parts.Add($"zmienione słowniki: {string.Join(", ", dictionaries.Select(d => $"{d.Dictionary} ({d.Rows} wierszy, {d.LastBy}, {Time(d.LastAt)})"))}");
+        return $"Od przypięcia uruchomienia {pin.Code} #{pin.PinNo} ({Time(pinnedAt)}): {string.Join("; ", parts)}. Przebieg liczy na przypiętym stanie "
+               + "(reguły walidacji czytają słowniki przy wykonaniu etapu – „Wykonaj ponownie”); nowe pliki ACTUALS – „Nowy przebieg”.";
+    }
+
+    /// <summary>
     /// Tabela wyniku reguły: kolumny zapytania w kolejności z wierszy (Details; bez Problem i Wskazowka – osobno), wiersze z problemem –
     /// kolumna Problem albo opis wyniku, wskazówka – kolumna Wskazowka albo (gdy problem z kolumny) opis wyniku. Wynik bez wiersza
     /// zapytania (OK reguły, kontrole etapów) – problem = opis. Kolumny liczbowe – wszystkie niepuste wartości są liczbami.

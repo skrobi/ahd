@@ -68,3 +68,6 @@ public sealed record RunBalanceRow(
 
 /// <summary>Plik ACTUALS z danymi programu w chwili przypięcia (najnowsza wersja do tej chwili): nazwa, data raportu w RABIT, import.</summary>
 public sealed record RunPinFile(long FileId, string FileName, DateTimeOffset ReportAt, DateTimeOffset ImportedAt, long? BatchId);
+
+/// <summary>Zmiana słownika po chwili przypięcia (informacja w przebiegu): słownik, liczba zmienionych wierszy, ostatnia zmiana – kiedy, kto.</summary>
+public sealed record RunDictionaryChange(string Dictionary, int Rows, DateTimeOffset LastAt, string LastBy);

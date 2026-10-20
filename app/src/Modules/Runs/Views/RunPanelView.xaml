@@ -105,6 +105,11 @@
                              Foreground="{StaticResource Info}" Background="{StaticResource Surface}" />
             </StackPanel>
         </Border>
+        <!-- Zmiany po przypięciu (docs/pipeline-fazy.md, rozdz. 5) – tylko informacja -->
+        <Border Background="{StaticResource WarnSoft}" CornerRadius="6" Padding="12,8" Margin="0,0,0,8"
+                Visibility="{Binding HasPinChanges, Converter={StaticResource BoolToVisibility}}">
+            <TextBlock partials:CopyText.Enabled="True" Text="{Binding PinChanges}" TextWrapping="Wrap" />
+        </Border>
         <TextBlock partials:CopyText.Enabled="True" Text="{Binding Notice}" Style="{StaticResource MutedText}" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,0,0,4" />
         <TextBlock partials:CopyText.Enabled="True" Text="{Binding Definition}" Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="0,0,0,8" />
         <TextBlock Style="{StaticResource MutedText}" Text="Brak uruchomień przebiegu programu – „Nowy przebieg”." TextWrapping="Wrap"

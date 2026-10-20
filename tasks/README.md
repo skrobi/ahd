@@ -75,7 +75,7 @@ zmiana zakresu zadania w trakcie realizacji wymaga uzgodnienia.
 | [F4.2 Nakładka Performance Objectives](F4.2-nakladka-performance-objectives.md) | Projects | F4.1, F3.2 | – | zrobione |
 | [F4.3 Słowniki projektu](F4.3-slowniki-projektu.md) | Projects / MasterData | F1.1, F4.2 | O24, O37 | zrobione |
 | [F4.4 Kreator projektu](F4.4-kreator-projektu.md) | Projects | F4.1–F4.3 | O23 | zrobione |
-| [F4.5 Gotowość projektu i ekrany Projekty / Projekt](F4.5-gotowosc-projektu-i-ekrany-projekty-projekt.md) | Projects | F4.4 | – | zrobione – historia przebiegów po F5 |
+| [F4.5 Gotowość projektu i ekrany Projekty / Projekt](F4.5-gotowosc-projektu-i-ekrany-projekty-projekt.md) | Projects | F4.4 | – | zrobione; gotowość usunięta 2026-10-20 – wymagania sprawdzają reguły etapów przebiegu |
 | [F4.6 Ekran Projekt – zakładki i struktura projektu](F4.6-ekran-projektu-zakladki-i-struktura.md) | Projects | F4.5 | – | zrobione – wskaźniki EV po F8; test ekranu na Windows |
 | [F4.7 Projekt CAS – ETC, EAC i budżet z narzutami CAS i kursem CAS](F4.7-cas-etc-eac-z-narzutami.md) | Projects | F4.6 | O51 | do zrobienia – ACWP CAS po narzutach wdrożony (045) |
 
@@ -85,7 +85,7 @@ zmiana zakresu zadania w trakcie realizacji wymaga uzgodnienia.
 |---|---|---|---|---|
 | [F5.1 P0 Uruchomienie przebiegu](F5.1-p0-uruchomienie-przebiegu.md) | Runs | F0.6, F4.5, F1.2 | O36 | w toku – P0/P1 i kontrole ACTUALS (RunService, reguły walidacji w SQL – F5.7; migracje 027/028) |
 | [F5.2 P1 Przypięcie stanu](F5.2-p1-przypiecie-stanu.md) | Runs | F5.1, F2.3, F3.2 | O30, O45 | w toku – P0/P1 i kontrole ACTUALS (RunService, reguły walidacji w SQL – F5.7; migracje 027/028) |
-| [F5.3 Zmiana po przypięciu](F5.3-zmiana-po-przypieciu.md) | Runs | F5.2 | – | do zrobienia |
+| [F5.3 Zmiana po przypięciu](F5.3-zmiana-po-przypieciu.md) | Runs | F5.2 | – | zrobione – wersja informacyjna (baner zmian) |
 | [F5.4 P2 Walidacja](F5.4-p2-walidacja.md) | Runs | F5.2 | O25 | w toku – P0/P1 i kontrole ACTUALS (RunService, reguły walidacji w SQL – F5.7; migracje 027/028) |
 | [F5.5 Z Zamknięcie okresu](F5.5-z-zamkniecie-okresu.md) | Runs | F8.2 | – | do zrobienia |
 | [F5.6 Ekrany Przebiegi i Przebieg](F5.6-ekrany-przebiegi-i-przebieg.md) | Runs | F5.1–F5.4 | – | w toku – szablony przebiegów (kafelki), przebieg w programie (etapy, macierz, porównanie), Zmiany ACWP |

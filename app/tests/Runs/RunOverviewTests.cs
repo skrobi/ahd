@@ -153,4 +153,20 @@ public sealed class RunOverviewTests
         Assert.Null(RunOverview.ActualsScope(Issue(Details(("ElementWBS", null), ("Wiersze", 2m))), Kind));
         Assert.Null(RunOverview.ActualsScope(Issue(null), Kind));
     }
+
+    [Fact]
+    public void Changes_since_pin_list_new_actuals_files_and_changed_dictionaries_or_nothing()
+    {
+        var pinnedAt = new DateTimeOffset(2026, 10, 20, 9, 0, 0, TimeSpan.Zero);
+        var pin = new RunPinRow(5, 1, "R-PAF-2026-10-T43", "PAF", 2, pinnedAt.AddMinutes(-5), "u", pinnedAt, RunStatuses.NeedsAction, null, 4, 0, 0, 0, 0, null, null);
+        RunPinFile File(string name, DateTimeOffset imported) => new(1, name, imported.AddHours(-8), imported, 7);
+
+        Assert.Null(RunOverview.ChangesSincePin(pin, pinnedAt, [File("ACTUALS_PAF_01.csv", pinnedAt.AddHours(-1))], []));   // plik sprzed przypięcia
+        var changes = RunOverview.ChangesSincePin(pin, pinnedAt, [File("ACTUALS_PAF_01.csv", pinnedAt.AddHours(-1)), File("ACTUALS_PAF_02.csv", pinnedAt.AddHours(2))],
+            [new RunDictionaryChange("Cost Category", 3, pinnedAt.AddHours(1), "INTL\\x")])!;
+        Assert.StartsWith("Od przypięcia uruchomienia R-PAF-2026-10-T43 #2", changes);
+        Assert.Contains("nowe pliki ACTUALS: ACTUALS_PAF_02.csv", changes);
+        Assert.DoesNotContain("ACTUALS_PAF_01.csv", changes);
+        Assert.Contains("zmienione słowniki: Cost Category (3 wierszy, INTL\\x", changes);
+    }
 }

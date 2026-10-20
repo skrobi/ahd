@@ -85,6 +85,35 @@ public sealed class SqlRunStore(SqlDatabase db) : IRunStore
             """, new { project, asOf }, commandTimeout: LongTimeout).ToList();
     }
 
+    /// <summary>Słowniki czytane przez przebieg (dane „ev”, reguły walidacji): tabela → nazwa na ekranie.</summary>
+    private static readonly (string Table, string Name)[] RunDictionaries =
+    [
+        ("dict.CostCategory", "Cost Category"), ("dict.Exclusion", "Wykluczenia"), ("dict.WpCam", "WP i CAM"), ("dict.ScheduleBudget", "Harmonogram i budżet"),
+        ("dict.DepartmentRate", "Stawki wydziałów"), ("dict.FxRate", "Kursy walut"), ("dict.RunValidation", "Reguły walidacji"),
+    ];
+
+    public IReadOnlyList<RunDictionaryChange> DictionaryChanges(string project, DateTimeOffset since)
+    {
+        using var connection = db.Open();
+        var changes = new List<RunDictionaryChange>();
+        foreach (var (table, name) in RunDictionaries)
+        {
+            // Zmiana wiersza = nowa wersja (RecordedAt) albo zamknięcie (SupersededAt) po chwili since.
+            var rows = connection.Query<(long RowId, DateTimeOffset At, string By)>(
+                $"""
+                SELECT RowId, RecordedAt, RecordedBy FROM {db.Table(table)} WHERE (Project = @project OR Project IS NULL) AND RecordedAt > @since
+                UNION ALL
+                SELECT RowId, SupersededAt, SupersededBy FROM {db.Table(table)} WHERE (Project = @project OR Project IS NULL) AND SupersededAt > @since
+                """, new { project, since }).ToList();
+            if (rows.Count > 0)
+            {
+                var last = rows.MaxBy(r => r.At);
+                changes.Add(new RunDictionaryChange(name, rows.Select(r => r.RowId).Distinct().Count(), last.At, last.By ?? ""));
+            }
+        }
+        return changes;
+    }
+
     public IReadOnlyList<RunBalanceRow> Balance(long pinId)
     {
         using var connection = db.Open();

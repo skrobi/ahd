@@ -76,6 +76,7 @@ public sealed class RunPanelViewModel : ObservableObject, IDisposable
     private string _comment = "";
     private string _progress = "";
     private string _notice = "";
+    private string? _pinChanges;
     private DateTime? _runStarted;
     private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromSeconds(1) };
     private string? _error;
@@ -274,6 +275,19 @@ public sealed class RunPanelViewModel : ObservableObject, IDisposable
 
     public bool IsRunning => _runStarted is not null;
 
+    /// <summary>Zmiany po przypięciu ostatniego uruchomienia (nowe pliki ACTUALS, słowniki) – informacja; null – bez zmian.</summary>
+    public string? PinChanges
+    {
+        get => _pinChanges;
+        private set
+        {
+            if (SetProperty(ref _pinChanges, value))
+                OnPropertyChanged(nameof(HasPinChanges));
+        }
+    }
+
+    public bool HasPinChanges => _pinChanges is not null;
+
     /// <summary>Komunikat ostatniej akcji (np. powód, dla którego przebieg nie ruszył).</summary>
     public string Notice { get => _notice; private set => SetProperty(ref _notice, value); }
 
@@ -435,6 +449,7 @@ public sealed class RunPanelViewModel : ObservableObject, IDisposable
         _allIssues = [];
         Steps = [];
         Definition = "";
+        PinChanges = null;
         if (pin is null)
         {
             ShowIssues();
@@ -462,11 +477,30 @@ public sealed class RunPanelViewModel : ObservableObject, IDisposable
                            ?? Steps.FirstOrDefault(s => s.Row.Status != RunStepStatuses.Done)
                            ?? Steps.LastOrDefault();
             ShowIssues();
+            _ = LoadPinChanges(pin, steps);
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
             Logger.Error(ex, "Uruchomienie {Pin}", pin.PinId);
             Error = $"Nie udało się wczytać uruchomienia: {ex.Message}";
+        }
+    }
+
+    // Zmiany po przypięciu – tylko ostatnie uruchomienie, nie w toku (w tle, bez paska; błąd odczytu – bez informacji).
+    private async Task LoadPinChanges(RunPinRow pin, IReadOnlyList<RunStepRow> steps)
+    {
+        if (!IsLatest || pin.Status == RunStatuses.Running || steps.FirstOrDefault(s => s.Action == RunActions.Pin) is not { Status: RunStepStatuses.Done, FinishedAt: { } pinnedAt })
+            return;
+        try
+        {
+            var changes = await Task.Run(() =>
+                RunOverview.ChangesSincePin(pin, pinnedAt, _store.PinFiles(Project, DateTimeOffset.Now), _store.DictionaryChanges(Project, pinnedAt)));
+            if (ReferenceEquals(pin, _selectedPin))
+                PinChanges = changes;
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            Logger.Warning(ex, "Zmiany po przypięciu {Pin}", pin.PinId);
         }
     }
 
