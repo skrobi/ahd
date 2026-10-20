@@ -14,6 +14,24 @@ public sealed record RunIssueView(RunIssueRow Issue, AcwpChangesRequest? Changes
     public string LevelText => RunOverview.LevelText(Issue);
 }
 
+/// <summary>
+/// Wynik reguły (albo kontroli etapu) w uruchomieniu: nazwa, najgorszy poziom, liczba problemów (wiersze wyniku i wyniki inne niż OK),
+/// wyniki.
+/// </summary>
+public sealed record RunRuleResultView(string Name, CheckLevel Level, string LevelText, int Problems, IReadOnlyList<RunIssueRow> Issues)
+{
+    public string CountText => Problems == 0 ? "" : Problems.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+    /// <summary>Kolor poziomu (LevelBrushConverter): crit, warn, info, ok.</summary>
+    public string Tone => Level switch { CheckLevel.Error => "crit", CheckLevel.Warning => "warn", _ => LevelText == "INFO" ? "info" : "ok" };
+}
+
+/// <summary>Wiersz wyniku reguły: wynik, problem i wskazówka (kolumny Problem / Wskazowka albo opis wyniku), wartości pozostałych kolumn zapytania.</summary>
+public sealed record RunResultRow(RunIssueRow Issue, string LevelText, string Problem, string? Hint, IReadOnlyList<string> Values);
+
+/// <summary>Wynik reguły jako tabela: kolumny zapytania (bez Problem i Wskazowka) i wiersze.</summary>
+public sealed record RunResultTable(IReadOnlyList<string> Columns, IReadOnlyList<RunResultRow> Rows);
+
 /// <summary>Kolumna macierzy kontroli: uruchomienie przebiegu (kod tygodnia i numer, start, stan).</summary>
 public sealed record RunMatrixColumn(long PinId, string Label, string Detail);
 
@@ -156,6 +174,77 @@ public static class RunOverview
         if (Value("CostElement") is { } costElement)
             return new(project, CostElement: costElement, PinId: issue.PinId, Scope: $"{issue.CheckName}: cost element {costElement}");
         return new(project, PinId: issue.PinId, Scope: issue.CheckName);
+    }
+
+    /// <summary>
+    /// Wyniki etapu pogrupowane po regule (kontroli): od najgorszego poziomu i największej liczby problemów, potem po nazwie.
+    /// </summary>
+    public static IReadOnlyList<RunRuleResultView> RuleResults(IEnumerable<RunIssueRow> issues) =>
+        issues.GroupBy(i => i.CheckName)
+            .Select(g =>
+            {
+                var worst = g.OrderByDescending(i => i.Level).ThenByDescending(i => i.Details is not null).First();
+                return new RunRuleResultView(g.Key, worst.Level, LevelText(worst), g.Count(i => i.Level != CheckLevel.Pass || i.Details is not null),
+                    g.OrderByDescending(i => i.Level).ThenBy(i => i.Id).ToList());
+            })
+            .OrderByDescending(r => r.Level).ThenByDescending(r => r.Problems).ThenBy(r => r.Name, StringComparer.CurrentCulture).ToList();
+
+    /// <summary>
+    /// Tabela wyniku reguły: kolumny zapytania w kolejności z wierszy (Details; bez Problem i Wskazowka – osobno), wiersze z problemem –
+    /// kolumna Problem albo opis wyniku, wskazówka – kolumna Wskazowka albo (gdy problem z kolumny) opis wyniku. Wynik bez wiersza
+    /// zapytania (OK reguły, kontrole etapów) – problem = opis.
+    /// </summary>
+    public static RunResultTable ResultTable(IReadOnlyList<RunIssueRow> issues)
+    {
+        var details = issues.Select(i => RunRules.ReadDetails(i.Details)).ToList();
+        static bool Special(string column) => string.Equals(column, RunRules.ProblemColumn, StringComparison.OrdinalIgnoreCase)
+                                              || string.Equals(column, RunRules.HintColumn, StringComparison.OrdinalIgnoreCase);
+        var columns = details.SelectMany(d => d.Select(c => c.Column)).Where(c => !Special(c)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        var rows = issues.Select((issue, index) =>
+        {
+            var values = details[index].ToDictionary(d => d.Column, d => d, StringComparer.OrdinalIgnoreCase);
+            string? Text(string column) => values.TryGetValue(column, out var v) ? v.Number is { } n ? RunRules.Format(n) : v.Text : null;
+            var problem = Text(RunRules.ProblemColumn) is { Length: > 0 } fromColumn ? fromColumn : null;
+            var hint = Text(RunRules.HintColumn) is { Length: > 0 } fromHint ? fromHint : problem is null ? null : issue.Message;
+            return new RunResultRow(issue, LevelText(issue), problem ?? issue.Message, hint, columns.Select(c => Text(c) ?? "").ToList());
+        }).ToList();
+        return new RunResultTable(columns, rows);
+    }
+
+    /// <summary>
+    /// Zakres linii ACTUALS wiersza wyniku reguły z jego kolumn: ElementWBS, CostElement (albo RodzajKosztu – cost elementy rodzaju:
+    /// costElementsOfKind), okres – RokOkres albo Okres w postaci „RRRR/OO”, albo Rok i Okres liczbowe. Wiersz bez elementu WBS, cost
+    /// elementu i rodzaju – null (brak zrzutu). Description – opis zakresu.
+    /// </summary>
+    public static (RunActualsScope Scope, string Description)? ActualsScope(RunIssueRow issue, Func<string, IReadOnlyCollection<string>> costElementsOfKind)
+    {
+        var details = RunRules.ReadDetails(issue.Details);
+        if (details.Count == 0)
+            return null;
+        (string? Text, decimal? Number) Value(string column) =>
+            details.FirstOrDefault(d => string.Equals(d.Column, column, StringComparison.OrdinalIgnoreCase)) is var d && d.Column is not null ? (d.Text, d.Number) : (null, null);
+        var wbs = Value("ElementWBS").Text is { Length: > 0 } w ? w : null;
+        var costElement = Value("CostElement").Text is { Length: > 0 } c ? c : null;
+        var kind = costElement is null && Value("RodzajKosztu").Text is { Length: > 0 } k && RunCostKinds.All.Contains(k) ? k : null;
+        if (wbs is null && costElement is null && kind is null)
+            return null;
+        (int Year, int Period)? period = null;
+        foreach (var column in new[] { "RokOkres", "Okres" })
+            if (period is null && Value(column).Text is { } text && System.Text.RegularExpressions.Regex.Match(text, @"^(\d{4})/(\d{2})$") is { Success: true } m)
+                period = (int.Parse(m.Groups[1].Value), int.Parse(m.Groups[2].Value));
+        if (period is null && Value("Rok").Number is { } year && Value("Okres").Number is { } month)
+            period = ((int)year, Math.Min((int)month, 12));
+        var parts = new List<string>();
+        if (wbs is not null)
+            parts.Add($"ElementWBS = {wbs}");
+        if (costElement is not null)
+            parts.Add($"CostElement = {costElement}");
+        if (kind is not null)
+            parts.Add($"RodzajKosztu = {kind}");
+        if (period is { } p)
+            parts.Add($"okres {p.Year}/{p.Period:00}");
+        return (new RunActualsScope(issue.PinId, wbs, costElement is not null ? [costElement] : kind is not null ? costElementsOfKind(kind) : null,
+            period?.Year, period?.Period), string.Join(" · ", parts));
     }
 
     // „R-PAF-2026-10-T41” → „2026-10 T41”.

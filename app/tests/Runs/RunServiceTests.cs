@@ -75,6 +75,21 @@ public sealed class RunServiceTests : IDisposable
         Assert.StartsWith("linia 3: ", templates.TestRule(new RunRule("x", CheckLevel.Error, true, "SELECT ElementWBS\nFROM biezace\nWHERE Brak = 1"), "PAF").Result.Error);
         Assert.Equal(["Brak"], templates.TestRule(new RunRule("x", CheckLevel.Error, true, "SELECT ElementWBS FROM biezace", "{Brak} {elementwbs}"), "PAF").UnknownColumns);
 
+        // Linie ACTUALS wiersza wyniku: zakres z kolumn wiersza (netowanie – element WBS), stan plików z przypięcia.
+        var net = issues.First(i => i.CheckName == NetZero && i.Element == "2DI473001001");
+        var (scope, description) = RunOverview.ActualsScope(net, _ => [])!.Value;
+        Assert.Equal("ElementWBS = 2DI473001001", description);
+        var asOf = store.Steps(pin.PinId)[1].FinishedAt!.Value;
+        var lines = store.ActualsLines(scope, asOf, "ValueObjCrcy", 500);
+        var balance = store.Balance(pin.PinId).Where(r => r.WbsElement == "2DI473001001").ToList();
+        Assert.Equal((balance.Sum(r => r.Rows), balance.Sum(r => r.Amount)), (lines.Count, lines.Sum));
+        Assert.All(lines.Rows, l => Assert.Equal("2DI473001001", l.WbsElement));
+        var program = store.ActualsLines(new RunActualsScope(pin.PinId, null, null, null, null), asOf, "ValueObjCrcy", 1);
+        Assert.Equal((4, 1), (program.Count, program.Rows.Count));   // elementy WBS programu (4 z 6 wierszy pliku), pierwsza linia wg |kwoty|
+        var byElement = store.ActualsLines(new RunActualsScope(pin.PinId, null, [lines.Rows[0].CostElement!], lines.Rows[0].FiscalYear, lines.Rows[0].Period),
+            asOf, "ValueObjCrcy", 500);
+        Assert.Contains(byElement.Rows, l => l.RowNumber == lines.Rows[0].RowNumber);
+
         // Tydzień później: nowa wersja pliku z dodatkowym wierszem – porównanie z przebiegiem tygodnia 40.
         _services.Clock.Advance(TimeSpan.FromDays(7));
         File.AppendAllText(file, "2DI473;2DI473001003;51105550;x;x;PLN;10,00;PLN;10,00;USD;2,50;0,000;;;;;;;;2026;2026-03-31;3;\r\n");

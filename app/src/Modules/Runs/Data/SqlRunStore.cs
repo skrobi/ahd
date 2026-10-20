@@ -344,23 +344,49 @@ public sealed class SqlRunStore(SqlDatabase db) : IRunStore
 
     public RunLines ActualsLines(string wbsElement, string costElement, int year, int period, DateTimeOffset asOf, string amountField, int top)
     {
+        var lines = ActualsLines(null, wbsElement, [costElement], year, period, asOf, amountField, top, exactPeriod: true);
+        return new RunLines(lines.Rows.Select(r => new RunLineRow(r.FileName, r.RowNumber, r.CreatedOn, r.Amount, r.Quantity, r.CostElementName, r.CoObjectName,
+            r.PartnerObject, r.PurchaseOrderNumber, r.InvoiceNumber, r.OriginalOrderNumber)).ToList(), lines.Count, lines.Sum);
+    }
+
+    public RunActualsLines ActualsLines(RunActualsScope scope, DateTimeOffset asOf, string amountField, int top) =>
+        ActualsLines(scope.PinId, scope.WbsElement, scope.CostElements, scope.Year, scope.Period, asOf, amountField, top, exactPeriod: false);
+
+    // Linie ACTUALS z najnowszych wersji plików do asOf: element WBS (null – elementy WBS danych przypiętych w uruchomieniu pinId),
+    // cost elementy, rok, okres (exactPeriod false – okres 12 obejmuje 13–16, jak RokOkres reguł).
+    private RunActualsLines ActualsLines(long? pinId, string? wbsElement, IReadOnlyCollection<string>? costElements, int? year, int? period, DateTimeOffset asOf,
+        string amountField, int top, bool exactPeriod)
+    {
         using var connection = db.Open();
         var parser = SqlCanonical.CurrentParser(connection, db, "ACTUALS") ?? throw new InvalidOperationException("Nie ma parsera ACTUALS.");
         // Pole parsera bez slotu (usunięte z parsera) – NULL: warunek bez wierszy, kolumna pusta.
         string Slot(string field) => SqlCanonical.SlotOrNull(parser, field) is var slot && slot == "NULL" ? "NULL" : "r." + slot;
         string Text(string field) => Slot(field) is var slot && slot == "NULL" ? "NULL" : $"CAST({slot} AS NVARCHAR(400))";
         string Number(string field) => Slot(field) is var slot && slot == "NULL" ? "NULL" : $"TRY_CONVERT(DECIMAL(28,8), {slot})";
+        string Integer(string field) => Slot(field) is var slot && slot == "NULL" ? "NULL" : $"TRY_CONVERT(INT, {slot})";
+        var periodValue = exactPeriod ? Integer("Period") : $"CASE WHEN {Integer("Period")} > 12 THEN 12 ELSE {Integer("Period")} END";
+        var conditions = new List<string>
+        {
+            wbsElement is not null ? $"{Slot("WbsElement")} = @wbsElement"
+                : $"{Slot("WbsElement")} IN (SELECT WbsElement FROM {_balance} WHERE PinId = @pinId AND WbsElement <> N'')",
+        };
+        if (costElements is not null)
+            conditions.Add($"{Slot("CostElement")} IN @costElements");
+        if (year is not null)
+            conditions.Add($"{Integer("FiscalYear")} = @year");
+        if (period is not null)
+            conditions.Add($"{periodValue} = @period");
         var from =
             $"""
             FROM {db.Table("can.LatestFiles")}('ACTUALS', NULL, @asOf) f
             JOIN {db.Table(DbTables.CanonicalRow)} r ON r.FileId = f.FileId AND r.ParserId = @parserId
-            WHERE {Slot("WbsElement")} = @wbsElement AND {Slot("CostElement")} = @costElement
-              AND TRY_CONVERT(INT, {Slot("FiscalYear")}) = @year AND TRY_CONVERT(INT, {Slot("Period")}) = @period
+            WHERE {string.Join(" AND ", conditions)}
             """;
-        var args = new { asOf, parserId = parser.ParserId, wbsElement, costElement, year, period, top };
-        var rows = connection.Query<RunLineRow>(
+        var args = new { asOf, parserId = parser.ParserId, pinId, wbsElement, costElements = costElements?.ToArray() ?? [], year, period, top };
+        var rows = connection.Query<RunActualsLine>(
             $"""
-            SELECT TOP (@top) f.FileName, r.RowNumber, {Text("CreatedOn")} AS CreatedOn, {Number(amountField)} AS Amount, {Number("TotalQuantity")} AS Quantity,
+            SELECT TOP (@top) {Text("WbsElement")} AS WbsElement, {Text("CostElement")} AS CostElement, {Integer("FiscalYear")} AS FiscalYear, {Integer("Period")} AS Period,
+                   f.FileName, r.RowNumber, {Text("CreatedOn")} AS CreatedOn, {Number(amountField)} AS Amount, {Number("TotalQuantity")} AS Quantity,
                    {Text("CostElementName")} AS CostElementName, {Text("CoObjectName")} AS CoObjectName, {Text("PartnerObject")} AS PartnerObject,
                    {Text("PurchaseOrderNumber")} AS PurchaseOrderNumber, {Text("InvoiceNumber")} AS InvoiceNumber, {Text("OriginalOrderNumber")} AS OriginalOrderNumber
             {from}
@@ -368,7 +394,7 @@ public sealed class SqlRunStore(SqlDatabase db) : IRunStore
             """, args, commandTimeout: LongTimeout).ToList();
         var (count, sum) = connection.QuerySingle<(int, decimal)>(
             $"SELECT COUNT(*), ISNULL(SUM({Number(amountField)}), 0) {from}", args, commandTimeout: LongTimeout);
-        return new RunLines(rows, count, sum);
+        return new RunActualsLines(rows, count, sum);
     }
 
     public IReadOnlyList<RunProjectRow> Projects()

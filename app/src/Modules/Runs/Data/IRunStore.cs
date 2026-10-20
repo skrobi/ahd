@@ -22,6 +22,20 @@ public sealed record RunLineRow(string FileName, int RowNumber, string? CreatedO
 /// <summary>Linie źródłowe komórki: pierwsze linie wg |kwoty| oraz liczba i suma wszystkich.</summary>
 public sealed record RunLines(IReadOnlyList<RunLineRow> Rows, int Count, decimal Sum);
 
+/// <summary>
+/// Zakres zrzutu linii ACTUALS (wynik reguły – kolumny wiersza): element WBS (null – elementy WBS danych przypiętych w uruchomieniu
+/// PinId), cost elementy (null – wszystkie), rok i okres (null – wszystkie; okres 12 obejmuje 13–16).
+/// </summary>
+public sealed record RunActualsScope(long PinId, string? WbsElement, IReadOnlyCollection<string>? CostElements, int? Year, int? Period);
+
+/// <summary>Linia ACTUALS zrzutu: element WBS, cost element, rok, okres i pola linii źródłowej.</summary>
+public sealed record RunActualsLine(string? WbsElement, string? CostElement, int? FiscalYear, int? Period, string FileName, int RowNumber, string? CreatedOn,
+    decimal? Amount, decimal? Quantity, string? CostElementName, string? CoObjectName, string? PartnerObject, string? PurchaseOrderNumber, string? InvoiceNumber,
+    string? OriginalOrderNumber);
+
+/// <summary>Zrzut linii ACTUALS: pierwsze linie wg |kwoty| oraz liczba i suma wszystkich.</summary>
+public sealed record RunActualsLines(IReadOnlyList<RunActualsLine> Rows, int Count, decimal Sum);
+
 /// <summary>Program (meta.Project): kod, nazwa, typ.</summary>
 public sealed record RunProjectRow(string Code, string Name, string ProjectType);
 
@@ -72,6 +86,12 @@ public interface IRunStore
     /// kwota z pola amountField; pierwsze top linii wg |kwoty|.
     /// </summary>
     RunLines ActualsLines(string wbsElement, string costElement, int year, int period, DateTimeOffset asOf, string amountField, int top);
+
+    /// <summary>
+    /// Linie ACTUALS zakresu (wynik reguły – „Linie ACTUALS”) z najnowszych wersji plików zaimportowanych do asOf, kwota z pola amountField;
+    /// pierwsze top linii wg |kwoty|, liczba i suma wszystkich.
+    /// </summary>
+    RunActualsLines ActualsLines(RunActualsScope scope, DateTimeOffset asOf, string amountField, int top);
 
     /// <summary>Reguły walidacji (słownik „Reguły walidacji”); pusty słownik – reguły startowe (RunRules.Starters).</summary>
     IReadOnlyList<RunRule> Rules();

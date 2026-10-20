@@ -84,11 +84,15 @@ public static partial class RunRules
                    SUM(z.Kwota) AS Saldo,
                    SUM(CASE WHEN z.Rozliczeniowy = 0 THEN z.Kwota ELSE 0 END) AS Koszt,
                    SUM(CASE WHEN z.Rozliczeniowy = 1 THEN z.Kwota ELSE 0 END) AS Rozliczenie,
-                   CASE WHEN SUM(CASE WHEN z.Rozliczeniowy = 1 THEN z.Kwota ELSE 0 END) = 0
-                          THEN N'brak rozliczenia (reguła rozliczenia, element statystyczny albo brak cost elementu „Rozliczeniowy” w słowniku)'
+                   CASE WHEN SUM(CASE WHEN z.Rozliczeniowy = 1 THEN z.Kwota ELSE 0 END) = 0 THEN N'brak rozliczenia'
                         WHEN ABS(SUM(CASE WHEN z.Rozliczeniowy = 1 THEN z.Kwota ELSE 0 END)) > ABS(SUM(CASE WHEN z.Rozliczeniowy = 0 THEN z.Kwota ELSE 0 END))
-                          THEN N'rozliczenie większe niż koszt (storno po rozliczeniu?)'
-                        ELSE N'rozliczenie niepełne' END AS Przyczyna,
+                          THEN N'rozliczenie większe niż koszt'
+                        ELSE N'rozliczenie niepełne' END AS Problem,
+                   CASE WHEN SUM(CASE WHEN z.Rozliczeniowy = 1 THEN z.Kwota ELSE 0 END) = 0
+                          THEN N'reguła rozliczenia, element statystyczny albo brak cost elementu „Rozliczeniowy” w słowniku'
+                        WHEN ABS(SUM(CASE WHEN z.Rozliczeniowy = 1 THEN z.Kwota ELSE 0 END)) > ABS(SUM(CASE WHEN z.Rozliczeniowy = 0 THEN z.Kwota ELSE 0 END))
+                          THEN N'storno kosztu po rozliczeniu?'
+                        ELSE N'sprawdź regułę rozliczenia elementu' END AS Wskazowka,
                    MAX(CASE WHEN z.Kwota <> 0 THEN z.RokOkres END) AS OstatniOkres,
                    MAX(p.SaldoProgramu) AS SaldoProgramu
             FROM zamkniete z
@@ -98,7 +102,7 @@ public static partial class RunRules
             HAVING ABS(SUM(z.Kwota)) > 1
             ORDER BY ABS(SUM(z.Kwota)) DESC, z.ElementWBS
             """,
-            "{ElementWBS}: saldo {Saldo} (koszt {Koszt}, rozliczenie {Rozliczenie}) – {Przyczyna}; ostatni okres z ruchem {OstatniOkres}; saldo programu {SaldoProgramu}",
+            "{ElementWBS}: saldo {Saldo} (koszt {Koszt}, rozliczenie {Rozliczenie}) – {Problem} ({Wskazowka}); ostatni okres z ruchem {OstatniOkres}; saldo programu {SaldoProgramu}",
             "Program nie netuje się do 0 w okresach zamkniętych (saldo programu > 1) – 10 elementów WBS z największym saldem i przyczyna."),
         new("Koszt utworzony po rozliczeniu", CheckLevel.Warning, true,
             """

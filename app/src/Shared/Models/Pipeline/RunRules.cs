@@ -91,6 +91,12 @@ public static partial class RunRules
         new("harmonogram", "Harmonogram i budżet programu", ["WP", "BAC", "BacHours", "BacMaterial", "Waluta"]),
     ];
 
+    /// <summary>Kolumny wyniku z własnym znaczeniem w programie (podpowiedź w edytorze).</summary>
+    public static RunRuleTable ResultColumns { get; } = new("kolumny wyniku",
+        "Opcjonalne kolumny o znaczeniu w zakładce Przebieg programu: Problem i Wskazowka – problem wiersza (zamiast opisu wyniku); "
+        + "ElementWBS, CostElement, RodzajKosztu, RokOkres (albo Rok i Okres) – zakres linii ACTUALS wiersza i „Pokaż zmiany”",
+        ["Problem", "Wskazowka", "ElementWBS", "CostElement", "RodzajKosztu", "RokOkres"]);
+
     /// <summary>Parametry zapytania (wartości uruchomienia).</summary>
     public static IReadOnlyList<RunRuleTable> Parameters { get; } =
     [
@@ -101,6 +107,13 @@ public static partial class RunRules
         new("@TypProgramu", "Typ programu (WEWNETRZNY, SAC, CAS)", []),
         new("@Program", "Kod programu", []),
     ];
+
+    /// <summary>
+    /// Kolumny wyniku z problemem wiersza i wskazówką (opcjonalne): w programie zamiast opisu wyniku – różne przyczyny w wierszach
+    /// jednej reguły (np. netowanie: rozliczenie niepełne / większe niż koszt / brak rozliczenia).
+    /// </summary>
+    public const string ProblemColumn = "Problem";
+    public const string HintColumn = "Wskazowka";
 
     /// <summary>Kolumny wyniku wskazujące zakres okna „Zmiany ACWP” („Pokaż zmiany”) i element wyniku – w tej kolejności.</summary>
     public static IReadOnlyList<string> ElementColumns { get; } = ["ElementWBS", "CostElement", "RodzajKosztu", "WP", "MPK"];

@@ -135,7 +135,9 @@ Lista kontrolna na ekranie projektu:
 - Po zatrzymaniu na bramce albo zakończeniu: powiadomienie systemowe Windows z liczbą błędów i ostrzeżeń; stan na liście
   projektów i w zakładce **Przebieg** programu: wybór uruchomienia, etapy ze statusem (Oczekuje, Do wykonania, W toku,
   Zakończony, Wymaga akcji, Błąd, Nieaktualny), opis etapu, bramka, reguły etapu, komentarz potwierdzenia; wyniki
-  wybranego etapu (poziom – ERROR, WARNING, INFO, OK; reguła; element; opis wyniku) z „Pokaż zmiany”. Akcje (tylko ostatnie uruchomienie): **Dalsze etapy** – do najbliższej bramki;
+  wybranego etapu po regułach (poziom, liczba problemów); wybrana reguła – kontekst sprawdzenia (co sprawdza, dane, zakres
+  uruchomienia), wynik zapytania z kolumnami Problem i Wskazówka, linie ACTUALS zaznaczonego wiersza (zakres z kolumn wiersza),
+  „Wynik do Excela”, „Pokaż zmiany” (`docs/pipeline-fazy.md`, rozdz. 4.1). Akcje (tylko ostatnie uruchomienie): **Dalsze etapy** – do najbliższej bramki;
   **Potwierdź i dalej** – etap „Wymaga akcji” (WARNING przy bramce „Potwierdzenie” albo zatwierdzenie) z wymaganym komentarzem
   (dziennik), potem dalsze etapy; **Wykonaj ponownie** – etap po poprawie danych lub słowników (wcześniejsze etapy zakończone;
   późniejsze – Nieaktualne). Etap z ERROR – przebieg stoi do ponownego wykonania.
@@ -144,7 +146,7 @@ Lista kontrolna na ekranie projektu:
   klik w komórkę – wyniki w uruchomieniu z „Pokaż zmiany”; **Porównanie uruchomień** – „było” i „jest” (domyślnie dwa ostatnie
   zakończone; zamiana), wiersze wyników tej samej reguły dopasowane po wartościach kolumn tekstowych: nowy, zmieniony (poziom,
   liczba wierszy, kolumny liczbowe), rozwiązany, bez zmian („Tylko zmiany”), różnice kolumn liczbowych (było → jest), „Pokaż
-  zmiany”; przycisk **Zmiany ACWP**. Sposób pokazywania błędów i analizy wyników – do uzgodnienia (O53).
+  zmiany”; przycisk **Zmiany ACWP**.
 - Przebieg programu: szablon wybrany w kreatorze albo w Konfiguracji („Parametry programu” → Przebieg), bez wyboru – szablon
   domyślny dla typu, bez szablonów – definicja wbudowana; nazwa i źródło wyboru nad etapami. Uruchomienie zapisuje definicję
   przebiegu, z którą liczyło (migracja 050). Przebieg zamykający okres i w środku okresu – ta sama definicja (oznaczenie

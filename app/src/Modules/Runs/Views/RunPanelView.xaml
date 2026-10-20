@@ -149,30 +149,65 @@
                                      AutomationProperties.Name="Komentarz potwierdzenia" ToolTip="Komentarz potwierdzenia etapu (wymagany)" />
                         </DockPanel>
 
-                        <DataGrid Style="{StaticResource DataTable}" ItemsSource="{Binding Issues}" IsReadOnly="True" MaxHeight="520">
-                            <DataGrid.Columns>
-                                <DataGridTextColumn Header="Poziom" Binding="{Binding LevelText}" />
-                                <DataGridTextColumn Header="Reguła / kontrola" Binding="{Binding Issue.CheckName}" />
-                                <DataGridTextColumn Header="Element" Binding="{Binding Issue.Element}" />
-                                <DataGridTextColumn Header="Opis" Binding="{Binding Issue.Message}" Width="*">
-                                    <DataGridTextColumn.ElementStyle>
-                                        <Style TargetType="TextBlock">
-                                            <Setter Property="TextWrapping" Value="Wrap" />
-                                        </Style>
-                                    </DataGridTextColumn.ElementStyle>
-                                </DataGridTextColumn>
-                                <DataGridTemplateColumn Header="">
-                                    <DataGridTemplateColumn.CellTemplate>
-                                        <DataTemplate>
-                                            <Button Content="Pokaż zmiany" Style="{StaticResource Btn}" Padding="8,2" CommandParameter="{Binding}"
-                                                    Command="{Binding DataContext.ShowChanges, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                                    Visibility="{Binding CanShowChanges, Converter={StaticResource BoolToVisibility}}"
-                                                    ToolTip="Okno „Zmiany ACWP” dla tego wyniku" />
-                                        </DataTemplate>
-                                    </DataGridTemplateColumn.CellTemplate>
-                                </DataGridTemplateColumn>
-                            </DataGrid.Columns>
-                        </DataGrid>
+                        <!-- Wyniki etapu po regułach; wybrana reguła: kontekst, wynik zapytania z problemem, linie ACTUALS wiersza -->
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="300" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <ListBox ItemsSource="{Binding RuleResults}" SelectedItem="{Binding SelectedRuleResult}" MaxHeight="620" VerticalAlignment="Top"
+                                     ScrollViewer.HorizontalScrollBarVisibility="Disabled" AutomationProperties.Name="Reguły etapu">
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <DockPanel Margin="0,3" Width="260">
+                                            <TextBlock DockPanel.Dock="Left" Text="{Binding LevelText}" Width="62" FontSize="11" FontWeight="Bold"
+                                                       Foreground="{Binding Tone, Converter={StaticResource LevelBrush}, ConverterParameter=fg}" VerticalAlignment="Center" />
+                                            <TextBlock DockPanel.Dock="Right" Text="{Binding CountText}" Style="{StaticResource MutedText}" Margin="6,0,0,0" VerticalAlignment="Center" />
+                                            <TextBlock Text="{Binding Name}" TextWrapping="Wrap" VerticalAlignment="Center" />
+                                        </DockPanel>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+
+                            <StackPanel Grid.Column="1" Margin="12,0,0,0">
+                                <DockPanel Margin="0,0,0,6">
+                                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                                        <Button Content="Pokaż zmiany" Style="{StaticResource Btn}" Margin="8,0,0,0" CommandParameter="{Binding SelectedIssue}"
+                                                Command="{Binding ShowChanges}" IsEnabled="{Binding SelectedIssue.CanShowChanges}"
+                                                ToolTip="Okno „Zmiany ACWP” dla zaznaczonego wiersza" />
+                                        <Button Content="Wynik do Excela" Style="{StaticResource Btn}" Margin="8,0,0,0" Command="{Binding ExportResult}"
+                                                ToolTip="Wynik reguły i wszystkie linie ACTUALS zaznaczonego wiersza" />
+                                    </StackPanel>
+                                    <TextBlock Text="{Binding SelectedRuleResult.Name}" Style="{StaticResource H2}" FontSize="15" TextWrapping="Wrap" />
+                                </DockPanel>
+                                <Border Background="{StaticResource Surface2}" CornerRadius="6" Padding="10,8" Margin="0,0,0,8">
+                                    <StackPanel>
+                                        <TextBlock Text="{Binding RuleContext}" TextWrapping="Wrap" />
+                                        <TextBlock Text="{Binding RunScope}" Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="0,4,0,0" />
+                                    </StackPanel>
+                                </Border>
+                                <DataGrid Style="{StaticResource DataTable}" ItemsSource="{Binding ResultView}" SelectedItem="{Binding SelectedResultRow}"
+                                          AutoGenerateColumns="True" IsReadOnly="True" MaxHeight="360" AutomationProperties.Name="Wynik reguły" />
+                                <TextBlock Text="{Binding LinesTitle}" Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="0,10,0,4" />
+                                <DataGrid Style="{StaticResource DataTable}" ItemsSource="{Binding Lines}" IsReadOnly="True" MaxHeight="360" AutomationProperties.Name="Linie ACTUALS">
+                                    <DataGrid.Columns>
+                                        <DataGridTextColumn Header="Rok/okres" Binding="{Binding Period}" />
+                                        <DataGridTextColumn Header="Element WBS" Binding="{Binding Line.WbsElement}" />
+                                        <DataGridTextColumn Header="Cost element" Binding="{Binding Line.CostElement}" />
+                                        <DataGridTextColumn Header="Created on" Binding="{Binding Line.CreatedOn}" />
+                                        <DataGridTextColumn Header="Opis" Binding="{Binding Line.CoObjectName}" />
+                                        <DataGridTextColumn Header="Partner" Binding="{Binding Line.PartnerObject}" />
+                                        <DataGridTextColumn Header="Zamówienie" Binding="{Binding Line.PurchaseOrderNumber}" />
+                                        <DataGridTextColumn Header="Faktura" Binding="{Binding Line.InvoiceNumber}" />
+                                        <DataGridTextColumn Header="Zlecenie" Binding="{Binding Line.OriginalOrderNumber}" />
+                                        <DataGridTextColumn Header="Ilość" Binding="{Binding Line.Quantity, StringFormat=#\,0.###}" />
+                                        <DataGridTextColumn Header="Kwota" Binding="{Binding Line.Amount, StringFormat=#\,0.00}" />
+                                        <DataGridTextColumn Header="Plik" Binding="{Binding Line.FileName}" />
+                                        <DataGridTextColumn Header="Wiersz" Binding="{Binding Line.RowNumber}" />
+                                    </DataGrid.Columns>
+                                </DataGrid>
+                            </StackPanel>
+                        </Grid>
                     </StackPanel>
                 </Grid>
             </TabItem>

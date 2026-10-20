@@ -234,7 +234,7 @@ public sealed class RunsViewModel : ObservableObject
     public IReadOnlyList<string> Levels => RunRules.Levels;
 
     /// <summary>Tabele i parametry dostępne w zapytaniu reguły (podpowiedź obok pola SQL).</summary>
-    public IReadOnlyList<RunRuleTable> RuleTables { get; } = [.. RunRules.Tables, .. RunRules.Parameters];
+    public IReadOnlyList<RunRuleTable> RuleTables { get; } = [.. RunRules.Tables, .. RunRules.Parameters, RunRules.ResultColumns];
 
     public IReadOnlyList<RunProjectRow> Projects { get => _projects; private set => SetProperty(ref _projects, value); }
 

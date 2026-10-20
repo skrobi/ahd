@@ -294,11 +294,24 @@ na bazie `RunRulesSqlTests`):
 | Spadek kosztu narastająco w rodzaju / Zmiana rodzaju kosztu w zamkniętych okresach | WARNING | ev, ev_poprzednie | koszt rodzaju narastająco / w okresach zamkniętych zmieniony o więcej niż 1 |
 | Koszt brutto nie większy niż BAC × 1,1 | WARNING | ev, harmonogram | przykład uzgodnienia (zamiast reguł uzgodnień z miarami) – poza szablonami startowymi |
 
-Wyniki w programie (zakładka Przebieg): wyniki etapu (poziom, reguła, element, opis), macierz reguła × uruchomienia (wiersz – nazwa
-reguły; „n ERROR”, „n WARNING”, „n INFO” – wiersze reguły INFO, „OK” – brak wierszy), porównanie dwóch uruchomień – wiersze wyników
-tej samej reguły dopasowane po wartościach kolumn tekstowych (wiersz wyniku – `RUN_Issue.Details`, JSON), różnice w kolumnach
-liczbowych; nowe, zmienione, rozwiązane. „Pokaż zmiany” (okno „Zmiany ACWP”): wynik z kolumną `ElementWBS`, `RodzajKosztu` albo
-`CostElement` – dla tej wartości, inny – cały program. Sposób pokazywania błędów i analizy wyników – do uzgodnienia (O53).
+Wyniki w programie (zakładka Przebieg, O53 – bez wykresów i porównań okresów; wynik zapytania i problemy):
+- wyniki etapu po regułach – poziom (ERROR / WARNING / INFO / OK), nazwa, liczba problemów; najpierw najgorsze;
+- wybrana reguła – **kontekst sprawdzenia**: co sprawdza (opis reguły), dane (tabele użyte w zapytaniu z opisem), zakres uruchomienia
+  (bieżący okres, okresy zamknięte, poprzedni przebieg do porównania);
+- **wynik zapytania**: kolumny zwrócone przez SQL (`RUN_Issue.Details`, JSON), na początku Nr, Poziom, **Problem** i **Wskazówka** –
+  kolumny wyniku `Problem` i `Wskazowka`, a bez nich opis wyniku (np. netowanie: „rozliczenie niepełne” / „rozliczenie większe niż
+  koszt” / „brak rozliczenia” ze wskazówką);
+- **linie ACTUALS** zaznaczonego wiersza – zakres z kolumn wiersza: `ElementWBS`, `CostElement` albo `RodzajKosztu` (cost elementy
+  rodzaju w danych przypiętych), okres – `RokOkres` albo `Okres` „RRRR/OO”, albo `Rok` i `Okres` (okres 12 obejmuje 13–16); bez elementu
+  WBS – elementy WBS programu z danych przypiętych; najnowsze wersje plików zaimportowane do końca przypięcia; 500 największych wg
+  |kwoty| (liczba i suma wszystkich): okres, element WBS, cost element, Created on, opis, partner, zamówienie, faktura, zlecenie, ilość,
+  kwota, plik i wiersz (`SqlRunStore.ActualsLines`, `RunOverview.ActualsScope`); wiersz bez tych kolumn – bez linii;
+- **Wynik do Excela** – wynik reguły i wszystkie linie ACTUALS zaznaczonego wiersza; „Pokaż zmiany” – okno „Zmiany ACWP” dla wiersza
+  (kolumna `ElementWBS`, `RodzajKosztu` albo `CostElement` – dla tej wartości, inaczej cały program).
+
+Zakładki porównań: macierz reguła × uruchomienia (wiersz – nazwa reguły; „n ERROR”, „n WARNING”, „n INFO”, „OK”) i porównanie dwóch
+uruchomień – wiersze wyników tej samej reguły dopasowane po wartościach kolumn tekstowych, różnice w kolumnach liczbowych; nowe,
+zmienione, rozwiązane.
 
 Wynik: stan uruchomienia („zakończony”, „zakończony z ostrzeżeniami”, „zakończony z błędami”, „przerwany błędem”;
 uruchomienie bez działającej aplikacji – „przerwany (brak zakończenia)”), wyniki kontroli, dziennik, powiadomienia
@@ -448,4 +461,3 @@ Zamrożonego przebiegu zmiany nie dotyczą.
 | O33 | Element CES z kosztem bez przypisania (spoza nakładki albo bez WP) w przebiegu zamykającym: czy dopuścić zamknięcie, czy wymagać przypisania (ERROR – P3)? Rekomendacja: wymagać przypisania |
 | O34 | CAM nie odesłał pliku w przebiegu zamykającym: blokada etapu (dziś) czy przyjęcie wartości z produkcji z oznaczeniem pochodzenia? |
 | O50 | Kontrole przebiegu wymagające kolumn spoza zrzutu ACTUALS: numer dokumentu CO i pozycja (stały klucz porównania przebiegów), odbiorca rozliczenia (PA, centrum kosztów, środek trwały w budowie), suma kontrolna projektu i okresu z niezależnego raportu SAP |
-| O53 | Reguły walidacji w SQL (F5.7): sposób pokazywania błędów i analizy wyników w programie – propozycja (bez wykresów): wyniki etapu z historią ostatnich przebiegów, wynik reguły (kolumny SQL), szczegóły wiersza rozbijane rodzaj → cost element → element WBS → linie ACTUALS (opis, partner, zamówienie, faktura, zlecenie, ilość, kwota, plik); mockup https://claude.ai/artifact/Ut2RfyRZzW5NujhMYLZ2uW, plansza 4 – do akceptacji |

@@ -1,3 +1,4 @@
+using System.Data;
 using System.Windows.Input;
 using PzlEv.Modules.Runs.Data;
 using PzlEv.Modules.Runs.Services;
@@ -5,6 +6,8 @@ using PzlEv.Shared.Models.Db;
 using PzlEv.Shared.Models.Dictionaries;
 using PzlEv.Shared.Models.Pipeline;
 using PzlEv.Shared.Utils.Data;
+using PzlEv.Shared.Utils.Files;
+using PzlEv.Shared.Utils.Ui.Dialogs;
 using PzlEv.Shared.Utils.Ui.Mvvm;
 using Serilog;
 
@@ -20,11 +23,19 @@ public sealed record RunStepView(RunStepRow Row, string Gate, string Elements, s
     public string When => Row.FinishedAt is { } at ? $"{at.ToLocalTime():yyyy-MM-dd HH:mm} · {Row.ActedBy}" : Row.StartedAt is { } s ? $"od {s.ToLocalTime():HH:mm}" : "";
 }
 
+/// <summary>Linia ACTUALS w zrzucie wiersza wyniku reguły.</summary>
+public sealed record RunActualsLineView(RunActualsLine Line)
+{
+    public string Period => Line.FiscalYear is { } year && Line.Period is { } period ? $"{year}/{period:00}" : "";
+}
+
 /// <summary>
 /// Przebieg programu (zakładka „Przebieg” programu – docs/funkcjonalnosc.md, F06): przebieg wybrany w Konfiguracji (albo domyślny dla
 /// typu), uruchomienia, etapy ze statusami (definicja zapisana w uruchomieniu), wyniki wybranego etapu z „Pokaż zmiany”; akcje: nowe
-/// uruchomienie, dalsze etapy, potwierdzenie etapu z komentarzem, ponowne wykonanie etapu (ostatnie uruchomienie). Porównania: macierz
-/// reguła × ostatnie uruchomienia, porównanie dwóch uruchomień (wiersze wyników reguł), okno „Zmiany ACWP”. Przebieg liczy się w tle (RunLauncher).
+/// uruchomienie, dalsze etapy, potwierdzenie etapu z komentarzem, ponowne wykonanie etapu (ostatnie uruchomienie). Wyniki etapu: reguły
+/// z liczbą problemów, wybrana reguła – kontekst (co sprawdza, dane, zakres), wynik zapytania z problemem w wierszu, linie ACTUALS
+/// zaznaczonego wiersza (zakres z kolumn wiersza), do Excela. Porównania: macierz reguła × ostatnie uruchomienia, porównanie dwóch
+/// uruchomień (wiersze wyników reguł), okno „Zmiany ACWP”. Przebieg liczy się w tle (RunLauncher).
 /// </summary>
 public sealed class RunPanelViewModel : ObservableObject, IDisposable
 {
@@ -38,7 +49,19 @@ public sealed class RunPanelViewModel : ObservableObject, IDisposable
     private IReadOnlyList<RunStepView> _steps = [];
     private RunStepView? _selectedStep;
     private IReadOnlyList<RunIssueRow> _allIssues = [];
-    private IReadOnlyList<RunIssueView> _issues = [];
+    private IReadOnlyList<RunRuleResultView> _ruleResults = [];
+    private RunRuleResultView? _selectedRuleResult;
+    private RunResultTable _resultTable = new([], []);
+    private DataView? _resultView;
+    private object? _selectedResultRow;
+    private RunIssueView? _selectedIssue;
+    private IReadOnlyList<RunActualsLineView> _lines = [];
+    private string _linesTitle = "";
+    private RunActualsScope? _linesScope;
+    private string _ruleContext = "";
+    private string _runScope = "";
+    private IReadOnlyList<RunRule> _library = [];
+    private readonly IFileDialogs _dialogs;
     private string _definition = "";
     private string _comment = "";
     private string _progress = "";
@@ -57,9 +80,14 @@ public sealed class RunPanelViewModel : ObservableObject, IDisposable
     /// <summary>Liczba uruchomień w macierzy kontroli.</summary>
     public const int MatrixPins = 8;
 
-    public RunPanelViewModel(IRunStore store, RunLauncher launcher, IAcwpChanges? acwpChanges, string project)
+    /// <summary>Najwyżej tyle linii ACTUALS w zrzucie na ekranie (do Excela – ExportLines).</summary>
+    public const int LineCount = 500;
+    private const int ExportLines = 100_000;
+
+    public RunPanelViewModel(IRunStore store, RunLauncher launcher, IAcwpChanges? acwpChanges, string project, IFileDialogs dialogs)
     {
         _store = store;
+        _dialogs = dialogs;
         _launcher = launcher;
         _acwpChanges = acwpChanges;
         Project = project;
@@ -71,6 +99,7 @@ public sealed class RunPanelViewModel : ObservableObject, IDisposable
         Rerun = new AsyncRelayCommand(() => Launch(_launcher.Rerun(Project, _selectedPin!.PinId, _selectedStep!.Row.StepNo)),
             () => IsLatest && !_launcher.IsRunning(Project) && _selectedStep is { } step && RunWorkflowEngine.CanRerun(_steps.Select(s => s.Row).ToList(), step.Row.StepNo));
         ShowChanges = new RelayCommand(p => { if (p is RunIssueView { Changes: { } request }) _acwpChanges?.Show(request); }, _ => _acwpChanges is not null);
+        ExportResult = new AsyncRelayCommand(DoExportResult, () => !Busy.IsBusy && _selectedRuleResult is not null);
         Refresh = new AsyncRelayCommand(() => Load(_selectedPin?.PinId), () => !Busy.IsBusy);
         SelectCell = new RelayCommand(p => ShowCell(p as RunMatrixCell));
         OpenAcwpChanges = new RelayCommand(_ => _acwpChanges?.Show(new AcwpChangesRequest(Project, PinId: _afterPin?.PinId, Scope: "cały program")),
@@ -97,6 +126,9 @@ public sealed class RunPanelViewModel : ObservableObject, IDisposable
     public ICommand Rerun { get; }
 
     public ICommand ShowChanges { get; }
+
+    /// <summary>Wynik reguły i linie ACTUALS zaznaczonego wiersza do Excela.</summary>
+    public ICommand ExportResult { get; }
 
     public ICommand Refresh { get; }
 
@@ -160,7 +192,45 @@ public sealed class RunPanelViewModel : ObservableObject, IDisposable
         }
     }
 
-    public IReadOnlyList<RunIssueView> Issues { get => _issues; private set => SetProperty(ref _issues, value); }
+    /// <summary>Wyniki wybranego etapu po regułach: poziom, nazwa, liczba problemów.</summary>
+    public IReadOnlyList<RunRuleResultView> RuleResults { get => _ruleResults; private set => SetProperty(ref _ruleResults, value); }
+
+    public RunRuleResultView? SelectedRuleResult
+    {
+        get => _selectedRuleResult;
+        set
+        {
+            if (SetProperty(ref _selectedRuleResult, value))
+                ShowRule();
+        }
+    }
+
+    /// <summary>Kontekst wybranej reguły: co sprawdza i na jakich danych.</summary>
+    public string RuleContext { get => _ruleContext; private set => SetProperty(ref _ruleContext, value); }
+
+    /// <summary>Zakres uruchomienia: okresy, poprzedni przebieg do porównania.</summary>
+    public string RunScope { get => _runScope; private set => SetProperty(ref _runScope, value); }
+
+    /// <summary>Wynik zapytania reguły: Nr, Poziom, Problem, Wskazówka i kolumny zapytania.</summary>
+    public DataView? ResultView { get => _resultView; private set => SetProperty(ref _resultView, value); }
+
+    /// <summary>Zaznaczony wiersz wyniku (DataRowView) – linie ACTUALS jego zakresu.</summary>
+    public object? SelectedResultRow
+    {
+        get => _selectedResultRow;
+        set
+        {
+            if (SetProperty(ref _selectedResultRow, value))
+                _ = LoadLines();
+        }
+    }
+
+    /// <summary>Wynik zaznaczonego wiersza – „Pokaż zmiany”.</summary>
+    public RunIssueView? SelectedIssue { get => _selectedIssue; private set => SetProperty(ref _selectedIssue, value); }
+
+    public IReadOnlyList<RunActualsLineView> Lines { get => _lines; private set => SetProperty(ref _lines, value); }
+
+    public string LinesTitle { get => _linesTitle; private set => SetProperty(ref _linesTitle, value); }
 
     /// <summary>Definicja przebiegu uruchomienia i stan.</summary>
     public string Definition { get => _definition; private set => SetProperty(ref _definition, value); }
@@ -220,8 +290,7 @@ public sealed class RunPanelViewModel : ObservableObject, IDisposable
                 var assigned = _store.AssignedDefinition(Project);
                 var definition = RunDefinitions.For(headers, steps, elements, assigned, _store.ProjectType(Project) ?? "");
                 var matrixPins = pins.Where(p => p.Status != RunStatuses.Running).Take(MatrixPins).ToList();
-                return new Loaded(pins, definition, assigned, matrixPins.ToDictionary(p => p.PinId, p => _store.Issues(p.PinId)),
-                    _store.Rules().Select(r => r.Name).ToList());
+                return new Loaded(pins, definition, assigned, matrixPins.ToDictionary(p => p.PinId, p => _store.Issues(p.PinId)), _store.Rules());
             });
             var pins = loaded.Pins;
             _pins = pins;
@@ -233,7 +302,8 @@ public sealed class RunPanelViewModel : ObservableObject, IDisposable
                   + (loaded.Assigned is null ? $"domyślny dla typu programu; wybór – Konfiguracja → Parametry programu → {ProjectSettings.RunDefinition}."
                      : string.Equals(loaded.Assigned, loaded.Definition.Code, StringComparison.OrdinalIgnoreCase) ? "wybrany w Konfiguracji programu."
                      : $"wybrany „{loaded.Assigned}” jest nieaktywny albo bez etapów, obowiązuje domyślny dla typu.");
-            Matrix = RunOverview.Matrix(pins.Where(p => loaded.Issues.ContainsKey(p.PinId)).ToList(), loaded.Issues, loaded.Rules);
+            _library = loaded.Rules;
+            Matrix = RunOverview.Matrix(pins.Where(p => loaded.Issues.ContainsKey(p.PinId)).ToList(), loaded.Issues, [.. loaded.Rules.Select(r => r.Name)]);
             var worst = Matrix.Rows.SelectMany(r => r.Cells).Where(c => c.PinId == Matrix.Columns.LastOrDefault()?.PinId && c.Level is not null)
                 .OrderByDescending(c => c.Level).FirstOrDefault();
             ShowCell(worst);
@@ -261,7 +331,7 @@ public sealed class RunPanelViewModel : ObservableObject, IDisposable
 
     /// <summary>Dane programu: uruchomienia, przebieg programu, wybór w Konfiguracji, wyniki uruchomień macierzy.</summary>
     private sealed record Loaded(IReadOnlyList<RunPinRow> Pins, RunDefinition Definition, string? Assigned, Dictionary<long, IReadOnlyList<RunIssueRow>> Issues,
-        IReadOnlyList<string> Rules);
+        IReadOnlyList<RunRule> Rules);
 
     private void ShowCell(RunMatrixCell? cell)
     {
@@ -321,12 +391,13 @@ public sealed class RunPanelViewModel : ObservableObject, IDisposable
         }
         try
         {
-            var (steps, issues, json) = await Busy.Run($"Wczytywanie uruchomienia {pin.Code} #{pin.PinNo}…",
-                () => (_store.Steps(pin.PinId), _store.Issues(pin.PinId), _store.DefinitionOf(pin.PinId)));
+            var (steps, issues, json, scope) = await Busy.Run($"Wczytywanie uruchomienia {pin.Code} #{pin.PinNo}…",
+                () => (_store.Steps(pin.PinId), _store.Issues(pin.PinId), _store.DefinitionOf(pin.PinId), Scope(pin)));
             if (!ReferenceEquals(pin, _selectedPin))
                 return;
             var definition = RunWorkflowEngine.Deserialize(json);
             _allIssues = issues;
+            RunScope = scope;
             Steps = steps.Select(s =>
             {
                 var step = definition?.Steps.FirstOrDefault(d => d.No == s.StepNo);
@@ -349,11 +420,155 @@ public sealed class RunPanelViewModel : ObservableObject, IDisposable
         }
     }
 
-    // Wyniki wybranego etapu (uruchomienie bez etapów – wszystkie), od błędów.
-    private void ShowIssues() =>
-        Issues = _allIssues.Where(i => _steps.Count == 0 || i.StepNo == _selectedStep?.Row.StepNo)
-            .OrderBy(i => i.Level == CheckLevel.Error ? 0 : i.Level == CheckLevel.Warning ? 1 : 2).ThenBy(i => i.Id)
-            .Select(i => new RunIssueView(i, RunOverview.ChangesFor(i, Project))).ToList();
+    // Wyniki wybranego etapu (uruchomienie bez etapów – wszystkie) po regułach; pierwsza – najgorsza.
+    private void ShowIssues()
+    {
+        RuleResults = RunOverview.RuleResults(_allIssues.Where(i => _steps.Count == 0 || i.StepNo == _selectedStep?.Row.StepNo));
+        SelectedRuleResult = RuleResults.FirstOrDefault();
+        ShowRule();
+    }
+
+    // Wybrana reguła: kontekst z biblioteki reguł, tabela wyniku; zaznaczenie – pierwszy wiersz z problemem.
+    private void ShowRule()
+    {
+        var result = _selectedRuleResult;
+        _resultTable = RunOverview.ResultTable(result?.Issues ?? []);
+        var rule = result is null ? null : _library.FirstOrDefault(r => string.Equals(r.Name, result.Name, StringComparison.OrdinalIgnoreCase));
+        RuleContext = result is null ? ""
+            : rule is null ? "Kontrola etapu przebiegu (import, przypięcie stanu) albo reguła usunięta z reguł walidacji."
+            : $"{rule.Description ?? "(reguła bez opisu)"}\nDane: "
+              + (RunRules.TablesUsed(rule.Sql) is { Count: > 0 } tables
+                  ? string.Join("; ", tables.Select(t => $"{t} – {RunRules.Tables.First(x => x.Name == t).Description}"))
+                  : "–");
+        ResultView = Table(_resultTable).DefaultView;
+        SelectedResultRow = ResultView.Count > 0 ? ResultView[0] : null;
+    }
+
+    // Tabela wyniku do DataGrid: Nr (wiersz wyniku), Poziom, Problem, Wskazówka (gdy jest), kolumny zapytania; znaki psujące wiązanie kolumny
+    // DataGrid (. / [ ] ( ) ^) – podkreślenie.
+    private static DataTable Table(RunResultTable result)
+    {
+        var table = new DataTable();
+        table.Columns.Add("Nr", typeof(int));
+        table.Columns.Add("Poziom", typeof(string));
+        table.Columns.Add("Problem", typeof(string));
+        var hints = result.Rows.Any(r => r.Hint is not null);
+        if (hints)
+            table.Columns.Add("Wskazówka", typeof(string));
+        foreach (var column in result.Columns)
+        {
+            var name = string.Concat(column.Select(c => ".[]()/^".Contains(c) ? '_' : c));
+            table.Columns.Add(Enumerable.Range(1, 99).Select(i => i == 1 ? name : $"{name}_{i}").First(n => !table.Columns.Contains(n)), typeof(string));
+        }
+        for (var i = 0; i < result.Rows.Count; i++)
+        {
+            var row = result.Rows[i];
+            table.Rows.Add([i + 1, row.LevelText, row.Problem, .. hints ? new object?[] { row.Hint ?? "" } : [], .. row.Values]);
+        }
+        return table;
+    }
+
+    private RunResultRow? SelectedRow() =>
+        _selectedResultRow is DataRowView view && view["Nr"] is int number && number >= 1 && number <= _resultTable.Rows.Count ? _resultTable.Rows[number - 1] : null;
+
+    // Linie ACTUALS zaznaczonego wiersza: zakres z kolumn wiersza (RunOverview.ActualsScope), stan plików z chwili przypięcia uruchomienia.
+    private async Task LoadLines()
+    {
+        var row = SelectedRow();
+        SelectedIssue = row is null ? null : new RunIssueView(row.Issue, RunOverview.ChangesFor(row.Issue, Project));
+        Lines = [];
+        _linesScope = null;
+        if (row is null || _selectedPin is not { } pin)
+        {
+            LinesTitle = "";
+            return;
+        }
+        try
+        {
+            var loaded = await Busy.Run<(RunActualsScope Scope, string Description, RunActualsLines Lines)?>("Linie ACTUALS wiersza…", () =>
+            {
+                var scope = RunOverview.ActualsScope(row.Issue, kind => CostElementsOfKind(pin, kind));
+                return scope is not { } s ? null
+                    : (s.Scope, s.Description, _store.ActualsLines(s.Scope, AsOf(pin), pin.AmountField ?? ProjectSettings.DefaultActualsAmount, LineCount));
+            });
+            if (!ReferenceEquals(row, SelectedRow()))
+                return;
+            if (loaded is not { } l)
+            {
+                LinesTitle = "Wiersz nie wskazuje elementu WBS, cost elementu ani rodzaju kosztu (kolumny ElementWBS, CostElement, RodzajKosztu) – bez linii ACTUALS.";
+                return;
+            }
+            _linesScope = l.Scope;
+            Lines = l.Lines.Rows.Select(r => new RunActualsLineView(r)).ToList();
+            LinesTitle = $"Linie ACTUALS – {l.Description}: {l.Lines.Count:#,0} linii, suma {l.Lines.Sum:#,0.00}"
+                + (l.Lines.Count > l.Lines.Rows.Count ? $"; pokazano {l.Lines.Rows.Count} największych (wszystkie – do Excela)" : "")
+                + (l.Scope.WbsElement is null ? "; linie z elementem WBS programu (bez sieci i zleceń)" : "");
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            Logger.Error(ex, "Linie ACTUALS {Project}", Project);
+            LinesTitle = $"Nie udało się wczytać linii ACTUALS: {ex.Message}";
+        }
+    }
+
+    // Cost elementy rodzaju kosztu w danych przypiętych uruchomienia (Cost Category programu; bez rodzaju – Other).
+    private IReadOnlyCollection<string> CostElementsOfKind(RunPinRow pin, string kind)
+    {
+        var kinds = _store.Dictionaries(Project).CostKinds;
+        return _store.Balance(pin.PinId).Where(r => r.CostElement.Length > 0 && RunCostKinds.Of(r, kinds) == kind)
+            .Select(r => r.CostElement).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+    }
+
+    // Stan plików ACTUALS jak w przypięciu uruchomienia: koniec etapu Przypięcie stanu, a bez niego – koniec uruchomienia albo teraz.
+    private DateTimeOffset AsOf(RunPinRow pin) =>
+        _steps.FirstOrDefault(s => s.Row.Action == RunActions.Pin)?.Row.FinishedAt ?? pin.FinishedAt ?? DateTimeOffset.Now;
+
+    // Zakres uruchomienia: okresy z tygodnia przebiegu i dnia uruchomienia, poprzedni przebieg do porównania.
+    private string Scope(RunPinRow pin)
+    {
+        var (closedBefore, today) = RunService.Periods(_store.RunWeek(pin.RunId).Period, pin.StartedAt.LocalDateTime.Date);
+        var previous = RunService.Comparable(_store, pin);
+        return $"Uruchomienie {pin.Code} #{pin.PinNo}: bieżący okres {today.Year}/{today.Period:00}, okresy zamknięte przed {closedBefore.Year}/{closedBefore.Period:00}; "
+            + (previous is null ? "bez poprzedniego przebiegu do porównania" : $"porównanie z {previous.Code} #{previous.PinNo}");
+    }
+
+    private async Task DoExportResult()
+    {
+        var result = _selectedRuleResult!;
+        var path = _dialogs.SaveExcel("Wynik reguły do Excela", $"{Project}_{string.Concat(result.Name.Select(c => char.IsLetterOrDigit(c) ? c : '_'))}.xlsx");
+        if (path is null)
+            return;
+        var table = _resultTable;
+        var scope = _linesScope;
+        var pin = _selectedPin;
+        try
+        {
+            await Busy.Run("Zapis wyniku do Excela…", () =>
+            {
+                var lines = scope is null || pin is null ? null
+                    : _store.ActualsLines(scope, AsOf(pin), pin.AmountField ?? ProjectSettings.DefaultActualsAmount, ExportLines);
+                ExcelTableWriter.WriteSheets(path,
+                [
+                    ("Wynik", ["Nr", "Poziom", "Problem", "Wskazówka", .. table.Columns],
+                        table.Rows.Select((r, i) => (IReadOnlyList<object?>)[i + 1, r.LevelText, r.Problem, r.Hint, .. r.Values])),
+                    .. lines is null ? Array.Empty<(string, IReadOnlyList<string>, IEnumerable<IReadOnlyList<object?>>)>() :
+                    [
+                        ("Linie ACTUALS", ["Element WBS", "Cost element", "Rok", "Okres", "Created on", "Opis cost elementu", "Opis", "Partner", "Zamówienie", "Faktura",
+                            "Zlecenie", "Ilość", "Kwota", "Plik", "Wiersz"],
+                            lines.Rows.Select(l => (IReadOnlyList<object?>)[l.WbsElement, l.CostElement, l.FiscalYear, l.Period, l.CreatedOn, l.CostElementName, l.CoObjectName,
+                                l.PartnerObject, l.PurchaseOrderNumber, l.InvoiceNumber, l.OriginalOrderNumber, l.Quantity, l.Amount, l.FileName, l.RowNumber])),
+                    ],
+                    ("Opis", ["Opis"], [[$"{Project} – {result.Name}"], [RunScope], [RuleContext], [LinesTitle]]),
+                ]);
+                return true;
+            });
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            Logger.Error(ex, "Wynik reguły do Excela {Project}", Project);
+            Error = $"Nie udało się zapisać wyniku do Excela: {ex.Message}";
+        }
+    }
 
     public void Dispose()
     {

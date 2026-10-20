@@ -1,3 +1,4 @@
+using PzlEv.Modules.Runs.Data;
 using PzlEv.Modules.Runs.Services;
 using PzlEv.Shared.Models.Db;
 using PzlEv.Shared.Models.Pipeline;
@@ -101,5 +102,53 @@ public sealed class RunOverviewTests
         Assert.Null(RunOverview.ChangesFor(Issue("Bez WBS", Details(("ElementWBS", null), ("Wiersze", 2m)))!, "PAF")!.WbsElements);   // NULL – cały program
         Assert.Null(RunOverview.ChangesFor(Issue("Import", null), "PAF"));
         Assert.NotNull(RunOverview.ChangesFor(Issue(RunService.Pinned, null), "PAF"));
+    }
+
+    [Fact]
+    public void Step_results_are_grouped_by_rule_worst_first_with_problem_from_column_or_result_description()
+    {
+        RunIssueRow Row(long id, string check, CheckLevel level, string message, string? details) => new(id, 1, check, level, null, message, null, 3, details);
+        RunIssueRow[] issues =
+        [
+            Row(1, "Wiersze bez elementu WBS", CheckLevel.Warning, "Wiersze bez elementu WBS: 3", Details(("Wiersze", 3m))),
+            Row(2, Net, CheckLevel.Error, "A.1: saldo 40,00 – rozliczenie niepełne", Details(("ElementWBS", "A.1"), ("Problem", "rozliczenie niepełne"), ("Wskazowka", "sprawdź regułę"), ("Saldo", 40m))),
+            Row(3, Net, CheckLevel.Error, "A.2: saldo 30,00", Details(("ElementWBS", "A.2"), ("Problem", "brak rozliczenia"), ("Saldo", 30m), ("OstatniOkres", "2026/04"))),
+            Row(4, "Mniej wierszy", CheckLevel.Pass, "OK – brak nieprawidłowości", null),
+            Row(5, "Odchylenia", CheckLevel.Pass, "Element WBS A.1: zmiana", Details(("ElementWBS", "A.1"), ("Zmiana", -30m))),
+        ];
+
+        var results = RunOverview.RuleResults(issues);
+        var table = RunOverview.ResultTable(results[0].Issues);
+
+        Assert.Equal([(Net, "ERROR", 2), ("Wiersze bez elementu WBS", "WARNING", 1), ("Odchylenia", "INFO", 1), ("Mniej wierszy", "OK", 0)],
+            results.Select(r => (r.Name, r.LevelText, r.Problems)));
+        Assert.Equal(["ElementWBS", "Saldo", "OstatniOkres"], table.Columns);   // Problem i Wskazowka – osobno
+        Assert.Equal(("rozliczenie niepełne", "sprawdź regułę"), (table.Rows[0].Problem, table.Rows[0].Hint));
+        Assert.Equal(("brak rozliczenia", "A.2: saldo 30,00"), (table.Rows[1].Problem, table.Rows[1].Hint));   // bez wskazówki – opis wyniku
+        Assert.Equal(["A.2", "30,00", "2026/04"], table.Rows[1].Values);
+        var plain = RunOverview.ResultTable(results[1].Issues).Rows.Single();
+        Assert.Equal(("Wiersze bez elementu WBS: 3", (string?)null), (plain.Problem, plain.Hint));   // bez kolumny Problem – opis wyniku
+        Assert.Equal("OK – brak nieprawidłowości", RunOverview.ResultTable(results[3].Issues).Rows.Single().Problem);
+    }
+
+    [Fact]
+    public void Actuals_scope_of_result_row_comes_from_wbs_cost_element_cost_kind_and_period_columns()
+    {
+        RunIssueRow Issue(string? details) => new(1, 77, "R", CheckLevel.Warning, null, "x", null, 3, details);
+        IReadOnlyCollection<string> Kind(string kind) => kind == "Materials" ? ["51105550", "51105560"] : [];
+
+        var wbs = RunOverview.ActualsScope(Issue(Details(("ElementWBS", "A.1"), ("CostElement", "51105550"), ("RokOkres", "2026/03"), ("Saldo", 5m))), Kind)!.Value;
+        var kind = RunOverview.ActualsScope(Issue(Details(("RodzajKosztu", "Materials"), ("Okres", "2026/10"), ("Przyrost", 1m))), Kind)!.Value;
+        var numbers = RunOverview.ActualsScope(Issue(Details(("CostElement", "92212550"), ("Rok", 2026m), ("Okres", 14m))), Kind)!.Value;
+
+        Assert.Equal((77L, "A.1", 2026, 3), (wbs.Scope.PinId, wbs.Scope.WbsElement, wbs.Scope.Year!.Value, wbs.Scope.Period!.Value));
+        Assert.Equal(["51105550"], wbs.Scope.CostElements);
+        Assert.Equal("ElementWBS = A.1 · CostElement = 51105550 · okres 2026/03", wbs.Description);
+        Assert.Equal((null, 2026, 10), (kind.Scope.WbsElement, kind.Scope.Year, kind.Scope.Period));
+        Assert.Equal(["51105550", "51105560"], kind.Scope.CostElements);
+        Assert.Equal((2026, 12), (numbers.Scope.Year!.Value, numbers.Scope.Period!.Value));   // okres 13–16 jak 12
+        Assert.Null(RunOverview.ActualsScope(Issue(Details(("WP", "WP-1"))), Kind));
+        Assert.Null(RunOverview.ActualsScope(Issue(Details(("ElementWBS", null), ("Wiersze", 2m))), Kind));
+        Assert.Null(RunOverview.ActualsScope(Issue(null), Kind));
     }
 }
