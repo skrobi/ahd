@@ -134,7 +134,7 @@ public sealed class ProjectDetailViewModel : ObservableObject, IDisposable
     public bool StructureDataUnapproved => _costs is not null && _approved is null;
 
     /// <summary>Dane produkcyjne (PZLPROD na żywo): chwila odczytu albo powód braku (nagłówek).</summary>
-    /// <summary>Waluta projektu w nagłówku: kod z danych ACTUALS i zestaw walutowy („Parametry projektu”).</summary>
+    /// <summary>Waluta projektu w statusie (zakładka Wskaźniki): kod z danych ACTUALS i zestaw walutowy („Parametry projektu”).</summary>
     public string CurrencyInfo
     {
         get
@@ -480,7 +480,7 @@ public sealed class ProjectDetailViewModel : ObservableObject, IDisposable
         });
     }
 
-    /// <summary>Daty danych ACTUALS (w tle); błąd odczytu – informacja w nagłówku, ekran działa dalej.</summary>
+    /// <summary>Daty danych ACTUALS (w tle); błąd odczytu – informacja w statusie (zakładka Wskaźniki), ekran działa dalej.</summary>
     private ActualsFreshness ReadActuals()
     {
         try

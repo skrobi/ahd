@@ -220,7 +220,7 @@ aż analityk zatwierdzi dane ACTUALS przebiegu z komentarzem („Zatwierdź dane
 ACWP Labor / Material, wskaźniki) pokazuje dane ACTUALS w stanie z przypięcia ostatniego uruchomienia z zakończonym tym etapem
 (pliki zaimportowane do końca etapu Przypięcie stanu – `@AsOf` procedur `REP_ProjectCostsByElement` / `REP_ProjectCasCosts`, migracja
 054; `SqlProjectStore.ApprovedActuals`): nowy import RABIT ani przebieg bez zatwierdzenia (także ponowne wykonanie wcześniejszego etapu –
-zatwierdzenie Nieaktualne) nie zmieniają struktury. Bez zatwierdzonego uruchomienia – ostatni import (tag nagłówka „ACTUALS struktury:
+zatwierdzenie Nieaktualne) nie zmieniają struktury. Bez zatwierdzonego uruchomienia – ostatni import (status w zakładce Wskaźniki „ACTUALS struktury:
 ostatni import – niezatwierdzone”). Słowniki (Cost Category, Wykluczenia) – bieżące. Zapis sprawdza strukturę (`RunDefinitions.Validate`:
 etapy stałe na początku, najwyżej jedno Zatwierdzenie ACTUALS, nazwy etapów bez powtórzeń, etap walidacji z regułą, reguły istniejące
 w regułach walidacji) i zapisuje szablon w słownikach globalnych „Definicje

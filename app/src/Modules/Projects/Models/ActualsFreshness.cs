@@ -17,7 +17,7 @@ public sealed record ActualsFile(string FileName, DateTimeOffset ReportAt, DateT
 }
 
 /// <summary>
-/// Skąd i z kiedy są dane ACTUALS projektu (nagłówek ekranu projektu): pliki najnowszego importu – data raportu w RABIT,
+/// Skąd i z kiedy są dane ACTUALS projektu (status w zakładce Wskaźniki): pliki najnowszego importu – data raportu w RABIT,
 /// import i ostatnie sprawdzenie. Error – nie udało się odczytać.
 /// </summary>
 public sealed record ActualsFreshness(IReadOnlyList<ActualsFile> Files, string? Error = null)
@@ -59,7 +59,7 @@ public sealed record ApprovedActuals(string RunCode, int PinNo, DateTimeOffset A
 {
     private static string Time(DateTimeOffset value) => value.ToLocalTime().ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture);
 
-    /// <summary>Tag nagłówka: źródło danych struktury; null – brak zatwierdzonego przebiegu (ostatni import).</summary>
+    /// <summary>Status (zakładka Wskaźniki): źródło danych struktury; null – brak zatwierdzonego przebiegu (ostatni import).</summary>
     public static string Summary(ApprovedActuals? approved) => approved is null
         ? "ACTUALS struktury: ostatni import – niezatwierdzone"
         : $"ACTUALS struktury: przebieg {approved.RunCode} #{approved.PinNo} · stan {Time(approved.AsOf)}";

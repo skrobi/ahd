@@ -48,7 +48,6 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
         <partials:PageHeader Title="{Binding Title}" Subtitle="{Binding Subtitle}">
@@ -58,34 +57,9 @@
                 </StackPanel>
             </partials:PageHeader.Actions>
         </partials:PageHeader>
-        <!-- Z kiedy są dane: RABIT (ACTUALS) i produkcja (PZLPROD) – osobna linia pod nagłówkiem (tytuł i opis mają całą szerokość) -->
-        <WrapPanel Grid.Row="1" Margin="0,-12,0,12">
-            <!-- Skąd są koszty struktury: przebieg z zatwierdzonymi danymi ACTUALS albo ostatni import (ostrzeżenie) -->
-            <Border VerticalAlignment="Center" Margin="0,0,8,4" ToolTip="{Binding StructureDataDetails}">
-                <Border.Style>
-                    <Style TargetType="Border" BasedOn="{StaticResource Tag}">
-                        <Style.Triggers>
-                            <DataTrigger Binding="{Binding StructureDataUnapproved}" Value="True">
-                                <Setter Property="Background" Value="{StaticResource WarnSoft}" />
-                            </DataTrigger>
-                        </Style.Triggers>
-                    </Style>
-                </Border.Style>
-                <TextBlock Text="{Binding StructureDataInfo}" FontSize="12" />
-            </Border>
-            <Border Style="{StaticResource Tag}" VerticalAlignment="Center" Margin="0,0,8,4" ToolTip="{Binding DataInfoDetails}">
-                <TextBlock Text="{Binding DataInfo}" FontSize="12" />
-            </Border>
-            <Border Style="{StaticResource Tag}" VerticalAlignment="Center" Margin="0,0,8,4" ToolTip="{Binding ProductionDetails}">
-                <TextBlock Text="{Binding ProductionInfo}" FontSize="12" />
-            </Border>
-            <Border Style="{StaticResource Tag}" VerticalAlignment="Center" Margin="0,0,8,4" ToolTip="{Binding CurrencyDetails}">
-                <TextBlock Text="{Binding CurrencyInfo}" FontSize="12" />
-            </Border>
-        </WrapPanel>
         <!-- Komunikat w stałym miejscu (jedna linia o stałej wysokości, pełna treść w podpowiedzi): operacja w toku albo wynik
              ostatniej operacji – pokazanie i ukrycie nie przesuwa zakładek ani tabeli struktury. -->
-        <Grid Grid.Row="2" Height="22" Margin="0,0,0,6">
+        <Grid Grid.Row="1" Height="22" Margin="0,0,0,6">
             <DockPanel Visibility="{Binding Busy.IsBusy, Converter={StaticResource BoolToVisibility}}" ToolTip="{Binding Busy.Display}">
                 <ProgressBar DockPanel.Dock="Left" IsIndeterminate="True" Width="80" Height="4" Margin="0,0,10,0" BorderThickness="0"
                              VerticalAlignment="Center" Foreground="{StaticResource Info}" Background="{StaticResource Surface}" />
@@ -108,11 +82,37 @@
             </TextBlock>
         </Grid>
 
-        <TabControl Grid.Row="3" Background="Transparent" BorderThickness="0,1,0,0" Padding="0,12,0,0">
+        <TabControl Grid.Row="2" Background="Transparent" BorderThickness="0,1,0,0" Padding="0,12,0,0">
             <!-- Wskaźniki: sumy projektu teraz, wskaźniki EV po przebiegach; gotowość do przebiegu zwinięta -->
             <TabItem Header="Wskaźniki" Padding="12,4">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                 <StackPanel>
+                    <!-- Status: skąd są dane – ACTUALS struktury (zatwierdzony przebieg albo ostatni import), RABIT, produkcja (PZLPROD), waluta -->
+                    <TextBlock Text="Status" Style="{StaticResource H2}" FontSize="15" Margin="0,0,0,8" />
+                    <WrapPanel Margin="0,0,0,12">
+                        <!-- Skąd są koszty struktury: przebieg z zatwierdzonymi danymi ACTUALS albo ostatni import (ostrzeżenie) -->
+                        <Border VerticalAlignment="Center" Margin="0,0,8,4" ToolTip="{Binding StructureDataDetails}">
+                            <Border.Style>
+                                <Style TargetType="Border" BasedOn="{StaticResource Tag}">
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding StructureDataUnapproved}" Value="True">
+                                            <Setter Property="Background" Value="{StaticResource WarnSoft}" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Border.Style>
+                            <TextBlock Text="{Binding StructureDataInfo}" FontSize="12" />
+                        </Border>
+                        <Border Style="{StaticResource Tag}" VerticalAlignment="Center" Margin="0,0,8,4" ToolTip="{Binding DataInfoDetails}">
+                            <TextBlock Text="{Binding DataInfo}" FontSize="12" />
+                        </Border>
+                        <Border Style="{StaticResource Tag}" VerticalAlignment="Center" Margin="0,0,8,4" ToolTip="{Binding ProductionDetails}">
+                            <TextBlock Text="{Binding ProductionInfo}" FontSize="12" />
+                        </Border>
+                        <Border Style="{StaticResource Tag}" VerticalAlignment="Center" Margin="0,0,8,4" ToolTip="{Binding CurrencyDetails}">
+                            <TextBlock Text="{Binding CurrencyInfo}" FontSize="12" />
+                        </Border>
+                    </WrapPanel>
                     <!-- Grupy wskaźników jak w tabeli struktury (Operational EV, Materials, Financial EV) -->
                     <ItemsControl ItemsSource="{Binding Kpis}">
                         <ItemsControl.ItemsPanel>

@@ -138,18 +138,18 @@ i budżetem (`StructureBuilder`).
   pasujący CPLGR). Operacje `vAHDD` elementu z tą grupą stanowisk (z DJK stanowiska) należą do węzła i są odejmowane od
   elementu – reszta zostaje na elemencie. Węzeł ma WP, CAM, Cost Category, budżet i daty jak element P1S; materiały i ACWP
   zostają na elemencie. SWBS nie jest brany pod uwagę. Kod niezgodny z konwencją – brak „kod wydzielenia” w kolumnie Braki,
-  powód w podpowiedzi nazwy i w nagłówku „Produkcja (PZLPROD)”. Godziny wydzielane są tylko z operacji samego elementu
+  powód w podpowiedzi nazwy i w statusie „Produkcja (PZLPROD)” (zakładka Wskaźniki). Godziny wydzielane są tylko z operacji samego elementu
   (PSPNR) – operacje elementów pod nim w `LOG.WBS` wydziela się kodem z ich elementem. Kod wydzielenia elementu `LOG.WBS`
   spod węzła należy do zakresu projektu także wtedy, gdy kod elementu nie zaczyna się od kodu węzła z kropką (np.
   `XYZ-1.PAINT.W20` pod `AC-CAB.6.38.07`). Węzeł wirtualny, którego `Legacy WBS` to zwykły element `LOG.WBS` (nie kod
   wydzielenia), pokazuje godziny samego elementu.
   Dane produkcyjne są czytane na żywo (`IPzlProdSource.Production`, filtr – zakres P1S projektu) przy
-  otwarciu projektu, „Odśwież P1S i koszty” i po zmianie Legacy WBS; chwila odczytu – w nagłówku ekranu
+  otwarciu projektu, „Odśwież P1S i koszty” i po zmianie Legacy WBS; chwila odczytu – w statusie zakładki Wskaźniki
   („Produkcja (PZLPROD) …”). Kolumny mają stałą szerokość – przy kolejnych kolumnach tabela przewija się w poziomie. Tabela kończy się na dole okna (wysokość
   dopasowana do okna przy każdej zmianie jego rozmiaru, bez górnego limitu; strona bez przewijania – wiersze przewija
-  tabela; przy zwiniętym menu – szersza); skróty klawiszowe i opis kolumn – okno „?”; nad tabelą daty danych RABIT
-  i produkcji – osobna linia pod nagłówkiem projektu. Komunikaty (operacja w toku – „Trwa…”, wynik zapisu, wczytania,
-  wklejenia) – jedna linia o stałej wysokości pod datami danych (pełna treść w podpowiedzi); pokazanie i ukrycie
+  tabela; przy zwiniętym menu – szersza); skróty klawiszowe i opis kolumn – okno „?”; daty danych RABIT i produkcji,
+  źródło ACTUALS struktury i waluta – pierwszy wiersz zakładki Wskaźniki („Status”). Komunikaty (operacja w toku – „Trwa…”,
+  wynik zapisu, wczytania, wklejenia) – jedna linia o stałej wysokości pod nagłówkiem projektu (pełna treść w podpowiedzi); pokazanie i ukrycie
   komunikatu nie przesuwa zakładek ani tabeli.
 - **WP** to znacznik elementu P1S (wiersz z kodem P1S), który wskażą finansiści: zaznaczony element jest pakietem pracy
   i ma mieć koszty i budżet. Kodem nowego WP jest kod elementu P1S (WP zapisany już w słowniku zachowuje swój
@@ -167,7 +167,7 @@ i budżetem (`StructureBuilder`).
   WP bez budżetu.
 - **ACWP** (tylko do odczytu): koszt rzeczywisty narastająco z danych ACTUALS zatwierdzonego przebiegu – stan z przypięcia ostatniego
   uruchomienia z zakończonym etapem „Zatwierdzenie ACTUALS”, bez niego ostatni import (`docs/pipeline-fazy.md`, rozdz. 4.1; tag
-  „ACTUALS struktury” w nagłówku programu) (pole kwoty ze słownika
+  „ACTUALS struktury” w statusie zakładki Wskaźniki) (pole kwoty ze słownika
   „Parametry projektu”, domyślnie waluta obiektu – PLN; bez wykluczeń
   projektu i bez cost elementów oznaczonych „Rozliczeniowy” w słowniku Cost Category (słownik efektywny projektu,
   bez względu na klasę obiektu partnera); procedura `REP_ProjectCostsByElement`, `docs/model-danych.md`,
@@ -179,7 +179,7 @@ i budżetem (`StructureBuilder`).
   pokazuje koszt elementów CES swojego poddrzewa, wiersz elementu P1S – koszt przypisany do WP poddrzewa. Koszt
   elementu CES projektu, którego nie ma w nakładce – „spoza nakładki”. Kafelki ACWP i „Koszt bez WP” w zakładce
   Wskaźniki. Koszty są czytane przy otwarciu projektu i „Odśwież P1S i koszty” (nie po każdym zapisie wiersza).
-  **Z kiedy są dane** – w nagłówku ekranu projektu: „Dane RABIT z … · import … · sprawdzone …” – data raportu w RABIT
+  **Z kiedy są dane** – w statusie zakładki Wskaźniki (pierwszy wiersz): „Dane RABIT z … · import … · sprawdzone …” – data raportu w RABIT
   (modyfikacja pliku ACTUALS), data importu i ostatniego pobrania z RABIT; podpowiedź – każdy plik osobno. Ponowne
   pobranie raportu z tą samą treścią (import „pominięty” / „duplikat”) nie zmienia danych, ale przesuwa datę „dane z” na
   nowszy raport – wiadomo, że dane są aktualne na tę datę (`CAN_LatestFiles` + `META_SourceFileSeen`).
