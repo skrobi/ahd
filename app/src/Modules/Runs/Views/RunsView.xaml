@@ -32,22 +32,33 @@
         </Style>
     </UserControl.Resources>
 
-    <StackPanel>
+    <!-- Wysokość ekranu = widoczny obszar strony: lista reguł sięga do dołu okna (przewija się sama), edytor po prawej przewija się osobno. -->
+    <Grid Height="{Binding ViewportHeight, RelativeSource={RelativeSource AncestorType=ScrollViewer}}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
         <partials:PageHeader Title="Przebiegi" Subtitle="Szablony przebiegów i reguły walidacji (SQL). Program wybiera szablon w Konfiguracji (Parametry programu → Przebieg) i uruchamia przebieg na swoim ekranie.">
             <partials:PageHeader.Actions>
                 <Button Content="Odśwież" Style="{StaticResource Btn}" Command="{Binding Refresh}" />
             </partials:PageHeader.Actions>
         </partials:PageHeader>
-        <partials:BusyBar DataContext="{Binding Busy}" />
+        <partials:BusyBar Grid.Row="1" DataContext="{Binding Busy}" />
 
-        <Grid>
+        <Grid Grid.Row="2">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="290" />
                 <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
 
-            <!-- Szablony i reguły – jedna kolumna -->
-            <StackPanel Margin="0,0,16,0">
+            <!-- Szablony i reguły – jedna kolumna; lista reguł wypełnia resztę wysokości -->
+            <Grid Margin="0,0,16,0">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+                <StackPanel>
                 <TextBlock Text="Szablony" Style="{StaticResource H2}" FontSize="15" Margin="0,0,0,6" />
                 <Border Style="{StaticResource Panel}" Padding="8">
                     <StackPanel>
@@ -95,8 +106,9 @@
                 </DockPanel>
                 <TextBox Style="{StaticResource Input}" Text="{Binding RuleSearch, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,6"
                          ToolTip="Szukaj reguły: nazwa albo tabela (np. ev)" AutomationProperties.Name="Szukaj reguły" />
-                <Border Style="{StaticResource Panel}" Padding="4">
-                    <ListBox ItemsSource="{Binding Rules}" SelectedItem="{Binding SelectedRule}" BorderThickness="0" Background="Transparent" MaxHeight="560"
+                </StackPanel>
+                <Border Grid.Row="1" Style="{StaticResource Panel}" Padding="4" MinHeight="160">
+                    <ListBox ItemsSource="{Binding Rules}" SelectedItem="{Binding SelectedRule}" BorderThickness="0" Background="Transparent"
                              AutomationProperties.Name="Reguły walidacji">
                         <ListBox.ItemContainerStyle>
                             <Style TargetType="ListBoxItem" BasedOn="{StaticResource {x:Type ListBoxItem}}">
@@ -130,10 +142,13 @@
                         </ListBox.ItemTemplate>
                     </ListBox>
                 </Border>
-            </StackPanel>
+            </Grid>
 
+            <!-- Edytor reguły albo szablonu – przewijany osobno -->
+            <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <Grid>
             <!-- Edytor reguły walidacji -->
-            <StackPanel Grid.Column="1" Visibility="{Binding HasRule, Converter={StaticResource BoolToVisibility}}">
+            <StackPanel Visibility="{Binding HasRule, Converter={StaticResource BoolToVisibility}}">
                 <Border Style="{StaticResource Panel}" DataContext="{Binding SelectedRule}">
                     <StackPanel>
                         <Grid Margin="0,0,0,8">
@@ -222,7 +237,7 @@
             </StackPanel>
 
             <!-- Edytor szablonu -->
-            <StackPanel Grid.Column="1" Visibility="{Binding HasEditor, Converter={StaticResource BoolToVisibility}}">
+            <StackPanel Visibility="{Binding HasEditor, Converter={StaticResource BoolToVisibility}}">
                 <Grid Margin="0,0,0,8">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto" />
@@ -387,6 +402,8 @@
                     </StackPanel>
                 </Border>
             </StackPanel>
+            </Grid>
+            </ScrollViewer>
         </Grid>
-    </StackPanel>
+    </Grid>
 </UserControl>
