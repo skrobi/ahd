@@ -6,8 +6,10 @@
      CAS po narzutach (liczy aplikacja), rodzaj kosztu; element WBS × cost element × rok × okres × rodzaj.
    - RUN_Issue.Details – wiersz wyniku reguły (JSON kolumna → wartość): porównanie uruchomień, „Pokaż zmiany”; RUN_Issue.CheckName –
      do 200 znaków (nazwa reguły).
-   Słowniki „Kontrole przebiegu” (047) i „Reguły uzgodnień” (049) oraz kolumny Level i Threshold „Elementów kontrolnych etapów”
-   (050) – nieużywane od tej wersji (bez usuwania danych). Skrypt jest idempotentny.
+   - Sprzątanie po regułach z formułami i katalogu C# (nieużywane od tej wersji): tabele DICT_RunCheck – „Kontrole przebiegu” (047)
+     i DICT_RunReconciliation – „Reguły uzgodnień” (049) usuwane z danymi i historią; kolumny META_RunPin.CheckSettings (048)
+     oraz DICT_RunStepElement.Level i Threshold (050) usuwane.
+   Skrypt jest idempotentny.
    Uruchomienie: aplikacja (Diagnostyka → Migracja albo pytanie przy starcie); ręcznie:
        sqlcmd -S pzltestdb.intl.lmco.com -d PZLTEST -E -f 65001 -v Schema=FINOP Prefix=PZLEV_ -i 051_reguly_walidacji.sql */
 
@@ -54,6 +56,23 @@ GO
 -- Kontrola wyniku = nazwa reguły (do 200 znaków jak w słowniku).
 IF COL_LENGTH(N'[$(Schema)].[$(Prefix)RUN_Issue]', N'CheckName') < 400
     ALTER TABLE [$(Schema)].[$(Prefix)RUN_Issue] ALTER COLUMN CheckName NVARCHAR(200) NOT NULL;
+GO
+
+-- Sprzątanie: słowniki i kolumny reguł sprzed reguł SQL.
+IF OBJECT_ID(N'[$(Schema)].[$(Prefix)DICT_RunCheck]') IS NOT NULL
+    DROP TABLE [$(Schema)].[$(Prefix)DICT_RunCheck];
+GO
+IF OBJECT_ID(N'[$(Schema)].[$(Prefix)DICT_RunReconciliation]') IS NOT NULL
+    DROP TABLE [$(Schema)].[$(Prefix)DICT_RunReconciliation];
+GO
+IF COL_LENGTH(N'[$(Schema)].[$(Prefix)META_RunPin]', N'CheckSettings') IS NOT NULL
+    ALTER TABLE [$(Schema)].[$(Prefix)META_RunPin] DROP COLUMN CheckSettings;
+GO
+IF COL_LENGTH(N'[$(Schema)].[$(Prefix)DICT_RunStepElement]', N'Level') IS NOT NULL
+    ALTER TABLE [$(Schema)].[$(Prefix)DICT_RunStepElement] DROP COLUMN Level;
+GO
+IF COL_LENGTH(N'[$(Schema)].[$(Prefix)DICT_RunStepElement]', N'Threshold') IS NOT NULL
+    ALTER TABLE [$(Schema)].[$(Prefix)DICT_RunStepElement] DROP COLUMN Threshold;
 GO
 
 IF NOT EXISTS (SELECT 1 FROM [$(Schema)].[$(Prefix)META_SchemaVersion] WHERE Version = 51)

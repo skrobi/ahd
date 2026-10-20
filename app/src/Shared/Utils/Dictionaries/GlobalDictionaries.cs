@@ -256,7 +256,7 @@ public static partial class GlobalDictionaries
             Code = RunStepElements,
             Name = "Elementy kontrolne etapów",
             Hidden = true,
-            Description = "Reguły etapu z akcją Kontrole: reguła walidacji (nazwa – słownik „Reguły walidacji”), aktywna. Poziom – w regule (kolumny Level i Threshold tabeli nieużywane).",
+            Description = "Reguły etapu z akcją Kontrole: reguła walidacji (nazwa – słownik „Reguły walidacji”), aktywna. Poziom – w regule.",
             Columns =
             [
                 new("Definicja", ColumnType.Text, Key: true, Lookup: RunDefinitionHeaders),

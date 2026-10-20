@@ -448,18 +448,18 @@ rozpoznawalne po `RecordedBy = N'migracja 046 – kursy przybliżone'` – przed
 **Migracja `sql/mssql/047_kontrole_przebiegu.sql`:** słownik globalny `DICT_RunCheck` – „Kontrole przebiegu” (`ProjectType`:
 Wszystkie / WEWNETRZNY / SAC / CAS, `RuleName` – nazwa reguły katalogu, `RunKind`: Każdy / Zamykający / W środku okresu,
 `IsActive`, `Level` ERROR / WARNING / INFO, `Threshold`, `Description`; klucz bieżących wersji `Project`, `ProjectType`,
-`RuleName`, `RunKind`); bez danych startowych. Wymaga aplikacji 0.56.0. Nieużywany od reguł walidacji w SQL (migracja 051).
+`RuleName`, `RunKind`); bez danych startowych. Wymaga aplikacji 0.56.0. Usunięty migracją 051 (reguły walidacji w SQL).
 
 **Migracja `sql/mssql/048_definicja_w_uruchomieniu.sql`:** `META_RunPin.CheckSettings` (`NVARCHAR(MAX)`, JSON: kod reguły →
 aktywna, poziom, próg) – ustawienia reguł kontroli użyte w uruchomieniu (słownik „Kontrole przebiegu” w chwili przebiegu);
 NULL – uruchomienie sprzed migracji. Od migracji 050 aplikacja nie zapisuje kolumny – ustawienia są w definicji przebiegu
-uruchomienia (`META_RunPin.Definition`). Wymaga aplikacji 0.56.0.
+uruchomienia (`META_RunPin.Definition`); kolumna usunięta migracją 051. Wymaga aplikacji 0.56.0.
 
 **Migracja `sql/mssql/049_reguly_uzgodnien.sql`:** słownik globalny `DICT_RunReconciliation` – „Reguły uzgodnień” (`ProjectType`,
 `Name`, `RunKind`, `IsActive`, `LeftFormula`, `Comparison` =, <=, >=, <>, `RightFormula`, `Tolerance`, `Level`, `Description`; klucz
 bieżących wersji `Project`, `ProjectType`, `Name`, `RunKind`) – własne kontrole przebiegu na miarach programu
-(`docs/pipeline-fazy.md`, rozdz. 4.1); bez danych startowych. Wymaga aplikacji 0.56.0. Nieużywany od reguł walidacji w SQL
-(migracja 051 – uzgodnienia to reguły SQL).
+(`docs/pipeline-fazy.md`, rozdz. 4.1); bez danych startowych. Wymaga aplikacji 0.56.0. Usunięty migracją 051 (uzgodnienia to
+reguły SQL).
 
 **Migracja `sql/mssql/050_definicje_przebiegow.sql`:** definicje przebiegów (workflow, `docs/pipeline-fazy.md`, rozdz. 4.1) –
 słowniki globalne `DICT_RunDefinition` – „Definicje przebiegów” (`Code`, `ProjectType`, `ProgramCode` – NULL: wszystkie programy
@@ -477,8 +477,9 @@ startowych – pusty słownik oznacza reguły startowe aplikacji); `RUN_BalanceE
 (tabela `ev` reguł: `PinId`, `WbsElement`, `CostElement`, `FiscalYear`, `Period`, `CostKind`, `Amount`; bez rozliczeniowych, po
 Wykluczeniach, CAS po narzutach – zapisuje aplikacja przy przypięciu i przed regułami etapu walidacji); `RUN_Issue.Details`
 (`NVARCHAR(MAX)`, JSON kolumna → wartość) – wiersz wyniku reguły do porównania uruchomień i „Pokaż zmiany”; `RUN_Issue.CheckName`
-– `NVARCHAR(200)` (nazwa reguły). `DICT_RunCheck` (047),
-`DICT_RunReconciliation` (049) i kolumny `DICT_RunStepElement.Level` / `Threshold` (050) – nieużywane od tej wersji (O54).
+– `NVARCHAR(200)` (nazwa reguły). Sprzątanie: usuwa
+`DICT_RunCheck` (047) i `DICT_RunReconciliation` (049) z danymi i historią oraz kolumny `META_RunPin.CheckSettings` (048)
+i `DICT_RunStepElement.Level` / `Threshold` (050).
 Wymaga aplikacji 0.59.0.
 
 `META_SourceFile.CanonicalStatus`: „utworzone” – dane kanoniczne zapisane i sprawdzone (widoczne dla odczytów),

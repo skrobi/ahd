@@ -92,8 +92,10 @@ public sealed class SqlMigrationsTests
         // + META_Run, META_RunPin, RUN_Balance, RUN_Issue (027) + DICT_ProjectSetting (028)
         // + DICT_CasBurdenGroup, DICT_CasBurdenRate (029) + DICT_CasPool, DICT_CasBurdenFormula (031)
         // – DICT_CasBurdenFormula + DICT_CasFormula (033) + CAN_ActualsBalance (037) + DICT_RunCheck (047) + DICT_RunReconciliation (049)
-        // + DICT_RunDefinition, DICT_RunStep, DICT_RunStepElement, META_RunStep (050) + DICT_RunValidation, RUN_BalanceEv (051)
-        Assert.Equal(42, tables.Count);
+        // + DICT_RunDefinition, DICT_RunStep, DICT_RunStepElement, META_RunStep (050) + DICT_RunValidation, RUN_BalanceEv
+        // – DICT_RunCheck, DICT_RunReconciliation (051)
+        Assert.Equal(40, tables.Count);
+        Assert.DoesNotContain(tables, t => t.EndsWith("DICT_RunCheck") || t.EndsWith("DICT_RunReconciliation"));
         Assert.DoesNotContain(tables, t => t.EndsWith("CAN_Actuals") || t.EndsWith("CAN_MappingReport") || t.EndsWith("STG_RawRow") || t.EndsWith("SourceFileContent"));
         Assert.Contains(database.Sql.Settings.TablePrefix + "META_PerformanceObjective", tables);
         Assert.Contains(database.Sql.Settings.TablePrefix + "DICT_ScheduleBudget", tables);

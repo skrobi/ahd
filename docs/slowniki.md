@@ -72,7 +72,7 @@ Słowniki, kreator projektu), `docs/zrodla-danych.md` (struktura P1S).
 | Parametry produkcji | `Okno produktywności IPT (mies.)` (12), `Statusy materiałów dostarczonych` (DOST, WYD), `Wartość materiałów ÷ (1 + Z_CLO)` (tak); puste słowniki – wartości raportu S70MR (informacja na ekranie projektu) | parametr | odczyt danych produkcyjnych (`sql/pzlprod/produkcja.sql`) |
 | Definicje przebiegów | szablon przebiegu (workflow, `docs/pipeline-fazy.md`, rozdz. 4.1): `Definicja` (nazwa) → `Typ programu` – typ, dla którego szablon jest domyślny (Wszystkie / WEWNETRZNY / SAC / CAS), `Aktywna`, `Opis`; `Program`, `Przebieg` – nieużywane (puste, „Każdy”); program wybiera szablon w „Parametry projektu” (`Przebieg`), bez wyboru – aktywny szablon swojego typu przed „Wszystkie”; bez szablonów – definicja wbudowana; szablony startowe „Wewnętrzny” (Wszystkie) i „CAS” – przycisk na ekranie Przebiegi | definicja | przebieg – etapy i bramki (P0–P2) |
 | Etapy przebiegów | `Definicja`, `Kolejność` → `Etap` (nazwa), `Akcja` (Import źródeł / Przypięcie stanu – stałe, etapy 1 i 2; Kontrole; Zatwierdzenie), `Bramka WARNING` (Potwierdzenie / Informacja), `Zatwierdzenie` (tak – etap czeka na potwierdzenie), `Opis` | definicja + kolejność | etapy przebiegu |
-| Elementy kontrolne etapów | `Definicja`, `Etap`, `Element` (nazwa reguły walidacji) → `Aktywny`, `Opis`; poziom – w regule (kolumny `Level` i `Threshold` tabeli – nieużywane, O54) | definicja + etap + element | reguły etapu walidacji przebiegu |
+| Elementy kontrolne etapów | `Definicja`, `Etap`, `Element` (nazwa reguły walidacji) → `Aktywny`, `Opis`; poziom – w regule | definicja + etap + element | reguły etapu walidacji przebiegu |
 | Reguły walidacji | reguły walidacji przebiegu w SQL (`docs/pipeline-fazy.md`, rozdz. 4.1): `Nazwa` → `Opis`, `Poziom` (ERROR / WARNING / INFO), `Aktywna`, `Zapytanie SQL` (jeden SELECT / WITH na tabelach danych uruchomienia; każdy zwrócony wiersz – nieprawidłowość), `Opis wyniku` (kolumny w { }); edycja – edytor reguł na ekranie Przebiegi; pusty słownik – reguły startowe aplikacji (pierwszy zapis tworzy wiersze); migracja 051 | nazwa | etapy walidacji przebiegu |
 
 Definicje źródeł i ich prefiksy są konfiguracją importu – `docs/zrodla-danych.md`, rozdz. 2.
@@ -80,7 +80,7 @@ Definicje źródeł i ich prefiksy są konfiguracją importu – `docs/zrodla-da
 Słowniki przebiegu (Definicje przebiegów, Etapy przebiegów, Elementy kontrolne etapów, Reguły walidacji) nie są na liście ekranu
 Słowniki – szablony (kafelki etapów) i reguły walidacji (edytor SQL z testem na programie) edytuje ekran Przebiegi (ta sama historia
 i walidacja przy zapisie; `docs/funkcjonalnosc.md`, rozdz. 2). Słowniki „Kontrole przebiegu” (047) i „Reguły uzgodnień” (049) –
-nieużywane od reguł SQL (F5.7; dane zostają, O54).
+usunięte migracją 051 (reguły SQL, F5.7).
 
 Na ekranie Słowniki przycisk **„Struktura P1S (PZLPROD)”** otwiera drzewo `LOG.WBS` (Z_KAT_ZBIORCZA → Z_KATEGORIA →
 Z_OPIS → PROJORG → elementy) z wyszukiwarką – tylko do odczytu, to nie jest słownik (`docs/zrodla-danych.md`, rozdz. 5.3).

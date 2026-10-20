@@ -101,7 +101,8 @@ zmieni). Brak pliku albo błąd w nim = komunikat przy starcie z nazwą pola –
   wyniku (`RUN_Issue.StepNo`); bez danych startowych (definicja wbudowana);
 - `051_reguly_walidacji.sql` – reguły walidacji przebiegu w SQL: słownik globalny „Reguły walidacji” (`DICT_RunValidation` –
   zapytanie, poziom, opis wyniku; edytor na ekranie Przebiegi), dane jak w strukturze programu (`RUN_BalanceEv` – tabela `ev`
-  reguł), wiersz wyniku reguły (`RUN_Issue.Details`); bez danych startowych (reguły startowe aplikacji).
+  reguł), wiersz wyniku reguły (`RUN_Issue.Details`); sprzątanie – usuwa słowniki 047 i 049 oraz kolumny `CheckSettings` (048)
+  i `Level` / `Threshold` (050); bez danych startowych (reguły startowe aplikacji).
 
 Migracje wykonuje przycisk **Diagnostyka → Migracja** – uruchamia po kolei skrypty, których numeru nie ma
 w `META_SchemaVersion`, a wykonane pomija. Lista na tym ekranie pokazuje, które skrypty są wykonane (kiedy, kto)
