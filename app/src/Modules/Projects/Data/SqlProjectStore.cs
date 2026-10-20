@@ -3,6 +3,7 @@ using Microsoft.Data.SqlClient;
 using PzlEv.Modules.Projects.Models;
 using PzlEv.Shared.Models.Db;
 using PzlEv.Shared.Models.Dictionaries;
+using PzlEv.Shared.Models.Pipeline;
 using PzlEv.Shared.Utils.Data;
 using PzlEv.Shared.Utils.Data.Sql;
 
@@ -255,11 +256,11 @@ public sealed class SqlProjectStore(SqlDatabase db, IClock clock, ICurrentUser u
             .ToDictionary(r => r.WbsElement, r => r.Amount ?? 0, StringComparer.OrdinalIgnoreCase);
     }
 
-    public ElementActuals CostsAndHoursByElement(string code, string value, string hours)
+    public ElementActuals CostsAndHoursByElement(string code, string value, string hours, DateTimeOffset? asOf = null)
     {
         using var connection = db.Open();
         var rows = connection.Query<(string WbsElement, decimal? Amount, int Rows, decimal? Hours, decimal? Labor, decimal? Material)>(
-                db.Table("rep.ProjectCostsByElement"), new { Project = code, Value = value, Hours = hours },
+                db.Table("rep.ProjectCostsByElement"), new { Project = code, Value = value, Hours = hours, AsOf = asOf },
                 commandType: System.Data.CommandType.StoredProcedure, commandTimeout: 600)
             .ToList();
         IReadOnlyDictionary<string, decimal> Of(Func<(string WbsElement, decimal? Amount, int Rows, decimal? Hours, decimal? Labor, decimal? Material), decimal?> value) =>
@@ -268,11 +269,26 @@ public sealed class SqlProjectStore(SqlDatabase db, IClock clock, ICurrentUser u
             Of(r => r.Hours), Of(r => r.Labor), Of(r => r.Material));
     }
 
-    public IReadOnlyList<CasCostRow> CasCosts(string code)
+    public IReadOnlyList<CasCostRow> CasCosts(string code, DateTimeOffset? asOf = null)
     {
         using var connection = db.Open();
-        return connection.Query<CasCostRow>(db.Table("rep.ProjectCasCosts"), new { Project = code },
+        return connection.Query<CasCostRow>(db.Table("rep.ProjectCasCosts"), new { Project = code, AsOf = asOf },
             commandType: System.Data.CommandType.StoredProcedure, commandTimeout: 600).ToList();
+    }
+
+    public ApprovedActuals? ApprovedActuals(string code)
+    {
+        using var connection = db.Open();
+        return connection.QueryFirstOrDefault<ApprovedActuals>(
+            $"""
+            SELECT TOP (1) r.Code AS RunCode, p.PinNo, pin.FinishedAt AS AsOf, a.ActedBy AS ApprovedBy, a.Comment
+            FROM {db.Table(DbTables.RunPin)} p
+            JOIN {db.Table(DbTables.Run)} r ON r.RunId = p.RunId
+            JOIN {db.Table("meta.RunStep")} a ON a.PinId = p.PinId AND a.Action = @approve AND a.Status = @done
+            JOIN {db.Table("meta.RunStep")} pin ON pin.PinId = p.PinId AND pin.Action = @pin AND pin.Status = @done AND pin.FinishedAt IS NOT NULL
+            WHERE r.Project = @code AND p.Rows IS NOT NULL
+            ORDER BY pin.FinishedAt DESC, p.PinId DESC
+            """, new { code, approve = RunActions.ApproveActuals, pin = RunActions.Pin, done = RunStepStatuses.Done });
     }
 
     public IReadOnlyList<string> CurrenciesOf(IReadOnlyCollection<string> definitions, string currencyField)

@@ -113,7 +113,8 @@ public sealed class RunService(IRunStore store, AppServices services, Func<ISour
                 return Outcome(pin, steps, "Potwierdzenie wymaga komentarza.");
             var step = steps.Single(s => s.StepNo == stepNo);
             var at = services.Clock.Now;
-            var what = step.Status == RunStepStatuses.Failed ? $"błędy zaakceptowane ({step.Errors})" : "potwierdzony";
+            var what = step.Status == RunStepStatuses.Failed ? $"błędy zaakceptowane ({step.Errors})"
+                : step.Action == RunActions.ApproveActuals ? "dane ACTUALS zatwierdzone (struktura programu)" : "potwierdzony";
             store.SetStep(pinId, stepNo, RunStepStatuses.Done, step.StartedAt, step.FinishedAt ?? at, services.User.Account, step.Errors, step.Warnings,
                 $"{at.ToLocalTime():yyyy-MM-dd HH:mm} {services.User.Account} – {what}: {comment.Trim()}");
             services.Journal.Add(Area, $"Przebieg {pin.Code} #{pin.PinNo}: etap {stepNo} „{step.Name}” {what} – {comment.Trim()}", pin.Code);
@@ -205,7 +206,10 @@ public sealed class RunService(IRunStore store, AppServices services, Func<ISour
     private static RunOutcome Outcome(RunPinRow pin, IReadOnlyList<RunStepRow> steps, string summary) =>
         new(pin.Project, pin.Code, RunWorkflowEngine.PinStatus(steps), steps.Sum(s => s.Errors), steps.Sum(s => s.Warnings), summary);
 
-    /// <summary>Akcja etapu: import źródeł, przypięcie stanu, kontrole (elementy kontrolne etapu), zatwierdzenie (bez wykonania); label – postęp etapu.</summary>
+    /// <summary>
+    /// Akcja etapu: import źródeł, przypięcie stanu, kontrole (elementy kontrolne etapu), zatwierdzenie i zatwierdzenie ACTUALS (bez wykonania –
+    /// czekają na analityka); label – postęp etapu.
+    /// </summary>
     private List<RunIssue> ExecuteStep(RunPinRow pin, RunStepDefinition step, string label, IProgress<string>? progress, CancellationToken cancellation) =>
         step.Action switch
         {

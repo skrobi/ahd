@@ -58,6 +58,8 @@ public sealed class RunsViewModel : ObservableObject
         AddValidation = new RelayCommand(_ => AddStep(new RunStepDefinition(0, NextName("Walidacja"), RunActions.Checks, RunGates.Confirm, false, [])), _ => HasEditor);
         AddApproval = new RelayCommand(_ => AddStep(new RunStepDefinition(0, NextName("Zatwierdzenie"), RunActions.Approval, RunGates.Confirm, true, [],
             "Analityk zatwierdza wynik przebiegu (komentarz w dzienniku).")), _ => HasEditor);
+        AddActualsApproval = new RelayCommand(_ => AddStep(RunDefinitions.ActualsApproval(0)),
+            _ => HasEditor && Steps.All(s => !s.IsActualsApproval));
         MoveLeft = new RelayCommand(p => Move(p as RunStepTileViewModel, -1), p => CanMove(p as RunStepTileViewModel, -1));
         MoveRight = new RelayCommand(p => Move(p as RunStepTileViewModel, 1), p => CanMove(p as RunStepTileViewModel, 1));
         RemoveStep = new RelayCommand(p => Remove(p as RunStepTileViewModel), p => p is RunStepTileViewModel { IsFixed: false });
@@ -83,6 +85,9 @@ public sealed class RunsViewModel : ObservableObject
     public ICommand DeleteTemplate { get; }
     public ICommand AddValidation { get; }
     public ICommand AddApproval { get; }
+
+    /// <summary>Klocek systemowy „Zatwierdzenie ACTUALS” (najwyżej jeden w szablonie).</summary>
+    public ICommand AddActualsApproval { get; }
     public ICommand MoveLeft { get; }
     public ICommand MoveRight { get; }
     public ICommand RemoveStep { get; }
@@ -318,7 +323,7 @@ public sealed class RunsViewModel : ObservableObject
         return tile;
     }
 
-    /// <summary>Nowy szablon: kopia wybranego (nazwa „… – kopia”) albo etapy stałe, walidacja i zatwierdzenie.</summary>
+    /// <summary>Nowy szablon: kopia wybranego (nazwa „… – kopia”) albo etapy stałe, walidacja, zatwierdzenie ACTUALS i zatwierdzenie.</summary>
     private void StartNew(RunTemplate? source)
     {
         SelectRule(null);
@@ -336,7 +341,8 @@ public sealed class RunsViewModel : ObservableObject
         [
             .. RunDefinitions.FixedSteps,
             new(3, RunRules.ActualsArea, RunActions.Checks, RunGates.Confirm, false, []),
-            new(4, "Zatwierdzenie analityka", RunActions.Approval, RunGates.Confirm, true, [], "Analityk zatwierdza wynik przebiegu (komentarz w dzienniku)."),
+            RunDefinitions.ActualsApproval(4),
+            new(5, "Zatwierdzenie analityka", RunActions.Approval, RunGates.Confirm, true, [], "Analityk zatwierdza wynik przebiegu (komentarz w dzienniku)."),
         ]);
         _loading = false;
         IsDirty = true;

@@ -672,18 +672,19 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
 
     /// <summary>
     /// ACWP (pole kwoty field) i Actual DLH (suma „Total Quantity” z tych samych wierszy) po elemencie CES – jedno wywołanie
-    /// REP_ProjectCostsByElement (migracja 036; wcześniej dwa odczyty dużego zrzutu ACTUALS).
+    /// REP_ProjectCostsByElement (migracja 036; wcześniej dwa odczyty dużego zrzutu ACTUALS). asOf – stan danych zatwierdzonego
+    /// przebiegu (ApprovedActuals, migracja 054); null – ostatni import.
     /// </summary>
-    public ElementActuals CostsAndHoursByElement(string code, string field)
+    public ElementActuals CostsAndHoursByElement(string code, string field, DateTimeOffset? asOf = null)
     {
         var process = Process(code, field);
-        var actuals = store.CostsAndHoursByElement(code, process.AmountField(field), ActualsHours);
+        var actuals = store.CostsAndHoursByElement(code, process.AmountField(field), ActualsHours, asOf);
         if (!process.TransformsCosts)
             return actuals;
         // Koszt liczony procesem projektu z kosztów bazowych po okresach (np. CAS – narzuty, kurs CAS); Actual DLH – godziny
         // z tych samych wierszy co dotąd.
         var hours = actuals.Hours;
-        var data = store.CasCosts(code);
+        var data = store.CasCosts(code, asOf);
         var result = process.Costs(CostRows(data), LastPeriod(data));
         if (result.Error is { } error)
             throw new InvalidOperationException(error);
@@ -754,6 +755,9 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
 
     /// <summary>Z kiedy są dane ACTUALS (data raportu w RABIT, import, ostatnie sprawdzenie) – nagłówek ekranu projektu.</summary>
     public ActualsFreshness ActualsFreshness() => new(store.ActualsFiles());
+
+    /// <summary>Ostatni przebieg programu z zatwierdzonymi danymi ACTUALS – stan danych struktury; null – ostatni import.</summary>
+    public ApprovedActuals? ApprovedActuals(string code) => store.ApprovedActuals(code);
 
     /// <summary>
     /// Zapis zmiany wiersza tabeli struktury od razu po jej zatwierdzeniu (bez osobnego „Zapisz”): nazwa i Legacy WBS –

@@ -258,8 +258,10 @@
                     <StackPanel Orientation="Horizontal">
                         <Button Content="+ Etap walidacji" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding AddValidation}"
                                 ToolTip="Etap z zaznaczonymi regułami walidacji (bramka: ERROR zatrzymuje, WARNING – potwierdzenie albo informacja)" />
-                        <Button Content="+ Zatwierdzenie" Style="{StaticResource Btn}" Command="{Binding AddApproval}"
+                        <Button Content="+ Zatwierdzenie" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding AddApproval}"
                                 ToolTip="Etap, na którym przebieg czeka na zatwierdzenie analityka z komentarzem" />
+                        <Button Content="+ Zatwierdzenie ACTUALS" Style="{StaticResource Btn}" Command="{Binding AddActualsApproval}"
+                                ToolTip="Klocek systemowy (najwyżej jeden): analityk zatwierdza dane ACTUALS przebiegu – od zatwierdzenia struktura programu pokazuje koszty z tego przebiegu" />
                     </StackPanel>
                 </DockPanel>
                 <TextBlock Text="{Binding Status}" TextWrapping="Wrap" Margin="0,0,0,4" />
@@ -333,6 +335,8 @@
                         <TextBlock Text="{Binding Title}" Style="{StaticResource H2}" FontSize="15" Margin="0,0,0,6" />
                         <TextBlock Text="Klocek predefiniowany: korzysta z konfiguracji programu (Źródła danych, Parametry programu) – zawsze na początku przebiegu."
                                    Style="{StaticResource MutedText}" TextWrapping="Wrap" Visibility="{Binding IsFixed, Converter={StaticResource BoolToVisibility}}" />
+                        <TextBlock Text="Klocek systemowy: przebieg czeka na zatwierdzenie danych ACTUALS z komentarzem. Struktura programu pokazuje koszty z ostatniego przebiegu z zatwierdzonymi danymi – nowy import RABIT ani niezatwierdzony przebieg ich nie zmieniają."
+                                   Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="0,0,0,6" Visibility="{Binding IsActualsApproval, Converter={StaticResource BoolToVisibility}}" />
                         <Grid Visibility="{Binding IsEditable, Converter={StaticResource BoolToVisibility}}" Margin="0,0,0,8">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto" />

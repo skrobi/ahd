@@ -106,7 +106,9 @@ zmieni). Brak pliku albo błąd w nim = komunikat przy starcie z nazwą pola –
 - `052_naprawa_regul_walidacji.sql` – naprawa bazy z migracją 051 z aplikacji 0.58.0 (stara tabela reguł z formułami → reguły SQL,
   brakujące zmiany 051);
 - `053_dane_reguly_i_przebiegi.sql` (dane startowe) – reguły startowe w słowniku „Reguły walidacji” i szablony przebiegów
-  „Wewnętrzny” i „CAS” z etapami walidacji; usuwa elementy etapów „Uzgodnienie: …”.
+  „Wewnętrzny” i „CAS” z etapami walidacji; usuwa elementy etapów „Uzgodnienie: …”;
+- `054_struktura_na_zatwierdzonym_przebiegu.sql` – procedury kosztów struktury z parametrem `@AsOf` (dane ACTUALS zatwierdzonego
+  przebiegu – klocek „Zatwierdzenie ACTUALS”).
 
 Migracje wykonuje przycisk **Diagnostyka → Migracja** – uruchamia po kolei skrypty, których numeru nie ma
 w `META_SchemaVersion`, a wykonane pomija. Lista na tym ekranie pokazuje, które skrypty są wykonane (kiedy, kto)

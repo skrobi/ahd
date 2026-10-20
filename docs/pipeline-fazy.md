@@ -214,9 +214,16 @@ szablony startowe”) i lista reguł walidacji (bez osobnego okna i zakładek). 
 **Import źródeł** i **Przypięcie stanu** korzystają z konfiguracji programu (Źródła danych, Parametry programu) – zawsze etapy 1 i 2,
 bez zmian i przesuwania. Dalej etapy dokładane w edytorze: **etap walidacji** (tylko zaznaczanie reguł walidacji – lista z poziomem
 i użytymi tabelami, szukaj po nazwie albo tabeli; treść i poziom reguły – edytor reguł; bramka WARNING: „Potwierdzenie” – wstrzymuje
-do potwierdzenia z komentarzem, „Informacja” – przebieg idzie dalej; opcjonalnie zatwierdzenie po etapie) i **zatwierdzenie**
-(przebieg czeka na analityka). Zapis sprawdza strukturę (`RunDefinitions.Validate`: etapy stałe na początku, nazwy etapów bez
-powtórzeń, etap walidacji z regułą, reguły istniejące w regułach walidacji) i zapisuje szablon w słownikach globalnych „Definicje
+do potwierdzenia z komentarzem, „Informacja” – przebieg idzie dalej; opcjonalnie zatwierdzenie po etapie), **zatwierdzenie**
+(przebieg czeka na analityka) i klocek systemowy **Zatwierdzenie ACTUALS** (najwyżej jeden; „+ Zatwierdzenie ACTUALS”): przebieg czeka,
+aż analityk zatwierdzi dane ACTUALS przebiegu z komentarzem („Zatwierdź dane ACTUALS i dalej”). **Struktura programu** (ACWP, Actual DLH,
+ACWP Labor / Material, wskaźniki) pokazuje dane ACTUALS w stanie z przypięcia ostatniego uruchomienia z zakończonym tym etapem
+(pliki zaimportowane do końca etapu Przypięcie stanu – `@AsOf` procedur `REP_ProjectCostsByElement` / `REP_ProjectCasCosts`, migracja
+054; `SqlProjectStore.ApprovedActuals`): nowy import RABIT ani przebieg bez zatwierdzenia (także ponowne wykonanie wcześniejszego etapu –
+zatwierdzenie Nieaktualne) nie zmieniają struktury. Bez zatwierdzonego uruchomienia – ostatni import (tag nagłówka „ACTUALS struktury:
+ostatni import – niezatwierdzone”). Słowniki (Cost Category, Wykluczenia) – bieżące. Zapis sprawdza strukturę (`RunDefinitions.Validate`:
+etapy stałe na początku, najwyżej jedno Zatwierdzenie ACTUALS, nazwy etapów bez powtórzeń, etap walidacji z regułą, reguły istniejące
+w regułach walidacji) i zapisuje szablon w słownikach globalnych „Definicje
 przebiegów”, „Etapy przebiegów”, „Elementy kontrolne etapów” (historia; `docs/slowniki.md`, rozdz. 2;
 `Modules/Runs/Services/RunTemplateService.cs`). Szablonu wybranego w programach nie można usunąć.
 
@@ -224,7 +231,8 @@ Program wybiera przebieg w kreatorze (krok 1) albo w Konfiguracji → „Paramet
 przebiegu (`RunDefinitions.For`): wybrany szablon (aktywny, z etapami); bez wyboru (albo wybrany nieaktywny) – aktywny szablon
 domyślny dla typu programu (typ przed „Wszystkie”); bez szablonów – **definicja wbudowana** „Standardowy (wbudowany)”: 1 Import
 źródeł → 2 Przypięcie stanu → 3 Walidacja ACTUALS (13 reguł startowych ACTUALS) → 4 Walidacja EV (8 reguł startowych EV) →
-5 Zatwierdzenie analityka (etapy walidacji z bramką „Potwierdzenie”; szablony startowe mają te same etapy). Przebieg zamykający okres
+5 Zatwierdzenie analityka (etapy walidacji z bramką „Potwierdzenie”; szablony startowe mają te same etapy – bez Zatwierdzenia ACTUALS,
+które dokłada się w edytorze szablonu; nowy szablon ma je od razu). Przebieg zamykający okres
 i w środku okresu mają tę samą definicję – wariant to informacja dla analityka (dziennik, ekran programu). Definicja (z etapami
 i regułami etapów) zapisuje się w uruchomieniu (`META_RunPin.Definition`, JSON) – zmiana szablonu nie zmienia trwającego przebiegu;
 treść reguły – z bieżącego słownika w chwili wykonania etapu. Model – `Shared/Models/Pipeline/RunWorkflow.cs`.
@@ -298,11 +306,13 @@ na bazie `RunRulesSqlTests`):
 
 Wyniki w programie (zakładka Przebieg, O53 – bez wykresów i porównań okresów; wynik zapytania i problemy):
 - wyniki etapu po regułach – poziom (ERROR / WARNING / INFO / OK), nazwa, liczba problemów; najpierw najgorsze;
-- wybrana reguła – **kontekst sprawdzenia**: co sprawdza (opis reguły), dane (tabele użyte w zapytaniu z opisem), zakres uruchomienia
-  (bieżący okres, okresy zamknięte, poprzedni przebieg do porównania);
-- **wynik zapytania**: kolumny zwrócone przez SQL (`RUN_Issue.Details`, JSON), na początku Nr, Poziom, **Problem** i **Wskazówka** –
-  kolumny wyniku `Problem` i `Wskazowka`, a bez nich opis wyniku (np. netowanie: „rozliczenie niepełne” / „rozliczenie większe niż
-  koszt” / „brak rozliczenia” ze wskazówką);
+- etapy uruchomienia – poziomy pasek kafelków nad wynikami (status, liczby wyników, komentarz potwierdzenia);
+- wybrana reguła – **kontekst sprawdzenia**: co sprawdza (opis reguły); dane (tabele użyte w zapytaniu z opisem) i zakres uruchomienia
+  (bieżący okres, okresy zamknięte, poprzedni przebieg do porównania) – w podpowiedzi;
+- **wynik zapytania**: najpierw kolumny zwrócone przez SQL (`RUN_Issue.Details`, JSON; kolumny liczbowe – do prawej, kwoty z separatorem
+  tysięcy), potem **Problem** – kolumna wyniku `Problem`, a bez niej opis wyniku (np. netowanie: „rozliczenie niepełne” / „rozliczenie
+  większe niż koszt” / „brak rozliczenia”); **Wskazówka** (kolumna `Wskazowka` albo opis wyniku) – pod tabelą: wspólna dla wszystkich
+  wierszy raz, inaczej zaznaczonego wiersza; poziom – na liście reguł (Excel – z Nr, Poziomem i Wskazówką);
 - **linie ACTUALS** zaznaczonego wiersza – zakres z kolumn wiersza: `ElementWBS`, `CostElement` albo `RodzajKosztu` (cost elementy
   rodzaju w danych przypiętych), okres – `RokOkres` albo `Okres` „RRRR/OO”, albo `Rok` i `Okres` (okres 12 obejmuje 13–16); bez elementu
   WBS – elementy WBS programu z danych przypiętych; najnowsze wersje plików zaimportowane do końca przypięcia; 500 największych wg

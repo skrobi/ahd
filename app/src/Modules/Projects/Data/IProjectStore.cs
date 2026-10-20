@@ -48,15 +48,22 @@ public interface IProjectStore
 
     /// <summary>
     /// Koszt (pole kwoty value) i godziny (pole hours, np. TotalQuantity) po elemencie CES jednym wywołaniem
-    /// REP_ProjectCostsByElement (migracja 036) – ACWP i Actual DLH struktury; ACWP Labor / Material (migracja 038).
+    /// REP_ProjectCostsByElement (migracja 036) – ACWP i Actual DLH struktury; ACWP Labor / Material (migracja 038). asOf – stan danych
+    /// (pliki zaimportowane do tej chwili – zatwierdzony przebieg, migracja 054); null – ostatni import.
     /// </summary>
-    ElementActuals CostsAndHoursByElement(string code, string value, string hours);
+    ElementActuals CostsAndHoursByElement(string code, string value, string hours, DateTimeOffset? asOf = null);
 
     /// <summary>
     /// Koszt bazowy projektu CAS po elemencie WBS × Cost Element × rok × okres w PLN, z Grouping i opisami raportu kosztów
-    /// (procedura REP_ProjectCasCosts, migracja 045) – podstawa kosztu po narzutach (CasCosts).
+    /// (procedura REP_ProjectCasCosts, migracja 045) – podstawa kosztu po narzutach (CasCosts). asOf – jak CostsAndHoursByElement.
     /// </summary>
-    IReadOnlyList<CasCostRow> CasCosts(string code);
+    IReadOnlyList<CasCostRow> CasCosts(string code, DateTimeOffset? asOf = null);
+
+    /// <summary>
+    /// Ostatni przebieg projektu z zakończonym etapem „Zatwierdzenie ACTUALS” (tabele modułu Przebiegi): kod, numer uruchomienia,
+    /// stan danych (koniec przypięcia stanu) i kto zatwierdził; null – brak.
+    /// </summary>
+    ApprovedActuals? ApprovedActuals(string code);
 
     /// <summary>Kody walut z kolumny currencyField (ObjectCurrency, ReportCurrency) w ostatnim imporcie ACTUALS projektu.</summary>
     IReadOnlyList<string> ProjectCurrencies(string code, string currencyField);

@@ -494,6 +494,11 @@ zostaje), szablony przebiegów „Wewnętrzny” (Wszystkie) i „CAS” w `DICT
 elementów etapów „Uzgodnienie: …” (historia zostaje). Wiersze `RecordedBy = N'migracja 053 – reguły i szablony startowe'`. Wymaga
 aplikacji 0.59.0.
 
+**Migracja `sql/mssql/054_struktura_na_zatwierdzonym_przebiegu.sql`:** `REP_ProjectCostsByElement` (043) i `REP_ProjectCasCosts` (045)
+z parametrem `@AsOf` – dane ACTUALS z plików zaimportowanych do tej chwili (`CAN_LatestFiles`); NULL – ostatni import (jak dotąd).
+Struktura programu podaje koniec przypięcia stanu ostatniego uruchomienia z zakończonym etapem „Zatwierdzenie ACTUALS” (akcja etapu
+`META_RunStep.Action`; `docs/pipeline-fazy.md`, rozdz. 4.1). Wymaga aplikacji 0.60.0.
+
 `META_SourceFile.CanonicalStatus`: „utworzone” – dane kanoniczne zapisane i sprawdzone (widoczne dla odczytów),
 „w toku” – zapis wierszy trwa (odczyty pomijają plik; po awarii wpis i wiersze są usuwane), inna wartość – powód
 braku danych (źródło bez parsera).

@@ -29,8 +29,12 @@ public sealed record RunRuleResultView(string Name, CheckLevel Level, string Lev
 /// <summary>Wiersz wyniku reguły: wynik, problem i wskazówka (kolumny Problem / Wskazowka albo opis wyniku), wartości pozostałych kolumn zapytania.</summary>
 public sealed record RunResultRow(RunIssueRow Issue, string LevelText, string Problem, string? Hint, IReadOnlyList<string> Values);
 
-/// <summary>Wynik reguły jako tabela: kolumny zapytania (bez Problem i Wskazowka) i wiersze.</summary>
-public sealed record RunResultTable(IReadOnlyList<string> Columns, IReadOnlyList<RunResultRow> Rows);
+/// <summary>Wynik reguły jako tabela: kolumny zapytania (bez Problem i Wskazowka), wiersze i kolumny liczbowe (kwoty – do prawej).</summary>
+public sealed record RunResultTable(IReadOnlyList<string> Columns, IReadOnlyList<RunResultRow> Rows, IReadOnlyCollection<string>? Numeric = null)
+{
+    /// <summary>Wskazówka wspólna dla wszystkich wierszy (jedna pod tabelą); null – różne albo brak.</summary>
+    public string? CommonHint => Rows.Count > 0 && Rows.All(r => r.Hint == Rows[0].Hint) ? Rows[0].Hint : null;
+}
 
 /// <summary>Kolumna macierzy kontroli: uruchomienie przebiegu (kod tygodnia i numer, start, stan).</summary>
 public sealed record RunMatrixColumn(long PinId, string Label, string Detail);
@@ -192,7 +196,7 @@ public static class RunOverview
     /// <summary>
     /// Tabela wyniku reguły: kolumny zapytania w kolejności z wierszy (Details; bez Problem i Wskazowka – osobno), wiersze z problemem –
     /// kolumna Problem albo opis wyniku, wskazówka – kolumna Wskazowka albo (gdy problem z kolumny) opis wyniku. Wynik bez wiersza
-    /// zapytania (OK reguły, kontrole etapów) – problem = opis.
+    /// zapytania (OK reguły, kontrole etapów) – problem = opis. Kolumny liczbowe – wszystkie niepuste wartości są liczbami.
     /// </summary>
     public static RunResultTable ResultTable(IReadOnlyList<RunIssueRow> issues)
     {
@@ -208,7 +212,12 @@ public static class RunOverview
             var hint = Text(RunRules.HintColumn) is { Length: > 0 } fromHint ? fromHint : problem is null ? null : issue.Message;
             return new RunResultRow(issue, LevelText(issue), problem ?? issue.Message, hint, columns.Select(c => Text(c) ?? "").ToList());
         }).ToList();
-        return new RunResultTable(columns, rows);
+        var numeric = columns.Where(c =>
+        {
+            var values = details.SelectMany(d => d.Where(v => string.Equals(v.Column, c, StringComparison.OrdinalIgnoreCase))).ToList();
+            return values.Any(v => v.Number is not null) && values.All(v => v.Number is not null || string.IsNullOrEmpty(v.Text));
+        }).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        return new RunResultTable(columns, rows, numeric);
     }
 
     /// <summary>

@@ -80,7 +80,10 @@ public sealed class RunStepTileViewModel : ObservableObject
 
     public bool IsChecks => Action == RunActions.Checks;
 
-    public bool IsApproval => Action == RunActions.Approval;
+    public bool IsApproval => Action is RunActions.Approval or RunActions.ApproveActuals;
+
+    /// <summary>Klocek systemowy „Zatwierdzenie ACTUALS” – zatwierdzone dane ACTUALS trafiają do struktury programu.</summary>
+    public bool IsActualsApproval => Action == RunActions.ApproveActuals;
 
     public IReadOnlyList<string> Gates => RunGates.All;
 
@@ -116,7 +119,7 @@ public sealed class RunStepTileViewModel : ObservableObject
         get
         {
             if (!IsChecks)
-                return IsFixed ? "klocek predefiniowany" : "";
+                return IsFixed ? "klocek predefiniowany" : IsActualsApproval ? "klocek systemowy – zatwierdzone dane ACTUALS w strukturze programu" : "";
             var selected = Rules.Where(c => c.IsSelected).Select(c => c.Name).ToList();
             return selected.Count == 0 ? "brak reguł – zaznacz"
                 : $"{selected.Count} {(selected.Count == 1 ? "reguła" : selected.Count % 10 is >= 2 and <= 4 && selected.Count / 10 % 10 != 1 ? "reguły" : "reguł")}: "

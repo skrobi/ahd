@@ -126,6 +126,8 @@ public sealed class RunOverviewTests
         Assert.Equal(("rozliczenie niepełne", "sprawdź regułę"), (table.Rows[0].Problem, table.Rows[0].Hint));
         Assert.Equal(("brak rozliczenia", "A.2: saldo 30,00"), (table.Rows[1].Problem, table.Rows[1].Hint));   // bez wskazówki – opis wyniku
         Assert.Equal(["A.2", "30,00", "2026/04"], table.Rows[1].Values);
+        Assert.Equal(["Saldo"], table.Numeric!);                                 // kwoty – do prawej
+        Assert.Null(table.CommonHint);                                            // wskazówki różne – zaznaczonego wiersza
         var plain = RunOverview.ResultTable(results[1].Issues).Rows.Single();
         Assert.Equal(("Wiersze bez elementu WBS: 3", (string?)null), (plain.Problem, plain.Hint));   // bez kolumny Problem – opis wyniku
         Assert.Equal("OK – brak nieprawidłowości", RunOverview.ResultTable(results[3].Issues).Rows.Single().Problem);

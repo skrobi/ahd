@@ -118,17 +118,22 @@
             <!-- Etapy wybranego uruchomienia: status, bramka, potwierdzenie, ponowne wykonanie, wyniki etapu -->
             <TabItem Header="Etapy" Padding="12,4">
                 <Grid Margin="0,12,0,0">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="320" />
-                        <ColumnDefinition Width="*" />
-                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
 
-                    <!-- Etapy uruchomienia -->
+                    <!-- Etapy uruchomienia – poziomy pasek kafelków (cała szerokość dla wyników) -->
                     <ListBox ItemsSource="{Binding Steps}" SelectedItem="{Binding SelectedStep}" BorderThickness="0" Background="Transparent"
                              ScrollViewer.HorizontalScrollBarVisibility="Disabled" AutomationProperties.Name="Etapy przebiegu">
+                        <ListBox.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <WrapPanel />
+                            </ItemsPanelTemplate>
+                        </ListBox.ItemsPanel>
                         <ListBox.ItemTemplate>
                             <DataTemplate>
-                                <StackPanel Margin="0,4">
+                                <StackPanel Margin="0,2,8,2" Width="230">
                                     <DockPanel>
                                         <Border DockPanel.Dock="Right" Style="{StaticResource StepStatus}">
                                             <TextBlock Text="{Binding Row.Status}" FontWeight="SemiBold" />
@@ -144,8 +149,8 @@
                         </ListBox.ItemTemplate>
                     </ListBox>
 
-                    <!-- Wybrany etap: bramka, elementy kontrolne, akcje, wyniki -->
-                    <StackPanel Grid.Column="1" Margin="16,0,0,0">
+                    <!-- Wybrany etap: bramka, akcje, wyniki -->
+                    <StackPanel Grid.Row="1" Margin="0,12,0,0">
                         <TextBlock Text="{Binding SelectedStep.Title}" Style="{StaticResource H2}" Margin="0,0,0,4" />
                         <TextBlock Style="{StaticResource MutedText}" TextWrapping="Wrap">
                             <Run Text="{Binding SelectedStep.Row.Action, Mode=OneWay}" FontWeight="SemiBold" />
@@ -194,14 +199,15 @@
                                     </StackPanel>
                                     <TextBlock Text="{Binding SelectedRuleResult.Name}" Style="{StaticResource H2}" FontSize="15" TextWrapping="Wrap" />
                                 </DockPanel>
-                                <Border Background="{StaticResource Surface2}" CornerRadius="6" Padding="10,8" Margin="0,0,0,8">
-                                    <StackPanel>
-                                        <TextBlock Text="{Binding RuleContext}" TextWrapping="Wrap" />
-                                        <TextBlock Text="{Binding RunScope}" Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="0,4,0,0" />
-                                    </StackPanel>
+                                <!-- Co sprawdza reguła; dane i zakres uruchomienia – w podpowiedzi -->
+                                <Border Background="{StaticResource Surface2}" CornerRadius="6" Padding="10,6" Margin="0,0,0,8" ToolTip="{Binding RuleDataTip}">
+                                    <TextBlock Text="{Binding RuleContext}" TextWrapping="Wrap" />
                                 </Border>
+                                <!-- Wynik: kolumny zapytania (kwoty do prawej), potem Problem; wskazówka pod tabelą -->
                                 <DataGrid Style="{StaticResource DataTable}" ItemsSource="{Binding ResultView}" SelectedItem="{Binding SelectedResultRow}"
-                                          AutoGenerateColumns="True" IsReadOnly="True" MaxHeight="360" AutomationProperties.Name="Wynik reguły" />
+                                          AutoGenerateColumns="True" IsReadOnly="True" MaxHeight="360" AutomationProperties.Name="Wynik reguły"
+                                          AutoGeneratingColumn="OnResultColumn" />
+                                <TextBlock Text="{Binding ResultHint}" TextWrapping="Wrap" Margin="0,6,0,0" FontWeight="SemiBold" />
                                 <TextBlock Text="{Binding LinesTitle}" Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="0,10,0,4" />
                                 <DataGrid Style="{StaticResource DataTable}" ItemsSource="{Binding Lines}" IsReadOnly="True" MaxHeight="360" AutomationProperties.Name="Linie ACTUALS">
                                     <DataGrid.Columns>

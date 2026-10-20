@@ -55,6 +55,7 @@ public sealed class ProjectDetailViewModel : ObservableObject, IDisposable
     private ElementActuals? _costs;   // ACWP, Actual DLH, ACWP Labor / Material – jeden odczyt ACTUALS
     private string? _currency;          // waluta projektu z kolumny waluty zestawu walutowego (dane ACTUALS projektu)
     private string? _currencyProblem;   // kilka walut w kolumnie waluty zestawu
+    private ApprovedActuals? _approved;  // przebieg z zatwierdzonymi danymi ACTUALS – stan danych kosztów struktury (null – ostatni import)
     private (ProjectStructure Structure, IReadOnlyList<LookupOption> Persons)? _structure;   // ostatnio wczytana – eksport do Excela
     private string? _costsError;
     private IReadOnlyList<SourceDefinitionRow> _sourceDefinitions = [];
@@ -88,6 +89,8 @@ public sealed class ProjectDetailViewModel : ObservableObject, IDisposable
         ImportSources = new AsyncRelayCommand(DoImportSources, () => !Busy.IsBusy && _service.Imports is not null);
         _runPanel = _service.RunPanels?.Create(Code);
         _runPanel?.Block("trwa sprawdzanie gotowości programu");   // do pierwszego odczytu (Reload)
+        if (_service.Runs is { } runs)
+            runs.Finished += OnRunFinished;
         foreach (var item in ProjectDictionaries.ForType(project.Type))
         {
             var panel = new DictionaryPanelViewModel(item, project.Type);
@@ -121,6 +124,14 @@ public sealed class ProjectDetailViewModel : ObservableObject, IDisposable
     public string DataInfo => _actuals?.Summary ?? "Dane RABIT: wczytywanie…";
 
     public string DataInfoDetails => _actuals?.Details ?? "";
+
+    /// <summary>Skąd są koszty struktury: zatwierdzony przebieg (stan danych z przypięcia) albo ostatni import – niezatwierdzone.</summary>
+    public string StructureDataInfo => _costs is null ? "ACTUALS struktury: wczytywanie…" : ApprovedActuals.Summary(_approved);
+
+    public string StructureDataDetails => ApprovedActuals.Details(_approved);
+
+    /// <summary>Koszty struktury z ostatniego importu (brak zatwierdzonego przebiegu) – tag ostrzegawczy.</summary>
+    public bool StructureDataUnapproved => _costs is not null && _approved is null;
 
     /// <summary>Dane produkcyjne (PZLPROD na żywo): chwila odczytu albo powód braku (nagłówek).</summary>
     /// <summary>Waluta projektu w nagłówku: kod z danych ACTUALS i zestaw walutowy („Parametry projektu”).</summary>
@@ -286,8 +297,20 @@ public sealed class ProjectDetailViewModel : ObservableObject, IDisposable
     /// <summary>Przebieg programu – zakładka Przebieg (panel modułu Przebiegi: etapy, potwierdzenia, ponowne wykonanie); null – moduł niedostępny.</summary>
     public object? RunPanel => _runPanel?.View;
 
-    /// <summary>Zwolnienie panelu przebiegu przy zmianie strony modułu.</summary>
-    public void Dispose() => _runPanel?.Dispose();
+    /// <summary>Zwolnienie panelu przebiegu i odpięcie od zdarzeń przebiegów przy zmianie strony modułu.</summary>
+    public void Dispose()
+    {
+        _runPanel?.Dispose();
+        if (_service.Runs is { } runs)
+            runs.Finished -= OnRunFinished;
+    }
+
+    // Przebieg programu zakończony (np. zatwierdzone dane ACTUALS) – struktura na danych zatwierdzonego przebiegu (ReadCosts).
+    private void OnRunFinished(string project)
+    {
+        if (string.Equals(project, Code, StringComparison.OrdinalIgnoreCase))
+            _ = Reload(refreshMapping: false);
+    }
 
     /// <summary>Okno „Zmiany ACWP” (moduł Przebiegi) dla wiersza struktury i rodzaju kosztu kolumny; wiersz bez elementów WBS – cały program.</summary>
     private void ShowAcwpChanges(StructureRowViewModel row, string column)
@@ -344,7 +367,7 @@ public sealed class ProjectDetailViewModel : ObservableObject, IDisposable
         IReadOnlyDictionary<string, (int Rows, string LastChange)> Dictionaries, ProjectStructure Structure, IReadOnlyList<LookupOption> Persons,
         IReadOnlyList<LookupOption> Categories,
         IReadOnlyList<(DictRow Row, bool Inherited)>? Table, IReadOnlyDictionary<string, IReadOnlyList<LookupOption>> Lookups,
-        ElementActuals Costs, string? CostsError, string CostsField, string? Currency, string? CurrencyProblem, IReadOnlyList<LookupOption> Mpks, IReadOnlyList<LookupOption> PersonLookups, (Issue Structure, Issue CamAccess) FolderChecks,
+        ElementActuals Costs, string? CostsError, string CostsField, string? Currency, string? CurrencyProblem, ApprovedActuals? Approved, IReadOnlyList<LookupOption> Mpks, IReadOnlyList<LookupOption> PersonLookups, (Issue Structure, Issue CamAccess) FolderChecks,
         ActualsFreshness Actuals, ProductionData Production, IReadOnlyList<SourceDefinitionRow> SourceDefinitions);
 
     /// <summary>
@@ -364,7 +387,7 @@ public sealed class ProjectDetailViewModel : ObservableObject, IDisposable
         var cachedOwners = refreshMapping || !_ownersLoaded ? null : _owners;
         var cachedActuals = refreshMapping ? null : _actuals;
         var cachedProduction = refreshMapping ? null : _production;
-        CostData? cachedCosts = _costs is null ? null : new CostData(_costs, _costsError, _costsField, _currency, _currencyProblem);
+        CostData? cachedCosts = _costs is null ? null : new CostData(_costs, _costsError, _costsField, _currency, _currencyProblem, _approved);
         await Try(async () =>
         {
             var steps = new StepTimer();
@@ -379,7 +402,7 @@ public sealed class ProjectDetailViewModel : ObservableObject, IDisposable
                 var rows = states.ToDictionary(s => s.Key, s => s.Value.Rows);
                 var wpCam = rows.GetValueOrDefault(ProjectDictionaries.WpCam) ?? [];
                 var production = cachedProduction ?? steps.Time("produkcja (PZLPROD vAHDD, vAPD)", () => _service.Production(tree, mapping));
-                var (costs, costsError, costsField, currency, currencyProblem) = costsRead.GetAwaiter().GetResult();
+                var (costs, costsError, costsField, currency, currencyProblem, approved) = costsRead.GetAwaiter().GetResult();
                 // Stawki MPK i kursy – ETC Cost struktury (waluta projektu z pola kwoty ACTUALS); lista MPK w „WP i CAM”.
                 var departmentRates = steps.Time("stawki wydziałów i kursy walut", _service.DepartmentRates);
                 var rates = ProjectService.EtcRatesOf(departmentRates, _service.FxRates(), currency, currencyProblem, DateOnly.FromDateTime(DateTime.Today));
@@ -405,14 +428,18 @@ public sealed class ProjectDetailViewModel : ObservableObject, IDisposable
                 return new Snapshot(tree, mapping, owners, readiness,
                     states.ToDictionary(s => s.Key, s => (s.Value.Rows.Count, s.Value.LastChange)), structure, ProjectService.PersonOptions(persons, wpCam),
                     ProjectService.CategoryOptions(categories, wpCam), editable,
-                    ProjectService.Lookups(persons, categories, sources, burdenGroups, mpks, runTemplates), costs, costsError, costsField, currency, currencyProblem, mpks, persons, folderChecks, actuals, production,
+                    ProjectService.Lookups(persons, categories, sources, burdenGroups, mpks, runTemplates), costs, costsError, costsField, currency, currencyProblem, approved, mpks, persons, folderChecks, actuals, production,
                     definitions.Where(d => projectSources.Contains(d.Code)).ToList());
             });
             Logger.Information("Program {Code}: wczytanie {Steps}", Code, steps.Summary);
             if (version != _reloads)
                 return;   // w międzyczasie ruszyło nowsze odświeżenie – starszy wynik pomijany
             _saved = snapshot.Tree;
-            (_costs, _costsError, _costsField, _currency, _currencyProblem) = (snapshot.Costs, snapshot.CostsError, snapshot.CostsField, snapshot.Currency, snapshot.CurrencyProblem);
+            (_costs, _costsError, _costsField, _currency, _currencyProblem, _approved) =
+                (snapshot.Costs, snapshot.CostsError, snapshot.CostsField, snapshot.Currency, snapshot.CurrencyProblem, snapshot.Approved);
+            OnPropertyChanged(nameof(StructureDataInfo));
+            OnPropertyChanged(nameof(StructureDataDetails));
+            OnPropertyChanged(nameof(StructureDataUnapproved));
             OnPropertyChanged(nameof(CurrencyInfo));
             OnPropertyChanged(nameof(CurrencyDetails));
             _mapping = snapshot.Mapping;
@@ -467,13 +494,15 @@ public sealed class ProjectDetailViewModel : ObservableObject, IDisposable
         }
     }
 
-    /// <summary>ACWP i Actual DLH po elemencie CES, błąd odczytu kosztów i pole kwoty ACTUALS.</summary>
-    private sealed record CostData(ElementActuals Actuals, string? Error, string Field, string? Currency = null, string? CurrencyProblem = null);
+    /// <summary>ACWP i Actual DLH po elemencie CES, błąd odczytu kosztów, pole kwoty ACTUALS i zatwierdzony przebieg (stan danych).</summary>
+    private sealed record CostData(ElementActuals Actuals, string? Error, string Field, string? Currency = null, string? CurrencyProblem = null,
+        ApprovedActuals? Approved = null);
 
     /// <summary>
-    /// ACWP po elemencie CES (w tle) z pola kwoty ACTUALS projektu i Actual DLH (Total Quantity); cached – koszty w pamięci,
-    /// użyte przy tym samym polu – jedno wywołanie procedury. Brak danych lub procedury – pusta lista i powód (struktura bez
-    /// kosztów); brak pola godzin w parserze – kolumna Actual DLH pusta.
+    /// ACWP po elemencie CES (w tle) z pola kwoty ACTUALS projektu i Actual DLH (Total Quantity) w stanie danych ostatniego przebiegu
+    /// z zatwierdzonymi danymi ACTUALS (bez niego – ostatni import); cached – koszty w pamięci, użyte przy tym samym polu i tym samym
+    /// zatwierdzonym przebiegu – jedno wywołanie procedury. Brak danych lub procedury – pusta lista i powód (struktura bez kosztów);
+    /// brak pola godzin w parserze – kolumna Actual DLH pusta.
     /// </summary>
     private CostData ReadCosts(StepTimer steps, CostData? cached)
     {
@@ -481,16 +510,31 @@ public sealed class ProjectDetailViewModel : ObservableObject, IDisposable
         try
         {
             field = steps.Time("pole kwoty ACTUALS", () => _service.ActualsAmount(Code));
-            if (cached is { } c && c.Field == field)
+            var approved = steps.Time("zatwierdzony przebieg (ACTUALS)", ReadApproved);
+            if (cached is { } c && c.Field == field && c.Approved == approved)
                 return c;
-            var actuals = steps.Time("koszty ACWP i godziny Actual DLH (ACTUALS)", () => _service.CostsAndHoursByElement(Code, field));
+            var actuals = steps.Time("koszty ACWP i godziny Actual DLH (ACTUALS)", () => _service.CostsAndHoursByElement(Code, field, approved?.AsOf));
             var (currency, problem) = steps.Time("waluta programu (ACTUALS)", () => _service.ProjectCurrency(Code, field));
-            return new CostData(actuals, null, field, currency, problem);
+            return new CostData(actuals, null, field, currency, problem, approved);
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
             Logger.Warning(ex, "Koszty programu {Code}", Code);
             return new CostData(ElementActuals.Empty, $"koszty (ACWP) niedostępne: {ex.Message}", field);
+        }
+    }
+
+    /// <summary>Zatwierdzony przebieg; błąd odczytu – null (koszty z ostatniego importu, tag „niezatwierdzone”).</summary>
+    private ApprovedActuals? ReadApproved()
+    {
+        try
+        {
+            return _service.ApprovedActuals(Code);
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            Logger.Warning(ex, "Zatwierdzony przebieg programu {Code}", Code);
+            return null;
         }
     }
 
@@ -507,7 +551,8 @@ public sealed class ProjectDetailViewModel : ObservableObject, IDisposable
             new KpiTile("BAC", Amount(summary.Bac), "budżet kosztowy – Harmonogram i budżet"),
             _costsError is null
                 ? new KpiTile("ACWP", Amount(summary.Acwp), ProjectProcess.AcwpDescription(_currency)
-                    ?? $"koszt rzeczywisty narastająco – {ProjectSettings.SetOf(_costsField).AmountColumn}, {_currency ?? ProjectSettings.CurrencyOf(_costsField)}; ostatni import ACTUALS, bez wykluczeń")
+                    ?? $"koszt rzeczywisty narastająco – {ProjectSettings.SetOf(_costsField).AmountColumn}, {_currency ?? ProjectSettings.CurrencyOf(_costsField)}; "
+                       + $"{(_approved is { } a ? $"dane zatwierdzone w przebiegu {a.RunCode} #{a.PinNo}" : "ostatni import ACTUALS (niezatwierdzone)")}, bez wykluczeń")
                 : new KpiTile("ACWP", "—", _costsError, Pending: true),
             new KpiTile("Koszt bez WP", Amount(summary.AcwpWithoutWp + summary.AcwpOutside),
                 $"bez przypisania do WP: {Amount(summary.AcwpWithoutWp)} (brak WP / kilka WP – O45); elementy CES spoza nakładki: {Amount(summary.AcwpOutside)}"),

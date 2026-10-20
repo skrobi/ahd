@@ -120,6 +120,31 @@ public sealed class RunServiceTests : IDisposable
         var other = _services.App(_root, _database.Sql);
         using (other.Locks.TryAcquire(RunService.ProjectLock("PAF"), out _))
             Assert.StartsWith("Przebieg programu PAF trwa", service.Execute("PAF").Summary);
+
+        // Zatwierdzenie ACTUALS (klocek systemowy): struktura na danych zatwierdzonego przebiegu – stan z przypięcia; import po
+        // zatwierdzeniu nie zmienia kosztów struktury do kolejnego zatwierdzenia.
+        var projects = new SqlProjectStore(_database.Sql, _services.Clock, _services.User);
+        Assert.Null(projects.ApprovedActuals("PAF"));
+        var approval = new RunDefinition("A – zatwierdzenie ACTUALS", RunRules.AllTypes, [.. RunDefinitions.StandardSteps.Take(3), RunDefinitions.ActualsApproval(4)]);
+        Assert.Equal(PzlEv.Shared.Models.Dictionaries.SaveStatus.Saved, templates.Save(approval, isActive: true).Status);   // domyślny – pierwszy alfabetycznie
+        service.Execute("PAF");
+        var approving = store.Pins("PAF", 1)[0];
+        service.Confirm(approving.PinId, 3, "znany błąd netowania");
+        Assert.Equal(RunStepStatuses.NeedsAction, store.Steps(approving.PinId)[3].Status);   // czeka na zatwierdzenie danych
+        Assert.Null(projects.ApprovedActuals("PAF"));
+        Assert.Equal(RunStatuses.Errors, service.Confirm(approving.PinId, 4, "dane ACTUALS sprawdzone").Status);
+        var approved = projects.ApprovedActuals("PAF")!;
+        Assert.Equal((approving.Code, approving.PinNo, store.Steps(approving.PinId)[1].FinishedAt), (approved.RunCode, approved.PinNo, (DateTimeOffset?)approved.AsOf));
+        var atApproval = projects.CostsAndHoursByElement("PAF", "ValueObjCrcy", "TotalQuantity", approved.AsOf).Amounts;
+
+        _services.Clock.Advance(TimeSpan.FromHours(1));
+        File.AppendAllText(file, "2DI473;2DI473001003;51105550;x;x;PLN;10,00;PLN;10,00;USD;2,50;0,000;;;;;;;;2026;2026-03-31;3;\r\n");
+        File.SetLastWriteTimeUtc(file, DateTime.UtcNow.AddMinutes(2));
+        Assert.Equal(FileDecisions.Imported, Assert.Single(import.Run().Files).Decision);
+
+        Assert.Equal(atApproval, projects.CostsAndHoursByElement("PAF", "ValueObjCrcy", "TotalQuantity", approved.AsOf).Amounts);   // stan zatwierdzony
+        Assert.Equal(atApproval["2DI473001003"] + 10m, projects.CostsAndHoursByElement("PAF", "ValueObjCrcy", "TotalQuantity").Amounts["2DI473001003"]);   // ostatni import
+        Assert.Equal(approved, projects.ApprovedActuals("PAF"));
     }
 
     /// <summary>

@@ -19,8 +19,9 @@ public sealed record RunStepView(RunStepRow Row, string Gate, string? Descriptio
 {
     public string Title => $"{Row.StepNo}. {Row.Name}";
 
-    /// <summary>Etap zatrzymany na błędzie – potwierdzenie akceptuje błędy (RunWorkflowEngine.CanConfirm).</summary>
-    public string ConfirmText => Row.Status == RunStepStatuses.Failed ? "Zaakceptuj błędy i dalej" : "Potwierdź i dalej";
+    /// <summary>Etap zatrzymany na błędzie – potwierdzenie akceptuje błędy (RunWorkflowEngine.CanConfirm); Zatwierdzenie ACTUALS – dane do struktury.</summary>
+    public string ConfirmText => Row.Status == RunStepStatuses.Failed ? "Zaakceptuj błędy i dalej"
+        : Row.Action == RunActions.ApproveActuals ? "Zatwierdź dane ACTUALS i dalej" : "Potwierdź i dalej";
 
     public bool HasComment => !string.IsNullOrWhiteSpace(Row.Comment);
 
@@ -65,6 +66,9 @@ public sealed class RunPanelViewModel : ObservableObject, IDisposable
     private string _linesTitle = "";
     private RunActualsScope? _linesScope;
     private string _ruleContext = "";
+    private string _ruleData = "";
+    private string _resultHint = "";
+    private IReadOnlySet<string> _numericColumns = new HashSet<string>();
     private string _runScope = "";
     private IReadOnlyList<RunRule> _library = [];
     private readonly IFileDialogs _dialogs;
@@ -221,10 +225,24 @@ public sealed class RunPanelViewModel : ObservableObject, IDisposable
     /// <summary>Kontekst wybranej reguły: co sprawdza i na jakich danych.</summary>
     public string RuleContext { get => _ruleContext; private set => SetProperty(ref _ruleContext, value); }
 
-    /// <summary>Zakres uruchomienia: okresy, poprzedni przebieg do porównania.</summary>
-    public string RunScope { get => _runScope; private set => SetProperty(ref _runScope, value); }
+    /// <summary>Dane użyte w zapytaniu reguły (tabele z opisem) – podpowiedź kontekstu razem z zakresem uruchomienia.</summary>
+    public string RuleData { get => _ruleData; private set { if (SetProperty(ref _ruleData, value)) OnPropertyChanged(nameof(RuleDataTip)); } }
 
-    /// <summary>Wynik zapytania reguły: Nr, Poziom, Problem, Wskazówka i kolumny zapytania.</summary>
+    public string RuleDataTip => string.Join("\n", new[] { RuleData, RunScope }.Where(t => t.Length > 0));
+
+    /// <summary>Wskazówka pod tabelą wyniku: wspólna dla wszystkich wierszy albo zaznaczonego wiersza.</summary>
+    public string ResultHint { get => _resultHint; private set => SetProperty(ref _resultHint, value); }
+
+    /// <summary>Kolumna techniczna tabeli wyniku – numer wiersza wyniku (ukryta w widoku).</summary>
+    public const string RowColumn = "_wiersz";
+
+    /// <summary>Kolumny liczbowe tabeli wyniku (nazwy kolumn DataTable) – w widoku wyrównane do prawej.</summary>
+    public IReadOnlySet<string> NumericColumns => _numericColumns;
+
+    /// <summary>Zakres uruchomienia: okresy, poprzedni przebieg do porównania.</summary>
+    public string RunScope { get => _runScope; private set { if (SetProperty(ref _runScope, value)) OnPropertyChanged(nameof(RuleDataTip)); } }
+
+    /// <summary>Wynik zapytania reguły: kolumny zapytania, Problem (wskazówka – ResultHint).</summary>
     public DataView? ResultView { get => _resultView; private set => SetProperty(ref _resultView, value); }
 
     /// <summary>Zaznaczony wiersz wyniku (DataRowView) – linie ACTUALS jego zakresu.</summary>
@@ -486,46 +504,56 @@ public sealed class RunPanelViewModel : ObservableObject, IDisposable
         var rule = result is null ? null : _library.FirstOrDefault(r => string.Equals(r.Name, result.Name, StringComparison.OrdinalIgnoreCase));
         RuleContext = result is null ? ""
             : rule is null ? "Kontrola etapu przebiegu (import, przypięcie stanu) albo reguła usunięta z reguł walidacji."
-            : $"{rule.Description ?? "(reguła bez opisu)"}\nDane: "
-              + (RunRules.TablesUsed(rule.Sql) is { Count: > 0 } tables
+            : rule.Description ?? "(reguła bez opisu)";
+        RuleData = rule is null ? ""
+            : "Dane: " + (RunRules.TablesUsed(rule.Sql) is { Count: > 0 } tables
                   ? string.Join("; ", tables.Select(t => $"{t} – {RunRules.Tables.First(x => x.Name == t).Description}"))
                   : "–");
-        ResultView = Table(_resultTable).DefaultView;
+        var (table, numeric) = Table(_resultTable);
+        _numericColumns = numeric;
+        ResultView = table.DefaultView;
         SelectedResultRow = ResultView.Count > 0 ? ResultView[0] : null;
     }
 
-    // Tabela wyniku do DataGrid: Nr (wiersz wyniku), Poziom, Problem, Wskazówka (gdy jest), kolumny zapytania; znaki psujące wiązanie kolumny
-    // DataGrid (. / [ ] ( ) ^) – podkreślenie.
-    private static DataTable Table(RunResultTable result)
+    // Tabela wyniku do DataGrid: kolumny zapytania (najważniejsze dane na początku), Problem, ukryta kolumna numeru wiersza (RowColumn);
+    // wskazówka – pod tabelą (ResultHint). Znaki psujące wiązanie kolumny DataGrid (. / [ ] ( ) ^) – podkreślenie; Numeric – nazwy kolumn
+    // liczbowych w DataTable.
+    private static (DataTable Table, IReadOnlySet<string> Numeric) Table(RunResultTable result)
     {
         var table = new DataTable();
-        table.Columns.Add("Nr", typeof(int));
-        table.Columns.Add("Poziom", typeof(string));
-        table.Columns.Add("Problem", typeof(string));
-        var hints = result.Rows.Any(r => r.Hint is not null);
-        if (hints)
-            table.Columns.Add("Wskazówka", typeof(string));
-        foreach (var column in result.Columns)
+        var numeric = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        string Add(string column)
         {
             var name = string.Concat(column.Select(c => ".[]()/^".Contains(c) ? '_' : c));
-            table.Columns.Add(Enumerable.Range(1, 99).Select(i => i == 1 ? name : $"{name}_{i}").First(n => !table.Columns.Contains(n)), typeof(string));
+            name = Enumerable.Range(1, 99).Select(i => i == 1 ? name : $"{name}_{i}").First(n => !table.Columns.Contains(n));
+            table.Columns.Add(name, typeof(string));
+            return name;
         }
+        foreach (var column in result.Columns)
+        {
+            var name = Add(column);
+            if (result.Numeric?.Contains(column) == true)
+                numeric.Add(name);
+        }
+        Add("Problem");
+        table.Columns.Add(RowColumn, typeof(int));
         for (var i = 0; i < result.Rows.Count; i++)
         {
             var row = result.Rows[i];
-            table.Rows.Add([i + 1, row.LevelText, row.Problem, .. hints ? new object?[] { row.Hint ?? "" } : [], .. row.Values]);
+            table.Rows.Add([.. row.Values, row.Problem, i]);
         }
-        return table;
+        return (table, numeric);
     }
 
     private RunResultRow? SelectedRow() =>
-        _selectedResultRow is DataRowView view && view["Nr"] is int number && number >= 1 && number <= _resultTable.Rows.Count ? _resultTable.Rows[number - 1] : null;
+        _selectedResultRow is DataRowView view && view[RowColumn] is int index && index >= 0 && index < _resultTable.Rows.Count ? _resultTable.Rows[index] : null;
 
     // Linie ACTUALS zaznaczonego wiersza: zakres z kolumn wiersza (RunOverview.ActualsScope), stan plików z chwili przypięcia uruchomienia.
     private async Task LoadLines()
     {
         var row = SelectedRow();
         SelectedIssue = row is null ? null : new RunIssueView(row.Issue, RunOverview.ChangesFor(row.Issue, Project));
+        ResultHint = (_resultTable.CommonHint ?? row?.Hint) is { Length: > 0 } hint ? $"Wskazówka: {hint}" : "";
         Lines = [];
         _linesScope = null;
         if (row is null || _selectedPin is not { } pin)
@@ -608,7 +636,7 @@ public sealed class RunPanelViewModel : ObservableObject, IDisposable
                             lines.Rows.Select(l => (IReadOnlyList<object?>)[l.WbsElement, l.CostElement, l.FiscalYear, l.Period, l.CreatedOn, l.CostElementName, l.CoObjectName,
                                 l.PartnerObject, l.PurchaseOrderNumber, l.InvoiceNumber, l.OriginalOrderNumber, l.Quantity, l.Amount, l.FileName, l.RowNumber])),
                     ],
-                    ("Opis", ["Opis"], [[$"{Project} – {result.Name}"], [RunScope], [RuleContext], [LinesTitle]]),
+                    ("Opis", ["Opis"], [[$"{Project} – {result.Name}"], [RunScope], [RuleContext], [RuleData], [LinesTitle]]),
                 ]);
                 return true;
             });

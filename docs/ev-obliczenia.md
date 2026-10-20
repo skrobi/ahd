@@ -21,7 +21,7 @@ Powiązane: `docs/pipeline-fazy.md` (P8 – kiedy silnik jest uruchamiany), `doc
 
 Zakładka Struktura ekranu Projekt pokazuje już **podgląd** wartości EV (`docs/performance-objectives.md`, rozdz. 4.2):
 BCWS – rozkład liniowy na dni robocze pn–pt baseline; BCWP = BAC Cost × BCWP Hours ÷ TECH Hours, najwyżej BAC Cost;
-ETC z produkcji (`TECH_DO_PON`) z nadpisaniem ręcznym; ACWP narastająco z ostatniego importu ACTUALS; data stanu – dziś;
+ETC z produkcji (`TECH_DO_PON`) z nadpisaniem ręcznym; ACWP narastająco z danych ACTUALS zatwierdzonego przebiegu (bez niego – ostatni import; `docs/pipeline-fazy.md`, rozdz. 4.1); data stanu – dziś;
 kwoty w walucie projektu (zestaw walutowy ACTUALS). To nie jest silnik EVM (F8.1 – niezaimplementowany): podgląd nie
 zapisuje rewizji i nie rozstrzyga O15, O30, O35, O36 ani O51 – pozostają do ustalenia z Finansami (rozdz. 6).
 

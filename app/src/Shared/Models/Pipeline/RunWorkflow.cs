@@ -10,7 +10,13 @@ public static class RunActions
     public const string Checks = "Kontrole";
     public const string Approval = "Zatwierdzenie";
 
-    public static IReadOnlyList<string> All { get; } = [Import, Pin, Checks, Approval];
+    /// <summary>
+    /// Klocek systemowy: analityk zatwierdza dane ACTUALS przypięte w uruchomieniu – struktura programu pokazuje koszty z ostatniego
+    /// uruchomienia z zakończonym tym etapem (docs/pipeline-fazy.md, rozdz. 4.1).
+    /// </summary>
+    public const string ApproveActuals = "Zatwierdzenie ACTUALS";
+
+    public static IReadOnlyList<string> All { get; } = [Import, Pin, Checks, Approval, ApproveActuals];
 }
 
 /// <summary>Bramka etapu przy wynikach WARNING (ERROR zawsze blokuje).</summary>
@@ -44,8 +50,8 @@ public sealed record RunElementSetting(string Element, bool Active = true);
 public sealed record RunStepDefinition(int No, string Name, string Action, string WarningGate, bool Approval, IReadOnlyList<RunElementSetting> Elements,
     string? Description = null)
 {
-    /// <summary>Etap kończy się wstrzymaniem do decyzji człowieka (zatwierdzenie ręczne albo akcja Zatwierdzenie).</summary>
-    public bool NeedsApproval => Approval || Action == RunActions.Approval;
+    /// <summary>Etap kończy się wstrzymaniem do decyzji człowieka (zatwierdzenie ręczne albo akcja Zatwierdzenie / Zatwierdzenie ACTUALS).</summary>
+    public bool NeedsApproval => Approval || Action is RunActions.Approval or RunActions.ApproveActuals;
 }
 
 /// <summary>
@@ -84,7 +90,15 @@ public static class RunDefinitions
         new(2, "Przypięcie stanu", RunActions.Pin, RunGates.Info, false, [], "Dane ACTUALS programu w chwili przebiegu; porównanie z poprzednim przebiegiem."),
     ];
 
-    /// <summary>Etapy definicji wbudowanej i szablonów startowych: stałe, Walidacja ACTUALS, Walidacja EV (bramka – potwierdzenie WARNING), zatwierdzenie analityka.</summary>
+    /// <summary>Klocek systemowy „Zatwierdzenie ACTUALS” (edytor szablonów) – najwyżej jeden w szablonie, po przypięciu stanu.</summary>
+    public static RunStepDefinition ActualsApproval(int no) =>
+        new(no, "Zatwierdzenie danych ACTUALS", RunActions.ApproveActuals, RunGates.Info, true, [],
+            "Analityk zatwierdza dane ACTUALS przebiegu (komentarz) – od zatwierdzenia struktura programu pokazuje koszty z tego przebiegu.");
+
+    /// <summary>
+    /// Etapy definicji wbudowanej i szablonów startowych (jak migracja 053): stałe, Walidacja ACTUALS, Walidacja EV (bramka – potwierdzenie
+    /// WARNING), zatwierdzenie analityka. Zatwierdzenie ACTUALS – klocek dokładany w edytorze szablonów.
+    /// </summary>
     public static IReadOnlyList<RunStepDefinition> StandardSteps { get; } =
     [
         .. FixedSteps,
@@ -142,7 +156,8 @@ public static class RunDefinitions
                 .ToList(), header.Description);
 
     /// <summary>
-    /// Kontrola szablonu przed zapisem: nazwa; etapy stałe (Import źródeł, Przypięcie stanu) – po jednym, na początku; nazwy etapów
+    /// Kontrola szablonu przed zapisem: nazwa; etapy stałe (Import źródeł, Przypięcie stanu) – po jednym, na początku; Zatwierdzenie ACTUALS
+    /// – najwyżej jedno; nazwy etapów
     /// niepuste i bez powtórzeń; etap kontroli bez aktywnego elementu – ERROR; elementy tylko w etapach kontroli; element – reguła
     /// walidacji (rules – nazwy reguł; null – reguły startowe).
     /// </summary>
@@ -159,6 +174,8 @@ public static class RunDefinitions
             if (count != 1 || steps.Count <= index || steps[index].Action != action)
                 issues.Add(Issue.Error($"Etap stały „{action}” – dokładnie jeden, jako etap {index + 1}"));
         }
+        if (steps.Count(s => s.Action == RunActions.ApproveActuals) > 1)
+            issues.Add(Issue.Error($"Klocek „{RunActions.ApproveActuals}” – najwyżej jeden w szablonie"));
         foreach (var step in steps)
         {
             var at = $"etap {step.No}";

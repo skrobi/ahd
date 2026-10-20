@@ -26,6 +26,7 @@ public sealed class RunWorkflowTests
         Assert.Equal(RunStepStatuses.NeedsAction, RunWorkflowEngine.Gate(Def(RunGates.Info, approval: true), 0, 0));
         Assert.Equal(RunStepStatuses.NeedsAction, RunWorkflowEngine.Gate(Def(RunGates.Info, action: RunActions.Approval), 0, 0));
         Assert.Equal(RunStepStatuses.Done, RunWorkflowEngine.Gate(Def(), 0, 0));
+        Assert.Equal(RunStepStatuses.NeedsAction, RunWorkflowEngine.Gate(RunDefinitions.ActualsApproval(3), 0, 0));   // zatwierdzenie danych ACTUALS
     }
 
     [Fact]
@@ -129,6 +130,8 @@ public sealed class RunWorkflowTests
             new(3, "Walidacja", RunActions.Checks, RunGates.Confirm, false, [new(rule, Active: false)]),
             new(4, "walidacja", RunActions.Checks, RunGates.Confirm, false, [new("Nieznana"), new(rule), new(rule.ToUpperInvariant())]),
             new(5, "Zatwierdzenie", RunActions.Approval, RunGates.Confirm, true, [new(rule)]),
+            RunDefinitions.ActualsApproval(6),
+            RunDefinitions.ActualsApproval(7) with { Name = "Zatwierdzenie ACTUALS 2" },
         ]);
 
         var issues = RunDefinitions.Validate(broken).Select(i => i.Message).ToList();
@@ -141,6 +144,8 @@ public sealed class RunWorkflowTests
         Assert.Contains("Nieznana reguła „Nieznana” – nie ma jej w regułach walidacji", issues);
         Assert.Contains($"Reguła „{rule}” dwa razy w etapie „walidacja”", issues);
         Assert.Contains("Etap „Zatwierdzenie” (Zatwierdzenie) nie ma reguł – reguły tylko w etapach walidacji", issues);
+        Assert.Contains($"Klocek „{RunActions.ApproveActuals}” – najwyżej jeden w szablonie", issues);
+        Assert.Empty(RunDefinitions.Validate(RunDefinitions.Starters[0] with { Steps = [.. RunDefinitions.StandardSteps.Take(3), RunDefinitions.ActualsApproval(4)] }));
         Assert.Empty(RunDefinitions.Validate(broken with { Code = "X", Steps = [.. RunDefinitions.FixedSteps, new(3, "W", RunActions.Checks, RunGates.Confirm, false, [new("Własna")])] },
             ["Własna"]));   // reguła ze słownika „Reguły walidacji”
     }

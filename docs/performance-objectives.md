@@ -165,7 +165,9 @@ i budżetem (`StructureBuilder`).
   pod swoją wartością; zapis takiej kategorii – WARNING.
 - **Sumy:** budżet i daty wiersza obejmują poddrzewo, każdy WP liczony raz; braki – element nakładki bez WP,
   WP bez budżetu.
-- **ACWP** (tylko do odczytu): koszt rzeczywisty narastająco z ostatniego importu ACTUALS (pole kwoty ze słownika
+- **ACWP** (tylko do odczytu): koszt rzeczywisty narastająco z danych ACTUALS zatwierdzonego przebiegu – stan z przypięcia ostatniego
+  uruchomienia z zakończonym etapem „Zatwierdzenie ACTUALS”, bez niego ostatni import (`docs/pipeline-fazy.md`, rozdz. 4.1; tag
+  „ACTUALS struktury” w nagłówku programu) (pole kwoty ze słownika
   „Parametry projektu”, domyślnie waluta obiektu – PLN; bez wykluczeń
   projektu i bez cost elementów oznaczonych „Rozliczeniowy” w słowniku Cost Category (słownik efektywny projektu,
   bez względu na klasę obiektu partnera); procedura `REP_ProjectCostsByElement`, `docs/model-danych.md`,
@@ -189,7 +191,7 @@ i budżetem (`StructureBuilder`).
   wpisana – zwykłym kolorem. Wiersz z WP w poddrzewie pokazuje daty WP: start najwcześniejszy, koniec najpóźniejszy, gdy
   wszystkie WP zakończone (wpisany start bez końca i bez daty końca z produkcji – WP trwa); wiersz bez WP – daty
   z produkcji poddrzewa.
-- **Actual DLH** (tylko do odczytu): godziny rzeczywiste narastająco z ostatniego importu ACTUALS – kolumna „Total
+- **Actual DLH** (tylko do odczytu): godziny rzeczywiste narastająco z tych samych danych ACTUALS co ACWP – kolumna „Total
   Quantity” (pole parsera `TotalQuantity`), te same wiersze (bez wykluczeń i rozliczenia wychodzącego) i to samo
   przypisanie do WP co ACWP – to samo wywołanie procedury `REP_ProjectCostsByElement` (parametr `@Hours`, kolumna
   `Hours`; migracja 036), jeden odczyt zrzutu ACTUALS dla obu kolumn. Godziny elementu bez WP zostają
