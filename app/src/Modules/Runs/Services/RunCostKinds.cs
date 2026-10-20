@@ -1,4 +1,3 @@
-using PzlEv.Modules.Runs.Data;
 using PzlEv.Shared.Models.Db;
 using PzlEv.Shared.Utils.Dictionaries;
 
@@ -25,18 +24,6 @@ public static class RunCostKinds
         foreach (var row in rows.Where(r => !r.IsSettlement))
             totals[Of(row, kinds)] += row.Amount;
         return totals;
-    }
-
-    /// <summary>Koszt brutto rodzaju zaksięgowany w okresie (rok, okres).</summary>
-    public static decimal InPeriod(IEnumerable<RunBalanceRow> rows, IReadOnlyDictionary<string, string>? kinds, string kind, (int Year, int Period) period) =>
-        rows.Where(r => !r.IsSettlement && (r.FiscalYear, Math.Min(r.Period, 12)) == period && Of(r, kinds) == kind).Sum(r => r.Amount);
-
-    /// <summary>Średni koszt rodzaju na okres w count okresach przed bieżącym (okresy bez kosztu liczą się jako 0).</summary>
-    public static decimal AverageBefore(IEnumerable<RunBalanceRow> rows, IReadOnlyDictionary<string, string>? kinds, string kind, (int Year, int Period) today,
-        int count)
-    {
-        var periods = Before(today, count).ToHashSet();
-        return rows.Where(r => !r.IsSettlement && periods.Contains((r.FiscalYear, Math.Min(r.Period, 12))) && Of(r, kinds) == kind).Sum(r => r.Amount) / count;
     }
 
     /// <summary>count okresów przed today, od najbliższego.</summary>

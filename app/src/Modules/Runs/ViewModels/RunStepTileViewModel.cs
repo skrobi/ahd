@@ -1,4 +1,3 @@
-using System.Collections.ObjectModel;
 using PzlEv.Shared.Models.Pipeline;
 using PzlEv.Shared.Utils.Ui.Mvvm;
 

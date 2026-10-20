@@ -14,8 +14,6 @@ public sealed class PoRowViewModel(PoNode node, int depth, int children = 0, boo
 
     public bool HasChildren => children > 0;
 
-    public bool IsCollapsed => collapsed;
-
     /// <summary>▸ zwinięty, ▾ rozwinięty, pusty – bez dzieci.</summary>
     public string Expander => children == 0 ? "" : collapsed ? "▸" : "▾";
 

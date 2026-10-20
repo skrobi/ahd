@@ -286,7 +286,7 @@ public sealed class WizardViewModel : ObservableObject
     private void BuildPanels()
     {
         Dictionaries.Clear();
-        foreach (var item in ProjectDictionaries.ForType(Type.Code))
+        foreach (var item in ProjectDictionaries.Items)
         {
             var panel = new DictionaryPanelViewModel(item);
             panel.Load = new AsyncRelayCommand(() => LoadDictionary(panel), () => item.Stored && !IsCreated && !Busy.IsBusy);
@@ -351,10 +351,10 @@ public sealed class WizardViewModel : ObservableObject
         var path = _dialogs.SaveExcel("Pobierz szablon słowników programu", $"{(Code.Length > 0 ? Code : "Program")}_slowniki_programu.xlsx");
         if (path is null)
             return;
-        var (type, tree, mapping) = (Type.Code, Objectives.Tree.Copy(), _mapping);
+        var (tree, mapping) = (Objectives.Tree.Copy(), _mapping);
         await Try(async () =>
         {
-            await Busy.Run("Zapisywanie szablonu Excel…", () => _service.ExportDictionaries(path, "", type, tree, mapping));
+            await Busy.Run("Zapisywanie szablonu Excel…", () => _service.ExportDictionaries(path, "", tree, mapping));
             Status = $"Zapisano szablon {path} – arkusz „WP i CAM” zawiera elementy P1S z zakresu (Legacy WBS i mapowanie nakładki).";
         });
     }

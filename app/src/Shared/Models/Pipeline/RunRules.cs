@@ -71,8 +71,6 @@ public static partial class RunRules
 
     public static string LevelText(CheckLevel level) => level switch { CheckLevel.Error => "ERROR", CheckLevel.Warning => "WARNING", _ => "INFO" };
 
-    private const string PeriodColumns = "Rok, Okres, RokOkres (tekst „RRRR/OO”, okresy 13–16 jak 12), OkresyWstecz (0 – bieżący okres, 1 – poprzedni …, ujemne – przyszłe), OkresZamkniety, OkresPrzyszly";
-
     /// <summary>Tabele danych uruchomienia (CTE złożone przez aplikację przed zapytaniem reguły).</summary>
     public static IReadOnlyList<RunRuleTable> Tables { get; } =
     [

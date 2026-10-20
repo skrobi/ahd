@@ -415,10 +415,10 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
     /// Słowniki projektu do Excela – arkusz na słownik; szablon do uzupełnienia: „WP i CAM” z elementami P1S z zakresu
     /// bez WP, „Harmonogram i budżet” z WP bez harmonogramu.
     /// </summary>
-    public void ExportDictionaries(string path, string code, string type, PoTree tree, P1sInputs inputs)
+    public void ExportDictionaries(string path, string code, PoTree tree, P1sInputs inputs)
     {
         var sheets = new List<(string, IReadOnlyList<ExcelTableWriter.ExcelColumn>, IEnumerable<IReadOnlyList<object?>>)>();
-        foreach (var item in ProjectDictionaries.ForType(type).Where(i => i.Stored))
+        foreach (var item in ProjectDictionaries.Items.Where(i => i.Stored))
         {
             var spec = ProjectDictionaries.Base(item.Code);
             var rows = code.Length > 0 ? Rows(item.Code, code) : [];
@@ -672,12 +672,6 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
             : null;
         return StructureImport.Read(TabularFileReader.Read(path, sheet), structure, Rows(ProjectDictionaries.ScheduleBudget, code));
     }
-
-    /// <summary>ACWP po elemencie CES z ostatniego importu ACTUALS (pole kwoty z „Parametrów projektu”) – kolumna ACWP struktury.</summary>
-    public IReadOnlyDictionary<string, decimal> CostsByElement(string code) => CostsByElement(code, ActualsAmount(code));
-
-    /// <summary>ACWP po elemencie CES z podanego pola kwoty ACTUALS.</summary>
-    public IReadOnlyDictionary<string, decimal> CostsByElement(string code, string field) => store.CostsByElement(code, field);
 
     /// <summary>Pole godzin parsera ACTUALS (kolumna „Total Quantity”) – Actual DLH struktury.</summary>
     public const string ActualsHours = "TotalQuantity";

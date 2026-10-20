@@ -130,9 +130,6 @@ public static class ProjectDictionaries
         new(Settings, "Parametry programu", "Parametry projektu", Stored: true),
     ];
 
-    /// <summary>Słowniki projektu dla typu (wspólne dla wszystkich typów; wymagalność – IsRequired).</summary>
-    public static IReadOnlyList<ProjectDictionaryItem> ForType(string type) => Items;
-
     /// <summary>Tabele słowników projektu w bazie (SqlDictionaryStore; Cost Category – tabela globalna, Tables w GlobalDictionaries).</summary>
     public static IReadOnlyList<DictionaryTable> Tables { get; } =
     [

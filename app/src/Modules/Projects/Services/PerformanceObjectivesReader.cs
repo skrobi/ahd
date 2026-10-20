@@ -35,7 +35,7 @@ public static class PerformanceObjectivesReader
         var index = new Dictionary<string, int>(StringComparer.Ordinal);
         foreach (var column in new[] { ProjectDefinition, Level, WbsElement, Name, PersonResponsible, ProfitCenter, LegacyWbs, PerformanceObligation, SacObjNumber, Statistical, AcctAsstElement })
         {
-            var i = FindHeader(data.Headers, column);
+            var i = TabularFileReader.FindHeader(data.Headers, column);
             if (i >= 0)
                 index[column] = i;
             else if (Required.Contains(column))
@@ -103,16 +103,4 @@ public static class PerformanceObjectivesReader
     private static bool IsMarked(string? value) =>
         value is not null && (value.Equals("X", StringComparison.OrdinalIgnoreCase) || value is "1" || value.Equals("tak", StringComparison.OrdinalIgnoreCase)
             || value.Equals("true", StringComparison.OrdinalIgnoreCase));
-
-    private static int FindHeader(IReadOnlyList<string> headers, string name)
-    {
-        static string Norm(string s) => new string(s.Where(ch => !char.IsWhiteSpace(ch)).ToArray()).ToLowerInvariant();
-        var target = Norm(name);
-        for (var i = 0; i < headers.Count; i++)
-        {
-            if (Norm(headers[i]) == target)
-                return i;
-        }
-        return -1;
-    }
 }

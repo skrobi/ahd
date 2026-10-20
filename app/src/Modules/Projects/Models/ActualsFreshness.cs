@@ -22,7 +22,7 @@ public sealed record ActualsFile(string FileName, DateTimeOffset ReportAt, DateT
 /// </summary>
 public sealed record ActualsFreshness(IReadOnlyList<ActualsFile> Files, string? Error = null)
 {
-    private static string Time(DateTimeOffset value) => value.ToLocalTime().ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture);
+    internal static string Time(DateTimeOffset value) => value.ToLocalTime().ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture);
 
     /// <summary>Jedna linia: stan danych RABIT, import, ostatnie sprawdzenie.</summary>
     public string Summary
@@ -57,17 +57,15 @@ public sealed record ActualsFreshness(IReadOnlyList<ActualsFile> Files, string? 
 /// </summary>
 public sealed record ApprovedActuals(string RunCode, int PinNo, DateTimeOffset AsOf, string? ApprovedBy, string? Comment)
 {
-    private static string Time(DateTimeOffset value) => value.ToLocalTime().ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture);
-
     /// <summary>Status (zakładka Wskaźniki): źródło danych struktury; null – brak zatwierdzonego przebiegu (ostatni import).</summary>
     public static string Summary(ApprovedActuals? approved) => approved is null
         ? "ACTUALS struktury: ostatni import – niezatwierdzone"
-        : $"ACTUALS struktury: przebieg {approved.RunCode} #{approved.PinNo} · stan {Time(approved.AsOf)}";
+        : $"ACTUALS struktury: przebieg {approved.RunCode} #{approved.PinNo} · stan {ActualsFreshness.Time(approved.AsOf)}";
 
     public static string Details(ApprovedActuals? approved) => approved is null
         ? "Program nie ma przebiegu z zatwierdzonymi danymi ACTUALS – struktura pokazuje ostatni import RABIT. Zatwierdzenie: zakończony "
           + "etap „Zatwierdzenie ACTUALS” (klocek szablonu), a bez niego – zakończony pierwszy etap walidacji (także z zaakceptowanymi błędami)."
-        : $"Koszty struktury (ACWP, Actual DLH) – dane ACTUALS w stanie z przypięcia przebiegu {approved.RunCode} #{approved.PinNo} ({Time(approved.AsOf)}), "
+        : $"Koszty struktury (ACWP, Actual DLH) – dane ACTUALS w stanie z przypięcia przebiegu {approved.RunCode} #{approved.PinNo} ({ActualsFreshness.Time(approved.AsOf)}), "
           + $"zatwierdzone{(approved.Comment is { Length: > 0 } c ? $": {c}" : approved.ApprovedBy is { } by ? $" przez {by}" : "")}. "
           + "Nowszy import RABIT trafi do struktury po zatwierdzeniu danych w kolejnym przebiegu.";
 }

@@ -7,8 +7,7 @@ Stan: **Słowniki** (słowniki globalne – F1), **Import RABIT** i **Administra
 źródeł, parsery, lokalizacje – F2), **Programy** (kreator, Performance Objectives, słowniki
 projektu, foldery – F4), **Przebiegi** (przebieg P0–P2 uruchamia „Nowy przebieg” w zakładce Przebieg
 ekranu projektu, historia – ta sama zakładka – F5), **Pulpit** (stan z bazy, otwarte problemy) i **Diagnostyka**.
-Pozycja menu „Przebiegi” pokazuje na razie ekran
-zastępczy modułu (dokumentacja i etapy, które moduł przejmie). Dane są w bazie MS SQL środowiska
+Pozycja menu „Przebiegi” – szablony przebiegów i reguły walidacji. Dane są w bazie MS SQL środowiska
 (sekcja „Konfiguracja i dane”).
 
 Kod ma strukturę modułową (`docs/architektura.md`, rozdz. 5.3).

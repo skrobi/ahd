@@ -28,7 +28,7 @@ public sealed class ParserEditorViewModel : ObservableObject
     private ParserRow? _selected;
     private long? _parserId;
     private int? _version;
-    private string _code = "", _name = "", _table = "", _message = "";
+    private string _code = "", _name = "", _message = "";
     private bool _active = true;
 
     public ParserEditorViewModel(SourceConfigService service, IFileDialogs dialogs, BusyState busy, Action saved)
@@ -78,7 +78,6 @@ public sealed class ParserEditorViewModel : ObservableObject
             Code = value.Code;
             Name = value.Name;
             Active = value.Active;
-            _table = value.Table;
             Fields.Clear();
             foreach (var parserField in value.Fields)
                 Fields.Add(ParserFieldRowViewModel.From(parserField));
@@ -148,7 +147,6 @@ public sealed class ParserEditorViewModel : ObservableObject
         Selected = null;
         _parserId = null;
         _version = null;
-        _table = "";
         Code = Name = "";
         Active = true;
         Fields.Clear();

@@ -3,7 +3,6 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
 using System.Windows.Input;
-using PzlEv.Modules.Projects.Services;
 using PzlEv.Modules.Projects.ViewModels;
 using PzlEv.Shared.Models.Dictionaries;
 using PzlEv.Shared.Views.Partials;

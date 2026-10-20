@@ -72,7 +72,7 @@ public sealed class ProjectSettingsTests : IDisposable
 
         // Bez parametru – waluta obiektu (PLN).
         Assert.Equal("ValueObjCrcy", service.ActualsAmount("PAF"));
-        Assert.Equal(store.CostsByElement("PAF", "ValueObjCrcy"), service.CostsByElement("PAF"));
+        Assert.Equal(store.CostsByElement("PAF", "ValueObjCrcy"), service.CostsAndHoursByElement("PAF", service.ActualsAmount("PAF")).Amounts);
         run.Execute("PAF");
         var first = Assert.Single(runs.Pins("PAF", 10));
         Assert.Equal("ValueObjCrcy", first.AmountField);
@@ -82,8 +82,8 @@ public sealed class ProjectSettingsTests : IDisposable
         var context = service.Context("PAF", tree, null, P1sInputs.None);
         Assert.Equal(SaveStatus.Saved, service.SaveDictionary(ProjectDictionaries.Settings, context, [Setting(ProjectSettings.ActualsAmount, "ValueRepCur")], [], "PAF").Status);
         Assert.Equal("ValueRepCur", service.ActualsAmount("PAF"));
-        Assert.Equal(store.CostsByElement("PAF", "ValueRepCur"), service.CostsByElement("PAF"));
-        Assert.NotEqual(service.CostsByElement("PAF", "ValueObjCrcy"), service.CostsByElement("PAF"));
+        Assert.Equal(store.CostsByElement("PAF", "ValueRepCur"), service.CostsAndHoursByElement("PAF", service.ActualsAmount("PAF")).Amounts);
+        Assert.NotEqual(service.CostsAndHoursByElement("PAF", "ValueObjCrcy").Amounts, service.CostsAndHoursByElement("PAF", service.ActualsAmount("PAF")).Amounts);
 
         _services.Clock.Advance(TimeSpan.FromDays(7));
         run.Execute("PAF");

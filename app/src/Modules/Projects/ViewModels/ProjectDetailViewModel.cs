@@ -4,7 +4,6 @@ using System.Windows.Input;
 using PzlEv.Shared.Utils.Files;
 using PzlEv.Modules.Projects.Models;
 using PzlEv.Modules.Projects.Services;
-using PzlEv.Shared.Models;
 using PzlEv.Shared.Models.Db;
 using PzlEv.Shared.Models.Dictionaries;
 using PzlEv.Shared.Models.Pipeline;
@@ -88,7 +87,7 @@ public sealed class ProjectDetailViewModel : ObservableObject, IDisposable
         _runPanel = _service.RunPanels?.Create(Code);
         if (_service.Runs is { } runs)
             runs.Finished += OnRunFinished;
-        foreach (var item in ProjectDictionaries.ForType(project.Type))
+        foreach (var item in ProjectDictionaries.Items)
         {
             var panel = new DictionaryPanelViewModel(item);
             panel.Load = new AsyncRelayCommand(() => LoadDictionary(panel), () => item.Stored && !Busy.IsBusy);
@@ -882,7 +881,7 @@ public sealed class ProjectDetailViewModel : ObservableObject, IDisposable
         var (tree, mapping) = (_saved, _mapping);
         await Try(async () =>
         {
-            await Busy.Run("Zapisywanie słowników programu do Excela…", () => _service.ExportDictionaries(path, Code, Project.Type, tree, mapping));
+            await Busy.Run("Zapisywanie słowników programu do Excela…", () => _service.ExportDictionaries(path, Code, tree, mapping));
             Status = $"Zapisano {path} – popraw w Excelu i wczytaj ponownie (przed zapisem zobaczysz różnice).";
         });
     }

@@ -138,7 +138,7 @@ Modules/<Moduł>/
   Views/ ViewModels/               ekran i jego logika prezentacji (WPF)
   Models/                          modele modułu
   Data/                            magazyn danych modułu: I<Moduł>Store (kontrakt) + Sql<Moduł>Store
-  Services/ Stages/                przypadki użycia, walidacja, parsery, implementacje etapów (IStage)
+  Services/                        przypadki użycia, walidacja, parsery, akcje etapów
 Shared/
   Utils/Ui/                        MVVM (w tym BusyState – operacja w tle), konwertery, okna wyboru pliku, kontrakt modułu i nawigacji (WPF)
   Utils/Config/                    konfiguracja pzl-ev.json
@@ -191,11 +191,11 @@ kursor „praca w tle”, polecenia ekranu nieaktywne do końca operacji; wynik 
 zmieniane (struktura P1S z `LOG.WBS`) są czytane raz na sesję, z przyciskiem odświeżenia; kontrole wywoływane przy
 każdej edycji działają na danych w pamięci (zapis sprawdza je ponownie w bazie).
 
-**Kontrakt etapu** (`Shared/Models/Pipeline`): `StageDescriptor` (kod, nazwa, krok, zakres, czy wymaga
-decyzji człowieka) deklarowany przez moduł-właściciela i `IStage` (bramka wejścia, akcja z bramką wyjścia,
-wynik z kontrolami ERROR / WARNING / PASS). Ten sam kontrakt obsługuje uruchomienie etapu z ekranu przez
-analityka i późniejsze łączenie etapów bez udziału człowieka – łańcuch zatrzymuje się na etapie wymagającym
-decyzji (P4, P6, Z) albo z wynikiem ERROR. Tam też reguły walidacji przebiegu w SQL (`RunRules` – model, tabele danych
+**Etapy** (`Shared/Models/Pipeline`): `StageDescriptor` (kod, nazwa, krok, zakres, czy wymaga decyzji człowieka) –
+opis etapu deklarowany przez moduł-właściciela (ekran zastępczy modułu, dziennik startu). Wykonanie etapów przebiegu –
+definicja przebiegu i silnik etapów (`RunWorkflow`, `RunWorkflowEngine`, `RunService`; `docs/pipeline-fazy.md`, rozdz. 4.1):
+łańcuch zatrzymuje się na etapie wymagającym decyzji albo z wynikiem ERROR. Ogólnego kontraktu `IStage` nie ma (usunięty
+nieużywany szkic – etapy P3–P9, Z dojdą jako akcje etapów `RunActions`). Tam też reguły walidacji przebiegu w SQL (`RunRules` – model, tabele danych
 uruchomienia, kontrola zapytania, reguły startowe; wykonanie w module Przebiegi, `docs/pipeline-fazy.md`, rozdz. 4.1).
 
 **Nowy moduł:**

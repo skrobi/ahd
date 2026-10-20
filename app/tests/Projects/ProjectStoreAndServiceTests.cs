@@ -164,7 +164,7 @@ public sealed class ProjectStoreAndServiceTests : IDisposable
     public void Create_with_all_dictionaries_from_one_workbook()
     {
         // Kategorie WBS, Źródła danych i Parametry projektu – słowniki opcjonalne, których arkuszy nie ma w skoroszycie testowym (wczytuje się tylko podane pliki).
-        var files = ProjectDictionaries.ForType(ProjectTypes.Sac).Where(i => i.Stored && i.Code is not (ProjectDictionaries.WbsCategories or ProjectDictionaries.Sources or ProjectDictionaries.Settings))
+        var files = ProjectDictionaries.Items.Where(i => i.Stored && i.Code is not (ProjectDictionaries.WbsCategories or ProjectDictionaries.Sources or ProjectDictionaries.Settings))
             .Select(i => (i.Code, Sheet: ProjectService.FindSheet(Dictionaries, i)))
             .ToDictionary(x => x.Code, x => (Dictionaries, x.Sheet));
         Assert.All(files.Values, f => Assert.NotNull(f.Sheet));
@@ -217,7 +217,7 @@ public sealed class ProjectStoreAndServiceTests : IDisposable
     public void Template_contains_scope_elements_and_reads_back()
     {
         var path = Path.Combine(_root, "szablon.xlsx");
-        _service.ExportDictionaries(path, "", ProjectTypes.Internal, Objectives(), P1sInputs.None);
+        _service.ExportDictionaries(path, "", Objectives(), P1sInputs.None);
 
         var sheets = PzlEv.Shared.Utils.Files.TabularFileReader.SheetNames(path);
         Assert.Equal(["WP i CAM", "Harmonogram i budżet", "Kategorie WBS", "Cost Category projektu", "Wykluczenia", "Źródła danych", "Parametry projektu"], sheets);
@@ -272,7 +272,7 @@ public sealed class ProjectStoreAndServiceTests : IDisposable
         var export = Path.Combine(Path.GetTempPath(), $"pzlev-categories-{Guid.NewGuid():N}.xlsx");
         try
         {
-            _service.ExportDictionaries(export, "M28", ProjectTypes.Internal, _store.Objectives("M28"), inputs);   // lista kategorii projektu w arkuszu „Listy”
+            _service.ExportDictionaries(export, "M28", _store.Objectives("M28"), inputs);   // lista kategorii projektu w arkuszu „Listy”
             Assert.Contains("Kategorie WBS", PzlEv.Shared.Utils.Files.TabularFileReader.SheetNames(export));
         }
         finally
@@ -361,7 +361,7 @@ public sealed class ProjectStoreAndServiceTests : IDisposable
 
         // Szablon z projektu: same klucze – nic do zapisania, bez błędów.
         var template = Path.Combine(_root, "szablon.xlsx");
-        _service.ExportDictionaries(template, "M28", ProjectTypes.Internal, tree, inputs);
+        _service.ExportDictionaries(template, "M28", tree, inputs);
         var empty = _service.PreviewDictionary(ProjectDictionaries.WpCam, context, template, "M28", ProjectService.FindSheet(template, item));
         Assert.False(empty.HasErrors, string.Join("; ", empty.Issues.Select(i => i.Message)));
         Assert.Empty(empty.Working);

@@ -141,7 +141,7 @@ public sealed class DictionaryService(IDictionaryStore store, IJournal journal)
         var missing = new HashSet<string>();
         foreach (var column in spec.Columns)
         {
-            var index = new[] { column.Name }.Concat(column.Aliases ?? []).Select(n => FindHeader(data.Headers, n)).FirstOrDefault(i => i >= 0, -1);
+            var index = new[] { column.Name }.Concat(column.Aliases ?? []).Select(n => TabularFileReader.FindHeader(data.Headers, n)).FirstOrDefault(i => i >= 0, -1);
             if (index >= 0)
                 columnIndex[column.Name] = index;
             else if (column.Key || column.Required)
@@ -194,7 +194,7 @@ public sealed class DictionaryService(IDictionaryStore store, IJournal journal)
         // Klucz bez względu na wielkość liter: „E123” w pliku zmienia wiersz „e123” (historia zostaje), nie dodaje nowego.
         var currentByKey = current.GroupBy(r => spec.KeyOf(r.Values), StringComparer.OrdinalIgnoreCase)
             .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
-        var normalized = DictionaryValidator.Normalize(spec, ResolveLookups(spec, sourceRows, issues, rowNumbers), issues);
+        var normalized = DictionaryValidator.Normalize(spec, ResolveLookups(spec, sourceRows, issues), issues);
 
         if (keep is { Count: > 0 })
             normalized = normalized.Select(row => currentByKey.TryGetValue(spec.KeyOf(row.Values), out var existing)
@@ -317,7 +317,7 @@ public sealed class DictionaryService(IDictionaryStore store, IJournal journal)
             .ToDictionary(code => code, code => GlobalDictionaries.LookupOptions(code, Load(GlobalDictionaries.Get(code))));
 
     /// <summary>Kolumny powiązane: opis (imię i nazwisko) → wartość (USRID), jak przy wpisaniu w tabeli; niejednoznaczny – ostrzeżenie.</summary>
-    private List<DictRow> ResolveLookups(DictionarySpec spec, IReadOnlyList<DictRow> rows, List<Issue> issues, IReadOnlyList<int>? rowNumbers)
+    private List<DictRow> ResolveLookups(DictionarySpec spec, IReadOnlyList<DictRow> rows, List<Issue> issues)
     {
         var lookups = Lookups(spec);
         if (lookups.Count == 0)
@@ -365,18 +365,6 @@ public sealed class DictionaryService(IDictionaryStore store, IJournal journal)
         if (outcome.Status == SaveStatus.Saved)
             journal.Add(Area, $"{spec.Name}: wczytano z Excela {preview.FileName} ({preview.Summary})", spec.Code);
         return outcome;
-    }
-
-    private static int FindHeader(IReadOnlyList<string> headers, string name)
-    {
-        static string Norm(string s) => new string(s.Where(ch => !char.IsWhiteSpace(ch)).ToArray()).ToLowerInvariant();
-        var target = Norm(name);
-        for (var i = 0; i < headers.Count; i++)
-        {
-            if (Norm(headers[i]) == target)
-                return i;
-        }
-        return -1;
     }
 
     private static bool SameValues(DictionarySpec spec, IReadOnlyDictionary<string, string?> a, IReadOnlyDictionary<string, string?> b) =>
