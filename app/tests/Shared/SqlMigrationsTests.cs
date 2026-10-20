@@ -57,9 +57,9 @@ public sealed class SqlMigrationsTests
     public void Scripts_are_embedded_numbered_and_parameterised()
     {
         var scripts = SqlMigrations.All();
-        Assert.Equal([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52], scripts.Select(s => s.Number));
-        Assert.Equal([false, true, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, true, false, false, false, false, false, false, true, false, true, false, true, false, false, false, false, false, true, false, false, false, false, false, true, false, false, false, false, false, true], scripts.Select(s => s.IsPresets));   // 002, 023, 030, 032, 034, 040, 046, 052 (*_dane_*) – dane startowe
-        Assert.Equal(52, SqlMigrations.Required);
+        Assert.Equal([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53], scripts.Select(s => s.Number));
+        Assert.Equal([false, true, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, true, false, false, false, false, false, false, true, false, true, false, true, false, false, false, false, false, true, false, false, false, false, false, true, false, false, false, false, false, false, true], scripts.Select(s => s.IsPresets));   // 002, 023, 030, 032, 034, 040, 046, 053 (*_dane_*) – dane startowe
+        Assert.Equal(53, SqlMigrations.Required);
 
         var batches = SqlMigrations.Batches(scripts[0].Text, "FINOP", "PZLEV_").ToList();
         Assert.True(batches.Count > 5);
@@ -73,14 +73,14 @@ public sealed class SqlMigrationsTests
     {
         using var database = new TestDatabase();   // bez danych startowych
 
-        Assert.Equal(["002_dane_startowe.sql", "023_dane_produkcji.sql", "030_dane_narzuty_cas.sql", "032_dane_formuly_narzutow_cas.sql", "034_dane_narzuty_cas.sql", "040_dane_rodzaj_kosztu.sql", "046_dane_kursy_usd.sql", "052_dane_reguly_i_przebiegi.sql"], SqlMigrations.Pending(database.Sql).Select(s => s.Name));
+        Assert.Equal(["002_dane_startowe.sql", "023_dane_produkcji.sql", "030_dane_narzuty_cas.sql", "032_dane_formuly_narzutow_cas.sql", "034_dane_narzuty_cas.sql", "040_dane_rodzaj_kosztu.sql", "046_dane_kursy_usd.sql", "053_dane_reguly_i_przebiegi.sql"], SqlMigrations.Pending(database.Sql).Select(s => s.Name));
         Assert.Empty(SqlMigrations.Apply(database.Sql, presets: false));
-        Assert.Equal(["002_dane_startowe.sql", "023_dane_produkcji.sql", "030_dane_narzuty_cas.sql", "032_dane_formuly_narzutow_cas.sql", "034_dane_narzuty_cas.sql", "040_dane_rodzaj_kosztu.sql", "046_dane_kursy_usd.sql", "052_dane_reguly_i_przebiegi.sql"], SqlMigrations.Apply(database.Sql));   // pozostałe wykonane – pominięte
+        Assert.Equal(["002_dane_startowe.sql", "023_dane_produkcji.sql", "030_dane_narzuty_cas.sql", "032_dane_formuly_narzutow_cas.sql", "034_dane_narzuty_cas.sql", "040_dane_rodzaj_kosztu.sql", "046_dane_kursy_usd.sql", "053_dane_reguly_i_przebiegi.sql"], SqlMigrations.Apply(database.Sql));   // pozostałe wykonane – pominięte
         Assert.Empty(SqlMigrations.Apply(database.Sql));                              // wszystko wykonane
         Assert.Empty(SqlMigrations.Pending(database.Sql));
         var status = SqlMigrations.Status(database.Sql);
         Assert.All(status, s => Assert.NotNull(s.AppliedAt));
-        Assert.Equal(52, SqlMigrations.CurrentVersion(database.Sql));
+        Assert.Equal(53, SqlMigrations.CurrentVersion(database.Sql));
         using var connection = database.Sql.Open();
         var tables = connection.Query<string>(
             "SELECT t.name FROM sys.tables t JOIN sys.schemas s ON s.schema_id = t.schema_id WHERE s.name = @schema AND LEFT(t.name, LEN(@prefix)) = @prefix",
@@ -126,6 +126,48 @@ public sealed class SqlMigrationsTests
         Assert.Equal("CLUSTERED COLUMNSTORE", connection.ExecuteScalar<string>("SELECT type_desc FROM sys.indexes WHERE object_id = OBJECT_ID(@canonical) AND index_id = 1", new { canonical }));
     }
 
+    /// <summary>
+    /// Migracja 052: baza z migracją 051 z aplikacji 0.58.0 (tabela reguł z formułami, bez zmian nowej 051) – po migracji tabela reguł
+    /// w kształcie reguł SQL, RUN_BalanceEv, RUN_Issue.Details, bez DICT_RunCheck; reguły startowe – migracja 053.
+    /// </summary>
+    [SqlFact]
+    public void Migration_052_repairs_database_with_formula_rules_from_old_051()
+    {
+        using var database = new TestDatabase();   // bez danych startowych
+        string T(string logical) => database.Sql.Table(logical);
+        using (var connection = database.Sql.Open())
+        {
+            // Stan po starej 051: tabela reguł z formułami, bez RUN_BalanceEv i Details, słowniki 047 i 049 zostały; 052 i 053 – niewykonane.
+            connection.Execute(
+                $"""
+                DROP TABLE {T("dict.RunValidation")};
+                CREATE TABLE {T("dict.RunValidation")} (Id BIGINT IDENTITY(1,1) PRIMARY KEY, RowId BIGINT NOT NULL, Version INT NOT NULL, Project VARCHAR(20) NULL,
+                    Name NVARCHAR(200) NOT NULL, CheckName NVARCHAR(200) NOT NULL, IsActive BIT NOT NULL, Condition NVARCHAR(4000) NOT NULL, Message NVARCHAR(4000) NOT NULL,
+                    Level NVARCHAR(10) NOT NULL, RecordedAt DATETIMEOFFSET(7) NOT NULL, RecordedBy NVARCHAR(128) NOT NULL, SupersededAt DATETIMEOFFSET(7) NULL,
+                    SupersededBy NVARCHAR(128) NULL);
+                """);
+            connection.Execute(
+                $"""
+                INSERT INTO {T("dict.RunValidation")} (RowId, Version, Name, CheckName, IsActive, Condition, Message, Level, RecordedAt, RecordedBy)
+                VALUES (1, 1, N'Stara', N'Jakość danych', 1, N'LICZBA() > 0', N'x', N'WARNING', SYSDATETIMEOFFSET(), N'test');
+                DROP TABLE {T("run.BalanceEv")};
+                ALTER TABLE {T("run.Issue")} DROP COLUMN Details;
+                CREATE TABLE {T("dict.RunCheck")} (Id INT NOT NULL);
+                DELETE FROM {T("meta.SchemaVersion")} WHERE Version IN (52, 53);
+                """);
+        }
+
+        Assert.Equal(["052_naprawa_regul_walidacji.sql", "053_dane_reguly_i_przebiegi.sql"], SqlMigrations.Apply(database.Sql).Where(n => n.StartsWith("05")));
+
+        using var check = database.Sql.Open();
+        Assert.NotNull(check.ExecuteScalar<int?>($"SELECT COL_LENGTH(N'{T("dict.RunValidation")}', N'SqlText')"));
+        Assert.Null(check.ExecuteScalar<int?>($"SELECT COL_LENGTH(N'{T("dict.RunValidation")}', N'CheckName')"));
+        Assert.NotNull(check.ExecuteScalar<int?>($"SELECT COL_LENGTH(N'{T("run.Issue")}', N'Details')"));
+        Assert.NotNull(check.ExecuteScalar<int?>($"SELECT OBJECT_ID(N'{T("run.BalanceEv")}')"));
+        Assert.Null(check.ExecuteScalar<int?>($"SELECT OBJECT_ID(N'{T("dict.RunCheck")}')"));
+        Assert.Equal(PzlEv.Shared.Models.Pipeline.RunRules.Starters.Select(r => r.Name), new PzlEv.Modules.Runs.Data.SqlRunStore(database.Sql).Rules().Select(r => r.Name));
+    }
+
     [SqlFact]
     public void Server_info_shows_sql_server_version_and_compatibility_level()
     {
@@ -142,7 +184,7 @@ public sealed class SqlMigrationsTests
         Parallel.For(0, 2, i => results[i] = SqlMigrations.Apply(database.Sql));   // blokada sp_getapplock
 
         // Każdy skrypt dokładnie raz (który wątek wykonał który skrypt – zależy od kolejności zdobycia blokady).
-        Assert.Equal(["002_dane_startowe.sql", "023_dane_produkcji.sql", "030_dane_narzuty_cas.sql", "032_dane_formuly_narzutow_cas.sql", "034_dane_narzuty_cas.sql", "040_dane_rodzaj_kosztu.sql", "046_dane_kursy_usd.sql", "052_dane_reguly_i_przebiegi.sql"],
+        Assert.Equal(["002_dane_startowe.sql", "023_dane_produkcji.sql", "030_dane_narzuty_cas.sql", "032_dane_formuly_narzutow_cas.sql", "034_dane_narzuty_cas.sql", "040_dane_rodzaj_kosztu.sql", "046_dane_kursy_usd.sql", "053_dane_reguly_i_przebiegi.sql"],
             results.SelectMany(r => r).Order(StringComparer.Ordinal));
         using var connection = database.Sql.Open();
         Assert.Equal(2, connection.ExecuteScalar<int>($"SELECT COUNT(*) FROM {database.Sql.Table("meta.SourceDefinition")}"));

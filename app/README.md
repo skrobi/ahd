@@ -103,7 +103,9 @@ zmieni). Brak pliku albo błąd w nim = komunikat przy starcie z nazwą pola –
   zapytanie, poziom, opis wyniku; edytor na ekranie Przebiegi), dane jak w strukturze programu (`RUN_BalanceEv` – tabela `ev`
   reguł), wiersz wyniku reguły (`RUN_Issue.Details`); sprzątanie – usuwa słowniki 047 i 049 oraz kolumny `CheckSettings` (048)
   i `Level` / `Threshold` (050); bez danych startowych (reguły startowe aplikacji);
-- `052_dane_reguly_i_przebiegi.sql` (dane startowe) – reguły startowe w słowniku „Reguły walidacji” i szablony przebiegów
+- `052_naprawa_regul_walidacji.sql` – naprawa bazy z migracją 051 z aplikacji 0.58.0 (stara tabela reguł z formułami → reguły SQL,
+  brakujące zmiany 051);
+- `053_dane_reguly_i_przebiegi.sql` (dane startowe) – reguły startowe w słowniku „Reguły walidacji” i szablony przebiegów
   „Wewnętrzny” i „CAS” z etapami walidacji; usuwa elementy etapów „Uzgodnienie: …”.
 
 Migracje wykonuje przycisk **Diagnostyka → Migracja** – uruchamia po kolei skrypty, których numeru nie ma

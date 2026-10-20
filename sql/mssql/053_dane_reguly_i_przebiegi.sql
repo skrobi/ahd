@@ -1,4 +1,4 @@
-/* PZL-EV – migracja 052 (dane startowe): reguły walidacji i szablony przebiegów (docs/pipeline-fazy.md, rozdz. 4.1; tasks/F5.7).
+/* PZL-EV – migracja 053 (dane startowe): reguły walidacji i szablony przebiegów (docs/pipeline-fazy.md, rozdz. 4.1; tasks/F5.7).
    - „Reguły walidacji” (DICT_RunValidation): 22 reguły startowe aplikacji w SQL – 13 Walidacja ACTUALS, 8 Walidacja EV, przykładowe
      uzgodnienie (koszt brutto ≤ BAC × 1,1); reguła o tej samej nazwie już zapisana – bez zmian. Treść jak RunRules.Starters
      (test SqlPresetsTests porównuje).
@@ -7,13 +7,13 @@
      o tej nazwie już jest – bez zmian; aktywny, gdy dla jego typu nie ma innego aktywnego szablonu.
    - Elementy etapów „Uzgodnienie: …” (reguły uzgodnień sprzed reguł SQL) – usunięte (historia zostaje).
    Skrypt jest idempotentny. Uruchomienie: aplikacja (Diagnostyka → Migracja albo pytanie przy starcie); ręcznie:
-       sqlcmd -S pzltestdb.intl.lmco.com -d PZLTEST -E -f 65001 -v Schema=FINOP Prefix=PZLEV_ -i 052_dane_reguly_i_przebiegi.sql */
+       sqlcmd -S pzltestdb.intl.lmco.com -d PZLTEST -E -f 65001 -v Schema=FINOP Prefix=PZLEV_ -i 053_dane_reguly_i_przebiegi.sql */
 
 SET ANSI_NULLS ON;
 SET QUOTED_IDENTIFIER ON;
 GO
 
-DECLARE @at DATETIMEOFFSET(7) = SYSDATETIMEOFFSET(), @by NVARCHAR(128) = N'migracja 052 – reguły i szablony startowe';
+DECLARE @at DATETIMEOFFSET(7) = SYSDATETIMEOFFSET(), @by NVARCHAR(128) = N'migracja 053 – reguły i szablony startowe';
 
 -- Reguły walidacji (RunRules.Starters).
 DECLARE @rules TABLE (Sort INT PRIMARY KEY, Name NVARCHAR(200) NOT NULL, Description NVARCHAR(1000) NULL, Level NVARCHAR(10) NOT NULL,
@@ -283,12 +283,12 @@ FROM @new n CROSS JOIN @elements e
 WHERE NOT EXISTS (SELECT 1 FROM [$(Schema)].[$(Prefix)DICT_RunStepElement] x
                   WHERE x.Project IS NULL AND x.SupersededAt IS NULL AND x.Definition = n.Code AND x.Step = e.Step AND x.Element = e.Element);
 
--- Elementy „Uzgodnienie: …” (reguły uzgodnień usunięte migracją 051) – usunięte z szablonów, historia zostaje.
+-- Elementy „Uzgodnienie: …” (reguły uzgodnień usunięte migracjami 051 / 052) – usunięte z szablonów, historia zostaje.
 UPDATE [$(Schema)].[$(Prefix)DICT_RunStepElement] SET SupersededAt = @at, SupersededBy = @by
 WHERE SupersededAt IS NULL AND Element LIKE N'Uzgodnienie:%';
 GO
 
-IF NOT EXISTS (SELECT 1 FROM [$(Schema)].[$(Prefix)META_SchemaVersion] WHERE Version = 52)
+IF NOT EXISTS (SELECT 1 FROM [$(Schema)].[$(Prefix)META_SchemaVersion] WHERE Version = 53)
 INSERT INTO [$(Schema)].[$(Prefix)META_SchemaVersion] (Version, Script, MinAppVersion)
-VALUES (52, N'052_dane_reguly_i_przebiegi.sql', '0.59.0');
+VALUES (53, N'053_dane_reguly_i_przebiegi.sql', '0.59.0');
 GO

@@ -482,11 +482,16 @@ Wykluczeniach, CAS po narzutach – zapisuje aplikacja przy przypięciu i przed 
 i `DICT_RunStepElement.Level` / `Threshold` (050).
 Wymaga aplikacji 0.59.0.
 
-**Migracja `sql/mssql/052_dane_reguly_i_przebiegi.sql` (dane startowe):** 22 reguły startowe w `DICT_RunValidation` (13 Walidacja
+**Migracja `sql/mssql/052_naprawa_regul_walidacji.sql`:** naprawa bazy, w której migrację 051 wykonała aplikacja 0.58.0 (reguły
+z formułami): `DICT_RunValidation` bez kolumny `SqlText` – usuwana i zakładana w kształcie reguł SQL; pozostałe zmiany 051
+(`RUN_BalanceEv`, `RUN_Issue.Details`, `RUN_Issue.CheckName`, sprzątanie 047–050) – gdy ich brak. W bazie z nową 051 – bez zmian.
+Wymaga aplikacji 0.59.0.
+
+**Migracja `sql/mssql/053_dane_reguly_i_przebiegi.sql` (dane startowe):** 22 reguły startowe w `DICT_RunValidation` (13 Walidacja
 ACTUALS, 8 Walidacja EV, przykładowe uzgodnienie; treść jak `RunRules.Starters` – test `SqlPresetsTests`; reguła o tej samej nazwie
 zostaje), szablony przebiegów „Wewnętrzny” (Wszystkie) i „CAS” w `DICT_RunDefinition` / `DICT_RunStep` / `DICT_RunStepElement`
 (etapy jak definicja wbudowana; szablon o tej nazwie zostaje; aktywny, gdy typ nie ma innego aktywnego szablonu), usunięcie
-elementów etapów „Uzgodnienie: …” (historia zostaje). Wiersze `RecordedBy = N'migracja 052 – reguły i szablony startowe'`. Wymaga
+elementów etapów „Uzgodnienie: …” (historia zostaje). Wiersze `RecordedBy = N'migracja 053 – reguły i szablony startowe'`. Wymaga
 aplikacji 0.59.0.
 
 `META_SourceFile.CanonicalStatus`: „utworzone” – dane kanoniczne zapisane i sprawdzone (widoczne dla odczytów),

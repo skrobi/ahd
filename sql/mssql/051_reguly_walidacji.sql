@@ -9,6 +9,7 @@
    - Sprzątanie po regułach z formułami i katalogu C# (nieużywane od tej wersji): tabele DICT_RunCheck – „Kontrole przebiegu” (047)
      i DICT_RunReconciliation – „Reguły uzgodnień” (049) usuwane z danymi i historią; kolumny META_RunPin.CheckSettings (048)
      oraz DICT_RunStepElement.Level i Threshold (050) usuwane.
+   Baza, w której 051 wykonała aplikacja 0.58.0 (reguły z formułami), dostaje te zmiany migracją 052.
    Skrypt jest idempotentny.
    Uruchomienie: aplikacja (Diagnostyka → Migracja albo pytanie przy starcie); ręcznie:
        sqlcmd -S pzltestdb.intl.lmco.com -d PZLTEST -E -f 65001 -v Schema=FINOP Prefix=PZLEV_ -i 051_reguly_walidacji.sql */

@@ -118,7 +118,7 @@ public sealed class SqlPresetsTests : IDisposable
         var ownFx = new Dictionary<string, string?> { ["Waluta"] = "USD", ["Od"] = "2024-01-01", ["Do"] = "2024-01-31", ["Kurs"] = "3.5", [GlobalDictionaries.CasFxColumn] = "3.6" };
         Assert.True(_dictionaries.Save(GlobalDictionaries.FxRates, null, [new RowChange(RowChangeKind.Added, null, null, fxSpec.KeyOf(ownFx), ownFx)]).Success);
 
-        Assert.Equal(["002_dane_startowe.sql", "023_dane_produkcji.sql", "030_dane_narzuty_cas.sql", "032_dane_formuly_narzutow_cas.sql", "034_dane_narzuty_cas.sql", "040_dane_rodzaj_kosztu.sql", "046_dane_kursy_usd.sql", "052_dane_reguly_i_przebiegi.sql"],
+        Assert.Equal(["002_dane_startowe.sql", "023_dane_produkcji.sql", "030_dane_narzuty_cas.sql", "032_dane_formuly_narzutow_cas.sql", "034_dane_narzuty_cas.sql", "040_dane_rodzaj_kosztu.sql", "046_dane_kursy_usd.sql", "053_dane_reguly_i_przebiegi.sql"],
             SqlMigrations.Apply(_database.Sql));
 
         var paf = _sources.Definitions().Single(d => d.Code == "ACTUALS_PAF");
@@ -146,7 +146,7 @@ public sealed class SqlPresetsTests : IDisposable
         Assert.Empty(DictionaryValidator.Validate(fxSpec, usd.Select(r => new DictRow(r.RowId, r.Version, r.Values)).ToList()).Where(i => i.Level == PzlEv.Shared.Models.Pipeline.CheckLevel.Error));   // okresy się nie nakładają
     }
 
-    /// <summary>Migracja 052: reguły startowe w słowniku „Reguły walidacji” i szablony przebiegów Wewnętrzny i CAS jak w aplikacji.</summary>
+    /// <summary>Migracja 053: reguły startowe w słowniku „Reguły walidacji” i szablony przebiegów Wewnętrzny i CAS jak w aplikacji.</summary>
     [SqlFact]
     public void Presets_contain_starter_rules_and_run_templates_and_drop_reconciliation_elements()
     {
@@ -154,7 +154,7 @@ public sealed class SqlPresetsTests : IDisposable
         var dictionaries = new DictionaryService(_dictionaries, _journal);
         var store = new PzlEv.Modules.Runs.Data.SqlRunStore(_database.Sql);
         var templates = new PzlEv.Modules.Runs.Services.RunTemplateService(dictionaries, store);
-        // Przed migracją 052: własny szablon CAS z elementem „Uzgodnienie: *” (reguły uzgodnień sprzed reguł SQL).
+        // Przed migracją 053: własny szablon CAS z elementem „Uzgodnienie: *” (reguły uzgodnień sprzed reguł SQL).
         var cas = PzlEv.Shared.Models.Pipeline.RunDefinitions.Starters[1];
         var own = cas with { Steps = [.. cas.Steps.Take(2), new(3, "Kontrole", PzlEv.Shared.Models.Pipeline.RunActions.Checks, PzlEv.Shared.Models.Pipeline.RunGates.Info, false,
             [new("WP bez MPK")])] };
