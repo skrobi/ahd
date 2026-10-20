@@ -15,7 +15,7 @@ namespace PzlEv.Modules.Runs.ViewModels;
 /// <summary>Wybór uruchomienia w oknie: wiersz uruchomienia i opis.</summary>
 public sealed record AcwpPinOption(RunPinRow Pin)
 {
-    public string Label => $"{Pin.Code} #{Pin.PinNo} – {Pin.StartedAt.ToLocalTime():yyyy-MM-dd HH:mm}";
+    public string Label => $"{Pin.Code} #{Pin.PinNo} – {Pin.StartedAt.ToLocalTime():yyyy-MM-dd HH:mm}{Pin.ClosingText}";
 }
 
 /// <summary>Wybór okresu w wariancie okres do okresu.</summary>

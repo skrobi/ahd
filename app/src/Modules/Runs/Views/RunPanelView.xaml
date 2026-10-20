@@ -84,6 +84,7 @@
                                 <Run Text="{Binding Code, Mode=OneWay}" FontWeight="SemiBold" />
                                 <Run Text="{Binding PinNo, Mode=OneWay, StringFormat='#{0}'}" />
                                 <Run Text="{Binding Status, Mode=OneWay, StringFormat='– {0}'}" Foreground="{StaticResource Muted}" />
+                                <Run Text="{Binding ClosingText, Mode=OneWay}" FontWeight="SemiBold" Foreground="{StaticResource Accent}" />
                             </TextBlock>
                         </DataTemplate>
                     </ComboBox.ItemTemplate>
@@ -312,30 +313,34 @@
                 <StackPanel Margin="0,12,0,0">
                     <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
                         <TextBlock Text="Było" VerticalAlignment="Center" Margin="0,0,6,0" />
-                        <ComboBox ItemsSource="{Binding Pins}" SelectedItem="{Binding BeforePin}" Width="300" AutomationProperties.Name="Uruchomienie było">
+                        <ComboBox ItemsSource="{Binding ComparePins}" SelectedItem="{Binding BeforePin}" Width="300" AutomationProperties.Name="Uruchomienie było">
                             <ComboBox.ItemTemplate>
                                 <DataTemplate>
                                     <TextBlock>
                                         <Run Text="{Binding Code, Mode=OneWay}" FontWeight="SemiBold" />
                                         <Run Text="{Binding PinNo, Mode=OneWay, StringFormat='#{0}'}" />
                                         <Run Text="{Binding Status, Mode=OneWay, StringFormat='– {0}'}" Foreground="{StaticResource Muted}" />
+                                        <Run Text="{Binding ClosingText, Mode=OneWay}" FontWeight="SemiBold" Foreground="{StaticResource Accent}" />
                                     </TextBlock>
                                 </DataTemplate>
                             </ComboBox.ItemTemplate>
                         </ComboBox>
                         <Button Content="⇄" Style="{StaticResource Btn}" Margin="6,0" Command="{Binding SwapCompare}" ToolTip="Zamień uruchomienia" />
                         <TextBlock Text="Jest" VerticalAlignment="Center" Margin="0,0,6,0" />
-                        <ComboBox ItemsSource="{Binding Pins}" SelectedItem="{Binding AfterPin}" Width="300" Margin="0,0,16,0" AutomationProperties.Name="Uruchomienie jest">
+                        <ComboBox ItemsSource="{Binding ComparePins}" SelectedItem="{Binding AfterPin}" Width="300" Margin="0,0,16,0" AutomationProperties.Name="Uruchomienie jest">
                             <ComboBox.ItemTemplate>
                                 <DataTemplate>
                                     <TextBlock>
                                         <Run Text="{Binding Code, Mode=OneWay}" FontWeight="SemiBold" />
                                         <Run Text="{Binding PinNo, Mode=OneWay, StringFormat='#{0}'}" />
                                         <Run Text="{Binding Status, Mode=OneWay, StringFormat='– {0}'}" Foreground="{StaticResource Muted}" />
+                                        <Run Text="{Binding ClosingText, Mode=OneWay}" FontWeight="SemiBold" Foreground="{StaticResource Accent}" />
                                     </TextBlock>
                                 </DataTemplate>
                             </ComboBox.ItemTemplate>
                         </ComboBox>
+                        <CheckBox Content="Tylko zamknięcia okresów" IsChecked="{Binding OnlyClosings}" VerticalAlignment="Center" Margin="0,0,16,0"
+                                  ToolTip="Do wyboru tylko zamknięcia okresów (★ – ostatnie zakończone uruchomienie tygodnia zamykającego z kalendarza okresów); wybór: dwa ostatnie zamknięcia" />
                         <CheckBox Content="Tylko zmiany" IsChecked="{Binding OnlyChanges}" VerticalAlignment="Center"
                                   ToolTip="Nowe, zmienione (poziom, liczba wierszy, wartości kolumn liczbowych) i rozwiązane wyniki reguł; bez wyników bez zmian" />
                     </StackPanel>

@@ -87,6 +87,8 @@ public sealed class RunPanelViewModel : ObservableObject, IDisposable
     private RunPinRow? _beforePin;
     private RunPinRow? _afterPin;
     private bool _onlyChanges = true;
+    private bool _onlyClosings;
+    private IReadOnlyList<RunPinRow> _closings = [];
     private IReadOnlyList<RunCompareRow> _compare = [];
     private string _compareNote = "";
     private readonly Dictionary<long, IReadOnlyList<RunIssueRow>> _issueCache = [];
@@ -171,6 +173,32 @@ public sealed class RunPanelViewModel : ObservableObject, IDisposable
 
     /// <summary>Porównanie: uruchomienie „jest”.</summary>
     public RunPinRow? AfterPin { get => _afterPin; set { if (SetProperty(ref _afterPin, value)) _ = LoadCompare(); } }
+
+    /// <summary>
+    /// Uruchomienia do porównania: ostatnie uruchomienia i wszystkie zamknięcia okresów (RunPinRow.IsPeriodClose), od najnowszego;
+    /// OnlyClosings – same zamknięcia (porównanie „od zamknięcia do zamknięcia”).
+    /// </summary>
+    public IReadOnlyList<RunPinRow> ComparePins => _onlyClosings ? _closings
+        : _pins.Concat(_closings.Where(c => _pins.All(p => p.PinId != c.PinId))).OrderByDescending(p => p.StartedAt).ToList();
+
+    /// <summary>Porównanie tylko zamknięć okresów – wybór: dwa ostatnie zamknięcia.</summary>
+    public bool OnlyClosings
+    {
+        get => _onlyClosings;
+        set
+        {
+            if (!SetProperty(ref _onlyClosings, value))
+                return;
+            OnPropertyChanged(nameof(ComparePins));
+            if (value)
+            {
+                (_afterPin, _beforePin) = (_closings.FirstOrDefault(), _closings.Skip(1).FirstOrDefault());
+                OnPropertyChanged(nameof(AfterPin));
+                OnPropertyChanged(nameof(BeforePin));
+                _ = LoadCompare();
+            }
+        }
+    }
 
     /// <summary>Porównanie: tylko nowe, zmienione i rozwiązane wyniki.</summary>
     public bool OnlyChanges { get => _onlyChanges; set { if (SetProperty(ref _onlyChanges, value)) _ = LoadCompare(); } }
@@ -355,10 +383,12 @@ public sealed class RunPanelViewModel : ObservableObject, IDisposable
                 var assigned = _store.AssignedDefinition(Project);
                 var definition = RunDefinitions.For(headers, steps, elements, assigned, _store.ProjectType(Project) ?? "");
                 var matrixPins = pins.Where(p => p.Status != RunStatuses.Running).Take(MatrixPins).ToList();
-                return new Loaded(pins, definition, assigned, matrixPins.ToDictionary(p => p.PinId, p => _store.Issues(p.PinId)), _store.Rules());
+                return new Loaded(pins, definition, assigned, matrixPins.ToDictionary(p => p.PinId, p => _store.Issues(p.PinId)), _store.Rules(),
+                    _store.ClosingPins(Project));
             });
             var pins = loaded.Pins;
             _pins = pins;
+            _closings = loaded.Closings;
             _issueCache.Clear();
             foreach (var (pin, issues) in loaded.Issues)
                 _issueCache[pin] = issues;
@@ -372,9 +402,10 @@ public sealed class RunPanelViewModel : ObservableObject, IDisposable
             var worst = Matrix.Rows.SelectMany(r => r.Cells).Where(c => c.PinId == Matrix.Columns.LastOrDefault()?.PinId && c.Level is not null)
                 .OrderByDescending(c => c.Level).FirstOrDefault();
             ShowCell(worst);
-            var done = pins.Where(p => p.Status != RunStatuses.Running).ToList();
+            var done = _onlyClosings ? _closings : pins.Where(p => p.Status != RunStatuses.Running).ToList();
             _afterPin = done.FirstOrDefault();
             _beforePin = done.Skip(1).FirstOrDefault();
+            OnPropertyChanged(nameof(ComparePins));
             OnPropertyChanged(nameof(AfterPin));
             OnPropertyChanged(nameof(BeforePin));
             await LoadCompare();
@@ -396,7 +427,7 @@ public sealed class RunPanelViewModel : ObservableObject, IDisposable
 
     /// <summary>Dane programu: uruchomienia, przebieg programu, wybór w Konfiguracji, wyniki uruchomień macierzy.</summary>
     private sealed record Loaded(IReadOnlyList<RunPinRow> Pins, RunDefinition Definition, string? Assigned, Dictionary<long, IReadOnlyList<RunIssueRow>> Issues,
-        IReadOnlyList<RunRule> Rules);
+        IReadOnlyList<RunRule> Rules, IReadOnlyList<RunPinRow> Closings);
 
     private void ShowCell(RunMatrixCell? cell)
     {

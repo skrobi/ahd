@@ -169,4 +169,13 @@ public sealed class RunOverviewTests
         Assert.DoesNotContain("ACTUALS_PAF_01.csv", changes);
         Assert.Contains("zmienione słowniki: Cost Category (3 wierszy, INTL\\x", changes);
     }
+
+    [Fact]
+    public void Closing_marker_shows_period_close_or_closing_week()
+    {
+        var pin = new RunPinRow(5, 1, "R-PAF-2026-10-T44", "PAF", 3, DateTimeOffset.Now, "u", null, RunStatuses.Ok, null, 4, 0, 0, 0, 0, null, null);
+        Assert.Equal("", pin.ClosingText);
+        Assert.Equal(" · tydzień zamykający", (pin with { IsClosingWeek = true }).ClosingText);
+        Assert.Equal("R-PAF-2026-10-T44 #3 – zakończony · ★ zamknięcie 2026-10", (pin with { IsClosingWeek = true, Period = "2026-10", IsPeriodClose = true }).Label);
+    }
 }

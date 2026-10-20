@@ -23,7 +23,12 @@ public sealed class SqlRunStore(SqlDatabase db) : IRunStore
 
     private string PinColumns =>
         "p.PinId, p.RunId, r.Code, r.Project, p.PinNo, p.StartedAt, p.StartedBy, p.FinishedAt, p.Status, p.ImportBatchId, p.Rows, p.GrossCost, p.Balance, " +
-        "p.Errors, p.Warnings, p.Summary, p.AmountField";
+        $"p.Errors, p.Warnings, p.Summary, p.AmountField, r.IsClosing AS IsClosingWeek, r.Period, CAST(CASE WHEN {PeriodClose} THEN 1 ELSE 0 END AS BIT) AS IsPeriodClose";
+
+    /// <summary>Zamknięcie okresu: ostatnie zakończone uruchomienie (zakończony / z ostrzeżeniami / z błędami) przebiegu tygodnia zamykającego.</summary>
+    private string PeriodClose =>
+        $"r.IsClosing = 1 AND p.PinId = (SELECT TOP (1) x.PinId FROM {_pins} x WHERE x.RunId = p.RunId " +
+        $"AND x.Status IN (N'{RunStatuses.Ok}', N'{RunStatuses.Warnings}', N'{RunStatuses.Errors}') ORDER BY x.PinNo DESC)";
 
     private string PinFrom => $"{_pins} p JOIN {_runs} r ON r.RunId = p.RunId";
 
@@ -344,6 +349,13 @@ public sealed class SqlRunStore(SqlDatabase db) : IRunStore
                                  WHERE r2.Project = r.Project ORDER BY p2.StartedAt DESC, p2.PinId DESC)
                 """)
             .ToDictionary(p => p.Project, StringComparer.OrdinalIgnoreCase);
+    }
+
+    public IReadOnlyList<RunPinRow> ClosingPins(string project)
+    {
+        using var connection = db.Open();
+        return connection.Query<RunPinRow>($"SELECT {PinColumns} FROM {PinFrom} WHERE r.Project = @project AND {PeriodClose} ORDER BY r.Year DESC, r.Week DESC",
+            new { project }).ToList();
     }
 
     public IReadOnlyList<RunPinRow> Pins(string project, int count)

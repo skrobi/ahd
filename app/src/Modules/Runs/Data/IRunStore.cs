@@ -79,6 +79,9 @@ public interface IRunStore
 
     IReadOnlyList<RunPinRow> Pins(string project, int count);
 
+    /// <summary>Zamknięcia okresów programu (RunPinRow.IsPeriodClose) – wszystkie, od najnowszego; porównania „od zamknięcia do zamknięcia”.</summary>
+    IReadOnlyList<RunPinRow> ClosingPins(string project);
+
     IReadOnlyList<RunIssueRow> Issues(long pinId);
 
     /// <summary>Definicje źródeł ze słownika projektu „Źródła danych”.</summary>

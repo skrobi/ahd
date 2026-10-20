@@ -145,7 +145,8 @@ rozdz. 4.1).
   klik w komórkę – wyniki w uruchomieniu z „Pokaż zmiany”; **Porównanie uruchomień** – „było” i „jest” (domyślnie dwa ostatnie
   zakończone; zamiana), wiersze wyników tej samej reguły dopasowane po wartościach kolumn tekstowych: nowy, zmieniony (poziom,
   liczba wierszy, kolumny liczbowe), rozwiązany, bez zmian („Tylko zmiany”), różnice kolumn liczbowych (było → jest), „Pokaż
-  zmiany”; przycisk **Zmiany ACWP**.
+  zmiany”; „Tylko zamknięcia okresów” – do wyboru same zamknięcia okresów (★ – ostatnie zakończone uruchomienie tygodnia
+  zamykającego, `docs/pipeline-fazy.md`, Z), domyślnie dwa ostatnie; przycisk **Zmiany ACWP**.
 - Przebieg programu: szablon wybrany w kreatorze albo w Konfiguracji („Parametry programu” → Przebieg), bez wyboru – szablon
   domyślny dla typu, bez szablonów – definicja wbudowana; nazwa i źródło wyboru nad etapami. Uruchomienie zapisuje definicję
   przebiegu, z którą liczyło (migracja 050). Przebieg zamykający okres i w środku okresu – ta sama definicja (oznaczenie

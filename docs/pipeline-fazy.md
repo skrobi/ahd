@@ -431,6 +431,14 @@ Kontrole wymagające innych danych spoza zrzutu (odbiorca rozliczenia, suma kont
 
 ### Z. Zamknięcie okresu
 
+**Wdrożone (decyzja użytkownika 2026-10-20) – znacznik zamknięcia bez osobnego zatwierdzenia:** każdy przebieg kończy się tak samo
+(ostatni etap szablonu, np. zatwierdzenie analityka, zapisuje wynik niezależnie od tego, czy tydzień jest zwykły, czy zamykający).
+Tydzień oznaczony w kalendarzu okresów jako zamknięcie (`META_Run.IsClosing`) – uruchomienia „tydzień zamykający”; ostatnie
+zakończone uruchomienie tego tygodnia (zakończony / z ostrzeżeniami / z błędami) to **zamknięcie okresu RRRR-MM** (★,
+`RunPinRow.IsPeriodClose`, `SqlRunStore.ClosingPins`) – znacznik na listach uruchomień (zakładka Przebieg, lista programów, okno
+„Zmiany ACWP”); porównanie uruchomień – wszystkie zamknięcia do wyboru i „Tylko zamknięcia okresów” (domyślnie dwa ostatnie –
+„od zamknięcia do zamknięcia”). Bez zamrażania przebiegu i bez rewizji EV (F8.2). Opis docelowy poniżej.
+
 | | |
 |---|---|
 | **Bramka wejścia** | Przebieg zamykający; etapy P0–P9 zakończone. |

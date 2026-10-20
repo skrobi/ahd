@@ -41,10 +41,19 @@ public sealed record RunPinRow(
     int Errors,
     int Warnings,
     string? Summary,
-    string? AmountField)
+    string? AmountField,
+    bool IsClosingWeek = false,
+    string? Period = null,
+    bool IsPeriodClose = false)
 {
-    /// <summary>Opis na listę projektów: kod, numer uruchomienia, stan.</summary>
-    public string Label => $"{Code} #{PinNo} – {Status}";
+    /// <summary>Opis na listę projektów: kod, numer uruchomienia, stan; zamknięcie okresu – znacznik.</summary>
+    public string Label => $"{Code} #{PinNo} – {Status}{ClosingText}";
+
+    /// <summary>
+    /// Znacznik zamknięcia okresu: IsPeriodClose – ostatnie zakończone uruchomienie tygodnia zamykającego okres (kalendarz okresów), czyli
+    /// wynik okresu do porównań „od zamknięcia do zamknięcia”; pozostałe uruchomienia tygodnia zamykającego – „tydzień zamykający”.
+    /// </summary>
+    public string ClosingText => IsPeriodClose ? $" · ★ zamknięcie {Period}" : IsClosingWeek ? " · tydzień zamykający" : "";
 }
 
 /// <summary>Wynik kontroli przebiegu – run.Issue; wynik reguły walidacji – CheckName = nazwa reguły, Details – wiersz wyniku (JSON, RunRules.Details).</summary>
