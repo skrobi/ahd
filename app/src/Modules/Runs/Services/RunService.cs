@@ -8,6 +8,9 @@ using Serilog;
 
 namespace PzlEv.Modules.Runs.Services;
 
+/// <summary>Wynik kontroli przebiegu: kontrola (wynik reguły – nazwa reguły), poziom, element, opis, kwota, wiersz wyniku reguły (JSON).</summary>
+public sealed record RunIssue(string Check, CheckLevel Level, string? Element, string Message, decimal? Amount = null, string? Details = null);
+
 /// <summary>Wynik uruchomienia przebiegu.</summary>
 public sealed record RunOutcome(string Project, string? Code, string Status, int Errors, int Warnings, string Summary)
 {
@@ -16,13 +19,19 @@ public sealed record RunOutcome(string Project, string? Code, string Status, int
 
 /// <summary>
 /// Przebieg projektu (docs/pipeline-fazy.md, P0–P2 – kontrole danych): tydzień z kalendarza okresów → przebieg
-/// i uruchomienie „w toku” → import źródeł projektu (ISourceImport) → przypięcie danych ACTUALS projektu (run.Balance)
-/// → kontrole wobec poprzedniego przebiegu (RunChecks) → wynik w bazie. Blokady: przebieg projektu (jeden naraz)
+/// i uruchomienie „w toku” → import źródeł projektu (ISourceImport) → przypięcie danych ACTUALS projektu (run.Balance, run.BalanceEv)
+/// → reguły walidacji w SQL wobec poprzedniego przebiegu (RunRules) → wynik w bazie. Blokady: przebieg projektu (jeden naraz)
 /// i trwające uruchomienie (wolna po awarii – uruchomienie „przerwane”).
 /// </summary>
 public sealed class RunService(IRunStore store, AppServices services, Func<ISourceImport?>? imports = null, Func<IProjectProcessSource?>? processes = null)
 {
     public const string Area = "Przebiegi";
+
+    /// <summary>Kontrola wyników etapu Przypięcie stanu (wiersz macierzy).</summary>
+    public const string Pinned = "Przypięcie stanu";
+
+    /// <summary>Najwyżej tyle błędów importu w wynikach etapu.</summary>
+    private const int Top = 10;
 
     /// <summary>Dni po początku okresu, w których poprzedni okres jest jeszcze otwarty (rozliczenie na przełomie miesiąca).</summary>
     public const int SettlementDays = 7;
@@ -163,7 +172,7 @@ public sealed class RunService(IRunStore store, AppServices services, Func<ISour
             try
             {
                 cancellation.ThrowIfCancellationRequested();
-                issues = ExecuteStep(store.Pin(pin.PinId)!, step, definition, progress, cancellation);
+                issues = ExecuteStep(store.Pin(pin.PinId)!, step, progress, cancellation);
             }
             catch (Exception ex) when (ex is not OutOfMemoryException)
             {
@@ -174,7 +183,7 @@ public sealed class RunService(IRunStore store, AppServices services, Func<ISour
             var errors = issues.Count(i => i.Level == CheckLevel.Error);
             var warnings = issues.Count(i => i.Level == CheckLevel.Warning);
             var status = RunWorkflowEngine.Gate(step, errors, warnings);
-            store.ReplaceStepIssues(pin.PinId, step.No, issues.Select(i => (i.Check, i.Level, i.Element, i.Message, i.Amount)).ToList());
+            store.ReplaceStepIssues(pin.PinId, step.No, issues.Select(i => (i.Check, i.Level, i.Element, i.Message, i.Amount, i.Details)).ToList());
             store.SetStep(pin.PinId, step.No, status, started, services.Clock.Now, services.User.Account, errors, warnings);
             services.Journal.Add(Area, $"Przebieg {pin.Code} #{pin.PinNo}: etap {step.No} „{step.Name}” – {status.ToLowerInvariant()} (błędy {errors}, ostrzeżenia {warnings})", pin.Code);
             if (status != RunStepStatuses.Done)
@@ -192,12 +201,12 @@ public sealed class RunService(IRunStore store, AppServices services, Func<ISour
         new(pin.Project, pin.Code, RunWorkflowEngine.PinStatus(steps), steps.Sum(s => s.Errors), steps.Sum(s => s.Warnings), summary);
 
     /// <summary>Akcja etapu: import źródeł, przypięcie stanu, kontrole (elementy kontrolne etapu), zatwierdzenie (bez wykonania).</summary>
-    private List<RunIssue> ExecuteStep(RunPinRow pin, RunStepDefinition step, RunDefinition definition, IProgress<string>? progress, CancellationToken cancellation) =>
+    private List<RunIssue> ExecuteStep(RunPinRow pin, RunStepDefinition step, IProgress<string>? progress, CancellationToken cancellation) =>
         step.Action switch
         {
             RunActions.Import => ImportStep(pin, progress, cancellation),
             RunActions.Pin => PinStep(pin),
-            RunActions.Checks => ChecksStep(pin, step, definition),
+            RunActions.Checks => ChecksStep(pin, step),
             _ => [],
         };
 
@@ -215,12 +224,12 @@ public sealed class RunService(IRunStore store, AppServices services, Func<ISour
         return
         [
             new RunIssue("Import", imported.Errors > 0 ? CheckLevel.Error : CheckLevel.Pass, null, $"Import #{imported.BatchId}: {imported.Summary}"),
-            .. imported.Issues.Where(i => i.Level == CheckLevel.Error).Take(RunChecks.Top).Select(i => new RunIssue("Import", CheckLevel.Error, i.Element, i.Message)),
+            .. imported.Issues.Where(i => i.Level == CheckLevel.Error).Take(Top).Select(i => new RunIssue("Import", CheckLevel.Error, i.Element, i.Message)),
         ];
     }
 
     // Przypięcie stanu: dane ACTUALS programu w chwili przebiegu (pole kwoty procesu programu), porównanie z poprzednim przebiegiem,
-    // koszty procesu programu (np. CAS – po narzutach).
+    // koszty procesu programu (np. CAS – po narzutach), dane jak w strukturze (tabela „ev” reguł walidacji).
     private List<RunIssue> PinStep(RunPinRow pin)
     {
         var issues = new List<RunIssue>();
@@ -230,10 +239,10 @@ public sealed class RunService(IRunStore store, AppServices services, Func<ISour
         var previousPin = store.Previous(pin.Project, pin.RunId);
         var previousField = previousPin?.AmountField ?? ProjectSettings.DefaultActualsAmount;
         if (previousPin is not null && previousField != amountField)
-            issues.Add(new RunIssue(RunChecks.Volume, CheckLevel.Warning, null,
+            issues.Add(new RunIssue(Pinned, CheckLevel.Warning, null,
                 $"Pole kwoty ACTUALS zmienione ({previousField} → {amountField}, „Parametry programu”) – bez porównania z przebiegiem {previousPin.Code} #{previousPin.PinNo}"));
         else if (previousPin is not null)
-            issues.Add(new RunIssue(RunChecks.Volume, CheckLevel.Pass, null, $"Porównanie z przebiegiem {previousPin.Code} #{previousPin.PinNo} ({previousPin.StartedAt.ToLocalTime():yyyy-MM-dd HH:mm})"));
+            issues.Add(new RunIssue(Pinned, CheckLevel.Pass, null, $"Porównanie z przebiegiem {previousPin.Code} #{previousPin.PinNo} ({previousPin.StartedAt.ToLocalTime():yyyy-MM-dd HH:mm})"));
         var current = source;
         if (process.TransformsCosts)
         {
@@ -242,88 +251,120 @@ public sealed class RunService(IRunStore store, AppServices services, Func<ISour
             {
                 current = transformed;
                 issues.Add(new RunIssue(process.CostsCheck, CheckLevel.Pass, null,
-                    $"{process.CostsCheck} w {process.Currency}: koszt brutto {Math.Round(RunChecks.GrossCost(current), 2):#,0.00}"));
+                    $"{process.CostsCheck} w {process.Currency}: koszt brutto {Math.Round(GrossCost(current), 2):#,0.00}"));
             }
             else
-                issues.Add(new RunIssue(process.CostsCheck, CheckLevel.Error, null, $"{process.CostsCheck} niepoliczone – {error}; kontrole na danych źródłowych"));
+                issues.Add(new RunIssue(process.CostsCheck, CheckLevel.Error, null, $"{process.CostsCheck} niepoliczone – {error}; dane „ev” reguł bez narzutów"));
         }
         var (closedBefore, _) = Periods(store.RunWeek(pin.RunId).Period, services.Clock.Now.Date);
         var balance = source.Where(r => (r.FiscalYear, Math.Min(r.Period, 12)).CompareTo(closedBefore) < 0).Sum(r => r.Amount);
-        store.SetPinBalance(pin.PinId, source.Sum(r => (long)r.Rows), RunChecks.GrossCost(current), balance);
-        issues.Add(new RunIssue(RunChecks.Volume, CheckLevel.Pass, null,
+        store.SetPinBalance(pin.PinId, source.Sum(r => (long)r.Rows), GrossCost(current), balance);
+        issues.Add(new RunIssue(Pinned, CheckLevel.Pass, null,
             $"Przypięto {source.Sum(r => (long)r.Rows):#,0} wierszy ACTUALS ({amountField}); saldo okresów zamkniętych {Math.Round(balance, 2):#,0.00}"));
+        SaveEv(pin, process, source);
         return issues;
     }
 
-    // Kontrole etapu (docs/pipeline-fazy.md, rozdz. 4.1): reguły walidacji (formuły) na całej puli ACTUALS przed narzutami, bez
-    // Wykluczeń; reguły wbudowane (Walidacja EV) na danych jak w strukturze – bez rozliczeniowych, po Wykluczeniach, CAS po
-    // narzutach; reguły uzgodnień – na kosztach procesu programu (netowanie – dane źródłowe).
-    private List<RunIssue> ChecksStep(RunPinRow pin, RunStepDefinition step, RunDefinition definition)
+    /// <summary>Koszt brutto: wiersze bez rozliczenia wychodzącego (jak ACWP struktury).</summary>
+    public static decimal GrossCost(IEnumerable<RunBalanceRow> rows) => rows.Where(r => !r.IsSettlement).Sum(r => r.Amount);
+
+    /// <summary>
+    /// Dane jak w strukturze programu (tabela „ev” reguł walidacji): wiersze kosztu bez rozliczeniowych, po Wykluczeniach (bez partnera –
+    /// partnera nie ma w danych przypiętych), przekształcone procesem programu (CAS – po narzutach); rodzaj kosztu z Cost Category
+    /// efektywnego. Error – kosztów procesu nie da się policzyć (dane bez przekształcenia).
+    /// </summary>
+    internal static (IReadOnlyList<RunEvRow> Rows, string? Error) Ev(IReadOnlyList<RunBalanceRow> source, IReadOnlyList<RunExclusionRow> exclusions,
+        ProjectProcess process, IReadOnlyDictionary<string, string>? kinds)
     {
-        var source = store.Balance(pin.PinId);
+        IReadOnlyList<RunBalanceRow> rows = source.Where(r => !r.IsSettlement && !exclusions.Any(x => x.Covers(r))).ToList();
+        string? error = null;
+        if (process.TransformsCosts)
+        {
+            var transformed = Transformed(process, rows);
+            if (transformed.Error is null)
+                rows = transformed.Rows;
+            else
+                error = transformed.Error;
+        }
+        return (rows.GroupBy(r => (r.WbsElement, r.CostElement, r.FiscalYear, r.Period, Kind: RunCostKinds.Of(r, kinds)))
+            .Select(g => new RunEvRow(g.Key.WbsElement, g.Key.CostElement, g.Key.FiscalYear, g.Key.Period, g.Key.Kind, g.Sum(r => r.Amount))).ToList(), error);
+    }
+
+    private string? SaveEv(RunPinRow pin, ProjectProcess process, IReadOnlyList<RunBalanceRow> source)
+    {
+        var (rows, error) = Ev(source, store.Exclusions(pin.Project), process, store.Dictionaries(pin.Project).CostKinds);
+        store.SaveEv(pin.PinId, rows);
+        return error;
+    }
+
+    // Kontrole etapu (docs/pipeline-fazy.md, rozdz. 4.1): reguły walidacji w SQL zaznaczone w etapie – na danych uruchomienia
+    // (biezace – cała pula ACTUALS; ev – jak w strukturze, odświeżane przed regułami: słowniki i Wykluczenia mogły się zmienić)
+    // wobec poprzedniego przebiegu z tym samym polem kwoty.
+    private List<RunIssue> ChecksStep(RunPinRow pin, RunStepDefinition step)
+    {
         if (pin.Rows is null)
             return [new RunIssue("Przebieg", CheckLevel.Error, null, $"Etap „{step.Name}” przed przypięciem stanu – w definicji przebiegu brakuje etapu z akcją „{RunActions.Pin}” przed kontrolami")];
-        var process = Process(pin.Project);
-        var amountField = pin.AmountField ?? ProjectSettings.DefaultActualsAmount;
-        var previousPin = store.Previous(pin.Project, pin.RunId);
-        var previousSource = previousPin is null || (previousPin.AmountField ?? ProjectSettings.DefaultActualsAmount) != amountField ? null : store.Balance(previousPin.PinId);
-        var week = store.RunWeek(pin.RunId);
-        var (closedBefore, today) = Periods(week.Period, services.Clock.Now.Date);
-        var projectType = store.ProjectType(pin.Project) ?? "";
         var issues = new List<RunIssue>();
-
-        // Walidacja ACTUALS – reguły z formułami (słownik „Reguły walidacji”).
-        var (validations, missing) = RunWorkflowEngine.Validations(step, store.ValidationRules());
-        if (validations.Count > 0)
-        {
-            var data = new RunValidationData(source, previousSource, store.CostElements(pin.Project), closedBefore, today,
-                amountField == ProjectSettings.DefaultActualsAmount ? "PLN" : null);
-            foreach (var rule in validations)
-            {
-                var (results, error) = RunValidationLanguage.Evaluate(rule, data);
-                issues.AddRange(error is null
-                    ? results.Select(r => new RunIssue(rule.Check, r.Level, r.Element, r.Message, r.Amount))
-                    : [new RunIssue(rule.Check, CheckLevel.Error, rule.Name, $"Reguła walidacji „{rule.Name}” niepoliczona: {error} – popraw ją w oknie Kontrole (ekran Przebiegi)")]);
-            }
-        }
-        issues.AddRange(missing.Select(name => new RunIssue(RunValidationRules.Area, CheckLevel.Warning, name,
-            $"Kontrola „{name}” z definicji przebiegu nie istnieje w słowniku „Reguły walidacji” ani w regułach wbudowanych – niesprawdzona")));
-
-        // Walidacja EV – reguły wbudowane na danych jak w strukturze programu.
-        var settings = RunWorkflowEngine.Settings(step, RunChecks.Settings(store.CheckSettings(), projectType, week.IsClosing), definition.BuiltIn);
-        var dictionaries = store.Dictionaries(pin.Project, today.Year);
-        if (settings.Values.Any(s => s.Active))
-        {
-            var exclusions = store.Exclusions(pin.Project);
-            List<RunBalanceRow> Ev(IEnumerable<RunBalanceRow> rows) => rows.Where(r => !r.IsSettlement && !exclusions.Any(x => x.Covers(r))).ToList();
-            IReadOnlyList<RunBalanceRow> current = Ev(source);
-            IReadOnlyList<RunBalanceRow>? previous = previousSource is null ? null : Ev(previousSource);
-            if (process.TransformsCosts && Transformed(process, current) is { Error: null } transformed)
-            {
-                current = transformed.Rows;
-                previous = previous is null ? null : Transformed(process, previous) is { Error: null } before ? before.Rows : null;
-            }
-            issues.AddRange(RunChecks.Check(current, previous, closedBefore, today, settings, dictionaries));
-            if (exclusions.Any(x => x.PartnerObject is not null))
-                issues.Add(new RunIssue(RunCheckRules.EvArea, CheckLevel.Pass, null,
-                    $"Wykluczenia z Partner object ({exclusions.Count(x => x.PartnerObject is not null)}) nie są stosowane w walidacji – dane przypięte nie mają partnera"));
-        }
-
-        // Reguły uzgodnień – koszty procesu programu (jak dotąd).
-        var (rules, missingRules) = RunWorkflowEngine.Reconciliations(step, store.Reconciliations(), projectType, week.IsClosing);
+        var (rules, missing) = RunWorkflowEngine.Rules(step, store.Rules());
         if (rules.Count > 0)
         {
-            var costs = source;
-            var previousCosts = previousSource;
-            if (process.TransformsCosts && Transformed(process, source) is { Error: null } transformed)
-            {
-                costs = transformed.Rows;
-                previousCosts = previousSource is null ? null : Transformed(process, previousSource) is { Error: null } before ? before.Rows : null;
-            }
-            issues.AddRange(RunReconciliations.CheckRules(rules, RunReconciliations.Measures(costs, source, previousCosts, closedBefore, today, dictionaries)));
+            var process = Process(pin.Project);
+            var source = store.Balance(pin.PinId);
+            if (SaveEv(pin, process, source) is { } error)
+                issues.Add(new RunIssue(process.CostsCheck, CheckLevel.Warning, null, $"{process.CostsCheck} niepoliczone – {error}; tabela „ev” bez narzutów"));
+            var previous = Comparable(store, pin);
+            if (previous is not null && !store.HasEv(previous.PinId))
+                SaveEv(previous, process, store.Balance(previous.PinId));
+            var context = Context(pin, previous, source, services.Clock.Now.Date);
+            foreach (var rule in rules)
+                issues.AddRange(Issues(rule, store.RunRule(rule.Sql, context)));
+            var exclusions = store.Exclusions(pin.Project);
+            if (exclusions.Any(x => x.PartnerObject is not null))
+                issues.Add(new RunIssue(RunRules.EvArea, CheckLevel.Pass, null,
+                    $"Wykluczenia z Partner object ({exclusions.Count(x => x.PartnerObject is not null)}) nie są stosowane w tabeli „ev” – dane przypięte nie mają partnera"));
         }
-        issues.AddRange(missingRules.Select(name => new RunIssue(RunReconciliations.CheckName, CheckLevel.Warning, name,
-            $"Reguła uzgodnień „{name}” z definicji przebiegu nie istnieje w słowniku „Reguły uzgodnień” – niesprawdzona")));
+        issues.AddRange(missing.Select(name => new RunIssue(name, CheckLevel.Warning, name,
+            $"Reguła „{name}” z szablonu przebiegu nie istnieje w regułach walidacji (ekran Przebiegi) – niesprawdzona")));
+        return issues;
+    }
+
+    /// <summary>Poprzednie uruchomienie do porównania: ostatnie uruchomienie wcześniejszego tygodnia z tym samym polem kwoty; null – brak.</summary>
+    internal static RunPinRow? Comparable(IRunStore store, RunPinRow pin)
+    {
+        var previous = store.Previous(pin.Project, pin.RunId);
+        return previous is not null && (previous.AmountField ?? ProjectSettings.DefaultActualsAmount) == (pin.AmountField ?? ProjectSettings.DefaultActualsAmount)
+            ? previous : null;
+    }
+
+    /// <summary>
+    /// Dane reguł dla uruchomienia: okresy z tygodnia przebiegu i dnia (wykonanie – dziś, test – dzień uruchomienia), waluta kosztów
+    /// (PLN dla pola kwoty w walucie obiektu, inaczej przeważająca w danych), typ programu.
+    /// </summary>
+    internal static RunRuleContext Context(IRunStore store, RunPinRow pin, RunPinRow? previous, IReadOnlyList<RunBalanceRow> source, DateTime day)
+    {
+        var (closedBefore, today) = Periods(store.RunWeek(pin.RunId).Period, day);
+        var currency = (pin.AmountField ?? ProjectSettings.DefaultActualsAmount) == ProjectSettings.DefaultActualsAmount ? "PLN"
+            : source.Where(r => r.Currency.Length > 0).GroupBy(r => r.Currency, StringComparer.OrdinalIgnoreCase)
+                .OrderByDescending(g => g.Sum(r => (long)r.Rows)).Select(g => g.Key).FirstOrDefault();
+        return new RunRuleContext(pin.PinId, previous?.PinId, pin.Project, closedBefore, today, currency, store.ProjectType(pin.Project) ?? "");
+    }
+
+    private RunRuleContext Context(RunPinRow pin, RunPinRow? previous, IReadOnlyList<RunBalanceRow> source, DateTime day) => Context(store, pin, previous, source, day);
+
+    /// <summary>
+    /// Wyniki reguły: każdy wiersz zapytania – wynik z poziomem reguły (element – RunRules.ElementOf, opis – RunRules.Describe, wiersz –
+    /// Details); brak wierszy – INFO „OK”; wynik obcięty – WARNING; błąd zapytania – ERROR „reguła niepoliczona”.
+    /// </summary>
+    public static IReadOnlyList<RunIssue> Issues(RunRule rule, RunRuleResult result)
+    {
+        if (result.Error is not null)
+            return [new RunIssue(rule.Name, CheckLevel.Error, null, $"Reguła niepoliczona: {result.Error} – popraw ją na ekranie Przebiegi")];
+        if (result.Rows.Count == 0)
+            return [new RunIssue(rule.Name, CheckLevel.Pass, null, "OK – brak nieprawidłowości")];
+        var issues = result.Rows.Select(row => new RunIssue(rule.Name, rule.Level, RunRules.ElementOf(result.Columns, row)?.Value,
+            RunRules.Describe(rule.ResultTemplate, result.Columns, row), null, RunRules.Details(result.Columns, row))).ToList();
+        if (result.Truncated)
+            issues.Add(new RunIssue(rule.Name, CheckLevel.Warning, null, $"Wynik obcięty do {RunRules.MaxRows} wierszy – zawęź zapytanie (TOP, WHERE)"));
         return issues;
     }
 

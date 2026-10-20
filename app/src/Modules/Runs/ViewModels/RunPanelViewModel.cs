@@ -24,7 +24,7 @@ public sealed record RunStepView(RunStepRow Row, string Gate, string Elements, s
 /// Przebieg programu (zakładka „Przebieg” programu – docs/funkcjonalnosc.md, F06): przebieg wybrany w Konfiguracji (albo domyślny dla
 /// typu), uruchomienia, etapy ze statusami (definicja zapisana w uruchomieniu), wyniki wybranego etapu z „Pokaż zmiany”; akcje: nowe
 /// uruchomienie, dalsze etapy, potwierdzenie etapu z komentarzem, ponowne wykonanie etapu (ostatnie uruchomienie). Porównania: macierz
-/// kontrola × ostatnie uruchomienia, porównanie dwóch uruchomień, okno „Zmiany ACWP”. Przebieg liczy się w tle (RunLauncher).
+/// reguła × ostatnie uruchomienia, porównanie dwóch uruchomień (wiersze wyników reguł), okno „Zmiany ACWP”. Przebieg liczy się w tle (RunLauncher).
 /// </summary>
 public sealed class RunPanelViewModel : ObservableObject, IDisposable
 {
@@ -220,7 +220,8 @@ public sealed class RunPanelViewModel : ObservableObject, IDisposable
                 var assigned = _store.AssignedDefinition(Project);
                 var definition = RunDefinitions.For(headers, steps, elements, assigned, _store.ProjectType(Project) ?? "");
                 var matrixPins = pins.Where(p => p.Status != RunStatuses.Running).Take(MatrixPins).ToList();
-                return new Loaded(pins, definition, assigned, matrixPins.ToDictionary(p => p.PinId, p => _store.Issues(p.PinId)));
+                return new Loaded(pins, definition, assigned, matrixPins.ToDictionary(p => p.PinId, p => _store.Issues(p.PinId)),
+                    _store.Rules().Select(r => r.Name).ToList());
             });
             var pins = loaded.Pins;
             _pins = pins;
@@ -232,7 +233,7 @@ public sealed class RunPanelViewModel : ObservableObject, IDisposable
                   + (loaded.Assigned is null ? $"domyślny dla typu programu; wybór – Konfiguracja → Parametry programu → {ProjectSettings.RunDefinition}."
                      : string.Equals(loaded.Assigned, loaded.Definition.Code, StringComparison.OrdinalIgnoreCase) ? "wybrany w Konfiguracji programu."
                      : $"wybrany „{loaded.Assigned}” jest nieaktywny albo bez etapów, obowiązuje domyślny dla typu.");
-            Matrix = RunOverview.Matrix(pins.Where(p => loaded.Issues.ContainsKey(p.PinId)).ToList(), loaded.Issues);
+            Matrix = RunOverview.Matrix(pins.Where(p => loaded.Issues.ContainsKey(p.PinId)).ToList(), loaded.Issues, loaded.Rules);
             var worst = Matrix.Rows.SelectMany(r => r.Cells).Where(c => c.PinId == Matrix.Columns.LastOrDefault()?.PinId && c.Level is not null)
                 .OrderByDescending(c => c.Level).FirstOrDefault();
             ShowCell(worst);
@@ -259,7 +260,8 @@ public sealed class RunPanelViewModel : ObservableObject, IDisposable
     }
 
     /// <summary>Dane programu: uruchomienia, przebieg programu, wybór w Konfiguracji, wyniki uruchomień macierzy.</summary>
-    private sealed record Loaded(IReadOnlyList<RunPinRow> Pins, RunDefinition Definition, string? Assigned, Dictionary<long, IReadOnlyList<RunIssueRow>> Issues);
+    private sealed record Loaded(IReadOnlyList<RunPinRow> Pins, RunDefinition Definition, string? Assigned, Dictionary<long, IReadOnlyList<RunIssueRow>> Issues,
+        IReadOnlyList<string> Rules);
 
     private void ShowCell(RunMatrixCell? cell)
     {

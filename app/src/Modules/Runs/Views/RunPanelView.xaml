@@ -137,7 +137,7 @@
                             <Run Text="{Binding SelectedStep.Gate, Mode=OneWay}" />
                         </TextBlock>
                         <TextBlock Text="{Binding SelectedStep.Description}" Style="{StaticResource MutedText}" TextWrapping="Wrap" />
-                        <TextBlock Text="{Binding SelectedStep.Elements, StringFormat='Elementy kontrolne: {0}'}" Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="0,4,0,0" />
+                        <TextBlock Text="{Binding SelectedStep.Elements, StringFormat='Reguły etapu: {0}'}" Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="0,4,0,0" />
                         <TextBlock Text="{Binding SelectedStep.Row.Comment, StringFormat='Komentarz: {0}'}" TextWrapping="Wrap" Margin="0,4,0,0" />
 
                         <DockPanel Margin="0,10,0,10">
@@ -151,8 +151,8 @@
 
                         <DataGrid Style="{StaticResource DataTable}" ItemsSource="{Binding Issues}" IsReadOnly="True" MaxHeight="520">
                             <DataGrid.Columns>
-                                <DataGridTextColumn Header="Poziom" Binding="{Binding Issue.Level}" />
-                                <DataGridTextColumn Header="Kontrola" Binding="{Binding Issue.CheckName}" />
+                                <DataGridTextColumn Header="Poziom" Binding="{Binding LevelText}" />
+                                <DataGridTextColumn Header="Reguła / kontrola" Binding="{Binding Issue.CheckName}" />
                                 <DataGridTextColumn Header="Element" Binding="{Binding Issue.Element}" />
                                 <DataGridTextColumn Header="Opis" Binding="{Binding Issue.Message}" Width="*">
                                     <DataGridTextColumn.ElementStyle>
@@ -161,7 +161,6 @@
                                         </Style>
                                     </DataGridTextColumn.ElementStyle>
                                 </DataGridTextColumn>
-                                <DataGridTextColumn Header="Kwota" Binding="{Binding Issue.Amount, StringFormat=#\,0.00}" />
                                 <DataGridTemplateColumn Header="">
                                     <DataGridTemplateColumn.CellTemplate>
                                         <DataTemplate>
@@ -179,7 +178,7 @@
             </TabItem>
 
             <!-- Macierz kontrola × ostatnie uruchomienia; klik w komórkę – wyniki kontroli w uruchomieniu -->
-            <TabItem Header="Kontrole – macierz" Padding="12,4">
+            <TabItem Header="Reguły – macierz" Padding="12,4">
                 <StackPanel Margin="0,12,0,0">
                     <TextBlock Style="{StaticResource MutedText}" Text="Brak zakończonych uruchomień przebiegu programu." TextWrapping="Wrap"
                                Visibility="{Binding NoRuns, Converter={StaticResource BoolToVisibility}}" />
@@ -187,7 +186,7 @@
                         <StackPanel>
                             <!-- Nagłówek: uruchomienia od najstarszego -->
                             <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
-                                <TextBlock Width="260" Text="Kontrola" Style="{StaticResource MutedText}" VerticalAlignment="Bottom" />
+                                <TextBlock Width="260" Text="Reguła / kontrola" Style="{StaticResource MutedText}" VerticalAlignment="Bottom" />
                                 <ItemsControl ItemsSource="{Binding Matrix.Columns}">
                                     <ItemsControl.ItemsPanel>
                                         <ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate>
@@ -228,7 +227,7 @@
                     <TextBlock Text="{Binding CellTitle}" Style="{StaticResource H2}" Margin="0,16,0,6" TextWrapping="Wrap" />
                     <DataGrid Style="{StaticResource DataTable}" ItemsSource="{Binding CellIssues}" IsReadOnly="True" MaxHeight="420">
                         <DataGrid.Columns>
-                            <DataGridTextColumn Header="Poziom" Binding="{Binding Issue.Level}" />
+                            <DataGridTextColumn Header="Poziom" Binding="{Binding LevelText}" />
                             <DataGridTextColumn Header="Element" Binding="{Binding Issue.Element}" />
                             <DataGridTextColumn Header="Opis" Binding="{Binding Issue.Message}" Width="*">
                                 <DataGridTextColumn.ElementStyle>
@@ -237,7 +236,6 @@
                                     </Style>
                                 </DataGridTextColumn.ElementStyle>
                             </DataGridTextColumn>
-                            <DataGridTextColumn Header="Kwota" Binding="{Binding Issue.Amount, StringFormat=#\,0.00}" />
                             <DataGridTemplateColumn Header="">
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate>
@@ -283,19 +281,23 @@
                             </ComboBox.ItemTemplate>
                         </ComboBox>
                         <CheckBox Content="Tylko zmiany" IsChecked="{Binding OnlyChanges}" VerticalAlignment="Center"
-                                  ToolTip="Nowe, zmienione (poziom, liczba wyników, kwota) i rozwiązane wyniki kontroli; bez wyników bez zmian" />
+                                  ToolTip="Nowe, zmienione (poziom, liczba wierszy, wartości kolumn liczbowych) i rozwiązane wyniki reguł; bez wyników bez zmian" />
                     </StackPanel>
                     <TextBlock Text="{Binding CompareNote}" Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="0,0,0,8" />
                     <DataGrid Style="{StaticResource DataTable}" ItemsSource="{Binding Compare}" IsReadOnly="True" MaxHeight="560">
                         <DataGrid.Columns>
                             <DataGridTextColumn Header="Zmiana" Binding="{Binding Status}" />
-                            <DataGridTextColumn Header="Kontrola" Binding="{Binding CheckName}" />
-                            <DataGridTextColumn Header="Element" Binding="{Binding Element}" />
+                            <DataGridTextColumn Header="Reguła / kontrola" Binding="{Binding CheckName}" />
+                            <DataGridTextColumn Header="Wiersz (kolumny tekstowe)" Binding="{Binding Element}" />
                             <DataGridTextColumn Header="Było" Binding="{Binding LevelBefore}" />
                             <DataGridTextColumn Header="Jest" Binding="{Binding LevelAfter}" />
-                            <DataGridTextColumn Header="Kwota było" Binding="{Binding AmountBefore, StringFormat=#\,0.00}" />
-                            <DataGridTextColumn Header="Kwota jest" Binding="{Binding AmountAfter, StringFormat=#\,0.00}" />
-                            <DataGridTextColumn Header="Różnica" Binding="{Binding Difference, StringFormat=#\,0.00}" />
+                            <DataGridTextColumn Header="Różnice (kolumny liczbowe)" Binding="{Binding Changes}" MaxWidth="360">
+                                <DataGridTextColumn.ElementStyle>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="TextWrapping" Value="Wrap" />
+                                    </Style>
+                                </DataGridTextColumn.ElementStyle>
+                            </DataGridTextColumn>
                             <DataGridTextColumn Header="Opis" Binding="{Binding Message}" Width="*">
                                 <DataGridTextColumn.ElementStyle>
                                     <Style TargetType="TextBlock">

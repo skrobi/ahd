@@ -37,12 +37,8 @@ public static class RunStepStatuses
     public const string Stale = "Nieaktualny";
 }
 
-/// <summary>
-/// Element kontrolny etapu: reguła katalogu (RunCheckRules – nazwa) albo reguła uzgodnień („Uzgodnienie: nazwa”; „Uzgodnienie: *” –
-/// wszystkie aktywne reguły uzgodnień typu programu i wariantu); Level / Threshold null – ustawienie domyślne (słownik „Kontrole
-/// przebiegu”, a bez wiersza – katalog; reguła uzgodnień – jej poziom i tolerancja).
-/// </summary>
-public sealed record RunElementSetting(string Element, bool Active = true, CheckLevel? Level = null, decimal? Threshold = null);
+/// <summary>Element kontrolny etapu: reguła walidacji (nazwa – słownik „Reguły walidacji”) zaznaczona w etapie.</summary>
+public sealed record RunElementSetting(string Element, bool Active = true);
 
 /// <summary>Etap definicji przebiegu: numer, nazwa, akcja, bramka WARNING, zatwierdzenie ręczne, elementy kontrolne (akcja Kontrole).</summary>
 public sealed record RunStepDefinition(int No, string Name, string Action, string WarningGate, bool Approval, IReadOnlyList<RunElementSetting> Elements,
@@ -63,7 +59,7 @@ public sealed record RunDefinitionHeaderRow(string Code, string ProjectType, boo
 
 public sealed record RunStepRowData(string Definition, int No, string Name, string Action, string WarningGate, bool Approval, string? Description);
 
-public sealed record RunStepElementRow(string Definition, string Step, string Element, bool IsActive, string? Level, decimal? Threshold);
+public sealed record RunStepElementRow(string Definition, string Step, string Element, bool IsActive);
 
 /// <summary>
 /// Definicje przebiegów (docs/pipeline-fazy.md, rozdz. 4.1): przebieg programu – szablon wybrany w programie (Parametry programu →
@@ -72,25 +68,11 @@ public sealed record RunStepElementRow(string Definition, string Step, string El
 /// </summary>
 public static class RunDefinitions
 {
-    public const string ReconciliationPrefix = "Uzgodnienie: ";
-
-    /// <summary>Wszystkie aktywne reguły uzgodnień typu programu i wariantu przebiegu.</summary>
-    public const string AllReconciliations = ReconciliationPrefix + "*";
-
     public const string BuiltInCode = "Standardowy (wbudowany)";
 
     /// <summary>Szablony startowe: programy wewnętrzne (i SAC – „Wszystkie”) oraz CAS.</summary>
     public const string InternalCode = "Wewnętrzny";
     public const string CasCode = "CAS";
-
-    /// <summary>Elementy do wyboru w kolumnie Element: reguły walidacji (startowe), reguły katalogu, wszystkie reguły uzgodnień, reguły uzgodnień po nazwie.</summary>
-    public static IReadOnlyList<string> Elements(IEnumerable<string> reconciliations) =>
-        [.. RunValidationRules.Starters.Select(r => r.Name), .. RunCheckRules.All.Select(r => r.Name), AllReconciliations,
-         .. reconciliations.Distinct(StringComparer.OrdinalIgnoreCase).Order().Select(n => ReconciliationPrefix + n)];
-
-    public static bool IsReconciliation(string element) => element.StartsWith(ReconciliationPrefix, StringComparison.OrdinalIgnoreCase);
-
-    public static string ReconciliationName(string element) => element[ReconciliationPrefix.Length..].Trim();
 
     /// <summary>Etap stały (klocek predefiniowany): import źródeł i przypięcie stanu – korzystają z konfiguracji programu, zawsze na początku.</summary>
     public static bool IsFixed(string action) => action is RunActions.Import or RunActions.Pin;
@@ -106,23 +88,23 @@ public static class RunDefinitions
     public static IReadOnlyList<RunStepDefinition> StandardSteps { get; } =
     [
         .. FixedSteps,
-        new(3, RunValidationRules.Area, RunActions.Checks, RunGates.Confirm, false,
-            [.. RunValidationRules.Starters.Select(r => new RunElementSetting(r.Name))],
-            "Spójność danych ACTUALS na całej puli (przed narzutami, bez Wykluczeń) – reguły walidacji z formułami (okno Kontrole)."),
-        new(4, RunCheckRules.EvArea, RunActions.Checks, RunGates.Confirm, false,
-            [.. RunCheckRules.All.Select(r => new RunElementSetting(r.Name)), new RunElementSetting(AllReconciliations)],
-            "Dane jak w strukturze (bez rozliczeniowych, po Wykluczeniach, CAS po narzutach): spójność ze słownikami, rodzaje kosztu, reguły uzgodnień."),
+        new(3, RunRules.ActualsArea, RunActions.Checks, RunGates.Confirm, false,
+            [.. RunRules.ActualsStarters.Select(r => new RunElementSetting(r.Name))],
+            "Spójność danych ACTUALS na całej puli (przed narzutami, bez Wykluczeń) – reguły walidacji w SQL (ekran Przebiegi)."),
+        new(4, RunRules.EvArea, RunActions.Checks, RunGates.Confirm, false,
+            [.. RunRules.EvStarters.Select(r => new RunElementSetting(r.Name))],
+            "Dane jak w strukturze (bez rozliczeniowych, po Wykluczeniach, CAS po narzutach) i słowniki programu – reguły walidacji w SQL."),
         new(5, "Zatwierdzenie analityka", RunActions.Approval, RunGates.Confirm, true, [], "Analityk potwierdza wynik przebiegu (komentarz w dzienniku)."),
     ];
 
     /// <summary>Definicja wbudowana – obowiązuje, dopóki nie ma aktywnego szablonu (ekran Przebiegi).</summary>
-    public static RunDefinition BuiltIn { get; } = new(BuiltInCode, RunCheckRules.AllTypes, StandardSteps,
+    public static RunDefinition BuiltIn { get; } = new(BuiltInCode, RunRules.AllTypes, StandardSteps,
         "Definicja wbudowana – obowiązuje, dopóki na ekranie Przebiegi nie ma aktywnego szablonu przebiegu.", BuiltIn: true);
 
     /// <summary>Szablony startowe (ekran Przebiegi, „Utwórz szablony startowe”): Wewnętrzny – domyślny dla wszystkich typów, CAS – dla CAS.</summary>
     public static IReadOnlyList<RunDefinition> Starters { get; } =
     [
-        new(InternalCode, RunCheckRules.AllTypes, StandardSteps, "Przebieg programów wewnętrznych i SAC."),
+        new(InternalCode, RunRules.AllTypes, StandardSteps, "Przebieg programów wewnętrznych i SAC."),
         new(CasCode, "CAS", StandardSteps, "Przebieg programów CAS (koszty po narzutach CAS)."),
     ];
 
@@ -143,7 +125,7 @@ public static class RunDefinitions
 
     /// <summary>Szablon domyślny dla typu programu spośród szablonów do wyboru (Available).</summary>
     public static RunDefinitionHeaderRow? DefaultFor(IReadOnlyList<RunDefinitionHeaderRow> available, string projectType) =>
-        available.Where(h => Is(h.ProjectType, projectType) || Is(h.ProjectType, RunCheckRules.AllTypes))
+        available.Where(h => Is(h.ProjectType, projectType) || Is(h.ProjectType, RunRules.AllTypes))
             .OrderByDescending(h => Is(h.ProjectType, projectType)).ThenBy(h => h.Code, StringComparer.OrdinalIgnoreCase).FirstOrDefault();
 
     /// <summary>Szablony do wyboru w programie: aktywne, z etapami.</summary>
@@ -156,17 +138,17 @@ public static class RunDefinitions
             steps.Where(s => Is(s.Definition, header.Code)).OrderBy(s => s.No)
                 .Select(s => new RunStepDefinition(s.No, s.Name, s.Action, s.WarningGate, s.Approval,
                     elements.Where(e => Is(e.Definition, header.Code) && Is(e.Step, s.Name))
-                        .Select(e => new RunElementSetting(e.Element.Trim(), e.IsActive, RunCheckRules.LevelOf(e.Level), e.Threshold)).ToList(), s.Description))
+                        .Select(e => new RunElementSetting(e.Element.Trim(), e.IsActive)).ToList(), s.Description))
                 .ToList(), header.Description);
 
     /// <summary>
     /// Kontrola szablonu przed zapisem: nazwa; etapy stałe (Import źródeł, Przypięcie stanu) – po jednym, na początku; nazwy etapów
     /// niepuste i bez powtórzeń; etap kontroli bez aktywnego elementu – ERROR; elementy tylko w etapach kontroli; element – reguła
-    /// walidacji (validations; null – reguły startowe), reguła wbudowana albo reguła uzgodnień.
+    /// walidacji (rules – nazwy reguł; null – reguły startowe).
     /// </summary>
-    public static IReadOnlyList<Issue> Validate(RunDefinition definition, IReadOnlyCollection<string>? validations = null)
+    public static IReadOnlyList<Issue> Validate(RunDefinition definition, IReadOnlyCollection<string>? rules = null)
     {
-        var known = new HashSet<string>(validations ?? RunValidationRules.Starters.Select(r => r.Name), StringComparer.OrdinalIgnoreCase);
+        var known = new HashSet<string>(rules ?? RunRules.Starters.Select(r => r.Name), StringComparer.OrdinalIgnoreCase);
         var issues = new List<Issue>();
         if (string.IsNullOrWhiteSpace(definition.Code))
             issues.Add(Issue.Error("Szablon bez nazwy"));
@@ -185,13 +167,13 @@ public static class RunDefinitions
             else if (steps.Count(s => Is(s.Name, step.Name)) > 1 && steps.First(s => Is(s.Name, step.Name)) != step)
                 issues.Add(Issue.Error($"Nazwa etapu „{step.Name}” powtórzona", at));
             if (step.Action == RunActions.Checks && !step.Elements.Any(e => e.Active))
-                issues.Add(Issue.Error($"Etap „{step.Name}” bez kontroli – dodaj kontrole albo usuń etap", at));
+                issues.Add(Issue.Error($"Etap „{step.Name}” bez reguł – zaznacz reguły albo usuń etap", at));
             if (step.Action != RunActions.Checks && step.Elements.Count > 0)
-                issues.Add(Issue.Error($"Etap „{step.Name}” ({step.Action}) nie ma kontroli – kontrole tylko w etapach walidacji", at));
+                issues.Add(Issue.Error($"Etap „{step.Name}” ({step.Action}) nie ma reguł – reguły tylko w etapach walidacji", at));
             foreach (var element in step.Elements.GroupBy(e => e.Element.Trim(), StringComparer.OrdinalIgnoreCase).Where(g => g.Count() > 1))
-                issues.Add(Issue.Error($"Kontrola „{element.Key}” dwa razy w etapie „{step.Name}”", at));
-            foreach (var element in step.Elements.Where(e => RunCheckRules.ByName(e.Element) is null && !IsReconciliation(e.Element) && !known.Contains(e.Element.Trim())))
-                issues.Add(Issue.Error($"Nieznana kontrola „{element.Element}”", at));
+                issues.Add(Issue.Error($"Reguła „{element.Key}” dwa razy w etapie „{step.Name}”", at));
+            foreach (var element in step.Elements.Where(e => !known.Contains(e.Element.Trim())))
+                issues.Add(Issue.Error($"Nieznana reguła „{element.Element}” – nie ma jej w regułach walidacji", at));
         }
         return issues;
     }

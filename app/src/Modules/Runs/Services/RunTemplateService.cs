@@ -10,10 +10,13 @@ namespace PzlEv.Modules.Runs.Services;
 /// <summary>Szablon przebiegu na ekranie Przebiegi: definicja, aktywny, programy, które go wybrały (Parametry programu → „Przebieg”).</summary>
 public sealed record RunTemplate(RunDefinition Definition, bool IsActive, IReadOnlyList<string> Programs);
 
+/// <summary>Test reguły na programie: wynik zapytania, opisy wierszy (opis wyniku), uruchomienie i okresy, nieznane kolumny w opisie wyniku.</summary>
+public sealed record RunRuleTest(RunRuleResult Result, IReadOnlyList<string> Descriptions, string Note, IReadOnlyList<string> UnknownColumns);
+
 /// <summary>
-/// Szablony przebiegów (ekran Przebiegi – docs/pipeline-fazy.md, rozdz. 4.1): odczyt i zapis szablonu jako wierszy słowników
-/// „Definicje przebiegów”, „Etapy przebiegów”, „Elementy kontrolne etapów” (historia, walidacja – DictionaryService), usunięcie,
-/// szablony startowe (Wewnętrzny, CAS).
+/// Szablony przebiegów i reguły walidacji (ekran Przebiegi – docs/pipeline-fazy.md, rozdz. 4.1): odczyt i zapis szablonu jako wierszy
+/// słowników „Definicje przebiegów”, „Etapy przebiegów”, „Elementy kontrolne etapów” (historia, walidacja – DictionaryService),
+/// usunięcie, szablony startowe (Wewnętrzny, CAS); reguły walidacji w SQL – odczyt, zapis (słownik „Reguły walidacji”), test na programie.
 /// </summary>
 public sealed class RunTemplateService(DictionaryService dictionaries, IRunStore store)
 {
@@ -41,7 +44,7 @@ public sealed class RunTemplateService(DictionaryService dictionaries, IRunStore
     public SaveOutcome Save(RunDefinition definition, bool isActive)
     {
         var numbered = definition with { Code = definition.Code.Trim(), Steps = [.. definition.Steps.OrderBy(s => s.No).Select((s, i) => s with { No = i + 1, Name = s.Name.Trim() })] };
-        var structure = RunDefinitions.Validate(numbered, ValidationRules().Rules.Select(r => r.Name).ToList());
+        var structure = RunDefinitions.Validate(numbered, Rules().Rules.Select(r => r.Name).ToList());
         if (structure.Any(i => i.Level == CheckLevel.Error))
             return new SaveOutcome(SaveStatus.Rejected, structure, "Szablon ma błędy – nic nie zapisano.");
         return SaveRows(numbered.Code, [RunDefinitionRows.Header(numbered, isActive)], RunDefinitionRows.StepValues(numbered),
@@ -73,99 +76,63 @@ public sealed class RunTemplateService(DictionaryService dictionaries, IRunStore
         return made.Count == 0 ? "Szablony startowe już są." : $"Utworzono szablony: {string.Join(", ", made)}.";
     }
 
-    /// <summary>Ustawienia domyślne reguł katalogu dla wszystkich programów (słownik „Kontrole przebiegu”: „Wszystkie”, „Każdy”; brak wiersza – katalog).</summary>
-    public IReadOnlyDictionary<string, RunCheckSetting> CheckDefaults() =>
-        RunChecks.Settings(store.CheckSettings().Where(r => Is(r.ProjectType, RunCheckRules.AllTypes) && Is(r.RunKind, RunCheckRules.AnyRun)),
-            RunCheckRules.AllTypes, isClosing: false);
+    private static DictionarySpec RuleSpec => GlobalDictionaries.Get(GlobalDictionaries.RunValidations);
 
-    /// <summary>
-    /// Zapis ustawień domyślnych reguł („Wszystkie”, „Każdy”): reguła z ustawieniem katalogu – bez wiersza, inna – wiersz (aktywna,
-    /// poziom, próg); wiersze typów programów i wariantów zostają.
-    /// </summary>
-    public SaveOutcome SaveCheckDefaults(IReadOnlyDictionary<string, RunCheckSetting> settings)
+    /// <summary>Reguły walidacji ze słownika; pusty słownik – reguły startowe (Starters = true – jeszcze niezapisane).</summary>
+    public (IReadOnlyList<RunRule> Rules, bool Starters) Rules()
     {
-        var spec = GlobalDictionaries.Get(GlobalDictionaries.RunChecks);
-        var current = dictionaries.Load(spec);
-        bool General(DictRow r) => Is(r["Typ programu"], RunCheckRules.AllTypes) && Is(r["Przebieg"], RunCheckRules.AnyRun);
-        var working = current.Where(r => !General(r)).ToList();
-        var general = current.Where(General).ToList();
-        var kept = new HashSet<long>();
-        foreach (var rule in RunCheckRules.All)
-        {
-            if (!settings.TryGetValue(rule.Code, out var setting) || setting == RunCheckRules.Default(rule))
-                continue;
-            var values = new Dictionary<string, string?>
-            {
-                ["Typ programu"] = RunCheckRules.AllTypes, ["Reguła"] = rule.Name, ["Przebieg"] = RunCheckRules.AnyRun, ["Aktywna"] = setting.Active ? "tak" : "nie",
-                ["Poziom"] = RunCheckRules.Levels[setting.Level switch { CheckLevel.Error => 0, CheckLevel.Warning => 1, _ => 2 }],
-                ["Próg"] = rule.Threshold is null || setting.Threshold is not { } threshold ? null : PzlEv.Shared.Utils.Files.PolishNumber.ToCanonical(threshold),
-                ["Opis"] = null,
-            };
-            var existing = general.FirstOrDefault(r => Is(r["Reguła"], rule.Name));
-            working.Add(existing is { RowId: { } id } && kept.Add(id) ? existing with { Values = values } : new DictRow(null, null, values));
-        }
-        var outcome = dictionaries.Save(spec, working, general.Where(r => r.RowId is not { } id || !kept.Contains(id)).ToList(), confirmWarnings: true);
-        return outcome.Status == SaveStatus.Saved ? outcome with { Message = "Ustawienia kontroli zapisane." } : outcome;
-    }
-
-    private static DictionarySpec ValidationSpec => GlobalDictionaries.Get(GlobalDictionaries.RunValidations);
-
-    /// <summary>Reguły walidacji ACTUALS ze słownika; pusty słownik – reguły startowe (Starters = true – jeszcze niezapisane).</summary>
-    public (IReadOnlyList<RunValidationRule> Rules, bool Starters) ValidationRules()
-    {
-        var rules = RunValidationRows.Rules(dictionaries.Load(ValidationSpec));
-        return rules.Count == 0 ? (RunValidationRules.Starters, true) : (rules, false);
+        var rules = RunRuleRows.Rules(dictionaries.Load(RuleSpec));
+        return rules.Count == 0 ? (RunRules.Starters, true) : (rules, false);
     }
 
     /// <summary>
-    /// Zapis reguł walidacji (cały słownik): reguła o tej samej nazwie zachowuje historię, reguły spoza listy – usunięte. Komunikat
-    /// wymienia reguły użyte w szablonach, których już nie ma (w przebiegu – ostrzeżenie „niesprawdzona”).
+    /// Zapis reguł walidacji (cały słownik; zapytania – RunRules.Check w regułach słownika): reguła o tej samej nazwie zachowuje historię,
+    /// reguły spoza listy – usunięte. Komunikat wymienia reguły użyte w szablonach, których już nie ma (w przebiegu – „niesprawdzona”).
     /// </summary>
-    public SaveOutcome SaveValidations(IReadOnlyList<RunValidationRule> rules)
+    public SaveOutcome SaveRules(IReadOnlyList<RunRule> rules)
     {
-        var current = dictionaries.Load(ValidationSpec);
+        var current = dictionaries.Load(RuleSpec);
         var byName = current.Where(r => r["Nazwa"] is not null).GroupBy(r => r["Nazwa"]!.Trim(), StringComparer.OrdinalIgnoreCase)
             .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
         var kept = new HashSet<long>();
         var working = rules.Select(rule => byName.TryGetValue(rule.Name.Trim(), out var row) && row.RowId is { } id && kept.Add(id)
-            ? row with { Values = RunValidationRows.Values(rule) } : new DictRow(null, null, RunValidationRows.Values(rule))).ToList();
-        var outcome = dictionaries.Save(ValidationSpec, working, current.Where(r => r.RowId is not { } id || !kept.Contains(id)).ToList(), confirmWarnings: true);
+            ? row with { Values = RunRuleRows.Values(rule) } : new DictRow(null, null, RunRuleRows.Values(rule))).ToList();
+        var outcome = dictionaries.Save(RuleSpec, working, current.Where(r => r.RowId is not { } id || !kept.Contains(id)).ToList(), confirmWarnings: true);
         if (outcome.Status != SaveStatus.Saved)
             return outcome;
         var names = rules.Select(r => r.Name.Trim()).ToHashSet(StringComparer.OrdinalIgnoreCase);
         var orphans = RunDefinitionRows.Elements(dictionaries.Load(ElementSpec)).Select(e => e.Element.Trim())
-            .Where(e => !RunDefinitions.IsReconciliation(e) && RunCheckRules.ByName(e) is null && !names.Contains(e)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            .Where(e => !names.Contains(e)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         return outcome with
         {
             Message = $"Reguły walidacji zapisane ({rules.Count})." + (orphans.Count == 0 ? ""
-                : $" Szablony przebiegów używają reguł, których już nie ma: {string.Join(", ", orphans)} – usuń je z kafelków albo przywróć regułę."),
+                : $" Szablony przebiegów używają reguł, których już nie ma: {string.Join(", ", orphans)} – odznacz je w etapach albo przywróć regułę."),
         };
     }
 
     /// <summary>
-    /// Test reguły na ostatnim uruchomieniu programu z przypiętymi danymi (i poprzednim jak w przebiegu) – bez zapisu wyników;
-    /// okresy jak w chwili uruchomienia.
+    /// Test reguły (także niezapisanej) na ostatnim uruchomieniu programu z przypiętymi danymi i poprzednim jak w przebiegu – bez zapisu
+    /// wyników; okresy jak w chwili uruchomienia.
     /// </summary>
-    public (IReadOnlyList<RunValidationResult> Results, string Note, string? Error) TestValidation(RunValidationRule rule, string project)
+    public RunRuleTest TestRule(RunRule rule, string project)
     {
         var pin = store.Pins(project, 20).FirstOrDefault(p => p.Rows is not null && p.Status != RunStatuses.Running);
         if (pin is null)
-            return ([], $"Program {project} nie ma uruchomienia z przypiętymi danymi – uruchom przebieg na ekranie programu.", null);
-        var amountField = pin.AmountField ?? ProjectSettings.DefaultActualsAmount;
-        var previousPin = store.Previous(project, pin.RunId);
-        var previous = previousPin is null || (previousPin.AmountField ?? ProjectSettings.DefaultActualsAmount) != amountField ? null : store.Balance(previousPin.PinId);
-        var (closedBefore, today) = RunService.Periods(store.RunWeek(pin.RunId).Period, pin.StartedAt.LocalDateTime.Date);
-        var current = store.Balance(pin.PinId);
-        var data = new RunValidationData(current, previous, store.CostElements(project), closedBefore, today,
-            amountField == ProjectSettings.DefaultActualsAmount ? "PLN" : null);
-        var (results, error) = RunValidationLanguage.Evaluate(rule, data);
-        var note = $"Uruchomienie {pin.Code} #{pin.PinNo} ({current.Count:#,0} pozycji, {current.Sum(r => (long)r.Rows):#,0} wierszy ACTUALS)"
-            + (previous is null ? ", bez poprzedniego przebiegu" : $", porównanie z {previousPin!.Code} #{previousPin.PinNo}")
-            + $"; bieżący okres {today.Year}/{today.Period:00}, zamknięte przed {closedBefore.Year}/{closedBefore.Period:00}; wyników: {results.Count}.";
-        return (results, note, error);
+            return new RunRuleTest(RunRuleResult.Failed($"Program {project} nie ma uruchomienia z przypiętymi danymi – uruchom przebieg na ekranie programu."), [], "", []);
+        var previous = RunService.Comparable(store, pin);
+        var source = store.Balance(pin.PinId);
+        var context = RunService.Context(store, pin, previous, source, pin.StartedAt.LocalDateTime.Date);
+        var result = store.RunRule(rule.Sql, context);
+        var note = $"Uruchomienie {pin.Code} #{pin.PinNo} ({source.Count:#,0} pozycji, {source.Sum(r => (long)r.Rows):#,0} wierszy ACTUALS)"
+            + (previous is null ? ", bez poprzedniego przebiegu" : $", poprzednie {previous.Code} #{previous.PinNo}")
+            + $"; bieżący okres {RunRulePeriod(context.Today)}, zamknięte przed {RunRulePeriod(context.ClosedBefore)}"
+            + (store.HasEv(pin.PinId) ? "" : "; uruchomienie bez danych „ev” (sprzed reguł SQL) – tabela ev pusta")
+            + (result.Error is null ? $"; wierszy: {result.Rows.Count}{(result.Truncated ? $" (obcięte do {RunRules.MaxRows})" : "")}." : ".");
+        return new RunRuleTest(result, result.Rows.Select(row => RunRules.Describe(rule.ResultTemplate, result.Columns, row)).ToList(), note,
+            result.Error is null ? RunRules.UnknownPlaceholders(rule.ResultTemplate, result.Columns) : []);
     }
 
-    private static bool Is(string? value, string expected) => string.Equals(value?.Trim(), expected, StringComparison.OrdinalIgnoreCase);
+    private static string RunRulePeriod((int Year, int Period) period) => $"{period.Year}/{period.Period:00}";
 
     // Kolejność: szablon (dodanie przed etapami), etapy, elementy; przy usuwaniu – odwrotnie (najpierw elementy, na końcu szablon).
     private SaveOutcome SaveRows(string code, IReadOnlyList<IReadOnlyDictionary<string, string?>> header, IReadOnlyList<IReadOnlyDictionary<string, string?>> steps,

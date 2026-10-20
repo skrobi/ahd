@@ -19,6 +19,8 @@ namespace PzlEv.Tests.Runs;
 /// <summary>Przebieg projektu na bazie: tydzień z kalendarza, przypięcie danych ACTUALS, kontrole, porównanie z poprzednim przebiegiem.</summary>
 public sealed class RunServiceTests : IDisposable
 {
+    private const string NetZero = "Netowanie do 0 w okresach zamkniętych";
+
     private readonly TestServices _services = new();
     private readonly string _root = Directory.CreateTempSubdirectory("pzl-ev-runs-").FullName;
     private TestDatabase? _database;
@@ -57,9 +59,21 @@ public sealed class RunServiceTests : IDisposable
         Assert.Equal(RunStatuses.Blocked, service.Rerun(pin.PinId, 3).Status);
         var issues = store.Issues(pin.PinId);
         Assert.Contains(issues, i => i.CheckName == "Import" && i.Level == CheckLevel.Warning);              // projekt bez źródeł danych
-        Assert.Contains(issues, i => i.CheckName == RunChecks.NetZero && i.Level == CheckLevel.Error && i.Element == "2DI473001001");   // dane bez rozliczenia
-        Assert.DoesNotContain(issues, i => i.CheckName == RunChecks.NewCostElements && i.Level == CheckLevel.Error);   // cost elementy projektu są w słowniku (numery 10-cyfrowe)
+        Assert.Contains(issues, i => i.CheckName == NetZero && i.Level == CheckLevel.Error && i.Element == "2DI473001001");   // dane bez rozliczenia
+        Assert.Equal(CheckLevel.Pass, Assert.Single(issues, i => i.CheckName == "Cost element spoza słownika Cost Category").Level);   // cost elementy projektu są w słowniku
+        Assert.Equal(RunRules.ActualsStarters.Count, issues.Where(i => i.StepNo == 3).Select(i => i.CheckName).Distinct().Count());   // każda reguła etapu – wynik
+        Assert.True(store.HasEv(pin.PinId));
         Assert.Equal(pin.PinId, store.Latest()["PAF"].PinId);
+
+        // Test reguły na programie (bez zapisu wyników): wiersze zapytania, opis wyniku; błąd SQL z linią zapytania reguły.
+        var templates = new RunTemplateService(new PzlEv.Shared.Utils.Dictionaries.DictionaryService(new PzlEv.Shared.Utils.Dictionaries.SqlDictionaryStore(_database.Sql,
+            _services.Clock, _services.User, PzlEv.Shared.Utils.Dictionaries.GlobalDictionaries.Tables), app.Journal), store);
+        var test = templates.TestRule(RunRules.Starter(NetZero)!, "PAF");
+        Assert.Null(test.Result.Error);
+        Assert.Contains(test.Descriptions, d => d.StartsWith("2DI473001001: saldo"));
+        Assert.StartsWith("Uruchomienie R-PAF-2026-10-T40 #1", test.Note);
+        Assert.StartsWith("linia 3: ", templates.TestRule(new RunRule("x", CheckLevel.Error, true, "SELECT ElementWBS\nFROM biezace\nWHERE Brak = 1"), "PAF").Result.Error);
+        Assert.Equal(["Brak"], templates.TestRule(new RunRule("x", CheckLevel.Error, true, "SELECT ElementWBS FROM biezace", "{Brak} {elementwbs}"), "PAF").UnknownColumns);
 
         // Tydzień później: nowa wersja pliku z dodatkowym wierszem – porównanie z przebiegiem tygodnia 40.
         _services.Clock.Advance(TimeSpan.FromDays(7));
@@ -74,9 +88,10 @@ public sealed class RunServiceTests : IDisposable
         Assert.Equal(5L, next.Rows);
         var compared = store.Issues(next.PinId);
         Assert.Contains(compared, i => i.Message.StartsWith("Porównanie z przebiegiem R-PAF-2026-10-T40 #1"));
-        Assert.DoesNotContain(compared, i => i.CheckName == RunChecks.Volume && i.Level != CheckLevel.Pass);
-        Assert.Contains(compared, i => i.CheckName == RunChecks.Deviations && i.Element == "2DI473001003" && i.Amount == 10m);
-        Assert.Contains(compared, i => i.CheckName == RunChecks.ClosedPeriods && i.Element == "2DI473001003");   // 2026/03 zmieniony po zamknięciu
+        Assert.Equal(CheckLevel.Pass, Assert.Single(compared, i => i.CheckName == "Mniej wierszy niż w poprzednim przebiegu").Level);
+        Assert.Contains(compared, i => i.CheckName == "Największe odchylenia raport do raportu" && i.Element == "2DI473001003"
+            && RunRules.ReadDetails(i.Details).Single(d => d.Column == "Zmiana").Number == 10m);
+        Assert.Contains(compared, i => i.CheckName == "Zmiana salda okresu zamkniętego" && i.Element == "2DI473001003");   // 2026/03 zmieniony po zamknięciu
 
         // Przebieg projektu u innej osoby – drugi nie startuje.
         var other = _services.App(_root, _database.Sql);
@@ -119,8 +134,10 @@ public sealed class RunServiceTests : IDisposable
         Assert.Equal(8884.51m, pin.Balance);                                             // saldo okresów zamkniętych – dane źródłowe
         var issues = store.Issues(pin.PinId);
         Assert.Contains(issues, i => i.CheckName == "Koszty po narzutach CAS" && i.Level == CheckLevel.Pass && i.Message.Contains("w PLN"));
-        Assert.Contains(issues, i => i.CheckName == RunChecks.NetZero && i.Level == CheckLevel.Error
+        Assert.Contains(issues, i => i.CheckName == NetZero && i.Level == CheckLevel.Error
             && i.Message.Replace('\u00a0', ' ').Contains("saldo programu 8 884,51"));   // Walidacja ACTUALS – dane źródłowe (przed narzutami)
+        var ev = store.RunRule("SELECT SUM(Kwota) AS Koszt FROM ev", new RunRuleContext(pin.PinId, null, "PAF", (2026, 9), (2026, 10), "PLN", "CAS"));
+        Assert.Equal(Math.Round(acwp, 2), Math.Round((decimal)ev.Rows.Single()[0]!, 2));   // tabela ev – koszty po narzutach CAS
         Assert.NotEqual(RunStatuses.Failed, outcome.Status);
     }
 

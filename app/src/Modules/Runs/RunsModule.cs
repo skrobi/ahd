@@ -7,14 +7,13 @@ using PzlEv.Shared.Models;
 using PzlEv.Shared.Models.Pipeline;
 using PzlEv.Shared.Utils.Data;
 using PzlEv.Shared.Utils.Dictionaries;
-using PzlEv.Shared.Utils.Ui.Dialogs;
 using PzlEv.Shared.Utils.Ui.Modularity;
 using PzlEv.Shared.Views.Partials;
 
 namespace PzlEv.Modules.Runs;
 
 /// <summary>
-/// Przebiegi (F06): ekran administracji szablonów przebiegów – etapy w kafelkach, okno Kontrole (RunsView); przebieg programu
+/// Przebiegi (F06): ekran Przebiegi – szablony przebiegów (etapy w kafelkach) i reguły walidacji w SQL (RunsView); przebieg programu
 /// uruchamia i analizuje ekran programu – panel przebiegu (IRunPanels), przebieg w tle (IRunLauncher), okno „Zmiany ACWP” (IAcwpChanges).
 /// Kroki i etapy P3–P9, Z – do implementacji (F5–F9).
 /// </summary>
@@ -55,11 +54,6 @@ public sealed class RunsModule : IModule
     {
         var dictionaries = new DictionaryService(_dictionaries!, context.Services.Journal);
         var templates = new RunTemplateService(dictionaries, _store!);
-        return new RunsView
-        {
-            DataContext = new RunsViewModel(templates, _store!, saved => RunChecksWindow.Open(
-                new RunChecksViewModel(templates, new RunDictionaryEditorViewModel(dictionaries, new FileDialogs(),
-                    [GlobalDictionaries.RunReconciliations, GlobalDictionaries.RunChecks]), new RunValidationEditorViewModel(templates, _store!)), saved)),
-        };
+        return new RunsView { DataContext = new RunsViewModel(templates, _store!) };
     }
 }

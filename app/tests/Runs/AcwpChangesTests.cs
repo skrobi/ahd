@@ -101,21 +101,4 @@ public sealed class AcwpChangesTests
         Assert.Equal(("51105550 – Materiały", "A.1", "2026/09", 30m), (row.CostElement, row.WbsElement, row.Period, row.Delta));
         Assert.Equal("", Assert.Single(AcwpChanges.Flatten(AcwpChanges.Periods(after, (2026, 8), (2026, 9), Kinds, null, null, null, true, costElement: "92212550").Tree)).Period);
     }
-
-    [Fact]
-    public void Run_issue_opens_changes_for_its_kind_cost_element_or_wbs_element_and_its_run()
-    {
-        RunIssueRow Issue(string check, string? element, string message = "x") => new(1, 77, check, CheckLevel.Warning, element, message, null);
-
-        Assert.Equal(new PzlEv.Shared.Utils.Data.AcwpChangesRequest("PAF", Kind: "Other", PinId: 77, Scope: "Rodzaje kosztu: Other"),
-            RunOverview.ChangesFor(Issue(RunChecks.CostKinds, "Other"), "PAF"));
-        Assert.Equal("99999999", RunOverview.ChangesFor(Issue(RunChecks.NewCostElements, "99999999"), "PAF")!.CostElement);
-        Assert.Equal("51105550", RunOverview.ChangesFor(Issue(RunChecks.Deviations, "51105550", "cost element 51105550: zmiana"), "PAF")!.CostElement);
-        Assert.Equal(["A.1"], RunOverview.ChangesFor(Issue(RunChecks.Deviations, "A.1", "element WBS A.1: zmiana"), "PAF")!.WbsElements);
-        Assert.Equal(["A.1"], RunOverview.ChangesFor(Issue(RunChecks.NetZero, "A.1"), "PAF")!.WbsElements);
-        var program = RunOverview.ChangesFor(Issue(RunChecks.Volume, null), "PAF")!;
-        Assert.Equal((null, null, (long?)77), (program.Kind, program.WbsElements, program.PinId));
-        Assert.Null(RunOverview.ChangesFor(Issue("Import", null), "PAF"));
-        Assert.Null(RunOverview.ChangesFor(Issue(RunChecks.Dictionaries, "WP-1"), "PAF"));
-    }
 }

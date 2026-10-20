@@ -195,8 +195,8 @@ każdej edycji działają na danych w pamięci (zapis sprawdza je ponownie w baz
 decyzji człowieka) deklarowany przez moduł-właściciela i `IStage` (bramka wejścia, akcja z bramką wyjścia,
 wynik z kontrolami ERROR / WARNING / PASS). Ten sam kontrakt obsługuje uruchomienie etapu z ekranu przez
 analityka i późniejsze łączenie etapów bez udziału człowieka – łańcuch zatrzymuje się na etapie wymagającym
-decyzji (P4, P6, Z) albo z wynikiem ERROR. Tam też katalog reguł kontroli przebiegu (`RunCheckRules` – metadane reguł
-dla słownika „Kontrole przebiegu”; implementacje w module Przebiegi, `RunChecks`, `docs/pipeline-fazy.md`, rozdz. 4.1).
+decyzji (P4, P6, Z) albo z wynikiem ERROR. Tam też reguły walidacji przebiegu w SQL (`RunRules` – model, tabele danych
+uruchomienia, kontrola zapytania, reguły startowe; wykonanie w module Przebiegi, `docs/pipeline-fazy.md`, rozdz. 4.1).
 
 **Nowy moduł:**
 

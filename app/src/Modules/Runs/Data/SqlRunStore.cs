@@ -1,12 +1,15 @@
+using System.Data;
 using Dapper;
+using Microsoft.Data.SqlClient;
 using PzlEv.Shared.Models.Db;
 using PzlEv.Shared.Models.Dictionaries;
 using PzlEv.Shared.Models.Pipeline;
 using PzlEv.Shared.Utils.Data.Sql;
+using PzlEv.Shared.Utils.Dictionaries;
 
 namespace PzlEv.Modules.Runs.Data;
 
-/// <summary>Przebiegi w MS SQL (migracja 027); dane projektu w chwili przypięcia – procedura RUN_PinBalance.</summary>
+/// <summary>Przebiegi w MS SQL (migracja 027); dane projektu w chwili przypięcia – procedura RUN_PinBalance; reguły walidacji w SQL (migracja 051).</summary>
 public sealed class SqlRunStore(SqlDatabase db) : IRunStore
 {
     private readonly string _runs = db.Table(DbTables.Run);
@@ -14,6 +17,7 @@ public sealed class SqlRunStore(SqlDatabase db) : IRunStore
     private readonly string _balance = db.Table(DbTables.RunBalance);
     private readonly string _issues = db.Table(DbTables.RunIssue);
     private readonly string _steps = db.Table("meta.RunStep");
+    private readonly string _ev = db.Table(DbTables.RunBalanceEv);
 
     private const int LongTimeout = 1800;
 
@@ -85,35 +89,191 @@ public sealed class SqlRunStore(SqlDatabase db) : IRunStore
             new { project, runId, excluded = new[] { RunStatuses.Running, RunStatuses.Failed } });
     }
 
-    public IReadOnlyList<RunValidationRule> ValidationRules()
+    public IReadOnlyList<RunRule> Rules()
     {
         using var connection = db.Open();
-        var rules = connection.Query<ValidationRow>(
-                $"SELECT Name, CheckName, IsActive, RowFilter, GroupBy, Condition, AmountFormula, Message, OkMessage, TopN, Level, Threshold, Description " +
-                $"FROM {db.Table("dict.RunValidation")} WHERE Project IS NULL AND SupersededAt IS NULL ORDER BY Id")
-            .Select(r => new RunValidationRule(r.Name, r.CheckName, r.IsActive, r.RowFilter, r.GroupBy, r.Condition, r.AmountFormula, r.Message, r.OkMessage,
-                r.TopN ?? 0, RunCheckRules.LevelOf(r.Level) ?? CheckLevel.Warning, r.Threshold, r.Description))
+        var rules = connection.Query<(string Name, string? Description, string Level, bool IsActive, string SqlText, string? ResultTemplate)>(
+                $"SELECT Name, Description, Level, IsActive, SqlText, ResultTemplate FROM {db.Table("dict.RunValidation")} " +
+                "WHERE Project IS NULL AND SupersededAt IS NULL ORDER BY Id")
+            .Select(r => new RunRule(r.Name, RunRules.LevelOf(r.Level) ?? CheckLevel.Warning, r.IsActive, r.SqlText, r.ResultTemplate, r.Description))
             .ToList();
-        return rules.Count == 0 ? RunValidationRules.Starters : rules;
+        return rules.Count == 0 ? RunRules.Starters : rules;
     }
 
-    private sealed record ValidationRow(string Name, string CheckName, bool IsActive, string? RowFilter, string? GroupBy, string Condition, string? AmountFormula,
-        string Message, string? OkMessage, int? TopN, string Level, decimal? Threshold, string? Description);
+    public void SaveEv(long pinId, IReadOnlyList<RunEvRow> rows)
+    {
+        using var connection = db.Open();
+        connection.Execute($"DELETE FROM {_ev} WHERE PinId = @pinId", new { pinId }, commandTimeout: LongTimeout);
+        SqlBulk.InsertInBatches(connection, _ev,
+            [("PinId", typeof(long)), ("WbsElement", typeof(string)), ("CostElement", typeof(string)), ("FiscalYear", typeof(int)), ("Period", typeof(int)),
+             ("CostKind", typeof(string)), ("Amount", typeof(decimal))],
+            rows.Select(r => new object?[] { pinId, r.WbsElement, r.CostElement, r.FiscalYear, r.Period, r.CostKind, r.Amount }));
+    }
+
+    public bool HasEv(long pinId)
+    {
+        using var connection = db.Open();
+        return connection.ExecuteScalar<int?>($"SELECT TOP (1) 1 FROM {_ev} WHERE PinId = @pinId", new { pinId }) is not null;
+    }
+
+    public RunRuleResult RunRule(string sql, RunRuleContext context)
+    {
+        if (RunRules.Check(sql) is { } refused)
+            return RunRuleResult.Failed(refused);
+        var (text, offset) = RunRules.Compose(RuleTables(), sql);
+        using var connection = db.Open();
+        // Reguła tylko czyta (RunRules.Check), a transakcja i tak jest zawsze wycofywana.
+        using var transaction = connection.BeginTransaction();
+        try
+        {
+            return Read(connection, transaction, text, context);
+        }
+        catch (SqlException ex)
+        {
+            return RunRuleResult.Failed(RuleError(ex, offset));
+        }
+        finally
+        {
+            try
+            {
+                transaction.Rollback();
+            }
+            catch (InvalidOperationException)
+            {
+                // Transakcja już wycofana przez SQL Server (błąd zapytania).
+            }
+        }
+    }
+
+    private static RunRuleResult Read(SqlConnection connection, SqlTransaction transaction, string text, RunRuleContext context)
+    {
+        using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = text;
+        command.CommandTimeout = RunRules.TimeoutSeconds;
+        static string Period((int Year, int Period) p) => $"{p.Year}/{Math.Min(p.Period, 12):00}";
+        void Add(string name, SqlDbType type, object? value, int size = 0) =>
+            command.Parameters.Add(new SqlParameter(name, type, size) { Value = value ?? DBNull.Value });
+        Add("@PinId", SqlDbType.BigInt, context.PinId);
+        Add("@PoprzedniPinId", SqlDbType.BigInt, context.PreviousPinId);
+        Add("@Program", SqlDbType.NVarChar, context.Project, 20);
+        Add("@BiezacyOkres", SqlDbType.NVarChar, Period(context.Today), 7);
+        Add("@PierwszyOtwartyOkres", SqlDbType.NVarChar, Period(context.ClosedBefore), 7);
+        Add("@JestPoprzedni", SqlDbType.Int, context.PreviousPinId is null ? 0 : 1);
+        Add("@WalutaKosztow", SqlDbType.NVarChar, context.Currency, 20);
+        Add("@TypProgramu", SqlDbType.NVarChar, context.ProjectType, 20);
+        var reader = command.ExecuteReader();
+        var rows = new List<IReadOnlyList<object?>>();
+        var truncated = false;
+        try
+        {
+            var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var columns = Enumerable.Range(0, reader.FieldCount).Select(i =>
+            {
+                var basis = reader.GetName(i) is { Length: > 0 } name ? name : $"Kolumna{i + 1}";
+                var unique = Enumerable.Range(1, 99).Select(n => n == 1 ? basis : $"{basis}{n}").First(names.Add);
+                var type = reader.GetFieldType(i);
+                return new RunRuleColumn(unique, type == typeof(decimal) || type == typeof(int) || type == typeof(long) || type == typeof(short)
+                                                 || type == typeof(byte) || type == typeof(double) || type == typeof(float));
+            }).ToList();
+            while (reader.Read())
+            {
+                if (rows.Count == RunRules.MaxRows)
+                {
+                    truncated = true;
+                    command.Cancel();
+                    break;
+                }
+                var values = new object?[reader.FieldCount];
+                reader.GetValues(values!);
+                rows.Add(values.Select(v => v is DBNull ? null : v).ToList());
+            }
+            return new RunRuleResult(columns, rows, truncated);
+        }
+        finally
+        {
+            try
+            {
+                reader.Dispose();
+            }
+            catch (SqlException) when (truncated)
+            {
+                // Przerwane czytanie nadmiarowych wierszy (Cancel).
+            }
+        }
+    }
+
+    // Błąd SQL Server z linią w zapytaniu reguły (linie tabel danych uruchomienia – przed zapytaniem); limit czasu – opis.
+    private static string RuleError(SqlException ex, int offset)
+    {
+        if (ex.Number == -2)
+            return $"Przekroczony limit czasu zapytania ({RunRules.TimeoutSeconds} s) – zawęź dane albo uprość zapytanie";
+        return string.Join("; ", ex.Errors.Cast<SqlError>().Select(e => e.LineNumber - offset is var line and > 0 ? $"linia {line}: {e.Message}" : e.Message).Distinct());
+    }
+
+    // Tabele danych uruchomienia dla zapytania reguły (RunRules.Tables): CTE z parametrami uruchomienia.
+    private string RuleTables()
+    {
+        // Rok i okres (okresy 13–16 jak 12) → „RRRR/OO” i liczba okresów przed bieżącym.
+        const string Periods =
+            """
+            CROSS APPLY (SELECT CASE WHEN b.Period > 12 THEN 12 ELSE b.Period END AS M) m
+                CROSS APPLY (SELECT CONCAT(b.FiscalYear, N'/', RIGHT(N'0' + CAST(m.M AS NVARCHAR(2)), 2)) AS RokOkres,
+                                    CAST(LEFT(@BiezacyOkres, 4) AS INT) * 12 + CAST(RIGHT(@BiezacyOkres, 2) AS INT) - (b.FiscalYear * 12 + m.M) AS OkresyWstecz) p
+            """;
+        string Balance(string pin) =>
+            $"""
+                SELECT NULLIF(b.WbsElement, N'') AS ElementWBS, NULLIF(b.CostElement, N'') AS CostElement, b.FiscalYear AS Rok, b.Period AS Okres, p.RokOkres, p.OkresyWstecz,
+                       b.IsSettlement AS Rozliczeniowy, b.Currency AS Waluta, b.Rows AS Wiersze, b.Amount AS Kwota, b.LastCreatedOn AS Utworzono,
+                       CAST(CASE WHEN p.RokOkres < @PierwszyOtwartyOkres THEN 1 ELSE 0 END AS BIT) AS OkresZamkniety,
+                       CAST(CASE WHEN p.RokOkres > @BiezacyOkres THEN 1 ELSE 0 END AS BIT) AS OkresPrzyszly
+                FROM {_balance} b
+                {Periods}
+                WHERE b.PinId = {pin}
+            """;
+        string Ev(string pin) =>
+            $"""
+                SELECT NULLIF(b.WbsElement, N'') AS ElementWBS, NULLIF(b.CostElement, N'') AS CostElement, b.FiscalYear AS Rok, b.Period AS Okres, p.RokOkres, p.OkresyWstecz,
+                       CAST(CASE WHEN p.RokOkres < @PierwszyOtwartyOkres THEN 1 ELSE 0 END AS BIT) AS OkresZamkniety, b.CostKind AS RodzajKosztu, b.Amount AS Kwota
+                FROM {_ev} b
+                {Periods}
+                WHERE b.PinId = {pin}
+            """;
+        return
+            $"""
+            WITH biezace AS (
+            {Balance("@PinId")}),
+            poprzednie AS (
+            {Balance("@PoprzedniPinId")}),
+            ev AS (
+            {Ev("@PinId")}),
+            ev_poprzednie AS (
+            {Ev("@PoprzedniPinId")}),
+            cost_category AS (
+                SELECT c.CostElement, c.Description AS Opis, NULLIF(LTRIM(RTRIM(c.CostCategory)), N'') AS CostCategory,
+                       CASE WHEN LTRIM(RTRIM(c.CostKind)) IN (N'{GlobalDictionaries.LaborKind}', N'{GlobalDictionaries.MaterialKind}') THEN LTRIM(RTRIM(c.CostKind))
+                            ELSE N'{GlobalDictionaries.OtherKind}' END AS RodzajKosztu,
+                       CAST(ISNULL(c.IsSettlement, 0) AS BIT) AS Rozliczeniowy
+                FROM (SELECT CostElement, Description, CostCategory, CostKind, IsSettlement,
+                             ROW_NUMBER() OVER (PARTITION BY CostElement ORDER BY CASE WHEN Project IS NULL THEN 1 ELSE 0 END) AS rn
+                      FROM {db.Table("dict.CostCategory")} WHERE SupersededAt IS NULL AND (Project = @Program OR Project IS NULL)) c
+                WHERE c.rn = 1),
+            wp_cam AS (
+                SELECT P1sElement AS ElementP1S, Wp AS WP, NULLIF(LTRIM(RTRIM(Cam)), N'') AS CAM, NULLIF(LTRIM(RTRIM(Mpk)), N'') AS MPK
+                FROM {db.Table("dict.WpCam")} WHERE Project = @Program AND SupersededAt IS NULL),
+            stawki AS (
+                SELECT CostCenter AS MPK, Year AS Rok, LaborRate FROM {db.Table("dict.DepartmentRate")} WHERE Project IS NULL AND SupersededAt IS NULL),
+            harmonogram AS (
+                SELECT Wp AS WP, Bac AS BAC, BacHours, BacMaterial, Currency AS Waluta
+                FROM {db.Table("dict.ScheduleBudget")} WHERE Project = @Program AND SupersededAt IS NULL)
+            """;
+    }
 
     public IReadOnlyList<RunExclusionRow> Exclusions(string project)
     {
         using var connection = db.Open();
         return connection.Query<RunExclusionRow>(
             $"SELECT CostElement, WbsElement, PartnerObject FROM {db.Table("dict.Exclusion")} WHERE Project = @project AND SupersededAt IS NULL", new { project }).ToList();
-    }
-
-    public IReadOnlySet<string> CostElements(string project)
-    {
-        using var connection = db.Open();
-        return connection.Query<string>(
-                $"SELECT DISTINCT CostElement FROM {db.Table("dict.CostCategory")} WHERE SupersededAt IS NULL AND (Project IS NULL OR Project = @project)",
-                new { project })
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
     }
 
     public void AbandonRunning(Func<long, bool> isAlive, DateTimeOffset at)
@@ -151,9 +311,9 @@ public sealed class SqlRunStore(SqlDatabase db) : IRunStore
     public IReadOnlyList<RunIssueRow> Issues(long pinId)
     {
         using var connection = db.Open();
-        return connection.Query<(long Id, long PinId, string CheckName, string Level, string? Element, string Message, decimal? Amount, int? StepNo)>(
-                $"SELECT Id, PinId, CheckName, Level, Element, Message, Amount, StepNo FROM {_issues} WHERE PinId = @pinId ORDER BY Id", new { pinId })
-            .Select(i => new RunIssueRow(i.Id, i.PinId, i.CheckName, Enum.Parse<CheckLevel>(i.Level), i.Element, i.Message, i.Amount, i.StepNo))
+        return connection.Query<(long Id, long PinId, string CheckName, string Level, string? Element, string Message, decimal? Amount, int? StepNo, string? Details)>(
+                $"SELECT Id, PinId, CheckName, Level, Element, Message, Amount, StepNo, Details FROM {_issues} WHERE PinId = @pinId ORDER BY Id", new { pinId })
+            .Select(i => new RunIssueRow(i.Id, i.PinId, i.CheckName, Enum.Parse<CheckLevel>(i.Level), i.Element, i.Message, i.Amount, i.StepNo, i.Details))
             .ToList();
     }
 
@@ -164,44 +324,22 @@ public sealed class SqlRunStore(SqlDatabase db) : IRunStore
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
     }
 
-    public RunDictionaryData Dictionaries(string project, int year)
+    public RunDictionaryData Dictionaries(string project)
     {
         using var connection = db.Open();
         // Cost Category efektywny: wiersz projektu przed globalnym (jak RUN_PinBalance – cost elementy rozliczeniowe).
-        var effective = connection.Query<(string CostElement, string? CostCategory, string? CostKind, string? Description)>(
+        var effective = connection.Query<(string CostElement, string? CostKind, string? Description)>(
                 $"""
-                SELECT CostElement, NULLIF(LTRIM(RTRIM(CostCategory)), N'') AS CostCategory, NULLIF(LTRIM(RTRIM(CostKind)), N'') AS CostKind, Description
-                FROM (SELECT CostElement, CostCategory, CostKind, Description,
+                SELECT CostElement, NULLIF(LTRIM(RTRIM(CostKind)), N'') AS CostKind, Description
+                FROM (SELECT CostElement, CostKind, Description,
                              ROW_NUMBER() OVER (PARTITION BY CostElement ORDER BY CASE WHEN Project IS NULL THEN 1 ELSE 0 END) AS rn
                       FROM {db.Table("dict.CostCategory")} WHERE SupersededAt IS NULL AND (Project = @project OR Project IS NULL)) c
                 WHERE c.rn = 1
                 """, new { project })
             .ToList();
-        var categories = effective.ToDictionary(r => r.CostElement, r => r.CostCategory, StringComparer.OrdinalIgnoreCase);
-        var kinds = effective.Where(r => r.CostKind is not null).ToDictionary(r => r.CostElement, r => r.CostKind!, StringComparer.OrdinalIgnoreCase);
-        var names = effective.Where(r => !string.IsNullOrWhiteSpace(r.Description)).ToDictionary(r => r.CostElement, r => r.Description!, StringComparer.OrdinalIgnoreCase);
-        var wps = connection.Query<RunWpRow>(
-                $"""
-                SELECT w.Wp, w.Mpk,
-                       CAST(CASE WHEN EXISTS (SELECT 1 FROM {db.Table("dict.ScheduleBudget")} b
-                                              WHERE b.Project = @project AND b.SupersededAt IS NULL AND b.Wp = w.Wp
-                                                AND (ISNULL(b.Bac, 0) <> 0 OR ISNULL(b.BacHours, 0) <> 0 OR ISNULL(b.BacMaterial, 0) <> 0))
-                                 THEN 1 ELSE 0 END AS BIT) AS HasBudget
-                FROM (SELECT DISTINCT Wp, NULLIF(LTRIM(RTRIM(Mpk)), N'') AS Mpk FROM {db.Table("dict.WpCam")}
-                      WHERE Project = @project AND SupersededAt IS NULL) w
-                ORDER BY w.Wp
-                """, new { project })
-            .ToList();
-        var rated = connection.Query<string>(
-                $"SELECT DISTINCT CostCenter FROM {db.Table("dict.DepartmentRate")} WHERE Project IS NULL AND SupersededAt IS NULL AND Year = @year",
-                new { year })
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var budget = connection.QuerySingle<RunBudgetTotals>(
-            $"""
-            SELECT ISNULL(SUM(Bac), 0) AS Bac, ISNULL(SUM(BacHours), 0) AS BacHours, ISNULL(SUM(BacMaterial), 0) AS BacMaterial
-            FROM {db.Table("dict.ScheduleBudget")} WHERE Project = @project AND SupersededAt IS NULL
-            """, new { project });
-        return new RunDictionaryData(categories, wps, rated, year, budget, kinds, names);
+        return new RunDictionaryData(
+            effective.Where(r => r.CostKind is not null).ToDictionary(r => r.CostElement, r => r.CostKind!, StringComparer.OrdinalIgnoreCase),
+            effective.Where(r => !string.IsNullOrWhiteSpace(r.Description)).ToDictionary(r => r.CostElement, r => r.Description!, StringComparer.OrdinalIgnoreCase));
     }
 
     public RunLines ActualsLines(string wbsElement, string costElement, int year, int period, DateTimeOffset asOf, string amountField, int top)
@@ -233,14 +371,6 @@ public sealed class SqlRunStore(SqlDatabase db) : IRunStore
         return new RunLines(rows, count, sum);
     }
 
-    public IReadOnlyList<RunReconciliationRow> Reconciliations()
-    {
-        using var connection = db.Open();
-        return connection.Query<RunReconciliationRow>(
-            $"SELECT ProjectType, Name, RunKind, IsActive, LeftFormula, Comparison, RightFormula, Tolerance, Level FROM {db.Table("dict.RunReconciliation")} " +
-            "WHERE Project IS NULL AND SupersededAt IS NULL ORDER BY Name").ToList();
-    }
-
     public IReadOnlyList<RunProjectRow> Projects()
     {
         using var connection = db.Open();
@@ -253,14 +383,6 @@ public sealed class SqlRunStore(SqlDatabase db) : IRunStore
         using var connection = db.Open();
         return connection.QueryFirstOrDefault<string?>(
             $"SELECT ProjectType FROM {db.Table("meta.Project")} WHERE Code = @project AND SupersededAt IS NULL", new { project });
-    }
-
-    public IReadOnlyList<RunCheckRow> CheckSettings()
-    {
-        using var connection = db.Open();
-        return connection.Query<RunCheckRow>(
-            $"SELECT ProjectType, RuleName, RunKind, IsActive, Level, Threshold FROM {db.Table("dict.RunCheck")} WHERE Project IS NULL AND SupersededAt IS NULL")
-            .ToList();
     }
 
     public RunPinRow? Pin(long pinId)
@@ -290,7 +412,7 @@ public sealed class SqlRunStore(SqlDatabase db) : IRunStore
             connection.Query<RunStepRowData>(
                 $"SELECT Definition, StepNo AS No, Name, Action, WarningGate, Approval, Description FROM {db.Table("dict.RunStep")} {Current}").ToList(),
             connection.Query<RunStepElementRow>(
-                $"SELECT Definition, Step, Element, IsActive, Level, Threshold FROM {db.Table("dict.RunStepElement")} {Current}").ToList());
+                $"SELECT Definition, Step, Element, IsActive FROM {db.Table("dict.RunStepElement")} {Current}").ToList());
     }
 
     public void StartSteps(long pinId, string definitionJson, IReadOnlyList<RunStepDefinition> steps) =>
@@ -329,15 +451,19 @@ public sealed class SqlRunStore(SqlDatabase db) : IRunStore
             """, new { pinId, stepNo, status, startedAt, finishedAt, actedBy, errors, warnings, comment });
     }
 
-    public void ReplaceStepIssues(long pinId, int stepNo, IReadOnlyList<(string Check, CheckLevel Level, string? Element, string Message, decimal? Amount)> issues) =>
+    public void ReplaceStepIssues(long pinId, int stepNo, IReadOnlyList<(string Check, CheckLevel Level, string? Element, string Message, decimal? Amount, string? Details)> issues) =>
         db.InTransaction((connection, transaction) =>
         {
             connection.Execute($"DELETE FROM {_issues} WHERE PinId = @pinId AND StepNo = @stepNo", new { pinId, stepNo }, transaction);
             connection.Execute(
-                $"INSERT INTO {_issues} (PinId, StepNo, CheckName, Level, Element, Message, Amount) VALUES (@pinId, @stepNo, @Check, @Level, @Element, @Message, @Amount)",
-                issues.Select(i => new { pinId, stepNo, i.Check, Level = i.Level.ToString(), i.Element, i.Message, i.Amount }), transaction);
+                $"INSERT INTO {_issues} (PinId, StepNo, CheckName, Level, Element, Message, Amount, Details) VALUES (@pinId, @stepNo, @Check, @Level, @Element, @Message, @Amount, @Details)",
+                issues.Select(i => new { pinId, stepNo, Check = Clip(i.Check, 200), Level = i.Level.ToString(), Element = Clip(i.Element, 400), Message = Clip(i.Message, 2000),
+                    i.Amount, i.Details }), transaction);
             return true;
         });
+
+    // Tekst przycięty do długości kolumny RUN_Issue (opis wyniku reguły z wieloma kolumnami bywa długi).
+    private static string? Clip(string? text, int length) => text is { Length: var n } && n > length ? text[..(length - 1)] + "…" : text;
 
     public void SetPinState(long pinId, string status, DateTimeOffset? finishedAt, string summary)
     {

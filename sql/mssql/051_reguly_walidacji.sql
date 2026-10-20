@@ -1,9 +1,13 @@
-/* PZL-EV – migracja 051: reguły walidacji ACTUALS zapisane formułami (docs/pipeline-fazy.md, rozdz. 4.1).
-   - DICT_RunValidation – „Reguły walidacji” (globalny): nazwa, kontrola (wiersz macierzy wyników), aktywna, filtr wierszy,
-     grupowanie, warunek, kwota, komunikat, komunikat OK, najwyżej N wyników, poziom, próg, opis. Formuły – język reguł walidacji
-     aplikacji (pola wiersza w nawiasach kwadratowych, agregaty SUMA / LICZBA / MAKS …, POPRZ. – poprzedni przebieg).
-   Bez danych startowych – pusty słownik oznacza reguły startowe aplikacji (okno Kontrole na ekranie Przebiegi zapisuje je do edycji).
-   Skrypt jest idempotentny.
+/* PZL-EV – migracja 051: reguły walidacji przebiegu w SQL (docs/pipeline-fazy.md, rozdz. 4.1; tasks/F5.7).
+   - DICT_RunValidation – „Reguły walidacji” (globalny): nazwa, opis, poziom (ERROR / WARNING / INFO), aktywna, zapytanie SQL
+     (jeden SELECT / WITH na tabelach danych uruchomienia – każdy zwrócony wiersz to nieprawidłowość), opis wyniku z kolumnami
+     w { }. Bez danych startowych – pusty słownik oznacza reguły startowe aplikacji (edytor na ekranie Przebiegi zapisuje je do zmiany).
+   - RUN_BalanceEv – dane uruchomienia jak w strukturze programu (tabela „ev” reguł): bez rozliczeniowych, po Wykluczeniach,
+     CAS po narzutach (liczy aplikacja), rodzaj kosztu; element WBS × cost element × rok × okres × rodzaj.
+   - RUN_Issue.Details – wiersz wyniku reguły (JSON kolumna → wartość): porównanie uruchomień, „Pokaż zmiany”; RUN_Issue.CheckName –
+     do 200 znaków (nazwa reguły).
+   Słowniki „Kontrole przebiegu” (047) i „Reguły uzgodnień” (049) oraz kolumny Level i Threshold „Elementów kontrolnych etapów”
+   (050) – nieużywane od tej wersji (bez usuwania danych). Skrypt jest idempotentny.
    Uruchomienie: aplikacja (Diagnostyka → Migracja albo pytanie przy starcie); ręcznie:
        sqlcmd -S pzltestdb.intl.lmco.com -d PZLTEST -E -f 65001 -v Schema=FINOP Prefix=PZLEV_ -i 051_reguly_walidacji.sql */
 
@@ -16,18 +20,11 @@ CREATE TABLE [$(Schema)].[$(Prefix)DICT_RunValidation] (
     Id BIGINT IDENTITY(1,1) NOT NULL CONSTRAINT [PK_$(Prefix)DICT_RunValidation] PRIMARY KEY,
     RowId BIGINT NOT NULL, Version INT NOT NULL, Project VARCHAR(20) NULL,
     Name             NVARCHAR(200)     NOT NULL,
-    CheckName        NVARCHAR(200)     NOT NULL,
-    IsActive         BIT               NOT NULL,
-    RowFilter        NVARCHAR(4000)    NULL,
-    GroupBy          NVARCHAR(400)     NULL,
-    Condition        NVARCHAR(4000)    NOT NULL,
-    AmountFormula    NVARCHAR(4000)    NULL,
-    Message          NVARCHAR(4000)    NOT NULL,
-    OkMessage        NVARCHAR(4000)    NULL,
-    TopN             INT               NULL,
-    Level            NVARCHAR(10)      NOT NULL,
-    Threshold        DECIMAL(28,8)     NULL,
     Description      NVARCHAR(1000)    NULL,
+    Level            NVARCHAR(10)      NOT NULL,
+    IsActive         BIT               NOT NULL,
+    SqlText          NVARCHAR(MAX)     NOT NULL,
+    ResultTemplate   NVARCHAR(2000)    NULL,
     RecordedAt DATETIMEOFFSET(7) NOT NULL, RecordedBy NVARCHAR(128) NOT NULL,
     SupersededAt DATETIMEOFFSET(7) NULL, SupersededBy NVARCHAR(128) NULL,
     DbLogin NVARCHAR(128) NOT NULL CONSTRAINT [DF_$(Prefix)DICT_RunValidation_Login] DEFAULT ORIGINAL_LOGIN(),
@@ -38,7 +35,28 @@ IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'UX_$(Prefix)DICT_RunVali
 CREATE UNIQUE INDEX [UX_$(Prefix)DICT_RunValidation_Key] ON [$(Schema)].[$(Prefix)DICT_RunValidation] (Project, Name) WHERE SupersededAt IS NULL;
 GO
 
+IF OBJECT_ID(N'[$(Schema)].[$(Prefix)RUN_BalanceEv]') IS NULL
+CREATE TABLE [$(Schema)].[$(Prefix)RUN_BalanceEv] (
+    PinId         BIGINT          NOT NULL,
+    WbsElement    NVARCHAR(400)   NOT NULL,
+    CostElement   NVARCHAR(400)   NOT NULL,
+    FiscalYear    INT             NOT NULL,
+    Period        INT             NOT NULL,
+    CostKind      NVARCHAR(20)    NOT NULL,
+    Amount        DECIMAL(28,8)   NOT NULL,
+    INDEX [IX_$(Prefix)RUN_BalanceEv_Pin] CLUSTERED (PinId, WbsElement, CostElement, FiscalYear, Period)
+);
+GO
+
+IF COL_LENGTH(N'[$(Schema)].[$(Prefix)RUN_Issue]', N'Details') IS NULL
+    ALTER TABLE [$(Schema)].[$(Prefix)RUN_Issue] ADD Details NVARCHAR(MAX) NULL;
+GO
+-- Kontrola wyniku = nazwa reguły (do 200 znaków jak w słowniku).
+IF COL_LENGTH(N'[$(Schema)].[$(Prefix)RUN_Issue]', N'CheckName') < 400
+    ALTER TABLE [$(Schema)].[$(Prefix)RUN_Issue] ALTER COLUMN CheckName NVARCHAR(200) NOT NULL;
+GO
+
 IF NOT EXISTS (SELECT 1 FROM [$(Schema)].[$(Prefix)META_SchemaVersion] WHERE Version = 51)
 INSERT INTO [$(Schema)].[$(Prefix)META_SchemaVersion] (Version, Script, MinAppVersion)
-VALUES (51, N'051_reguly_walidacji.sql', '0.58.0');
+VALUES (51, N'051_reguly_walidacji.sql', '0.59.0');
 GO

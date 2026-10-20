@@ -93,9 +93,9 @@ public sealed class ProjectSettingsTests : IDisposable
         Assert.All(balance, r => Assert.Equal("USD", r.Currency));
         Assert.Equal(261.54m + 1000m + 500m + 89.58m, balance.Sum(r => r.Amount));   // Val.in rep.cur. wierszy 2DI473 pliku testowego
         var issues = runs.Issues(second.PinId);
-        Assert.Contains(issues, i => i.CheckName == RunChecks.Volume && i.Level == CheckLevel.Warning && i.Message.StartsWith("Pole kwoty ACTUALS zmienione (ValueObjCrcy → ValueRepCur"));
-        Assert.DoesNotContain(issues, i => i.CheckName == RunChecks.Deviations);
-        Assert.DoesNotContain(issues, i => i.CheckName == RunChecks.Quality && i.Message.StartsWith("Waluta inna"));
+        Assert.Contains(issues, i => i.CheckName == RunService.Pinned && i.Level == CheckLevel.Warning && i.Message.StartsWith("Pole kwoty ACTUALS zmienione (ValueObjCrcy → ValueRepCur"));
+        Assert.DoesNotContain(issues, i => i.CheckName == "Największe odchylenia raport do raportu" && i.Details is not null);   // bez porównania
+        Assert.Equal(CheckLevel.Pass, Assert.Single(issues, i => i.CheckName == "Waluta inna niż waluta kosztów").Level);          // waluta kosztów – przeważająca
 
         // Waluta transakcji nie jest zestawem walutowym – procedury jej nie przyjmują (migracja 042).
         Assert.Contains("nie ma pola kwoty ValueTranCurr", Assert.ThrowsAny<Exception>(() => store.CostsByElement("PAF", "ValueTranCurr")).Message);

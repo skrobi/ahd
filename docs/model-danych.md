@@ -448,8 +448,7 @@ rozpoznawalne po `RecordedBy = N'migracja 046 – kursy przybliżone'` – przed
 **Migracja `sql/mssql/047_kontrole_przebiegu.sql`:** słownik globalny `DICT_RunCheck` – „Kontrole przebiegu” (`ProjectType`:
 Wszystkie / WEWNETRZNY / SAC / CAS, `RuleName` – nazwa reguły katalogu, `RunKind`: Każdy / Zamykający / W środku okresu,
 `IsActive`, `Level` ERROR / WARNING / INFO, `Threshold`, `Description`; klucz bieżących wersji `Project`, `ProjectType`,
-`RuleName`, `RunKind`); bez danych startowych – reguła bez wiersza ma ustawienie domyślne (`docs/pipeline-fazy.md`, rozdz. 4.1).
-Wymaga aplikacji 0.56.0.
+`RuleName`, `RunKind`); bez danych startowych. Wymaga aplikacji 0.56.0. Nieużywany od reguł walidacji w SQL (migracja 051).
 
 **Migracja `sql/mssql/048_definicja_w_uruchomieniu.sql`:** `META_RunPin.CheckSettings` (`NVARCHAR(MAX)`, JSON: kod reguły →
 aktywna, poziom, próg) – ustawienia reguł kontroli użyte w uruchomieniu (słownik „Kontrole przebiegu” w chwili przebiegu);
@@ -459,7 +458,8 @@ uruchomienia (`META_RunPin.Definition`). Wymaga aplikacji 0.56.0.
 **Migracja `sql/mssql/049_reguly_uzgodnien.sql`:** słownik globalny `DICT_RunReconciliation` – „Reguły uzgodnień” (`ProjectType`,
 `Name`, `RunKind`, `IsActive`, `LeftFormula`, `Comparison` =, <=, >=, <>, `RightFormula`, `Tolerance`, `Level`, `Description`; klucz
 bieżących wersji `Project`, `ProjectType`, `Name`, `RunKind`) – własne kontrole przebiegu na miarach programu
-(`docs/pipeline-fazy.md`, rozdz. 4.1); bez danych startowych. Wymaga aplikacji 0.56.0.
+(`docs/pipeline-fazy.md`, rozdz. 4.1); bez danych startowych. Wymaga aplikacji 0.56.0. Nieużywany od reguł walidacji w SQL
+(migracja 051 – uzgodnienia to reguły SQL).
 
 **Migracja `sql/mssql/050_definicje_przebiegow.sql`:** definicje przebiegów (workflow, `docs/pipeline-fazy.md`, rozdz. 4.1) –
 słowniki globalne `DICT_RunDefinition` – „Definicje przebiegów” (`Code`, `ProjectType`, `ProgramCode` – NULL: wszystkie programy
@@ -470,10 +470,16 @@ status, start, koniec, kto, liczba błędów i ostrzeżeń, komentarz potwierdze
 definicja przebiegu użyta w uruchomieniu; NULL – uruchomienie sprzed migracji, bez etapów); `RUN_Issue.StepNo` – etap wyniku.
 Bez danych startowych – bez definicji obowiązuje definicja wbudowana. Wymaga aplikacji 0.57.0.
 
-**Migracja `sql/mssql/051_reguly_walidacji.sql`:** słownik globalny `DICT_RunValidation` – „Reguły walidacji” (`Name`, `CheckName`,
-`IsActive`, `RowFilter`, `GroupBy`, `Condition`, `AmountFormula`, `Message`, `OkMessage`, `TopN`, `Level`, `Threshold`,
-`Description`; klucz bieżących wersji `Project`, `Name`) – reguły walidacji ACTUALS zapisane formułami (`docs/pipeline-fazy.md`,
-rozdz. 4.1); bez danych startowych – pusty słownik oznacza reguły startowe aplikacji. Wymaga aplikacji 0.58.0.
+**Migracja `sql/mssql/051_reguly_walidacji.sql`:** reguły walidacji przebiegu w SQL (`docs/pipeline-fazy.md`, rozdz. 4.1; F5.7) –
+słownik globalny `DICT_RunValidation` – „Reguły walidacji” (`Name`, `Description`, `Level` ERROR / WARNING / INFO, `IsActive`,
+`SqlText` – zapytanie `NVARCHAR(MAX)`, `ResultTemplate` – opis wyniku; klucz bieżących wersji `Project`, `Name`; bez danych
+startowych – pusty słownik oznacza reguły startowe aplikacji); `RUN_BalanceEv` – dane uruchomienia jak w strukturze programu
+(tabela `ev` reguł: `PinId`, `WbsElement`, `CostElement`, `FiscalYear`, `Period`, `CostKind`, `Amount`; bez rozliczeniowych, po
+Wykluczeniach, CAS po narzutach – zapisuje aplikacja przy przypięciu i przed regułami etapu walidacji); `RUN_Issue.Details`
+(`NVARCHAR(MAX)`, JSON kolumna → wartość) – wiersz wyniku reguły do porównania uruchomień i „Pokaż zmiany”; `RUN_Issue.CheckName`
+– `NVARCHAR(200)` (nazwa reguły). `DICT_RunCheck` (047),
+`DICT_RunReconciliation` (049) i kolumny `DICT_RunStepElement.Level` / `Threshold` (050) – nieużywane od tej wersji (O54).
+Wymaga aplikacji 0.59.0.
 
 `META_SourceFile.CanonicalStatus`: „utworzone” – dane kanoniczne zapisane i sprawdzone (widoczne dla odczytów),
 „w toku” – zapis wierszy trwa (odczyty pomijają plik; po awarii wpis i wiersze są usuwane), inna wartość – powód

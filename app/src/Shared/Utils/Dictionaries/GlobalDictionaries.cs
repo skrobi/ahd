@@ -23,8 +23,6 @@ public static partial class GlobalDictionaries
     public const string CasBurdenGroups = "cas-burden-groups";
     public const string CasBurdenFormulas = "cas-burden-formulas";
     public const string CasBurdenRates = "cas-burden-rates";
-    public const string RunChecks = "run-checks";
-    public const string RunReconciliations = "run-reconciliations";
     public const string RunDefinitionHeaders = "run-definitions";
     public const string RunSteps = "run-steps";
     public const string RunStepElements = "run-step-elements";
@@ -220,45 +218,6 @@ public static partial class GlobalDictionaries
         },
         new()
         {
-            Code = RunChecks,
-            Name = "Kontrole przebiegu",
-            Hidden = true,
-            Description = "Definicja przebiegu: reguły kontroli danych przebiegu (docs/pipeline-fazy.md, rozdz. 4.1) dla typu programu i wariantu przebiegu (zamykający okres / w środku okresu) – aktywna, poziom wyniku (ERROR / WARNING / INFO), próg (kwota). Wiersz typu programu ma pierwszeństwo przed „Wszystkie”, wariant przebiegu – przed „Każdy”; reguła bez wiersza – ustawienie domyślne (aktywna, poziom i próg z opisu reguły).",
-            Columns =
-            [
-                new("Typ programu", ColumnType.Choice, Key: true, Choices: RunCheckRules.ProjectTypes),
-                new("Reguła", ColumnType.Choice, Key: true, Choices: [.. RunCheckRules.All.Select(r => r.Name)]),
-                new("Przebieg", ColumnType.Choice, Key: true, Choices: RunCheckRules.RunKinds),
-                new("Aktywna", ColumnType.Boolean, Required: true),
-                new("Poziom", ColumnType.Choice, Choices: RunCheckRules.Levels),
-                new("Próg", ColumnType.Decimal),
-                new("Opis", ColumnType.Text),
-            ],
-            Rules = RunCheckSettingRules,
-        },
-        new()
-        {
-            Code = RunReconciliations,
-            Name = "Reguły uzgodnień",
-            Hidden = true,
-            Description = "Własne kontrole przebiegu bez zmiany programu: lewa strona, warunek (=, <=, >=, <>) i prawa strona z tolerancją; strony to formuły z miar programu w nawiasach kwadratowych, liczb, + - * / i nawiasów, np. [Koszt brutto] <= [BAC] * 1,1. Miary – ekran Przebiegi → Definicja przebiegu. Reguła dla typu programu (albo „Wszystkie”) i wariantu przebiegu (albo „Każdy”); wynik – kontrola „Reguły uzgodnień”: warunek niespełniony – poziom reguły, spełniony – INFO.",
-            Columns =
-            [
-                new("Typ programu", ColumnType.Choice, Key: true, Choices: RunCheckRules.ProjectTypes),
-                new("Nazwa", ColumnType.Text, Key: true),
-                new("Przebieg", ColumnType.Choice, Key: true, Choices: RunCheckRules.RunKinds),
-                new("Aktywna", ColumnType.Boolean, Required: true),
-                new("Lewa strona", ColumnType.Text, Required: true),
-                new("Warunek", ColumnType.Choice, Required: true, Choices: RunMeasures.Comparisons),
-                new("Prawa strona", ColumnType.Text, Required: true),
-                new("Tolerancja", ColumnType.Decimal),
-                new("Poziom", ColumnType.Choice, Required: true, Choices: RunCheckRules.Levels),
-                new("Opis", ColumnType.Text),
-            ],
-            Rules = RunReconciliationRules,
-        },
-        new()
-        {
             Code = RunDefinitionHeaders,
             Name = "Definicje przebiegów",
             Hidden = true,
@@ -266,9 +225,9 @@ public static partial class GlobalDictionaries
             Columns =
             [
                 new("Definicja", ColumnType.Text, Key: true, CheckSimilar: true),
-                new("Typ programu", ColumnType.Choice, Required: true, Choices: RunCheckRules.ProjectTypes),
+                new("Typ programu", ColumnType.Choice, Required: true, Choices: RunRules.ProjectTypes),
                 new("Program", ColumnType.Text),
-                new("Przebieg", ColumnType.Choice, Required: true, Choices: RunCheckRules.RunKinds),
+                new("Przebieg", ColumnType.Choice, Required: true, Choices: RunRules.RunKinds),
                 new("Aktywna", ColumnType.Boolean, Required: true),
                 new("Opis", ColumnType.Text),
             ],
@@ -297,15 +256,13 @@ public static partial class GlobalDictionaries
             Code = RunStepElements,
             Name = "Elementy kontrolne etapów",
             Hidden = true,
-            Description = "Elementy kontrolne etapu z akcją Kontrole: reguła katalogu kontroli przebiegu albo reguła uzgodnień („Uzgodnienie: nazwa”, „Uzgodnienie: *” – wszystkie aktywne reguły uzgodnień typu programu i wariantu); aktywna, poziom i próg (puste – ustawienie domyślne ze słownika „Kontrole przebiegu” albo z katalogu; reguła uzgodnień – jej poziom i tolerancja).",
+            Description = "Reguły etapu z akcją Kontrole: reguła walidacji (nazwa – słownik „Reguły walidacji”), aktywna. Poziom – w regule (kolumny Level i Threshold tabeli nieużywane).",
             Columns =
             [
                 new("Definicja", ColumnType.Text, Key: true, Lookup: RunDefinitionHeaders),
                 new("Etap", ColumnType.Text, Key: true, Lookup: RunSteps),
-                new("Element", ColumnType.Text, Key: true, Lookup: RunReconciliations),
+                new("Element", ColumnType.Text, Key: true, Lookup: RunValidations),
                 new("Aktywny", ColumnType.Boolean, Required: true),
-                new("Poziom", ColumnType.Choice, Choices: RunCheckRules.Levels),
-                new("Próg", ColumnType.Decimal),
                 new("Opis", ColumnType.Text),
             ],
             Rules = RunStepElementRules,
@@ -315,22 +272,15 @@ public static partial class GlobalDictionaries
             Code = RunValidations,
             Name = "Reguły walidacji",
             Hidden = true,
-            Description = "Reguły walidacji ACTUALS zapisane formułami (okno Kontrole na ekranie Przebiegi): filtr wierszy, grupowanie (pola po średniku), warunek grupy, kwota, komunikat z wyrażeniami w {…}, komunikat OK, najwyżej N wyników, poziom, próg ([Próg]). Dane – cała pula ACTUALS programu przed narzutami CAS. Pusty słownik – reguły startowe.",
+            Description = "Reguły walidacji przebiegu w SQL (edytor na ekranie Przebiegi): zapytanie (jeden SELECT / WITH na tabelach danych uruchomienia – biezace, poprzednie, ev, ev_poprzednie, cost_category, wp_cam, stawki, harmonogram); każdy zwrócony wiersz to nieprawidłowość z poziomem reguły, brak wierszy – OK; opis wyniku z kolumnami w { } (puste – kolumny i wartości). Pusty słownik – reguły startowe.",
             Columns =
             [
                 new("Nazwa", ColumnType.Text, Key: true, CheckSimilar: true),
-                new("Kontrola", ColumnType.Text, Required: true),
-                new("Aktywna", ColumnType.Boolean, Required: true),
-                new("Filtr", ColumnType.Text),
-                new("Grupuj", ColumnType.Text),
-                new("Warunek", ColumnType.Text, Required: true),
-                new("Kwota", ColumnType.Text),
-                new("Komunikat", ColumnType.Text, Required: true),
-                new("Komunikat OK", ColumnType.Text),
-                new("Najwyżej", ColumnType.Integer),
-                new("Poziom", ColumnType.Choice, Required: true, Choices: RunCheckRules.Levels),
-                new("Próg", ColumnType.Decimal),
                 new("Opis", ColumnType.Text),
+                new("Poziom", ColumnType.Choice, Required: true, Choices: RunRules.Levels),
+                new("Aktywna", ColumnType.Boolean, Required: true),
+                new("Zapytanie SQL", ColumnType.Text, Required: true),
+                new("Opis wyniku", ColumnType.Text),
             ],
             Rules = ValidationRuleRules,
         },
@@ -361,23 +311,15 @@ public static partial class GlobalDictionaries
         new(Get(CasBurdenGroups), "dict.CasBurdenGroup", [("Grupa", "BurdenGroup"), ("Opis", "Description")]),
         new(Get(CasBurdenFormulas), "dict.CasFormula", [("Grupa", "GroupId"), ("Kategoria", "PoolId"), ("Formuła", "Formula")]),
         new(Get(CasBurdenRates), "dict.CasBurdenRate", [("Kategoria", "PoolId"), ("Od", "ValidFrom"), ("Do", "ValidTo"), ("Wskaźnik", "Rate"), ("Opis", "Description")]),
-        new(Get(RunChecks), "dict.RunCheck",
-            [("Typ programu", "ProjectType"), ("Reguła", "RuleName"), ("Przebieg", "RunKind"), ("Aktywna", "IsActive"), ("Poziom", "Level"), ("Próg", "Threshold"), ("Opis", "Description")]),
-        new(Get(RunReconciliations), "dict.RunReconciliation",
-            [("Typ programu", "ProjectType"), ("Nazwa", "Name"), ("Przebieg", "RunKind"), ("Aktywna", "IsActive"), ("Lewa strona", "LeftFormula"),
-             ("Warunek", "Comparison"), ("Prawa strona", "RightFormula"), ("Tolerancja", "Tolerance"), ("Poziom", "Level"), ("Opis", "Description")]),
         new(Get(RunDefinitionHeaders), "dict.RunDefinition",
             [("Definicja", "Code"), ("Typ programu", "ProjectType"), ("Program", "ProgramCode"), ("Przebieg", "RunKind"), ("Aktywna", "IsActive"), ("Opis", "Description")]),
         new(Get(RunSteps), "dict.RunStep",
             [("Definicja", "Definition"), ("Kolejność", "StepNo"), ("Etap", "Name"), ("Akcja", "Action"), ("Bramka WARNING", "WarningGate"),
              ("Zatwierdzenie", "Approval"), ("Opis", "Description")]),
         new(Get(RunValidations), "dict.RunValidation",
-            [("Nazwa", "Name"), ("Kontrola", "CheckName"), ("Aktywna", "IsActive"), ("Filtr", "RowFilter"), ("Grupuj", "GroupBy"), ("Warunek", "Condition"),
-             ("Kwota", "AmountFormula"), ("Komunikat", "Message"), ("Komunikat OK", "OkMessage"), ("Najwyżej", "TopN"), ("Poziom", "Level"), ("Próg", "Threshold"),
-             ("Opis", "Description")]),
+            [("Nazwa", "Name"), ("Opis", "Description"), ("Poziom", "Level"), ("Aktywna", "IsActive"), ("Zapytanie SQL", "SqlText"), ("Opis wyniku", "ResultTemplate")]),
         new(Get(RunStepElements), "dict.RunStepElement",
-            [("Definicja", "Definition"), ("Etap", "Step"), ("Element", "Element"), ("Aktywny", "IsActive"), ("Poziom", "Level"), ("Próg", "Threshold"),
-             ("Opis", "Description")]),
+            [("Definicja", "Definition"), ("Etap", "Step"), ("Element", "Element"), ("Aktywny", "IsActive"), ("Opis", "Description")]),
     ];
 
     private static IEnumerable<Issue> CalendarRules(IReadOnlyList<DictRow> rows)
@@ -503,72 +445,20 @@ public static partial class GlobalDictionaries
                     DictionaryValidator.RowElement(x.Index));
     }
 
-    /// <summary>„Elementy kontrolne etapów”: element niepusty, próg nieujemny; próg reguły wbudowanej bez progu – ostrzeżenie.</summary>
-    /// <summary>„Reguły walidacji”: składnia formuł (RunValidationLanguage), nazwa spoza reguł wbudowanych, Najwyżej ≥ 0, próg ≥ 0.</summary>
+    /// <summary>„Reguły walidacji”: zapytanie tylko do odczytu (RunRules.Check – jeden SELECT / WITH, bez instrukcji zmieniających dane).</summary>
     private static IEnumerable<Issue> ValidationRuleRules(IReadOnlyList<DictRow> rows)
     {
         for (var i = 0; i < rows.Count; i++)
-        {
-            var at = DictionaryValidator.RowElement(i);
-            if (RunCheckRules.ByName(rows[i]["Nazwa"]) is not null)
-                yield return Issue.Error($"Nazwa „{rows[i]["Nazwa"]}” zajęta przez regułę wbudowaną (Walidacja EV)", at);
-            if (Int(rows[i]["Najwyżej"]) is < 0)
-                yield return Issue.Error("Najwyżej – liczba od 0 (0 – wszystkie wyniki)", at);
-            if (Dec(rows[i]["Próg"]) is < 0)
-                yield return Issue.Error("Próg nie może być ujemny", at);
-            if (RunValidationRows.Rule(rows[i]) is { } rule)
-                foreach (var error in RunValidationLanguage.Validate(rule))
-                    yield return Issue.Error(error, at);
-        }
+            if (rows[i]["Zapytanie SQL"] is { } sql && RunRules.Check(sql) is { } error)
+                yield return Issue.Error($"Zapytanie SQL: {error}", DictionaryValidator.RowElement(i));
     }
 
+    /// <summary>„Elementy kontrolne etapów”: element niepusty (nazwy reguł sprawdza zapis szablonu – RunDefinitions.Validate z bieżącymi regułami).</summary>
     private static IEnumerable<Issue> RunStepElementRules(IReadOnlyList<DictRow> rows)
     {
         for (var i = 0; i < rows.Count; i++)
-        {
-            var at = DictionaryValidator.RowElement(i);
-            var element = rows[i]["Element"]?.Trim() ?? "";
-            var rule = RunCheckRules.ByName(element);
-            // Nazwy reguł walidacji (słownik „Reguły walidacji”) sprawdza zapis szablonu (RunDefinitions.Validate z bieżącymi regułami).
-            if (element.Length == 0)
-                yield return Issue.Error("Element pusty – reguła walidacji, reguła wbudowana albo „Uzgodnienie: nazwa”", at);
-            if (Dec(rows[i]["Próg"]) is { } threshold)
-            {
-                if (threshold < 0)
-                    yield return Issue.Error("Próg nie może być ujemny", at);
-                else if (rule is { Threshold: null })
-                    yield return Issue.Warning($"Reguła „{rule.Name}” nie ma progu – próg pominięty", at);
-            }
-        }
-    }
-
-    /// <summary>„Reguły uzgodnień”: formuły stron poprawne (znane miary, składnia), tolerancja nieujemna.</summary>
-    private static IEnumerable<Issue> RunReconciliationRules(IReadOnlyList<DictRow> rows)
-    {
-        for (var i = 0; i < rows.Count; i++)
-        {
-            var at = DictionaryValidator.RowElement(i);
-            foreach (var side in new[] { "Lewa strona", "Prawa strona" })
-                if (rows[i][side] is { } text && RunFormula.Parse(text).Error is { } error)
-                    yield return Issue.Error($"{side}: {error}", at);
-            if (Dec(rows[i]["Tolerancja"]) is < 0)
-                yield return Issue.Error("Tolerancja nie może być ujemna", at);
-        }
-    }
-
-    /// <summary>„Kontrole przebiegu”: próg nieujemny; próg reguły bez progu – ostrzeżenie (pomijany).</summary>
-    private static IEnumerable<Issue> RunCheckSettingRules(IReadOnlyList<DictRow> rows)
-    {
-        for (var i = 0; i < rows.Count; i++)
-        {
-            var at = DictionaryValidator.RowElement(i);
-            if (Dec(rows[i]["Próg"]) is not { } threshold)
-                continue;
-            if (threshold < 0)
-                yield return Issue.Error("Próg nie może być ujemny", at);
-            else if (RunCheckRules.ByName(rows[i]["Reguła"]) is { Threshold: null } rule)
-                yield return Issue.Warning($"Reguła „{rule.Name}” nie ma progu – próg pominięty", at);
-        }
+            if (string.IsNullOrWhiteSpace(rows[i]["Element"]))
+                yield return Issue.Error("Element pusty – nazwa reguły walidacji", DictionaryValidator.RowElement(i));
     }
 
     /// <summary>„Wskaźniki narzutu CAS”: wskaźnik nieujemny (okresy obowiązywania – DictionaryValidator, Validity).</summary>
@@ -692,8 +582,6 @@ public static partial class GlobalDictionaries
         DepartmentRates => rows.Where(r => r["MPK"] is not null).GroupBy(r => r["MPK"]!, StringComparer.OrdinalIgnoreCase)
             .Select(g => new LookupOption(g.Key, g.Select(r => r["Department"]).FirstOrDefault(d => d is not null) is { } department ? $"{g.Key} – {department}" : g.Key))
             .OrderBy(o => o.Value, StringComparer.OrdinalIgnoreCase).ToList(),
-        // Element kontrolny etapu: reguły katalogu, wszystkie reguły uzgodnień, reguły uzgodnień po nazwie (wiersze „Reguły uzgodnień”).
-        RunReconciliations => RunDefinitions.Elements(rows.Select(r => r["Nazwa"]).OfType<string>()).Select(e => new LookupOption(e, e)).ToList(),
         // Etap elementu kontrolnego: nazwy etapów (wszystkich definicji; definicję wskazuje kolumna Definicja).
         RunSteps => rows.Select(r => r["Etap"]).OfType<string>().Distinct(StringComparer.OrdinalIgnoreCase).Order().Select(e => new LookupOption(e, e)).ToList(),
         _ => rows.Select(r => Get(code).KeyOf(r.Values)).Distinct().Select(k => new LookupOption(k, k)).ToList(),

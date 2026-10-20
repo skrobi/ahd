@@ -61,7 +61,7 @@ public sealed class AcwpChangesViewModel : ObservableObject
     private readonly AcwpChangesRequest _request;
     private readonly string _project;
     private readonly IReadOnlySet<string>? _wbsElements;
-    private decimal _jumpFactor = RunCheckRules.CostKindJump.Threshold ?? 3m;
+    private readonly decimal _jumpFactor = AcwpChanges.JumpFactor;
     private IReadOnlyList<AcwpBarSeries> _chart = [];
     private readonly Dictionary<long, IReadOnlyList<RunBalanceRow>> _balances = [];
     private RunDictionaryData? _dictionaries;
@@ -104,7 +104,7 @@ public sealed class AcwpChangesViewModel : ObservableObject
     public IReadOnlyList<AcwpBarSeries> Chart { get => _chart; private set => SetProperty(ref _chart, value); }
 
     public string ChartNote => $"Koszt zaksięgowany w okresie (uruchomienie „jest”); kolor ostrzeżenia – skok: przyrost > {_jumpFactor:0.##} × średni przyrost "
-                               + $"z {RunCheckRules.IncrementPeriods} poprzednich okresów (próg – słownik „Kontrole przebiegu”, reguła „Skok przyrostu kosztu”).";
+                               + $"z {AcwpChanges.IncrementPeriods} poprzednich okresów (jak reguła startowa „Skok przyrostu kosztu”).";
 
     public string Title { get; }
 
@@ -112,7 +112,7 @@ public sealed class AcwpChangesViewModel : ObservableObject
 
     public ICommand Swap { get; }
 
-    public IReadOnlyList<string> Kinds { get; } = [AllKinds, .. RunMeasures.Kinds];
+    public IReadOnlyList<string> Kinds { get; } = [AllKinds, .. RunCostKinds.All];
 
     public IReadOnlyList<AcwpPinOption> Pins { get; private set; } = [];
 
@@ -191,13 +191,10 @@ public sealed class AcwpChangesViewModel : ObservableObject
     {
         await Try(async () =>
         {
-            var (pins, dictionaries, jump) = await Busy.Run("Wczytywanie uruchomień przebiegu…", () =>
+            var (pins, dictionaries) = await Busy.Run("Wczytywanie uruchomień przebiegu…", () =>
                 (_store.Pins(_project, 60).Where(p => p.Rows > 0 && p.Status is not (RunStatuses.Running or RunStatuses.Failed or RunStatuses.Abandoned)).ToList(),
-                    _store.Dictionaries(_project, DateTime.Today.Year),
-                    RunChecks.Settings(_store.CheckSettings(), _store.ProjectType(_project) ?? "", isClosing: false)[RunCheckRules.CostKindJump.Code]));
+                    _store.Dictionaries(_project)));
             _dictionaries = dictionaries;
-            _jumpFactor = jump.Threshold ?? _jumpFactor;
-            OnPropertyChanged(nameof(ChartNote));
             Pins = pins.Select(p => new AcwpPinOption(p)).ToList();
             OnPropertyChanged(nameof(Pins));
             if (Pins.Count == 0)
@@ -325,7 +322,7 @@ public sealed class AcwpChangesViewModel : ObservableObject
         var max = series.SelectMany(s => s.Increments).Select(i => i.Amount).DefaultIfEmpty(0).Max();
         return series.Select(s => new AcwpBarSeries(s.Kind, s.Increments.Select(i => new AcwpBar(i.Label,
             max <= 0 || i.Amount <= 0 ? 1 : Math.Max(1, (double)(i.Amount / max) * BarHeight), i.IsJump,
-            $"{i.Label}: {i.Amount:#,0.00} (średni przyrost {RunCheckRules.IncrementPeriods} poprzednich okresów {i.Average:#,0.00})"
+            $"{i.Label}: {i.Amount:#,0.00} (średni przyrost {AcwpChanges.IncrementPeriods} poprzednich okresów {i.Average:#,0.00})"
             + (i.IsJump ? " – skok" : ""))).ToList(), s.Increments.Count(i => i.IsJump))).ToList();
     }
 

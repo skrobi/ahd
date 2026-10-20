@@ -47,8 +47,9 @@ public sealed record RunPinRow(
     public string Label => $"{Code} #{PinNo} – {Status}";
 }
 
-/// <summary>Wynik kontroli przebiegu – run.Issue.</summary>
-public sealed record RunIssueRow(long Id, long PinId, string CheckName, CheckLevel Level, string? Element, string Message, decimal? Amount, int? StepNo = null);
+/// <summary>Wynik kontroli przebiegu – run.Issue; wynik reguły walidacji – CheckName = nazwa reguły, Details – wiersz wyniku (JSON, RunRules.Details).</summary>
+public sealed record RunIssueRow(long Id, long PinId, string CheckName, CheckLevel Level, string? Element, string Message, decimal? Amount, int? StepNo = null,
+    string? Details = null);
 
 /// <summary>
 /// Dane ACTUALS projektu w chwili przypięcia (run.Balance): element WBS × cost element × rok × okres × rozliczenie

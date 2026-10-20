@@ -1,5 +1,4 @@
 using System.Text.Json;
-using PzlEv.Modules.Runs.Data;
 using PzlEv.Shared.Models.Db;
 using PzlEv.Shared.Models.Pipeline;
 
@@ -7,7 +6,7 @@ namespace PzlEv.Modules.Runs.Services;
 
 /// <summary>
 /// Przebieg etapowy (docs/pipeline-fazy.md, rozdz. 1.1–1.2 i 4.1): bramki etapów, kolejny etap do wykonania, potwierdzenie,
-/// ponowne wykonanie i stan uruchomienia z etapów; ustawienia reguł kontroli etapu z jego elementów kontrolnych. Bez bazy – stan
+/// ponowne wykonanie i stan uruchomienia z etapów; reguły walidacji etapu z jego elementów kontrolnych. Bez bazy – stan
 /// etapów przekazuje RunService.
 /// </summary>
 public static class RunWorkflowEngine
@@ -64,70 +63,22 @@ public static class RunWorkflowEngine
     }
 
     /// <summary>
-    /// Ustawienia reguł katalogu dla etapu kontroli: reguły spoza elementów etapu – wyłączone; element – aktywny (w definicji
-    /// wbudowanej także wg słownika „Kontrole przebiegu”), poziom i próg elementu, a puste – ze słownika „Kontrole przebiegu” (defaults).
+    /// Reguły walidacji etapu: element etapu z nazwą reguły (słownik „Reguły walidacji”) – reguła, gdy element i reguła są aktywne;
+    /// Missing – nazwy spoza słownika (w przebiegu – ostrzeżenie „niesprawdzona”).
     /// </summary>
-    public static IReadOnlyDictionary<string, RunCheckSetting> Settings(RunStepDefinition step, IReadOnlyDictionary<string, RunCheckSetting> defaults, bool builtIn) =>
-        RunCheckRules.All.ToDictionary(rule => rule.Code, rule =>
-        {
-            var basic = defaults.GetValueOrDefault(rule.Code) ?? RunCheckRules.Default(rule);
-            return step.Elements.FirstOrDefault(e => RunCheckRules.ByName(e.Element) == rule) is { } element
-                ? new RunCheckSetting(element.Active && (!builtIn || basic.Active), element.Level ?? basic.Level,
-                    rule.Threshold is null ? null : element.Threshold ?? basic.Threshold)
-                : basic with { Active = false };
-        });
-
-    /// <summary>
-    /// Reguły walidacji etapu (formuły – słownik „Reguły walidacji”): element etapu z nazwą reguły – reguła aktywna z poziomem i progiem
-    /// elementu (puste – reguły); reguła wyłączona w słowniku albo element nieaktywny – pominięte; Missing – nazwy spoza słownika
-    /// i katalogu reguł wbudowanych.
-    /// </summary>
-    public static (IReadOnlyList<RunValidationRule> Rules, IReadOnlyList<string> Missing) Validations(RunStepDefinition step, IReadOnlyList<RunValidationRule> library)
+    public static (IReadOnlyList<RunRule> Rules, IReadOnlyList<string> Missing) Rules(RunStepDefinition step, IReadOnlyList<RunRule> library)
     {
-        var rules = new List<RunValidationRule>();
+        var rules = new List<RunRule>();
         var missing = new List<string>();
-        foreach (var element in step.Elements.Where(e => !RunDefinitions.IsReconciliation(e.Element) && RunCheckRules.ByName(e.Element) is null))
+        foreach (var element in step.Elements)
         {
             var rule = library.FirstOrDefault(r => string.Equals(r.Name, element.Element.Trim(), StringComparison.OrdinalIgnoreCase));
             if (rule is null)
                 missing.Add(element.Element.Trim());
             else if (element.Active && rule.IsActive)
-                rules.Add(rule with { Level = element.Level ?? rule.Level, Threshold = element.Threshold ?? rule.Threshold });
+                rules.Add(rule);
         }
         return (rules, missing);
-    }
-
-    /// <summary>
-    /// Reguły uzgodnień etapu: „Uzgodnienie: *” – aktywne reguły typu programu i wariantu; „Uzgodnienie: nazwa” – reguła o tej nazwie
-    /// (wiersz typu i wariantu przed innymi) z poziomem i tolerancją elementu; Missing – nazwy reguł, których nie ma w słowniku.
-    /// </summary>
-    public static (IReadOnlyList<RunReconciliationRow> Rules, IReadOnlyList<string> Missing) Reconciliations(RunStepDefinition step,
-        IReadOnlyList<RunReconciliationRow> library, string projectType, bool isClosing)
-    {
-        var rules = new List<RunReconciliationRow>();
-        var missing = new List<string>();
-        var applicable = RunReconciliations.Applicable(library, projectType, isClosing);
-        foreach (var element in step.Elements.Where(e => e.Active && RunDefinitions.IsReconciliation(e.Element)))
-        {
-            if (element.Element.Trim() == RunDefinitions.AllReconciliations)
-            {
-                rules.AddRange(applicable.Where(r => r.IsActive));
-                continue;
-            }
-            var name = RunDefinitions.ReconciliationName(element.Element);
-            var found = applicable.FirstOrDefault(r => string.Equals(r.Name, name, StringComparison.OrdinalIgnoreCase))
-                        ?? library.FirstOrDefault(r => string.Equals(r.Name, name, StringComparison.OrdinalIgnoreCase));
-            if (found is null)
-                missing.Add(name);
-            else
-                rules.Add(found with
-                {
-                    IsActive = true,
-                    Level = element.Level is { } level ? RunCheckRules.Levels[level switch { CheckLevel.Error => 0, CheckLevel.Warning => 1, _ => 2 }] : found.Level,
-                    Tolerance = element.Threshold ?? found.Tolerance,
-                });
-        }
-        return (rules.DistinctBy(r => r.Name, StringComparer.OrdinalIgnoreCase).ToList(), missing);
     }
 
     public static string Serialize(RunDefinition definition) => JsonSerializer.Serialize(definition);

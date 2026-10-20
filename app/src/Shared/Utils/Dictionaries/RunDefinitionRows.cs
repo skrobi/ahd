@@ -1,7 +1,6 @@
 using System.Globalization;
 using PzlEv.Shared.Models.Dictionaries;
 using PzlEv.Shared.Models.Pipeline;
-using PzlEv.Shared.Utils.Files;
 
 namespace PzlEv.Shared.Utils.Dictionaries;
 
@@ -13,7 +12,7 @@ public static class RunDefinitionRows
 {
     public static IReadOnlyList<RunDefinitionHeaderRow> Headers(IEnumerable<DictRow> rows) =>
         rows.Where(r => r["Definicja"] is not null)
-            .Select(r => new RunDefinitionHeaderRow(r["Definicja"]!, r["Typ programu"] ?? RunCheckRules.AllTypes, r["Aktywna"] == "tak", r["Opis"])).ToList();
+            .Select(r => new RunDefinitionHeaderRow(r["Definicja"]!, r["Typ programu"] ?? RunRules.AllTypes, r["Aktywna"] == "tak", r["Opis"])).ToList();
 
     public static IReadOnlyList<RunStepRowData> Steps(IEnumerable<DictRow> rows) =>
         rows.Where(r => r["Definicja"] is not null && r["Etap"] is not null)
@@ -22,13 +21,12 @@ public static class RunDefinitionRows
 
     public static IReadOnlyList<RunStepElementRow> Elements(IEnumerable<DictRow> rows) =>
         rows.Where(r => r["Definicja"] is not null && r["Etap"] is not null && r["Element"] is not null)
-            .Select(r => new RunStepElementRow(r["Definicja"]!, r["Etap"]!, r["Element"]!, r["Aktywny"] == "tak", r["Poziom"],
-                decimal.TryParse(r["Próg"], NumberStyles.Number, CultureInfo.InvariantCulture, out var threshold) ? threshold : null)).ToList();
+            .Select(r => new RunStepElementRow(r["Definicja"]!, r["Etap"]!, r["Element"]!, r["Aktywny"] == "tak")).ToList();
 
     /// <summary>Wartości wiersza szablonu (bez wariantu i programu – „Każdy”, puste).</summary>
     public static IReadOnlyDictionary<string, string?> Header(RunDefinition definition, bool isActive) => new Dictionary<string, string?>
     {
-        ["Definicja"] = definition.Code, ["Typ programu"] = definition.ProjectType, ["Program"] = null, ["Przebieg"] = RunCheckRules.AnyRun,
+        ["Definicja"] = definition.Code, ["Typ programu"] = definition.ProjectType, ["Program"] = null, ["Przebieg"] = RunRules.AnyRun,
         ["Aktywna"] = YesNo(isActive), ["Opis"] = definition.Description,
     };
 
@@ -42,9 +40,7 @@ public static class RunDefinitionRows
     public static IReadOnlyList<IReadOnlyDictionary<string, string?>> ElementValues(RunDefinition definition) =>
         definition.Steps.OrderBy(s => s.No).SelectMany(s => s.Elements.Select(e => (IReadOnlyDictionary<string, string?>)new Dictionary<string, string?>
         {
-            ["Definicja"] = definition.Code, ["Etap"] = s.Name, ["Element"] = e.Element, ["Aktywny"] = YesNo(e.Active),
-            ["Poziom"] = e.Level is { } level ? RunCheckRules.Levels[level switch { CheckLevel.Error => 0, CheckLevel.Warning => 1, _ => 2 }] : null,
-            ["Próg"] = e.Threshold is { } threshold ? PolishNumber.ToCanonical(threshold) : null, ["Opis"] = null,
+            ["Definicja"] = definition.Code, ["Etap"] = s.Name, ["Element"] = e.Element, ["Aktywny"] = YesNo(e.Active), ["Opis"] = null,
         })).ToList();
 
     /// <summary>

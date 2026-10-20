@@ -9,7 +9,7 @@ using Xunit;
 
 namespace PzlEv.Tests.Runs;
 
-/// <summary>Szablony przebiegów na bazie: szablony startowe, zapis zmian z historią, usunięcie, ustawienia domyślne kontroli.</summary>
+/// <summary>Szablony przebiegów i reguły walidacji na bazie: szablony startowe, zapis zmian z historią, usunięcie; reguły – startowe, zapis, odrzucenie.</summary>
 public sealed class RunTemplateServiceTests : IDisposable
 {
     private readonly TestServices _services = new();
@@ -35,18 +35,18 @@ public sealed class RunTemplateServiceTests : IDisposable
         Assert.Equal(RunDefinitions.CasCode, RunDefinitions.For(headers, steps, elements, null, "CAS").Code);
         Assert.Equal(RunDefinitions.InternalCode, RunDefinitions.For(headers, steps, elements, null, "SAC").Code);
 
-        // Bez etapu „Spójność ze słownikami”, walidacja z jedną kontrolą – etapy o tych samych numerach zachowują historię.
+        // Bez etapu „Walidacja EV”, walidacja z jedną regułą – etapy o tych samych numerach zachowują historię.
         var cas = templates[0].Definition;
         var stepIds = dictionaries.Load(GlobalDictionaries.Get(GlobalDictionaries.RunSteps)).Where(r => r["Definicja"] == "CAS").ToDictionary(r => r["Kolejność"]!, r => r.RowId);
+        var rule = RunRules.EvStarters[^1].Name;
         var changed = cas with
         {
-            Steps = [.. cas.Steps.Where(s => s.Name != RunCheckRules.EvArea)
-                .Select(s => s.No == 3 ? s with { Elements = [new(RunCheckRules.CostKindDecrease.Name, Level: CheckLevel.Warning)] } : s)],
+            Steps = [.. cas.Steps.Where(s => s.Name != RunRules.EvArea).Select(s => s.No == 3 ? s with { Elements = [new(rule)] } : s)],
         };
         Assert.Equal(SaveStatus.Saved, service.Save(changed, isActive: true).Status);
         var reloaded = service.Load().Single(t => t.Definition.Code == "CAS").Definition;
         Assert.Equal([1, 2, 3, 4], reloaded.Steps.Select(s => s.No));
-        Assert.Equal(new RunElementSetting(RunCheckRules.CostKindDecrease.Name, true, CheckLevel.Warning), Assert.Single(reloaded.Steps[2].Elements));
+        Assert.Equal(new RunElementSetting(rule), Assert.Single(reloaded.Steps[2].Elements));
         Assert.Equal(stepIds["1"], dictionaries.Load(GlobalDictionaries.Get(GlobalDictionaries.RunSteps)).Single(r => r["Definicja"] == "CAS" && r["Kolejność"] == "1").RowId);
         Assert.Equal(SaveStatus.Rejected, service.Save(changed with { Steps = changed.Steps.Skip(1).ToList() }, true).Status);   // bez importu źródeł
 
@@ -56,46 +56,39 @@ public sealed class RunTemplateServiceTests : IDisposable
     }
 
     [SqlFact]
-    public void Check_defaults_store_only_differences_from_catalog()
-    {
-        _database = new TestDatabase();
-        var dictionaries = new DictionaryService(new SqlDictionaryStore(_database.Sql, _services.Clock, _services.User, GlobalDictionaries.Tables),
-            new SqlJournal(_database.Sql, _services.Clock, _services.User));
-        var service = new RunTemplateService(dictionaries, new SqlRunStore(_database.Sql));
-        var settings = RunCheckRules.All.ToDictionary(r => r.Code, RunCheckRules.Default);
-        settings[RunCheckRules.CostKindJump.Code] = new RunCheckSetting(true, CheckLevel.Error, 4m);
-
-        Assert.Equal(SaveStatus.Saved, service.SaveCheckDefaults(settings).Status);
-
-        Assert.Equal(new RunCheckSetting(true, CheckLevel.Error, 4m), service.CheckDefaults()[RunCheckRules.CostKindJump.Code]);
-        Assert.Single(dictionaries.Load(GlobalDictionaries.Get(GlobalDictionaries.RunChecks)));
-        settings[RunCheckRules.CostKindJump.Code] = RunCheckRules.Default(RunCheckRules.CostKindJump);
-        Assert.Equal(SaveStatus.Saved, service.SaveCheckDefaults(settings).Status);
-        Assert.Empty(dictionaries.Load(GlobalDictionaries.Get(GlobalDictionaries.RunChecks)));
-    }
-
-    [SqlFact]
-    public void Validation_rules_start_from_starters_save_with_history_and_feed_the_run()
+    public void Rules_start_from_starters_save_with_history_reject_data_changes_and_report_rules_missing_in_templates()
     {
         _database = new TestDatabase();
         var dictionaries = new DictionaryService(new SqlDictionaryStore(_database.Sql, _services.Clock, _services.User, GlobalDictionaries.Tables),
             new SqlJournal(_database.Sql, _services.Clock, _services.User));
         var store = new SqlRunStore(_database.Sql);
         var service = new RunTemplateService(dictionaries, store);
+        service.CreateStarters();
 
-        var (rules, starters) = service.ValidationRules();
+        var (rules, starters) = service.Rules();
         Assert.True(starters);
-        Assert.Equal(RunValidationRules.Starters, store.ValidationRules());
+        Assert.Equal(RunRules.Starters, store.Rules());
 
-        var changed = rules.Select(r => r.Name == "Wiersze bez elementu WBS" ? r with { Level = CheckLevel.Error, Threshold = 5m } : r)
+        var changed = rules.Select(r => r.Name == "Wiersze bez elementu WBS" ? r with { Level = CheckLevel.Error, ResultTemplate = null } : r)
             .Where(r => r.Name != "Waluta inna niż waluta kosztów").ToList();
-        Assert.Equal(SaveStatus.Saved, service.SaveValidations(changed).Status);
+        var outcome = service.SaveRules(changed);
 
-        var saved = store.ValidationRules();
-        Assert.False(service.ValidationRules().Starters);
+        Assert.Equal(SaveStatus.Saved, outcome.Status);
+        Assert.Contains("Szablony przebiegów używają reguł, których już nie ma: Waluta inna niż waluta kosztów", outcome.Message);
+        var saved = store.Rules();
+        Assert.False(service.Rules().Starters);
         Assert.Equal(changed.Count, saved.Count);
-        Assert.Equal((CheckLevel.Error, 5m), saved.Where(r => r.Name == "Wiersze bez elementu WBS").Select(r => (r.Level, r.Threshold!.Value)).Single());
-        Assert.Equal(RunValidationRules.Starter("Netowanie do 0 w okresach zamkniętych"), saved.Single(r => r.Name.StartsWith("Netowanie")));
-        Assert.Equal(SaveStatus.Rejected, service.SaveValidations([changed[0] with { Condition = "SUMA([Kwota] > 0" }]).Status);   // błąd składni
+        Assert.Equal((CheckLevel.Error, (string?)null), saved.Where(r => r.Name == "Wiersze bez elementu WBS").Select(r => (r.Level, r.ResultTemplate)).Single());
+        Assert.Equal(RunRules.Starter("Netowanie do 0 w okresach zamkniętych"), saved.Single(r => r.Name.StartsWith("Netowanie")));
+        var rowId = dictionaries.Load(GlobalDictionaries.Get(GlobalDictionaries.RunValidations)).Single(r => r["Nazwa"] == "WP bez MPK").RowId;
+        Assert.Equal(SaveStatus.Saved, service.SaveRules([.. saved.Select(r => r.Name == "WP bez MPK" ? r with { IsActive = false } : r)]).Status);
+        Assert.Equal(rowId, dictionaries.Load(GlobalDictionaries.Get(GlobalDictionaries.RunValidations)).Single(r => r["Nazwa"] == "WP bez MPK").RowId);   // historia
+
+        // Zapytanie zmieniające dane – odrzucone przy zapisie, słownik bez zmian.
+        var rejected = service.SaveRules([.. saved, new RunRule("Zła", CheckLevel.Error, true, "DELETE FROM biezace")]);
+        Assert.Equal(SaveStatus.Rejected, rejected.Status);
+        Assert.Contains(rejected.Issues, i => i.Message.Contains("Zapytanie musi zaczynać się od SELECT albo WITH"));
+        Assert.Equal(SaveStatus.Rejected, service.SaveRules([new RunRule("Zła", CheckLevel.Error, true, "SELECT * INTO kopia FROM biezace")]).Status);
+        Assert.Equal(saved.Count, store.Rules().Count);
     }
 }

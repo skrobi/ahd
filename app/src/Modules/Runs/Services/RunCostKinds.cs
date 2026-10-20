@@ -1,6 +1,5 @@
 using PzlEv.Modules.Runs.Data;
 using PzlEv.Shared.Models.Db;
-using PzlEv.Shared.Models.Pipeline;
 using PzlEv.Shared.Utils.Dictionaries;
 
 namespace PzlEv.Modules.Runs.Services;
@@ -12,6 +11,9 @@ namespace PzlEv.Modules.Runs.Services;
 /// </summary>
 public static class RunCostKinds
 {
+    /// <summary>Rodzaje kosztu w kolejności (jak ACWP Hours / Materials / Other struktury).</summary>
+    public static IReadOnlyList<string> All { get; } = [GlobalDictionaries.LaborKind, GlobalDictionaries.MaterialKind, GlobalDictionaries.OtherKind];
+
     public static string Of(RunBalanceRow row, IReadOnlyDictionary<string, string>? kinds) =>
         kinds?.GetValueOrDefault(row.CostElement) is { } kind && (kind == GlobalDictionaries.LaborKind || kind == GlobalDictionaries.MaterialKind)
             ? kind : GlobalDictionaries.OtherKind;
@@ -19,7 +21,7 @@ public static class RunCostKinds
     /// <summary>Koszt brutto (bez rozliczenia wychodzącego) każdego rodzaju narastająco.</summary>
     public static IReadOnlyDictionary<string, decimal> Totals(IEnumerable<RunBalanceRow> rows, IReadOnlyDictionary<string, string>? kinds)
     {
-        var totals = RunMeasures.Kinds.ToDictionary(k => k, _ => 0m);
+        var totals = All.ToDictionary(k => k, _ => 0m);
         foreach (var row in rows.Where(r => !r.IsSettlement))
             totals[Of(row, kinds)] += row.Amount;
         return totals;

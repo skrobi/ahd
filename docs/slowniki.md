@@ -72,17 +72,15 @@ Słowniki, kreator projektu), `docs/zrodla-danych.md` (struktura P1S).
 | Parametry produkcji | `Okno produktywności IPT (mies.)` (12), `Statusy materiałów dostarczonych` (DOST, WYD), `Wartość materiałów ÷ (1 + Z_CLO)` (tak); puste słowniki – wartości raportu S70MR (informacja na ekranie projektu) | parametr | odczyt danych produkcyjnych (`sql/pzlprod/produkcja.sql`) |
 | Definicje przebiegów | szablon przebiegu (workflow, `docs/pipeline-fazy.md`, rozdz. 4.1): `Definicja` (nazwa) → `Typ programu` – typ, dla którego szablon jest domyślny (Wszystkie / WEWNETRZNY / SAC / CAS), `Aktywna`, `Opis`; `Program`, `Przebieg` – nieużywane (puste, „Każdy”); program wybiera szablon w „Parametry projektu” (`Przebieg`), bez wyboru – aktywny szablon swojego typu przed „Wszystkie”; bez szablonów – definicja wbudowana; szablony startowe „Wewnętrzny” (Wszystkie) i „CAS” – przycisk na ekranie Przebiegi | definicja | przebieg – etapy i bramki (P0–P2) |
 | Etapy przebiegów | `Definicja`, `Kolejność` → `Etap` (nazwa), `Akcja` (Import źródeł / Przypięcie stanu – stałe, etapy 1 i 2; Kontrole; Zatwierdzenie), `Bramka WARNING` (Potwierdzenie / Informacja), `Zatwierdzenie` (tak – etap czeka na potwierdzenie), `Opis` | definicja + kolejność | etapy przebiegu |
-| Elementy kontrolne etapów | `Definicja`, `Etap`, `Element` (reguła katalogu kontroli, „Uzgodnienie: nazwa” – reguła uzgodnień, „Uzgodnienie: *” – wszystkie aktywne reguły uzgodnień typu) → `Aktywny`, `Poziom`, `Próg` (puste – ustawienie domyślne z okna Kontrole / słownika „Kontrole przebiegu”, a reguła uzgodnień – jej poziom i tolerancja), `Opis` | definicja + etap + element | etapy kontroli przebiegu |
-| Reguły walidacji | reguły walidacji ACTUALS z formułami (`docs/pipeline-fazy.md`, rozdz. 4.1): `Nazwa` → `Kontrola` (wiersz macierzy wyników), `Aktywna`, `Filtr`, `Grupuj`, `Warunek`, `Kwota`, `Komunikat`, `Komunikat OK`, `Najwyżej`, `Poziom`, `Próg`, `Opis`; edycja – okno Kontrole na ekranie Przebiegi; pusty słownik – reguły startowe aplikacji (zapis w oknie tworzy wiersze); migracja 051 | nazwa | etap Walidacja ACTUALS przebiegu |
-| Kontrole przebiegu | ustawienia domyślne reguł wbudowanych (Walidacja EV): reguła kontroli danych przebiegu (`docs/pipeline-fazy.md`, rozdz. 4.1) dla `Typ programu` (Wszystkie / WEWNETRZNY / SAC / CAS) i wariantu `Przebieg` (Każdy / Zamykający / W środku okresu) → `Aktywna`, `Poziom` (ERROR / WARNING / INFO; puste – domyślny reguły), `Próg` (kwota; puste – domyślny); wiersz typu przed „Wszystkie”, wariant przed „Każdy”; reguła bez wiersza – ustawienie domyślne; element etapu z poziomem / progiem ma pierwszeństwo; wiersze „Wszystkie”, „Każdy” zapisuje okno Kontrole (ekran Przebiegi) – tylko reguły z ustawieniem innym niż w katalogu; bez danych startowych | typ + reguła + przebieg | kontrole przebiegu (P0–P2) |
-| Reguły uzgodnień | własne kontrole przebiegu bez zmiany programu: `Typ programu`, `Nazwa`, `Przebieg` → `Aktywna`, `Lewa strona`, `Warunek` (=, <=, >=, <>), `Prawa strona`, `Tolerancja`, `Poziom`; strony to formuły z miar programu w nawiasach kwadratowych, liczb, + - * / i nawiasów (np. `[Koszt brutto] <= [BAC] * 1,1`; miary – `docs/pipeline-fazy.md`, rozdz. 4.1); bez danych startowych | typ + nazwa + przebieg | kontrola „Reguły uzgodnień” przebiegu |
+| Elementy kontrolne etapów | `Definicja`, `Etap`, `Element` (nazwa reguły walidacji) → `Aktywny`, `Opis`; poziom – w regule (kolumny `Level` i `Threshold` tabeli – nieużywane, O54) | definicja + etap + element | reguły etapu walidacji przebiegu |
+| Reguły walidacji | reguły walidacji przebiegu w SQL (`docs/pipeline-fazy.md`, rozdz. 4.1): `Nazwa` → `Opis`, `Poziom` (ERROR / WARNING / INFO), `Aktywna`, `Zapytanie SQL` (jeden SELECT / WITH na tabelach danych uruchomienia; każdy zwrócony wiersz – nieprawidłowość), `Opis wyniku` (kolumny w { }); edycja – edytor reguł na ekranie Przebiegi; pusty słownik – reguły startowe aplikacji (pierwszy zapis tworzy wiersze); migracja 051 | nazwa | etapy walidacji przebiegu |
 
 Definicje źródeł i ich prefiksy są konfiguracją importu – `docs/zrodla-danych.md`, rozdz. 2.
 
-Słowniki przebiegu (Definicje przebiegów, Etapy przebiegów, Elementy kontrolne etapów, Reguły walidacji, Kontrole przebiegu, Reguły uzgodnień)
-nie są na liście ekranu Słowniki – szablony edytuje ekran Przebiegi (kafelki etapów), reguły walidacji (edytor formuł z testem na
-programie), ustawienia domyślne reguł wbudowanych, reguły uzgodnień i ustawienia dla typów – okno Kontrole na ekranie Przebiegi (ta sama tabela słownika: historia, walidacja przy zapisie,
-Excel; `docs/funkcjonalnosc.md`, rozdz. 2).
+Słowniki przebiegu (Definicje przebiegów, Etapy przebiegów, Elementy kontrolne etapów, Reguły walidacji) nie są na liście ekranu
+Słowniki – szablony (kafelki etapów) i reguły walidacji (edytor SQL z testem na programie) edytuje ekran Przebiegi (ta sama historia
+i walidacja przy zapisie; `docs/funkcjonalnosc.md`, rozdz. 2). Słowniki „Kontrole przebiegu” (047) i „Reguły uzgodnień” (049) –
+nieużywane od reguł SQL (F5.7; dane zostają, O54).
 
 Na ekranie Słowniki przycisk **„Struktura P1S (PZLPROD)”** otwiera drzewo `LOG.WBS` (Z_KAT_ZBIORCZA → Z_KATEGORIA →
 Z_OPIS → PROJORG → elementy) z wyszukiwarką – tylko do odczytu, to nie jest słownik (`docs/zrodla-danych.md`, rozdz. 5.3).
@@ -205,13 +203,11 @@ Wydzielenia godzin z elementu P1S (np. Paint) to węzły wirtualne nakładki z k
 |---|---|
 | „Wskaźniki DJK”: udział od 0 do 1; prefiks zawarty w innym (W5 i W51) | ERROR / WARNING |
 | „Parametry produkcji”: okno 1–120 miesięcy; statusy niepuste; Z_CLO – tak / nie | ERROR |
-| „Kontrole przebiegu”: próg ujemny – ERROR; próg reguły bez progu – WARNING (pominięty) | ERROR / WARNING |
-| „Reguły walidacji”: błąd składni formuły (nieznane pole albo funkcja, pole spoza grupowania poza agregatem, agregat w filtrze, nawiasy), nazwa reguły wbudowanej, Najwyżej < 0, próg ujemny | ERROR |
+| „Reguły walidacji”: zapytanie SQL puste, nie jedno zapytanie SELECT / WITH, ze średnikiem albo z instrukcją zmieniającą dane, schemat, uprawnienia, transakcję lub sesję (INSERT, UPDATE, DELETE, MERGE, EXEC, DROP, ALTER, CREATE, TRUNCATE, GRANT, SELECT … INTO …, procedury sp_ / xp_ – `RunRules.Check`; to samo przed wykonaniem w przebiegu) | ERROR |
 | „Definicje przebiegów”: dwa aktywne szablony domyślne dla tego samego typu programu | ERROR |
-| Szablon przebiegu (zapis z ekranu Przebiegi): etapy stałe Import źródeł i Przypięcie stanu – po jednym, jako etapy 1 i 2; nazwy etapów bez powtórzeń; etap walidacji bez kontroli; kontrole w etapie innym niż walidacja; nieznana kontrola (spoza reguł walidacji, wbudowanych i uzgodnień) | ERROR |
+| Szablon przebiegu (zapis z ekranu Przebiegi): etapy stałe Import źródeł i Przypięcie stanu – po jednym, jako etapy 1 i 2; nazwy etapów bez powtórzeń; etap walidacji bez reguł; reguły w etapie innym niż walidacja; nieznana reguła (spoza „Reguł walidacji”) | ERROR |
 | „Etapy przebiegów”: kolejność nie jest liczbą od 1; nazwa etapu powtórzona w definicji | ERROR |
-| „Elementy kontrolne etapów”: element pusty, próg ujemny – ERROR; próg reguły wbudowanej bez progu – WARNING (pominięty); nieznaną kontrolę (spoza „Reguł walidacji”, reguł wbudowanych i uzgodnień) odrzuca zapis szablonu | ERROR / WARNING |
-| „Reguły uzgodnień”: formuła strony niepoprawna (nieznana miara, składnia) albo tolerancja ujemna | ERROR |
+| „Elementy kontrolne etapów”: element pusty; nieznaną regułę odrzuca zapis szablonu | ERROR |
 
 ### 5.8 Kategorie WBS
 

@@ -8,7 +8,7 @@ using Xunit;
 
 namespace PzlEv.Tests.Runs;
 
-/// <summary>Przebieg etapowy: wybór definicji, bramki, kolejny etap, potwierdzenie, ponowne wykonanie, ustawienia reguł etapu.</summary>
+/// <summary>Przebieg etapowy: wybór definicji, bramki, kolejny etap, potwierdzenie, ponowne wykonanie, reguły etapu.</summary>
 public sealed class RunWorkflowTests
 {
     private static RunStepRow Step(int no, string status, int errors = 0, int warnings = 0) =>
@@ -64,45 +64,19 @@ public sealed class RunWorkflowTests
     }
 
     [Fact]
-    public void Step_settings_enable_only_its_elements_with_element_then_dictionary_then_catalog_values()
+    public void Step_rules_are_active_elements_with_active_rules_and_missing_names_are_reported()
     {
-        var step = Def(RunGates.Confirm, false, RunActions.Checks,
-            new RunElementSetting(RunCheckRules.CostKindDecrease.Name, Level: CheckLevel.Warning),
-            new RunElementSetting(RunCheckRules.WpWithoutBudget.Name, Active: false),
-            new RunElementSetting(RunCheckRules.NewCostKind.Name));
-        var defaults = RunCheckRules.All.ToDictionary(r => r.Code, RunCheckRules.Default);
-        defaults[RunCheckRules.NewCostKind.Code] = new RunCheckSetting(true, CheckLevel.Error, 50m);   // „Kontrole przebiegu”
-        defaults[RunCheckRules.CostKindDecrease.Code] = new RunCheckSetting(false, CheckLevel.Error, 5m);
-
-        var custom = RunWorkflowEngine.Settings(step, defaults, builtIn: false);
-        var builtIn = RunWorkflowEngine.Settings(step, defaults, builtIn: true);
-
-        Assert.Equal(new RunCheckSetting(true, CheckLevel.Warning, 5m), custom[RunCheckRules.CostKindDecrease.Code]);
-        Assert.Equal(new RunCheckSetting(true, CheckLevel.Error, 50m), custom[RunCheckRules.NewCostKind.Code]);
-        Assert.False(custom[RunCheckRules.WpWithoutBudget.Code].Active);
-        Assert.False(custom[RunCheckRules.CostCenterWithoutRate.Code].Active);                   // spoza etapu
-        Assert.False(builtIn[RunCheckRules.CostKindDecrease.Code].Active);                // wbudowana – słownik „Kontrole przebiegu” wyłącza
-        Assert.Equal(RunCheckRules.All.Count, custom.Count);
-    }
-
-    [Fact]
-    public void Step_reconciliations_take_all_of_type_or_named_rules_with_overrides_and_report_missing()
-    {
-        RunReconciliationRow[] library =
+        RunRule[] library =
         [
-            new(RunCheckRules.AllTypes, "Budżet", RunCheckRules.AnyRun, true, "[Koszt brutto]", "<=", "[BAC]", null, "WARNING"),
-            new("CAS", "Tylko CAS", RunCheckRules.AnyRun, true, "[BAC]", ">=", "0", null, "ERROR"),
-            new(RunCheckRules.AllTypes, "Wyłączona", RunCheckRules.AnyRun, false, "[BAC]", ">=", "0", null, "ERROR"),
+            new("Netowanie", CheckLevel.Error, true, "SELECT 1"), new("Wyłączona", CheckLevel.Warning, false, "SELECT 1"), new("Odznaczona", CheckLevel.Warning, true, "SELECT 1"),
         ];
+        var step = Def(RunGates.Confirm, false, RunActions.Checks,
+            new RunElementSetting("netowanie "), new RunElementSetting("Wyłączona"), new RunElementSetting("Odznaczona", Active: false), new RunElementSetting("Usunięta"));
 
-        var all = RunWorkflowEngine.Reconciliations(Def(elements: new RunElementSetting(RunDefinitions.AllReconciliations)), library, "SAC", false);
-        var named = RunWorkflowEngine.Reconciliations(Def(elements: [new RunElementSetting("Uzgodnienie: Tylko CAS", Level: CheckLevel.Warning, Threshold: 2m),
-            new RunElementSetting("Uzgodnienie: Brak")]), library, "SAC", false);
+        var (rules, missing) = RunWorkflowEngine.Rules(step, library);
 
-        Assert.Equal(["Budżet"], all.Rules.Select(r => r.Name));
-        var rule = Assert.Single(named.Rules);
-        Assert.Equal(("Tylko CAS", "WARNING", 2m, true), (rule.Name, rule.Level, rule.Tolerance!.Value, rule.IsActive));
-        Assert.Equal(["Brak"], named.Missing);
+        Assert.Equal(["Netowanie"], rules.Select(r => r.Name));
+        Assert.Equal(["Usunięta"], missing);
     }
 
     private static RunDefinitionHeaderRow Header(string code, string type, bool active = true) => new(code, type, active, null);
@@ -112,7 +86,7 @@ public sealed class RunWorkflowTests
     {
         RunDefinitionHeaderRow[] headers =
         [
-            Header(RunDefinitions.InternalCode, RunCheckRules.AllTypes), Header("CAS", "CAS"), Header("Specjalny", "SAC"), Header("Bez etapów", "SAC"),
+            Header(RunDefinitions.InternalCode, RunRules.AllTypes), Header("CAS", "CAS"), Header("Specjalny", "SAC"), Header("Bez etapów", "SAC"),
             Header("Wyłączony", "WEWNETRZNY", active: false),
         ];
         RunStepRowData[] steps =
@@ -120,13 +94,13 @@ public sealed class RunWorkflowTests
             .. new[] { RunDefinitions.InternalCode, "CAS", "Specjalny", "Wyłączony" }.Select(d => new RunStepRowData(d, 2, "Kontrole", RunActions.Checks, RunGates.Confirm, false, null)),
             new("CAS", 1, "Przypięcie", RunActions.Pin, RunGates.Info, false, null),
         ];
-        RunStepElementRow[] elements = [new("CAS", "Kontrole", RunCheckRules.CostKindDecrease.Name, true, "WARNING", 3m), new("CAS", "Inny etap", "x", true, null, null)];
+        RunStepElementRow[] elements = [new("CAS", "Kontrole", "Skok przyrostu kosztu", true), new("CAS", "Inny etap", "x", true)];
 
         var cas = RunDefinitions.For(headers, steps, elements, null, "CAS");
 
         Assert.Equal("CAS", cas.Code);
         Assert.Equal([("Przypięcie", RunActions.Pin), ("Kontrole", RunActions.Checks)], cas.Steps.Select(s => (s.Name, s.Action)));
-        Assert.Equal(new RunElementSetting(RunCheckRules.CostKindDecrease.Name, true, CheckLevel.Warning, 3m), Assert.Single(cas.Steps[1].Elements));
+        Assert.Equal(new RunElementSetting("Skok przyrostu kosztu"), Assert.Single(cas.Steps[1].Elements));
         Assert.Equal("Specjalny", RunDefinitions.For(headers, steps, elements, "specjalny", "CAS").Code);              // wybrany w programie
         Assert.Equal("Specjalny", RunDefinitions.For(headers, steps, elements, null, "SAC").Code);                     // typ przed „Wszystkie”
         Assert.Equal(RunDefinitions.InternalCode, RunDefinitions.For(headers, steps, elements, null, "WEWNETRZNY").Code);
@@ -143,13 +117,14 @@ public sealed class RunWorkflowTests
     public void Template_structure_requires_fixed_steps_first_and_checks_in_validation_steps()
     {
         Assert.Empty(RunDefinitions.Validate(RunDefinitions.Starters[0]));
-        var broken = new RunDefinition(" ", RunCheckRules.AllTypes,
+        var rule = RunRules.EvStarters[0].Name;
+        var broken = new RunDefinition(" ", RunRules.AllTypes,
         [
             RunDefinitions.FixedSteps[1] with { No = 1 },
             RunDefinitions.FixedSteps[0] with { No = 2 },
-            new(3, "Walidacja", RunActions.Checks, RunGates.Confirm, false, [new(RunCheckRules.CostKindDecrease.Name, Active: false)]),
-            new(4, "walidacja", RunActions.Checks, RunGates.Confirm, false, [new("Nieznana"), new("Uzgodnienie: *"), new("uzgodnienie: *")]),
-            new(5, "Zatwierdzenie", RunActions.Approval, RunGates.Confirm, true, [new(RunCheckRules.CostKindDecrease.Name)]),
+            new(3, "Walidacja", RunActions.Checks, RunGates.Confirm, false, [new(rule, Active: false)]),
+            new(4, "walidacja", RunActions.Checks, RunGates.Confirm, false, [new("Nieznana"), new(rule), new(rule.ToUpperInvariant())]),
+            new(5, "Zatwierdzenie", RunActions.Approval, RunGates.Confirm, true, [new(rule)]),
         ]);
 
         var issues = RunDefinitions.Validate(broken).Select(i => i.Message).ToList();
@@ -157,11 +132,13 @@ public sealed class RunWorkflowTests
         Assert.Contains("Szablon bez nazwy", issues);
         Assert.Contains($"Etap stały „{RunActions.Import}” – dokładnie jeden, jako etap 1", issues);
         Assert.Contains($"Etap stały „{RunActions.Pin}” – dokładnie jeden, jako etap 2", issues);
-        Assert.Contains("Etap „Walidacja” bez kontroli – dodaj kontrole albo usuń etap", issues);
+        Assert.Contains("Etap „Walidacja” bez reguł – zaznacz reguły albo usuń etap", issues);
         Assert.Contains("Nazwa etapu „walidacja” powtórzona", issues);
-        Assert.Contains("Nieznana kontrola „Nieznana”", issues);
-        Assert.Contains("Kontrola „Uzgodnienie: *” dwa razy w etapie „walidacja”", issues);
-        Assert.Contains("Etap „Zatwierdzenie” (Zatwierdzenie) nie ma kontroli – kontrole tylko w etapach walidacji", issues);
+        Assert.Contains("Nieznana reguła „Nieznana” – nie ma jej w regułach walidacji", issues);
+        Assert.Contains($"Reguła „{rule}” dwa razy w etapie „walidacja”", issues);
+        Assert.Contains("Etap „Zatwierdzenie” (Zatwierdzenie) nie ma reguł – reguły tylko w etapach walidacji", issues);
+        Assert.Empty(RunDefinitions.Validate(broken with { Code = "X", Steps = [.. RunDefinitions.FixedSteps, new(3, "W", RunActions.Checks, RunGates.Confirm, false, [new("Własna")])] },
+            ["Własna"]));   // reguła ze słownika „Reguły walidacji”
     }
 
     [Fact]
@@ -169,7 +146,7 @@ public sealed class RunWorkflowTests
     {
         var starter = RunDefinitions.Starters[1] with
         {
-            Steps = [.. RunDefinitions.Starters[1].Steps.Select(s => s.No == 3 ? s with { Elements = [new(RunCheckRules.CostKindDecrease.Name, true, CheckLevel.Warning, 2.5m)] } : s)],
+            Steps = [.. RunDefinitions.Starters[1].Steps.Select(s => s.No == 3 ? s with { Elements = [new("Skok przyrostu kosztu"), new("Odznaczona", Active: false)] } : s)],
         };
         var header = RunDefinitionRows.Headers([new DictRow(1, 1, RunDefinitionRows.Header(starter, isActive: true))]).Single();
         var steps = RunDefinitionRows.Steps(RunDefinitionRows.StepValues(starter).Select(v => new DictRow(null, null, v)));
@@ -193,14 +170,14 @@ public sealed class RunWorkflowTests
     }
 
     [Fact]
-    public void Built_in_definition_covers_every_validation_and_catalog_rule_in_check_steps_and_ends_with_approval()
+    public void Built_in_definition_checks_actuals_then_ev_starter_rules_and_ends_with_approval()
     {
         var builtIn = RunDefinitions.BuiltIn;
-        var rules = builtIn.Steps.SelectMany(s => s.Elements).Select(e => e.Element).ToList();
 
-        Assert.Equal(RunValidationRules.Starters.Select(r => r.Name).Concat(RunCheckRules.All.Select(r => r.Name)).Order(),
-            rules.Where(r => !RunDefinitions.IsReconciliation(r)).Order());
-        Assert.Contains(RunDefinitions.AllReconciliations, rules);
+        Assert.Equal(RunRules.ActualsStarters.Select(r => r.Name), builtIn.Steps[2].Elements.Select(e => e.Element));
+        Assert.Equal(RunRules.EvStarters.Select(r => r.Name), builtIn.Steps[3].Elements.Select(e => e.Element));
+        Assert.DoesNotContain(builtIn.Steps.SelectMany(s => s.Elements), e => e.Element == RunRules.ReconciliationExample.Name);   // przykład – poza szablonami
+        Assert.Empty(RunDefinitions.Validate(builtIn));
         Assert.Equal([RunActions.Import, RunActions.Pin], builtIn.Steps.Take(2).Select(s => s.Action));
         Assert.True(builtIn.Steps[^1].NeedsApproval);
     }
@@ -222,14 +199,12 @@ public sealed class RunWorkflowTests
         ]);
         var elements = DictionaryValidator.Validate(GlobalDictionaries.Get(GlobalDictionaries.RunStepElements),
         [
-            Row(("Definicja", "A"), ("Etap", "Kontrole"), ("Element", "Nieznana"), ("Aktywny", "tak"), ("Poziom", null), ("Próg", null), ("Opis", null)),
-            Row(("Definicja", "A"), ("Etap", "Kontrole"), ("Element", "Uzgodnienie: Budżet"), ("Aktywny", "tak"), ("Poziom", null), ("Próg", "-1"), ("Opis", null)),
-            Row(("Definicja", "A"), ("Etap", "Kontrole"), ("Element", RunCheckRules.CostKindDecrease.Name), ("Aktywny", "tak"), ("Poziom", "WARNING"), ("Próg", "5"), ("Opis", null)),
+            Row(("Definicja", "A"), ("Etap", "Kontrole"), ("Element", "Nieznana"), ("Aktywny", "tak"), ("Opis", null)),
+            Row(("Definicja", "A"), ("Etap", "Kontrole"), ("Element", " "), ("Aktywny", "tak"), ("Opis", null)),
         ]);
 
         Assert.Single(definitions, i => i.Level == CheckLevel.Error && i.Message.StartsWith("Aktywny szablon „A” jest już domyślny dla typu programu CAS"));
         Assert.Single(steps, i => i.Level == CheckLevel.Error && i.Message.StartsWith("Etap „kontrole” już jest"));
-        Assert.Contains(elements, i => i.Level == CheckLevel.Error && i.Message == "Próg nie może być ujemny");
-        Assert.Equal(1, elements.Count(i => i.Level == CheckLevel.Error));   // nieznana kontrola – zapis szablonu (RunDefinitions.Validate)
+        Assert.Equal(1, elements.Count(i => i.Level == CheckLevel.Error));   // pusty element; nieznana reguła – zapis szablonu (RunDefinitions.Validate)
     }
 }

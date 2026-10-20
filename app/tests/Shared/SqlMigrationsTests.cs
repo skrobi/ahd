@@ -80,7 +80,7 @@ public sealed class SqlMigrationsTests
         Assert.Empty(SqlMigrations.Pending(database.Sql));
         var status = SqlMigrations.Status(database.Sql);
         Assert.All(status, s => Assert.NotNull(s.AppliedAt));
-        Assert.Equal(46, SqlMigrations.CurrentVersion(database.Sql));
+        Assert.Equal(51, SqlMigrations.CurrentVersion(database.Sql));
         using var connection = database.Sql.Open();
         var tables = connection.Query<string>(
             "SELECT t.name FROM sys.tables t JOIN sys.schemas s ON s.schema_id = t.schema_id WHERE s.name = @schema AND LEFT(t.name, LEN(@prefix)) = @prefix",
@@ -91,8 +91,9 @@ public sealed class SqlMigrationsTests
         // – DICT_MappingReport, DICT_MappingCorrection (025) + DICT_ProjectSource (026)
         // + META_Run, META_RunPin, RUN_Balance, RUN_Issue (027) + DICT_ProjectSetting (028)
         // + DICT_CasBurdenGroup, DICT_CasBurdenRate (029) + DICT_CasPool, DICT_CasBurdenFormula (031)
-        // – DICT_CasBurdenFormula + DICT_CasFormula (033) + CAN_ActualsBalance (037)
-        Assert.Equal(34, tables.Count);
+        // – DICT_CasBurdenFormula + DICT_CasFormula (033) + CAN_ActualsBalance (037) + DICT_RunCheck (047) + DICT_RunReconciliation (049)
+        // + DICT_RunDefinition, DICT_RunStep, DICT_RunStepElement, META_RunStep (050) + DICT_RunValidation, RUN_BalanceEv (051)
+        Assert.Equal(42, tables.Count);
         Assert.DoesNotContain(tables, t => t.EndsWith("CAN_Actuals") || t.EndsWith("CAN_MappingReport") || t.EndsWith("STG_RawRow") || t.EndsWith("SourceFileContent"));
         Assert.Contains(database.Sql.Settings.TablePrefix + "META_PerformanceObjective", tables);
         Assert.Contains(database.Sql.Settings.TablePrefix + "DICT_ScheduleBudget", tables);

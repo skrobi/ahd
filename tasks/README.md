@@ -83,13 +83,13 @@ zmiana zakresu zadania w trakcie realizacji wymaga uzgodnienia.
 
 | Zadanie | Moduł | Zależy od | Otwarte kwestie | Status |
 |---|---|---|---|---|
-| [F5.1 P0 Uruchomienie przebiegu](F5.1-p0-uruchomienie-przebiegu.md) | Runs | F0.6, F4.5, F1.2 | O36 | w toku – P0/P1 i kontrole ACTUALS (RunService, RunChecks; migracje 027/028) |
-| [F5.2 P1 Przypięcie stanu](F5.2-p1-przypiecie-stanu.md) | Runs | F5.1, F2.3, F3.2 | O30, O45 | w toku – P0/P1 i kontrole ACTUALS (RunService, RunChecks; migracje 027/028) |
+| [F5.1 P0 Uruchomienie przebiegu](F5.1-p0-uruchomienie-przebiegu.md) | Runs | F0.6, F4.5, F1.2 | O36 | w toku – P0/P1 i kontrole ACTUALS (RunService, reguły walidacji w SQL – F5.7; migracje 027/028) |
+| [F5.2 P1 Przypięcie stanu](F5.2-p1-przypiecie-stanu.md) | Runs | F5.1, F2.3, F3.2 | O30, O45 | w toku – P0/P1 i kontrole ACTUALS (RunService, reguły walidacji w SQL – F5.7; migracje 027/028) |
 | [F5.3 Zmiana po przypięciu](F5.3-zmiana-po-przypieciu.md) | Runs | F5.2 | – | do zrobienia |
-| [F5.4 P2 Walidacja](F5.4-p2-walidacja.md) | Runs | F5.2 | O25 | w toku – P0/P1 i kontrole ACTUALS (RunService, RunChecks; migracje 027/028) |
+| [F5.4 P2 Walidacja](F5.4-p2-walidacja.md) | Runs | F5.2 | O25 | w toku – P0/P1 i kontrole ACTUALS (RunService, reguły walidacji w SQL – F5.7; migracje 027/028) |
 | [F5.5 Z Zamknięcie okresu](F5.5-z-zamkniecie-okresu.md) | Runs | F8.2 | – | do zrobienia |
 | [F5.6 Ekrany Przebiegi i Przebieg](F5.6-ekrany-przebiegi-i-przebieg.md) | Runs | F5.1–F5.4 | – | w toku – szablony przebiegów (kafelki), przebieg w programie (etapy, macierz, porównanie), Zmiany ACWP |
-| [F5.7 Reguły walidacji w SQL – jeden edytor](F5.7-reguly-walidacji-sql.md) | Runs | F5.4, F5.6 | O52, O53, O54 | do zrobienia – zakres uzgodniony 2026-10-20 |
+| [F5.7 Reguły walidacji w SQL – jeden edytor](F5.7-reguly-walidacji-sql.md) | Runs | F5.4, F5.6 | O52, O53, O54 | zrobione (migracja 051, 0.59.0) – otwarte: O52 (login tylko do odczytu), O53 (pokazywanie błędów i analiza), O54 (stare słowniki) |
 
 ## F6. Uzgodnienie (P3, P4)
 

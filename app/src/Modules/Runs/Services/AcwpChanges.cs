@@ -55,6 +55,12 @@ public static class AcwpChanges
     public const string WbsLevel = "Element WBS";
     public const string PeriodLevel = "Okres";
 
+    /// <summary>Liczba okresów przed okresem, z których liczony jest średni przyrost (jak reguła startowa „Skok przyrostu kosztu”).</summary>
+    public const int IncrementPeriods = 6;
+
+    /// <summary>Skok przyrostu: koszt okresu &gt; JumpFactor × średni przyrost (jak reguła startowa „Skok przyrostu kosztu”).</summary>
+    public const decimal JumpFactor = 3m;
+
     /// <summary>Domyślna liczba pozycji na poziomie drzewa.</summary>
     public const int DefaultTop = 50;
 
@@ -91,7 +97,7 @@ public static class AcwpChanges
     /// kosztu”). Filtry jak w porównaniu.
     /// </summary>
     public static IReadOnlyList<AcwpIncrementSeries> Increments(IReadOnlyList<RunBalanceRow> rows, IReadOnlyDictionary<string, string>? kinds, string? kind,
-        IReadOnlySet<string>? wbsElements, string? costElement, decimal factor, int count = 12, int averagePeriods = RunCheckRules.IncrementPeriods)
+        IReadOnlySet<string>? wbsElements, string? costElement, decimal factor, int count = 12, int averagePeriods = IncrementPeriods)
     {
         var data = rows.Where(r => !r.IsSettlement && (wbsElements is null || wbsElements.Contains(r.WbsElement))
                                    && (costElement is null || string.Equals(r.CostElement, costElement, StringComparison.OrdinalIgnoreCase))).ToList();
@@ -101,7 +107,7 @@ public static class AcwpChanges
         // count okresów kończących się ostatnim okresem danych, od najstarszego.
         var next = last.Item2 == 12 ? (last.Item1 + 1, 1) : (last.Item1, last.Item2 + 1);
         var periods = RunCostKinds.Before(next, count).Reverse().ToList();
-        return RunMeasures.Kinds.Where(k => kind is null || k == kind).Select(k =>
+        return RunCostKinds.All.Where(k => kind is null || k == kind).Select(k =>
         {
             var byPeriod = data.Where(r => RunCostKinds.Of(r, kinds) == k).GroupBy(r => (r.FiscalYear, Math.Min(r.Period, 12)))
                 .ToDictionary(g => g.Key, g => g.Sum(r => r.Amount));
@@ -161,7 +167,7 @@ public static class AcwpChanges
     }
 
     private static IReadOnlyList<AcwpKindTotal> Totals(List<Cell> cells, string? kind) =>
-        RunMeasures.Kinds.Where(k => kind is null || k == kind)
+        RunCostKinds.All.Where(k => kind is null || k == kind)
             .Select(k => new AcwpKindTotal(k, cells.Where(c => c.Kind == k).Sum(c => c.Before), cells.Where(c => c.Kind == k).Sum(c => c.After))).ToList();
 
     private static IReadOnlyList<AcwpChangeNode> Tree(List<Cell> cells, IReadOnlyDictionary<string, string>? names, bool onlyChanges, int top, bool withPeriods,
