@@ -15,7 +15,7 @@
                 <Button Content="Zapisz" Style="{StaticResource BtnPrimary}" Margin="0,0,8,0" Command="{Binding Save}" />
                 <Button Content="Zamknij" Style="{StaticResource Btn}" IsCancel="True" />
             </StackPanel>
-            <TextBlock Text="{Binding Status}" TextWrapping="Wrap" VerticalAlignment="Center" />
+            <TextBlock partials:CopyText.Enabled="True" Text="{Binding Status}" TextWrapping="Wrap" VerticalAlignment="Center" />
         </DockPanel>
         <partials:BusyBar DockPanel.Dock="Top" DataContext="{Binding Busy}" />
         <DataGrid x:Name="Matrix" Style="{StaticResource DataTable}" ItemsSource="{Binding Rows}" AutoGenerateColumns="False" IsReadOnly="True"

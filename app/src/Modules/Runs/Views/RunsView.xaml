@@ -181,7 +181,7 @@
                                 <TextBox Text="{Binding Sql, UpdateSourceTrigger=PropertyChanged}" FontFamily="Consolas" FontSize="12" AcceptsReturn="True" AcceptsTab="True"
                                          TextWrapping="NoWrap" MinHeight="300" MaxHeight="520" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"
                                          Padding="6" Margin="0,2,0,0" BorderBrush="{StaticResource Line}" AutomationProperties.Name="Zapytanie SQL" />
-                                <TextBlock Text="{Binding Error}" Foreground="{StaticResource Crit}" TextWrapping="Wrap" Margin="0,4,0,0"
+                                <TextBlock partials:CopyText.Enabled="True" Text="{Binding Error}" Foreground="{StaticResource Crit}" TextWrapping="Wrap" Margin="0,4,0,0"
                                            Visibility="{Binding HasError, Converter={StaticResource BoolToVisibility}}" />
                             </StackPanel>
                             <!-- Dostępne dane: tabele uruchomienia i parametry -->
@@ -192,7 +192,7 @@
                                             <DataTemplate>
                                                 <StackPanel Margin="0,0,0,8">
                                                     <TextBlock Text="{Binding Name}" FontFamily="Consolas" FontWeight="Bold" />
-                                                    <TextBlock Text="{Binding Description}" Style="{StaticResource MutedText}" FontSize="11" TextWrapping="Wrap" />
+                                                    <TextBlock partials:CopyText.Enabled="True" Text="{Binding Description}" Style="{StaticResource MutedText}" FontSize="11" TextWrapping="Wrap" />
                                                     <ItemsControl ItemsSource="{Binding Columns}">
                                                         <ItemsControl.ItemTemplate>
                                                             <DataTemplate>
@@ -230,8 +230,8 @@
                                 ToolTip="Wykonuje zapytanie (także niezapisane) bez zapisu wyników – transakcja wycofywana" />
                     </StackPanel>
                 </DockPanel>
-                <TextBlock Text="{Binding RuleStatus}" TextWrapping="Wrap" Margin="0,6,0,0" />
-                <TextBlock Text="{Binding TestNote}" Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="0,6,0,4" />
+                <TextBlock partials:CopyText.Enabled="True" Text="{Binding RuleStatus}" TextWrapping="Wrap" Margin="0,6,0,0" />
+                <TextBlock partials:CopyText.Enabled="True" Text="{Binding TestNote}" Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="0,6,0,4" />
                 <DataGrid Style="{StaticResource DataTable}" ItemsSource="{Binding TestResult}" AutoGenerateColumns="True" IsReadOnly="True" MaxHeight="420"
                           AutomationProperties.Name="Wynik testu reguły" />
             </StackPanel>
@@ -279,7 +279,7 @@
                                 ToolTip="Klocek systemowy (najwyżej jeden): analityk zatwierdza dane ACTUALS przebiegu – od zatwierdzenia struktura programu pokazuje koszty z tego przebiegu" />
                     </StackPanel>
                 </DockPanel>
-                <TextBlock Text="{Binding Status}" TextWrapping="Wrap" Margin="0,0,0,4" />
+                <TextBlock partials:CopyText.Enabled="True" Text="{Binding Status}" TextWrapping="Wrap" Margin="0,0,0,4" />
                 <ItemsControl ItemsSource="{Binding Issues}" Margin="0,0,0,8">
                     <ItemsControl.ItemTemplate>
                         <DataTemplate>
@@ -333,7 +333,7 @@
                                             </DockPanel>
                                             <TextBlock Text="{Binding Action}" Style="{StaticResource MutedText}" />
                                             <TextBlock Text="{Binding GateText}" Style="{StaticResource MutedText}" />
-                                            <TextBlock Text="{Binding Summary}" TextWrapping="Wrap" Margin="0,4,0,0" FontSize="12" />
+                                            <TextBlock partials:CopyText.Enabled="True" Text="{Binding Summary}" TextWrapping="Wrap" Margin="0,4,0,0" FontSize="12" />
                                         </StackPanel>
                                     </DockPanel>
                                 </Border>

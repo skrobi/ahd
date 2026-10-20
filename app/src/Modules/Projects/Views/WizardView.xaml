@@ -173,7 +173,7 @@
                     <ItemsControl ItemsSource="{Binding CreateIssues}" Margin="0,8,0,0" />
                 </StackPanel>
 
-                <TextBlock Text="{Binding Status}" TextWrapping="Wrap" Margin="0,10,0,0" />
+                <TextBlock partials:CopyText.Enabled="True" Text="{Binding Status}" TextWrapping="Wrap" Margin="0,10,0,0" />
                 <partials:BusyBar DataContext="{Binding Busy}" Margin="0,10,0,0" />
                 <DockPanel Margin="0,12,0,0">
                     <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">

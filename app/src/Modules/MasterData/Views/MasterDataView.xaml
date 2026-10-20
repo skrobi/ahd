@@ -67,7 +67,7 @@
                     </StackPanel>
                 </DockPanel>
                 <partials:BusyBar DataContext="{Binding Busy}" />
-                <TextBlock Text="{Binding Status}" TextWrapping="Wrap" Margin="0,0,0,8" />
+                <TextBlock partials:CopyText.Enabled="True" Text="{Binding Status}" TextWrapping="Wrap" Margin="0,0,0,8" />
 
                 <!-- Wiersze słownika i wynik walidacji: wspólna tabela słownika (Shared/Views/Partials/DictionaryGrid) -->
                 <partials:DictionaryGrid DataContext="{Binding Table}" />

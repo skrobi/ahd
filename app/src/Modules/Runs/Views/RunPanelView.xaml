@@ -90,23 +90,23 @@
                 </ComboBox>
             </StackPanel>
         </DockPanel>
-        <TextBlock Text="{Binding Assigned}" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,0,0,6" />
+        <TextBlock partials:CopyText.Enabled="True" Text="{Binding Assigned}" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,0,0,6" />
         <partials:BusyBar DataContext="{Binding Busy}" />
         <Border Background="{StaticResource CritSoft}" CornerRadius="6" Padding="12,8" Margin="0,0,0,8"
                 Visibility="{Binding HasError, Converter={StaticResource BoolToVisibility}}">
-            <TextBlock Text="{Binding Error}" Foreground="{StaticResource Crit}" FontWeight="SemiBold" TextWrapping="Wrap" />
+            <TextBlock partials:CopyText.Enabled="True" Text="{Binding Error}" Foreground="{StaticResource Crit}" FontWeight="SemiBold" TextWrapping="Wrap" />
         </Border>
         <!-- Przebieg w toku: etap, reguła i czas od uruchomienia (licznik co sekundę), pasek – jak BusyBar -->
         <Border Background="{StaticResource InfoSoft}" BorderBrush="{StaticResource Info}" BorderThickness="1" CornerRadius="4"
                 Padding="10,6" Margin="0,0,0,8" Visibility="{Binding IsRunning, Converter={StaticResource BoolToVisibility}}">
             <StackPanel>
-                <TextBlock Text="{Binding ProgressText}" Foreground="{StaticResource Info}" FontWeight="SemiBold" TextWrapping="Wrap" />
+                <TextBlock partials:CopyText.Enabled="True" Text="{Binding ProgressText}" Foreground="{StaticResource Info}" FontWeight="SemiBold" TextWrapping="Wrap" />
                 <ProgressBar IsIndeterminate="True" Height="4" Margin="0,6,0,0" BorderThickness="0"
                              Foreground="{StaticResource Info}" Background="{StaticResource Surface}" />
             </StackPanel>
         </Border>
-        <TextBlock Text="{Binding Notice}" Style="{StaticResource MutedText}" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,0,0,4" />
-        <TextBlock Text="{Binding Definition}" Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="0,0,0,8" />
+        <TextBlock partials:CopyText.Enabled="True" Text="{Binding Notice}" Style="{StaticResource MutedText}" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,0,0,4" />
+        <TextBlock partials:CopyText.Enabled="True" Text="{Binding Definition}" Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="0,0,0,8" />
         <TextBlock Style="{StaticResource MutedText}" Text="Brak uruchomień przebiegu programu – „Nowy przebieg”." TextWrapping="Wrap"
                    Visibility="{Binding NoRuns, Converter={StaticResource BoolToVisibility}}" />
 
@@ -136,9 +136,9 @@
                                         </Border>
                                         <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" Margin="0,0,8,0" />
                                     </DockPanel>
-                                    <TextBlock Text="{Binding Results}" Style="{StaticResource MutedText}" />
+                                    <TextBlock partials:CopyText.Enabled="True" Text="{Binding Results}" Style="{StaticResource MutedText}" />
                                     <TextBlock Text="{Binding When}" Style="{StaticResource MutedText}" />
-                                    <TextBlock Text="{Binding Row.Comment}" TextWrapping="Wrap" FontStyle="Italic" Margin="0,2,0,0"
+                                    <TextBlock partials:CopyText.Enabled="True" Text="{Binding Row.Comment}" TextWrapping="Wrap" FontStyle="Italic" Margin="0,2,0,0"
                                                Visibility="{Binding HasComment, Converter={StaticResource BoolToVisibility}}" />
                                 </StackPanel>
                             </DataTemplate>
@@ -152,7 +152,7 @@
                             <Run Text="{Binding SelectedStep.Row.Action, Mode=OneWay}" FontWeight="SemiBold" />
                             <Run Text="{Binding SelectedStep.Gate, Mode=OneWay}" />
                         </TextBlock>
-                        <TextBlock Text="{Binding SelectedStep.Description}" Style="{StaticResource MutedText}" TextWrapping="Wrap" />
+                        <TextBlock partials:CopyText.Enabled="True" Text="{Binding SelectedStep.Description}" Style="{StaticResource MutedText}" TextWrapping="Wrap" />
 
                         <DockPanel Margin="0,10,0,10">
                             <Button DockPanel.Dock="Right" Content="Wykonaj ponownie" Style="{StaticResource Btn}" Margin="8,0,0,0" Command="{Binding Rerun}"
@@ -197,14 +197,14 @@
                                 </DockPanel>
                                 <!-- Co sprawdza reguła; dane i zakres uruchomienia – w podpowiedzi -->
                                 <Border Background="{StaticResource Surface2}" CornerRadius="6" Padding="10,6" Margin="0,0,0,8" ToolTip="{Binding RuleDataTip}">
-                                    <TextBlock Text="{Binding RuleContext}" TextWrapping="Wrap" />
+                                    <TextBlock partials:CopyText.Enabled="True" Text="{Binding RuleContext}" TextWrapping="Wrap" />
                                 </Border>
                                 <!-- Wynik: kolumny zapytania (kwoty do prawej), potem Problem; wskazówka pod tabelą -->
                                 <DataGrid Style="{StaticResource DataTable}" ItemsSource="{Binding ResultView}" SelectedItem="{Binding SelectedResultRow}"
                                           AutoGenerateColumns="True" IsReadOnly="True" MaxHeight="360" AutomationProperties.Name="Wynik reguły"
                                           AutoGeneratingColumn="OnResultColumn" />
-                                <TextBlock Text="{Binding ResultHint}" TextWrapping="Wrap" Margin="0,6,0,0" FontWeight="SemiBold" />
-                                <TextBlock Text="{Binding LinesTitle}" Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="0,10,0,4" />
+                                <TextBlock partials:CopyText.Enabled="True" Text="{Binding ResultHint}" TextWrapping="Wrap" Margin="0,6,0,0" FontWeight="SemiBold" />
+                                <TextBlock partials:CopyText.Enabled="True" Text="{Binding LinesTitle}" Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="0,10,0,4" />
                                 <DataGrid Style="{StaticResource DataTable}" ItemsSource="{Binding Lines}" IsReadOnly="True" MaxHeight="360" AutomationProperties.Name="Linie ACTUALS">
                                     <DataGrid.Columns>
                                         <DataGridTextColumn Header="Rok/okres" Binding="{Binding Period}" />
@@ -334,7 +334,7 @@
                         <CheckBox Content="Tylko zmiany" IsChecked="{Binding OnlyChanges}" VerticalAlignment="Center"
                                   ToolTip="Nowe, zmienione (poziom, liczba wierszy, wartości kolumn liczbowych) i rozwiązane wyniki reguł; bez wyników bez zmian" />
                     </StackPanel>
-                    <TextBlock Text="{Binding CompareNote}" Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="0,0,0,8" />
+                    <TextBlock partials:CopyText.Enabled="True" Text="{Binding CompareNote}" Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="0,0,0,8" />
                     <DataGrid Style="{StaticResource DataTable}" ItemsSource="{Binding Compare}" IsReadOnly="True" MaxHeight="560">
                         <DataGrid.Columns>
                             <DataGridTextColumn Header="Zmiana" Binding="{Binding Status}" />

@@ -17,7 +17,7 @@
         <partials:PageHeader Title="Administracja" />
 
         <partials:BusyBar DataContext="{Binding Busy}" />
-        <TextBlock Text="{Binding Status}" TextWrapping="Wrap" Margin="0,0,0,8" />
+        <TextBlock partials:CopyText.Enabled="True" Text="{Binding Status}" TextWrapping="Wrap" Margin="0,0,0,8" />
         <Border Style="{StaticResource Panel}" Margin="0,0,0,12"
                 Visibility="{Binding HasIssues, Converter={StaticResource BoolToVisibility}}">
             <ItemsControl ItemsSource="{Binding Issues}" />
@@ -203,7 +203,7 @@
                     </DataGrid.Columns>
                 </DataGrid>
                 <Button Content="Zapisz parser" Style="{StaticResource BtnPrimary}" HorizontalAlignment="Left" Margin="0,8,0,0" Command="{Binding Save}" />
-                <TextBlock Text="{Binding Message}" TextWrapping="Wrap" FontWeight="SemiBold" Margin="0,6,0,0" MaxWidth="720" HorizontalAlignment="Left" />
+                <TextBlock partials:CopyText.Enabled="True" Text="{Binding Message}" TextWrapping="Wrap" FontWeight="SemiBold" Margin="0,6,0,0" MaxWidth="720" HorizontalAlignment="Left" />
                 <partials:BusyBar DataContext="{Binding Busy}" Margin="0,6,0,0" />
 
                 <TextBlock Text="Historia parsera" FontWeight="SemiBold" Margin="0,14,0,4" />

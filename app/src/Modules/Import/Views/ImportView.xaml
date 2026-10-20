@@ -45,7 +45,7 @@
         <Border Background="{StaticResource AccentSoft}" BorderBrush="{StaticResource Accent}" BorderThickness="1"
                 CornerRadius="10" Padding="16,12" Margin="0,0,0,12">
             <StackPanel>
-                <TextBlock Text="{Binding Summary}" FontWeight="SemiBold" TextWrapping="Wrap" />
+                <TextBlock partials:CopyText.Enabled="True" Text="{Binding Summary}" FontWeight="SemiBold" TextWrapping="Wrap" />
                 <TextBlock Text="{Binding Progress}" Style="{StaticResource MonoText}" Margin="0,2,0,0" TextWrapping="Wrap" />
                 <ItemsControl ItemsSource="{Binding LocationChecks}" Margin="0,6,0,0">
                     <ItemsControl.ItemTemplate>
@@ -53,7 +53,7 @@
                             <StackPanel Margin="0,2,0,4">
                                 <DockPanel>
                                     <TextBlock DockPanel.Dock="Left" Width="160" Text="{Binding Name}" FontWeight="Medium" />
-                                    <TextBlock Text="{Binding Status}" TextWrapping="Wrap" />
+                                    <TextBlock partials:CopyText.Enabled="True" Text="{Binding Status}" TextWrapping="Wrap" />
                                 </DockPanel>
                                 <TextBlock Margin="160,0,0,0" Style="{StaticResource MonoText}" TextWrapping="Wrap"
                                            Text="{Binding Path, StringFormat='czytana ścieżka: {0}'}" />

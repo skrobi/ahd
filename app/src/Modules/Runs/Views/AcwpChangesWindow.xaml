@@ -42,7 +42,7 @@
         <partials:BusyBar DockPanel.Dock="Top" DataContext="{Binding Busy}" />
         <Border DockPanel.Dock="Top" Background="{StaticResource CritSoft}" CornerRadius="6" Padding="12,8" Margin="0,0,0,8"
                 Visibility="{Binding HasError, Converter={StaticResource BoolToVisibility}}">
-            <TextBlock Text="{Binding Error}" Foreground="{StaticResource Crit}" FontWeight="SemiBold" TextWrapping="Wrap" />
+            <TextBlock partials:CopyText.Enabled="True" Text="{Binding Error}" Foreground="{StaticResource Crit}" FontWeight="SemiBold" TextWrapping="Wrap" />
         </Border>
 
         <!-- Kafelki rodzajów kosztu -->
@@ -155,7 +155,7 @@
                 </TreeView.ItemTemplate>
             </TreeView>
 
-            <TextBlock Grid.Row="2" Text="{Binding LinesTitle}" Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="0,10,0,6" />
+            <TextBlock partials:CopyText.Enabled="True" Grid.Row="2" Text="{Binding LinesTitle}" Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="0,10,0,6" />
             <DataGrid Grid.Row="3" Style="{StaticResource DataTable}" ItemsSource="{Binding Lines}" IsReadOnly="True">
                 <DataGrid.Columns>
                     <DataGridTextColumn Header="Stan" Binding="{Binding Side}" />

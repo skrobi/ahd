@@ -1,5 +1,6 @@
 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:partials="clr-namespace:PzlEv.Shared.Views.Partials"
                     xmlns:models="clr-namespace:PzlEv.Shared.Models"
                     xmlns:conv="clr-namespace:PzlEv.Shared.Utils.Ui.Converters">
 
@@ -34,7 +35,7 @@
             </Border>
             <TextBlock DockPanel.Dock="Left" Text="{Binding Element}" FontFamily="{DynamicResource FMono}" FontSize="12" Margin="0,1,8,0"
                        Foreground="{DynamicResource Muted}" />
-            <TextBlock Text="{Binding Message}" TextWrapping="Wrap" />
+            <TextBlock partials:CopyText.Enabled="True" Text="{Binding Message}" TextWrapping="Wrap" />
         </DockPanel>
     </DataTemplate>
 

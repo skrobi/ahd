@@ -75,7 +75,7 @@
                                     <ColumnDefinition Width="*" />
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Text="{Binding Name}" Style="{StaticResource MonoText}" />
-                                <TextBlock Grid.Column="1" Text="{Binding Status}" Foreground="{StaticResource Muted}" TextWrapping="Wrap" />
+                                <TextBlock partials:CopyText.Enabled="True" Grid.Column="1" Text="{Binding Status}" Foreground="{StaticResource Muted}" TextWrapping="Wrap" />
                             </Grid>
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>
@@ -105,7 +105,7 @@
                                     <ColumnDefinition Width="*" />
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Text="{Binding Column, Mode=OneWay}" Style="{StaticResource MonoText}" />
-                                <TextBlock Grid.Column="1" Text="{Binding Display, Mode=OneWay}" Style="{StaticResource MonoText}" />
+                                <TextBlock partials:CopyText.Enabled="True" Grid.Column="1" Text="{Binding Display, Mode=OneWay}" Style="{StaticResource MonoText}" />
                                 <TextBlock Grid.Column="2" Text="{Binding Rows, Mode=OneWay, StringFormat='{}{0} wierszy'}" Foreground="{StaticResource Muted}" />
                             </Grid>
                         </DataTemplate>

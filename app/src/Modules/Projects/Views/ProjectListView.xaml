@@ -12,7 +12,7 @@
             </partials:PageHeader.Actions>
         </partials:PageHeader>
         <partials:BusyBar DataContext="{Binding Busy}" />
-        <TextBlock Text="{Binding Status}" TextWrapping="Wrap" Margin="0,0,0,8" />
+        <TextBlock partials:CopyText.Enabled="True" Text="{Binding Status}" TextWrapping="Wrap" Margin="0,0,0,8" />
         <Border Style="{StaticResource Panel}" Visibility="{Binding IsEmpty, Converter={StaticResource BoolToVisibility}}">
             <TextBlock Style="{StaticResource MutedText}" Text="Brak programów." TextWrapping="Wrap" />
         </Border>

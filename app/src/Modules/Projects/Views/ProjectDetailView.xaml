@@ -63,10 +63,10 @@
             <DockPanel Visibility="{Binding Busy.IsBusy, Converter={StaticResource BoolToVisibility}}" ToolTip="{Binding Busy.Display}">
                 <ProgressBar DockPanel.Dock="Left" IsIndeterminate="True" Width="80" Height="4" Margin="0,0,10,0" BorderThickness="0"
                              VerticalAlignment="Center" Foreground="{StaticResource Info}" Background="{StaticResource Surface}" />
-                <TextBlock Text="{Binding Busy.Display}" Foreground="{StaticResource Info}" FontWeight="SemiBold" VerticalAlignment="Center"
+                <TextBlock partials:CopyText.Enabled="True" Text="{Binding Busy.Display}" Foreground="{StaticResource Info}" FontWeight="SemiBold" VerticalAlignment="Center"
                            TextTrimming="CharacterEllipsis" />
             </DockPanel>
-            <TextBlock Text="{Binding StatusLine}" ToolTip="{Binding StatusLine}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis">
+            <TextBlock partials:CopyText.Enabled="True" Text="{Binding StatusLine}" ToolTip="{Binding StatusLine}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis">
                 <TextBlock.Style>
                     <Style TargetType="TextBlock">
                         <Style.Triggers>
