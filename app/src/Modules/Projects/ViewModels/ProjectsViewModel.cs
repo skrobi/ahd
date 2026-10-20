@@ -36,7 +36,7 @@ public sealed class ProjectsViewModel : ObservableObject
         }
     }
 
-    public void ShowList() => Page = new ProjectListViewModel(_service, Busy, ShowWizard, code => _ = ShowProject(code));
+    public void ShowList() => Page = new ProjectListViewModel(_service, _dialogs, Busy, ShowWizard, code => _ = ShowProject(code));
 
     public void ShowWizard() => Page = new WizardViewModel(_service, _dialogs, Busy, ShowList, code => _ = ShowProject(code));
 

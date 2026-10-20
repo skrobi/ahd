@@ -66,6 +66,11 @@ w historii z informacją, kto i kiedy go zastąpił.
 Wyjątek – migracje, które zmieniły wartości w miejscu, w całej historii: 033 (zaokrąglenie `Rate`, `PoolId`,
 `BurdenGroup` → `BurdenGroupId` z usunięciem kolumny) i 038/039 (`CostKind`).
 
+Wyjątek – **usunięcie programu** (lista programów, „Usuń”, po ostrzeżeniu; `SqlProjectStore.Delete`): w jednej transakcji trwale usuwa
+przebiegi programu (`META_Run`, `META_RunPin`, `META_RunStep`, `RUN_Balance`, `RUN_BalanceEv`, `RUN_Issue`), wiersze programu
+w słownikach z historią (WP i CAM, Harmonogram i budżet, Kategorie WBS, Wykluczenia, Źródła danych, Parametry projektu, Cost Category
+programu), nakładkę (`META_PerformanceObjective`) i `META_Project`. Zostają: dane importów, dziennik (wpis o usunięciu), folder na dysku.
+
 ### 3.2 Dwie osie czasu
 
 | Oś | Znaczenie | Kto ustala |

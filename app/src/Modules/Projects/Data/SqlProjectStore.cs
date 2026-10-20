@@ -23,12 +23,35 @@ public sealed class SqlProjectStore(SqlDatabase db, IClock clock, ICurrentUser u
 
     private string NodeTable => db.Table("meta.PerformanceObjective");
 
+    /// <summary>Tabele z wierszami programu (kolumna Project): słowniki programu (ProjectDictionaries.Tables), Cost Category programu, nakładka.</summary>
+    private static readonly string[] ProjectTables =
+        ["dict.WpCam", "dict.ScheduleBudget", "dict.WbsCategory", "dict.Exclusion", "dict.ProjectSource", "dict.ProjectSetting", "dict.CostCategory",
+         "meta.PerformanceObjective"];
+
     public IReadOnlyList<ProjectInfo> Projects()
     {
         using var connection = db.Open();
         return connection.Query<ProjectRow>($"SELECT ProjectId, Version, Code, Name, ProjectType, RecordedAt, RecordedBy FROM {ProjectTable} WHERE SupersededAt IS NULL AND Active = 1 ORDER BY Code")
             .Select(r => r.ToInfo()).ToList();
     }
+
+    public int Delete(string code) =>
+        db.InTransaction((connection, transaction) =>
+        {
+            var deleted = 0;
+            // Przebiegi programu: dane uruchomień (po PinId), uruchomienia, przebiegi.
+            var pins = $"SELECT p.PinId FROM {db.Table(DbTables.RunPin)} p JOIN {db.Table(DbTables.Run)} r ON r.RunId = p.RunId WHERE r.Project = @code";
+            foreach (var table in new[] { DbTables.RunBalance, DbTables.RunBalanceEv, DbTables.RunIssue, "meta.RunStep" })
+                deleted += connection.Execute($"DELETE FROM {db.Table(table)} WHERE PinId IN ({pins})", new { code }, transaction, commandTimeout: 1800);
+            deleted += connection.Execute($"DELETE FROM {db.Table(DbTables.RunPin)} WHERE RunId IN (SELECT RunId FROM {db.Table(DbTables.Run)} WHERE Project = @code)",
+                new { code }, transaction);
+            deleted += connection.Execute($"DELETE FROM {db.Table(DbTables.Run)} WHERE Project = @code", new { code }, transaction);
+            // Słowniki programu z historią (wiersze globalnych słowników mają Project NULL – zostają), nakładka, rejestracja programu.
+            foreach (var table in ProjectTables)
+                deleted += connection.Execute($"DELETE FROM {db.Table(table)} WHERE Project = @code", new { code }, transaction);
+            deleted += connection.Execute($"DELETE FROM {ProjectTable} WHERE Code = @code", new { code }, transaction);
+            return deleted;
+        });
 
     public ProjectInfo? Find(string code)
     {

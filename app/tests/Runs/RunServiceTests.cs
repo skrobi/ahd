@@ -150,6 +150,13 @@ public sealed class RunServiceTests : IDisposable
         Assert.Equal(atApproval, projects.CostsAndHoursByElement("PAF", "ValueObjCrcy", "TotalQuantity", approved.AsOf).Amounts);   // stan zatwierdzony
         Assert.Equal(atApproval["2DI473001003"] + 10m, projects.CostsAndHoursByElement("PAF", "ValueObjCrcy", "TotalQuantity").Amounts["2DI473001003"]);   // ostatni import
         Assert.Equal(approved, projects.ApprovedActuals("PAF"));
+
+        // Usunięcie programu – z przebiegami, etapami, danymi przypiętymi i wynikami.
+        Assert.True(projects.Delete("PAF") > 0);
+        Assert.Empty(store.Pins("PAF", 10));
+        Assert.Empty(store.Issues(approving.PinId));
+        Assert.Empty(store.Balance(approving.PinId));
+        Assert.Null(projects.Find("PAF"));
     }
 
     /// <summary>

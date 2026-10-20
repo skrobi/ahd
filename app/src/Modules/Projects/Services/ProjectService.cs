@@ -34,6 +34,21 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
 
     public ProjectInfo? Find(string code) => store.Find(code);
 
+    /// <summary>
+    /// Trwałe usunięcie programu ze wszystkimi danymi (IProjectStore.Delete); folder na dysku sieciowym i dane importów zostają, wpis
+    /// w dzienniku. Odmowa (komunikat), gdy przebieg programu trwa w tej aplikacji; null – usunięty.
+    /// </summary>
+    public string? Delete(string code)
+    {
+        if (Runs?.IsRunning(code) == true)
+            return $"Przebieg programu {code} trwa – usuń program po jego zakończeniu.";
+        var deleted = store.Delete(code);
+        if (deleted == 0)
+            return $"Nie ma programu {code}.";
+        journal.Add(Area, $"{code}: program usunięty ze wszystkimi danymi ({deleted} wierszy); folder na dysku zostaje", code);
+        return null;
+    }
+
     public PoTree Objectives(string code) => store.Objectives(code);
 
     public List<Issue> ValidateBasics(string code, string name, string type) =>

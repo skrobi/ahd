@@ -13,6 +13,13 @@ public interface IProjectStore
 
     ProjectInfo? Find(string code);
 
+    /// <summary>
+    /// Trwałe usunięcie programu (wyjątek od zasady wersjonowania – na żądanie użytkownika) w jednej transakcji: przebiegi (uruchomienia,
+    /// etapy, dane przypięte, wyniki), słowniki programu z historią, Cost Category programu, nakładka i rejestracja programu; dane importów
+    /// i dziennik zostają. Zwraca liczbę usuniętych wierszy (0 – nie ma programu).
+    /// </summary>
+    int Delete(string code);
+
     /// <summary>Bieżąca nakładka Performance Objectives projektu.</summary>
     PoTree Objectives(string code);
 

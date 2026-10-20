@@ -149,6 +149,15 @@ public sealed class ProjectStoreAndServiceTests : IDisposable
         var analytic = ProjectService.Analytic(tree, _service.Rows(ProjectDictionaries.WpCam, "M28"), _service.Rows(ProjectDictionaries.ScheduleBudget, "M28"), _service.Mapping());
         Assert.Equal((3, 2250m, 75000.5m), (analytic.WpCount, analytic.BacHours, analytic.BacMaterial));
         Assert.Empty(analytic.ElementsWithoutWp);
+
+        // Usunięcie programu: wszystkie dane programu znikają, folder na dysku zostaje, kod wolny dla nowego programu.
+        Assert.Null(_service.Delete("M28"));
+        Assert.Null(_service.Find("M28"));
+        Assert.Empty(_service.Rows(ProjectDictionaries.WpCam, "M28"));
+        Assert.Empty(_service.Rows(ProjectDictionaries.ScheduleBudget, "M28"));
+        Assert.Equal(0, _service.Objectives("M28").ElementCount);
+        Assert.Equal("Nie ma programu M28.", _service.Delete("M28"));
+        Assert.True(Directory.Exists(Path.Combine(_root, "Projekty", "M28", "CAM")));
     }
 
     [SqlFact]
