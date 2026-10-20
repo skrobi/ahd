@@ -52,7 +52,7 @@ public sealed record ActualsFreshness(IReadOnlyList<ActualsFile> Files, string? 
 }
 
 /// <summary>
-/// Przebieg z zatwierdzonymi danymi ACTUALS (etap „Zatwierdzenie ACTUALS” zakończony): struktura programu pokazuje koszty w stanie
+/// Przebieg z zatwierdzonymi danymi ACTUALS (etap „Zatwierdzenie ACTUALS” zakończony, a bez niego w szablonie – pierwszy etap walidacji): struktura programu pokazuje koszty w stanie
 /// danych z chwili przypięcia (AsOf) – nowszy import RABIT ani niezatwierdzony przebieg ich nie zmieniają (docs/pipeline-fazy.md, rozdz. 4.1).
 /// </summary>
 public sealed record ApprovedActuals(string RunCode, int PinNo, DateTimeOffset AsOf, string? ApprovedBy, string? Comment)
@@ -65,8 +65,8 @@ public sealed record ApprovedActuals(string RunCode, int PinNo, DateTimeOffset A
         : $"ACTUALS struktury: przebieg {approved.RunCode} #{approved.PinNo} · stan {Time(approved.AsOf)}";
 
     public static string Details(ApprovedActuals? approved) => approved is null
-        ? "Program nie ma przebiegu z zatwierdzonymi danymi ACTUALS – struktura pokazuje ostatni import RABIT. Zatwierdzenie: klocek "
-          + "„Zatwierdzenie ACTUALS” w szablonie przebiegu (ekran Przebiegi) i „Zatwierdź dane ACTUALS i dalej” w zakładce Przebieg."
+        ? "Program nie ma przebiegu z zatwierdzonymi danymi ACTUALS – struktura pokazuje ostatni import RABIT. Zatwierdzenie: zakończony "
+          + "etap „Zatwierdzenie ACTUALS” (klocek szablonu), a bez niego – zakończony pierwszy etap walidacji (także z zaakceptowanymi błędami)."
         : $"Koszty struktury (ACWP, Actual DLH) – dane ACTUALS w stanie z przypięcia przebiegu {approved.RunCode} #{approved.PinNo} ({Time(approved.AsOf)}), "
           + $"zatwierdzone{(approved.Comment is { Length: > 0 } c ? $": {c}" : approved.ApprovedBy is { } by ? $" przez {by}" : "")}. "
           + "Nowszy import RABIT trafi do struktury po zatwierdzeniu danych w kolejnym przebiegu.";

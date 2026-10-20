@@ -33,7 +33,6 @@ public sealed class ProjectDetailViewModel : ObservableObject, IDisposable
     private readonly ProjectService _service;
     private readonly IFileDialogs _dialogs;
     private string _status = "";
-    private Pill _readiness = new("muted", "");
     private readonly IRunPanel? _runPanel;
     private P1sInputs _mapping = P1sInputs.None;
     private PoTree _saved = new();
@@ -42,11 +41,9 @@ public sealed class ProjectDetailViewModel : ObservableObject, IDisposable
     // osoby (słownik Osoby), elementy CES nakładek innych projektów, kontrola folderów na dysku sieciowym.
     private IReadOnlyList<LookupOption>? _persons;
     private bool _ownersLoaded;
-    private (Issue Structure, Issue CamAccess)? _folderChecks;
     private ActualsFreshness? _actuals;   // z kiedy są dane ACTUALS – czytane razem z kosztami
     private ProductionData? _production;  // PZLPROD na żywo (vAHDD, vAPD) – przy otwarciu, „Odśwież” i po zmianie Legacy WBS
     private bool _isEditingObjectives;
-    private bool _isReady;
     private DictionaryPanelViewModel? _selectedDictionary;
     private readonly Queue<StructureRowViewModel> _commits = new();
     private bool _committing;
@@ -88,12 +85,11 @@ public sealed class ProjectDetailViewModel : ObservableObject, IDisposable
         RefreshMapping = new AsyncRelayCommand(() => { Structure.CommitEdits(); return Reload(refreshMapping: true); }, () => !Busy.IsBusy);
         ImportSources = new AsyncRelayCommand(DoImportSources, () => !Busy.IsBusy && _service.Imports is not null);
         _runPanel = _service.RunPanels?.Create(Code);
-        _runPanel?.Block("trwa sprawdzanie gotowości programu");   // do pierwszego odczytu (Reload)
         if (_service.Runs is { } runs)
             runs.Finished += OnRunFinished;
         foreach (var item in ProjectDictionaries.ForType(project.Type))
         {
-            var panel = new DictionaryPanelViewModel(item, project.Type);
+            var panel = new DictionaryPanelViewModel(item);
             panel.Load = new AsyncRelayCommand(() => LoadDictionary(panel), () => item.Stored && !Busy.IsBusy);
             panel.Apply = new AsyncRelayCommand(() => ApplyDictionary(panel), () => panel.Preview is { HasErrors: false, HasChanges: true } && !Busy.IsBusy);
             panel.Remove = new RelayCommand(_ => { panel.SetPreview(null, ""); Status = "Wczytanie anulowane – słownik bez zmian."; }, _ => panel.HasPreview && !Busy.IsBusy);
@@ -186,11 +182,6 @@ public sealed class ProjectDetailViewModel : ObservableObject, IDisposable
     private static readonly IReadOnlyList<KpiTile> EvKpis =
         new[] { "BCWS", "BCWP", "CPI", "SPI", "EAC" }.Select(k => new KpiTile(k, "—", "po obliczeniu EV w przebiegu", Pending: true)).ToList();
 
-    public ObservableCollection<Issue> Readiness { get; } = [];
-
-    /// <summary>Czy projekt jest gotowy do przebiegu (kontrole F02 bez ERROR).</summary>
-    public bool IsReady { get => _isReady; private set => SetProperty(ref _isReady, value); }
-
     public string MappingInfo => _mapping.Describe;
 
     public ObservableCollection<DictionaryPanelViewModel> Dictionaries { get; } = [];
@@ -269,8 +260,6 @@ public sealed class ProjectDetailViewModel : ObservableObject, IDisposable
 
     /// <summary>Wiersze wybranego słownika projektu – edycja w komórkach (wspólna tabela słownika).</summary>
     public DictionaryTableViewModel Table { get; } = new();
-
-    public Pill ReadinessPill { get => _readiness; private set => SetProperty(ref _readiness, value); }
 
     public string Status
     {
@@ -362,12 +351,12 @@ public sealed class ProjectDetailViewModel : ObservableObject, IDisposable
     /// <summary>„Importuj źródła projektu” – pliki definicji ze słownika „Źródła danych”, potem odświeżenie kosztów.</summary>
     public ICommand ImportSources { get; }
 
-    /// <summary>Stan projektu z bazy w jednym odczycie w tle: nakładka, struktura P1S, gotowość, słowniki, struktura.</summary>
-    private sealed record Snapshot(PoTree Tree, P1sInputs Mapping, IReadOnlyDictionary<string, string> Owners, List<Issue> Readiness,
+    /// <summary>Stan projektu z bazy w jednym odczycie w tle: nakładka, struktura P1S, słowniki, struktura.</summary>
+    private sealed record Snapshot(PoTree Tree, P1sInputs Mapping, IReadOnlyDictionary<string, string> Owners,
         IReadOnlyDictionary<string, (int Rows, string LastChange)> Dictionaries, ProjectStructure Structure, IReadOnlyList<LookupOption> Persons,
         IReadOnlyList<LookupOption> Categories,
         IReadOnlyList<(DictRow Row, bool Inherited)>? Table, IReadOnlyDictionary<string, IReadOnlyList<LookupOption>> Lookups,
-        ElementActuals Costs, string? CostsError, string CostsField, string? Currency, string? CurrencyProblem, ApprovedActuals? Approved, IReadOnlyList<LookupOption> Mpks, IReadOnlyList<LookupOption> PersonLookups, (Issue Structure, Issue CamAccess) FolderChecks,
+        ElementActuals Costs, string? CostsError, string CostsField, string? Currency, string? CurrencyProblem, ApprovedActuals? Approved, IReadOnlyList<LookupOption> Mpks, IReadOnlyList<LookupOption> PersonLookups,
         ActualsFreshness Actuals, ProductionData Production, IReadOnlyList<SourceDefinitionRow> SourceDefinitions);
 
     /// <summary>
@@ -383,7 +372,6 @@ public sealed class ProjectDetailViewModel : ObservableObject, IDisposable
         var selected = _selectedDictionary;
         var table = selected is { Item.Stored: true } && (discard || !Table.HasPendingChanges) ? selected.Item.Code : null;
         var cachedPersons = refreshMapping ? null : _persons;
-        var cachedFolders = refreshMapping ? null : _folderChecks;
         var cachedOwners = refreshMapping || !_ownersLoaded ? null : _owners;
         var cachedActuals = refreshMapping ? null : _actuals;
         var cachedProduction = refreshMapping ? null : _production;
@@ -411,10 +399,7 @@ public sealed class ProjectDetailViewModel : ObservableObject, IDisposable
                     ProjectService.Structure(tree, mapping, wpCam, rows.GetValueOrDefault(ProjectDictionaries.ScheduleBudget) ?? [], costs.Amounts, production,
                         costs.Hours, costs.Labor, costs.Material, rates));
                 var persons = cachedPersons ?? steps.Time("osoby", _service.PersonLookups);
-                var folderChecks = cachedFolders ?? steps.Time("foldery (dysk sieciowy)", () => _service.FolderChecks(Code));
                 var categories = ProjectService.CategoryLookups(rows.GetValueOrDefault(ProjectDictionaries.WbsCategories) ?? []);
-                var readiness = steps.Time("gotowość", () => ProjectService.Readiness(Project, tree, mapping, rows,
-                    persons.Select(p => p.Value).ToHashSet(StringComparer.OrdinalIgnoreCase), folderChecks));
                 var owners = cachedOwners ?? steps.Time("nakładki innych programów", () => _service.WbsOwners(Code));
                 var editable = table is null ? null : steps.Time("tabela słownika", () =>
                     _service.EditableRows(table, rows.TryGetValue(table, out var tableRows) ? tableRows : _service.Rows(table, Code)));
@@ -425,10 +410,10 @@ public sealed class ProjectDetailViewModel : ObservableObject, IDisposable
                 var projectSources = (rows.GetValueOrDefault(ProjectDictionaries.Sources) ?? []).Select(r => r["Definicja źródła"]).OfType<string>()
                     .ToHashSet(StringComparer.OrdinalIgnoreCase);
                 var actuals = cachedActuals ?? steps.Time("data danych ACTUALS", ReadActuals);
-                return new Snapshot(tree, mapping, owners, readiness,
+                return new Snapshot(tree, mapping, owners,
                     states.ToDictionary(s => s.Key, s => (s.Value.Rows.Count, s.Value.LastChange)), structure, ProjectService.PersonOptions(persons, wpCam),
                     ProjectService.CategoryOptions(categories, wpCam), editable,
-                    ProjectService.Lookups(persons, categories, sources, burdenGroups, mpks, runTemplates), costs, costsError, costsField, currency, currencyProblem, approved, mpks, persons, folderChecks, actuals, production,
+                    ProjectService.Lookups(persons, categories, sources, burdenGroups, mpks, runTemplates), costs, costsError, costsField, currency, currencyProblem, approved, mpks, persons, actuals, production,
                     definitions.Where(d => projectSources.Contains(d.Code)).ToList());
             });
             Logger.Information("Program {Code}: wczytanie {Steps}", Code, steps.Summary);
@@ -446,7 +431,6 @@ public sealed class ProjectDetailViewModel : ObservableObject, IDisposable
             _owners = snapshot.Owners;
             _ownersLoaded = true;
             _persons = snapshot.PersonLookups;
-            _folderChecks = snapshot.FolderChecks;
             _actuals = snapshot.Actuals;
             _production = snapshot.Production;
             SourceDefinitions = snapshot.SourceDefinitions;
@@ -467,14 +451,6 @@ public sealed class ProjectDetailViewModel : ObservableObject, IDisposable
                 Table.Load(selected is { Item.Stored: true } ? ProjectDictionaries.Base(selected.Item.Code) : null, snapshot.Table ?? [], snapshot.Lookups);
             if (discard)
                 Status = "Zmiany słownika odrzucone.";
-            Readiness.Clear();
-            foreach (var check in snapshot.Readiness)
-                Readiness.Add(check);
-            IsReady = ProjectReadiness.IsReady(snapshot.Readiness);
-            ReadinessPill = IsReady ? new Pill("ok", "gotowy do przebiegu") : new Pill("crit", "niegotowy – przebieg zablokowany");
-            // Projekt niegotowy (ERROR gotowości) – nowy przebieg zablokowany w zakładce Przebieg (docs/pipeline-fazy.md, P0 – bramka wejścia).
-            _runPanel?.Block(IsReady ? null : "program niegotowy: " + string.Join("; ", snapshot.Readiness.Where(c => c.Level == CheckLevel.Error).Select(c => c.Message))
-                + ". Szczegóły: zakładka Wskaźniki → Gotowość do przebiegu");
             if (refreshMapping)
                 Status = _costsError is null ? "Odświeżono strukturę P1S i koszty (ostatni import ACTUALS)." : $"Odświeżono strukturę P1S; {_costsError}";
         });
@@ -905,7 +881,6 @@ public sealed class ProjectDetailViewModel : ObservableObject, IDisposable
         await Try(async () =>
         {
             var created = await Busy.Run("Tworzenie folderów programu…", () => _service.Folders.Create(Code));
-            _folderChecks = null;   // ponowna kontrola folderów
             await Reload(refreshMapping: false);
             Status = created.Count == 0 ? "Wszystkie foldery programu istnieją." : $"Utworzono foldery: {string.Join(", ", created)}.";
         });

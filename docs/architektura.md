@@ -112,7 +112,7 @@ Każdy moduł jest folderem `Modules/<Folder>/` i właścicielem swoich ekranów
 | Pulpit | `Dashboard` | pulpit, „Wymaga uwagi”, ostatnie zdarzenia (F07) | – | `docs/funkcjonalnosc.md` |
 | Import | `Import` | pobranie i załadowanie plików, parsery źródeł (F05) | G1 | `docs/zrodla-danych.md` |
 | Master Data | `MasterData` | ekran Słowniki – słowniki globalne (F03), struktura P1S z `PZLPROD` (tylko odczyt); mechanizm słowników jest wspólny (`Shared/Utils/Dictionaries`) | G3 | `docs/slowniki.md`, `docs/zrodla-danych.md` |
-| Projects | `Projects` | projekty, kreator, Performance Objectives, słowniki projektu, gotowość, foldery projektu (F01, F02) | – | `docs/performance-objectives.md` |
+| Projects | `Projects` | projekty, kreator, Performance Objectives, słowniki projektu, foldery projektu (F01) | – | `docs/performance-objectives.md` |
 | Runs | `Runs` | przebiegi, ekran przebiegu, przypięcie stanu, walidacja, zamknięcie (F06) | P0, P1, P2, Z | `docs/pipeline-fazy.md`, `docs/model-danych.md` |
 | Reconciliation | `Reconciliation` | łączenie źródeł, pliki dla finansów | P3, P4 | `docs/pipeline-fazy.md` |
 | CAM / Progress | `Progress` | zaawansowanie: produkcja, uzupełnienia, pliki CAM | P5, P6, P7 | `docs/pipeline-fazy.md` |
@@ -165,7 +165,7 @@ modułu i `Shared/Models`; Excel, File Connectors, SQL Access – `Shared/Utils`
 - moduły komunikują się przez bazę (etapy – `docs/pipeline-fazy.md`, rozdz. 1.1), nawigację po kluczu
   (`INavigator`, `ModuleKeys`) albo kontrakt w `Shared`: moduł rejestruje implementację w `Initialize`
   (`AppServices.Contracts`), inny pobiera ją przy użyciu – np. `ISourceImport` (moduł Import) dla „Importuj źródła
-  projektu” i przebiegu, `IRunLauncher` (moduł Przebiegi) dla listy projektów, `IRunPanels` – panel przebiegu programu (zakładka Przebieg; uruchomienie przebiegu, blokada – gotowość projektu), `IAcwpChanges` – okno „Zmiany ACWP” (moduł Projekty);
+  projektu” i przebiegu, `IRunLauncher` (moduł Przebiegi) dla listy projektów, `IRunPanels` – panel przebiegu programu (zakładka Przebieg; uruchomienie przebiegu – bez kontroli gotowości, wymagania sprawdzają reguły etapów), `IAcwpChanges` – okno „Zmiany ACWP” (moduł Projekty);
   powiadomienia – `Shared/Utils/Ui/Notifications` (Windows),
 - silnik EVM zależy wyłącznie od modeli (rozdz. 5.1).
 
@@ -228,8 +228,8 @@ uruchomienia, kontrola zapytania, reguły startowe; wykonanie w module Przebiegi
 - Stan obecny: magazyny (`Data/Sql<Moduł>Store`) wykonują sparametryzowane polecenia SQL bezpośrednio na tabelach
   oraz wywołują procedury (np. `CAN_LatestImport`, `REP_ProjectCosts`, `RUN_PinBalance`) – konto użytkownika
   (`pzl_ev_user`) potrzebuje dziś praw do tabel.
-- Reguły procesu są wymuszane w procedurach (docelowo; dziś część reguł sprawdza tylko aplikacja, np. gotowość
-  projektu przed przebiegiem – `docs/pipeline-fazy.md`, P0) – aplikacja działa na stanowisku użytkownika i nie może
+- Reguły procesu są wymuszane w procedurach (docelowo; dziś część reguł sprawdza tylko aplikacja, np. bramki
+  etapów przebiegu – `docs/pipeline-fazy.md`, rozdz. 4.1) – aplikacja działa na stanowisku użytkownika i nie może
   być jedyną kontrolą.
 - Każda procedura zapisuje użytkownika AD (`ORIGINAL_LOGIN()`) w dzienniku.
 
@@ -281,7 +281,7 @@ wspólnym i nadpisanie w podklasie – bez warunków na typ w modułach.
 - **Konfiguracja środowiska:** plik `pzl-ev.json` obok `PZL-EV.exe` – przełącznik `Env` (`TEST` / `PROD`) i sekcja
   `Environments.<Env>`: `NetworkRoot` (korzeń folderów środowiska, rozdz. 7), `Sql` (serwer, baza, schemat,
   sygnatura tabel – logowanie kontem AD) i `PzlProd` (struktura P1S: serwer `splmcd03`, baza `PZLPROD`, schemat
-  `LOG` – tylko odczyt kontem AD; sekcja opcjonalna – bez niej gotowość projektu (kontrola „Strona P1S”), okno „Struktura P1S (PZLPROD)” na ekranie Słowniki i Diagnostyka pokazują, czego brakuje) oraz `PzlHrProd` (baza
+  `LOG` – tylko odczyt kontem AD; sekcja opcjonalna – bez niej struktura P1S (kolumna Braki), okno „Struktura P1S (PZLPROD)” na ekranie Słowniki i Diagnostyka pokazują, czego brakuje) oraz `PzlHrProd` (baza
   pracowników `PZLHRPROD`, schemat `HR` – źródło słownika Osoby, „Dodaj z HR”; tylko odczyt, sekcja opcjonalna –
   `app/README.md`). Plik jest wymagany – wzór z opisem ustawień `app/pzl-ev.json` kopiowany
   obok exe przy budowie; brak pliku albo pola = komunikat przy starcie (`app/README.md`). TEST: `pzltestdb.intl.lmco.com`, baza `PZLTEST`, schemat `FINOP`, sygnatura `PZLEV_`.
@@ -335,7 +335,7 @@ wspólnym i nadpisanie w podklasie – bez warunków na typ w modułach.
 | 5 | Zmiana istniejących wierszy w `PZLPROD` (założenie przyrostowości) | odczyt bez kopiowania; zmiana `LOG.WBS` nie jest wykrywana i może zmienić wynik odtworzenia rewizji |
 | 6 | Nieaktualne dane produkcyjne (`vAHDD`) | kontrola świeżości w P0 (niewdrożona) |
 | 7 | Mieszanie źródeł zaawansowania | zapis pochodzenia; w przebiegu zamykającym wyłącznie CAM |
-| 8 | Nowe elementy SAP bez przypisania | gotowość projektu (element nakładki bez `Legacy WBS` – WARNING) i P3; blokada w przebiegu zamykającym |
+| 8 | Nowe elementy SAP bez przypisania | kolumna Braki struktury (element nakładki bez `Legacy WBS`) i P3; blokada w przebiegu zamykającym |
 | 9 | Pliki CAM zmienione poza polami lub z innego przebiegu | identyfikator i blokady w szablonie, kontrola przy imporcie |
 | 10 | Excel zmienia typy (WBS jako liczba, daty, zera wiodące) | walidacja typów; CSV z RABIT, jeśli dostępny |
 | 11 | Reguły procesu omijane przez bezpośrednie połączenie z bazą | reguły w procedurach, brak praw do tabel (stan docelowy – rozdz. 6; dziś część reguł tylko w aplikacji) |

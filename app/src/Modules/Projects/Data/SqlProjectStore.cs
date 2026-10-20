@@ -284,11 +284,16 @@ public sealed class SqlProjectStore(SqlDatabase db, IClock clock, ICurrentUser u
             SELECT TOP (1) r.Code AS RunCode, p.PinNo, pin.FinishedAt AS AsOf, a.ActedBy AS ApprovedBy, a.Comment
             FROM {db.Table(DbTables.RunPin)} p
             JOIN {db.Table(DbTables.Run)} r ON r.RunId = p.RunId
-            JOIN {db.Table("meta.RunStep")} a ON a.PinId = p.PinId AND a.Action = @approve AND a.Status = @done
             JOIN {db.Table("meta.RunStep")} pin ON pin.PinId = p.PinId AND pin.Action = @pin AND pin.Status = @done AND pin.FinishedAt IS NOT NULL
-            WHERE r.Project = @code AND p.Rows IS NOT NULL
+            -- etap decydujący: Zatwierdzenie ACTUALS, a w uruchomieniu bez niego – pierwszy etap walidacji (walidacja ACTUALS)
+            CROSS APPLY (SELECT TOP (1) s.Status, s.ActedBy, s.Comment FROM {db.Table("meta.RunStep")} s
+                         WHERE s.PinId = p.PinId
+                           AND (s.Action = @approve
+                                OR s.Action = @checks AND NOT EXISTS (SELECT 1 FROM {db.Table("meta.RunStep")} x WHERE x.PinId = p.PinId AND x.Action = @approve))
+                         ORDER BY CASE WHEN s.Action = @approve THEN 0 ELSE 1 END, s.StepNo) a
+            WHERE r.Project = @code AND p.Rows IS NOT NULL AND a.Status = @done
             ORDER BY pin.FinishedAt DESC, p.PinId DESC
-            """, new { code, approve = RunActions.ApproveActuals, pin = RunActions.Pin, done = RunStepStatuses.Done });
+            """, new { code, approve = RunActions.ApproveActuals, checks = RunActions.Checks, pin = RunActions.Pin, done = RunStepStatuses.Done });
     }
 
     public IReadOnlyList<string> CurrenciesOf(IReadOnlyCollection<string> definitions, string currencyField)

@@ -121,13 +121,13 @@ public static class ProjectDictionaries
     /// <summary>Słowniki projektu w kolejności kreatora i ekranu projektu.</summary>
     public static IReadOnlyList<ProjectDictionaryItem> Items { get; } =
     [
-        new(WpCam, "WP i CAM", "WP i CAM", RequiredFor: ProjectTypes.All, Stored: true),
-        new(ScheduleBudget, "Harmonogram i budżet", "Harmonogram i budżet", RequiredFor: ProjectTypes.All, Stored: true),
-        new(WbsCategories, "Kategorie WBS", "Kategorie WBS", RequiredFor: [], Stored: true),
-        new(GlobalDictionaries.CostCategory, "Cost Category – zmiany w programie", "Cost Category projektu", RequiredFor: [], Stored: true),
-        new(Exclusions, "Wykluczenia", "Wykluczenia", RequiredFor: [], Stored: true),
-        new(Sources, "Źródła danych", "Źródła danych", RequiredFor: [], Stored: true),
-        new(Settings, "Parametry programu", "Parametry projektu", RequiredFor: [], Stored: true),
+        new(WpCam, "WP i CAM", "WP i CAM", Stored: true),
+        new(ScheduleBudget, "Harmonogram i budżet", "Harmonogram i budżet", Stored: true),
+        new(WbsCategories, "Kategorie WBS", "Kategorie WBS", Stored: true),
+        new(GlobalDictionaries.CostCategory, "Cost Category – zmiany w programie", "Cost Category projektu", Stored: true),
+        new(Exclusions, "Wykluczenia", "Wykluczenia", Stored: true),
+        new(Sources, "Źródła danych", "Źródła danych", Stored: true),
+        new(Settings, "Parametry programu", "Parametry projektu", Stored: true),
     ];
 
     /// <summary>Słowniki projektu dla typu (wspólne dla wszystkich typów; wymagalność – IsRequired).</summary>

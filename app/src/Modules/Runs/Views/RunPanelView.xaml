@@ -96,10 +96,6 @@
                 Visibility="{Binding HasError, Converter={StaticResource BoolToVisibility}}">
             <TextBlock Text="{Binding Error}" Foreground="{StaticResource Crit}" FontWeight="SemiBold" TextWrapping="Wrap" />
         </Border>
-        <Border Background="{StaticResource CritSoft}" CornerRadius="6" Padding="12,8" Margin="0,0,0,8"
-                Visibility="{Binding IsBlocked, Converter={StaticResource BoolToVisibility}}">
-            <TextBlock Text="{Binding BlockedText}" Foreground="{StaticResource Crit}" FontWeight="SemiBold" TextWrapping="Wrap" />
-        </Border>
         <!-- Przebieg w toku: etap, reguła i czas od uruchomienia (licznik co sekundę), pasek – jak BusyBar -->
         <Border Background="{StaticResource InfoSoft}" BorderBrush="{StaticResource Info}" BorderThickness="1" CornerRadius="4"
                 Padding="10,6" Margin="0,0,0,8" Visibility="{Binding IsRunning, Converter={StaticResource BoolToVisibility}}">

@@ -116,9 +116,10 @@ Z_OPIS → PROJORG → elementy) z wyszukiwarką – tylko do odczytu, to nie je
 ## 4. Typ projektu a słowniki
 
 Wszystkie typy projektów przechodzą ten sam przebieg (`docs/pipeline-fazy.md`). Typ wyznacza zestaw słowników
-pobieranych do przebiegu oraz wymaganych do jego uruchomienia:
+pobieranych do przebiegu; czego przebieg wymaga, sprawdzają reguły walidacji etapów przebiegu (szablon programu), a nie kontrola
+przed startem:
 
-| Typ | Słowniki projektu wymagane | Słowniki szczególne | Waluta wyniku | Wynik dodatkowy |
+| Typ | Słowniki projektu używane | Słowniki szczególne | Waluta wyniku | Wynik dodatkowy |
 |---|---|---|---|---|
 | SAC (Sikorsky) | WP i CAM, Harmonogram i budżet | Stawki wydziałów (bieżące), Kursy walut (USD) | USD | plik dla Cobra |
 | CAS Compliance | WP i CAM, Harmonogram i budżet | narzuty CAS – słowniki globalne (rozdz. 6.1): Kategorie, Grupy, Formuły i Wskaźniki narzutu CAS, grupa narzutowa w Cost Category, Kurs CAS w „Kursy walut” – koszty po narzutach (TOTAL COST) | PLN | – |
@@ -150,7 +151,7 @@ Kontekst biznesowy typów – `readme.md`.
 |---|---|
 | element P1S należy do projektu (kod P1S elementu nakładki – `Legacy WBS` – albo pod nim, także w `LOG.WBS`) i nie należy do innego projektu | ERROR |
 | jeden WP na element P1S | ERROR |
-| WP bez CAM – zapis dozwolony (najpierw wskazuje się WP, CAM uzupełnia się później); w strukturze brak „WP bez CAM”; gotowość projektu – ERROR (blokuje przebieg) | WARNING |
+| WP bez CAM – zapis dozwolony (najpierw wskazuje się WP, CAM uzupełnia się później); w strukturze brak „WP bez CAM” | WARNING |
 | CAM wybierany z listy osób; przy wczytaniu z Excela CAM spoza listy osób | – / WARNING |
 | Cost Category spoza słownika „Kategorie WBS” projektu (sprawdzane, gdy słownik ma pozycje) | WARNING |
 

@@ -321,7 +321,7 @@ opis; klucz projekt + kategoria). Kolumna `DICT_WpCam.CostCategory` przyjmuje ka
 BAC HOURS i BAC MATERIAL. Wymaga aplikacji 0.32.0.
 
 **Migracja `sql/mssql/021_cam_opcjonalny.sql`:** `DICT_WpCam.Cam` dopuszcza NULL – WP wskazuje się najpierw, CAM
-uzupełnia później (gotowość projektu blokuje przebieg z WP bez CAM). Wymaga aplikacji 0.34.0.
+uzupełnia później). Wymaga aplikacji 0.34.0.
 
 **Migracje `sql/mssql/022_produkcja_slowniki.sql`, `023_dane_produkcji.sql`:** słowniki globalne „Wskaźniki DJK”
 (`DICT_DjkRate`) i „Parametry produkcji” (`DICT_ProductionParameter`) z danymi startowymi raportu S70MR (023 – dane startowe,

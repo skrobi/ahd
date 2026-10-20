@@ -121,17 +121,18 @@ public sealed class RunServiceTests : IDisposable
         using (other.Locks.TryAcquire(RunService.ProjectLock("PAF"), out _))
             Assert.StartsWith("Przebieg programu PAF trwa", service.Execute("PAF").Summary);
 
-        // Zatwierdzenie ACTUALS (klocek systemowy): struktura na danych zatwierdzonego przebiegu – stan z przypięcia; import po
-        // zatwierdzeniu nie zmienia kosztów struktury do kolejnego zatwierdzenia.
+        // Zatwierdzenie ACTUALS: struktura na danych zatwierdzonego przebiegu – stan z przypięcia; import po zatwierdzeniu nie zmienia
+        // kosztów struktury do kolejnego zatwierdzenia. Szablon bez klocka „Zatwierdzenie ACTUALS” – zakończona walidacja ACTUALS
+        // (T40 #1 – błędy zaakceptowane; T41 #1 – zatrzymany na błędzie, niezatwierdzony).
         var projects = new SqlProjectStore(_database.Sql, _services.Clock, _services.User);
-        Assert.Null(projects.ApprovedActuals("PAF"));
+        Assert.Equal((pin.Code, pin.PinNo), (projects.ApprovedActuals("PAF")!.RunCode, projects.ApprovedActuals("PAF")!.PinNo));
         var approval = new RunDefinition("A – zatwierdzenie ACTUALS", RunRules.AllTypes, [.. RunDefinitions.StandardSteps.Take(3), RunDefinitions.ActualsApproval(4)]);
         Assert.Equal(PzlEv.Shared.Models.Dictionaries.SaveStatus.Saved, templates.Save(approval, isActive: true).Status);   // domyślny – pierwszy alfabetycznie
         service.Execute("PAF");
         var approving = store.Pins("PAF", 1)[0];
         service.Confirm(approving.PinId, 3, "znany błąd netowania");
         Assert.Equal(RunStepStatuses.NeedsAction, store.Steps(approving.PinId)[3].Status);   // czeka na zatwierdzenie danych
-        Assert.Null(projects.ApprovedActuals("PAF"));
+        Assert.Equal(pin.Code, projects.ApprovedActuals("PAF")!.RunCode);                     // z klockiem – liczy się tylko zatwierdzenie
         Assert.Equal(RunStatuses.Errors, service.Confirm(approving.PinId, 4, "dane ACTUALS sprawdzone").Status);
         var approved = projects.ApprovedActuals("PAF")!;
         Assert.Equal((approving.Code, approving.PinNo, store.Steps(approving.PinId)[1].FinishedAt), (approved.RunCode, approved.PinNo, (DateTimeOffset?)approved.AsOf));

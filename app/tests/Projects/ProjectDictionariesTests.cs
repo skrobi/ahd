@@ -82,7 +82,6 @@ public sealed class ProjectDictionariesTests
     {
         var item = ProjectDictionaries.Item(ProjectDictionaries.WbsCategories);
         Assert.True(item.Stored);
-        Assert.Empty(item.RequiredFor);
         Assert.Contains(ProjectDictionaries.ForType(ProjectTypes.Sac), i => i.Code == ProjectDictionaries.WbsCategories);
         Assert.Contains(ProjectDictionaries.Tables, t => t.Spec.Code == ProjectDictionaries.WbsCategories);
         Assert.Empty(Validate(ProjectDictionaries.WbsCategories, Cat("Production", "produkcja"), Cat("Programs", null)));

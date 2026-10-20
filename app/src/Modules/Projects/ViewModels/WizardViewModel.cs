@@ -288,7 +288,7 @@ public sealed class WizardViewModel : ObservableObject
         Dictionaries.Clear();
         foreach (var item in ProjectDictionaries.ForType(Type.Code))
         {
-            var panel = new DictionaryPanelViewModel(item, Type.Code);
+            var panel = new DictionaryPanelViewModel(item);
             panel.Load = new AsyncRelayCommand(() => LoadDictionary(panel), () => item.Stored && !IsCreated && !Busy.IsBusy);
             panel.Remove = new AsyncRelayCommand(() => { _files.Remove(item.Code); return RefreshDictionaries(); }, () => _files.ContainsKey(item.Code) && !IsCreated && !Busy.IsBusy);
             Dictionaries.Add(panel);
@@ -376,8 +376,6 @@ public sealed class WizardViewModel : ObservableObject
                 checks.Add(Issue.Error($"{panel.Name}: plik z błędami – popraw plik albo usuń wczytanie w kroku 3", panel.Name));
             else if (panel.Preview is { } p)
                 checks.Add(new Issue(CheckLevel.Pass, $"{panel.Name}: {p.Working.Count} wierszy", panel.Name));
-            else if (panel.Item.IsRequired(Type.Code))
-                checks.Add(Issue.Warning($"{panel.Name}: nie wczytano – słownik pusty, pierwszy przebieg zablokowany (program niegotowy)", panel.Name));
         }
         var wp = Dictionaries.FirstOrDefault(p => p.Item.Code == ProjectDictionaries.WpCam)?.Preview;
         var plan = Dictionaries.FirstOrDefault(p => p.Item.Code == ProjectDictionaries.ScheduleBudget)?.Preview;

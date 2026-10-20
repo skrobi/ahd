@@ -13,8 +13,6 @@ public sealed class RunPanels(IRunStore store, RunLauncher launcher, Func<IAcwpC
     {
         public object View { get; } = new RunPanelView { DataContext = model };
 
-        public void Block(string? reason) => model.Blocked = reason;
-
         public void Dispose() => model.Dispose();
     }
 }

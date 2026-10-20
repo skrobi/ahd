@@ -53,7 +53,7 @@ public sealed class ProjectSourcesTests : IDisposable
         var issue = Assert.Single(DictionaryValidator.Validate(spec, [Source("ACTUALS_X")]));
         Assert.Equal(CheckLevel.Warning, issue.Level);
         Assert.Contains("ACTUALS_X nie istnieje albo jest nieaktywna", issue.Message);
-        Assert.Contains(ProjectDictionaries.Items, i => i.Code == ProjectDictionaries.Sources && i.Stored && i.RequiredFor.Count == 0);
+        Assert.Contains(ProjectDictionaries.Items, i => i.Code == ProjectDictionaries.Sources && i.Stored);
         var sources = new List<LookupOption> { new("ACTUALS_PAF", "ACTUALS_PAF (ACTUALS_PAF)") };
         Assert.Same(sources, ProjectService.Lookups([], [], sources)[ProjectDictionaries.Sources]);
     }

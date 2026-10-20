@@ -120,9 +120,9 @@ public sealed class ProjectStoreAndServiceTests : IDisposable
     }
 
     [SqlFact]
-    public void Scenario_1_new_project_not_ready_then_dictionaries_make_it_ready()
+    public void Scenario_1_new_project_without_dictionaries_then_dictionaries_from_excel()
     {
-        // Kreator bez słowników: projekt powstaje, ale jest niegotowy (brak WP, CAM, budżetu).
+        // Kreator bez słowników: projekt powstaje (czego wymaga przebieg – reguły walidacji przebiegu).
         var created = _service.Create("M28", "M28 – modernizacja", ProjectTypes.Internal, Objectives(), new Dictionary<string, (string, string?)>(),
             actualsAmount: "ValueRepCur");
         Assert.True(created.Created, string.Join("; ", created.Issues.Select(i => i.Message)));
@@ -131,9 +131,6 @@ public sealed class ProjectStoreAndServiceTests : IDisposable
         Assert.True(Directory.Exists(Path.Combine(_root, "Projekty", "M28", "CAM")));
         var project = _service.Find("M28")!;
         var tree = _service.Objectives("M28");
-        var before = _service.Readiness(project, tree, _service.Mapping());
-        Assert.False(ProjectReadiness.IsReady(before));
-        Assert.Contains(before, c => c.Level == CheckLevel.Error && c.Element == "WP i CAM");
 
         // Uzupełnienie słowników z Excela (skoroszyt z arkuszami jak w szablonie).
         var context = _service.Context("M28", tree, null, _service.Mapping());
@@ -148,9 +145,6 @@ public sealed class ProjectStoreAndServiceTests : IDisposable
         var plan = _service.PreviewDictionary(planItem.Code, withWp, Dictionaries, "M28", ProjectService.FindSheet(Dictionaries, planItem));
         Assert.False(plan.HasErrors, string.Join("; ", plan.Issues.Select(i => i.Message)));
         Assert.Equal(SaveStatus.Saved, _service.ApplyDictionary(planItem.Code, withWp, plan, "M28").Status);
-
-        var after = _service.Readiness(project, tree, _service.Mapping());
-        Assert.True(ProjectReadiness.IsReady(after), string.Join("; ", after.Select(c => c.Message)));
 
         var analytic = ProjectService.Analytic(tree, _service.Rows(ProjectDictionaries.WpCam, "M28"), _service.Rows(ProjectDictionaries.ScheduleBudget, "M28"), _service.Mapping());
         Assert.Equal((3, 2250m, 75000.5m), (analytic.WpCount, analytic.BacHours, analytic.BacMaterial));
@@ -229,13 +223,12 @@ public sealed class ProjectStoreAndServiceTests : IDisposable
         StructureRow Row(string wbs) => ProjectService.Structure(_store.Objectives("M28"), inputs,
             _service.Rows(ProjectDictionaries.WpCam, "M28"), _service.Rows(ProjectDictionaries.ScheduleBudget, "M28")).Rows.Single(r => r.WbsElement == wbs);
 
-        // Nowy WP bez CAM – zapisany (CAM uzupełnia się później), w strukturze brak „WP bez CAM”, gotowość – ERROR.
+        // Nowy WP bez CAM – zapisany (CAM uzupełnia się później), w strukturze brak „WP bez CAM”.
         var withoutCam = _service.SaveStructureEdit("M28", inputs, Row("4D06WP000001"), new Dictionary<string, string?> { [StructureEdits.Wp] = "true" });
         Assert.True(withoutCam.Saved, withoutCam.Message);
         var marked = Assert.Single(_service.Rows(ProjectDictionaries.WpCam, "M28"));
         Assert.Equal(("AC-CAB.6.38.01", null), (marked["WP"], marked["CAM"]));
         Assert.Contains("WP bez CAM", Row("4D06WP000001").Gap);
-        Assert.Contains(_service.Readiness(_store.Find("M28")!, _store.Objectives("M28"), inputs), i => i.Level == CheckLevel.Error && i.Message.StartsWith("WP bez CAM"));
 
         var assigned = _service.SaveStructureEdit("M28", inputs, Row("4D06WP000001"),
             new Dictionary<string, string?> { [StructureEdits.Wp] = "true", [StructureEdits.Cam] = "e123456" });

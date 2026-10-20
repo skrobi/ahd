@@ -85,8 +85,8 @@ Powiązane: `docs/funkcjonalnosc.md` (F01 – kreator projektu), `docs/zrodla-da
 - WP ze słownika „WP i CAM” podpina się pod węzeł nakładki, którego kod P1S obejmuje element (najdłuższy pasujący
   kod; przy kilku węzłach z tym kodem – pod najgłębszy). Węzeł wirtualny ma WP swoich elementów; sumy węzła obejmują jego poddrzewo, każdy WP liczony raz.
 - Element nakładki, pod którym nie ma żadnego WP, jest brakiem w bazie analitycznej (kreator, krok 5).
-- Element CES bez `Legacy WBS` nie ma kodu P1S – WARNING „Strona P1S” w gotowości projektu
-  (`docs/funkcjonalnosc.md`, F02); brak PZLPROD – WARNING z powodem (zakres P1S bez poddrzew `LOG.WBS`).
+- Element CES bez `Legacy WBS` nie ma kodu P1S – kolumna Braki w strukturze;
+  brak PZLPROD – WARNING z powodem (zakres P1S bez poddrzew `LOG.WBS`).
 
 ### 4.2 Struktura projektu (ekran Projekt)
 
@@ -217,8 +217,7 @@ i budżetem (`StructureBuilder`).
 - **Edycja w komórkach** (zapis od razu po zatwierdzeniu wiersza – Enter albo przejście do innego wiersza, bez
   osobnego „Zapisz”; Esc cofa): nazwa i `Legacy WBS` węzła → nakładka; WP, CAM i Cost Category wiersza z kodem P1S → „WP i CAM”
   (klucz – kod P1S; zaznaczenie WP albo wybór CAM tworzy przypisanie, odznaczenie WP je usuwa razem z budżetem WP, jeśli
-  WP nie jest przypisany do innego elementu; WP można zapisać bez CAM – brak „WP bez CAM”, CAM uzupełnia się później,
-  przebieg blokuje gotowość projektu);
+  WP nie jest przypisany do innego elementu; WP można zapisać bez CAM – brak „WP bez CAM”, CAM uzupełnia się później);
   BAC HOURS, BAC MATERIAL, BAC, Baseline Start, Baseline Koniec, Actual Start, Actual Koniec wiersza z jednym WP w poddrzewie – własnym albo jedynym
   pod nim (np. węzeł nakładki nad elementem P1S z WP) → „Harmonogram i budżet” tego WP (klucz – WP); wiersz z kilkoma WP
   w poddrzewie pokazuje sumę i nie jest edytowalny. Walidacja jak przy zapisie słownika: ERROR blokuje zapis (zmiany zostają w wierszu, komunikat

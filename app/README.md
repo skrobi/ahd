@@ -5,7 +5,7 @@ i nadal służy do sprawdzenia uruchomienia jednego `PZL-EV.exe` z dysku sieciow
 
 Stan: **Słowniki** (słowniki globalne – F1), **Import RABIT** i **Administracja** (import plików, definicje
 źródeł, parsery, lokalizacje – F2), **Programy** (kreator, Performance Objectives, słowniki
-projektu, gotowość, foldery – F4), **Przebiegi** (przebieg P0–P2 uruchamia „Nowy przebieg” w zakładce Przebieg
+projektu, foldery – F4), **Przebiegi** (przebieg P0–P2 uruchamia „Nowy przebieg” w zakładce Przebieg
 ekranu projektu, historia – ta sama zakładka – F5), **Pulpit** (stan z bazy, otwarte problemy) i **Diagnostyka**.
 Pozycja menu „Przebiegi” pokazuje na razie ekran
 zastępczy modułu (dokumentacja i etapy, które moduł przejmie). Dane są w bazie MS SQL środowiska
@@ -161,8 +161,8 @@ na ekranie **Diagnostyka** i w stopce okna.
    `testdata/Projekty/PO_M28.xlsx` (8 elementów; strona P1S – kolumna Legacy WBS), dodaj węzeł wirtualny i przeciągnij do niego elementy →
    **Słowniki programu**: **Pobierz szablon Excel** (arkusz „WP i CAM” z elementami P1S z zakresu) albo
    **Wczytaj skoroszyt** `testdata/Projekty/Slowniki_M28.xlsx` → **Foldery** → **Podsumowanie**: baza analityczna
-   (3 WP, 2 250 h, 75 000,50 materiałów) → **Utwórz program**. Bez słowników projekt powstaje, ale jest niegotowy
-   (ERROR „WP i CAM”); po wczytaniu słowników na ekranie projektu – gotowy. Drugi projekt z tym samym kodem albo z tym
+   (3 WP, 2 250 h, 75 000,50 materiałów) → **Utwórz program**. Bez słowników projekt też powstaje (braki
+   pokaże walidacja w przebiegu – reguły etapów). Drugi projekt z tym samym kodem albo z tym
    samym elementem CES – odrzucony.
 
 ## Test stosu – co aplikacja sprawdza
@@ -329,7 +329,7 @@ app/
     │   ├── Administration/      definicje źródeł, parsery, lokalizacje RABIT (F2)
     │   ├── Dashboard/           Pulpit: import, źródła, słowniki, otwarte problemy, dziennik (z bazy)
     │   ├── Diagnostics/         test stosu, konfiguracja środowiska, migracje, sprawdzenie PZLPROD
-    │   ├── Projects/            Projekty (F4): kreator, Performance Objectives, słowniki projektu, gotowość, struktura, przebiegi projektu
+    │   ├── Projects/            Projekty (F4): kreator, Performance Objectives, słowniki projektu, struktura, przebiegi projektu
     │   ├── Runs/                przebieg programu etapami wg szablonu (RunService, RunWorkflowEngine – bramki; reguły walidacji w SQL – Shared/Models/Pipeline/RunRules*, wykonanie SqlRunStore.RunRule); ekran Przebiegi – szablony i edytor reguł; panel przebiegu programu – etapy, macierz reguł, porównanie uruchomień (RunPanel, kontrakt IRunPanels, RunOverview); ekran „Przebiegi” – szablony w kafelkach, okno Kontrole (RunTemplateService, RunStepTile, RunChecks*); okno „Zmiany ACWP” (AcwpChanges)
     │   └── Reconciliation/ Progress/ Evm/ Export/   pozostałe moduły: plik wejścia + etapy, bez pozycji w menu
     └── Shared/

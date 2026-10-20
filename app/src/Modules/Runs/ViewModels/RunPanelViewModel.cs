@@ -76,7 +76,6 @@ public sealed class RunPanelViewModel : ObservableObject, IDisposable
     private string _comment = "";
     private string _progress = "";
     private string _notice = "";
-    private string? _blocked;
     private DateTime? _runStarted;
     private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromSeconds(1) };
     private string? _error;
@@ -105,8 +104,8 @@ public sealed class RunPanelViewModel : ObservableObject, IDisposable
         _launcher = launcher;
         _acwpChanges = acwpChanges;
         Project = project;
-        // Projekt niegotowy (Blocked – gotowość z ekranu projektu) – nowe uruchomienie zablokowane (docs/pipeline-fazy.md, P0).
-        NewRun = new AsyncRelayCommand(() => Launch(_launcher.Start(Project)), () => !Busy.IsBusy && _blocked is null && !_launcher.IsRunning(Project));
+        // Bez kontroli „na boku” – czego wymaga przebieg, sprawdzają reguły etapów przebiegu (docs/pipeline-fazy.md, rozdz. 4.1).
+        NewRun = new AsyncRelayCommand(() => Launch(_launcher.Start(Project)), () => !Busy.IsBusy && !_launcher.IsRunning(Project));
         Continue = new AsyncRelayCommand(() => Launch(_launcher.Continue(Project, _selectedPin!.PinId)),
             () => IsLatest && !_launcher.IsRunning(Project) && RunWorkflowEngine.Next(_steps.Select(s => s.Row).ToList()) is not null);
         Confirm = new AsyncRelayCommand(() => Launch(_launcher.Confirm(Project, _selectedPin!.PinId, _selectedStep!.Row.StepNo, Comment)),
@@ -278,23 +277,6 @@ public sealed class RunPanelViewModel : ObservableObject, IDisposable
     /// <summary>Komunikat ostatniej akcji (np. powód, dla którego przebieg nie ruszył).</summary>
     public string Notice { get => _notice; private set => SetProperty(ref _notice, value); }
 
-    /// <summary>Powód blokady nowego uruchomienia (projekt niegotowy); null – dozwolone.</summary>
-    public string? Blocked
-    {
-        get => _blocked;
-        set
-        {
-            if (!SetProperty(ref _blocked, value))
-                return;
-            OnPropertyChanged(nameof(IsBlocked));
-            OnPropertyChanged(nameof(BlockedText));
-            CommandManager.InvalidateRequerySuggested();
-        }
-    }
-
-    public bool IsBlocked => _blocked is not null;
-
-    public string BlockedText => $"Nowy przebieg zablokowany – {_blocked}.";
 
     public string? Error
     {

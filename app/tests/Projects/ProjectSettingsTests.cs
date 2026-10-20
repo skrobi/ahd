@@ -47,7 +47,7 @@ public sealed class ProjectSettingsTests : IDisposable
         // Zakładka Konfiguracja: Źródła danych i Parametry projektu; pozostałe słowniki – zakładka „Słowniki projektu”.
         Assert.Equal([ProjectDictionaries.Sources, ProjectDictionaries.Settings],
             ProjectDictionaries.Items.Where(i => ProjectDictionaries.Configuration.Contains(i.Code)).Select(i => i.Code));
-        Assert.Contains(ProjectDictionaries.Items, i => i.Code == ProjectDictionaries.Settings && i.Stored && i.RequiredFor.Count == 0);
+        Assert.Contains(ProjectDictionaries.Items, i => i.Code == ProjectDictionaries.Settings && i.Stored);
     }
 
     [SqlFact]

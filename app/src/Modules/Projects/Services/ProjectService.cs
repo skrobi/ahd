@@ -372,9 +372,6 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
             last is null ? "" : $"{last.RecordedAt:yyyy-MM-dd HH:mm} · {last.RecordedBy}");
     }
 
-    /// <summary>Kontrole folderów projektu (gotowość) – dysk sieciowy, czytane rzadko (ekran projektu trzyma wynik).</summary>
-    public (Issue Structure, Issue CamAccess) FolderChecks(string code) => (folders.CheckStructure(code), folders.CamAccessWarning(code));
-
     /// <summary>Arkusz słownika w skoroszycie (nazwa jak w szablonie); null – plik bez takiego arkusza albo CSV.</summary>
     public static string? FindSheet(string path, ProjectDictionaryItem item) =>
         TabularFileReader.SheetNames(path).FirstOrDefault(s =>
@@ -1030,27 +1027,7 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
         return (rows.Count, notes.Count);
     }
 
-    // ---------- gotowość, baza analityczna ----------
-
-    public List<Issue> Readiness(ProjectInfo project, PoTree tree, P1sInputs inputs) =>
-        Readiness(project, tree, inputs,
-            ProjectDictionaries.Items.Where(i => i.Stored).ToDictionary(i => i.Code, i => Rows(i.Code, project.Code)), Persons(), FolderChecks(project.Code));
-
-    /// <summary>
-    /// Gotowość z danymi już wczytanymi (ekran projektu): struktura P1S, wiersze słowników projektu (kod →
-    /// wiersze), USRID osób, wynik kontroli folderów – bez ponownych odczytów z bazy i dysku sieciowego.
-    /// </summary>
-    public static List<Issue> Readiness(ProjectInfo project, PoTree tree, P1sInputs inputs,
-        IReadOnlyDictionary<string, IReadOnlyList<DictRow>> dictionaries, IReadOnlySet<string> persons, (Issue Structure, Issue CamAccess) folderChecks)
-    {
-        var counts = dictionaries.ToDictionary(d => d.Key, d => d.Value.Count);
-        var wpCam = dictionaries.GetValueOrDefault(ProjectDictionaries.WpCam) ?? [];
-        var withoutCam = wpCam.Where(r => r["WP"] is not null && r["CAM"] is null).Select(r => r["WP"]!).Distinct(StringComparer.OrdinalIgnoreCase).Order().ToList();
-        var camsOutside = wpCam.Select(r => r["CAM"]).OfType<string>()
-            .Where(c => !persons.Contains(c)).Distinct(StringComparer.OrdinalIgnoreCase).Order().ToList();
-        return ProjectReadiness.Check(project.Type, tree, counts, camsOutside, ObjectivesMapping.Check(tree, inputs),
-            folderChecks.Structure, folderChecks.CamAccess, withoutCam);
-    }
+    // ---------- baza analityczna ----------
 
     /// <param name="rates">Waluta projektu i kursy (EtcRatesOf) – kwoty „Harmonogram i budżet” w innej walucie przeliczone; null – bez przeliczenia.</param>
     public static AnalyticBase Analytic(PoTree tree, IReadOnlyList<DictRow> wpCam, IReadOnlyList<DictRow> schedule, P1sInputs inputs, EtcRates? rates = null)

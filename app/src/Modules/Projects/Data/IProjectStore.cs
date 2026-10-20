@@ -60,8 +60,9 @@ public interface IProjectStore
     IReadOnlyList<CasCostRow> CasCosts(string code, DateTimeOffset? asOf = null);
 
     /// <summary>
-    /// Ostatni przebieg projektu z zakończonym etapem „Zatwierdzenie ACTUALS” (tabele modułu Przebiegi): kod, numer uruchomienia,
-    /// stan danych (koniec przypięcia stanu) i kto zatwierdził; null – brak.
+    /// Ostatni przebieg projektu z zatwierdzonymi danymi ACTUALS (tabele modułu Przebiegi): zakończony etap „Zatwierdzenie ACTUALS”,
+    /// a w uruchomieniu bez tego etapu – zakończony pierwszy etap walidacji (walidacja ACTUALS, także z zaakceptowanymi błędami); kod,
+    /// numer uruchomienia, stan danych (koniec przypięcia stanu) i kto zatwierdził; null – brak.
     /// </summary>
     ApprovedActuals? ApprovedActuals(string code);
 

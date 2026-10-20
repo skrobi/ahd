@@ -1,6 +1,6 @@
 # PZL-EV – Specyfikacja funkcjonalna
 
-Zakres: użytkownicy, ekrany, funkcje aplikacji (projekt i kreator, gotowość, słowniki, import,
+Zakres: użytkownicy, ekrany, funkcje aplikacji (projekt i kreator, słowniki, import,
 przebiegi, pulpit, administracja), pliki generowane, scenariusze i zakres wersji.
 
 Powiązane: przepływ i etapy – `docs/pipeline-fazy.md`; reguły słowników – `docs/slowniki.md`; nakładka i strona
@@ -29,7 +29,7 @@ Menu modułów po lewej (Pulpit, Import RABIT, Programy, Przebiegi, Słowniki, A
 | **Pulpit** | karty faz globalnych (Import RABIT, Źródła danych, Słowniki globalne), „Wymaga uwagi”, ostatnie zdarzenia (F07) | klik w kartę – przejście do sekcji (Import / Administracja / Słowniki), „Odśwież” |
 | **Import RABIT** | import źródeł, historia importów, decyzje dla plików (F05) | importuj |
 | **Programy** | lista programów: kod, nazwa, typ, ostatni przebieg (kod, numer uruchomienia, stan, data), problemy przebiegu (liczba błędów i ostrzeżeń, kolor; podsumowanie w podpowiedzi), folder – sam odczyt projektów (nakładka i gotowość – na ekranie projektu) | nowy program |
-| **Program** | zakładki: Wskaźniki (wskaźniki programu w grupach Operational EV, Materials, Financial EV; gotowość F02 zwinięta; pierwszy wiersz „Status”: źródło ACTUALS struktury – zatwierdzony przebieg albo ostatni import, niezatwierdzone; data danych RABIT, produkcji PZLPROD, waluta), Struktura (nakładka z rozwinięciem P1S, WP, CAM, Cost Category, budżet i daty – `docs/performance-objectives.md`, rozdz. 4.2), Raporty, Słowniki programu, Konfiguracja (Źródła danych, Parametry programu – w tym wybór przebiegu, `docs/slowniki.md`, rozdz. 3), Przebieg (przebieg programu: etapy, macierz reguł, porównanie uruchomień – F06), Foldery | edycja w komórkach struktury (zapis od razu); dwuklik w ACWP / ACWP Hours / Materials / Other – okno „Zmiany ACWP” (F06); dołożenie elementów z kolejnego eksportu SAP; Raport kosztów (Excel) na zakładce Raporty (`docs/model-danych.md`, migracja 013), w projektach CAS także Raport kosztów CES – narzuty CAS w formułach Excela (`docs/slowniki.md`, rozdz. 6.1); struktura do Excela i wczytanie uzupełnionej struktury (WP, CAM, budżet, daty); import źródeł projektu (F05); nowy przebieg, dalsze etapy, potwierdzenie etapu z komentarzem, ponowne wykonanie etapu, porównanie dwóch uruchomień, „Zmiany ACWP” (zakładka Przebieg); edycja słowników projektu w tabeli (Cost Category – pozycje globalne i zmiany projektu, `docs/slowniki.md`, rozdz. 6); pobierz / wczytaj słowniki z Excela |
+| **Program** | zakładki: Wskaźniki (wskaźniki programu w grupach Operational EV, Materials, Financial EV; pierwszy wiersz „Status”: źródło ACTUALS struktury – zatwierdzony przebieg albo ostatni import, niezatwierdzone; data danych RABIT, produkcji PZLPROD, waluta), Struktura (nakładka z rozwinięciem P1S, WP, CAM, Cost Category, budżet i daty – `docs/performance-objectives.md`, rozdz. 4.2), Raporty, Słowniki programu, Konfiguracja (Źródła danych, Parametry programu – w tym wybór przebiegu, `docs/slowniki.md`, rozdz. 3), Przebieg (przebieg programu: etapy, macierz reguł, porównanie uruchomień – F06), Foldery | edycja w komórkach struktury (zapis od razu); dwuklik w ACWP / ACWP Hours / Materials / Other – okno „Zmiany ACWP” (F06); dołożenie elementów z kolejnego eksportu SAP; Raport kosztów (Excel) na zakładce Raporty (`docs/model-danych.md`, migracja 013), w projektach CAS także Raport kosztów CES – narzuty CAS w formułach Excela (`docs/slowniki.md`, rozdz. 6.1); struktura do Excela i wczytanie uzupełnionej struktury (WP, CAM, budżet, daty); import źródeł projektu (F05); nowy przebieg, dalsze etapy, potwierdzenie etapu z komentarzem, ponowne wykonanie etapu, porównanie dwóch uruchomień, „Zmiany ACWP” (zakładka Przebieg); edycja słowników projektu w tabeli (Cost Category – pozycje globalne i zmiany projektu, `docs/slowniki.md`, rozdz. 6); pobierz / wczytaj słowniki z Excela |
 | **Kreator programu** | 5 kroków (F01); w kroku 1 także przebieg programu (szablon domyślny dla typu) | utwórz program |
 | **Przebiegi** | szablony przebiegów i reguły walidacji w jednej kolumnie (bez przebiegów konkretnych programów, bez osobnego okna i zakładek): lista szablonów (startowe „Wewnętrzny” i „CAS”) – etapy szablonu w kafelkach: klocki predefiniowane Import źródeł i Przypięcie stanu (konfiguracja programu), klocek systemowy Zatwierdzenie ACTUALS (dane struktury programu), etapy walidacji z zaznaczonymi regułami (poziom i tabele reguły, szukaj), zatwierdzenie; nazwa, typ programu, dla którego szablon jest domyślny, aktywny, programy, które go wybrały; lista **reguł walidacji** (szukaj po nazwie i tabeli; przy regule – poziom i użyte tabele) – edytor reguły: nazwa, poziom, aktywna, opis, **zapytanie SQL** z listą tabel i kolumn danych uruchomienia obok, opis wyniku (kolumny w { }); **Testuj na programie** – reguła (także niezapisana) na ostatnim uruchomieniu wybranego programu i poprzednim, tabela kolumn zwróconych przez SQL z opisem wyniku, błąd SQL Server z linią (`docs/pipeline-fazy.md`, rozdz. 4.1) | nowy / kopiuj / usuń szablon, „Utwórz szablony startowe”, + etap walidacji, + zatwierdzenie, przesuń / usuń etap, zapisz szablon; reguła: + nowa, kopiuj, usuń, odrzuć zmiany, zapisz regułę, testuj |
 | **Przebieg** | kroki i etapy (F06), panel wybranego etapu, znacznik stanu, problemy, rewizje, dziennik – wdrożony jako zakładka Przebieg programu: przebieg programu (wybrany / domyślny), etapy uruchomienia ze statusem, wyniki etapu, macierz kontroli, porównanie dwóch uruchomień | akcje etapów, „Zmiany ACWP” |
@@ -55,12 +55,12 @@ Nazwy arkuszy Excela słowników („Parametry projektu”, „Cost Category pro
 |---|---|
 | Kod | unikalny; używany w nazwach folderów, plików i przebiegów |
 | Nazwa | opis |
-| Typ | SAC, CAS albo wewnętrzny – wyznacza wymagane słowniki (`docs/slowniki.md`, rozdz. 4) |
+| Typ | SAC, CAS albo wewnętrzny – wyznacza zestaw słowników i szablon przebiegu domyślny (`docs/slowniki.md`, rozdz. 4) |
 | Zakres | nakładka **Performance Objectives** – struktura kontraktu CES (`docs/performance-objectives.md`) |
 
 Kroki kreatora:
 
-1. **Podstawowe** – kod, nazwa, typ; aplikacja pokazuje słowniki wymagane dla typu. Waluta kosztów – zestaw walutowy
+1. **Podstawowe** – kod, nazwa, typ. Waluta kosztów – zestaw walutowy
    ACTUALS (Object / Report currency z odpowiednią kolumną kwoty; waluta transakcji – nie), zapisywany w „Parametrach projektu”
    (`docs/slowniki.md`, rozdz. 3); zmiana później – zakładka Konfiguracja. Waluta projektu (nagłówek ekranu projektu) –
    z kolumny waluty zestawu w danych ACTUALS.
@@ -85,19 +85,12 @@ Kroki kreatora:
 
 Na stronie projektu bazę analityczną zastępuje zakładka Struktura (te same sumy i braki, aktualne po każdej zmianie).
 
-### F02. Gotowość projektu
+### F02. Gotowość projektu (usunięta)
 
-Lista kontrolna na ekranie projektu:
-
-| Kontrola | Poziom |
-|---|---|
-| nakładka Performance Objectives zawiera co najmniej jeden element | ERROR |
-| Strona P1S: elementy nakładki mają `Legacy WBS`; `PZLPROD` dostępny (poddrzewa `LOG.WBS`) | WARNING |
-| wymagane słowniki projektu dla typu są wypełnione | ERROR – blokuje uruchomienie przebiegu |
-| WP mają przypisanego CAM | ERROR – blokuje uruchomienie przebiegu |
-| CAM jest w słowniku Osoby | WARNING – bez tego nie powstaną pliki CAM |
-| struktura folderów zgodna z konfiguracją | WARNING |
-| dostęp CAM do folderu `Zwrocone` | WARNING |
+Aplikacja nie sprawdza gotowości projektu „na boku” i nie blokuje uruchomienia przebiegu. Czego wymaga przebieg programu
+(np. wypełniony słownik „WP i CAM”, budżet, MPK ze stawką), sprawdzają reguły walidacji w etapach przebiegu – szablon dobiera się
+do programu, więc program, dla którego np. brak WP i CAM nie jest problemem, ma przebieg bez tej reguły (`docs/pipeline-fazy.md`,
+rozdz. 4.1).
 
 ### F03. Słowniki
 
@@ -127,8 +120,8 @@ Lista kontrolna na ekranie projektu:
 
 ### F06. Przebieg
 
-- **Nowy przebieg** w zakładce **Przebieg** programu (jedyne miejsce uruchomienia; projekt niegotowy – przycisk nieaktywny, powód
-  w zakładce, szczegóły: Wskaźniki → Gotowość do przebiegu) – przebieg liczy się w tle aplikacji
+- **Nowy przebieg** w zakładce **Przebieg** programu (jedyne miejsce uruchomienia; bez kontroli gotowości – wymagania sprawdzają
+  reguły etapów przebiegu) – przebieg liczy się w tle aplikacji
   (analityk pracuje dalej; aplikacja musi być otwarta do końca przebiegu) według definicji przebiegu programu (workflow:
   etapy import źródeł, przypięcie danych ACTUALS, etapy kontroli, zatwierdzenie – `docs/pipeline-fazy.md`, rozdz. 4.1);
   etapy wykonują się kolejno do najbliższej bramki. Przebieg = projekt + tydzień; kolejne uruchomienie w tym samym tygodniu to
@@ -144,7 +137,8 @@ Lista kontrolna na ekranie projektu:
   (etap, dziennik), potem dalsze etapy; **Zaakceptuj błędy i dalej** – etap „Błąd” (ERROR, np. znany błąd albo błędna reguła)
   z wymaganym komentarzem: etap zakończony, błędy zostają w wynikach, uruchomienie kończy się stanem „zakończony z błędami”;
   **Zatwierdź dane ACTUALS i dalej** – etap „Zatwierdzenie ACTUALS” (klocek systemowy szablonu) z wymaganym komentarzem: od tej chwili
-  struktura programu pokazuje dane ACTUALS tego uruchomienia (stan z przypięcia), a nowy import – dopiero po kolejnym zatwierdzeniu;
+  struktura programu pokazuje dane ACTUALS tego uruchomienia (stan z przypięcia), a nowy import – dopiero po kolejnym zatwierdzeniu
+  (szablon bez tego klocka – zatwierdza zakończony pierwszy etap walidacji, także „Zaakceptuj błędy i dalej”);
   **Wykonaj ponownie** – etap po poprawie danych lub słowników (wcześniejsze etapy zakończone; późniejsze – Nieaktualne).
 - Porównania w zakładce **Przebieg** programu: **Reguły – macierz** – reguła (i kontrola etapu: import, przypięcie stanu) ×
   ostatnie 8 zakończonych uruchomień (kolor i liczba wyników ERROR / WARNING / INFO, „OK” – reguła bez wierszy, „–” bez wyników),
@@ -191,7 +185,7 @@ Lista kontrolna na ekranie projektu:
   (Import RABIT / Administracja / Słowniki). Jedyna akcja Pulpitu to „Odśwież”; lista projektów jest w module Projekty.
 - **„Wymaga uwagi”** – otwarte problemy (`docs/pipeline-fazy.md`, rozdz. 1.3) i etapy wymagające akcji, m.in.:
   brak przebiegu w bieżącym tygodniu, etapy z błędem, pliki czekające na potwierdzenie, zmiany po przypięciu,
-  projekty niegotowe, pliki nierozpoznane. Przy problemie – „Rozwiązane”
+  pliki nierozpoznane. Przy problemie – „Rozwiązane”
   (ręczne zamknięcie z wpisem w dzienniku); problem znika też sam, gdy przyczyna zniknie. Problemy importu – tylko
   z ostatniego importu (także trwającego); każdy import ocenia pliki od nowa, więc problemy wcześniejszych importów
   nie są pokazywane.
@@ -224,8 +218,7 @@ potwierdzenia.
 
 ## 5. Scenariusze
 
-1. **Nowy projekt M28** – kreator → projekt niegotowy (brak WP, CAM, budżetu) → uzupełnienie słowników →
-   projekt gotowy.
+1. **Nowy projekt M28** – kreator bez słowników → uzupełnienie słowników z Excela (braki pokaże walidacja w przebiegu).
 2. **Przebieg tygodniowy F16** – zapis nakładających się okresów w słowniku odrzucony → poprawa; w łączeniu
    wykryte elementy P1S bez WP → przypisanie → ponowne przypięcie; potwierdzenie plików
    dla finansów; zaawansowanie z produkcji, uzupełnienia, EV wstępne, publikacja.

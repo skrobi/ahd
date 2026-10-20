@@ -135,15 +135,6 @@
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
-                    <Expander Margin="0,4,0,0">
-                        <Expander.Header>
-                            <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="Gotowość do przebiegu" FontWeight="SemiBold" Margin="0,0,8,0" VerticalAlignment="Center" />
-                                <ContentControl Content="{Binding ReadinessPill}" />
-                            </StackPanel>
-                        </Expander.Header>
-                        <ItemsControl ItemsSource="{Binding Readiness}" Margin="0,8,0,0" />
-                    </Expander>
                 </StackPanel>
                 </ScrollViewer>
             </TabItem>
