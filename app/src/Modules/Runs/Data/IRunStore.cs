@@ -60,6 +60,9 @@ public interface IRunStore
     /// <summary>Dane ACTUALS projektu w chwili przypięcia (procedura RUN_PinBalance); amountField – pole kwoty parsera ACTUALS.</summary>
     IReadOnlyList<RunBalanceRow> PinBalance(string project, long pinId, string amountField);
 
+    /// <summary>Pliki ACTUALS z wierszami programu (Project definition nakładki) – najnowsze wersje zaimportowane do asOf (informacja przypięcia).</summary>
+    IReadOnlyList<RunPinFile> PinFiles(string project, DateTimeOffset asOf);
+
     IReadOnlyList<RunBalanceRow> Balance(long pinId);
 
     /// <summary>Ostatnie zakończone uruchomienie wcześniejszego przebiegu projektu (poprzedni tydzień z danymi); null – pierwszy przebieg.</summary>

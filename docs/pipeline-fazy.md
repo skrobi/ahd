@@ -206,7 +206,9 @@ projektu (kurs CAS, `docs/slowniki.md`, rozdz. 6.1; koszt brutto przebiegu = ACW
 zamkniętych – na danych źródłowych (`biezace`, rozliczenie nie dostaje narzutów); brak kursu CAS – ERROR „Koszty po narzutach CAS”
 i `ev` bez narzutów. Etap walidacji odświeża `ev` przed regułami (słowniki i Wykluczenia mogły się zmienić – „Wykonaj ponownie”). Okresy zamknięte – okresy SAP przed
 bieżącym okresem kalendarza, a w pierwszych 7 dniach okresu – przed poprzednim (rozliczenie poprzedniego okresu trwa);
-okresy 13–16 liczone jak 12.
+okresy 13–16 liczone jak 12. Wynik przypięcia pokazuje informacyjnie (bez wiązania danych z przebiegiem), z jakich plików ACTUALS są dane
+programu: plik, data raportu RABIT, import (w tym przebiegu albo wcześniejszy – import programu lub pełny import RABIT) i czy są nowe względem
+poprzedniego uruchomienia programu („bez zmian względem przebiegu … (te same dane)” / „nowe względem przebiegu …: pliki”) – `RunService.PinFiles`.
 
 **Definicja przebiegu (workflow).** Co dzieje się na którym etapie, określa szablon przebiegu – ekran Przebiegi (menu): w jednej
 kolumnie lista szablonów (startowe: „Wewnętrzny” – domyślny dla wszystkich typów, w tym SAC; „CAS” – domyślny dla CAS; „Utwórz

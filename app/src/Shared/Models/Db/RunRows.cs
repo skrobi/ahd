@@ -65,3 +65,6 @@ public sealed record RunBalanceRow(
     int Rows,
     decimal Amount,
     DateTime? LastCreatedOn);
+
+/// <summary>Plik ACTUALS z danymi programu w chwili przypięcia (najnowsza wersja do tej chwili): nazwa, data raportu w RABIT, import.</summary>
+public sealed record RunPinFile(long FileId, string FileName, DateTimeOffset ReportAt, DateTimeOffset ImportedAt, long? BatchId);

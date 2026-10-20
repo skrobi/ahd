@@ -63,6 +63,8 @@ public sealed class RunServiceTests : IDisposable
         Assert.Equal(CheckLevel.Pass, Assert.Single(issues, i => i.CheckName == "Cost element spoza słownika Cost Category").Level);   // cost elementy projektu są w słowniku
         Assert.Equal(RunRules.ActualsStarters.Count, issues.Where(i => i.StepNo == 3).Select(i => i.CheckName).Distinct().Count());   // każda reguła etapu – wynik
         Assert.True(store.HasEv(pin.PinId));
+        Assert.Contains(issues, i => i.CheckName == RunService.Pinned && i.Message.StartsWith("Dane ACTUALS: 1 plik(ów)") && i.Message.EndsWith("pierwszy przebieg programu"));
+        Assert.Contains(issues, i => i.CheckName == RunService.Pinned && i.Details is not null && i.Message.StartsWith("ACTUALS_PAF_01.csv"));   // plik – wiersz wyniku
         Assert.Equal(pin.PinId, store.Latest()["PAF"].PinId);
 
         // Test reguły na programie (bez zapisu wyników): wiersze zapytania, opis wyniku; błąd SQL z linią zapytania reguły.
@@ -111,6 +113,7 @@ public sealed class RunServiceTests : IDisposable
         Assert.Equal(5L, next.Rows);
         var compared = store.Issues(next.PinId);
         Assert.Contains(compared, i => i.Message.StartsWith("Porównanie z przebiegiem R-PAF-2026-10-T40 #1"));
+        Assert.Contains(compared, i => i.Message.EndsWith("nowe względem przebiegu R-PAF-2026-10-T40 #1: ACTUALS_PAF_01.csv"));   // nowa wersja pliku
         Assert.Equal(CheckLevel.Pass, Assert.Single(compared, i => i.CheckName == "Mniej wierszy niż w poprzednim przebiegu").Level);
         Assert.Contains(compared, i => i.CheckName == "Największe odchylenia raport do raportu" && i.Element == "2DI473001003"
             && RunRules.ReadDetails(i.Details).Single(d => d.Column == "Zmiana").Number == 10m);
@@ -130,6 +133,7 @@ public sealed class RunServiceTests : IDisposable
         Assert.Equal(PzlEv.Shared.Models.Dictionaries.SaveStatus.Saved, templates.Save(approval, isActive: true).Status);   // domyślny – pierwszy alfabetycznie
         service.Execute("PAF");
         var approving = store.Pins("PAF", 1)[0];
+        Assert.Contains(store.Issues(approving.PinId), i => i.Message.EndsWith("bez zmian względem przebiegu R-PAF-2026-10-T41 #1 (te same dane)"));
         service.Confirm(approving.PinId, 3, "znany błąd netowania");
         Assert.Equal(RunStepStatuses.NeedsAction, store.Steps(approving.PinId)[3].Status);   // czeka na zatwierdzenie danych
         Assert.Equal(pin.Code, projects.ApprovedActuals("PAF")!.RunCode);                     // z klockiem – liczy się tylko zatwierdzenie

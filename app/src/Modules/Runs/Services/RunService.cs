@@ -271,7 +271,39 @@ public sealed class RunService(IRunStore store, AppServices services, Func<ISour
         issues.Add(new RunIssue(Pinned, CheckLevel.Pass, null,
             $"Przypięto {source.Sum(r => (long)r.Rows):#,0} wierszy ACTUALS ({amountField}); saldo okresów zamkniętych {Math.Round(balance, 2):#,0.00}"));
         SaveEv(pin, process, source);
+        issues.AddRange(PinFiles(pin));
         return issues;
+    }
+
+    /// <summary>
+    /// Informacja przypięcia (bez wiązania danych z przebiegiem): z jakich plików ACTUALS są dane programu – raport RABIT, import (w tym
+    /// przebiegu albo wcześniejszy, np. pełny import RABIT) i czy są nowe względem poprzedniego uruchomienia programu (każdego tygodnia).
+    /// </summary>
+    private IEnumerable<RunIssue> PinFiles(RunPinRow pin)
+    {
+        static string Time(DateTimeOffset value) => value.ToLocalTime().ToString("yyyy-MM-dd HH:mm", System.Globalization.CultureInfo.InvariantCulture);
+        var files = store.PinFiles(pin.Project, services.Clock.Now);
+        var previous = store.Pins(pin.Project, 20).FirstOrDefault(p => p.PinId != pin.PinId && p.Rows is not null && p.StartedAt <= pin.StartedAt);
+        var previousAt = previous is null ? (DateTimeOffset?)null
+            : store.Steps(previous.PinId).FirstOrDefault(s => s.Action == RunActions.Pin)?.FinishedAt ?? previous.StartedAt;
+        bool IsNew(RunPinFile f) => previousAt is null || f.ImportedAt > previousAt;
+        var label = previous is null ? "" : $"{previous.Code} #{previous.PinNo}";
+        var news = files.Where(IsNew).ToList();
+        var summary = files.Count == 0 ? "Dane ACTUALS: brak plików z danymi programu"
+            : $"Dane ACTUALS: {files.Count} plik(ów), raport RABIT {Time(files.Min(f => f.ReportAt))}"
+              + (Time(files.Min(f => f.ReportAt)) == Time(files.Max(f => f.ReportAt)) ? "" : $" – {Time(files.Max(f => f.ReportAt))}")
+              + (previous is null ? " – pierwszy przebieg programu"
+                  : news.Count == 0 ? $" – bez zmian względem przebiegu {label} (te same dane)"
+                  : $" – nowe względem przebiegu {label}: {string.Join(", ", news.Select(f => f.FileName))}");
+        yield return new RunIssue(Pinned, CheckLevel.Pass, null, summary);
+        RunRuleColumn[] columns = [new("Plik", false), new("RaportRABIT", false), new("Import", false), new("ImportNr", true), new("Pochodzenie", false), new("Nowe", false)];
+        foreach (var f in files)
+            yield return new RunIssue(Pinned, CheckLevel.Pass, null, $"{f.FileName}: raport RABIT {Time(f.ReportAt)}", null, RunRules.Details(columns,
+            [
+                f.FileName, Time(f.ReportAt), Time(f.ImportedAt), f.BatchId,
+                f.BatchId is { } batch && batch == pin.ImportBatchId ? "import w tym przebiegu" : "wcześniejszy import (program albo pełny import RABIT)",
+                previous is null ? "pierwszy przebieg" : IsNew(f) ? "tak" : $"nie – jak w {label}",
+            ]));
     }
 
     /// <summary>Koszt brutto: wiersze bez rozliczenia wychodzącego (jak ACWP struktury).</summary>

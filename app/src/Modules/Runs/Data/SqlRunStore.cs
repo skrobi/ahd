@@ -69,6 +69,22 @@ public sealed class SqlRunStore(SqlDatabase db) : IRunStore
         return Balance(pinId);
     }
 
+    public IReadOnlyList<RunPinFile> PinFiles(string project, DateTimeOffset asOf)
+    {
+        using var connection = db.Open();
+        return connection.Query<RunPinFile>(
+            $"""
+            WITH defs AS (
+                SELECT DISTINCT v.Code FROM {db.Table("meta.PerformanceObjective")} po
+                CROSS APPLY (VALUES (po.ProjectDefinition), (po.WbsElement)) v(Code)
+                WHERE po.Project = @project AND po.SupersededAt IS NULL AND v.Code IS NOT NULL)
+            SELECT f.FileId, f.FileName, f.ModifiedAt AS ReportAt, f.ImportedAt, f.BatchId
+            FROM {db.Table("can.LatestFiles")}('ACTUALS', NULL, @asOf) f
+            WHERE EXISTS (SELECT 1 FROM {db.Table(DbTables.ActualsBalance)} b JOIN defs d ON d.Code = b.ProjectDefinition WHERE b.FileId = f.FileId)
+            ORDER BY f.FileName
+            """, new { project, asOf }, commandTimeout: LongTimeout).ToList();
+    }
+
     public IReadOnlyList<RunBalanceRow> Balance(long pinId)
     {
         using var connection = db.Open();
