@@ -52,6 +52,7 @@ public sealed class ProjectDetailViewModel : ObservableObject, IDisposable
     private ElementActuals? _costs;   // ACWP, Actual DLH, ACWP Labor / Material – jeden odczyt ACTUALS
     private string? _currency;          // waluta projektu z kolumny waluty zestawu walutowego (dane ACTUALS projektu)
     private string? _currencyProblem;   // kilka walut w kolumnie waluty zestawu
+    private int _loading;   // trwające odczyty programu (Reload) – zmiana słownika dozwolona, starszy odczyt pomijany
     private ApprovedActuals? _approved;  // przebieg z zatwierdzonymi danymi ACTUALS – stan danych kosztów struktury (null – ostatni import)
     private (ProjectStructure Structure, IReadOnlyList<LookupOption> Persons)? _structure;   // ostatnio wczytana – eksport do Excela
     private string? _costsError;
@@ -195,10 +196,12 @@ public sealed class ProjectDetailViewModel : ObservableObject, IDisposable
             if (value is null || ReferenceEquals(value, _selectedDictionary))
                 return;
             Table.CommitEdits();
-            if (Table.HasPendingChanges || Busy.IsBusy)
+            // Trwający odczyt nie blokuje zmiany słownika (nowszy Reload zastępuje starszy); zapis i wczytywanie pliku – tak.
+            if (Table.HasPendingChanges || Busy.IsBusy && _loading == 0)
             {
                 Status = Busy.IsBusy ? "Poczekaj na zakończenie bieżącej operacji." : "Masz niezapisane zmiany słownika – zapisz albo odrzuć je przed zmianą słownika.";
-                OnSelectionChanged();
+                // Przywrócenie zaznaczenia po zakończeniu kliknięcia – bez tego lista zostaje na klikniętym słowniku, a tabela pokazuje poprzedni.
+                System.Windows.Application.Current?.Dispatcher.BeginInvoke(OnSelectionChanged);
                 return;
             }
             _selectedDictionary = value;
@@ -376,84 +379,92 @@ public sealed class ProjectDetailViewModel : ObservableObject, IDisposable
         var cachedActuals = refreshMapping ? null : _actuals;
         var cachedProduction = refreshMapping ? null : _production;
         CostData? cachedCosts = _costs is null ? null : new CostData(_costs, _costsError, _costsField, _currency, _currencyProblem, _approved);
-        await Try(async () =>
+        _loading++;
+        try
         {
-            var steps = new StepTimer();
-            var snapshot = await Busy.Run(refreshMapping ? "Odświeżanie struktury P1S, kosztów i struktury programu…" : "Wczytywanie programu i struktury…", () =>
+            await Try(async () =>
             {
-                // koszty (PZLTEST) – równolegle z odczytami PZLPROD (struktura P1S, potem produkcja); z pamięci, gdy pole kwoty
-                // („Parametry projektu”) się nie zmieniło
-                var costsRead = Task.Run(() => ReadCosts(steps, refreshMapping ? null : cachedCosts));
-                var tree = steps.Time("nakładka Performance Objectives", () => _service.Objectives(Code));
-                var mapping = steps.Time("struktura P1S (PZLPROD LOG.WBS)", () => _service.Mapping(refreshMapping));
-                var states = steps.Time("słowniki programu", () => codes.ToDictionary(c => c, c => _service.DictionaryState(c, Code)));
-                var rows = states.ToDictionary(s => s.Key, s => s.Value.Rows);
-                var wpCam = rows.GetValueOrDefault(ProjectDictionaries.WpCam) ?? [];
-                var production = cachedProduction ?? steps.Time("produkcja (PZLPROD vAHDD, vAPD)", () => _service.Production(tree, mapping));
-                var (costs, costsError, costsField, currency, currencyProblem, approved) = costsRead.GetAwaiter().GetResult();
-                // Stawki MPK i kursy – ETC Cost struktury (waluta projektu z pola kwoty ACTUALS); lista MPK w „WP i CAM”.
-                var departmentRates = steps.Time("stawki wydziałów i kursy walut", _service.DepartmentRates);
-                var rates = ProjectService.EtcRatesOf(departmentRates, _service.FxRates(), currency, currencyProblem, DateOnly.FromDateTime(DateTime.Today));
-                var mpks = GlobalDictionaries.LookupOptions(GlobalDictionaries.DepartmentRates, departmentRates);
-                var structure = steps.Time("budowa struktury", () =>
-                    ProjectService.Structure(tree, mapping, wpCam, rows.GetValueOrDefault(ProjectDictionaries.ScheduleBudget) ?? [], costs.Amounts, production,
-                        costs.Hours, costs.Labor, costs.Material, rates));
-                var persons = cachedPersons ?? steps.Time("osoby", _service.PersonLookups);
-                var categories = ProjectService.CategoryLookups(rows.GetValueOrDefault(ProjectDictionaries.WbsCategories) ?? []);
-                var owners = cachedOwners ?? steps.Time("nakładki innych programów", () => _service.WbsOwners(Code));
-                var editable = table is null ? null : steps.Time("tabela słownika", () =>
-                    _service.EditableRows(table, rows.TryGetValue(table, out var tableRows) ? tableRows : _service.Rows(table, Code)));
-                var definitions = steps.Time("definicje źródeł", _service.SourceDefinitions);
-                var sources = ProjectService.SourceOptions(definitions);
-                var burdenGroups = steps.Time("grupy narzutowe CAS", _service.BurdenGroupLookups);
-                var runTemplates = steps.Time("szablony przebiegów", _service.RunTemplates);
-                var projectSources = (rows.GetValueOrDefault(ProjectDictionaries.Sources) ?? []).Select(r => r["Definicja źródła"]).OfType<string>()
-                    .ToHashSet(StringComparer.OrdinalIgnoreCase);
-                var actuals = cachedActuals ?? steps.Time("data danych ACTUALS", ReadActuals);
-                return new Snapshot(tree, mapping, owners,
-                    states.ToDictionary(s => s.Key, s => (s.Value.Rows.Count, s.Value.LastChange)), structure, ProjectService.PersonOptions(persons, wpCam),
-                    ProjectService.CategoryOptions(categories, wpCam), editable,
-                    ProjectService.Lookups(persons, categories, sources, burdenGroups, mpks, runTemplates), costs, costsError, costsField, currency, currencyProblem, approved, mpks, persons, actuals, production,
-                    definitions.Where(d => projectSources.Contains(d.Code)).ToList());
+                var steps = new StepTimer();
+                var snapshot = await Busy.Run(refreshMapping ? "Odświeżanie struktury P1S, kosztów i struktury programu…" : "Wczytywanie programu i struktury…", () =>
+                {
+                    // koszty (PZLTEST) – równolegle z odczytami PZLPROD (struktura P1S, potem produkcja); z pamięci, gdy pole kwoty
+                    // („Parametry projektu”) się nie zmieniło
+                    var costsRead = Task.Run(() => ReadCosts(steps, refreshMapping ? null : cachedCosts));
+                    var tree = steps.Time("nakładka Performance Objectives", () => _service.Objectives(Code));
+                    var mapping = steps.Time("struktura P1S (PZLPROD LOG.WBS)", () => _service.Mapping(refreshMapping));
+                    var states = steps.Time("słowniki programu", () => codes.ToDictionary(c => c, c => _service.DictionaryState(c, Code)));
+                    var rows = states.ToDictionary(s => s.Key, s => s.Value.Rows);
+                    var wpCam = rows.GetValueOrDefault(ProjectDictionaries.WpCam) ?? [];
+                    var production = cachedProduction ?? steps.Time("produkcja (PZLPROD vAHDD, vAPD)", () => _service.Production(tree, mapping));
+                    var (costs, costsError, costsField, currency, currencyProblem, approved) = costsRead.GetAwaiter().GetResult();
+                    // Stawki MPK i kursy – ETC Cost struktury (waluta projektu z pola kwoty ACTUALS); lista MPK w „WP i CAM”.
+                    var departmentRates = steps.Time("stawki wydziałów i kursy walut", _service.DepartmentRates);
+                    var rates = ProjectService.EtcRatesOf(departmentRates, _service.FxRates(), currency, currencyProblem, DateOnly.FromDateTime(DateTime.Today));
+                    var mpks = GlobalDictionaries.LookupOptions(GlobalDictionaries.DepartmentRates, departmentRates);
+                    var structure = steps.Time("budowa struktury", () =>
+                        ProjectService.Structure(tree, mapping, wpCam, rows.GetValueOrDefault(ProjectDictionaries.ScheduleBudget) ?? [], costs.Amounts, production,
+                            costs.Hours, costs.Labor, costs.Material, rates));
+                    var persons = cachedPersons ?? steps.Time("osoby", _service.PersonLookups);
+                    var categories = ProjectService.CategoryLookups(rows.GetValueOrDefault(ProjectDictionaries.WbsCategories) ?? []);
+                    var owners = cachedOwners ?? steps.Time("nakładki innych programów", () => _service.WbsOwners(Code));
+                    var editable = table is null ? null : steps.Time("tabela słownika", () =>
+                        _service.EditableRows(table, rows.TryGetValue(table, out var tableRows) ? tableRows : _service.Rows(table, Code)));
+                    var definitions = steps.Time("definicje źródeł", _service.SourceDefinitions);
+                    var sources = ProjectService.SourceOptions(definitions);
+                    var burdenGroups = steps.Time("grupy narzutowe CAS", _service.BurdenGroupLookups);
+                    var runTemplates = steps.Time("szablony przebiegów", _service.RunTemplates);
+                    var projectSources = (rows.GetValueOrDefault(ProjectDictionaries.Sources) ?? []).Select(r => r["Definicja źródła"]).OfType<string>()
+                        .ToHashSet(StringComparer.OrdinalIgnoreCase);
+                    var actuals = cachedActuals ?? steps.Time("data danych ACTUALS", ReadActuals);
+                    return new Snapshot(tree, mapping, owners,
+                        states.ToDictionary(s => s.Key, s => (s.Value.Rows.Count, s.Value.LastChange)), structure, ProjectService.PersonOptions(persons, wpCam),
+                        ProjectService.CategoryOptions(categories, wpCam), editable,
+                        ProjectService.Lookups(persons, categories, sources, burdenGroups, mpks, runTemplates), costs, costsError, costsField, currency, currencyProblem, approved, mpks, persons, actuals, production,
+                        definitions.Where(d => projectSources.Contains(d.Code)).ToList());
+                });
+                Logger.Information("Program {Code}: wczytanie {Steps}", Code, steps.Summary);
+                if (version != _reloads)
+                    return;   // w międzyczasie ruszyło nowsze odświeżenie – starszy wynik pomijany
+                _saved = snapshot.Tree;
+                (_costs, _costsError, _costsField, _currency, _currencyProblem, _approved) =
+                    (snapshot.Costs, snapshot.CostsError, snapshot.CostsField, snapshot.Currency, snapshot.CurrencyProblem, snapshot.Approved);
+                OnPropertyChanged(nameof(StructureDataInfo));
+                OnPropertyChanged(nameof(StructureDataDetails));
+                OnPropertyChanged(nameof(StructureDataUnapproved));
+                OnPropertyChanged(nameof(CurrencyInfo));
+                OnPropertyChanged(nameof(CurrencyDetails));
+                _mapping = snapshot.Mapping;
+                _owners = snapshot.Owners;
+                _ownersLoaded = true;
+                _persons = snapshot.PersonLookups;
+                _actuals = snapshot.Actuals;
+                _production = snapshot.Production;
+                SourceDefinitions = snapshot.SourceDefinitions;
+                OnPropertyChanged(nameof(ProductionInfo));
+                OnPropertyChanged(nameof(ProductionDetails));
+                OnPropertyChanged(nameof(DataInfo));
+                OnPropertyChanged(nameof(DataInfoDetails));
+                Objectives.MappingInfo = _mapping.Describe;
+                if (IsEditingObjectives)
+                    Objectives.Refresh();
+                OnPropertyChanged(nameof(MappingInfo));
+                Structure.Load(snapshot.Structure, snapshot.Persons, snapshot.Categories, saved, snapshot.Mpks);
+                _structure = (snapshot.Structure, snapshot.Persons);
+                ShowKpis(snapshot.Structure.Summary);
+                foreach (var panel in Dictionaries.Where(p => p.Item.Stored))
+                    (panel.Rows, panel.LastChange) = snapshot.Dictionaries[panel.Item.Code];
+                if (ReferenceEquals(selected, _selectedDictionary) && (snapshot.Table is not null || selected is { Item.Stored: false }))
+                    Table.Load(selected is { Item.Stored: true } ? ProjectDictionaries.Base(selected.Item.Code) : null, snapshot.Table ?? [], snapshot.Lookups);
+                if (discard)
+                    Status = "Zmiany słownika odrzucone.";
+                if (refreshMapping)
+                    Status = _costsError is null ? "Odświeżono strukturę P1S i koszty (ostatni import ACTUALS)." : $"Odświeżono strukturę P1S; {_costsError}";
             });
-            Logger.Information("Program {Code}: wczytanie {Steps}", Code, steps.Summary);
-            if (version != _reloads)
-                return;   // w międzyczasie ruszyło nowsze odświeżenie – starszy wynik pomijany
-            _saved = snapshot.Tree;
-            (_costs, _costsError, _costsField, _currency, _currencyProblem, _approved) =
-                (snapshot.Costs, snapshot.CostsError, snapshot.CostsField, snapshot.Currency, snapshot.CurrencyProblem, snapshot.Approved);
-            OnPropertyChanged(nameof(StructureDataInfo));
-            OnPropertyChanged(nameof(StructureDataDetails));
-            OnPropertyChanged(nameof(StructureDataUnapproved));
-            OnPropertyChanged(nameof(CurrencyInfo));
-            OnPropertyChanged(nameof(CurrencyDetails));
-            _mapping = snapshot.Mapping;
-            _owners = snapshot.Owners;
-            _ownersLoaded = true;
-            _persons = snapshot.PersonLookups;
-            _actuals = snapshot.Actuals;
-            _production = snapshot.Production;
-            SourceDefinitions = snapshot.SourceDefinitions;
-            OnPropertyChanged(nameof(ProductionInfo));
-            OnPropertyChanged(nameof(ProductionDetails));
-            OnPropertyChanged(nameof(DataInfo));
-            OnPropertyChanged(nameof(DataInfoDetails));
-            Objectives.MappingInfo = _mapping.Describe;
-            if (IsEditingObjectives)
-                Objectives.Refresh();
-            OnPropertyChanged(nameof(MappingInfo));
-            Structure.Load(snapshot.Structure, snapshot.Persons, snapshot.Categories, saved, snapshot.Mpks);
-            _structure = (snapshot.Structure, snapshot.Persons);
-            ShowKpis(snapshot.Structure.Summary);
-            foreach (var panel in Dictionaries.Where(p => p.Item.Stored))
-                (panel.Rows, panel.LastChange) = snapshot.Dictionaries[panel.Item.Code];
-            if (ReferenceEquals(selected, _selectedDictionary) && (snapshot.Table is not null || selected is { Item.Stored: false }))
-                Table.Load(selected is { Item.Stored: true } ? ProjectDictionaries.Base(selected.Item.Code) : null, snapshot.Table ?? [], snapshot.Lookups);
-            if (discard)
-                Status = "Zmiany słownika odrzucone.";
-            if (refreshMapping)
-                Status = _costsError is null ? "Odświeżono strukturę P1S i koszty (ostatni import ACTUALS)." : $"Odświeżono strukturę P1S; {_costsError}";
-        });
+        }
+        finally
+        {
+            _loading--;
+        }
     }
 
     /// <summary>Daty danych ACTUALS (w tle); błąd odczytu – informacja w statusie (zakładka Wskaźniki), ekran działa dalej.</summary>

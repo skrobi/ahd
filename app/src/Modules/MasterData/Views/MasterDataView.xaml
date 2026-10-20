@@ -59,7 +59,9 @@
                         <Button Content="Usuń wiersze" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding RemoveRow}" ToolTip="Usuwa wiersze zaznaczonych komórek (Ctrl+minus)" />
                         <Button Content="Cofnij" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding Table.Undo}" ToolTip="Cofa ostatnią zmianę w tabeli (Ctrl+Z)" />
                         <Button Content="Odrzuć zmiany" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding Discard}" />
-                        <Button Content="Zapisz" Style="{StaticResource BtnPrimary}" Command="{Binding Save}" />
+                        <Button Content="Zapisz" Style="{StaticResource BtnPrimary}" Margin="0,0,8,0" Command="{Binding Save}" />
+                        <Button Content="Odśwież" Style="{StaticResource Btn}" Command="{Binding Refresh}"
+                                ToolTip="Wczytuje słownik ponownie z bazy (np. pozycja dodana na innym komputerze albo w innym oknie)" />
                         <TextBlock Text="Filtr" VerticalAlignment="Center" Margin="16,0,6,0" Foreground="{StaticResource Muted}" />
                         <TextBox Width="180" Style="{StaticResource Input}" Text="{Binding Table.Filter, UpdateSourceTrigger=PropertyChanged}" />
                     </StackPanel>
