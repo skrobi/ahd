@@ -127,20 +127,23 @@ Lista kontrolna na ekranie projektu:
 
 ### F06. Przebieg
 
-- **Uruchom przebieg** na stronie projektu (albo „Nowy przebieg” w zakładce Przebieg) – przebieg liczy się w tle aplikacji
+- **Nowy przebieg** w zakładce **Przebieg** programu (jedyne miejsce uruchomienia; projekt niegotowy – przycisk nieaktywny, powód
+  w zakładce, szczegóły: Wskaźniki → Gotowość do przebiegu) – przebieg liczy się w tle aplikacji
   (analityk pracuje dalej; aplikacja musi być otwarta do końca przebiegu) według definicji przebiegu programu (workflow:
   etapy import źródeł, przypięcie danych ACTUALS, etapy kontroli, zatwierdzenie – `docs/pipeline-fazy.md`, rozdz. 4.1);
   etapy wykonują się kolejno do najbliższej bramki. Przebieg = projekt + tydzień; kolejne uruchomienie w tym samym tygodniu to
-  nowe przypięcie tego przebiegu. Jeden przebieg projektu naraz (blokada `run-<Projekt>`, także między komputerami).
+  nowe przypięcie tego przebiegu. Jeden przebieg projektu naraz (blokada `run-<Projekt>`, także między komputerami). W trakcie –
+  pasek postępu z etapem (np. „Etap 3/5: Walidacja ACTUALS”), regułą etapu kontroli („reguła 7/13: …”) i czasem od uruchomienia.
 - Po zatrzymaniu na bramce albo zakończeniu: powiadomienie systemowe Windows z liczbą błędów i ostrzeżeń; stan na liście
   projektów i w zakładce **Przebieg** programu: wybór uruchomienia, etapy ze statusem (Oczekuje, Do wykonania, W toku,
-  Zakończony, Wymaga akcji, Błąd, Nieaktualny), opis etapu, bramka, reguły etapu, komentarz potwierdzenia; wyniki
+  Zakończony, Wymaga akcji, Błąd, Nieaktualny) z komentarzem potwierdzenia (kto, kiedy, co), opis etapu, bramka; wyniki
   wybranego etapu po regułach (poziom, liczba problemów); wybrana reguła – kontekst sprawdzenia (co sprawdza, dane, zakres
   uruchomienia), wynik zapytania z kolumnami Problem i Wskazówka, linie ACTUALS zaznaczonego wiersza (zakres z kolumn wiersza),
   „Wynik do Excela”, „Pokaż zmiany” (`docs/pipeline-fazy.md`, rozdz. 4.1). Akcje (tylko ostatnie uruchomienie): **Dalsze etapy** – do najbliższej bramki;
   **Potwierdź i dalej** – etap „Wymaga akcji” (WARNING przy bramce „Potwierdzenie” albo zatwierdzenie) z wymaganym komentarzem
-  (dziennik), potem dalsze etapy; **Wykonaj ponownie** – etap po poprawie danych lub słowników (wcześniejsze etapy zakończone;
-  późniejsze – Nieaktualne). Etap z ERROR – przebieg stoi do ponownego wykonania.
+  (etap, dziennik), potem dalsze etapy; **Zaakceptuj błędy i dalej** – etap „Błąd” (ERROR, np. znany błąd albo błędna reguła)
+  z wymaganym komentarzem: etap zakończony, błędy zostają w wynikach, uruchomienie kończy się stanem „zakończony z błędami”;
+  **Wykonaj ponownie** – etap po poprawie danych lub słowników (wcześniejsze etapy zakończone; późniejsze – Nieaktualne).
 - Porównania w zakładce **Przebieg** programu: **Reguły – macierz** – reguła (i kontrola etapu: import, przypięcie stanu) ×
   ostatnie 8 zakończonych uruchomień (kolor i liczba wyników ERROR / WARNING / INFO, „OK” – reguła bez wierszy, „–” bez wyników),
   klik w komórkę – wyniki w uruchomieniu z „Pokaż zmiany”; **Porównanie uruchomień** – „było” i „jest” (domyślnie dwa ostatnie

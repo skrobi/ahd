@@ -4,6 +4,9 @@ namespace PzlEv.Shared.Utils.Data;
 public interface IRunPanel : IDisposable
 {
     object View { get; }
+
+    /// <summary>Nowe uruchomienie zablokowane – powód (gotowość programu, docs/pipeline-fazy.md, P0); null – dozwolone.</summary>
+    void Block(string? reason);
 }
 
 /// <summary>

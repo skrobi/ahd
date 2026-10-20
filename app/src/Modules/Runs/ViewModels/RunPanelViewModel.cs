@@ -1,5 +1,6 @@
 using System.Data;
 using System.Windows.Input;
+using System.Windows.Threading;
 using PzlEv.Modules.Runs.Data;
 using PzlEv.Modules.Runs.Services;
 using PzlEv.Shared.Models.Db;
@@ -13,10 +14,15 @@ using Serilog;
 
 namespace PzlEv.Modules.Runs.ViewModels;
 
-/// <summary>Etap uruchomienia w panelu: wiersz etapu, akcja i opis z definicji, elementy kontrolne.</summary>
-public sealed record RunStepView(RunStepRow Row, string Gate, string Elements, string? Description)
+/// <summary>Etap uruchomienia w panelu: wiersz etapu, akcja i opis z definicji.</summary>
+public sealed record RunStepView(RunStepRow Row, string Gate, string? Description)
 {
     public string Title => $"{Row.StepNo}. {Row.Name}";
+
+    /// <summary>Etap zatrzymany na błędzie – potwierdzenie akceptuje błędy (RunWorkflowEngine.CanConfirm).</summary>
+    public string ConfirmText => Row.Status == RunStepStatuses.Failed ? "Zaakceptuj błędy i dalej" : "Potwierdź i dalej";
+
+    public bool HasComment => !string.IsNullOrWhiteSpace(Row.Comment);
 
     public string Results => Row.Errors + Row.Warnings == 0 ? "" : $"błędy {Row.Errors}, ostrzeżenia {Row.Warnings}";
 
@@ -65,6 +71,10 @@ public sealed class RunPanelViewModel : ObservableObject, IDisposable
     private string _definition = "";
     private string _comment = "";
     private string _progress = "";
+    private string _notice = "";
+    private string? _blocked;
+    private DateTime? _runStarted;
+    private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromSeconds(1) };
     private string? _error;
     private string _assigned = "";
     private RunMatrix _matrix = new([], []);
@@ -91,11 +101,13 @@ public sealed class RunPanelViewModel : ObservableObject, IDisposable
         _launcher = launcher;
         _acwpChanges = acwpChanges;
         Project = project;
-        NewRun = new AsyncRelayCommand(() => Launch(_launcher.Start(Project)), () => !Busy.IsBusy && !_launcher.IsRunning(Project));
+        // Projekt niegotowy (Blocked – gotowość z ekranu projektu) – nowe uruchomienie zablokowane (docs/pipeline-fazy.md, P0).
+        NewRun = new AsyncRelayCommand(() => Launch(_launcher.Start(Project)), () => !Busy.IsBusy && _blocked is null && !_launcher.IsRunning(Project));
         Continue = new AsyncRelayCommand(() => Launch(_launcher.Continue(Project, _selectedPin!.PinId)),
             () => IsLatest && !_launcher.IsRunning(Project) && RunWorkflowEngine.Next(_steps.Select(s => s.Row).ToList()) is not null);
         Confirm = new AsyncRelayCommand(() => Launch(_launcher.Confirm(Project, _selectedPin!.PinId, _selectedStep!.Row.StepNo, Comment)),
-            () => IsLatest && !_launcher.IsRunning(Project) && _selectedStep?.Row.Status == RunStepStatuses.NeedsAction && Comment.Trim().Length > 0);
+            () => IsLatest && !_launcher.IsRunning(Project) && _selectedStep is { } step && RunWorkflowEngine.CanConfirm(_steps.Select(s => s.Row).ToList(), step.Row.StepNo)
+                  && Comment.Trim().Length > 0);
         Rerun = new AsyncRelayCommand(() => Launch(_launcher.Rerun(Project, _selectedPin!.PinId, _selectedStep!.Row.StepNo)),
             () => IsLatest && !_launcher.IsRunning(Project) && _selectedStep is { } step && RunWorkflowEngine.CanRerun(_steps.Select(s => s.Row).ToList(), step.Row.StepNo));
         ShowChanges = new RelayCommand(p => { if (p is RunIssueView { Changes: { } request }) _acwpChanges?.Show(request); }, _ => _acwpChanges is not null);
@@ -106,10 +118,11 @@ public sealed class RunPanelViewModel : ObservableObject, IDisposable
             _ => _acwpChanges is not null && _pins.Count > 0);
         SwapCompare = new RelayCommand(_ => { (_beforePin, _afterPin) = (_afterPin, _beforePin); OnPropertyChanged(nameof(BeforePin)); OnPropertyChanged(nameof(AfterPin)); _ = LoadCompare(); },
             _ => _beforePin is not null && _afterPin is not null);
+        _timer.Tick += (_, _) => OnPropertyChanged(nameof(ProgressText));
         _launcher.Progress += OnProgress;
         _launcher.Finished += OnFinished;
         if (_launcher.IsRunning(Project))
-            ProgressText = "Przebieg trwa…";
+            StartProgress("Przebieg trwa…");
         _ = Load(null);
     }
 
@@ -238,7 +251,32 @@ public sealed class RunPanelViewModel : ObservableObject, IDisposable
     /// <summary>Komentarz potwierdzenia etapu (wymagany).</summary>
     public string Comment { get => _comment; set => SetProperty(ref _comment, value); }
 
-    public string ProgressText { get => _progress; private set => SetProperty(ref _progress, value); }
+    /// <summary>Postęp przebiegu w toku: etap, reguła, czas od uruchomienia (licznik co sekundę – widać, że przebieg się liczy).</summary>
+    public string ProgressText => _runStarted is { } at && (int)(DateTime.Now - at).TotalSeconds is var seconds and >= 2
+        ? $"{_progress} ({(seconds < 60 ? $"{seconds} s" : $"{seconds / 60} min {seconds % 60:00} s")})" : _progress;
+
+    public bool IsRunning => _runStarted is not null;
+
+    /// <summary>Komunikat ostatniej akcji (np. powód, dla którego przebieg nie ruszył).</summary>
+    public string Notice { get => _notice; private set => SetProperty(ref _notice, value); }
+
+    /// <summary>Powód blokady nowego uruchomienia (projekt niegotowy); null – dozwolone.</summary>
+    public string? Blocked
+    {
+        get => _blocked;
+        set
+        {
+            if (!SetProperty(ref _blocked, value))
+                return;
+            OnPropertyChanged(nameof(IsBlocked));
+            OnPropertyChanged(nameof(BlockedText));
+            CommandManager.InvalidateRequerySuggested();
+        }
+    }
+
+    public bool IsBlocked => _blocked is not null;
+
+    public string BlockedText => $"Nowy przebieg zablokowany – {_blocked}.";
 
     public string? Error
     {
@@ -257,23 +295,36 @@ public sealed class RunPanelViewModel : ObservableObject, IDisposable
     private async Task Launch(Task<string?> start)
     {
         var refused = await start;
-        ProgressText = refused ?? "Przebieg w toku…";
+        Notice = refused ?? "";   // uruchomiony – postęp z RunLauncher.Progress (OnProgress)
         if (refused is null)
             Comment = "";
         CommandManager.InvalidateRequerySuggested();
     }
 
+    private void StartProgress(string text)
+    {
+        _runStarted ??= DateTime.Now;
+        _progress = text;
+        _timer.Start();
+        OnPropertyChanged(nameof(IsRunning));
+        OnPropertyChanged(nameof(ProgressText));
+    }
+
     private void OnProgress(string project, string text)
     {
         if (string.Equals(project, Project, StringComparison.OrdinalIgnoreCase))
-            ProgressText = text;
+            StartProgress(text);
     }
 
     private void OnFinished(string project)
     {
         if (!string.Equals(project, Project, StringComparison.OrdinalIgnoreCase))
             return;
-        ProgressText = "";
+        _timer.Stop();
+        _runStarted = null;
+        _progress = "";
+        OnPropertyChanged(nameof(IsRunning));
+        OnPropertyChanged(nameof(ProgressText));
         _ = Load(null);
     }
 
@@ -402,8 +453,7 @@ public sealed class RunPanelViewModel : ObservableObject, IDisposable
             {
                 var step = definition?.Steps.FirstOrDefault(d => d.No == s.StepNo);
                 var gate = step is null ? "" : step.NeedsApproval ? "zatwierdzenie ręczne" : step.Action == RunActions.Checks ? $"WARNING – {step.WarningGate.ToLowerInvariant()}" : "";
-                var elements = step is null || step.Elements.Count == 0 ? "" : string.Join(", ", step.Elements.Where(e => e.Active).Select(e => e.Element));
-                return new RunStepView(s, gate, elements, step?.Description);
+                return new RunStepView(s, gate, step?.Description);
             }).ToList();
             Definition = definition is null
                 ? $"{pin.Code} #{pin.PinNo} – {pin.Status} (uruchomienie sprzed przebiegu etapowego – wyniki bez podziału na etapy)"
@@ -572,6 +622,7 @@ public sealed class RunPanelViewModel : ObservableObject, IDisposable
 
     public void Dispose()
     {
+        _timer.Stop();
         _launcher.Progress -= OnProgress;
         _launcher.Finished -= OnFinished;
     }

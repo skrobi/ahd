@@ -26,9 +26,12 @@ public static class RunWorkflowEngine
         && step.Status is RunStepStatuses.Ready or RunStepStatuses.Waiting or RunStepStatuses.Stale
             ? step : null;
 
-    /// <summary>Potwierdzenie możliwe dla etapu, który wymaga akcji (WARNING przy bramce albo zatwierdzenie ręczne).</summary>
+    /// <summary>
+    /// Potwierdzenie możliwe dla etapu, który wymaga akcji (WARNING przy bramce albo zatwierdzenie ręczne) albo zatrzymał się na błędzie
+    /// (akceptacja ERROR przez analityka, np. znany błąd albo błędna reguła).
+    /// </summary>
     public static bool CanConfirm(IReadOnlyList<RunStepRow> steps, int stepNo) =>
-        steps.FirstOrDefault(s => s.StepNo == stepNo)?.Status == RunStepStatuses.NeedsAction;
+        steps.FirstOrDefault(s => s.StepNo == stepNo)?.Status is RunStepStatuses.NeedsAction or RunStepStatuses.Failed;
 
     /// <summary>Ponowne wykonanie etapu: wykonany albo zatrzymany (nie w toku), wszystkie wcześniejsze zakończone.</summary>
     public static bool CanRerun(IReadOnlyList<RunStepRow> steps, int stepNo) =>
@@ -44,13 +47,15 @@ public static class RunWorkflowEngine
 
     /// <summary>
     /// Stan uruchomienia z etapów: etap w toku – w toku; etap z błędem – zatrzymany; etap wymagający akcji – wymaga akcji; wszystkie
-    /// zakończone – zakończony (z ostrzeżeniami, gdy były); inaczej (przerwany przed końcem) – zatrzymany.
+    /// zakończone – zakończony (z błędami, gdy analityk zaakceptował błędy; z ostrzeżeniami, gdy były); inaczej (przerwany przed końcem) –
+    /// zatrzymany.
     /// </summary>
     public static string PinStatus(IReadOnlyList<RunStepRow> steps) =>
         steps.Any(s => s.Status == RunStepStatuses.Running) ? RunStatuses.Running
         : steps.Any(s => s.Status == RunStepStatuses.Failed) ? RunStatuses.Blocked
         : steps.Any(s => s.Status == RunStepStatuses.NeedsAction) ? RunStatuses.NeedsAction
-        : steps.Count > 0 && steps.All(s => s.Status == RunStepStatuses.Done) ? steps.Any(s => s.Warnings > 0) ? RunStatuses.Warnings : RunStatuses.Ok
+        : steps.Count > 0 && steps.All(s => s.Status == RunStepStatuses.Done)
+            ? steps.Any(s => s.Errors > 0) ? RunStatuses.Errors : steps.Any(s => s.Warnings > 0) ? RunStatuses.Warnings : RunStatuses.Ok
         : RunStatuses.Blocked;
 
     /// <summary>Podsumowanie uruchomienia: stan, etap, na którym stoi (albo „wszystkie etapy”), liczby wyników.</summary>

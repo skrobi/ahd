@@ -35,7 +35,6 @@ public sealed class ProjectDetailViewModel : ObservableObject, IDisposable
     private string _status = "";
     private Pill _readiness = new("muted", "");
     private readonly IRunPanel? _runPanel;
-    private string _runProgress = "";
     private P1sInputs _mapping = P1sInputs.None;
     private PoTree _saved = new();
     private IReadOnlyDictionary<string, string> _owners = new Dictionary<string, string>();
@@ -87,16 +86,8 @@ public sealed class ProjectDetailViewModel : ObservableObject, IDisposable
         CreateFolders = new AsyncRelayCommand(DoCreateFolders, () => !Busy.IsBusy);
         RefreshMapping = new AsyncRelayCommand(() => { Structure.CommitEdits(); return Reload(refreshMapping: true); }, () => !Busy.IsBusy);
         ImportSources = new AsyncRelayCommand(DoImportSources, () => !Busy.IsBusy && _service.Imports is not null);
-        // Projekt niegotowy (ERROR gotowości) – przebieg zablokowany (docs/pipeline-fazy.md, P0 – bramka wejścia).
-        StartRun = new AsyncRelayCommand(DoStartRun, () => IsReady && _service.Runs is { } r && !r.IsRunning(Code));
-        if (_service.Runs is { } launcher)
-        {
-            launcher.Progress += OnRunProgress;
-            launcher.Finished += OnRunFinished;
-            if (launcher.IsRunning(Code))
-                RunProgress = "Przebieg trwa…";
-        }
         _runPanel = _service.RunPanels?.Create(Code);
+        _runPanel?.Block("trwa sprawdzanie gotowości programu");   // do pierwszego odczytu (Reload)
         foreach (var item in ProjectDictionaries.ForType(project.Type))
         {
             var panel = new DictionaryPanelViewModel(item, project.Type);
@@ -295,46 +286,8 @@ public sealed class ProjectDetailViewModel : ObservableObject, IDisposable
     /// <summary>Przebieg programu – zakładka Przebieg (panel modułu Przebiegi: etapy, potwierdzenia, ponowne wykonanie); null – moduł niedostępny.</summary>
     public object? RunPanel => _runPanel?.View;
 
-    /// <summary>Postęp przebiegu w tle (pusty – przebieg nie trwa).</summary>
-    public string RunProgress { get => _runProgress; private set => SetProperty(ref _runProgress, value); }
-
-    /// <summary>„Uruchom przebieg” – w tle; etapy i wynik w zakładce Przebieg, na liście projektów i w powiadomieniu.</summary>
-    public ICommand StartRun { get; }
-
-    private async Task DoStartRun()
-    {
-        if (_service.Runs is not { } runs)
-            return;
-        var refused = await runs.Start(Code);
-        RunProgress = refused ?? "Przebieg uruchomiony…";
-        if (refused is null)
-            Status = "Przebieg liczy się w tle – możesz dalej pracować; po zakończeniu pojawi się powiadomienie.";
-    }
-
-    /// <summary>Odpięcie od zdarzeń przebiegów przy zmianie strony modułu.</summary>
-    public void Dispose()
-    {
-        _runPanel?.Dispose();
-        if (_service.Runs is { } runs)
-        {
-            runs.Progress -= OnRunProgress;
-            runs.Finished -= OnRunFinished;
-        }
-    }
-
-    private void OnRunProgress(string project, string text)
-    {
-        if (string.Equals(project, Code, StringComparison.OrdinalIgnoreCase))
-            RunProgress = text;
-    }
-
-    private void OnRunFinished(string project)
-    {
-        if (!string.Equals(project, Code, StringComparison.OrdinalIgnoreCase))
-            return;
-        RunProgress = "";
-        CommandManager.InvalidateRequerySuggested();   // „Uruchom przebieg” znów dostępny
-    }
+    /// <summary>Zwolnienie panelu przebiegu przy zmianie strony modułu.</summary>
+    public void Dispose() => _runPanel?.Dispose();
 
     /// <summary>Okno „Zmiany ACWP” (moduł Przebiegi) dla wiersza struktury i rodzaju kosztu kolumny; wiersz bez elementów WBS – cały program.</summary>
     private void ShowAcwpChanges(StructureRowViewModel row, string column)
@@ -492,7 +445,9 @@ public sealed class ProjectDetailViewModel : ObservableObject, IDisposable
                 Readiness.Add(check);
             IsReady = ProjectReadiness.IsReady(snapshot.Readiness);
             ReadinessPill = IsReady ? new Pill("ok", "gotowy do przebiegu") : new Pill("crit", "niegotowy – przebieg zablokowany");
-            CommandManager.InvalidateRequerySuggested();   // „Uruchom przebieg” według gotowości
+            // Projekt niegotowy (ERROR gotowości) – nowy przebieg zablokowany w zakładce Przebieg (docs/pipeline-fazy.md, P0 – bramka wejścia).
+            _runPanel?.Block(IsReady ? null : "program niegotowy: " + string.Join("; ", snapshot.Readiness.Where(c => c.Level == CheckLevel.Error).Select(c => c.Message))
+                + ". Szczegóły: zakładka Wskaźniki → Gotowość do przebiegu");
             if (refreshMapping)
                 Status = _costsError is null ? "Odświeżono strukturę P1S i koszty (ostatni import ACTUALS)." : $"Odświeżono strukturę P1S; {_costsError}";
         });

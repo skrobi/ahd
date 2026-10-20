@@ -54,7 +54,7 @@ public sealed class RunServiceTests : IDisposable
         Assert.Equal([RunStepStatuses.Done, RunStepStatuses.Done, RunStepStatuses.Failed, RunStepStatuses.Waiting, RunStepStatuses.Waiting],
             store.Steps(pin.PinId).Select(s => s.Status));
         Assert.Equal(RunStatuses.Blocked, pin.Status);
-        Assert.Contains("Nie wymaga potwierdzenia".ToLowerInvariant(), service.Confirm(pin.PinId, 3, "ok").Summary.ToLowerInvariant());
+        Assert.Equal("Potwierdzenie wymaga komentarza.", service.Confirm(pin.PinId, 3, " ").Summary);
         Assert.Equal(RunStepStatuses.Failed, store.Steps(pin.PinId)[2].Status);   // ponowne wykonanie bez poprawy danych – nadal błąd
         Assert.Equal(RunStatuses.Blocked, service.Rerun(pin.PinId, 3).Status);
         var issues = store.Issues(pin.PinId);
@@ -89,6 +89,14 @@ public sealed class RunServiceTests : IDisposable
         var byElement = store.ActualsLines(new RunActualsScope(pin.PinId, null, [lines.Rows[0].CostElement!], lines.Rows[0].FiscalYear, lines.Rows[0].Period),
             asOf, "ValueObjCrcy", 500);
         Assert.Contains(byElement.Rows, l => l.RowNumber == lines.Rows[0].RowNumber);
+
+        // Akceptacja błędu przez analityka (komentarz): etap zakończony z błędami w wynikach, komentarz w etapie, dalsze etapy wykonane.
+        service.Confirm(pin.PinId, 3, "znany błąd netowania");
+        var accepted = store.Steps(pin.PinId);
+        Assert.Equal(RunStepStatuses.Done, accepted[2].Status);
+        Assert.True(accepted[2].Errors > 0);
+        Assert.EndsWith("błędy zaakceptowane (" + accepted[2].Errors + "): znany błąd netowania", accepted[2].Comment);
+        Assert.NotEqual(RunStepStatuses.Waiting, accepted[3].Status);
 
         // Tydzień później: nowa wersja pliku z dodatkowym wierszem – porównanie z przebiegiem tygodnia 40.
         _services.Clock.Advance(TimeSpan.FromDays(7));

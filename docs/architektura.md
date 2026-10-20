@@ -165,7 +165,7 @@ modułu i `Shared/Models`; Excel, File Connectors, SQL Access – `Shared/Utils`
 - moduły komunikują się przez bazę (etapy – `docs/pipeline-fazy.md`, rozdz. 1.1), nawigację po kluczu
   (`INavigator`, `ModuleKeys`) albo kontrakt w `Shared`: moduł rejestruje implementację w `Initialize`
   (`AppServices.Contracts`), inny pobiera ją przy użyciu – np. `ISourceImport` (moduł Import) dla „Importuj źródła
-  projektu” i przebiegu, `IRunLauncher` (moduł Przebiegi) dla „Uruchom przebieg” i listy projektów, `IRunPanels` – panel przebiegu programu (zakładka Przebieg), `IAcwpChanges` – okno „Zmiany ACWP” (moduł Projekty);
+  projektu” i przebiegu, `IRunLauncher` (moduł Przebiegi) dla listy projektów, `IRunPanels` – panel przebiegu programu (zakładka Przebieg; uruchomienie przebiegu, blokada – gotowość projektu), `IAcwpChanges` – okno „Zmiany ACWP” (moduł Projekty);
   powiadomienia – `Shared/Utils/Ui/Notifications` (Windows),
 - silnik EVM zależy wyłącznie od modeli (rozdz. 5.1).
 

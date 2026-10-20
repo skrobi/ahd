@@ -25,7 +25,7 @@ Każda faza i każdy etap mają ten sam kształt:
 | **Zapis stanu** | status etapu, kto, kiedy – `meta.EtapPrzebiegu` i dziennik |
 | **Idempotencja** | ponowne wykonanie z tymi samymi wejściami daje ten sam wynik i nie dubluje danych |
 | **Unieważnienie** | ponowne wykonanie etapu albo zmiana jego wejść oznacza etapy późniejsze jako **Nieaktualne** |
-| **Uruchomienie** | użytkownik uruchamia przebieg; etapy wykonują się kolejno do najbliższej bramki (ERROR, WARNING przy bramce „Potwierdzenie”, zatwierdzenie ręczne) – dalej decyduje analityk (potwierdzenie z komentarzem, poprawa i ponowne wykonanie etapu); kolejność etapów i bramki – definicja przebiegu (rozdz. 4.1) |
+| **Uruchomienie** | użytkownik uruchamia przebieg; etapy wykonują się kolejno do najbliższej bramki (ERROR, WARNING przy bramce „Potwierdzenie”, zatwierdzenie ręczne) – dalej decyduje analityk (potwierdzenie z komentarzem – także akceptacja ERROR, poprawa i ponowne wykonanie etapu); kolejność etapów i bramki – definicja przebiegu (rozdz. 4.1) |
 
 Etapy komunikują się przez bazę, więc mogą je wykonywać różne osoby, w różne dni, z różnych komputerów.
 
@@ -37,17 +37,19 @@ Etapy komunikują się przez bazę, więc mogą je wykonywać różne osoby, w r
 | Do wykonania | można uruchomić akcję etapu | → W toku |
 | W toku | operacja trwa (blokada przebiegu) | → Zakończony / Wymaga akcji / Błąd |
 | Wymaga akcji | potrzebna decyzja lub dane (potwierdzenie, pliki CAM, uzupełnienia, przypisania) | → Zakończony / Do wykonania |
-| Błąd | kontrola z poziomem ERROR | → Do wykonania (po poprawie) |
+| Błąd | kontrola z poziomem ERROR | → Do wykonania (po poprawie) / Zakończony (akceptacja błędów z komentarzem) |
 | Zakończony | bramka wyjścia spełniona | → Nieaktualny (gdy zmienią się wejścia) |
 | Nieaktualny | wynik oparty na nieaktualnych wejściach | → Do wykonania |
 
 - Stan przebiegu wynika ze stanów etapów – pierwszy niezakończony etap wyznacza „co dalej”.
 - Każda zmiana statusu trafia do dziennika (kto, kiedy, co).
 - Wdrożone (przebieg etapowy, rozdz. 4.1): etapy uruchomienia w `META_RunStep` (migracja 050), wyniki kontroli z numerem etapu
-  (`RUN_Issue.StepNo`). Po wykonaniu etapu: ERROR – **Błąd** (przebieg stoi; po poprawie – ponowne wykonanie etapu);
+  (`RUN_Issue.StepNo`). Po wykonaniu etapu: ERROR – **Błąd** (przebieg stoi; po poprawie – ponowne wykonanie etapu albo
+  akceptacja błędów przez analityka z komentarzem → Zakończony, błędy zostają w wynikach etapu, dalsze etapy);
   zatwierdzenie ręczne albo WARNING przy bramce „Potwierdzenie” – **Wymaga akcji** (potwierdzenie z komentarzem → Zakończony,
   dalsze etapy); inaczej – **Zakończony** i następny etap. Ponowne wykonanie etapu oznacza późniejsze etapy jako Nieaktualne.
-  Stan uruchomienia (`META_RunPin.Status`): w toku / wymaga akcji / zatrzymany – błąd / zakończony (z ostrzeżeniami). Logika –
+  Stan uruchomienia (`META_RunPin.Status`): w toku / wymaga akcji / zatrzymany – błąd / zakończony (z błędami – zaakceptowanymi,
+  z ostrzeżeniami). Komentarz potwierdzenia (kto, kiedy, co) – w etapie (`META_RunStep.Comment`) i dzienniku. Logika –
   `Modules/Runs/Services/RunWorkflowEngine.cs`, wykonanie – `RunService` (Execute, Continue, Confirm, Rerun).
 
 ### 1.3 Problemy (kontrola jakości danych)
@@ -59,7 +61,7 @@ uruchomienia przebiegu (`RUN_Issue`).
 |---|---|---|
 | PASS | kontrola przeszła | widoczna w raporcie przebiegu |
 | WARNING | ostrzeżenie | nie blokuje; widoczne w raporcie przebiegu i na pulpicie |
-| ERROR | błąd blokujący | blokuje bramkę etapu do czasu poprawy |
+| ERROR | błąd blokujący | blokuje bramkę etapu do czasu poprawy albo akceptacji przez analityka z komentarzem (etap przebiegu, rozdz. 1.2) |
 
 - Problem zawiera: poziom, kontrolę, obszar (import, słownik, etap przebiegu), element, opis,
   akcję naprawczą (przejście do właściwego ekranu z filtrem na problem) i stan (otwarty / rozwiązany – kto, kiedy, jak).
@@ -192,7 +194,7 @@ Kalendarz okresów wyznacza wariant przebiegu:
 
 ### 4.1 Kontrole danych przebiegu (wdrożone: P0, P1, kontrole ACTUALS, spójność ze słownikami – P2)
 
-„Uruchom przebieg” (ekran projektu) wykonuje w tle: tydzień z kalendarza okresów i przebieg `R-<Projekt>-<RRRR-MM>-T<NN>`
+„Nowy przebieg” (ekran programu, zakładka Przebieg – jedyne miejsce uruchomienia) wykonuje w tle: tydzień z kalendarza okresów i przebieg `R-<Projekt>-<RRRR-MM>-T<NN>`
 (kolejne uruchomienie w tym tygodniu – nowe przypięcie, numer #N) → import źródeł projektu (słownik „Źródła danych”,
 `docs/zrodla-danych.md`, rozdz. 2) → przypięcie: dane ACTUALS projektu z ostatniego importu (`RUN_PinBalance` w jednej
 transakcji, `docs/model-danych.md`, migracja 027) → kontrole wobec ostatniego zakończonego uruchomienia wcześniejszego tygodnia.
@@ -228,8 +230,8 @@ i regułami etapów) zapisuje się w uruchomieniu (`META_RunPin.Definition`, JSO
 treść reguły – z bieżącego słownika w chwili wykonania etapu. Model – `Shared/Models/Pipeline/RunWorkflow.cs`.
 
 Przebieg prowadzi się na poziomie programu: ekran programu, zakładka „Przebieg” – przebieg programu (wybrany / domyślny), etapy
-uruchomienia ze statusem, wyniki etapu, akcje „Nowy przebieg”, „Dalsze etapy”, „Potwierdź i dalej” (komentarz wymagany),
-„Wykonaj ponownie”; porównania: macierz reguł, porównanie dwóch uruchomień, okno „Zmiany ACWP” (`docs/funkcjonalnosc.md`, F06).
+uruchomienia ze statusem i komentarzem potwierdzenia, postęp w toku (etap, reguła, czas), wyniki etapu, akcje „Nowy przebieg”,
+„Dalsze etapy”, „Potwierdź i dalej” / „Zaakceptuj błędy i dalej” (komentarz wymagany), „Wykonaj ponownie”; porównania: macierz reguł, porównanie dwóch uruchomień, okno „Zmiany ACWP” (`docs/funkcjonalnosc.md`, F06).
 Kolejne akcje etapów (np. kafelek warunkowy „jeśli przebieg zamykający – powiadomienie CAM o uzupełnieniu danych do ETC” – P6) –
 nowe akcje w `RunActions` i ich wykonanie w `RunService.ExecuteStep`.
 
@@ -325,7 +327,7 @@ Kontrole wymagające innych danych spoza zrzutu (odbiorca rozliczenia, suma kont
 |---|---|
 | **Cel** | Założyć przebieg projektu za tydzień. |
 | **Działanie** | Wybór tygodnia (domyślnie bieżący; dziś zawsze tydzień bieżący z kalendarza okresów – wybór niewdrożony). Aplikacja pokazuje okres i to, czy przebieg zamyka okres (kalendarz okresów), oraz datę stanu (`docs/ev-obliczenia.md`, rozdz. 2). |
-| **Bramka wejścia** | tydzień jest w kalendarzu okresów (ERROR); przebieg projektu nie jest właśnie liczony (blokada `run-<Projekt>`, rozdz. 1.4) – kolejne uruchomienie w tym samym tygodniu to nowe przypięcie #N tego samego przebiegu (rozdz. 4.1); projekt gotowy – wymagane słowniki projektu dla typu (`docs/funkcjonalnosc.md`, F02) – sprawdza ekran projektu („Uruchom przebieg” aktywne tylko dla projektu gotowego; sama usługa przebiegu gotowości nie sprawdza); zgodna wersja aplikacji – kontrola przy starcie aplikacji (`docs/architektura.md`, rozdz. 3); świeżość danych produkcyjnych – data odświeżenia `vAHDD` (WARNING – niewdrożone). |
+| **Bramka wejścia** | tydzień jest w kalendarzu okresów (ERROR); przebieg projektu nie jest właśnie liczony (blokada `run-<Projekt>`, rozdz. 1.4) – kolejne uruchomienie w tym samym tygodniu to nowe przypięcie #N tego samego przebiegu (rozdz. 4.1); projekt gotowy – wymagane słowniki projektu dla typu (`docs/funkcjonalnosc.md`, F02) – sprawdza ekran projektu („Nowy przebieg” w zakładce Przebieg aktywne tylko dla projektu gotowego, powód blokady w zakładce; sama usługa przebiegu gotowości nie sprawdza); zgodna wersja aplikacji – kontrola przy starcie aplikacji (`docs/architektura.md`, rozdz. 3); świeżość danych produkcyjnych – data odświeżenia `vAHDD` (WARNING – niewdrożone). |
 | **Efekt** | Przebieg `R-<Projekt>-<RRRR-MM>-T<NN>`, pierwsze zdarzenie w dzienniku. |
 | **Przekazanie** | P1. |
 

@@ -99,7 +99,10 @@ public sealed class RunService(IRunStore store, AppServices services, Func<ISour
     public RunOutcome Continue(long pinId, IProgress<string>? progress = null, CancellationToken cancellation = default) =>
         WithPin(pinId, pin => Advance(pin, progress, cancellation));
 
-    /// <summary>Potwierdzenie etapu wymagającego akcji (WARNING przy bramce, zatwierdzenie ręczne) z komentarzem – dziennik; potem dalsze etapy.</summary>
+    /// <summary>
+    /// Potwierdzenie etapu wymagającego akcji (WARNING przy bramce, zatwierdzenie ręczne) albo akceptacja błędów etapu zatrzymanego (ERROR)
+    /// z komentarzem – komentarz w etapie, dziennik; potem dalsze etapy. Błędy zaakceptowane zostają w wynikach etapu.
+    /// </summary>
     public RunOutcome Confirm(long pinId, int stepNo, string comment, IProgress<string>? progress = null, CancellationToken cancellation = default) =>
         WithPin(pinId, pin =>
         {
@@ -110,9 +113,10 @@ public sealed class RunService(IRunStore store, AppServices services, Func<ISour
                 return Outcome(pin, steps, "Potwierdzenie wymaga komentarza.");
             var step = steps.Single(s => s.StepNo == stepNo);
             var at = services.Clock.Now;
+            var what = step.Status == RunStepStatuses.Failed ? $"błędy zaakceptowane ({step.Errors})" : "potwierdzony";
             store.SetStep(pinId, stepNo, RunStepStatuses.Done, step.StartedAt, step.FinishedAt ?? at, services.User.Account, step.Errors, step.Warnings,
-                $"{at.ToLocalTime():yyyy-MM-dd HH:mm} {services.User.Account}: {comment.Trim()}");
-            services.Journal.Add(Area, $"Przebieg {pin.Code} #{pin.PinNo}: etap {stepNo} „{step.Name}” potwierdzony – {comment.Trim()}", pin.Code);
+                $"{at.ToLocalTime():yyyy-MM-dd HH:mm} {services.User.Account} – {what}: {comment.Trim()}");
+            services.Journal.Add(Area, $"Przebieg {pin.Code} #{pin.PinNo}: etap {stepNo} „{step.Name}” {what} – {comment.Trim()}", pin.Code);
             return Advance(pin, progress, cancellation);
         });
 
@@ -167,12 +171,13 @@ public sealed class RunService(IRunStore store, AppServices services, Func<ISour
                        ?? new RunStepDefinition(next.StepNo, next.Name, next.Action, RunGates.Confirm, false, []);
             var started = services.Clock.Now;
             store.SetStep(pin.PinId, step.No, RunStepStatuses.Running, started, null, services.User.Account, 0, 0);
-            progress?.Report($"Etap {step.No}/{definition.Steps.Count}: {step.Name}…");
+            var label = $"Etap {step.No}/{definition.Steps.Count}: {step.Name}";
+            progress?.Report($"{label}…");
             List<RunIssue> issues;
             try
             {
                 cancellation.ThrowIfCancellationRequested();
-                issues = ExecuteStep(store.Pin(pin.PinId)!, step, progress, cancellation);
+                issues = ExecuteStep(store.Pin(pin.PinId)!, step, label, progress, cancellation);
             }
             catch (Exception ex) when (ex is not OutOfMemoryException)
             {
@@ -200,13 +205,13 @@ public sealed class RunService(IRunStore store, AppServices services, Func<ISour
     private static RunOutcome Outcome(RunPinRow pin, IReadOnlyList<RunStepRow> steps, string summary) =>
         new(pin.Project, pin.Code, RunWorkflowEngine.PinStatus(steps), steps.Sum(s => s.Errors), steps.Sum(s => s.Warnings), summary);
 
-    /// <summary>Akcja etapu: import źródeł, przypięcie stanu, kontrole (elementy kontrolne etapu), zatwierdzenie (bez wykonania).</summary>
-    private List<RunIssue> ExecuteStep(RunPinRow pin, RunStepDefinition step, IProgress<string>? progress, CancellationToken cancellation) =>
+    /// <summary>Akcja etapu: import źródeł, przypięcie stanu, kontrole (elementy kontrolne etapu), zatwierdzenie (bez wykonania); label – postęp etapu.</summary>
+    private List<RunIssue> ExecuteStep(RunPinRow pin, RunStepDefinition step, string label, IProgress<string>? progress, CancellationToken cancellation) =>
         step.Action switch
         {
             RunActions.Import => ImportStep(pin, progress, cancellation),
             RunActions.Pin => PinStep(pin),
-            RunActions.Checks => ChecksStep(pin, step),
+            RunActions.Checks => ChecksStep(pin, step, label, progress, cancellation),
             _ => [],
         };
 
@@ -299,8 +304,8 @@ public sealed class RunService(IRunStore store, AppServices services, Func<ISour
 
     // Kontrole etapu (docs/pipeline-fazy.md, rozdz. 4.1): reguły walidacji w SQL zaznaczone w etapie – na danych uruchomienia
     // (biezace – cała pula ACTUALS; ev – jak w strukturze, odświeżane przed regułami: słowniki i Wykluczenia mogły się zmienić)
-    // wobec poprzedniego przebiegu z tym samym polem kwoty.
-    private List<RunIssue> ChecksStep(RunPinRow pin, RunStepDefinition step)
+    // wobec poprzedniego przebiegu z tym samym polem kwoty. Postęp – reguła po regule.
+    private List<RunIssue> ChecksStep(RunPinRow pin, RunStepDefinition step, string label, IProgress<string>? progress, CancellationToken cancellation)
     {
         if (pin.Rows is null)
             return [new RunIssue("Przebieg", CheckLevel.Error, null, $"Etap „{step.Name}” przed przypięciem stanu – w definicji przebiegu brakuje etapu z akcją „{RunActions.Pin}” przed kontrolami")];
@@ -309,6 +314,7 @@ public sealed class RunService(IRunStore store, AppServices services, Func<ISour
         if (rules.Count > 0)
         {
             var process = Process(pin.Project);
+            progress?.Report($"{label} – przygotowanie danych reguł…");
             var source = store.Balance(pin.PinId);
             if (SaveEv(pin, process, source) is { } error)
                 issues.Add(new RunIssue(process.CostsCheck, CheckLevel.Warning, null, $"{process.CostsCheck} niepoliczone – {error}; tabela „ev” bez narzutów"));
@@ -316,8 +322,12 @@ public sealed class RunService(IRunStore store, AppServices services, Func<ISour
             if (previous is not null && !store.HasEv(previous.PinId))
                 SaveEv(previous, process, store.Balance(previous.PinId));
             var context = Context(pin, previous, source, services.Clock.Now.Date);
-            foreach (var rule in rules)
+            foreach (var (rule, i) in rules.Select((r, i) => (r, i + 1)))
+            {
+                cancellation.ThrowIfCancellationRequested();
+                progress?.Report($"{label} – reguła {i}/{rules.Count}: {rule.Name}…");
                 issues.AddRange(Issues(rule, store.RunRule(rule.Sql, context)));
+            }
             var exclusions = store.Exclusions(pin.Project);
             if (exclusions.Any(x => x.PartnerObject is not null))
                 issues.Add(new RunIssue(RunRules.EvArea, CheckLevel.Pass, null,

@@ -44,17 +44,21 @@ public sealed class RunWorkflowTests
         Assert.Equal(RunStatuses.Blocked, RunWorkflowEngine.PinStatus(failed));
         Assert.Equal(RunStatuses.Warnings, RunWorkflowEngine.PinStatus(done));
         Assert.Equal(RunStatuses.Ok, RunWorkflowEngine.PinStatus([Step(1, RunStepStatuses.Done)]));
+        Assert.Equal(RunStatuses.Errors, RunWorkflowEngine.PinStatus([Step(1, RunStepStatuses.Done, errors: 1), Step(2, RunStepStatuses.Done, warnings: 1)]));   // błędy zaakceptowane
         Assert.StartsWith("wymaga akcji: etap 2 „Etap 2” – wymaga akcji; błędy 0, ostrzeżenia 1", RunWorkflowEngine.Summary(stopped));
         Assert.StartsWith("zakończony z ostrzeżeniami: wszystkie etapy (2) zakończone", RunWorkflowEngine.Summary(done));
     }
 
     [Fact]
-    public void Confirm_only_step_needing_action_and_rerun_marks_later_steps_stale()
+    public void Confirm_step_needing_action_or_failed_and_rerun_marks_later_steps_stale()
     {
         RunStepRow[] steps = [Step(1, RunStepStatuses.Done), Step(2, RunStepStatuses.Done), Step(3, RunStepStatuses.NeedsAction), Step(4, RunStepStatuses.Waiting)];
 
         Assert.True(RunWorkflowEngine.CanConfirm(steps, 3));
         Assert.False(RunWorkflowEngine.CanConfirm(steps, 2));
+        Assert.False(RunWorkflowEngine.CanConfirm(steps, 4));
+        Assert.True(RunWorkflowEngine.CanConfirm([Step(1, RunStepStatuses.Failed, errors: 1), Step(2, RunStepStatuses.Waiting)], 1));   // akceptacja błędów
+        Assert.False(RunWorkflowEngine.CanConfirm([Step(1, RunStepStatuses.Running)], 1));
         Assert.True(RunWorkflowEngine.CanRerun(steps, 2));
         Assert.False(RunWorkflowEngine.CanRerun(steps, 4));                              // jeszcze nie wykonany
         Assert.False(RunWorkflowEngine.CanRerun([Step(1, RunStepStatuses.Failed), Step(2, RunStepStatuses.Done)], 2));   // wcześniejszy z błędem

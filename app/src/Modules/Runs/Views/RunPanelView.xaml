@@ -96,7 +96,20 @@
                 Visibility="{Binding HasError, Converter={StaticResource BoolToVisibility}}">
             <TextBlock Text="{Binding Error}" Foreground="{StaticResource Crit}" FontWeight="SemiBold" TextWrapping="Wrap" />
         </Border>
-        <TextBlock Text="{Binding ProgressText}" Style="{StaticResource MutedText}" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,0,0,4" />
+        <Border Background="{StaticResource CritSoft}" CornerRadius="6" Padding="12,8" Margin="0,0,0,8"
+                Visibility="{Binding IsBlocked, Converter={StaticResource BoolToVisibility}}">
+            <TextBlock Text="{Binding BlockedText}" Foreground="{StaticResource Crit}" FontWeight="SemiBold" TextWrapping="Wrap" />
+        </Border>
+        <!-- Przebieg w toku: etap, reguła i czas od uruchomienia (licznik co sekundę), pasek – jak BusyBar -->
+        <Border Background="{StaticResource InfoSoft}" BorderBrush="{StaticResource Info}" BorderThickness="1" CornerRadius="4"
+                Padding="10,6" Margin="0,0,0,8" Visibility="{Binding IsRunning, Converter={StaticResource BoolToVisibility}}">
+            <StackPanel>
+                <TextBlock Text="{Binding ProgressText}" Foreground="{StaticResource Info}" FontWeight="SemiBold" TextWrapping="Wrap" />
+                <ProgressBar IsIndeterminate="True" Height="4" Margin="0,6,0,0" BorderThickness="0"
+                             Foreground="{StaticResource Info}" Background="{StaticResource Surface}" />
+            </StackPanel>
+        </Border>
+        <TextBlock Text="{Binding Notice}" Style="{StaticResource MutedText}" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,0,0,4" />
         <TextBlock Text="{Binding Definition}" Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="0,0,0,8" />
         <TextBlock Style="{StaticResource MutedText}" Text="Brak uruchomień przebiegu programu – „Nowy przebieg”." TextWrapping="Wrap"
                    Visibility="{Binding NoRuns, Converter={StaticResource BoolToVisibility}}" />
@@ -124,6 +137,8 @@
                                     </DockPanel>
                                     <TextBlock Text="{Binding Results}" Style="{StaticResource MutedText}" />
                                     <TextBlock Text="{Binding When}" Style="{StaticResource MutedText}" />
+                                    <TextBlock Text="{Binding Row.Comment}" TextWrapping="Wrap" FontStyle="Italic" Margin="0,2,0,0"
+                                               Visibility="{Binding HasComment, Converter={StaticResource BoolToVisibility}}" />
                                 </StackPanel>
                             </DataTemplate>
                         </ListBox.ItemTemplate>
@@ -137,14 +152,13 @@
                             <Run Text="{Binding SelectedStep.Gate, Mode=OneWay}" />
                         </TextBlock>
                         <TextBlock Text="{Binding SelectedStep.Description}" Style="{StaticResource MutedText}" TextWrapping="Wrap" />
-                        <TextBlock Text="{Binding SelectedStep.Elements, StringFormat='Reguły etapu: {0}'}" Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="0,4,0,0" />
-                        <TextBlock Text="{Binding SelectedStep.Row.Comment, StringFormat='Komentarz: {0}'}" TextWrapping="Wrap" Margin="0,4,0,0" />
 
                         <DockPanel Margin="0,10,0,10">
                             <Button DockPanel.Dock="Right" Content="Wykonaj ponownie" Style="{StaticResource Btn}" Margin="8,0,0,0" Command="{Binding Rerun}"
                                     ToolTip="Ponowne wykonanie etapu (np. po poprawie danych lub słowników); późniejsze etapy stają się nieaktualne" />
-                            <Button DockPanel.Dock="Right" Content="Potwierdź i dalej" Style="{StaticResource BtnPrimary}" Margin="8,0,0,0" Command="{Binding Confirm}"
-                                    ToolTip="Etap wymagający akcji: potwierdzenie ostrzeżeń / zatwierdzenie z komentarzem (dziennik), potem kolejne etapy" />
+                            <Button DockPanel.Dock="Right" Content="{Binding SelectedStep.ConfirmText, FallbackValue='Potwierdź i dalej'}" Style="{StaticResource BtnPrimary}"
+                                    Margin="8,0,0,0" Command="{Binding Confirm}"
+                                    ToolTip="Etap wymagający akcji albo zatrzymany na błędzie: potwierdzenie ostrzeżeń / akceptacja błędów / zatwierdzenie z komentarzem (etap, dziennik), potem kolejne etapy" />
                             <TextBox Style="{StaticResource Input}" Text="{Binding Comment, UpdateSourceTrigger=PropertyChanged}"
                                      AutomationProperties.Name="Komentarz potwierdzenia" ToolTip="Komentarz potwierdzenia etapu (wymagany)" />
                         </DockPanel>
