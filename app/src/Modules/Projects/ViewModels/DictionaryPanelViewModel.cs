@@ -11,7 +11,7 @@ namespace PzlEv.Modules.Projects.ViewModels;
 /// Słownik projektu na ekranie (kreator, krok 3; ekran Projekt): stan, wczytany plik, podgląd różnic i wynik walidacji.
 /// Akcje ustawia ekran nadrzędny.
 /// </summary>
-public sealed class DictionaryPanelViewModel(ProjectDictionaryItem item, string type) : ObservableObject
+public sealed class DictionaryPanelViewModel(ProjectDictionaryItem item) : ObservableObject
 {
     private ImportPreview? _preview;
     private string _file = "";
@@ -22,9 +22,7 @@ public sealed class DictionaryPanelViewModel(ProjectDictionaryItem item, string 
 
     public string Name => item.Name;
 
-    public string Requirement => !item.Stored
-        ? "nie jest wczytywany"
-        : item.IsRequired(type) ? "wymagany – bez niego przebieg jest zablokowany" : "opcjonalny";
+    public string Requirement => item.Stored ? "" : "nie jest wczytywany";
 
     public bool CanLoad => item.Stored;
 
@@ -49,7 +47,7 @@ public sealed class DictionaryPanelViewModel(ProjectDictionaryItem item, string 
         : _preview is { HasErrors: true } ? new Pill("crit", $"{_preview.Issues.Count(i => i.Level == Shared.Models.Pipeline.CheckLevel.Error)} błędów")
         : _preview is not null ? new Pill("ok", $"{_preview.Working.Count} wierszy z pliku")
         : _rows > 0 ? new Pill("ok", $"{_rows} wierszy")
-        : item.IsRequired(type) ? new Pill("warn", "pusty") : new Pill("muted", "pusty");
+        : new Pill("muted", "pusty");
 
     public ICommand? Load { get; set; }
     public ICommand? Remove { get; set; }

@@ -34,7 +34,7 @@ public class ProjectProcess
     public virtual CostResult Costs(IReadOnlyList<CostRow> rows, (int Year, int Period) last) => new(rows.Select(r => r.Amount).ToList(), null);
 
     /// <summary>Nazwa kontroli przebiegu z kosztami po przekształceniu (TransformsCosts).</summary>
-    public virtual string CostsCheck => "Koszty projektu";
+    public virtual string CostsCheck => "Koszty programu";
 
     /// <summary>Opis ACWP (kafelek ekranu projektu) w walucie currency; null – opis wspólny (pole kwoty ACTUALS i waluta).</summary>
     public virtual string? AcwpDescription(string? currency) => null;

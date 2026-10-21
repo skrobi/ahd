@@ -1,7 +1,6 @@
 using System.Windows.Input;
 using PzlEv.Modules.Dashboard.Data;
 using PzlEv.Modules.Dashboard.Models;
-using PzlEv.Shared.Models;
 using PzlEv.Shared.Utils.Ui.Modularity;
 using PzlEv.Shared.Utils.Ui.Mvvm;
 using Serilog;

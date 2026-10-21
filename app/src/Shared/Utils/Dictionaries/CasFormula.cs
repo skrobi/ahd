@@ -5,7 +5,7 @@ namespace PzlEv.Shared.Utils.Dictionaries;
 /// <summary>
 /// Formuła narzutu CAS z klocków (docs/slowniki.md, rozdz. 6.1): koszt bazowy kolumny, pula (narzut innej puli
 /// w wierszu), wskaźnik puli, operatory + − × ÷ i nawiasy. Pule i wskaźniki wskazuje identyfikator puli (RowId słownika
-/// „Pule narzutu CAS”), nie nazwa – zmiana nazwy puli nie zmienia formuły. Zapis w słowniku: klocki rozdzielone spacją
+/// „Kategorie narzutu CAS”), nie nazwa – zmiana nazwy puli nie zmienia formuły. Zapis w słowniku: klocki rozdzielone spacją
 /// („( base + p:12 ) * r:15”).
 /// </summary>
 public static class CasFormula
@@ -87,7 +87,7 @@ public static class CasFormula
                 if (!expectOperand)
                     return $"Brak operatora przed klockiem „{token.Code}” ({at}) – wstaw +, −, × albo ÷.";
                 if (token.Kind != Kind.Base && known is not null && !known.Contains(token.Id))
-                    return $"Pula usunięta ze słownika „Pule narzutu CAS” ({at}) – usuń klocek.";
+                    return $"Kategoria usunięta ze słownika „Kategorie narzutu CAS” ({at}) – usuń klocek.";
                 expectOperand = false;
             }
             else if (token.Kind == Kind.Operator)

@@ -48,44 +48,25 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
         <partials:PageHeader Title="{Binding Title}" Subtitle="{Binding Subtitle}">
             <partials:PageHeader.Actions>
                 <StackPanel Orientation="Horizontal">
-                    <TextBlock Text="{Binding RunProgress}" Style="{StaticResource MutedText}" VerticalAlignment="Center" Margin="0,0,12,0" MaxWidth="320"
-                               TextTrimming="CharacterEllipsis" ToolTip="{Binding RunProgress}" />
-                    <Button Content="Uruchom przebieg" Style="{StaticResource BtnPrimary}" Margin="0,0,12,0" Command="{Binding StartRun}"
-                            ToolTip="Przebieg w tle: import źródeł projektu, przypięcie danych ACTUALS, kontrole (liczba danych, odchylenia, nowe cost elementy, netowanie do 0); powiadomienie Windows po zakończeniu" />
-                    <ContentControl Content="{Binding ReadinessPill}" VerticalAlignment="Center" Margin="0,0,12,0"
-                                    ToolTip="Gotowość do przebiegu – szczegóły w zakładce Wskaźniki" />
-                    <Button Content="← Lista projektów" Style="{StaticResource Btn}" Command="{Binding Back}" />
+                    <Button Content="← Lista programów" Style="{StaticResource Btn}" Command="{Binding Back}" />
                 </StackPanel>
             </partials:PageHeader.Actions>
         </partials:PageHeader>
-        <!-- Z kiedy są dane: RABIT (ACTUALS) i produkcja (PZLPROD) – osobna linia pod nagłówkiem (tytuł i opis mają całą szerokość) -->
-        <WrapPanel Grid.Row="1" Margin="0,-12,0,12">
-            <Border Style="{StaticResource Tag}" VerticalAlignment="Center" Margin="0,0,8,4" ToolTip="{Binding DataInfoDetails}">
-                <TextBlock Text="{Binding DataInfo}" FontSize="12" />
-            </Border>
-            <Border Style="{StaticResource Tag}" VerticalAlignment="Center" Margin="0,0,8,4" ToolTip="{Binding ProductionDetails}">
-                <TextBlock Text="{Binding ProductionInfo}" FontSize="12" />
-            </Border>
-            <Border Style="{StaticResource Tag}" VerticalAlignment="Center" Margin="0,0,8,4" ToolTip="{Binding CurrencyDetails}">
-                <TextBlock Text="{Binding CurrencyInfo}" FontSize="12" />
-            </Border>
-        </WrapPanel>
         <!-- Komunikat w stałym miejscu (jedna linia o stałej wysokości, pełna treść w podpowiedzi): operacja w toku albo wynik
              ostatniej operacji – pokazanie i ukrycie nie przesuwa zakładek ani tabeli struktury. -->
-        <Grid Grid.Row="2" Height="22" Margin="0,0,0,6">
+        <Grid Grid.Row="1" Height="22" Margin="0,0,0,6">
             <DockPanel Visibility="{Binding Busy.IsBusy, Converter={StaticResource BoolToVisibility}}" ToolTip="{Binding Busy.Display}">
                 <ProgressBar DockPanel.Dock="Left" IsIndeterminate="True" Width="80" Height="4" Margin="0,0,10,0" BorderThickness="0"
                              VerticalAlignment="Center" Foreground="{StaticResource Info}" Background="{StaticResource Surface}" />
-                <TextBlock Text="{Binding Busy.Display}" Foreground="{StaticResource Info}" FontWeight="SemiBold" VerticalAlignment="Center"
+                <TextBlock partials:CopyText.Enabled="True" Text="{Binding Busy.Display}" Foreground="{StaticResource Info}" FontWeight="SemiBold" VerticalAlignment="Center"
                            TextTrimming="CharacterEllipsis" />
             </DockPanel>
-            <TextBlock Text="{Binding StatusLine}" ToolTip="{Binding StatusLine}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis">
+            <TextBlock partials:CopyText.Enabled="True" Text="{Binding StatusLine}" ToolTip="{Binding StatusLine}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis">
                 <TextBlock.Style>
                     <Style TargetType="TextBlock">
                         <Style.Triggers>
@@ -101,11 +82,37 @@
             </TextBlock>
         </Grid>
 
-        <TabControl Grid.Row="3" Background="Transparent" BorderThickness="0,1,0,0" Padding="0,12,0,0">
+        <TabControl Grid.Row="2" Background="Transparent" BorderThickness="0,1,0,0" Padding="0,12,0,0">
             <!-- Wskaźniki: sumy projektu teraz, wskaźniki EV po przebiegach; gotowość do przebiegu zwinięta -->
             <TabItem Header="Wskaźniki" Padding="12,4">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                 <StackPanel>
+                    <!-- Status: skąd są dane – ACTUALS struktury (zatwierdzony przebieg albo ostatni import), RABIT, produkcja (PZLPROD), waluta -->
+                    <TextBlock Text="Status" Style="{StaticResource H2}" FontSize="15" Margin="0,0,0,8" />
+                    <WrapPanel Margin="0,0,0,12">
+                        <!-- Skąd są koszty struktury: przebieg z zatwierdzonymi danymi ACTUALS albo ostatni import (ostrzeżenie) -->
+                        <Border VerticalAlignment="Center" Margin="0,0,8,4" ToolTip="{Binding StructureDataDetails}">
+                            <Border.Style>
+                                <Style TargetType="Border" BasedOn="{StaticResource Tag}">
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding StructureDataUnapproved}" Value="True">
+                                            <Setter Property="Background" Value="{StaticResource WarnSoft}" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Border.Style>
+                            <TextBlock Text="{Binding StructureDataInfo}" FontSize="12" />
+                        </Border>
+                        <Border Style="{StaticResource Tag}" VerticalAlignment="Center" Margin="0,0,8,4" ToolTip="{Binding DataInfoDetails}">
+                            <TextBlock Text="{Binding DataInfo}" FontSize="12" />
+                        </Border>
+                        <Border Style="{StaticResource Tag}" VerticalAlignment="Center" Margin="0,0,8,4" ToolTip="{Binding ProductionDetails}">
+                            <TextBlock Text="{Binding ProductionInfo}" FontSize="12" />
+                        </Border>
+                        <Border Style="{StaticResource Tag}" VerticalAlignment="Center" Margin="0,0,8,4" ToolTip="{Binding CurrencyDetails}">
+                            <TextBlock Text="{Binding CurrencyInfo}" FontSize="12" />
+                        </Border>
+                    </WrapPanel>
                     <!-- Grupy wskaźników jak w tabeli struktury (Operational EV, Materials, Financial EV) -->
                     <ItemsControl ItemsSource="{Binding Kpis}">
                         <ItemsControl.ItemsPanel>
@@ -128,15 +135,6 @@
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
-                    <Expander Margin="0,4,0,0">
-                        <Expander.Header>
-                            <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="Gotowość do przebiegu" FontWeight="SemiBold" Margin="0,0,8,0" VerticalAlignment="Center" />
-                                <ContentControl Content="{Binding ReadinessPill}" />
-                            </StackPanel>
-                        </Expander.Header>
-                        <ItemsControl ItemsSource="{Binding Readiness}" Margin="0,8,0,0" />
-                    </Expander>
                 </StackPanel>
                 </ScrollViewer>
             </TabItem>
@@ -156,7 +154,7 @@
                                         ToolTip="Edytuj Performance Objectives – edytor jak w kreatorze: przeciąganie, przesuwanie, usuwanie, węzły wirtualne, podmiana z Excela" />
                                 <Button Content="&#xE710;" Style="{StaticResource BtnIcon}" Command="{Binding AddFromExcel}"
                                         AutomationProperties.Name="Dołóż z Excela (eksport SAP)"
-                                        ToolTip="Dołóż z Excela (eksport SAP) – dokłada elementy, których projekt jeszcze nie ma (np. kolejne Project definition); istniejąca struktura zostaje bez zmian" />
+                                        ToolTip="Dołóż z Excela (eksport SAP) – dokłada elementy, których program jeszcze nie ma (np. kolejne Project definition); istniejąca struktura zostaje bez zmian" />
                                 <Button Content="&#xE896;" Style="{StaticResource BtnIcon}" Command="{Binding ExportStructure}"
                                         AutomationProperties.Name="Pobierz strukturę do Excela"
                                         ToolTip="Pobierz strukturę do Excela – całe drzewo (także zwinięte wiersze) ze wszystkimi kolumnami: WP, CAM, Cost Category, budżet, daty, ACWP, braki; kolumny do uzupełnienia wyróżnione na żółto" />
@@ -168,8 +166,8 @@
                                 <Button Content="&#xE70E;" Style="{StaticResource BtnIcon}" Margin="0,0,12,0" Command="{Binding Structure.CollapseAll}"
                                         AutomationProperties.Name="Zwiń wszystko" ToolTip="Zwiń wszystko" />
                                 <Button Content="&#xE8B5;" Style="{StaticResource BtnIcon}" Command="{Binding ImportSources}"
-                                        AutomationProperties.Name="Importuj źródła projektu"
-                                        ToolTip="Importuj źródła projektu – pliki definicji ze słownika „Źródła danych” (tylko nowe wersje), potem odświeżenie kosztów i produkcji" />
+                                        AutomationProperties.Name="Importuj źródła programu"
+                                        ToolTip="Importuj źródła programu – pliki definicji ze słownika „Źródła danych” (tylko nowe wersje), potem odświeżenie kosztów i produkcji" />
                                 <Button Content="&#xE72C;" Style="{StaticResource BtnIcon}" Command="{Binding RefreshMapping}"
                                         AutomationProperties.Name="Odśwież P1S i koszty"
                                         ToolTip="Odśwież P1S i koszty – ponowny odczyt struktury P1S (PZLPROD), produkcji i kosztów ACWP z ostatniego importu ACTUALS" />
@@ -217,20 +215,20 @@
                         <Button Grid.Column="0" Content="Raport kosztów (Excel)" Style="{StaticResource Btn}" HorizontalAlignment="Left"
                                 VerticalAlignment="Center" Margin="12" Command="{Binding ExportCostReport}" />
                         <TextBlock Grid.Column="1" VerticalAlignment="Center" Margin="0,12,12,12" TextWrapping="Wrap"
-                                   Text="Koszty ostatniego importu ACTUALS: Project definition × Cost Element, ostatni okres i lata (PLN), bez wykluczeń projektu." />
+                                   Text="Koszty ostatniego importu ACTUALS: Project definition × Cost Element, ostatni okres i lata (PLN), bez wykluczeń programu." />
                         <Button Grid.Row="1" Grid.Column="0" Content="Raport kosztów CES (Excel)" Style="{StaticResource Btn}" HorizontalAlignment="Left"
                                 VerticalAlignment="Center" Margin="12,0,12,12" Command="{Binding ExportCasCostReport}"
                                 Visibility="{Binding HasBurdenReport, Converter={StaticResource BoolToVisibility}}" />
                         <TextBlock Grid.Row="1" Grid.Column="1" VerticalAlignment="Center" Margin="0,0,12,12" TextWrapping="Wrap"
                                    Visibility="{Binding HasBurdenReport, Converter={StaticResource BoolToVisibility}}"
-                                   Text="Raport kosztów z narzutami CAS w formułach Excela: pule według grupy narzutowej elementu kosztowego (słownik Cost Category), wskaźniki obowiązujące w okresie kolumny (słownik „Wskaźniki narzutu CAS”) – wiersz wskaźników nad nagłówkiem można zmienić w pliku." />
+                                   Text="Raport kosztów z narzutami CAS w formułach Excela: kategorie według grupy narzutowej elementu kosztowego (słownik Cost Category), wskaźniki obowiązujące w okresie kolumny (słownik „Wskaźniki narzutu CAS”) – wiersz wskaźników nad nagłówkiem można zmienić w pliku." />
                     </Grid>
                 </Border>
                 </ScrollViewer>
             </TabItem>
 
             <!-- Słowniki projektu: lista słowników i tabela wybranego słownika z edycją w komórkach (jak ekran Słowniki) -->
-            <TabItem Header="Słowniki projektu" Padding="12,4" IsSelected="{Binding DictionaryTabOpen, Mode=OneWayToSource}">
+            <TabItem Header="Słowniki programu" Padding="12,4" IsSelected="{Binding DictionaryTabOpen, Mode=OneWayToSource}">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                 <Grid>
                     <Grid.ColumnDefinitions>
@@ -254,7 +252,7 @@
                         </Border>
                         <Button Content="Pobierz słowniki (Excel)" Style="{StaticResource Btn}" HorizontalAlignment="Left" Margin="0,10,0,0"
                                 Command="{Binding ExportDictionaries}"
-                                ToolTip="Wszystkie słowniki projektu w jednym skoroszycie – popraw i wczytaj ponownie (przed zapisem zobaczysz różnice)" />
+                                ToolTip="Wszystkie słowniki programu w jednym skoroszycie – popraw i wczytaj ponownie (przed zapisem zobaczysz różnice)" />
                     </StackPanel>
 
                     <ContentControl Grid.Column="1" Content="{Binding}" ContentTemplate="{StaticResource DictionaryEditor}" />
@@ -287,7 +285,7 @@
 
                     <StackPanel Grid.Column="1">
                         <ContentControl Content="{Binding}" ContentTemplate="{StaticResource DictionaryEditor}" />
-                        <TextBlock Text="Definicje źródeł projektu (Administracja)" Style="{StaticResource Eyebrow}" Margin="0,16,0,6" />
+                        <TextBlock Text="Definicje źródeł programu (Administracja)" Style="{StaticResource Eyebrow}" Margin="0,16,0,6" />
                         <DataGrid Style="{StaticResource DataTable}" ItemsSource="{Binding SourceDefinitions}" IsReadOnly="True" HorizontalAlignment="Left" MinWidth="480">
                             <DataGrid.Columns>
                                 <DataGridTextColumn Header="Definicja" Binding="{Binding Code}" />
@@ -302,43 +300,10 @@
                 </ScrollViewer>
             </TabItem>
 
-            <!-- Przebiegi -->
-            <TabItem Header="Przebiegi" Padding="12,4">
+            <!-- Przebieg programu: panel modułu Przebiegi (etapy, bramki, potwierdzenie, ponowne wykonanie) -->
+            <TabItem Header="Przebieg" Padding="12,4">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
-                <Grid>
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="*" />
-                    </Grid.RowDefinitions>
-                    <DataGrid Style="{StaticResource DataTable}" ItemsSource="{Binding RunPins}" SelectedItem="{Binding SelectedPin}" IsReadOnly="True" MaxHeight="220">
-                        <DataGrid.Columns>
-                            <DataGridTextColumn Header="Przebieg" Binding="{Binding Code}" />
-                            <DataGridTextColumn Header="#" Binding="{Binding PinNo}" />
-                            <DataGridTextColumn Header="Start" Binding="{Binding StartedAt, StringFormat=yyyy-MM-dd HH:mm}" />
-                            <DataGridTextColumn Header="Kto" Binding="{Binding StartedBy}" />
-                            <DataGridTextColumn Header="Stan" Binding="{Binding Status}" />
-                            <DataGridTextColumn Header="Błędy" Binding="{Binding Errors}" />
-                            <DataGridTextColumn Header="Ostrz." Binding="{Binding Warnings}" />
-                            <DataGridTextColumn Header="Wiersze" Binding="{Binding Rows, StringFormat=#\,0}" />
-                            <DataGridTextColumn Header="Podsumowanie" Binding="{Binding Summary}" Width="*" />
-                        </DataGrid.Columns>
-                    </DataGrid>
-                    <DataGrid Grid.Row="1" Style="{StaticResource DataTable}" ItemsSource="{Binding RunIssues}" IsReadOnly="True" Margin="0,12,0,0" MaxHeight="520">
-                        <DataGrid.Columns>
-                            <DataGridTextColumn Header="Poziom" Binding="{Binding Level}" />
-                            <DataGridTextColumn Header="Kontrola" Binding="{Binding CheckName}" />
-                            <DataGridTextColumn Header="Element" Binding="{Binding Element}" />
-                            <DataGridTextColumn Header="Opis" Binding="{Binding Message}" Width="*">
-                                <DataGridTextColumn.ElementStyle>
-                                    <Style TargetType="TextBlock">
-                                        <Setter Property="TextWrapping" Value="Wrap" />
-                                    </Style>
-                                </DataGridTextColumn.ElementStyle>
-                            </DataGridTextColumn>
-                            <DataGridTextColumn Header="Kwota" Binding="{Binding Amount, StringFormat=#\,0.00}" />
-                        </DataGrid.Columns>
-                    </DataGrid>
-                </Grid>
+                    <ContentControl Content="{Binding RunPanel}" />
                 </ScrollViewer>
             </TabItem>
 

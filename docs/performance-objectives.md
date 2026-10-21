@@ -85,8 +85,8 @@ Powiązane: `docs/funkcjonalnosc.md` (F01 – kreator projektu), `docs/zrodla-da
 - WP ze słownika „WP i CAM” podpina się pod węzeł nakładki, którego kod P1S obejmuje element (najdłuższy pasujący
   kod; przy kilku węzłach z tym kodem – pod najgłębszy). Węzeł wirtualny ma WP swoich elementów; sumy węzła obejmują jego poddrzewo, każdy WP liczony raz.
 - Element nakładki, pod którym nie ma żadnego WP, jest brakiem w bazie analitycznej (kreator, krok 5).
-- Element CES bez `Legacy WBS` nie ma kodu P1S – WARNING „Strona P1S” w gotowości projektu
-  (`docs/funkcjonalnosc.md`, F02); brak PZLPROD – WARNING z powodem (zakres P1S bez poddrzew `LOG.WBS`).
+- Element CES bez `Legacy WBS` nie ma kodu P1S – kolumna Braki w strukturze;
+  brak PZLPROD – WARNING z powodem (zakres P1S bez poddrzew `LOG.WBS`).
 
 ### 4.2 Struktura projektu (ekran Projekt)
 
@@ -138,18 +138,18 @@ i budżetem (`StructureBuilder`).
   pasujący CPLGR). Operacje `vAHDD` elementu z tą grupą stanowisk (z DJK stanowiska) należą do węzła i są odejmowane od
   elementu – reszta zostaje na elemencie. Węzeł ma WP, CAM, Cost Category, budżet i daty jak element P1S; materiały i ACWP
   zostają na elemencie. SWBS nie jest brany pod uwagę. Kod niezgodny z konwencją – brak „kod wydzielenia” w kolumnie Braki,
-  powód w podpowiedzi nazwy i w nagłówku „Produkcja (PZLPROD)”. Godziny wydzielane są tylko z operacji samego elementu
+  powód w podpowiedzi nazwy i w statusie „Produkcja (PZLPROD)” (zakładka Wskaźniki). Godziny wydzielane są tylko z operacji samego elementu
   (PSPNR) – operacje elementów pod nim w `LOG.WBS` wydziela się kodem z ich elementem. Kod wydzielenia elementu `LOG.WBS`
   spod węzła należy do zakresu projektu także wtedy, gdy kod elementu nie zaczyna się od kodu węzła z kropką (np.
   `XYZ-1.PAINT.W20` pod `AC-CAB.6.38.07`). Węzeł wirtualny, którego `Legacy WBS` to zwykły element `LOG.WBS` (nie kod
   wydzielenia), pokazuje godziny samego elementu.
   Dane produkcyjne są czytane na żywo (`IPzlProdSource.Production`, filtr – zakres P1S projektu) przy
-  otwarciu projektu, „Odśwież P1S i koszty” i po zmianie Legacy WBS; chwila odczytu – w nagłówku ekranu
+  otwarciu projektu, „Odśwież P1S i koszty” i po zmianie Legacy WBS; chwila odczytu – w statusie zakładki Wskaźniki
   („Produkcja (PZLPROD) …”). Kolumny mają stałą szerokość – przy kolejnych kolumnach tabela przewija się w poziomie. Tabela kończy się na dole okna (wysokość
   dopasowana do okna przy każdej zmianie jego rozmiaru, bez górnego limitu; strona bez przewijania – wiersze przewija
-  tabela; przy zwiniętym menu – szersza); skróty klawiszowe i opis kolumn – okno „?”; nad tabelą daty danych RABIT
-  i produkcji – osobna linia pod nagłówkiem projektu. Komunikaty (operacja w toku – „Trwa…”, wynik zapisu, wczytania,
-  wklejenia) – jedna linia o stałej wysokości pod datami danych (pełna treść w podpowiedzi); pokazanie i ukrycie
+  tabela; przy zwiniętym menu – szersza); skróty klawiszowe i opis kolumn – okno „?”; daty danych RABIT i produkcji,
+  źródło ACTUALS struktury i waluta – pierwszy wiersz zakładki Wskaźniki („Status”). Komunikaty (operacja w toku – „Trwa…”,
+  wynik zapisu, wczytania, wklejenia) – jedna linia o stałej wysokości pod nagłówkiem projektu (pełna treść w podpowiedzi); pokazanie i ukrycie
   komunikatu nie przesuwa zakładek ani tabeli.
 - **WP** to znacznik elementu P1S (wiersz z kodem P1S), który wskażą finansiści: zaznaczony element jest pakietem pracy
   i ma mieć koszty i budżet. Kodem nowego WP jest kod elementu P1S (WP zapisany już w słowniku zachowuje swój
@@ -165,7 +165,9 @@ i budżetem (`StructureBuilder`).
   pod swoją wartością; zapis takiej kategorii – WARNING.
 - **Sumy:** budżet i daty wiersza obejmują poddrzewo, każdy WP liczony raz; braki – element nakładki bez WP,
   WP bez budżetu.
-- **ACWP** (tylko do odczytu): koszt rzeczywisty narastająco z ostatniego importu ACTUALS (pole kwoty ze słownika
+- **ACWP** (tylko do odczytu): koszt rzeczywisty narastająco z danych ACTUALS zatwierdzonego przebiegu – stan z przypięcia ostatniego
+  uruchomienia z zakończonym etapem „Zatwierdzenie ACTUALS”, bez niego ostatni import (`docs/pipeline-fazy.md`, rozdz. 4.1; tag
+  „ACTUALS struktury” w statusie zakładki Wskaźniki) (pole kwoty ze słownika
   „Parametry projektu”, domyślnie waluta obiektu – PLN; bez wykluczeń
   projektu i bez cost elementów oznaczonych „Rozliczeniowy” w słowniku Cost Category (słownik efektywny projektu,
   bez względu na klasę obiektu partnera); procedura `REP_ProjectCostsByElement`, `docs/model-danych.md`,
@@ -177,7 +179,7 @@ i budżetem (`StructureBuilder`).
   pokazuje koszt elementów CES swojego poddrzewa, wiersz elementu P1S – koszt przypisany do WP poddrzewa. Koszt
   elementu CES projektu, którego nie ma w nakładce – „spoza nakładki”. Kafelki ACWP i „Koszt bez WP” w zakładce
   Wskaźniki. Koszty są czytane przy otwarciu projektu i „Odśwież P1S i koszty” (nie po każdym zapisie wiersza).
-  **Z kiedy są dane** – w nagłówku ekranu projektu: „Dane RABIT z … · import … · sprawdzone …” – data raportu w RABIT
+  **Z kiedy są dane** – w statusie zakładki Wskaźniki (pierwszy wiersz): „Dane RABIT z … · import … · sprawdzone …” – data raportu w RABIT
   (modyfikacja pliku ACTUALS), data importu i ostatniego pobrania z RABIT; podpowiedź – każdy plik osobno. Ponowne
   pobranie raportu z tą samą treścią (import „pominięty” / „duplikat”) nie zmienia danych, ale przesuwa datę „dane z” na
   nowszy raport – wiadomo, że dane są aktualne na tę datę (`CAN_LatestFiles` + `META_SourceFileSeen`).
@@ -189,7 +191,7 @@ i budżetem (`StructureBuilder`).
   wpisana – zwykłym kolorem. Wiersz z WP w poddrzewie pokazuje daty WP: start najwcześniejszy, koniec najpóźniejszy, gdy
   wszystkie WP zakończone (wpisany start bez końca i bez daty końca z produkcji – WP trwa); wiersz bez WP – daty
   z produkcji poddrzewa.
-- **Actual DLH** (tylko do odczytu): godziny rzeczywiste narastająco z ostatniego importu ACTUALS – kolumna „Total
+- **Actual DLH** (tylko do odczytu): godziny rzeczywiste narastająco z tych samych danych ACTUALS co ACWP – kolumna „Total
   Quantity” (pole parsera `TotalQuantity`), te same wiersze (bez wykluczeń i rozliczenia wychodzącego) i to samo
   przypisanie do WP co ACWP – to samo wywołanie procedury `REP_ProjectCostsByElement` (parametr `@Hours`, kolumna
   `Hours`; migracja 036), jeden odczyt zrzutu ACTUALS dla obu kolumn. Godziny elementu bez WP zostają
@@ -215,8 +217,7 @@ i budżetem (`StructureBuilder`).
 - **Edycja w komórkach** (zapis od razu po zatwierdzeniu wiersza – Enter albo przejście do innego wiersza, bez
   osobnego „Zapisz”; Esc cofa): nazwa i `Legacy WBS` węzła → nakładka; WP, CAM i Cost Category wiersza z kodem P1S → „WP i CAM”
   (klucz – kod P1S; zaznaczenie WP albo wybór CAM tworzy przypisanie, odznaczenie WP je usuwa razem z budżetem WP, jeśli
-  WP nie jest przypisany do innego elementu; WP można zapisać bez CAM – brak „WP bez CAM”, CAM uzupełnia się później,
-  przebieg blokuje gotowość projektu);
+  WP nie jest przypisany do innego elementu; WP można zapisać bez CAM – brak „WP bez CAM”, CAM uzupełnia się później);
   BAC HOURS, BAC MATERIAL, BAC, Baseline Start, Baseline Koniec, Actual Start, Actual Koniec wiersza z jednym WP w poddrzewie – własnym albo jedynym
   pod nim (np. węzeł nakładki nad elementem P1S z WP) → „Harmonogram i budżet” tego WP (klucz – WP); wiersz z kilkoma WP
   w poddrzewie pokazuje sumę i nie jest edytowalny. Walidacja jak przy zapisie słownika: ERROR blokuje zapis (zmiany zostają w wierszu, komunikat

@@ -57,7 +57,7 @@ public sealed class ProjectFolders(string projectsFolder)
         {
             var missing = Subfolders.Where(f => !Directory.Exists(Path.Combine(PathOf(code), f))).ToList();
             if (!Directory.Exists(PathOf(code)))
-                return Issue.Warning("Brak folderu projektu", PathOf(code));
+                return Issue.Warning("Brak folderu programu", PathOf(code));
             return missing.Count == 0
                 ? new Issue(Shared.Models.Pipeline.CheckLevel.Pass, "Struktura folderów zgodna z konfiguracją", PathOf(code))
                 : Issue.Warning($"Brak folderów: {string.Join(", ", missing)}", PathOf(code));
@@ -73,8 +73,8 @@ public sealed class ProjectFolders(string projectsFolder)
         Issue.Warning("Dostęp CAM do folderu CAM\\<RRRR-MM>\\Zwrocone nadaje IT – wyślij zgłoszenie (treść poniżej); aplikacja nie sprawdza uprawnień", PathOf(code));
 
     public string ItRequest(string code) =>
-        $"Proszę o nadanie osobom pełniącym funkcję CAM w projekcie {code} prawa zapisu do folderów {PathOf(code)}\\CAM\\<RRRR-MM>\\Zwrocone "
-        + $"(pliki zwracane przez CAM) oraz prawa odczytu do {PathOf(code)}\\CAM\\<RRRR-MM>\\Wyslane. Lista CAM – słownik „WP i CAM” projektu w PZL-EV.";
+        $"Proszę o nadanie osobom pełniącym funkcję CAM w programie {code} prawa zapisu do folderów {PathOf(code)}\\CAM\\<RRRR-MM>\\Zwrocone "
+        + $"(pliki zwracane przez CAM) oraz prawa odczytu do {PathOf(code)}\\CAM\\<RRRR-MM>\\Wyslane. Lista CAM – słownik „WP i CAM” programu w PZL-EV.";
 
     /// <summary>Tworzy brakujące foldery projektu; zwraca utworzone ścieżki.</summary>
     public IReadOnlyList<string> Create(string code)

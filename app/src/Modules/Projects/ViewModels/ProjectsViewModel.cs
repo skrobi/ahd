@@ -36,7 +36,7 @@ public sealed class ProjectsViewModel : ObservableObject
         }
     }
 
-    public void ShowList() => Page = new ProjectListViewModel(_service, Busy, ShowWizard, code => _ = ShowProject(code));
+    public void ShowList() => Page = new ProjectListViewModel(_service, _dialogs, Busy, ShowWizard, code => _ = ShowProject(code));
 
     public void ShowWizard() => Page = new WizardViewModel(_service, _dialogs, Busy, ShowList, code => _ = ShowProject(code));
 
@@ -44,7 +44,7 @@ public sealed class ProjectsViewModel : ObservableObject
     {
         try
         {
-            if (await Busy.Run($"Otwieranie projektu {code}…", () => _service.Find(code)) is { } project)
+            if (await Busy.Run($"Otwieranie programu {code}…", () => _service.Find(code)) is { } project)
             {
                 Page = new ProjectDetailViewModel(_service, _dialogs, Busy, project, ShowList);
                 return;
@@ -52,7 +52,7 @@ public sealed class ProjectsViewModel : ObservableObject
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
-            Logger.Error(ex, "Otwarcie projektu {Code}", code);
+            Logger.Error(ex, "Otwarcie programu {Code}", code);
         }
         ShowList();
     }

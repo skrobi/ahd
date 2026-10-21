@@ -1,9 +1,9 @@
 using PzlEv.Shared.Models.Hr;
-using PzlEv.Shared.Models.PzlProd;
 using System.Globalization;
 using System.Text.RegularExpressions;
 using PzlEv.Shared.Models.Dictionaries;
 using PzlEv.Shared.Models;
+using PzlEv.Shared.Models.Pipeline;
 using PzlEv.Shared.Utils.Data;
 
 namespace PzlEv.Shared.Utils.Dictionaries;
@@ -22,6 +22,11 @@ public static partial class GlobalDictionaries
     public const string CasBurdenGroups = "cas-burden-groups";
     public const string CasBurdenFormulas = "cas-burden-formulas";
     public const string CasBurdenRates = "cas-burden-rates";
+    public const string RunDefinitionHeaders = "run-definitions";
+    public const string RunSteps = "run-steps";
+    public const string RunStepElements = "run-step-elements";
+    public const string RunValidations = "run-validations";
+
 
     /// <summary>Kolumna słownika Cost Category z rodzajem kosztu (Hours / Materials / Other; puste – Other) – podział ACWP w strukturze.</summary>
     public const string CostKindColumn = "Rodzaj kosztu";
@@ -77,7 +82,7 @@ public static partial class GlobalDictionaries
         {
             Code = FxRates,
             Name = "Kursy walut",
-            Description = "Kurs waluty (do PLN: ile PLN za jednostkę waluty) obowiązujący od – do (Do puste – bezterminowo). „Kurs” – przeliczenia walut w strukturze projektu (materiały, budżety, ETC), łączeniu źródeł (P3) i obliczeniu EV (P8); „Kurs CAS” – projekty CAS w walucie innej niż PLN: koszt PLN z ACTUALS po narzutach CAS przeliczany kursem CAS obowiązującym w okresie kosztu (kurs zakupu waluty); brak kursu CAS dla okresu z kosztem – błąd.",
+            Description = "Kurs waluty (do PLN: ile PLN za jednostkę waluty) obowiązujący od – do (Do puste – bezterminowo). „Kurs” – przeliczenia walut w strukturze programu (materiały, budżety, ETC), łączeniu źródeł (P3) i obliczeniu EV (P8); „Kurs CAS” – programy CAS w walucie innej niż PLN: koszt PLN z ACTUALS po narzutach CAS przeliczany kursem CAS obowiązującym w okresie kosztu (kurs zakupu waluty); brak kursu CAS dla okresu z kosztem – błąd.",
             Columns =
             [
                 new("Waluta", ColumnType.Text, Key: true),
@@ -93,7 +98,7 @@ public static partial class GlobalDictionaries
         {
             Code = CostCategory,
             Name = "Cost Category",
-            Description = "Numer elementu kosztowego → opis, obszar, Cost Category; „Rozliczeniowy” – cost element rozliczenia (settlement), pomijany w ACWP jako rozliczenie wychodzące; „Rodzaj kosztu” – Hours / Materials / Other (puste – Other): podział ACWP w strukturze projektu na ACWP Hours, ACWP Materials i ACWP Other. Numer liczbowy uzupełniany zerami do 10 znaków.",
+            Description = "Numer elementu kosztowego → opis, obszar, Cost Category; „Rozliczeniowy” – cost element rozliczenia (settlement), pomijany w ACWP jako rozliczenie wychodzące; „Rodzaj kosztu” – Hours / Materials / Other (puste – Other): podział ACWP w strukturze programu na ACWP Hours, ACWP Materials i ACWP Other. Numer liczbowy uzupełniany zerami do 10 znaków.",
             Columns =
             [
                 new("Numer elementu kosztowego", ColumnType.Text, Key: true, PadNumericTo: 10),
@@ -110,7 +115,7 @@ public static partial class GlobalDictionaries
         {
             Code = Persons,
             Name = "Osoby",
-            Description = "Pracownicy z HR (PZLHRPROD, HR.ORG – „Dodaj z HR”): USRID (numer znaczka, login) → imię i nazwisko, MPK, dział, stanowisko. CAM w strukturze projektu wybiera się z tej listy (zapisywany USRID).",
+            Description = "Pracownicy z HR (PZLHRPROD, HR.ORG – „Dodaj z HR”): USRID (numer znaczka, login) → imię i nazwisko, MPK, dział, stanowisko. CAM w strukturze programu wybiera się z tej listy (zapisywany USRID).",
             Columns =
             [
                 new("USRID", ColumnType.Text, Key: true, Aliases: ["Konto AD"]),
@@ -131,7 +136,7 @@ public static partial class GlobalDictionaries
         {
             Code = DjkRates,
             Name = "Wskaźniki DJK",
-            Description = "Godziny jakości DJK doliczane do godzin produkcji: udział godzin TECH / TECH_PON według prefiksu grupy stanowisk (IPT, np. W2, W51 – najdłuższy pasujący prefiks). Odczyt danych produkcyjnych struktury projektu (vAHDD).",
+            Description = "Godziny jakości DJK doliczane do godzin produkcji: udział godzin TECH / TECH_PON według prefiksu grupy stanowisk (IPT, np. W2, W51 – najdłuższy pasujący prefiks). Odczyt danych produkcyjnych struktury programu (vAHDD).",
             Columns =
             [
                 new("Grupa stanowisk", ColumnType.Text, Key: true),
@@ -144,7 +149,7 @@ public static partial class GlobalDictionaries
         {
             Code = ProductionParameters,
             Name = "Parametry produkcji",
-            Description = "Parametry odczytu danych produkcyjnych z PZLPROD (struktura projektu): okno produktywności IPT w miesiącach, statusy vAPD liczone jako dostarczone (po przecinku), dzielenie wartości materiałów przez (1 + Z_CLO) – tak / nie.",
+            Description = "Parametry odczytu danych produkcyjnych z PZLPROD (struktura programu): okno produktywności IPT w miesiącach, statusy vAPD liczone jako dostarczone (po przecinku), dzielenie wartości materiałów przez (1 + Z_CLO) – tak / nie.",
             Columns =
             [
                 new("Parametr", ColumnType.Choice, Key: true, Choices: [ProductivityMonths, DeliveredStatuses, DivideByZClo]),
@@ -156,23 +161,23 @@ public static partial class GlobalDictionaries
         new()
         {
             Code = CasPools,
-            Name = "Pule narzutu CAS",
-            Description = "Pule narzutu CAS – kolumny raportu kosztów CES w kolejności „Kolejność”; Rodzaj: Koszt – w TOTAL COST, FCCOM – w TOTAL FCCOM. Formuły, wskaźniki i raport wskazują pulę identyfikatorem – zmiana nazwy jest od razu widoczna wszędzie; puli używanej w formułach albo wskaźnikach nie można usunąć.",
+            Name = "Kategorie narzutu CAS",
+            Description = "Kategorie narzutu CAS – kolumny raportu kosztów CES w kolejności „Kolejność”; Rodzaj: Koszt – w TOTAL COST, FCCOM – w TOTAL FCCOM. Formuły, wskaźniki i raport wskazują kategorię identyfikatorem – zmiana nazwy jest od razu widoczna wszędzie; kategorii używanej w formułach albo wskaźnikach nie można usunąć.",
             Columns =
             [
-                new("Pula", ColumnType.Text, Key: true, CheckSimilar: true),
+                new("Kategoria", ColumnType.Text, Key: true, CheckSimilar: true),
                 new("Kolejność", ColumnType.Integer, Required: true),
                 new("Rodzaj", ColumnType.Choice, Required: true, Choices: [CasBurden.CostKind, CasBurden.FccomKind]),
                 new("Opis", ColumnType.Text),
             ],
             Rules = CasPoolRules,
-            ReferencedBy = [(CasBurdenFormulas, "Pula", CasBurden.References), (CasBurdenFormulas, "Formuła", CasBurden.References), (CasBurdenRates, "Pula", CasBurden.References)],
+            ReferencedBy = [(CasBurdenFormulas, "Kategoria", CasBurden.References), (CasBurdenFormulas, "Formuła", CasBurden.References), (CasBurdenRates, "Kategoria", CasBurden.References)],
         },
         new()
         {
             Code = CasBurdenGroups,
             Name = "Grupy narzutowe CAS",
-            Description = "Grupa narzutowa elementu kosztowego (kolumna „Grupa narzutowa CAS” słownika Cost Category – zapisany identyfikator grupy, zmiana nazwy jest od razu widoczna). Pule naliczane w grupie i ich formuły – przycisk „Formuły narzutów” (macierz grup i pul, edytor formuły z klocków).",
+            Description = "Grupa narzutowa elementu kosztowego (kolumna „Grupa narzutowa CAS” słownika Cost Category – zapisany identyfikator grupy, zmiana nazwy jest od razu widoczna). Kategorie naliczane w grupie i ich formuły – przycisk „Formuły narzutów” (macierz grup i kategorii, edytor formuły z klocków).",
             Columns =
             [
                 new("Grupa", ColumnType.Text, Key: true, CheckSimilar: true),
@@ -184,11 +189,11 @@ public static partial class GlobalDictionaries
         {
             Code = CasBurdenFormulas,
             Name = "Formuły narzutów CAS",
-            Description = "Formuła puli w grupie narzutowej z klocków: Base cost elements (koszt bazowy kolumny), narzuty pul, wskaźniki pul, + − × ÷ ( ). Wiersz = pula naliczana w grupie. Edycja tylko w oknie „Formuły narzutów” (macierz grup i pul).",
+            Description = "Formuła kategorii w grupie narzutowej z klocków: Base cost elements (koszt bazowy kolumny), narzuty kategorii, wskaźniki kategorii, + − × ÷ ( ). Wiersz = kategoria naliczana w grupie. Edycja tylko w oknie „Formuły narzutów” (macierz grup i kategorii).",
             Columns =
             [
                 new("Grupa", ColumnType.Text, Key: true, Lookup: CasBurdenGroups, IdLookup: true),
-                new("Pula", ColumnType.Text, Key: true, Lookup: CasPools, IdLookup: true),
+                new("Kategoria", ColumnType.Text, Key: true, Lookup: CasPools, IdLookup: true),
                 new("Formuła", ColumnType.Text, Required: true),
             ],
             Rules = CasBurden.FormulaRules,
@@ -198,10 +203,10 @@ public static partial class GlobalDictionaries
         {
             Code = CasBurdenRates,
             Name = "Wskaźniki narzutu CAS",
-            Description = "Wskaźnik puli narzutu CAS obowiązujący od – do (zwykle rok: 2026-01-01 – 2026-12-31; Do puste – bezterminowo); pula z listy słownika „Pule narzutu CAS” (zapisany identyfikator – zmiana nazwy puli jest od razu widoczna). Raport kosztów CES bierze wskaźnik obowiązujący w okresie kolumny (okres, rok).",
+            Description = "Wskaźnik kategorii narzutu CAS obowiązujący od – do (zwykle rok: 2026-01-01 – 2026-12-31; Do puste – bezterminowo); kategoria z listy słownika „Kategorie narzutu CAS” (zapisany identyfikator – zmiana nazwy kategorii jest od razu widoczna). Raport kosztów CES bierze wskaźnik obowiązujący w okresie kolumny (okres, rok).",
             Columns =
             [
-                new("Pula", ColumnType.Text, Key: true, Lookup: CasPools, IdLookup: true),
+                new("Kategoria", ColumnType.Text, Key: true, Lookup: CasPools, IdLookup: true),
                 new("Od", ColumnType.Date, Key: true),
                 new("Do", ColumnType.Date),
                 new("Wskaźnik", ColumnType.Decimal, Required: true, Decimals: 18),
@@ -209,6 +214,74 @@ public static partial class GlobalDictionaries
             ],
             Validity = ("Od", "Do"),
             Rules = CasRateRules,
+        },
+        new()
+        {
+            Code = RunDefinitionHeaders,
+            Name = "Definicje przebiegów",
+            Hidden = true,
+            Description = "Szablon przebiegu (workflow, ekran Przebiegi) – etapy w słowniku „Etapy przebiegów”. Program wybiera szablon w Parametrach programu („Przebieg”); bez wyboru – aktywny szablon domyślny dla typu programu (typ przed „Wszystkie”); bez szablonów – definicja wbudowana. Program i Przebieg – nieużywane (puste, „Każdy”).",
+            Columns =
+            [
+                new("Definicja", ColumnType.Text, Key: true, CheckSimilar: true),
+                new("Typ programu", ColumnType.Choice, Required: true, Choices: RunRules.ProjectTypes),
+                new("Program", ColumnType.Text),
+                new("Przebieg", ColumnType.Choice, Required: true, Choices: RunRules.RunKinds),
+                new("Aktywna", ColumnType.Boolean, Required: true),
+                new("Opis", ColumnType.Text),
+            ],
+            Rules = RunDefinitionRules,
+        },
+        new()
+        {
+            Code = RunSteps,
+            Name = "Etapy przebiegów",
+            Hidden = true,
+            Description = "Etapy definicji przebiegu w kolejności: akcja (import źródeł, przypięcie stanu, kontrole – elementy kontrolne etapu, zatwierdzenie), bramka przy WARNING (potwierdzenie z komentarzem albo informacja; ERROR zawsze zatrzymuje przebieg), zatwierdzenie ręczne (przebieg czeka na analityka). Przebieg wykonuje etapy kolejno sam, do najbliższej bramki.",
+            Columns =
+            [
+                new("Definicja", ColumnType.Text, Key: true, Lookup: RunDefinitionHeaders),
+                new("Kolejność", ColumnType.Integer, Key: true),
+                new("Etap", ColumnType.Text, Required: true),
+                new("Akcja", ColumnType.Choice, Required: true, Choices: RunActions.All),
+                new("Bramka WARNING", ColumnType.Choice, Required: true, Choices: RunGates.All),
+                new("Zatwierdzenie", ColumnType.Boolean, Required: true),
+                new("Opis", ColumnType.Text),
+            ],
+            Rules = RunStepRules,
+        },
+        new()
+        {
+            Code = RunStepElements,
+            Name = "Elementy kontrolne etapów",
+            Hidden = true,
+            Description = "Reguły etapu z akcją Kontrole: reguła walidacji (nazwa – słownik „Reguły walidacji”), aktywna. Poziom – w regule.",
+            Columns =
+            [
+                new("Definicja", ColumnType.Text, Key: true, Lookup: RunDefinitionHeaders),
+                new("Etap", ColumnType.Text, Key: true, Lookup: RunSteps),
+                new("Element", ColumnType.Text, Key: true, Lookup: RunValidations),
+                new("Aktywny", ColumnType.Boolean, Required: true),
+                new("Opis", ColumnType.Text),
+            ],
+            Rules = RunStepElementRules,
+        },
+        new()
+        {
+            Code = RunValidations,
+            Name = "Reguły walidacji",
+            Hidden = true,
+            Description = "Reguły walidacji przebiegu w SQL (edytor na ekranie Przebiegi): zapytanie (jeden SELECT / WITH na tabelach danych uruchomienia – biezace, poprzednie, ev, ev_poprzednie, cost_category, wp_cam, stawki, harmonogram); każdy zwrócony wiersz to nieprawidłowość z poziomem reguły, brak wierszy – OK; opis wyniku z kolumnami w { } (puste – kolumny i wartości). Pusty słownik – reguły startowe.",
+            Columns =
+            [
+                new("Nazwa", ColumnType.Text, Key: true, CheckSimilar: true),
+                new("Opis", ColumnType.Text),
+                new("Poziom", ColumnType.Choice, Required: true, Choices: RunRules.Levels),
+                new("Aktywna", ColumnType.Boolean, Required: true),
+                new("Zapytanie SQL", ColumnType.Text, Required: true),
+                new("Opis wyniku", ColumnType.Text),
+            ],
+            Rules = ValidationRuleRules,
         },
     ];
 
@@ -233,10 +306,19 @@ public static partial class GlobalDictionaries
         ]),
         new(Get(DjkRates), "dict.DjkRate", [("Grupa stanowisk", "WorkCenterGroup"), ("Udział DJK", "Share"), ("Opis", "Description")]),
         new(Get(ProductionParameters), "dict.ProductionParameter", [("Parametr", "Name"), ("Wartość", "Value"), ("Opis", "Description")]),
-        new(Get(CasPools), "dict.CasPool", [("Pula", "Pool"), ("Kolejność", "SortOrder"), ("Rodzaj", "Kind"), ("Opis", "Description")]),
+        new(Get(CasPools), "dict.CasPool", [("Kategoria", "Pool"), ("Kolejność", "SortOrder"), ("Rodzaj", "Kind"), ("Opis", "Description")]),
         new(Get(CasBurdenGroups), "dict.CasBurdenGroup", [("Grupa", "BurdenGroup"), ("Opis", "Description")]),
-        new(Get(CasBurdenFormulas), "dict.CasFormula", [("Grupa", "GroupId"), ("Pula", "PoolId"), ("Formuła", "Formula")]),
-        new(Get(CasBurdenRates), "dict.CasBurdenRate", [("Pula", "PoolId"), ("Od", "ValidFrom"), ("Do", "ValidTo"), ("Wskaźnik", "Rate"), ("Opis", "Description")]),
+        new(Get(CasBurdenFormulas), "dict.CasFormula", [("Grupa", "GroupId"), ("Kategoria", "PoolId"), ("Formuła", "Formula")]),
+        new(Get(CasBurdenRates), "dict.CasBurdenRate", [("Kategoria", "PoolId"), ("Od", "ValidFrom"), ("Do", "ValidTo"), ("Wskaźnik", "Rate"), ("Opis", "Description")]),
+        new(Get(RunDefinitionHeaders), "dict.RunDefinition",
+            [("Definicja", "Code"), ("Typ programu", "ProjectType"), ("Program", "ProgramCode"), ("Przebieg", "RunKind"), ("Aktywna", "IsActive"), ("Opis", "Description")]),
+        new(Get(RunSteps), "dict.RunStep",
+            [("Definicja", "Definition"), ("Kolejność", "StepNo"), ("Etap", "Name"), ("Akcja", "Action"), ("Bramka WARNING", "WarningGate"),
+             ("Zatwierdzenie", "Approval"), ("Opis", "Description")]),
+        new(Get(RunValidations), "dict.RunValidation",
+            [("Nazwa", "Name"), ("Opis", "Description"), ("Poziom", "Level"), ("Aktywna", "IsActive"), ("Zapytanie SQL", "SqlText"), ("Opis wyniku", "ResultTemplate")]),
+        new(Get(RunStepElements), "dict.RunStepElement",
+            [("Definicja", "Definition"), ("Etap", "Step"), ("Element", "Element"), ("Aktywny", "IsActive"), ("Opis", "Description")]),
     ];
 
     private static IEnumerable<Issue> CalendarRules(IReadOnlyList<DictRow> rows)
@@ -332,11 +414,50 @@ public static partial class GlobalDictionaries
         for (var i = 0; i < rows.Count; i++)
         {
             var at = DictionaryValidator.RowElement(i);
-            if (rows[i]["Pula"] is { } pool && (pool.Contains('+') || string.Equals(pool, CasBurden.Base, StringComparison.OrdinalIgnoreCase)))
-                yield return Issue.Error($"Pula „{pool}” – nazwa nie może zawierać „+” ani być „{CasBurden.Base}”", at);
+            if (rows[i]["Kategoria"] is { } pool && (pool.Contains('+') || string.Equals(pool, CasBurden.Base, StringComparison.OrdinalIgnoreCase)))
+                yield return Issue.Error($"Kategoria „{pool}” – nazwa nie może zawierać „+” ani być „{CasBurden.Base}”", at);
         }
         foreach (var order in rows.Where(r => r["Kolejność"] is not null).GroupBy(r => r["Kolejność"]!).Where(g => g.Count() > 1))
-            yield return Issue.Warning($"Kolejność {order.Key} ma kilka pul ({string.Join(", ", order.Select(r => r["Pula"]))}) – kolumny ułożone po nazwie", "Kolejność");
+            yield return Issue.Warning($"Kolejność {order.Key} ma kilka kategorii ({string.Join(", ", order.Select(r => r["Pula"]))}) – kolumny ułożone po nazwie", "Kolejność");
+    }
+
+    /// <summary>„Definicje przebiegów”: dwa aktywne szablony domyślne dla tego samego typu programu – ERROR (nie wiadomo, który obowiązuje).</summary>
+    private static IEnumerable<Issue> RunDefinitionRules(IReadOnlyList<DictRow> rows)
+    {
+        var active = rows.Select((r, i) => (Row: r, Index: i)).Where(x => x.Row["Aktywna"] == "tak").ToList();
+        foreach (var group in active.GroupBy(x => x.Row["Typ programu"]?.Trim().ToUpperInvariant()).Where(g => g.Count() > 1))
+            foreach (var x in group.Skip(1))
+                yield return Issue.Error($"Aktywny szablon „{group.First().Row["Definicja"]}” jest już domyślny dla typu programu {group.First().Row["Typ programu"]} – wyłącz jeden albo zmień typ",
+                    DictionaryValidator.RowElement(x.Index));
+    }
+
+    /// <summary>„Etapy przebiegów”: kolejność od 1, nazwy etapów definicji bez powtórzeń.</summary>
+    private static IEnumerable<Issue> RunStepRules(IReadOnlyList<DictRow> rows)
+    {
+        for (var i = 0; i < rows.Count; i++)
+            if (Int(rows[i]["Kolejność"]) is < 1)
+                yield return Issue.Error("Kolejność – liczba od 1", DictionaryValidator.RowElement(i));
+        foreach (var group in rows.Select((r, i) => (Row: r, Index: i))
+                     .GroupBy(x => (Definition: x.Row["Definicja"]?.Trim().ToUpperInvariant(), Name: x.Row["Etap"]?.Trim().ToUpperInvariant())).Where(g => g.Count() > 1))
+            foreach (var x in group.Skip(1))
+                yield return Issue.Error($"Etap „{x.Row["Etap"]}” już jest w definicji „{x.Row["Definicja"]}” – nazwa etapu wskazuje go w elementach kontrolnych",
+                    DictionaryValidator.RowElement(x.Index));
+    }
+
+    /// <summary>„Reguły walidacji”: zapytanie tylko do odczytu (RunRules.Check – jeden SELECT / WITH, bez instrukcji zmieniających dane).</summary>
+    private static IEnumerable<Issue> ValidationRuleRules(IReadOnlyList<DictRow> rows)
+    {
+        for (var i = 0; i < rows.Count; i++)
+            if (rows[i]["Zapytanie SQL"] is { } sql && RunRules.Check(sql) is { } error)
+                yield return Issue.Error($"Zapytanie SQL: {error}", DictionaryValidator.RowElement(i));
+    }
+
+    /// <summary>„Elementy kontrolne etapów”: element niepusty (nazwy reguł sprawdza zapis szablonu – RunDefinitions.Validate z bieżącymi regułami).</summary>
+    private static IEnumerable<Issue> RunStepElementRules(IReadOnlyList<DictRow> rows)
+    {
+        for (var i = 0; i < rows.Count; i++)
+            if (string.IsNullOrWhiteSpace(rows[i]["Element"]))
+                yield return Issue.Error("Element pusty – nazwa reguły walidacji", DictionaryValidator.RowElement(i));
     }
 
     /// <summary>„Wskaźniki narzutu CAS”: wskaźnik nieujemny (okresy obowiązywania – DictionaryValidator, Validity).</summary>
@@ -451,15 +572,17 @@ public static partial class GlobalDictionaries
             .OrderBy(o => o.Label, StringComparer.CurrentCulture)
             .ToList(),
         // Pule i grupy narzutowe CAS: zapisywany identyfikator wiersza (RowId), wyświetlana nazwa.
-        CasPools => rows.Where(r => r.RowId is not null && r["Pula"] is not null)
+        CasPools => rows.Where(r => r.RowId is not null && r["Kategoria"] is not null)
             .OrderBy(r => int.TryParse(r["Kolejność"], out var order) ? order : int.MaxValue)
-            .Select(r => new LookupOption(CasBurden.Ref(r.RowId!.Value), r["Pula"]!)).ToList(),
+            .Select(r => new LookupOption(CasBurden.Ref(r.RowId!.Value), r["Kategoria"]!)).ToList(),
         CasBurdenGroups => rows.Where(r => r.RowId is not null && r["Grupa"] is not null)
             .Select(r => new LookupOption(CasBurden.Ref(r.RowId!.Value), r["Grupa"]!)).OrderBy(o => o.Label, StringComparer.CurrentCulture).ToList(),
         // MPK ze stawek wydziałów (klucz MPK + rok) – raz na MPK, z opisem wydziału.
         DepartmentRates => rows.Where(r => r["MPK"] is not null).GroupBy(r => r["MPK"]!, StringComparer.OrdinalIgnoreCase)
             .Select(g => new LookupOption(g.Key, g.Select(r => r["Department"]).FirstOrDefault(d => d is not null) is { } department ? $"{g.Key} – {department}" : g.Key))
             .OrderBy(o => o.Value, StringComparer.OrdinalIgnoreCase).ToList(),
+        // Etap elementu kontrolnego: nazwy etapów (wszystkich definicji; definicję wskazuje kolumna Definicja).
+        RunSteps => rows.Select(r => r["Etap"]).OfType<string>().Distinct(StringComparer.OrdinalIgnoreCase).Order().Select(e => new LookupOption(e, e)).ToList(),
         _ => rows.Select(r => Get(code).KeyOf(r.Values)).Distinct().Select(k => new LookupOption(k, k)).ToList(),
     };
 

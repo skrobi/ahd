@@ -17,4 +17,6 @@ public static class DbTables
     public const string RunPin = "meta.RunPin";
     public const string RunBalance = "run.Balance";
     public const string RunIssue = "run.Issue";
+    /// <summary>Dane uruchomienia jak w strukturze programu – tabela „ev” reguł walidacji (migracja 051).</summary>
+    public const string RunBalanceEv = "run.BalanceEv";
 }

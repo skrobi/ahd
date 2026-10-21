@@ -24,7 +24,7 @@ public static class ProjectTypes
     public static string Description(string type) => type switch
     {
         Sac => "Waluta wyniku USD; stawki wydziałów i kursy walut; plik dla Cobra.",
-        Cas => "Waluta projektu z „Parametrów projektu” (PLN albo USD kursem CAS od kosztu PLN); koszty po narzutach CAS.",
+        Cas => "Waluta programu z „Parametrów programu” (PLN albo USD kursem CAS od kosztu PLN); koszty po narzutach CAS.",
         Internal => "Waluta wyniku PLN; własne szablony i kalkulacje EV.",
         _ => "",
     };

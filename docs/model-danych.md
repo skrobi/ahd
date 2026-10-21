@@ -66,6 +66,11 @@ w historii z informacją, kto i kiedy go zastąpił.
 Wyjątek – migracje, które zmieniły wartości w miejscu, w całej historii: 033 (zaokrąglenie `Rate`, `PoolId`,
 `BurdenGroup` → `BurdenGroupId` z usunięciem kolumny) i 038/039 (`CostKind`).
 
+Wyjątek – **usunięcie programu** (lista programów, „Usuń”, po ostrzeżeniu; `SqlProjectStore.Delete`): w jednej transakcji trwale usuwa
+przebiegi programu (`META_Run`, `META_RunPin`, `META_RunStep`, `RUN_Balance`, `RUN_BalanceEv`, `RUN_Issue`), wiersze programu
+w słownikach z historią (WP i CAM, Harmonogram i budżet, Kategorie WBS, Wykluczenia, Źródła danych, Parametry projektu, Cost Category
+programu), nakładkę (`META_PerformanceObjective`) i `META_Project`. Zostają: dane importów, dziennik (wpis o usunięciu), folder na dysku.
+
 ### 3.2 Dwie osie czasu
 
 | Oś | Znaczenie | Kto ustala |
@@ -197,7 +202,7 @@ Bez metodologii EV; kolejne tabele dochodzą kolejnymi migracjami.
 | `DICT_Calendar`, `DICT_DepartmentRate`, `DICT_FxRate`, `DICT_CostCategory`, `DICT_Person`, `DICT_DjkRate`, `DICT_ProductionParameter` | słowniki globalne – tabela z typowanymi kolumnami na słownik; `Project` NULL = globalny (w Cost Category `Project` = zmiany w projekcie) |
 | `DICT_WpCam`, `DICT_ScheduleBudget`, `DICT_WbsCategory`, `DICT_Exclusion` | słowniki projektu (F4.3; `DICT_WbsCategory` – Kategorie WBS, migracja 019); „Cost Category – zmiany w projekcie” – `DICT_CostCategory` z kodem projektu (narzuty CAS – słowniki globalne, bez słownika projektu; O37) |
 | `DICT_ProjectSource` (026), `DICT_ProjectSetting` (028) | słowniki projektu „Źródła danych” i „Parametry projektu” |
-| `DICT_CasPool`, `DICT_CasBurdenGroup`, `DICT_CasBurdenRate`, `DICT_CasFormula` (029–034) | narzuty CAS: pule, grupy narzutowe, wskaźniki, formuły |
+| `DICT_CasPool`, `DICT_CasBurdenGroup`, `DICT_CasBurdenRate`, `DICT_CasFormula` (029–034) | narzuty CAS: kategorie, grupy narzutowe, wskaźniki, formuły |
 | `META_Run`, `META_RunPin`, `RUN_Balance`, `RUN_Issue` (027) | przebiegi (projekt + tydzień), uruchomienia (przypięcia), dane ACTUALS przypięte w uruchomieniu, wyniki kontroli przebiegu |
 
 **Dane startowe – migracja `sql/mssql/002_dane_startowe.sql`:** definicje źródeł `ACTUALS_PAF` i `ACTUALS_CES`
@@ -321,7 +326,7 @@ opis; klucz projekt + kategoria). Kolumna `DICT_WpCam.CostCategory` przyjmuje ka
 BAC HOURS i BAC MATERIAL. Wymaga aplikacji 0.32.0.
 
 **Migracja `sql/mssql/021_cam_opcjonalny.sql`:** `DICT_WpCam.Cam` dopuszcza NULL – WP wskazuje się najpierw, CAM
-uzupełnia później (gotowość projektu blokuje przebieg z WP bez CAM). Wymaga aplikacji 0.34.0.
+uzupełnia później). Wymaga aplikacji 0.34.0.
 
 **Migracje `sql/mssql/022_produkcja_slowniki.sql`, `023_dane_produkcji.sql`:** słowniki globalne „Wskaźniki DJK”
 (`DICT_DjkRate`) i „Parametry produkcji” (`DICT_ProductionParameter`) z danymi startowymi raportu S70MR (023 – dane startowe,
@@ -354,7 +359,7 @@ podaje `@Value` procedur `REP_ProjectCosts`, `REP_ProjectCostsByElement` i `RUN_
 **Migracja `sql/mssql/029_narzuty_cas.sql`:** narzuty CAS raportu kosztów CES (`docs/slowniki.md`, rozdz. 6.1):
 `DICT_CostCategory.BurdenGroup` – „Grupa narzutowa CAS” elementu kosztowego; `DICT_CasBurdenGroup` – „Grupy narzutowe
 CAS” (od migracji 031 – grupa i opis); `DICT_CasBurdenRate` – „Wskaźniki narzutu CAS”
-(pula, `ValidFrom`, `ValidTo`, `Rate DECIMAL(38,18)`; klucz projekt + pula + od). Raport liczy aplikacja
+(kategoria, `ValidFrom`, `ValidTo`, `Rate DECIMAL(38,18)`; klucz projekt + kategoria + od). Raport liczy aplikacja
 (`CasCostReport`) z wyniku `REP_ProjectCosts` – bez nowej procedury. Wymaga aplikacji 0.46.0.
 
 **Migracja `sql/mssql/030_dane_narzuty_cas.sql`** (dane startowe; od 034 tylko zapis wersji): 10 grup narzutowych i wskaźniki 2025 i 2026 z arkusza
@@ -362,21 +367,21 @@ finansów; grupa narzutowa elementów kosztowych arkusza w globalnym Cost Catego
 (grupa ustawiona wcześniej zostaje).
 
 **Migracja `sql/mssql/031_formuly_narzutow_cas.sql`:** formuły narzutów CAS jako dane (`docs/slowniki.md`, rozdz. 6.1):
-`DICT_CasPool` – „Pule narzutu CAS” (pula, `SortOrder`, `Kind`: Koszt / FCCOM); `DICT_CasBurdenFormula` – „Formuły
-narzutów CAS” (grupa, pula, `Basis` – składniki połączone „ + ”; klucz projekt + grupa + pula); z `DICT_CasBurdenGroup`
-usunięte kolumny pul i `BaseInGsGa` (029) – zostają grupa i opis. Wymaga aplikacji 0.47.0.
+`DICT_CasPool` – „Kategorie narzutu CAS” (kategoria, `SortOrder`, `Kind`: Koszt / FCCOM); `DICT_CasBurdenFormula` – „Formuły
+narzutów CAS” (grupa, kategoria, `Basis` – składniki połączone „ + ”; klucz projekt + grupa + kategoria); z `DICT_CasBurdenGroup`
+usunięte kolumny kategorii i `BaseInGsGa` (029) – zostają grupa i opis. Wymaga aplikacji 0.47.0.
 
-**Migracja `sql/mssql/032_dane_formuly_narzutow_cas.sql`** (dane startowe): wcześniej pule i formuły z nazwami; od 034
+**Migracja `sql/mssql/032_dane_formuly_narzutow_cas.sql`** (dane startowe): wcześniej kategorie i formuły z nazwami; od 034
 tylko zapis wersji (dane startowe narzutów CAS – 034).
 
 **Migracja `sql/mssql/033_narzuty_cas_identyfikatory.sql`:** narzuty CAS powiązane identyfikatorem (RowId), nie nazwą:
 `DICT_CasBurdenRate.PoolId` zamiast `Pool`, `DICT_CostCategory.BurdenGroupId` zamiast `BurdenGroup` (nazwy przekształcone
-na identyfikatory – nazwa szukana także w historii wierszy; wskaźnik puli spoza słownika – zamknięty), `DICT_CasFormula`
-(grupa, pula, formuła z klocków: `base`, `p:<pula>`, `r:<pula>`, `+ - * / ( )`) zamiast `DICT_CasBurdenFormula`; wskaźniki
+na identyfikatory – nazwa szukana także w historii wierszy; wskaźnik kategorii spoza słownika – zamknięty), `DICT_CasFormula`
+(grupa, kategoria, formuła z klocków: `base`, `p:<kategoria>`, `r:<kategoria>`, `+ - * / ( )`) zamiast `DICT_CasBurdenFormula`; wskaźniki
 zaokrąglone do 15 cyfr znaczących (jak w Excelu). Wymaga aplikacji 0.48.0.
 
-**Migracja `sql/mssql/034_dane_narzuty_cas.sql`** (dane startowe): 17 pul, 10 grup, wskaźniki 2025–2026, formuły grup
-i grupa narzutowa elementów kosztowych z arkusza finansów – pule i grupy dopasowane po nazwie bieżącej albo z historii
+**Migracja `sql/mssql/034_dane_narzuty_cas.sql`** (dane startowe): 17 kategorii, 10 grup, wskaźniki 2025–2026, formuły grup
+i grupa narzutowa elementów kosztowych z arkusza finansów – kategorie i grupy dopasowane po nazwie bieżącej albo z historii
 (przemianowane przez użytkownika nie są dodawane ponownie); formuły grupy tylko, gdy grupa nie ma żadnej formuły.
 
 **Migracja `sql/mssql/035_daty_rzeczywiste_wp.sql`:** kolumny `DICT_ScheduleBudget.ActualStart`, `ActualEnd` – daty
@@ -444,6 +449,60 @@ aplikacja (`CasCosts` – ACWP struktury, raport kosztów CES, przebieg; `docs/s
 pierwszy, `ValidTo` – ostatni dzień miesiąca, `Rate` = `CasRate`) – wartości **przybliżone** (zbliżone do średnich NBP, nie kursy
 urzędowe), do testów i uruchomienia projektów w USD; miesiąc z kursem USD obowiązującym wcześniej zostaje bez zmian. Wiersze
 rozpoznawalne po `RecordedBy = N'migracja 046 – kursy przybliżone'` – przed rozliczeniem zastąpić kursami finansów.
+
+**Migracja `sql/mssql/047_kontrole_przebiegu.sql`:** słownik globalny `DICT_RunCheck` – „Kontrole przebiegu” (`ProjectType`:
+Wszystkie / WEWNETRZNY / SAC / CAS, `RuleName` – nazwa reguły katalogu, `RunKind`: Każdy / Zamykający / W środku okresu,
+`IsActive`, `Level` ERROR / WARNING / INFO, `Threshold`, `Description`; klucz bieżących wersji `Project`, `ProjectType`,
+`RuleName`, `RunKind`); bez danych startowych. Wymaga aplikacji 0.56.0. Usunięty migracją 051 (reguły walidacji w SQL).
+
+**Migracja `sql/mssql/048_definicja_w_uruchomieniu.sql`:** `META_RunPin.CheckSettings` (`NVARCHAR(MAX)`, JSON: kod reguły →
+aktywna, poziom, próg) – ustawienia reguł kontroli użyte w uruchomieniu (słownik „Kontrole przebiegu” w chwili przebiegu);
+NULL – uruchomienie sprzed migracji. Od migracji 050 aplikacja nie zapisuje kolumny – ustawienia są w definicji przebiegu
+uruchomienia (`META_RunPin.Definition`); kolumna usunięta migracją 051. Wymaga aplikacji 0.56.0.
+
+**Migracja `sql/mssql/049_reguly_uzgodnien.sql`:** słownik globalny `DICT_RunReconciliation` – „Reguły uzgodnień” (`ProjectType`,
+`Name`, `RunKind`, `IsActive`, `LeftFormula`, `Comparison` =, <=, >=, <>, `RightFormula`, `Tolerance`, `Level`, `Description`; klucz
+bieżących wersji `Project`, `ProjectType`, `Name`, `RunKind`) – własne kontrole przebiegu na miarach programu
+(`docs/pipeline-fazy.md`, rozdz. 4.1); bez danych startowych. Wymaga aplikacji 0.56.0. Usunięty migracją 051 (uzgodnienia to
+reguły SQL).
+
+**Migracja `sql/mssql/050_definicje_przebiegow.sql`:** definicje przebiegów (workflow, `docs/pipeline-fazy.md`, rozdz. 4.1) –
+słowniki globalne `DICT_RunDefinition` – „Definicje przebiegów” (`Code`, `ProjectType`, `ProgramCode` – NULL: wszystkie programy
+typu, `RunKind`, `IsActive`, `Description`), `DICT_RunStep` – „Etapy przebiegów” (`Definition`, `StepNo`, `Name`, `Action`,
+`WarningGate`, `Approval`, `Description`), `DICT_RunStepElement` – „Elementy kontrolne etapów” (`Definition`, `Step`, `Element`,
+`IsActive`, `Level`, `Threshold`, `Description`); `META_RunStep` – etapy uruchomienia (klucz `PinId` + `StepNo`: nazwa, akcja,
+status, start, koniec, kto, liczba błędów i ostrzeżeń, komentarz potwierdzenia); `META_RunPin.Definition` (`NVARCHAR(MAX)`, JSON –
+definicja przebiegu użyta w uruchomieniu; NULL – uruchomienie sprzed migracji, bez etapów); `RUN_Issue.StepNo` – etap wyniku.
+Bez danych startowych – bez definicji obowiązuje definicja wbudowana. Wymaga aplikacji 0.57.0.
+
+**Migracja `sql/mssql/051_reguly_walidacji.sql`:** reguły walidacji przebiegu w SQL (`docs/pipeline-fazy.md`, rozdz. 4.1; F5.7) –
+słownik globalny `DICT_RunValidation` – „Reguły walidacji” (`Name`, `Description`, `Level` ERROR / WARNING / INFO, `IsActive`,
+`SqlText` – zapytanie `NVARCHAR(MAX)`, `ResultTemplate` – opis wyniku; klucz bieżących wersji `Project`, `Name`; bez danych
+startowych – pusty słownik oznacza reguły startowe aplikacji); `RUN_BalanceEv` – dane uruchomienia jak w strukturze programu
+(tabela `ev` reguł: `PinId`, `WbsElement`, `CostElement`, `FiscalYear`, `Period`, `CostKind`, `Amount`; bez rozliczeniowych, po
+Wykluczeniach, CAS po narzutach – zapisuje aplikacja przy przypięciu i przed regułami etapu walidacji); `RUN_Issue.Details`
+(`NVARCHAR(MAX)`, JSON kolumna → wartość) – wiersz wyniku reguły do porównania uruchomień i „Pokaż zmiany”; `RUN_Issue.CheckName`
+– `NVARCHAR(200)` (nazwa reguły). Sprzątanie: usuwa
+`DICT_RunCheck` (047) i `DICT_RunReconciliation` (049) z danymi i historią oraz kolumny `META_RunPin.CheckSettings` (048)
+i `DICT_RunStepElement.Level` / `Threshold` (050).
+Wymaga aplikacji 0.59.0.
+
+**Migracja `sql/mssql/052_naprawa_regul_walidacji.sql`:** naprawa bazy, w której migrację 051 wykonała aplikacja 0.58.0 (reguły
+z formułami): `DICT_RunValidation` bez kolumny `SqlText` – usuwana i zakładana w kształcie reguł SQL; pozostałe zmiany 051
+(`RUN_BalanceEv`, `RUN_Issue.Details`, `RUN_Issue.CheckName`, sprzątanie 047–050) – gdy ich brak. W bazie z nową 051 – bez zmian.
+Wymaga aplikacji 0.59.0.
+
+**Migracja `sql/mssql/053_dane_reguly_i_przebiegi.sql` (dane startowe):** 22 reguły startowe w `DICT_RunValidation` (13 Walidacja
+ACTUALS, 8 Walidacja EV, przykładowe uzgodnienie; treść jak `RunRules.Starters` – test `SqlPresetsTests`; reguła o tej samej nazwie
+zostaje), szablony przebiegów „Wewnętrzny” (Wszystkie) i „CAS” w `DICT_RunDefinition` / `DICT_RunStep` / `DICT_RunStepElement`
+(etapy jak definicja wbudowana; szablon o tej nazwie zostaje; aktywny, gdy typ nie ma innego aktywnego szablonu), usunięcie
+elementów etapów „Uzgodnienie: …” (historia zostaje). Wiersze `RecordedBy = N'migracja 053 – reguły i szablony startowe'`. Wymaga
+aplikacji 0.59.0.
+
+**Migracja `sql/mssql/054_struktura_na_zatwierdzonym_przebiegu.sql`:** `REP_ProjectCostsByElement` (043) i `REP_ProjectCasCosts` (045)
+z parametrem `@AsOf` – dane ACTUALS z plików zaimportowanych do tej chwili (`CAN_LatestFiles`); NULL – ostatni import (jak dotąd).
+Struktura programu podaje koniec przypięcia stanu ostatniego uruchomienia z zakończonym etapem „Zatwierdzenie ACTUALS” (akcja etapu
+`META_RunStep.Action`; `docs/pipeline-fazy.md`, rozdz. 4.1). Wymaga aplikacji 0.60.0.
 
 `META_SourceFile.CanonicalStatus`: „utworzone” – dane kanoniczne zapisane i sprawdzone (widoczne dla odczytów),
 „w toku” – zapis wierszy trwa (odczyty pomijają plik; po awarii wpis i wiersze są usuwane), inna wartość – powód

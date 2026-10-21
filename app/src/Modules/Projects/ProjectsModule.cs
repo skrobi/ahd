@@ -19,7 +19,7 @@ public sealed class ProjectsModule : IModule
 
     public string Key => ModuleKeys.Projects;
 
-    public string? NavLabel => "Projekty";
+    public string? NavLabel => "Programy";
 
     public string Doc => "docs/funkcjonalnosc.md (F01, F02), docs/performance-objectives.md, docs/slowniki.md (rozdz. 3–7)";
 
@@ -34,7 +34,9 @@ public sealed class ProjectsModule : IModule
             new ProjectFolders(services.Config.ProjectsFolder),
             services.PzlProd is null ? null : new SqlPzlProdSource(services.PzlProd),
             () => services.Contracts.Get<ISourceImport>(),
-            () => services.Contracts.Get<IRunLauncher>());
+            () => services.Contracts.Get<IRunLauncher>(),
+            () => services.Contracts.Get<IAcwpChanges>(),
+            () => services.Contracts.Get<IRunPanels>());
         services.Contracts.Register<IProjectProcessSource>(new ProjectProcessSource(_service));
     }
 

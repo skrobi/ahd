@@ -52,20 +52,22 @@
                                 ToolTip="Dopisuje cost elementy z całego ostatniego importu ACTUALS, których nie ma w słowniku (podgląd przed zapisem; nic nie jest usuwane) – Cost Category i „Rozliczeniowy” uzupełnia finansista" />
                         <Button Content="Formuły narzutów" Style="{StaticResource Btn}" Margin="8,0,0,0" Command="{Binding EditFormulas}"
                                 Visibility="{Binding IsCasBurden, Converter={StaticResource BoolToVisibility}}"
-                                ToolTip="Macierz grupy narzutowe × pule: zaznaczone pole – pula naliczana w grupie; kliknięcie otwiera edytor formuły z klocków" />
+                                ToolTip="Macierz grupy narzutowe × kategorie: zaznaczone pole – kategoria naliczana w grupie; kliknięcie otwiera edytor formuły z klocków" />
                     </StackPanel>
                     <StackPanel Orientation="Horizontal">
                         <Button Content="Dodaj wiersz" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding AddRow}" />
                         <Button Content="Usuń wiersze" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding RemoveRow}" ToolTip="Usuwa wiersze zaznaczonych komórek (Ctrl+minus)" />
                         <Button Content="Cofnij" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding Table.Undo}" ToolTip="Cofa ostatnią zmianę w tabeli (Ctrl+Z)" />
                         <Button Content="Odrzuć zmiany" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding Discard}" />
-                        <Button Content="Zapisz" Style="{StaticResource BtnPrimary}" Command="{Binding Save}" />
+                        <Button Content="Zapisz" Style="{StaticResource BtnPrimary}" Margin="0,0,8,0" Command="{Binding Save}" />
+                        <Button Content="Odśwież" Style="{StaticResource Btn}" Command="{Binding Refresh}"
+                                ToolTip="Wczytuje słownik ponownie z bazy (np. pozycja dodana na innym komputerze albo w innym oknie)" />
                         <TextBlock Text="Filtr" VerticalAlignment="Center" Margin="16,0,6,0" Foreground="{StaticResource Muted}" />
                         <TextBox Width="180" Style="{StaticResource Input}" Text="{Binding Table.Filter, UpdateSourceTrigger=PropertyChanged}" />
                     </StackPanel>
                 </DockPanel>
                 <partials:BusyBar DataContext="{Binding Busy}" />
-                <TextBlock Text="{Binding Status}" TextWrapping="Wrap" Margin="0,0,0,8" />
+                <TextBlock partials:CopyText.Enabled="True" Text="{Binding Status}" TextWrapping="Wrap" Margin="0,0,0,8" />
 
                 <!-- Wiersze słownika i wynik walidacji: wspólna tabela słownika (Shared/Views/Partials/DictionaryGrid) -->
                 <partials:DictionaryGrid DataContext="{Binding Table}" />

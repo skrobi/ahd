@@ -11,6 +11,9 @@ public static class ProjectSettings
 
     public const string DefaultActualsAmount = "ValueObjCrcy";
 
+    /// <summary>Przebieg programu – szablon z ekranu Przebiegi; brak wiersza – szablon domyślny dla typu programu.</summary>
+    public const string RunDefinition = "Przebieg";
+
     /// <summary>
     /// Zestaw walutowy ACTUALS: pole kwoty i pole jej waluty (kolumny raportu RABIT). Projekt liczy koszty (ACWP, raport
     /// kosztów, przebieg) w kwocie zestawu, a walutę projektu odczytuje z kolumny waluty tego zestawu w danych projektu.

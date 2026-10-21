@@ -3,21 +3,16 @@ using PzlEv.Shared.Models.Db;
 namespace PzlEv.Shared.Utils.Data;
 
 /// <summary>
-/// Uruchomienie przebiegu projektu w tle – kontrakt modułu Przebiegi dla innych modułów (ekran projektu). Rejestruje
-/// go moduł Przebiegi (AppServices.Contracts). Wynik zapisuje się w bazie (meta.RunPin, run.Issue); po zakończeniu –
-/// powiadomienie Windows.
+/// Przebiegi projektów w tle – kontrakt modułu Przebiegi dla innych modułów (lista projektów: stan i zakończenie przebiegu;
+/// uruchomienie – tylko zakładka Przebieg ekranu projektu, IRunPanels). Rejestruje go moduł Przebiegi (AppServices.Contracts).
+/// Wynik zapisuje się w bazie (meta.RunPin, run.Issue); po zakończeniu – powiadomienie Windows.
 /// </summary>
 public interface IRunLauncher
 {
     /// <summary>Przebieg projektu trwa w tej aplikacji.</summary>
     bool IsRunning(string project);
 
-    /// <summary>Start przebiegu (wątek UI – logowanie do SharePoint); zwraca od razu, przebieg liczy się w tle. Null – uruchomiony, inaczej powód.</summary>
-    Task<string?> Start(string project);
-
-    /// <summary>Postęp i zakończenie przebiegu (projekt, tekst; wątek UI).</summary>
-    event Action<string, string>? Progress;
-
+    /// <summary>Zakończenie przebiegu (projekt; wątek UI).</summary>
     event Action<string>? Finished;
 
     /// <summary>Ostatnie uruchomienie przebiegu każdego projektu (lista projektów).</summary>

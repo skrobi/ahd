@@ -1,0 +1,409 @@
+<UserControl x:Class="PzlEv.Modules.Runs.Views.RunsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:partials="clr-namespace:PzlEv.Shared.Views.Partials">
+
+    <!-- Ekran Przebiegi (DataContext: RunsViewModel) – szablony przebiegów w kafelkach i reguły walidacji w SQL; docs/funkcjonalnosc.md, F06; docs/pipeline-fazy.md, rozdz. 4.1 -->
+    <UserControl.Resources>
+        <!-- Kafelek etapu: stały (import, przypięcie) – wyszarzony; walidacja – akcent; zatwierdzenie – ostrzeżenie. -->
+        <Style x:Key="StepTile" TargetType="Border">
+            <Setter Property="Width" Value="230" />
+            <Setter Property="MinHeight" Value="132" />
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="Padding" Value="10" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="BorderBrush" Value="{StaticResource Line}" />
+            <Setter Property="Background" Value="{StaticResource Surface}" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsFixed}" Value="True">
+                    <Setter Property="Background" Value="{StaticResource Surface2}" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding IsChecks}" Value="True">
+                    <Setter Property="Background" Value="{StaticResource AccentSoft}" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding IsApproval}" Value="True">
+                    <Setter Property="Background" Value="{StaticResource WarnSoft}" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=ListBoxItem}}" Value="True">
+                    <Setter Property="BorderBrush" Value="{StaticResource Accent}" />
+                    <Setter Property="BorderThickness" Value="2" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+    </UserControl.Resources>
+
+    <!-- Wysokość ekranu = widoczny obszar strony: lista reguł sięga do dołu okna (przewija się sama), edytor po prawej przewija się osobno. -->
+    <Grid Height="{Binding ViewportHeight, RelativeSource={RelativeSource AncestorType=ScrollViewer}}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+        <partials:PageHeader Title="Przebiegi" Subtitle="Szablony przebiegów i reguły walidacji (SQL). Program wybiera szablon w Konfiguracji (Parametry programu → Przebieg) i uruchamia przebieg na swoim ekranie.">
+            <partials:PageHeader.Actions>
+                <Button Content="Odśwież" Style="{StaticResource Btn}" Command="{Binding Refresh}" />
+            </partials:PageHeader.Actions>
+        </partials:PageHeader>
+        <partials:BusyBar Grid.Row="1" DataContext="{Binding Busy}" />
+
+        <Grid Grid.Row="2">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="290" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <!-- Szablony i reguły – jedna kolumna; lista reguł wypełnia resztę wysokości -->
+            <Grid Margin="0,0,16,0">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+                <StackPanel>
+                <TextBlock Text="Szablony" Style="{StaticResource H2}" FontSize="15" Margin="0,0,0,6" />
+                <Border Style="{StaticResource Panel}" Padding="8">
+                    <StackPanel>
+                        <TextBlock Text="Brak szablonów – programy używają definicji wbudowanej." Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="4"
+                                   Visibility="{Binding NoTemplates, Converter={StaticResource BoolToVisibility}}" />
+                        <ListBox ItemsSource="{Binding Templates}" SelectedItem="{Binding SelectedTemplate}" BorderThickness="0" Background="Transparent"
+                                 AutomationProperties.Name="Szablony przebiegów">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate>
+                                    <StackPanel Margin="0,4" Width="240">
+                                        <TextBlock Text="{Binding Definition.Code}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                                        <TextBlock Style="{StaticResource MutedText}">
+                                            <Run Text="{Binding Definition.ProjectType, Mode=OneWay, StringFormat='domyślny: {0}'}" />
+                                            <Run Text="{Binding Definition.Steps.Count, Mode=OneWay, StringFormat='· etapy: {0}'}" />
+                                        </TextBlock>
+                                        <TextBlock Text="nieaktywny" Foreground="{StaticResource Warn}" FontSize="11">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Visibility" Value="Collapsed" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsActive}" Value="False">
+                                                            <Setter Property="Visibility" Value="Visible" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                    </StackPanel>
+                </Border>
+                <Button Content="Nowy szablon" Style="{StaticResource Btn}" HorizontalAlignment="Stretch" Margin="0,10,0,0" Command="{Binding NewTemplate}" />
+                <Button Content="Kopiuj szablon" Style="{StaticResource Btn}" HorizontalAlignment="Stretch" Margin="0,6,0,0" Command="{Binding CopyTemplate}" />
+                <Button Content="Usuń szablon" Style="{StaticResource Btn}" HorizontalAlignment="Stretch" Margin="0,6,0,0" Command="{Binding DeleteTemplate}"
+                        ToolTip="Usuwa szablon (historia zostaje); szablonu wybranego w programach nie można usunąć" />
+                <Button Content="Utwórz szablony startowe" Style="{StaticResource BtnPrimary}" HorizontalAlignment="Stretch" Margin="0,12,0,0" Command="{Binding CreateStarters}"
+                        Visibility="{Binding MissingStarters, Converter={StaticResource BoolToVisibility}}"
+                        ToolTip="Wewnętrzny (domyślny dla wszystkich typów, także SAC) i CAS (domyślny dla CAS) – etapy jak w definicji wbudowanej" />
+
+                <DockPanel Margin="0,20,0,6">
+                    <Button DockPanel.Dock="Right" Content="+ Nowa" Style="{StaticResource Btn}" Padding="8,2" Command="{Binding NewRule}" ToolTip="Nowa reguła walidacji" />
+                    <TextBlock Text="{Binding RulesTitle}" Style="{StaticResource H2}" FontSize="15" VerticalAlignment="Center" />
+                </DockPanel>
+                <TextBox Style="{StaticResource Input}" Text="{Binding RuleSearch, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,6"
+                         ToolTip="Szukaj reguły: nazwa albo tabela (np. ev)" AutomationProperties.Name="Szukaj reguły" />
+                </StackPanel>
+                <Border Grid.Row="1" Style="{StaticResource Panel}" Padding="4" MinHeight="160">
+                    <ListBox ItemsSource="{Binding Rules}" SelectedItem="{Binding SelectedRule}" BorderThickness="0" Background="Transparent"
+                             AutomationProperties.Name="Reguły walidacji">
+                        <ListBox.ItemContainerStyle>
+                            <Style TargetType="ListBoxItem" BasedOn="{StaticResource {x:Type ListBoxItem}}">
+                                <Setter Property="Visibility" Value="{Binding IsVisible, Converter={StaticResource BoolToVisibility}}" />
+                            </Style>
+                        </ListBox.ItemContainerStyle>
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <StackPanel Margin="0,3" Width="240">
+                                    <DockPanel>
+                                        <TextBlock DockPanel.Dock="Right" Text="{Binding Level}" FontSize="11" FontWeight="Bold" Margin="6,0,0,0" />
+                                        <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextWrapping="Wrap" />
+                                    </DockPanel>
+                                    <TextBlock Text="{Binding Tables}" Style="{StaticResource MutedText}" FontSize="11" TextTrimming="CharacterEllipsis" />
+                                    <TextBlock Text="wyłączona" Foreground="{StaticResource Warn}" FontSize="11">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Visibility" Value="Collapsed" />
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding IsActive}" Value="False">
+                                                        <Setter Property="Visibility" Value="Visible" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                    <TextBlock Text="zapytanie niedozwolone" Foreground="{StaticResource Crit}" FontSize="11"
+                                               Visibility="{Binding HasError, Converter={StaticResource BoolToVisibility}}" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </Border>
+            </Grid>
+
+            <!-- Edytor reguły albo szablonu – przewijany osobno -->
+            <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <Grid>
+            <!-- Edytor reguły walidacji -->
+            <StackPanel Visibility="{Binding HasRule, Converter={StaticResource BoolToVisibility}}">
+                <Border Style="{StaticResource Panel}" DataContext="{Binding SelectedRule}">
+                    <StackPanel>
+                        <Grid Margin="0,0,0,8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="120" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="Nazwa" VerticalAlignment="Center" Margin="0,0,8,0" />
+                            <TextBox Grid.Column="1" Style="{StaticResource Input}" Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}"
+                                     ToolTip="Nazwa reguły – wiersz macierzy wyników; szablony wskazują regułę po nazwie" />
+                            <TextBlock Grid.Column="2" Text="Poziom" VerticalAlignment="Center" Margin="16,0,8,0" />
+                            <ComboBox Grid.Column="3" ItemsSource="{Binding DataContext.Levels, RelativeSource={RelativeSource AncestorType=UserControl}}" SelectedItem="{Binding Level}"
+                                      ToolTip="Poziom każdego zwróconego wiersza: ERROR zatrzymuje przebieg, WARNING – bramka etapu, INFO – informacja" />
+                            <CheckBox Grid.Column="4" Content="Aktywna" IsChecked="{Binding IsActive}" VerticalAlignment="Center" Margin="16,0,0,0"
+                                      ToolTip="Wyłączona reguła nie jest wykonywana w przebiegu (zostaje zaznaczona w szablonach)" />
+                        </Grid>
+                        <TextBlock Text="Opis (dla analityka)" Style="{StaticResource MutedText}" />
+                        <TextBox Style="{StaticResource Input}" Text="{Binding Description, UpdateSourceTrigger=PropertyChanged}" Margin="0,2,0,8" TextWrapping="Wrap"
+                                 AutomationProperties.Name="Opis reguły" />
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="300" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock Text="Zapytanie SQL – każdy zwrócony wiersz to jedna nieprawidłowość (brak wierszy – OK)" Style="{StaticResource MutedText}" />
+                                <TextBox Text="{Binding Sql, UpdateSourceTrigger=PropertyChanged}" FontFamily="Consolas" FontSize="12" AcceptsReturn="True" AcceptsTab="True"
+                                         TextWrapping="NoWrap" MinHeight="300" MaxHeight="520" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"
+                                         Padding="6" Margin="0,2,0,0" BorderBrush="{StaticResource Line}" AutomationProperties.Name="Zapytanie SQL" />
+                                <TextBlock partials:CopyText.Enabled="True" Text="{Binding Error}" Foreground="{StaticResource Crit}" TextWrapping="Wrap" Margin="0,4,0,0"
+                                           Visibility="{Binding HasError, Converter={StaticResource BoolToVisibility}}" />
+                            </StackPanel>
+                            <!-- Dostępne dane: tabele uruchomienia i parametry -->
+                            <Border Grid.Column="1" Margin="12,16,0,0" Padding="10" CornerRadius="6" Background="{StaticResource Surface2}">
+                                <ScrollViewer MaxHeight="500" VerticalScrollBarVisibility="Auto">
+                                    <ItemsControl ItemsSource="{Binding DataContext.RuleTables, RelativeSource={RelativeSource AncestorType=UserControl}}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <StackPanel Margin="0,0,0,8">
+                                                    <TextBlock Text="{Binding Name}" FontFamily="Consolas" FontWeight="Bold" />
+                                                    <TextBlock partials:CopyText.Enabled="True" Text="{Binding Description}" Style="{StaticResource MutedText}" FontSize="11" TextWrapping="Wrap" />
+                                                    <ItemsControl ItemsSource="{Binding Columns}">
+                                                        <ItemsControl.ItemTemplate>
+                                                            <DataTemplate>
+                                                                <TextBlock Text="{Binding}" FontFamily="Consolas" FontSize="11" TextWrapping="Wrap" />
+                                                            </DataTemplate>
+                                                        </ItemsControl.ItemTemplate>
+                                                    </ItemsControl>
+                                                </StackPanel>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </ScrollViewer>
+                            </Border>
+                        </Grid>
+                        <TextBlock Text="Opis wyniku (opcjonalny – kolumny zapytania w { }, np. {ElementWBS}: saldo {Saldo}; puste – kolumny i wartości)" Style="{StaticResource MutedText}"
+                                   TextWrapping="Wrap" Margin="0,8,0,0" />
+                        <TextBox Style="{StaticResource Input}" Text="{Binding ResultTemplate, UpdateSourceTrigger=PropertyChanged}" Margin="0,2,0,0" AutomationProperties.Name="Opis wyniku" />
+                    </StackPanel>
+                </Border>
+
+                <!-- Akcje reguły i test na programie -->
+                <DockPanel Margin="0,8,0,0">
+                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                        <Button Content="Kopiuj" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding CopyRule}" />
+                        <Button Content="Usuń" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding DeleteRule}"
+                                ToolTip="Usuwa regułę (historia zostaje); reguły zaznaczonej w szablonach nie można usunąć" />
+                        <Button Content="Odrzuć zmiany" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding DiscardRule}" />
+                        <Button Content="Zapisz regułę" Style="{StaticResource BtnPrimary}" Command="{Binding SaveRule}" />
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="Testuj na programie" VerticalAlignment="Center" Margin="0,0,8,0" />
+                        <ComboBox ItemsSource="{Binding Projects}" SelectedItem="{Binding TestProject}" DisplayMemberPath="Code" Width="120"
+                                  ToolTip="Ostatnie uruchomienie programu z przypiętymi danymi i poprzednie jak w przebiegu" />
+                        <Button Content="Testuj" Style="{StaticResource Btn}" Margin="8,0,0,0" Command="{Binding TestRule}"
+                                ToolTip="Wykonuje zapytanie (także niezapisane) bez zapisu wyników – transakcja wycofywana" />
+                    </StackPanel>
+                </DockPanel>
+                <TextBlock partials:CopyText.Enabled="True" Text="{Binding RuleStatus}" TextWrapping="Wrap" Margin="0,6,0,0" />
+                <TextBlock partials:CopyText.Enabled="True" Text="{Binding TestNote}" Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="0,6,0,4" />
+                <DataGrid Style="{StaticResource DataTable}" ItemsSource="{Binding TestResult}" AutoGenerateColumns="True" IsReadOnly="True" MaxHeight="420"
+                          AutomationProperties.Name="Wynik testu reguły" />
+            </StackPanel>
+
+            <!-- Edytor szablonu -->
+            <StackPanel Visibility="{Binding HasEditor, Converter={StaticResource BoolToVisibility}}">
+                <Grid Margin="0,0,0,8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="260" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="140" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <TextBlock Text="Nazwa" VerticalAlignment="Center" Margin="0,0,8,0" />
+                    <TextBox Grid.Column="1" Style="{StaticResource Input}" Text="{Binding Code, UpdateSourceTrigger=PropertyChanged}" IsEnabled="{Binding IsNew}"
+                             ToolTip="Nazwę ustala się przy tworzeniu – programy wskazują szablon po nazwie" />
+                    <TextBlock Grid.Column="2" Text="Domyślny dla typu" VerticalAlignment="Center" Margin="16,0,8,0" />
+                    <ComboBox Grid.Column="3" ItemsSource="{Binding ProjectTypes}" SelectedItem="{Binding ProjectType}"
+                              ToolTip="Program bez wybranego przebiegu dostaje aktywny szablon swojego typu, a bez niego – szablon „Wszystkie”" />
+                    <CheckBox Grid.Column="4" Content="Aktywny" IsChecked="{Binding IsActive}" VerticalAlignment="Center" Margin="16,0,0,0"
+                              ToolTip="Tylko aktywny szablon można wybrać w programie i uruchomić" />
+                    <TextBox Grid.Row="1" Grid.ColumnSpan="6" Style="{StaticResource Input}" Margin="0,8,0,0" Text="{Binding Description, UpdateSourceTrigger=PropertyChanged}"
+                             ToolTip="Opis szablonu" AutomationProperties.Name="Opis szablonu" />
+                </Grid>
+                <TextBlock Text="{Binding Programs}" Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="0,0,0,8" />
+
+                <!-- Akcje edytora -->
+                <DockPanel Margin="0,0,0,8">
+                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                        <Button Content="Odrzuć zmiany" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding Discard}" />
+                        <Button Content="Zapisz szablon" Style="{StaticResource BtnPrimary}" Command="{Binding Save}" />
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal">
+                        <Button Content="+ Etap walidacji" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding AddValidation}"
+                                ToolTip="Etap z zaznaczonymi regułami walidacji (bramka: ERROR zatrzymuje, WARNING – potwierdzenie albo informacja)" />
+                        <Button Content="+ Zatwierdzenie" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding AddApproval}"
+                                ToolTip="Etap, na którym przebieg czeka na zatwierdzenie analityka z komentarzem" />
+                        <Button Content="+ Zatwierdzenie ACTUALS" Style="{StaticResource Btn}" Command="{Binding AddActualsApproval}"
+                                ToolTip="Klocek systemowy (najwyżej jeden): analityk zatwierdza dane ACTUALS przebiegu – od zatwierdzenia struktura programu pokazuje koszty z tego przebiegu" />
+                    </StackPanel>
+                </DockPanel>
+                <TextBlock partials:CopyText.Enabled="True" Text="{Binding Status}" TextWrapping="Wrap" Margin="0,0,0,4" />
+                <ItemsControl ItemsSource="{Binding Issues}" Margin="0,0,0,8">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock TextWrapping="Wrap" Foreground="{Binding Level, Converter={StaticResource LevelBrush}}">
+                                <Run Text="{Binding Level, Mode=OneWay}" FontWeight="SemiBold" />
+                                <Run Text="{Binding Element, Mode=OneWay}" />
+                                <Run Text="{Binding Message, Mode=OneWay}" />
+                            </TextBlock>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <!-- Etapy w kafelkach (kolejność wykonania) -->
+                <ListBox ItemsSource="{Binding Steps}" SelectedItem="{Binding SelectedStep}" BorderThickness="0" Background="Transparent"
+                         ScrollViewer.HorizontalScrollBarVisibility="Disabled" AutomationProperties.Name="Etapy szablonu">
+                    <ListBox.ItemsPanel>
+                        <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
+                    </ListBox.ItemsPanel>
+                    <ListBox.ItemContainerStyle>
+                        <Style TargetType="ListBoxItem">
+                            <Setter Property="Padding" Value="0" />
+                            <Setter Property="Margin" Value="0,0,8,8" />
+                            <Setter Property="Template">
+                                <Setter.Value>
+                                    <ControlTemplate TargetType="ListBoxItem">
+                                        <ContentPresenter />
+                                    </ControlTemplate>
+                                </Setter.Value>
+                            </Setter>
+                        </Style>
+                    </ListBox.ItemContainerStyle>
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <StackPanel Orientation="Horizontal">
+                                <Border Style="{StaticResource StepTile}">
+                                    <DockPanel>
+                                        <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,6,0,0"
+                                                    Visibility="{Binding IsEditable, Converter={StaticResource BoolToVisibility}}">
+                                            <Button Content="◀" Style="{StaticResource Btn}" Padding="6,0" Margin="0,0,4,0" CommandParameter="{Binding}" ToolTip="Wcześniej"
+                                                    Command="{Binding DataContext.MoveLeft, RelativeSource={RelativeSource AncestorType=UserControl}}" />
+                                            <Button Content="▶" Style="{StaticResource Btn}" Padding="6,0" Margin="0,0,4,0" CommandParameter="{Binding}" ToolTip="Później"
+                                                    Command="{Binding DataContext.MoveRight, RelativeSource={RelativeSource AncestorType=UserControl}}" />
+                                            <Button Content="✕" Style="{StaticResource Btn}" Padding="6,0" CommandParameter="{Binding}" ToolTip="Usuń etap"
+                                                    Command="{Binding DataContext.RemoveStep, RelativeSource={RelativeSource AncestorType=UserControl}}" />
+                                        </StackPanel>
+                                        <StackPanel>
+                                            <DockPanel>
+                                                <TextBlock DockPanel.Dock="Right" Text="🔒" ToolTip="Klocek predefiniowany – konfiguracja programu"
+                                                           Visibility="{Binding IsFixed, Converter={StaticResource BoolToVisibility}}" />
+                                                <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                                            </DockPanel>
+                                            <TextBlock Text="{Binding Action}" Style="{StaticResource MutedText}" />
+                                            <TextBlock Text="{Binding GateText}" Style="{StaticResource MutedText}" />
+                                            <TextBlock partials:CopyText.Enabled="True" Text="{Binding Summary}" TextWrapping="Wrap" Margin="0,4,0,0" FontSize="12" />
+                                        </StackPanel>
+                                    </DockPanel>
+                                </Border>
+                                <TextBlock Text="→" VerticalAlignment="Center" Margin="8,0,0,0" Foreground="{StaticResource Muted}" FontSize="16" />
+                            </StackPanel>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+
+                <!-- Wybrany etap: właściwości i kontrole -->
+                <Border Style="{StaticResource Panel}" Margin="0,8,0,0" DataContext="{Binding SelectedStep}"
+                        Visibility="{Binding DataContext.HasSelectedStep, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BoolToVisibility}}">
+                    <StackPanel>
+                        <TextBlock Text="{Binding Title}" Style="{StaticResource H2}" FontSize="15" Margin="0,0,0,6" />
+                        <TextBlock Text="Klocek predefiniowany: korzysta z konfiguracji programu (Źródła danych, Parametry programu) – zawsze na początku przebiegu."
+                                   Style="{StaticResource MutedText}" TextWrapping="Wrap" Visibility="{Binding IsFixed, Converter={StaticResource BoolToVisibility}}" />
+                        <TextBlock Text="Klocek systemowy: przebieg czeka na zatwierdzenie danych ACTUALS z komentarzem. Struktura programu pokazuje koszty z ostatniego przebiegu z zatwierdzonymi danymi – nowy import RABIT ani niezatwierdzony przebieg ich nie zmieniają."
+                                   Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="0,0,0,6" Visibility="{Binding IsActualsApproval, Converter={StaticResource BoolToVisibility}}" />
+                        <Grid Visibility="{Binding IsEditable, Converter={StaticResource BoolToVisibility}}" Margin="0,0,0,8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="260" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="160" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="Nazwa etapu" VerticalAlignment="Center" Margin="0,0,8,0" />
+                            <TextBox Grid.Column="1" Style="{StaticResource Input}" Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}" />
+                            <TextBlock Grid.Column="2" Text="WARNING" VerticalAlignment="Center" Margin="16,0,8,0"
+                                       Visibility="{Binding IsChecks, Converter={StaticResource BoolToVisibility}}" />
+                            <ComboBox Grid.Column="3" ItemsSource="{Binding Gates}" SelectedItem="{Binding WarningGate}"
+                                      Visibility="{Binding IsChecks, Converter={StaticResource BoolToVisibility}}"
+                                      ToolTip="Potwierdzenie – przebieg czeka na potwierdzenie z komentarzem; Informacja – idzie dalej. ERROR zawsze zatrzymuje." />
+                            <CheckBox Grid.Column="4" Content="Zatwierdzenie po etapie" IsChecked="{Binding Approval}" VerticalAlignment="Center" Margin="16,0,0,0"
+                                      Visibility="{Binding IsChecks, Converter={StaticResource BoolToVisibility}}" />
+                        </Grid>
+                        <TextBox Style="{StaticResource Input}" Text="{Binding Description, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,8"
+                                 Visibility="{Binding IsEditable, Converter={StaticResource BoolToVisibility}}" ToolTip="Opis etapu" AutomationProperties.Name="Opis etapu" />
+
+                        <!-- Reguły etapu walidacji: tylko zaznaczanie (treść reguły – edytor reguł) -->
+                        <DockPanel Margin="0,0,0,6" Visibility="{Binding IsChecks, Converter={StaticResource BoolToVisibility}}">
+                            <TextBox DockPanel.Dock="Right" Width="220" Style="{StaticResource Input}" Text="{Binding RuleSearch, UpdateSourceTrigger=PropertyChanged}"
+                                     ToolTip="Szukaj reguły: nazwa albo tabela" AutomationProperties.Name="Szukaj reguły etapu" />
+                            <TextBlock Style="{StaticResource MutedText}" TextWrapping="Wrap" VerticalAlignment="Center"
+                                       Text="Zaznacz reguły etapu. ERROR zawsze zatrzymuje przebieg. Treść i poziom reguły zmieniasz w edytorze reguł (lista po lewej)." />
+                        </DockPanel>
+                        <ItemsControl ItemsSource="{Binding Rules}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid Margin="0,1" ToolTip="{Binding Description}" Visibility="{Binding IsVisible, Converter={StaticResource BoolToVisibility}}">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="420" />
+                                            <ColumnDefinition Width="140" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <CheckBox IsChecked="{Binding IsSelected}" VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding Name}" TextWrapping="Wrap" />
+                                        </CheckBox>
+                                        <TextBlock Grid.Column="1" Text="{Binding Level}" FontSize="11" FontWeight="Bold" VerticalAlignment="Center" Margin="8,0,0,0" />
+                                        <TextBlock Grid.Column="2" Text="{Binding Tables}" Style="{StaticResource MutedText}" VerticalAlignment="Center" Margin="8,0,0,0" />
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+            </Grid>
+            </ScrollViewer>
+        </Grid>
+    </Grid>
+</UserControl>

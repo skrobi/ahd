@@ -158,7 +158,7 @@
     <!-- Układ strony modułu: przewijanie i marginesy – każdy ekran modułu jest w nim osadzony -->
     <Style x:Key="PageHost" TargetType="ScrollViewer">
         <Setter Property="VerticalScrollBarVisibility" Value="Auto" />
-        <Setter Property="Padding" Value="32,24,32,48" />
+        <Setter Property="Padding" Value="32,24,32,16" />
     </Style>
 
     <!-- Tabela danych (słowniki, import, administracja) -->

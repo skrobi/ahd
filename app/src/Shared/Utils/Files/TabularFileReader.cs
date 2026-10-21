@@ -1,5 +1,4 @@
 using System.IO;
-using System.Globalization;
 using System.Text;
 
 namespace PzlEv.Shared.Utils.Files;
@@ -17,6 +16,19 @@ public static class TabularFileReader
     static TabularFileReader()
     {
         Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
+    }
+
+    /// <summary>Indeks kolumny o nazwie name w nagłówkach (bez spacji, bez wielkości liter); -1 – brak.</summary>
+    public static int FindHeader(IReadOnlyList<string> headers, string name)
+    {
+        static string Norm(string s) => new string(s.Where(ch => !char.IsWhiteSpace(ch)).ToArray()).ToLowerInvariant();
+        var target = Norm(name);
+        for (var i = 0; i < headers.Count; i++)
+        {
+            if (Norm(headers[i]) == target)
+                return i;
+        }
+        return -1;
     }
 
     public static bool IsSupported(string fileName)

@@ -64,7 +64,7 @@ public sealed class CasMatrixViewModel : ObservableObject
     {
         try
         {
-            var (pools, groups) = await Busy.Run("Wczytywanie pul, grup i formuł narzutów CAS…", () =>
+            var (pools, groups) = await Busy.Run("Wczytywanie kategorii, grup i formuł narzutów CAS…", () =>
                 (CasBurden.PoolsFrom(_service.Load(GlobalDictionaries.Get(GlobalDictionaries.CasPools))),
                  CasBurden.GroupsFrom(_service.Load(GlobalDictionaries.Get(GlobalDictionaries.CasBurdenGroups)), _service.Load(_spec))));
             _changes.Clear();
@@ -75,7 +75,7 @@ public sealed class CasMatrixViewModel : ObservableObject
             Loaded?.Invoke();
             Status = status.Length > 0 ? status
                 : groups.Count == 0 ? "Brak grup – dodaj grupy w słowniku „Grupy narzutowe CAS”."
-                : pools.Count == 0 ? "Brak pul – dodaj pule w słowniku „Pule narzutu CAS”." : "";
+                : pools.Count == 0 ? "Brak kategorii – dodaj kategorie w słowniku „Kategorie narzutu CAS”." : "";
             OnPropertyChanged(nameof(HasChanges));
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
@@ -104,7 +104,7 @@ public sealed class CasMatrixViewModel : ObservableObject
     {
         if (Rows.SelectMany(r => r.Cells).FirstOrDefault(c => c.Problem.Length > 0) is { } bad)
         {
-            Status = $"Grupa {bad.Row.Name}, pula {bad.Pool.Name}: {bad.Problem} – popraw formułę przed zapisem.";
+            Status = $"Grupa {bad.Row.Name}, kategoria {bad.Pool.Name}: {bad.Problem} – popraw formułę przed zapisem.";
             return;
         }
         try

@@ -3,6 +3,7 @@ using Microsoft.Data.SqlClient;
 using PzlEv.Modules.Projects.Models;
 using PzlEv.Shared.Models.Db;
 using PzlEv.Shared.Models.Dictionaries;
+using PzlEv.Shared.Models.Pipeline;
 using PzlEv.Shared.Utils.Data;
 using PzlEv.Shared.Utils.Data.Sql;
 
@@ -22,12 +23,35 @@ public sealed class SqlProjectStore(SqlDatabase db, IClock clock, ICurrentUser u
 
     private string NodeTable => db.Table("meta.PerformanceObjective");
 
+    /// <summary>Tabele z wierszami programu (kolumna Project): słowniki programu (ProjectDictionaries.Tables), Cost Category programu, nakładka.</summary>
+    private static readonly string[] ProjectTables =
+        ["dict.WpCam", "dict.ScheduleBudget", "dict.WbsCategory", "dict.Exclusion", "dict.ProjectSource", "dict.ProjectSetting", "dict.CostCategory",
+         "meta.PerformanceObjective"];
+
     public IReadOnlyList<ProjectInfo> Projects()
     {
         using var connection = db.Open();
         return connection.Query<ProjectRow>($"SELECT ProjectId, Version, Code, Name, ProjectType, RecordedAt, RecordedBy FROM {ProjectTable} WHERE SupersededAt IS NULL AND Active = 1 ORDER BY Code")
             .Select(r => r.ToInfo()).ToList();
     }
+
+    public int Delete(string code) =>
+        db.InTransaction((connection, transaction) =>
+        {
+            var deleted = 0;
+            // Przebiegi programu: dane uruchomień (po PinId), uruchomienia, przebiegi.
+            var pins = $"SELECT p.PinId FROM {db.Table(DbTables.RunPin)} p JOIN {db.Table(DbTables.Run)} r ON r.RunId = p.RunId WHERE r.Project = @code";
+            foreach (var table in new[] { DbTables.RunBalance, DbTables.RunBalanceEv, DbTables.RunIssue, "meta.RunStep" })
+                deleted += connection.Execute($"DELETE FROM {db.Table(table)} WHERE PinId IN ({pins})", new { code }, transaction, commandTimeout: 1800);
+            deleted += connection.Execute($"DELETE FROM {db.Table(DbTables.RunPin)} WHERE RunId IN (SELECT RunId FROM {db.Table(DbTables.Run)} WHERE Project = @code)",
+                new { code }, transaction);
+            deleted += connection.Execute($"DELETE FROM {db.Table(DbTables.Run)} WHERE Project = @code", new { code }, transaction);
+            // Słowniki programu z historią (wiersze globalnych słowników mają Project NULL – zostają), nakładka, rejestracja programu.
+            foreach (var table in ProjectTables)
+                deleted += connection.Execute($"DELETE FROM {db.Table(table)} WHERE Project = @code", new { code }, transaction);
+            deleted += connection.Execute($"DELETE FROM {ProjectTable} WHERE Code = @code", new { code }, transaction);
+            return deleted;
+        });
 
     public ProjectInfo? Find(string code)
     {
@@ -68,7 +92,7 @@ public sealed class SqlProjectStore(SqlDatabase db, IClock clock, ICurrentUser u
                 var taken = connection.ExecuteScalar<int>(
                     $"SELECT COUNT(*) FROM {ProjectTable} WITH (UPDLOCK, HOLDLOCK) WHERE SupersededAt IS NULL AND Code = @code", new { code }, transaction);
                 if (taken > 0)
-                    return StoreResult.Rejected($"Projekt o kodzie {code} już istnieje.");
+                    return StoreResult.Rejected($"Program o kodzie {code} już istnieje.");
                 if (OwnerConflict(connection, transaction, code, objectives) is { } conflict)
                     return StoreResult.Rejected(conflict);
 
@@ -82,7 +106,7 @@ public sealed class SqlProjectStore(SqlDatabase db, IClock clock, ICurrentUser u
         }
         catch (SqlException ex) when (SqlDatabase.IsDuplicateKey(ex))
         {
-            return StoreResult.Rejected($"Projekt o kodzie {code} albo element nakładki został w międzyczasie zapisany przez inną osobę – odśwież dane.");
+            return StoreResult.Rejected($"Program o kodzie {code} albo element nakładki został w międzyczasie zapisany przez inną osobę – odśwież dane.");
         }
     }
 
@@ -176,7 +200,7 @@ public sealed class SqlProjectStore(SqlDatabase db, IClock clock, ICurrentUser u
             .Where(n => !n.IsVirtual && n.WbsElement is not null && owners.ContainsKey(n.WbsElement))
             .Select(n => $"{n.WbsElement} ({owners[n.WbsElement!]})")
             .ToList();
-        return taken.Count == 0 ? null : $"Elementy CES należą już do nakładki innego projektu: {string.Join(", ", taken.Take(10))}{(taken.Count > 10 ? "…" : "")}";
+        return taken.Count == 0 ? null : $"Elementy CES należą już do nakładki innego programu: {string.Join(", ", taken.Take(10))}{(taken.Count > 10 ? "…" : "")}";
     }
 
     private Dictionary<string, string> Owners(SqlConnection connection, SqlTransaction? transaction, string exceptCode) =>
@@ -255,11 +279,11 @@ public sealed class SqlProjectStore(SqlDatabase db, IClock clock, ICurrentUser u
             .ToDictionary(r => r.WbsElement, r => r.Amount ?? 0, StringComparer.OrdinalIgnoreCase);
     }
 
-    public ElementActuals CostsAndHoursByElement(string code, string value, string hours)
+    public ElementActuals CostsAndHoursByElement(string code, string value, string hours, DateTimeOffset? asOf = null)
     {
         using var connection = db.Open();
         var rows = connection.Query<(string WbsElement, decimal? Amount, int Rows, decimal? Hours, decimal? Labor, decimal? Material)>(
-                db.Table("rep.ProjectCostsByElement"), new { Project = code, Value = value, Hours = hours },
+                db.Table("rep.ProjectCostsByElement"), new { Project = code, Value = value, Hours = hours, AsOf = asOf },
                 commandType: System.Data.CommandType.StoredProcedure, commandTimeout: 600)
             .ToList();
         IReadOnlyDictionary<string, decimal> Of(Func<(string WbsElement, decimal? Amount, int Rows, decimal? Hours, decimal? Labor, decimal? Material), decimal?> value) =>
@@ -268,11 +292,31 @@ public sealed class SqlProjectStore(SqlDatabase db, IClock clock, ICurrentUser u
             Of(r => r.Hours), Of(r => r.Labor), Of(r => r.Material));
     }
 
-    public IReadOnlyList<CasCostRow> CasCosts(string code)
+    public IReadOnlyList<CasCostRow> CasCosts(string code, DateTimeOffset? asOf = null)
     {
         using var connection = db.Open();
-        return connection.Query<CasCostRow>(db.Table("rep.ProjectCasCosts"), new { Project = code },
+        return connection.Query<CasCostRow>(db.Table("rep.ProjectCasCosts"), new { Project = code, AsOf = asOf },
             commandType: System.Data.CommandType.StoredProcedure, commandTimeout: 600).ToList();
+    }
+
+    public ApprovedActuals? ApprovedActuals(string code)
+    {
+        using var connection = db.Open();
+        return connection.QueryFirstOrDefault<ApprovedActuals>(
+            $"""
+            SELECT TOP (1) r.Code AS RunCode, p.PinNo, pin.FinishedAt AS AsOf, a.ActedBy AS ApprovedBy, a.Comment
+            FROM {db.Table(DbTables.RunPin)} p
+            JOIN {db.Table(DbTables.Run)} r ON r.RunId = p.RunId
+            JOIN {db.Table("meta.RunStep")} pin ON pin.PinId = p.PinId AND pin.Action = @pin AND pin.Status = @done AND pin.FinishedAt IS NOT NULL
+            -- etap decydujący: Zatwierdzenie ACTUALS, a w uruchomieniu bez niego – pierwszy etap walidacji (walidacja ACTUALS)
+            CROSS APPLY (SELECT TOP (1) s.Status, s.ActedBy, s.Comment FROM {db.Table("meta.RunStep")} s
+                         WHERE s.PinId = p.PinId
+                           AND (s.Action = @approve
+                                OR s.Action = @checks AND NOT EXISTS (SELECT 1 FROM {db.Table("meta.RunStep")} x WHERE x.PinId = p.PinId AND x.Action = @approve))
+                         ORDER BY CASE WHEN s.Action = @approve THEN 0 ELSE 1 END, s.StepNo) a
+            WHERE r.Project = @code AND p.Rows IS NOT NULL AND a.Status = @done
+            ORDER BY pin.FinishedAt DESC, p.PinId DESC
+            """, new { code, approve = RunActions.ApproveActuals, checks = RunActions.Checks, pin = RunActions.Pin, done = RunStepStatuses.Done });
     }
 
     public IReadOnlyList<string> CurrenciesOf(IReadOnlyCollection<string> definitions, string currencyField)

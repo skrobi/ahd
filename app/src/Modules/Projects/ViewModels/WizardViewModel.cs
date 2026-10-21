@@ -19,7 +19,7 @@ namespace PzlEv.Modules.Projects.ViewModels;
 /// </summary>
 public sealed class WizardViewModel : ObservableObject
 {
-    public static readonly IReadOnlyList<string> StepTitles = ["Podstawowe", "Performance Objectives", "Słowniki projektu", "Foldery", "Podsumowanie"];
+    public static readonly IReadOnlyList<string> StepTitles = ["Podstawowe", "Performance Objectives", "Słowniki programu", "Foldery", "Podsumowanie"];
 
     private static readonly ILogger Logger = Log.ForContext("Module", "projects");
 
@@ -61,6 +61,7 @@ public sealed class WizardViewModel : ObservableObject
         BuildPanels();
         GoTo(0);
         _ = InitAsync();
+        _ = LoadRunTemplates();
     }
 
     public BusyState Busy { get; }
@@ -70,14 +71,14 @@ public sealed class WizardViewModel : ObservableObject
     {
         try
         {
-            (_codes, _owners, _mapping) = await Busy.Run("Wczytywanie projektów i struktury P1S…",
+            (_codes, _owners, _mapping) = await Busy.Run("Wczytywanie programów i struktury P1S…",
                 () => ((IReadOnlyList<string>)_service.Projects().Select(p => p.Code).ToList(), _service.WbsOwners(""), _service.Mapping()));
             Objectives.MappingInfo = _mapping.Describe;
             Objectives.Refresh();
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
-            Logger.Error(ex, "Kreator projektu – dane początkowe");
+            Logger.Error(ex, "Kreator programu – dane początkowe");
             Status = $"Nie udało się wczytać danych z bazy: {ex.Message}";
             Objectives.MappingInfo = "Struktura P1S (PZLPROD) niedostępna.";
         }
@@ -140,6 +141,45 @@ public sealed class WizardViewModel : ObservableObject
                 return;
             BuildPanels();
             _ = RefreshDictionaries();
+            RunTemplate = DefaultTemplate();
+        }
+    }
+
+    /// <summary>Szablony przebiegów do wyboru (ekran Przebiegi; aktywne, z etapami); pusta lista – definicja wbudowana.</summary>
+    public IReadOnlyList<LookupOption> RunTemplates
+    {
+        get => _runTemplates;
+        private set
+        {
+            if (SetProperty(ref _runTemplates, value))
+                OnPropertyChanged(nameof(NoRunTemplates));
+        }
+    }
+
+    public bool NoRunTemplates => _runTemplates.Count == 0;
+
+    /// <summary>Przebieg programu – zapisywany w „Parametrach programu”; domyślnie szablon domyślny dla typu; zmiana później – Konfiguracja.</summary>
+    public LookupOption? RunTemplate { get => _runTemplate; set => SetProperty(ref _runTemplate, value); }
+
+    private IReadOnlyList<LookupOption> _runTemplates = [];
+    private IReadOnlyList<RunDefinitionHeaderRow> _templates = [];
+    private LookupOption? _runTemplate;
+
+    private LookupOption? DefaultTemplate() =>
+        RunDefinitions.DefaultFor(_templates, _type.Code) is { } header ? _runTemplates.FirstOrDefault(o => o.Value == header.Code) : _runTemplates.FirstOrDefault();
+
+    /// <summary>Szablony przebiegów z bazy (w tle); wybór – domyślny dla typu programu.</summary>
+    private async Task LoadRunTemplates()
+    {
+        try
+        {
+            _templates = await Task.Run(_service.RunTemplates);
+            RunTemplates = ProjectService.RunTemplateOptions(_templates);
+            RunTemplate = DefaultTemplate();
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            Logger.Warning(ex, "Szablony przebiegów do kreatora");
         }
     }
 
@@ -164,7 +204,7 @@ public sealed class WizardViewModel : ObservableObject
         $"Sumy kontrolne: {_analytic.WpCount} WP · BAC HOURS {_analytic.BacHours:N2} h · BAC MATERIAL {_analytic.BacMaterial:N2} {AnalyticCurrency} · CAM: {_analytic.ByCam.Count}";
 
     /// <summary>Waluta kwot bazy analitycznej: waluta projektu z danych ACTUALS nakładki (zestaw walutowy) albo „waluta nieznana”.</summary>
-    public string AnalyticCurrency => _analytic?.Currency ?? "(waluta projektu nieznana – brak danych ACTUALS nakładki; kwoty bez przeliczenia)";
+    public string AnalyticCurrency => _analytic?.Currency ?? "(waluta programu nieznana – brak danych ACTUALS nakładki; kwoty bez przeliczenia)";
 
     public ICommand Back { get; }
     public ICommand Next { get; }
@@ -183,7 +223,7 @@ public sealed class WizardViewModel : ObservableObject
             SetAll(BasicIssues, ProjectRules.ValidateBasics(Code, Name, Type.Code, _codes));
             if (BasicIssues.Any(i => i.Level == CheckLevel.Error))
             {
-                Status = "Popraw dane podstawowe projektu.";
+                Status = "Popraw dane podstawowe programu.";
                 return;
             }
         }
@@ -233,7 +273,7 @@ public sealed class WizardViewModel : ObservableObject
         OnPropertyChanged(nameof(ItRequest));
         if (Code.Length == 0)
         {
-            SetAll(FolderChecks, [Issue.Error("Podaj kod projektu w kroku 1", "Kod")]);
+            SetAll(FolderChecks, [Issue.Error("Podaj kod programu w kroku 1", "Kod")]);
             return;
         }
         FolderChecks.Clear();
@@ -246,9 +286,9 @@ public sealed class WizardViewModel : ObservableObject
     private void BuildPanels()
     {
         Dictionaries.Clear();
-        foreach (var item in ProjectDictionaries.ForType(Type.Code))
+        foreach (var item in ProjectDictionaries.Items)
         {
-            var panel = new DictionaryPanelViewModel(item, Type.Code);
+            var panel = new DictionaryPanelViewModel(item);
             panel.Load = new AsyncRelayCommand(() => LoadDictionary(panel), () => item.Stored && !IsCreated && !Busy.IsBusy);
             panel.Remove = new AsyncRelayCommand(() => { _files.Remove(item.Code); return RefreshDictionaries(); }, () => _files.ContainsKey(item.Code) && !IsCreated && !Busy.IsBusy);
             Dictionaries.Add(panel);
@@ -272,7 +312,7 @@ public sealed class WizardViewModel : ObservableObject
 
     private async Task DoLoadWorkbook()
     {
-        var path = _dialogs.OpenExcel("Wczytaj słowniki projektu – skoroszyt z arkuszami jak w szablonie");
+        var path = _dialogs.OpenExcel("Wczytaj słowniki programu – skoroszyt z arkuszami jak w szablonie");
         if (path is null)
             return;
         await Try(async () =>
@@ -297,7 +337,7 @@ public sealed class WizardViewModel : ObservableObject
         await Try(async () =>
         {
             var (code, tree, files, mapping) = (Code, Objectives.Tree.Copy(), new Dictionary<string, (string Path, string? Sheet)>(_files), _mapping);
-            var previews = files.Count == 0 ? [] : await Busy.Run("Sprawdzanie słowników projektu…", () => _service.PreviewAll(code, tree, files, mapping));
+            var previews = files.Count == 0 ? [] : await Busy.Run("Sprawdzanie słowników programu…", () => _service.PreviewAll(code, tree, files, mapping));
             foreach (var panel in Dictionaries)
             {
                 var file = files.TryGetValue(panel.Item.Code, out var f) ? $"{Path.GetFileName(f.Path)}{(f.Sheet is null ? "" : $" · arkusz „{f.Sheet}”")}" : "";
@@ -308,13 +348,13 @@ public sealed class WizardViewModel : ObservableObject
 
     private async Task DoDownloadTemplate()
     {
-        var path = _dialogs.SaveExcel("Pobierz szablon słowników projektu", $"{(Code.Length > 0 ? Code : "Projekt")}_slowniki_projektu.xlsx");
+        var path = _dialogs.SaveExcel("Pobierz szablon słowników programu", $"{(Code.Length > 0 ? Code : "Program")}_slowniki_programu.xlsx");
         if (path is null)
             return;
-        var (type, tree, mapping) = (Type.Code, Objectives.Tree.Copy(), _mapping);
+        var (tree, mapping) = (Objectives.Tree.Copy(), _mapping);
         await Try(async () =>
         {
-            await Busy.Run("Zapisywanie szablonu Excel…", () => _service.ExportDictionaries(path, "", type, tree, mapping));
+            await Busy.Run("Zapisywanie szablonu Excel…", () => _service.ExportDictionaries(path, "", tree, mapping));
             Status = $"Zapisano szablon {path} – arkusz „WP i CAM” zawiera elementy P1S z zakresu (Legacy WBS i mapowanie nakładki).";
         });
     }
@@ -336,8 +376,6 @@ public sealed class WizardViewModel : ObservableObject
                 checks.Add(Issue.Error($"{panel.Name}: plik z błędami – popraw plik albo usuń wczytanie w kroku 3", panel.Name));
             else if (panel.Preview is { } p)
                 checks.Add(new Issue(CheckLevel.Pass, $"{panel.Name}: {p.Working.Count} wierszy", panel.Name));
-            else if (panel.Item.IsRequired(Type.Code))
-                checks.Add(Issue.Warning($"{panel.Name}: nie wczytano – słownik pusty, pierwszy przebieg zablokowany (projekt niegotowy)", panel.Name));
         }
         var wp = Dictionaries.FirstOrDefault(p => p.Item.Code == ProjectDictionaries.WpCam)?.Preview;
         var plan = Dictionaries.FirstOrDefault(p => p.Item.Code == ProjectDictionaries.ScheduleBudget)?.Preview;
@@ -353,7 +391,7 @@ public sealed class WizardViewModel : ObservableObject
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
-            Logger.Error(ex, "Kreator projektu – podsumowanie");
+            Logger.Error(ex, "Kreator programu – podsumowanie");
             Status = $"Nie udało się przygotować podsumowania: {ex.Message}";
             return;
         }
@@ -374,7 +412,7 @@ public sealed class WizardViewModel : ObservableObject
 
     private async Task DoExportAnalytic()
     {
-        var path = _dialogs.SaveExcel("Pobierz bazę analityczną", $"{(Code.Length > 0 ? Code : "Projekt")}_baza_analityczna.xlsx");
+        var path = _dialogs.SaveExcel("Pobierz bazę analityczną", $"{(Code.Length > 0 ? Code : "Program")}_baza_analityczna.xlsx");
         if (path is null)
             return;
         var analytic = _analytic!;
@@ -387,19 +425,19 @@ public sealed class WizardViewModel : ObservableObject
 
     private async Task DoCreate()
     {
-        var (code, name, type, tree, files, amount) = (Code, Name, Type.Code, Objectives.Tree.Copy(), new Dictionary<string, (string Path, string? Sheet)>(_files),
-            CurrencySet.Value);
+        var (code, name, type, tree, files, amount, run) = (Code, Name, Type.Code, Objectives.Tree.Copy(), new Dictionary<string, (string Path, string? Sheet)>(_files),
+            CurrencySet.Value, RunTemplate?.Value);
         await Try(async () =>
         {
-            _outcome = await Busy.Run($"Tworzenie projektu {code}: zapis w bazie, słowniki, foldery…", () => _service.Create(code, name, type, tree, files, amount));
+            _outcome = await Busy.Run($"Tworzenie programu {code}: zapis w bazie, słowniki, foldery…", () => _service.Create(code, name, type, tree, files, amount, run));
             SetAll(CreateIssues, _outcome.Issues);
             CreatedSteps.Clear();
             foreach (var step in _outcome.Steps)
                 CreatedSteps.Add(step);
             Status = _outcome.Created
-                ? $"Projekt {Code} utworzony."
-                : "Projekt nie został utworzony – popraw błędy (ERROR) poniżej.";
-            Logger.Information("Utworzenie projektu {Code}: {Created}", Code, _outcome.Created);
+                ? $"Program {Code} utworzony."
+                : "Program nie został utworzony – popraw błędy (ERROR) poniżej.";
+            Logger.Information("Utworzenie programu {Code}: {Created}", Code, _outcome.Created);
             OnPropertyChanged(nameof(IsCreated));
             OnPropertyChanged(nameof(HasCreateIssues));
         });
@@ -421,12 +459,12 @@ public sealed class WizardViewModel : ObservableObject
         }
         catch (Exception ex) when (FileInUse.Is(ex))
         {
-            Logger.Warning("{Context}: plik otwarty w innym programie – {Message}", "Kreator projektu", ex.Message);
+            Logger.Warning("{Context}: plik otwarty w innym programie – {Message}", "Kreator programu", ex.Message);
             Status = FileInUse.Describe(ex);
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
-            Logger.Error(ex, "Kreator projektu");
+            Logger.Error(ex, "Kreator programu");
             Status = $"Nie udało się: {ex.Message}";
         }
     }

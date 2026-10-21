@@ -373,7 +373,7 @@ public sealed partial class CasCostReportTests : IDisposable
     public void Matrix_changes_replace_formulas_and_keep_versions()
     {
         DictRow Row(long id, long group, long pool, string formula) =>
-            new(id, 3, new Dictionary<string, string?> { ["Grupa"] = CasBurden.Ref(group), ["Pula"] = CasBurden.Ref(pool), ["Formuła"] = formula });
+            new(id, 3, new Dictionary<string, string?> { ["Grupa"] = CasBurden.Ref(group), ["Kategoria"] = CasBurden.Ref(pool), ["Formuła"] = formula });
         IReadOnlyList<DictRow> current = [Row(1, 101, 8, "base * r:8"), Row(2, 101, 12, "base * r:12"), Row(3, 110, 1, "base * r:1")];
 
         var (working, removed) = CasBurden.Apply(current,
@@ -395,7 +395,7 @@ public sealed partial class CasCostReportTests : IDisposable
         var spec = GlobalDictionaries.Get(GlobalDictionaries.CasBurdenFormulas);
         DictRow Row(long group, string pool, string? formula) => new(null, null, new Dictionary<string, string?>
         {
-            ["Grupa"] = CasBurden.Ref(group), ["Pula"] = CasBurden.Ref(PoolId(pool)), ["Formuła"] = formula is null ? null : CasFormula.Serialize(Tokens(formula, PoolId)),
+            ["Grupa"] = CasBurden.Ref(group), ["Kategoria"] = CasBurden.Ref(PoolId(pool)), ["Formuła"] = formula is null ? null : CasFormula.Serialize(Tokens(formula, PoolId)),
         });
 
         var issues = DictionaryValidator.Validate(spec,
@@ -408,7 +408,7 @@ public sealed partial class CasCostReportTests : IDisposable
             Row(2, "Corporate Flowdowns (FD)", "base +"),
         ]);
 
-        Assert.Equal(["grupa 1 / pula 2", "grupa 1 / pula 8", "grupa 1 / pula 11"], issues.Where(i => i.Message.Contains("zapętlenie")).Select(i => i.Element));
+        Assert.Equal(["grupa 1 / kategoria 2", "grupa 1 / kategoria 8", "grupa 1 / kategoria 11"], issues.Where(i => i.Message.Contains("zapętlenie")).Select(i => i.Element));
         Assert.Contains(issues, i => i.Level == CheckLevel.Error && i.Element == "wiersz 6" && i.Message.Contains("kończyć się operatorem"));
     }
 
@@ -459,17 +459,17 @@ public sealed partial class CasCostReportTests : IDisposable
 
         var pools = CasBurden.PoolsFrom(
         [
-            Row(17, ("Pula", "FCCOM G&A"), ("Kolejność", "170"), ("Rodzaj", "FCCOM")),
-            Row(1, ("Pula", "MFG Fringe"), ("Kolejność", "10"), ("Rodzaj", "Koszt")),
+            Row(17, ("Kategoria", "FCCOM G&A"), ("Kolejność", "170"), ("Rodzaj", "FCCOM")),
+            Row(1, ("Kategoria", "MFG Fringe"), ("Kolejność", "10"), ("Rodzaj", "Koszt")),
         ]);
         var groups = CasBurden.GroupsFrom(
             [Row(109, ("Grupa", "Travel"), ("Opis", "Podróże")), Row(110, ("Grupa", "Pusta"), ("Opis", null))],
             [
-                Row(1, ("Grupa", "109"), ("Pula", "8"), ("Formuła", "( base + p:1 ) * r:8")),
-                Row(2, ("Grupa", "109"), ("Pula", "11"), ("Formuła", "nieczytelna")),   // pominięta
-                Row(3, ("Grupa", "555"), ("Pula", "1"), ("Formuła", "base * r:1")),      // grupa spoza słownika grup
+                Row(1, ("Grupa", "109"), ("Kategoria", "8"), ("Formuła", "( base + p:1 ) * r:8")),
+                Row(2, ("Grupa", "109"), ("Kategoria", "11"), ("Formuła", "nieczytelna")),   // pominięta
+                Row(3, ("Grupa", "555"), ("Kategoria", "1"), ("Formuła", "base * r:1")),      // grupa spoza słownika grup
             ]);
-        var rates = CasBurden.RatesFrom([Row(5, ("Pula", "17"), ("Od", "2026-01-01"), ("Do", null), ("Wskaźnik", "0.000057456819309837"))]);
+        var rates = CasBurden.RatesFrom([Row(5, ("Kategoria", "17"), ("Od", "2026-01-01"), ("Do", null), ("Wskaźnik", "0.000057456819309837"))]);
 
         Assert.Equal([new CasBurden.Pool(1, "MFG Fringe", 10, false), new CasBurden.Pool(17, "FCCOM G&A", 170, true)], pools);
         Assert.Equal(["Travel", "Pusta"], groups.Select(g => g.Name));
@@ -478,7 +478,7 @@ public sealed partial class CasCostReportTests : IDisposable
         Assert.Empty(groups[1].Formulas);
         Assert.Equal(new CasBurden.Rate(17, new DateOnly(2026, 1, 1), null, 0.000057456819309837m), rates.Single());
         Assert.Equal([new LookupOption("1", "MFG Fringe"), new LookupOption("17", "FCCOM G&A")],
-            GlobalDictionaries.LookupOptions(GlobalDictionaries.CasPools, [Row(17, ("Pula", "FCCOM G&A"), ("Kolejność", "170")), Row(1, ("Pula", "MFG Fringe"), ("Kolejność", "10"))]));
+            GlobalDictionaries.LookupOptions(GlobalDictionaries.CasPools, [Row(17, ("Kategoria", "FCCOM G&A"), ("Kolejność", "170")), Row(1, ("Kategoria", "MFG Fringe"), ("Kolejność", "10"))]));
     }
 
     [Fact]
@@ -486,7 +486,7 @@ public sealed partial class CasCostReportTests : IDisposable
     {
         var spec = GlobalDictionaries.Get(GlobalDictionaries.CasBurdenRates);
         DictRow Row(string pool, string from, string? to, string rate) =>
-            new(null, null, new Dictionary<string, string?> { ["Pula"] = pool, ["Od"] = from, ["Do"] = to, ["Wskaźnik"] = rate, ["Opis"] = null });
+            new(null, null, new Dictionary<string, string?> { ["Kategoria"] = pool, ["Od"] = from, ["Do"] = to, ["Wskaźnik"] = rate, ["Opis"] = null });
 
         var issues = DictionaryValidator.Validate(spec,
         [
@@ -559,7 +559,7 @@ public sealed partial class CasCostReportTests : IDisposable
         var poolSpec = GlobalDictionaries.Get(GlobalDictionaries.CasPools);
         DictRow Renamed(DictRow row, string column, string name) => row with { Values = new Dictionary<string, string?>(row.Values) { [column] = name } };
         var pools = dictionaries.Load(poolSpec);
-        Assert.Equal(SaveStatus.Saved, dictionaries.Save(poolSpec, pools.Select(r => r["Pula"] == "MFG Fringe" ? Renamed(r, "Pula", "Fringe produkcji") : r).ToList(), [], true).Status);
+        Assert.Equal(SaveStatus.Saved, dictionaries.Save(poolSpec, pools.Select(r => r["Kategoria"] == "MFG Fringe" ? Renamed(r, "Kategoria", "Fringe produkcji") : r).ToList(), [], true).Status);
         var groups = dictionaries.Load(groupSpec);
         Assert.Equal(SaveStatus.Saved, dictionaries.Save(groupSpec, groups.Select(r => r["Grupa"] == "MFG labor" ? Renamed(r, "Grupa", "Robocizna produkcji") : r).ToList(), [], true).Status);
         Assert.Equal((4, 0), service.ExportCasCostReport(path, "PAF"));
@@ -572,14 +572,14 @@ public sealed partial class CasCostReportTests : IDisposable
         }
 
         // Puli i grupy używanej w formułach, wskaźnikach albo Cost Category (także w projekcie) nie można usunąć.
-        var used = dictionaries.Save(poolSpec, dictionaries.Load(poolSpec).Where(r => r["Pula"] != "Fringe produkcji").ToList(),
-            dictionaries.Load(poolSpec).Where(r => r["Pula"] == "Fringe produkcji").ToList(), true);
+        var used = dictionaries.Save(poolSpec, dictionaries.Load(poolSpec).Where(r => r["Kategoria"] != "Fringe produkcji").ToList(),
+            dictionaries.Load(poolSpec).Where(r => r["Kategoria"] == "Fringe produkcji").ToList(), true);
         Assert.Equal(SaveStatus.Rejected, used.Status);
         Assert.Contains(used.Issues, i => i.Message.Contains("„Fringe produkcji” jest używane w słowniku „Formuły narzutów CAS”"));
         Assert.Contains(used.Issues, i => i.Message.Contains("jest używane w słowniku „Wskaźniki narzutu CAS”"));
         var odcRow = dictionaries.Load(groupSpec).Where(r => r["Grupa"] == "ODC").ToList();
         var group = dictionaries.Save(groupSpec, dictionaries.Load(groupSpec).Except(odcRow).ToList(), odcRow, true);
-        Assert.Contains(group.Issues, i => i.Message.Contains("„ODC” jest używane w słowniku „Cost Category”") && i.Message.Contains("także w projektach"));
+        Assert.Contains(group.Issues, i => i.Message.Contains("„ODC” jest używane w słowniku „Cost Category”") && i.Message.Contains("także w programach"));
 
         // Excel słownika wskaźników: nazwa puli zamiast identyfikatora; wczytanie zamienia nazwę z powrotem na identyfikator.
         var rateSpec = GlobalDictionaries.Get(GlobalDictionaries.CasBurdenRates);
@@ -648,7 +648,7 @@ public sealed partial class CasCostReportTests : IDisposable
         var rate2024 = pools.ToDictionary(p => p.Name, p => Math.Round(0.01m + (decimal)random.NextDouble(), 6));
         var added = pools.Select(p => new DictRow(null, null, new Dictionary<string, string?>
         {
-            ["Pula"] = CasBurden.Ref(p.Id), ["Od"] = "2024-01-01", ["Do"] = "2024-12-31",
+            ["Kategoria"] = CasBurden.Ref(p.Id), ["Od"] = "2024-01-01", ["Do"] = "2024-12-31",
             ["Wskaźnik"] = rate2024[p.Name].ToString(System.Globalization.CultureInfo.InvariantCulture), ["Opis"] = "test",
         }));
         Assert.Equal(SaveStatus.Saved, dictionaries.Save(rateSpec, [.. current, .. added], [], confirmWarnings: true).Status);

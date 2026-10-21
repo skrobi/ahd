@@ -21,7 +21,7 @@
             <Button Content="Odśwież" Style="{StaticResource Btn}" Command="{Binding Refresh}" />
             <TextBlock Text="Szukaj" VerticalAlignment="Center" Margin="16,0,6,0" Foreground="{StaticResource Muted}" />
             <TextBox Width="240" Style="{StaticResource Input}" Text="{Binding Search, UpdateSourceTrigger=PropertyChanged}" />
-            <TextBlock Text="{Binding Status}" Style="{StaticResource MutedText}" VerticalAlignment="Center" Margin="16,0,0,0" />
+            <TextBlock partials:CopyText.Enabled="True" Text="{Binding Status}" Style="{StaticResource MutedText}" VerticalAlignment="Center" Margin="16,0,0,0" />
         </StackPanel>
         <partials:BusyBar DataContext="{Binding Busy}" />
         <Border Style="{StaticResource Panel}" Padding="8" Margin="0,0,0,8"

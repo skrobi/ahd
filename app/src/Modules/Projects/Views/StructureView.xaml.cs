@@ -319,6 +319,17 @@ public partial class StructureView : UserControl
         Dispatcher.BeginInvoke(CommitEdit, DispatcherPriority.Input);
     }
 
+    /// <summary>Dwuklik w komórce ACWP (tylko do odczytu) – okno „Zmiany ACWP” dla wiersza i rodzaju kosztu kolumny.</summary>
+    private void OnMouseDoubleClick(object sender, MouseButtonEventArgs e)
+    {
+        if (Model is { } model && RowsGrid.CurrentCell.Item is StructureRowViewModel row
+            && RowsGrid.CurrentCell.Column?.SortMemberPath is StructureColumns.Acwp or StructureColumns.AcwpLabor or StructureColumns.AcwpMaterial or StructureColumns.AcwpOther)
+        {
+            model.OpenAcwpChanges?.Invoke(row, RowsGrid.CurrentCell.Column.SortMemberPath);
+            e.Handled = true;
+        }
+    }
+
     private void OnIsVisibleChanged(object sender, DependencyPropertyChangedEventArgs e)
     {
         if (e.NewValue is false)

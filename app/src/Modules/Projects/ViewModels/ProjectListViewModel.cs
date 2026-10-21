@@ -2,8 +2,8 @@ using System.Collections.ObjectModel;
 using System.Windows.Input;
 using PzlEv.Modules.Projects.Models;
 using PzlEv.Modules.Projects.Services;
-using PzlEv.Shared.Models;
 using PzlEv.Shared.Models.Db;
+using PzlEv.Shared.Utils.Ui.Dialogs;
 using PzlEv.Shared.Utils.Ui.Mvvm;
 using Serilog;
 
@@ -15,17 +15,20 @@ public sealed class ProjectListViewModel : ObservableObject, IDisposable
     private static readonly ILogger Logger = Log.ForContext("Module", "projects");
 
     private readonly ProjectService _service;
+    private readonly IFileDialogs _dialogs;
     private ProjectListItem? _selected;
     private string _status = "";
     private bool _loaded;
 
-    public ProjectListViewModel(ProjectService service, BusyState busy, Action newProject, Action<string> open)
+    public ProjectListViewModel(ProjectService service, IFileDialogs dialogs, BusyState busy, Action newProject, Action<string> open)
     {
         _service = service;
+        _dialogs = dialogs;
         Busy = busy;
         NewProject = new RelayCommand(_ => newProject(), _ => !Busy.IsBusy);
         Open = new RelayCommand(p => open(((ProjectListItem)p!).Code), p => p is ProjectListItem && !Busy.IsBusy);
         Refresh = new AsyncRelayCommand(Reload, () => !Busy.IsBusy);
+        Delete = new RelayCommand(p => _ = DoDelete(p as ProjectListItem), p => p is ProjectListItem && !Busy.IsBusy);
         if (_service.Runs is { } runs)
             runs.Finished += OnRunFinished;   // zakończony przebieg – stan na liście od razu
         _ = Reload();
@@ -45,6 +48,34 @@ public sealed class ProjectListViewModel : ObservableObject, IDisposable
     public ICommand Open { get; }
     public ICommand Refresh { get; }
 
+    /// <summary>Trwałe usunięcie programu ze wszystkimi danymi – po ostrzeżeniu (folder na dysku zostaje).</summary>
+    public ICommand Delete { get; }
+
+    private async Task DoDelete(ProjectListItem? item)
+    {
+        if (item is null || !_dialogs.Confirm("Usuń program",
+                $"Program {item.Code} – {item.Name} zostanie trwale usunięty ze WSZYSTKIMI danymi: nakładka Performance Objectives, słowniki programu "
+                + "z historią, Cost Category programu, przebiegi z wynikami i zatwierdzeniami.\n\nOperacji nie można cofnąć. Folder programu na dysku "
+                + "i dane importów RABIT zostają.\n\nUsunąć program?"))
+            return;
+        try
+        {
+            var refused = await Busy.Run($"Usuwanie programu {item.Code}…", () => _service.Delete(item.Code));
+            if (refused is not null)
+            {
+                Status = refused;
+                return;
+            }
+            await Reload();
+            Status = $"Program {item.Code} usunięty.";
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            Logger.Error(ex, "Usunięcie programu {Code}", item.Code);
+            Status = $"Nie udało się usunąć programu {item.Code}: {ex.Message}";
+        }
+    }
+
     private void OnRunFinished(string project) => _ = Reload();
 
     /// <summary>Odpięcie od zdarzeń przebiegów przy zmianie strony modułu.</summary>
@@ -59,7 +90,7 @@ public sealed class ProjectListViewModel : ObservableObject, IDisposable
         try
         {
             // Sam odczyt projektów – nakładka, gotowość i mapowanie dopiero na ekranie projektu.
-            var items = await Busy.Run("Wczytywanie projektów…", () =>
+            var items = await Busy.Run("Wczytywanie programów…", () =>
             {
                 var runs = _service.Runs?.Latest() ?? new Dictionary<string, RunPinRow>();
                 return _service.Projects().Select(project => runs.GetValueOrDefault(project.Code) is { } run
@@ -77,8 +108,8 @@ public sealed class ProjectListViewModel : ObservableObject, IDisposable
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
-            Logger.Error(ex, "Lista projektów");
-            Status = $"Nie udało się wczytać projektów: {ex.Message}";
+            Logger.Error(ex, "Lista programów");
+            Status = $"Nie udało się wczytać programów: {ex.Message}";
         }
         _loaded = true;
         OnPropertyChanged(nameof(IsEmpty));

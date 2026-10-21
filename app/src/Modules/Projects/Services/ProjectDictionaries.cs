@@ -28,7 +28,7 @@ public static class ProjectDictionaries
     {
         Code = WpCam,
         Name = "WP i CAM",
-        Description = "Element P1S projektu → WP, CAM, Cost Category (kategoria ze słownika „Kategorie WBS” projektu), MPK (słownik „Stawki wydziałów” – stawka ETC Cost). Element P1S należy do projektu, gdy jest kodem P1S elementu nakładki (Legacy WBS albo cel z mapowania) albo leży pod nim.",
+        Description = "Element P1S programu → WP, CAM, Cost Category (kategoria ze słownika „Kategorie WBS” programu), MPK (słownik „Stawki wydziałów” – stawka ETC Cost). Element P1S należy do programu, gdy jest kodem P1S elementu nakładki (Legacy WBS albo cel z mapowania) albo leży pod nim.",
         Columns =
         [
             new("Element P1S", ColumnType.Text, Key: true),
@@ -44,7 +44,7 @@ public static class ProjectDictionaries
     {
         Code = ScheduleBudget,
         Name = "Harmonogram i budżet",
-        Description = "WP → BAC HOURS (godziny), BAC MATERIAL (koszt materiałów), BAC (budżet kosztowy), Baseline Start i Baseline Koniec – baseline projektu; Actual Start i Actual Koniec – daty rzeczywiste WP nadpisujące daty z raportu produkcyjnego (puste – data z produkcji); Forecast Start i Forecast Koniec – prognoza; ETC HOURS i ETC MATERIAL – godziny i materiały do poniesienia nadpisujące wartości z produkcji (puste – z produkcji). Kwoty (BAC MATERIAL, BAC, ETC MATERIAL) – w walucie projektu; Waluta – kod waluty projektu zapisywany przy wpisaniu kwot (puste – waluta projektu).",
+        Description = "WP → BAC HOURS (godziny), BAC MATERIAL (koszt materiałów), BAC (budżet kosztowy), Baseline Start i Baseline Koniec – baseline programu; Actual Start i Actual Koniec – daty rzeczywiste WP nadpisujące daty z raportu produkcyjnego (puste – data z produkcji); Forecast Start i Forecast Koniec – prognoza; ETC HOURS i ETC MATERIAL – godziny i materiały do poniesienia nadpisujące wartości z produkcji (puste – z produkcji). Kwoty (BAC MATERIAL, BAC, ETC MATERIAL) – w walucie programu; Waluta – kod waluty programu zapisywany przy wpisaniu kwot (puste – waluta programu).",
         Columns =
         [
             new("WP", ColumnType.Text, Key: true),
@@ -68,7 +68,7 @@ public static class ProjectDictionaries
     {
         Code = WbsCategories,
         Name = "Kategorie WBS",
-        Description = "Kategorie elementów WBS projektu (np. Production, Programs) – do wyboru w kolumnie Cost Category struktury i słownika „WP i CAM”; raport po kategoriach. Inne niż globalny słownik Cost Category (numer elementu kosztowego).",
+        Description = "Kategorie elementów WBS programu (np. Production, Programs) – do wyboru w kolumnie Cost Category struktury i słownika „WP i CAM”; raport po kategoriach. Inne niż globalny słownik Cost Category (numer elementu kosztowego).",
         Columns =
         [
             new("Cost Category", ColumnType.Text, Key: true, CheckSimilar: true),
@@ -80,7 +80,7 @@ public static class ProjectDictionaries
     {
         Code = Sources,
         Name = "Źródła danych",
-        Description = "Definicje źródeł (Administracja) importowane dla projektu – „Importuj źródła projektu” importuje tylko ich pliki.",
+        Description = "Definicje źródeł (Administracja) importowane dla programu – „Importuj źródła programu” importuje tylko ich pliki.",
         Columns =
         [
             new("Definicja źródła", ColumnType.Text, Key: true, Lookup: Sources),
@@ -91,12 +91,13 @@ public static class ProjectDictionaries
     private static readonly DictionarySpec SettingsSpec = new()
     {
         Code = Settings,
-        Name = "Parametry projektu",
-        Description = $"Parametry projektu: {ProjectSettings.ActualsAmount} – pole kwoty parsera ACTUALS dla ACWP struktury, raportu kosztów i przebiegu "
-                      + "(ValueObjCrcy – waluta obiektu (PLN), ValueRepCur – waluta raportu); brak wiersza – ValueObjCrcy.",
+        Name = "Parametry programu",
+        Description = $"Parametry programu: {ProjectSettings.ActualsAmount} – pole kwoty parsera ACTUALS dla ACWP struktury, raportu kosztów i przebiegu "
+                      + "(ValueObjCrcy – waluta obiektu (PLN), ValueRepCur – waluta raportu); brak wiersza – ValueObjCrcy. "
+                      + $"{ProjectSettings.RunDefinition} – szablon przebiegu programu (ekran Przebiegi); brak wiersza – szablon domyślny dla typu programu.",
         Columns =
         [
-            new("Parametr", ColumnType.Choice, Key: true, Choices: [ProjectSettings.ActualsAmount]),
+            new("Parametr", ColumnType.Choice, Key: true, Choices: [ProjectSettings.ActualsAmount, ProjectSettings.RunDefinition]),
             new("Wartość", ColumnType.Text, Required: true, Lookup: Settings),
             new("Opis", ColumnType.Text),
         ],
@@ -120,17 +121,14 @@ public static class ProjectDictionaries
     /// <summary>Słowniki projektu w kolejności kreatora i ekranu projektu.</summary>
     public static IReadOnlyList<ProjectDictionaryItem> Items { get; } =
     [
-        new(WpCam, "WP i CAM", "WP i CAM", RequiredFor: ProjectTypes.All, Stored: true),
-        new(ScheduleBudget, "Harmonogram i budżet", "Harmonogram i budżet", RequiredFor: ProjectTypes.All, Stored: true),
-        new(WbsCategories, "Kategorie WBS", "Kategorie WBS", RequiredFor: [], Stored: true),
-        new(GlobalDictionaries.CostCategory, "Cost Category – zmiany w projekcie", "Cost Category projektu", RequiredFor: [], Stored: true),
-        new(Exclusions, "Wykluczenia", "Wykluczenia", RequiredFor: [], Stored: true),
-        new(Sources, "Źródła danych", "Źródła danych", RequiredFor: [], Stored: true),
-        new(Settings, "Parametry projektu", "Parametry projektu", RequiredFor: [], Stored: true),
+        new(WpCam, "WP i CAM", "WP i CAM", Stored: true),
+        new(ScheduleBudget, "Harmonogram i budżet", "Harmonogram i budżet", Stored: true),
+        new(WbsCategories, "Kategorie WBS", "Kategorie WBS", Stored: true),
+        new(GlobalDictionaries.CostCategory, "Cost Category – zmiany w programie", "Cost Category projektu", Stored: true),
+        new(Exclusions, "Wykluczenia", "Wykluczenia", Stored: true),
+        new(Sources, "Źródła danych", "Źródła danych", Stored: true),
+        new(Settings, "Parametry programu", "Parametry projektu", Stored: true),
     ];
-
-    /// <summary>Słowniki projektu dla typu (wspólne dla wszystkich typów; wymagalność – IsRequired).</summary>
-    public static IReadOnlyList<ProjectDictionaryItem> ForType(string type) => Items;
 
     /// <summary>Tabele słowników projektu w bazie (SqlDictionaryStore; Cost Category – tabela globalna, Tables w GlobalDictionaries).</summary>
     public static IReadOnlyList<DictionaryTable> Tables { get; } =
@@ -251,16 +249,16 @@ public static class ProjectDictionaries
             if (rows[i]["Element P1S"] is { } element)
             {
                 if (context.P1sOwners.TryGetValue(element, out var owner))
-                    yield return Issue.Error($"Element P1S {element} należy do projektu {owner}", at);
+                    yield return Issue.Error($"Element P1S {element} należy do programu {owner}", at);
                 else if (context.Scope.RootOf(element) is null)
-                    yield return Issue.Error($"Element P1S {element} jest poza zakresem projektu (nie jest Legacy WBS ani celem mapowania elementu nakładki i nie leży pod nimi)", at);
+                    yield return Issue.Error($"Element P1S {element} jest poza zakresem programu (nie jest Legacy WBS ani celem mapowania elementu nakładki i nie leży pod nimi)", at);
             }
             if (rows[i]["WP"] is { } wp && rows[i]["CAM"] is null)
                 yield return Issue.Warning($"WP {wp} bez CAM – uzupełnij CAM przed przebiegiem", at);
             if (rows[i]["CAM"] is { } cam && !context.Persons.Contains(cam))
                 yield return Issue.Warning($"CAM „{cam}” spoza listy osób (słownik Osoby) – sprawdź pisownię", at);
             if (rows[i]["Cost Category"] is { } category && context.Categories is { } categories && !categories.Contains(category))
-                yield return Issue.Warning($"Cost Category „{category}” spoza słownika „Kategorie WBS” projektu – dodaj ją do słownika albo wybierz z listy", at);
+                yield return Issue.Warning($"Cost Category „{category}” spoza słownika „Kategorie WBS” programu – dodaj ją do słownika albo wybierz z listy", at);
         }
     }
 
@@ -274,7 +272,7 @@ public static class ProjectDictionaries
             var at = DictionaryValidator.RowElement(i);
             var row = rows[i];
             if (context.Wps is { } wps && row["WP"] is { } wp && !wps.Contains(wp))
-                yield return Issue.Error($"WP {wp} nie istnieje w słowniku „WP i CAM” projektu", at);
+                yield return Issue.Error($"WP {wp} nie istnieje w słowniku „WP i CAM” programu", at);
             if (Dec(row["BAC HOURS"]) is < 0)
                 yield return Issue.Error("BAC HOURS – budżet nie może być ujemny", at);
             if (Dec(row["BAC MATERIAL"]) is < 0)
@@ -320,6 +318,10 @@ public static class ProjectDictionaries
                     DictionaryValidator.RowElement(i));
         }
     }
+
+    /// <summary>Przebieg programu z wierszy słownika „Parametry projektu” (null – szablon domyślny dla typu programu).</summary>
+    public static string? RunDefinition(IEnumerable<DictRow> settings) =>
+        settings.FirstOrDefault(r => r["Parametr"] == ProjectSettings.RunDefinition)?["Wartość"]?.Trim() is { Length: > 0 } code ? code : null;
 
     /// <summary>Pole kwoty ACTUALS z wierszy słownika „Parametry projektu” (brak – ValueObjCrcy).</summary>
     public static string ActualsAmount(IEnumerable<DictRow> settings) =>

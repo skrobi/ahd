@@ -8,34 +8,10 @@ using Xunit;
 
 namespace PzlEv.Tests.Projects;
 
-/// <summary>Gotowość projektu (F02, F4.5), baza analityczna (F01, krok 5) i foldery projektu.</summary>
+/// <summary>Daty danych ACTUALS, baza analityczna (F01, krok 5) i foldery projektu.</summary>
 public sealed class ReadinessAndAnalyticTests
 {
-    private static readonly Issue FoldersOk = new(CheckLevel.Pass, "ok");
-    private static readonly Issue CamAccess = Issue.Warning("IT");
-    private static readonly Issue P1sSide = new(CheckLevel.Pass, "P1S");
-
     private static PoTree Objectives() => PerformanceObjectivesReader.Read(TestServices.TestData("Projekty", "PO_M28.xlsx")).Tree;
-
-    private static Dictionary<string, int> Rows(int wp, int schedule) =>
-        new() { [ProjectDictionaries.WpCam] = wp, [ProjectDictionaries.ScheduleBudget] = schedule };
-
-    [Fact]
-    public void Project_without_wp_is_not_ready()
-    {
-        var checks = ProjectReadiness.Check(ProjectTypes.Internal, Objectives(), Rows(0, 0), [], P1sSide, FoldersOk, CamAccess);
-        Assert.False(ProjectReadiness.IsReady(checks));
-        Assert.Contains(checks, c => c.Level == CheckLevel.Error && c.Element == "WP i CAM");
-        Assert.Contains(checks, c => c.Level == CheckLevel.Error && c.Element == "Harmonogram i budżet");
-    }
-
-    [Fact]
-    public void Project_with_dictionaries_is_ready_with_warnings_only()
-    {
-        var checks = ProjectReadiness.Check(ProjectTypes.Sac, Objectives(), Rows(4, 3), ["Jan Obcy"], P1sSide, FoldersOk, CamAccess);
-        Assert.True(ProjectReadiness.IsReady(checks));
-        Assert.Contains(checks, c => c.Level == CheckLevel.Warning && c.Message.Contains("Jan Obcy"));
-    }
 
     [Fact]
     public void Actuals_freshness_shows_rabit_data_date_import_and_last_check()
@@ -52,33 +28,6 @@ public sealed class ReadinessAndAnalyticTests
         var older = new[] { files[1], new ActualsFile("ACTUALS_PAF_02.csv", At(5, 23), At(6, 8), null, null) };
         Assert.StartsWith("Dane RABIT z 2026-10-05 23:00 – 2026-10-07 23:00", new ActualsFreshness(older).Summary);   // pliki z różnych dni
         Assert.Contains("ACTUALS_PAF_01.csv: raport RABIT 2026-10-06 23:00, import 2026-10-07 08:00; sprawdzony 2026-10-08 07:00", new ActualsFreshness(files).Details);
-    }
-
-    [Fact]
-    public void Wp_without_cam_blocks_the_run()
-    {
-        var checks = ProjectReadiness.Check(ProjectTypes.Internal, Objectives(), Rows(4, 3), [], P1sSide, FoldersOk, CamAccess, ["WP-1", "WP-2"]);
-        Assert.False(ProjectReadiness.IsReady(checks));
-        Assert.Contains(checks, c => c.Level == CheckLevel.Error && c.Message.StartsWith("WP bez CAM (2)") && c.Message.Contains("WP-1, WP-2"));
-    }
-
-    [Fact]
-    public void Empty_objectives_block()
-    {
-        var empty = ProjectReadiness.Check(ProjectTypes.Internal, new PoTree(), Rows(4, 3), [], P1sSide, FoldersOk, CamAccess);
-        Assert.Contains(empty, c => c.Level == CheckLevel.Error && c.Element == "Performance Objectives");
-    }
-
-    [Fact]
-    public void Cas_project_with_filled_dictionaries_is_ready()
-    {
-        // Regresja: dawny placeholder „Stawki CAS” (O37) blokował każdy projekt CAS – narzuty CAS są w słownikach globalnych.
-        var cas = ProjectReadiness.Check(ProjectTypes.Cas, Objectives(), Rows(4, 3), [], P1sSide, FoldersOk, CamAccess);
-        Assert.True(ProjectReadiness.IsReady(cas));
-        Assert.DoesNotContain(cas, c => c.Message.Contains("O37") || c.Message.Contains("Stawki CAS"));
-
-        var empty = ProjectReadiness.Check(ProjectTypes.Cas, Objectives(), Rows(0, 3), [], P1sSide, FoldersOk, CamAccess);
-        Assert.False(ProjectReadiness.IsReady(empty));
     }
 
     private static DictRow Row(params (string Column, string? Value)[] values) => new(null, null, values.ToDictionary(v => v.Column, v => v.Value));

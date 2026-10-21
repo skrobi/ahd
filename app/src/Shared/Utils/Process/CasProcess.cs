@@ -28,7 +28,7 @@ public sealed class CasProcess(Func<CasCosts> calculator) : ProjectProcess
 
     public override string? AcwpDescription(string? currency) =>
         "koszt rzeczywisty narastająco po narzutach CAS (TOTAL COST) – koszt PLN z ACTUALS (Value in Obj. Crcy)"
-        + (currency is { } c && c != "PLN" ? $" w {c} kursem CAS okresu kosztu" : "") + "; ostatni import ACTUALS, bez wykluczeń";
+        + (currency is { } c && c != "PLN" ? $" w {c} kursem CAS okresu kosztu" : "") + "; stan danych – status „ACTUALS struktury” w zakładce Wskaźniki, bez wykluczeń";
 
     public override bool HasBurdenReport => true;
 }

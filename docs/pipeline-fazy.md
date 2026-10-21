@@ -25,7 +25,7 @@ Każda faza i każdy etap mają ten sam kształt:
 | **Zapis stanu** | status etapu, kto, kiedy – `meta.EtapPrzebiegu` i dziennik |
 | **Idempotencja** | ponowne wykonanie z tymi samymi wejściami daje ten sam wynik i nie dubluje danych |
 | **Unieważnienie** | ponowne wykonanie etapu albo zmiana jego wejść oznacza etapy późniejsze jako **Nieaktualne** |
-| **Uruchomienie** | każdy etap uruchamia użytkownik – analityk zachowuje kontrolę nad przebiegiem; nic nie wykonuje się automatycznie |
+| **Uruchomienie** | użytkownik uruchamia przebieg; etapy wykonują się kolejno do najbliższej bramki (ERROR, WARNING przy bramce „Potwierdzenie”, zatwierdzenie ręczne) – dalej decyduje analityk (potwierdzenie z komentarzem – także akceptacja ERROR, poprawa i ponowne wykonanie etapu); kolejność etapów i bramki – definicja przebiegu (rozdz. 4.1) |
 
 Etapy komunikują się przez bazę, więc mogą je wykonywać różne osoby, w różne dni, z różnych komputerów.
 
@@ -37,12 +37,20 @@ Etapy komunikują się przez bazę, więc mogą je wykonywać różne osoby, w r
 | Do wykonania | można uruchomić akcję etapu | → W toku |
 | W toku | operacja trwa (blokada przebiegu) | → Zakończony / Wymaga akcji / Błąd |
 | Wymaga akcji | potrzebna decyzja lub dane (potwierdzenie, pliki CAM, uzupełnienia, przypisania) | → Zakończony / Do wykonania |
-| Błąd | kontrola z poziomem ERROR | → Do wykonania (po poprawie) |
+| Błąd | kontrola z poziomem ERROR | → Do wykonania (po poprawie) / Zakończony (akceptacja błędów z komentarzem) |
 | Zakończony | bramka wyjścia spełniona | → Nieaktualny (gdy zmienią się wejścia) |
 | Nieaktualny | wynik oparty na nieaktualnych wejściach | → Do wykonania |
 
 - Stan przebiegu wynika ze stanów etapów – pierwszy niezakończony etap wyznacza „co dalej”.
 - Każda zmiana statusu trafia do dziennika (kto, kiedy, co).
+- Wdrożone (przebieg etapowy, rozdz. 4.1): etapy uruchomienia w `META_RunStep` (migracja 050), wyniki kontroli z numerem etapu
+  (`RUN_Issue.StepNo`). Po wykonaniu etapu: ERROR – **Błąd** (przebieg stoi; po poprawie – ponowne wykonanie etapu albo
+  akceptacja błędów przez analityka z komentarzem → Zakończony, błędy zostają w wynikach etapu, dalsze etapy);
+  zatwierdzenie ręczne albo WARNING przy bramce „Potwierdzenie” – **Wymaga akcji** (potwierdzenie z komentarzem → Zakończony,
+  dalsze etapy); inaczej – **Zakończony** i następny etap. Ponowne wykonanie etapu oznacza późniejsze etapy jako Nieaktualne.
+  Stan uruchomienia (`META_RunPin.Status`): w toku / wymaga akcji / zatrzymany – błąd / zakończony (z błędami – zaakceptowanymi,
+  z ostrzeżeniami). Komentarz potwierdzenia (kto, kiedy, co) – w etapie (`META_RunStep.Comment`) i dzienniku. Logika –
+  `Modules/Runs/Services/RunWorkflowEngine.cs`, wykonanie – `RunService` (Execute, Continue, Confirm, Rerun).
 
 ### 1.3 Problemy (kontrola jakości danych)
 
@@ -53,7 +61,7 @@ uruchomienia przebiegu (`RUN_Issue`).
 |---|---|---|
 | PASS | kontrola przeszła | widoczna w raporcie przebiegu |
 | WARNING | ostrzeżenie | nie blokuje; widoczne w raporcie przebiegu i na pulpicie |
-| ERROR | błąd blokujący | blokuje bramkę etapu do czasu poprawy |
+| ERROR | błąd blokujący | blokuje bramkę etapu do czasu poprawy albo akceptacji przez analityka z komentarzem (etap przebiegu, rozdz. 1.2) |
 
 - Problem zawiera: poziom, kontrolę, obszar (import, słownik, etap przebiegu), element, opis,
   akcję naprawczą (przejście do właściwego ekranu z filtrem na problem) i stan (otwarty / rozwiązany – kto, kiedy, jak).
@@ -184,29 +192,141 @@ Kalendarz okresów wyznacza wariant przebiegu:
 | P9 Publikacja | Publikacja | tak | tak | pliki zapisane |
 | Z Zamknięcie okresu | Zamrożenie | – | tak | zatwierdzenie |
 
-### 4.1 Kontrole danych przebiegu (wdrożone: P0, P1, kontrole ACTUALS)
+### 4.1 Kontrole danych przebiegu (wdrożone: P0, P1, kontrole ACTUALS, spójność ze słownikami – P2)
 
-„Uruchom przebieg” (ekran projektu) wykonuje w tle: tydzień z kalendarza okresów i przebieg `R-<Projekt>-<RRRR-MM>-T<NN>`
+„Nowy przebieg” (ekran programu, zakładka Przebieg – jedyne miejsce uruchomienia) wykonuje w tle: tydzień z kalendarza okresów i przebieg `R-<Projekt>-<RRRR-MM>-T<NN>`
 (kolejne uruchomienie w tym tygodniu – nowe przypięcie, numer #N) → import źródeł projektu (słownik „Źródła danych”,
 `docs/zrodla-danych.md`, rozdz. 2) → przypięcie: dane ACTUALS projektu z ostatniego importu (`RUN_PinBalance` w jednej
 transakcji, `docs/model-danych.md`, migracja 027) → kontrole wobec ostatniego zakończonego uruchomienia wcześniejszego tygodnia.
 Kwoty – pole kwoty ACTUALS projektu (słownik „Parametry projektu”, domyślnie waluta obiektu – PLN, `Value in Obj. Crcy`);
-pole inne niż w poprzednim przebiegu – WARNING i kontrole bez porównania z poprzednim przebiegiem; tolerancja zaokrągleń 1,00.
-Projekt CAS: przypięcie zawsze z PLN (`Value in Obj. Crcy`), kontrole – na kosztach po narzutach CAS w walucie projektu
-(kurs CAS, `docs/slowniki.md`, rozdz. 6.1; koszt brutto przebiegu = ACWP struktury), także porównanie z poprzednim
-przebiegiem; netowanie projektu do 0 i saldo okresów zamkniętych – na danych źródłowych (rozliczenie nie dostaje narzutów);
-brak kursu CAS – ERROR „Koszty po narzutach CAS” i kontrole na kosztach bez narzutów. Okresy zamknięte – okresy SAP przed
+pole inne niż w poprzednim przebiegu – WARNING i reguły bez porównania z poprzednim przebiegiem (`@JestPoprzedni = 0`).
+Przypięcie zapisuje też dane jak w strukturze programu (`RUN_BalanceEv` – tabela `ev` reguł): bez rozliczeniowych, po Wykluczeniach,
+rodzaj kosztu z Cost Category; projekt CAS: przypięcie zawsze z PLN (`Value in Obj. Crcy`), `ev` – koszty po narzutach CAS w walucie
+projektu (kurs CAS, `docs/slowniki.md`, rozdz. 6.1; koszt brutto przebiegu = ACWP struktury); netowanie projektu do 0 i saldo okresów
+zamkniętych – na danych źródłowych (`biezace`, rozliczenie nie dostaje narzutów); brak kursu CAS – ERROR „Koszty po narzutach CAS”
+i `ev` bez narzutów. Etap walidacji odświeża `ev` przed regułami (słowniki i Wykluczenia mogły się zmienić – „Wykonaj ponownie”). Okresy zamknięte – okresy SAP przed
 bieżącym okresem kalendarza, a w pierwszych 7 dniach okresu – przed poprzednim (rozliczenie poprzedniego okresu trwa);
-okresy 13–16 liczone jak 12.
+okresy 13–16 liczone jak 12. Wynik przypięcia pokazuje informacyjnie (bez wiązania danych z przebiegiem), z jakich plików ACTUALS są dane
+programu: plik, data raportu RABIT, import (w tym przebiegu albo wcześniejszy – import programu lub pełny import RABIT) i czy są nowe względem
+poprzedniego uruchomienia programu („bez zmian względem przebiegu … (te same dane)” / „nowe względem przebiegu …: pliki”) – `RunService.PinFiles`.
 
-| Kontrola | Poziom | Opis |
-|---|---|---|
-| Liczba danych | ERROR / WARNING | wierszy mniej niż w poprzednim przebiegu (zrzut jest narastający) – ERROR; koszt brutto (bez rozliczenia wychodzącego) mniejszy – WARNING |
-| Odchylenia raport do raportu | informacja | 10 największych zmian kosztu brutto po elemencie WBS i po cost elemencie |
-| Nowe cost elementy | ERROR / informacja | cost element spoza słownika Cost Category (efektywnego dla projektu) – ERROR; pierwszy raz w projekcie – informacja |
-| Netowanie projektu do 0 | ERROR / WARNING | suma wszystkich wierszy projektu w okresach zamkniętych ≠ 0 – ERROR i 10 elementów WBS z największym saldem: koszt, rozliczenie, przyczyna (brak rozliczenia – reguła rozliczenia, element statystyczny albo brak cost elementu „Rozliczeniowy” w słowniku; rozliczenie niepełne; rozliczenie większe niż koszt), ostatni okres z ruchem, główne cost elementy; koszt utworzony (`Created on`) po rozliczeniu elementu w tym okresie – WARNING |
-| Zmiany w zamkniętych okresach | WARNING | saldo elementu WBS w zamkniętym okresie inne niż w poprzednim przebiegu |
-| Jakość danych | WARNING | ujemny koszt elementu WBS narastająco (storno po rozliczeniu), wiersze w okresach późniejszych niż bieżący, waluta inna niż PLN (pole `ValueObjCrcy`) albo niż przeważająca waluta danych (inne pola kwoty), wiersze bez elementu WBS |
+**Definicja przebiegu (workflow).** Co dzieje się na którym etapie, określa szablon przebiegu – ekran Przebiegi (menu): w jednej
+kolumnie lista szablonów (startowe: „Wewnętrzny” – domyślny dla wszystkich typów, w tym SAC; „CAS” – domyślny dla CAS; „Utwórz
+szablony startowe”) i lista reguł walidacji (bez osobnego okna i zakładek). Etapy szablonu w kafelkach: klocki predefiniowane
+**Import źródeł** i **Przypięcie stanu** korzystają z konfiguracji programu (Źródła danych, Parametry programu) – zawsze etapy 1 i 2,
+bez zmian i przesuwania. Dalej etapy dokładane w edytorze: **etap walidacji** (tylko zaznaczanie reguł walidacji – lista z poziomem
+i użytymi tabelami, szukaj po nazwie albo tabeli; treść i poziom reguły – edytor reguł; bramka WARNING: „Potwierdzenie” – wstrzymuje
+do potwierdzenia z komentarzem, „Informacja” – przebieg idzie dalej; opcjonalnie zatwierdzenie po etapie), **zatwierdzenie**
+(przebieg czeka na analityka) i klocek systemowy **Zatwierdzenie ACTUALS** (najwyżej jeden; „+ Zatwierdzenie ACTUALS”): przebieg czeka,
+aż analityk zatwierdzi dane ACTUALS przebiegu z komentarzem („Zatwierdź dane ACTUALS i dalej”). **Struktura programu** (ACWP, Actual DLH,
+ACWP Labor / Material, wskaźniki) pokazuje dane ACTUALS w stanie z przypięcia ostatniego uruchomienia z zakończonym tym etapem (uruchomienie bez tego
+etapu w definicji – z zakończonym pierwszym etapem walidacji, czyli walidacją ACTUALS, także z zaakceptowanymi błędami)
+(pliki zaimportowane do końca etapu Przypięcie stanu – `@AsOf` procedur `REP_ProjectCostsByElement` / `REP_ProjectCasCosts`, migracja
+054; `SqlProjectStore.ApprovedActuals`): nowy import RABIT ani przebieg bez zatwierdzenia (także ponowne wykonanie wcześniejszego etapu –
+zatwierdzenie Nieaktualne) nie zmieniają struktury. Bez zatwierdzonego uruchomienia – ostatni import (status w zakładce Wskaźniki „ACTUALS struktury:
+ostatni import – niezatwierdzone”). Słowniki (Cost Category, Wykluczenia) – bieżące. Zapis sprawdza strukturę (`RunDefinitions.Validate`:
+etapy stałe na początku, najwyżej jedno Zatwierdzenie ACTUALS, nazwy etapów bez powtórzeń, etap walidacji z regułą, reguły istniejące
+w regułach walidacji) i zapisuje szablon w słownikach globalnych „Definicje
+przebiegów”, „Etapy przebiegów”, „Elementy kontrolne etapów” (historia; `docs/slowniki.md`, rozdz. 2;
+`Modules/Runs/Services/RunTemplateService.cs`). Szablonu wybranego w programach nie można usunąć.
+
+Program wybiera przebieg w kreatorze (krok 1) albo w Konfiguracji → „Parametry programu” → `Przebieg`. Wybór definicji przy starcie
+przebiegu (`RunDefinitions.For`): wybrany szablon (aktywny, z etapami); bez wyboru (albo wybrany nieaktywny) – aktywny szablon
+domyślny dla typu programu (typ przed „Wszystkie”); bez szablonów – **definicja wbudowana** „Standardowy (wbudowany)”: 1 Import
+źródeł → 2 Przypięcie stanu → 3 Walidacja ACTUALS (13 reguł startowych ACTUALS) → 4 Walidacja EV (8 reguł startowych EV) →
+5 Zatwierdzenie analityka (etapy walidacji z bramką „Potwierdzenie”; szablony startowe mają te same etapy – bez Zatwierdzenia ACTUALS,
+które dokłada się w edytorze szablonu; nowy szablon ma je od razu). Przebieg zamykający okres
+i w środku okresu mają tę samą definicję – wariant to informacja dla analityka (dziennik, ekran programu). Definicja (z etapami
+i regułami etapów) zapisuje się w uruchomieniu (`META_RunPin.Definition`, JSON) – zmiana szablonu nie zmienia trwającego przebiegu;
+treść reguły – z bieżącego słownika w chwili wykonania etapu. Model – `Shared/Models/Pipeline/RunWorkflow.cs`.
+
+Przebieg prowadzi się na poziomie programu: ekran programu, zakładka „Przebieg” – przebieg programu (wybrany / domyślny), etapy
+uruchomienia ze statusem i komentarzem potwierdzenia, postęp w toku (etap, reguła, czas), wyniki etapu, akcje „Nowy przebieg”,
+„Dalsze etapy”, „Potwierdź i dalej” / „Zaakceptuj błędy i dalej” (komentarz wymagany), „Wykonaj ponownie”; porównania: macierz reguł, porównanie dwóch uruchomień, okno „Zmiany ACWP” (`docs/funkcjonalnosc.md`, F06).
+Kolejne akcje etapów (np. kafelek warunkowy „jeśli przebieg zamykający – powiadomienie CAM o uzupełnieniu danych do ETC” – P6) –
+nowe akcje w `RunActions` i ich wykonanie w `RunService.ExecuteStep`.
+
+**Reguły walidacji w SQL** (F5.7, `tasks/F5.7-reguly-walidacji-sql.md`). Każda kontrola danych przebiegu to reguła w słowniku globalnym
+„Reguły walidacji” (`docs/slowniki.md`, rozdz. 2; migracja 051): **Nazwa** (wiersz macierzy wyników), **Opis** (dla analityka),
+**Poziom** (ERROR / WARNING / INFO), **Aktywna**, **Zapytanie SQL** (MS SQL) i opcjonalny **Opis wyniku**. Zapytanie zwraca tylko
+dane: **każdy zwrócony wiersz to jedna nieprawidłowość** z poziomem reguły, kolumny dowolne; brak wierszy – reguła spełniona (INFO
+„OK”). Sortowanie, grupowanie i limity – w SQL (`ORDER BY`, `GROUP BY`, `TOP`); progi, grupy wyników („Kontrola”), „Najwyżej”,
+komunikat OK i poziom na kafelku szablonu – nie istnieją. Opis wyniku: tekst z nazwami kolumn w `{ }`, np.
+`{ElementWBS}: saldo {Saldo}` (liczby dziesiętne – format polski z 2 miejscami, całkowite – bez separatora, daty – RRRR-MM-DD,
+NULL – „(brak)”); puste – „Kolumna: wartość; …”. Element wyniku – pierwsza niepusta kolumna `ElementWBS`, `CostElement`,
+`RodzajKosztu`, `WP`, `MPK`. Model, reguły startowe, kontrola zapytania – `Shared/Models/Pipeline/RunRules*.cs`; wykonanie –
+`SqlRunStore.RunRule`, wyniki – `RunService.Issues`.
+
+Dane dostępne w zapytaniu – tabele (CTE) i parametry, które aplikacja podstawia dla uruchomienia programu:
+
+| Tabela / parametr | Zawartość |
+|---|---|
+| `biezace` | ACTUALS przypięte w uruchomieniu – cała pula (także rozliczeniowe), przed narzutami, bez Wykluczeń: `ElementWBS` (NULL – sieci, zlecenia), `CostElement`, `Rok`, `Okres`, `RokOkres` (tekst „RRRR/OO”, okresy 13–16 jak 12), `OkresyWstecz` (0 – bieżący okres, 1 – poprzedni …, ujemne – przyszłe), `Rozliczeniowy` (0/1), `Waluta`, `Wiersze` (liczba wierszy źródłowych), `Kwota`, `Utworzono`, `OkresZamkniety`, `OkresPrzyszly` (0/1) |
+| `poprzednie` | to samo z poprzedniego przebiegu – ostatnie uruchomienie wcześniejszego tygodnia z tym samym polem kwoty (pusta, gdy brak) |
+| `ev` | dane jak w strukturze (`RUN_BalanceEv`): bez rozliczeniowych, po Wykluczeniach (bez partnera – partnera nie ma w danych przypiętych), CAS po narzutach: `ElementWBS`, `CostElement`, `Rok`, `Okres`, `RokOkres`, `OkresyWstecz`, `OkresZamkniety`, `RodzajKosztu` (Hours / Materials / Other), `Kwota` |
+| `ev_poprzednie` | to samo z poprzedniego przebiegu (uruchomienie sprzed reguł SQL – zapisywane przy pierwszej potrzebie) |
+| `cost_category` | Cost Category programu (wiersz programu przed globalnym): `CostElement`, `Opis`, `CostCategory` (NULL – pusta), `RodzajKosztu`, `Rozliczeniowy` |
+| `wp_cam`, `stawki`, `harmonogram` | `ElementP1S, WP, CAM, MPK` · `MPK, Rok, LaborRate` (globalne) · `WP, BAC, BacHours, BacMaterial, Waluta` |
+| parametry | `@BiezacyOkres`, `@PierwszyOtwartyOkres` („RRRR/OO”; wcześniejsze okresy – zamknięte), `@JestPoprzedni` (1/0), `@WalutaKosztow` (PLN dla pola w walucie obiektu, inaczej przeważająca w danych), `@TypProgramu`, `@Program` |
+
+Zapytanie zaczynające się od `WITH` dołącza swoje CTE do tabel uruchomienia. **Bezpieczeństwo** (O52 rozstrzygnięte – wystarczy blokada
+w aplikacji, bez osobnego loginu tylko do odczytu): tylko jedno zapytanie `SELECT` albo `WITH … SELECT`, bez średnika i bez słów `INSERT`, `UPDATE`,
+`DELETE`, `MERGE`, `EXEC`, `DROP`, `ALTER`, `CREATE`, `TRUNCATE`, `GRANT`, `REVOKE`, `DENY`, `INTO`, `OPENROWSET`/`OPENQUERY`, poleceń
+transakcji i sesji (`BEGIN`, `COMMIT`, `ROLLBACK`, `SET`, `DECLARE`, `USE` …) oraz procedur `sp_` / `xp_` (poza tekstami w apostrofach,
+nazwami w nawiasach i komentarzami) – kontrola przy zapisie (słownik) i przed wykonaniem; transakcja zawsze wycofywana; limit czasu
+30 s, najwyżej 500 wierszy (więcej – WARNING „wynik obcięty”). Błąd zapytania w przebiegu – ERROR „Reguła niepoliczona” z treścią
+błędu SQL Server (linia w zapytaniu reguły); reguła z szablonu, której nie ma w słowniku – WARNING „niesprawdzona”.
+
+**Edytor reguł** (ekran Przebiegi, lista reguł pod szablonami): nazwa, poziom, aktywna, opis, pole SQL z listą tabel i kolumn obok,
+opis wyniku; „+ Nowa”, „Kopiuj”, „Usuń” (reguły zaznaczonej w szablonach nie można usunąć), „Odrzuć zmiany”, „Zapisz regułę” (cały
+słownik z historią; pusty słownik – reguły startowe aplikacji, pierwszy zapis tworzy wszystkie wiersze). **Testuj na programie** –
+reguła (także niezapisana) na ostatnim uruchomieniu wybranego programu z przypiętymi danymi i poprzednim jak w przebiegu (okresy z dnia
+uruchomienia), bez zapisu wyników: tabela kolumn zwróconych przez SQL i opis wyniku; błąd SQL Server z numerem linii; nieznane kolumny
+w opisie wyniku.
+
+Reguły startowe (migracja 053 zapisuje je do słownika razem z szablonami „Wewnętrzny” i „CAS”; bez niej obowiązują, dopóki słownik jest pusty; te same nieprawidłowości co dawne reguły z formułami i reguły wbudowane – testy
+na bazie `RunRulesSqlTests`):
+
+| Reguła | Poziom | Dane | Logika |
+|---|---|---|---|
+| Mniej wierszy niż w poprzednim przebiegu | ERROR | biezace, poprzednie | suma `Wiersze` mniejsza niż w poprzednim (zrzut narastający) |
+| Koszt brutto mniejszy niż w poprzednim przebiegu | WARNING | biezace, poprzednie | koszt bez rozliczeniowych mniejszy o więcej niż 1 |
+| Największe odchylenia raport do raportu (– cost element) | INFO | biezace, poprzednie | 10 elementów WBS (cost elementów) z największą zmianą salda, \|zmiana\| ≥ 1 |
+| Cost element spoza słownika Cost Category | ERROR | biezace, cost_category | cost element bez wpisu w Cost Category programu |
+| Cost element pierwszy raz w programie | INFO | biezace, poprzednie, cost_category | cost element ze słownika, którego w poprzednim przebiegu nie było |
+| Netowanie do 0 w okresach zamkniętych | ERROR | biezace | saldo programu w okresach zamkniętych > 1: 10 elementów WBS z saldem – koszt, rozliczenie, przyczyna, ostatni okres z ruchem, saldo programu |
+| Koszt utworzony po rozliczeniu | WARNING | biezace | program nie netuje się do 0: koszt utworzony później niż rozliczenie elementu w okresie |
+| Zmiana salda okresu zamkniętego | WARNING | biezace, poprzednie | saldo elementu WBS w okresie zamkniętym zmienione o więcej niż 1 |
+| Ujemny koszt elementu WBS | WARNING | biezace | saldo narastająco < −1 (koszt i rozliczenie) |
+| Wiersze w okresach przyszłych / Waluta inna niż waluta kosztów / Wiersze bez elementu WBS | WARNING | biezace | jak nazwa (waluta – `@WalutaKosztow`) |
+| Cost element bez Cost Category | WARNING | ev, cost_category | cost element kosztu z pustą Cost Category |
+| MPK bez stawki wydziału na rok | ERROR | wp_cam, stawki | MPK WP bez stawki na rok bieżącego okresu, lista WP |
+| WP bez MPK / WP bez budżetu | WARNING | wp_cam, harmonogram | WP bez MPK; WP bez BAC, BAC HOURS i BAC MATERIAL |
+| Nowy rodzaj kosztu w programie | WARNING | ev, ev_poprzednie | rodzaj z kosztem (\|kwota\| > 1), którego w poprzednim przebiegu nie było |
+| Skok przyrostu kosztu | WARNING | ev | przyrost rodzaju w bieżącym okresie > 3 × średni przyrost z 6 okresów przed bieżącym |
+| Spadek kosztu narastająco w rodzaju / Zmiana rodzaju kosztu w zamkniętych okresach | WARNING | ev, ev_poprzednie | koszt rodzaju narastająco / w okresach zamkniętych zmieniony o więcej niż 1 |
+| Koszt brutto nie większy niż BAC × 1,1 | WARNING | ev, harmonogram | przykład uzgodnienia (zamiast reguł uzgodnień z miarami) – poza szablonami startowymi |
+
+Wyniki w programie (zakładka Przebieg, O53 – bez wykresów i porównań okresów; wynik zapytania i problemy):
+- wyniki etapu po regułach – poziom (ERROR / WARNING / INFO / OK), nazwa, liczba problemów; najpierw najgorsze;
+- etapy uruchomienia – poziomy pasek kafelków nad wynikami (status, liczby wyników, komentarz potwierdzenia);
+- wybrana reguła – **kontekst sprawdzenia**: co sprawdza (opis reguły); dane (tabele użyte w zapytaniu z opisem) i zakres uruchomienia
+  (bieżący okres, okresy zamknięte, poprzedni przebieg do porównania) – w podpowiedzi;
+- **wynik zapytania**: najpierw kolumny zwrócone przez SQL (`RUN_Issue.Details`, JSON; kolumny liczbowe – do prawej, kwoty z separatorem
+  tysięcy), potem **Problem** – kolumna wyniku `Problem`, a bez niej opis wyniku (np. netowanie: „rozliczenie niepełne” / „rozliczenie
+  większe niż koszt” / „brak rozliczenia”); **Wskazówka** (kolumna `Wskazowka` albo opis wyniku) – pod tabelą: wspólna dla wszystkich
+  wierszy raz, inaczej zaznaczonego wiersza; poziom – na liście reguł (Excel – z Nr, Poziomem i Wskazówką);
+- **linie ACTUALS** zaznaczonego wiersza – zakres z kolumn wiersza: `ElementWBS`, `CostElement` albo `RodzajKosztu` (cost elementy
+  rodzaju w danych przypiętych), okres – `RokOkres` albo `Okres` „RRRR/OO”, albo `Rok` i `Okres` (okres 12 obejmuje 13–16); bez elementu
+  WBS – elementy WBS programu z danych przypiętych; najnowsze wersje plików zaimportowane do końca przypięcia; 500 największych wg
+  |kwoty| (liczba i suma wszystkich): okres, element WBS, cost element, Created on, opis, partner, zamówienie, faktura, zlecenie, ilość,
+  kwota, plik i wiersz (`SqlRunStore.ActualsLines`, `RunOverview.ActualsScope`); wiersz bez tych kolumn – bez linii;
+- **Wynik do Excela** – wynik reguły i wszystkie linie ACTUALS zaznaczonego wiersza; „Pokaż zmiany” – okno „Zmiany ACWP” dla wiersza
+  (kolumna `ElementWBS`, `RodzajKosztu` albo `CostElement` – dla tej wartości, inaczej cały program).
+
+Zakładki porównań: macierz reguła × uruchomienia (wiersz – nazwa reguły; „n ERROR”, „n WARNING”, „n INFO”, „OK”) i porównanie dwóch
+uruchomień – wiersze wyników tej samej reguły dopasowane po wartościach kolumn tekstowych, różnice w kolumnach liczbowych; nowe,
+zmienione, rozwiązane.
 
 Wynik: stan uruchomienia („zakończony”, „zakończony z ostrzeżeniami”, „zakończony z błędami”, „przerwany błędem”;
 uruchomienie bez działającej aplikacji – „przerwany (brak zakończenia)”), wyniki kontroli, dziennik, powiadomienia
@@ -220,7 +340,7 @@ Kontrole wymagające innych danych spoza zrzutu (odbiorca rozliczenia, suma kont
 |---|---|
 | **Cel** | Założyć przebieg projektu za tydzień. |
 | **Działanie** | Wybór tygodnia (domyślnie bieżący; dziś zawsze tydzień bieżący z kalendarza okresów – wybór niewdrożony). Aplikacja pokazuje okres i to, czy przebieg zamyka okres (kalendarz okresów), oraz datę stanu (`docs/ev-obliczenia.md`, rozdz. 2). |
-| **Bramka wejścia** | tydzień jest w kalendarzu okresów (ERROR); przebieg projektu nie jest właśnie liczony (blokada `run-<Projekt>`, rozdz. 1.4) – kolejne uruchomienie w tym samym tygodniu to nowe przypięcie #N tego samego przebiegu (rozdz. 4.1); projekt gotowy – wymagane słowniki projektu dla typu (`docs/funkcjonalnosc.md`, F02) – sprawdza ekran projektu („Uruchom przebieg” aktywne tylko dla projektu gotowego; sama usługa przebiegu gotowości nie sprawdza); zgodna wersja aplikacji – kontrola przy starcie aplikacji (`docs/architektura.md`, rozdz. 3); świeżość danych produkcyjnych – data odświeżenia `vAHDD` (WARNING – niewdrożone). |
+| **Bramka wejścia** | tydzień jest w kalendarzu okresów (ERROR); przebieg projektu nie jest właśnie liczony (blokada `run-<Projekt>`, rozdz. 1.4) – kolejne uruchomienie w tym samym tygodniu to nowe przypięcie #N tego samego przebiegu (rozdz. 4.1); bez kontroli gotowości projektu – czego wymaga przebieg (słowniki, budżet, stawki), sprawdzają reguły etapów walidacji (rozdz. 4.1); zgodna wersja aplikacji – kontrola przy starcie aplikacji (`docs/architektura.md`, rozdz. 3); świeżość danych produkcyjnych – data odświeżenia `vAHDD` (WARNING – niewdrożone). |
 | **Efekt** | Przebieg `R-<Projekt>-<RRRR-MM>-T<NN>`, pierwsze zdarzenie w dzienniku. |
 | **Przekazanie** | P1. |
 
@@ -240,6 +360,7 @@ Kontrole wymagające innych danych spoza zrzutu (odbiorca rozliczenia, suma kont
 |---|---|
 | **Cel** | Nie dopuścić niespójnych danych i słowników do obliczeń. |
 | **Działanie** | Poprawność samych słowników zapewnia walidacja przy zapisie (`docs/slowniki.md`, rozdz. 5), a plików – import (`docs/zrodla-danych.md`, rozdz. 8). Tu: spójność danych projektu ze słownikami i okresem. |
+| **Wdrożone** | kontrole spójności ze słownikami w przebiegu (rozdz. 4.1): cost element spoza Cost Category (ERROR), cost element bez kategorii (WARNING), MPK WP bez stawki na rok (ERROR), WP bez MPK (WARNING), WP bez budżetu (WARNING). Niewdrożone: daty księgowania względem okresu – zrzut ACTUALS nie ma daty księgowania (tylko `Created on`, które po rozliczeniu legalnie jest późniejsze; kontrola okresów przyszłych – rozdz. 4.1) i znaczenie okresu nie jest polem definicji źródła (`docs/zrodla-danych.md`, rozdz. 2); duplikaty między częściami źródła – klucz wiersza ACTUALS nieustalony (O27, O50). Programy CAS: koszt po narzutach CAS (słowniki globalne, O37 rozstrzygnięte) – ETC Cost liczy ta sama stawka MPK, więc kontrola MPK obowiązuje także w CAS (wyłączenie – reguła „MPK bez stawki wydziału na rok” w edytorze reguł albo w szablonie). |
 | **Kontrole** | MPK z kosztów bez stawki na dany rok – stawki wydziałów (klucz MPK + rok) albo, w CAS, stawki CAS (ERROR); numer elementu kosztowego bez wpisu w efektywnym słowniku Cost Category (ERROR – O25; naprawa: pozycja w słowniku projektu); numer bez kategorii (WARNING); WP bez budżetu (WARNING); daty księgowania niezgodne z okresem przebiegu według znaczenia okresu w definicji źródła (ERROR); duplikaty wierszy między częściami źródła (ERROR). |
 | **Przy ERROR** | **Popraw w aplikacji** (ekran Słowniki z filtrem na problem) → **Przypnij ponownie** (P1) i waliduj. |
 | **Efekt** | Problemy przebiegu; WARNING trafiają do raportu przebiegu. |
@@ -310,6 +431,14 @@ Kontrole wymagające innych danych spoza zrzutu (odbiorca rozliczenia, suma kont
 
 ### Z. Zamknięcie okresu
 
+**Wdrożone (decyzja użytkownika 2026-10-20) – znacznik zamknięcia bez osobnego zatwierdzenia:** każdy przebieg kończy się tak samo
+(ostatni etap szablonu, np. zatwierdzenie analityka, zapisuje wynik niezależnie od tego, czy tydzień jest zwykły, czy zamykający).
+Tydzień oznaczony w kalendarzu okresów jako zamknięcie (`META_Run.IsClosing`) – uruchomienia „tydzień zamykający”; ostatnie
+zakończone uruchomienie tego tygodnia (zakończony / z ostrzeżeniami / z błędami) to **zamknięcie okresu RRRR-MM** (★,
+`RunPinRow.IsPeriodClose`, `SqlRunStore.ClosingPins`) – znacznik na listach uruchomień (zakładka Przebieg, lista programów, okno
+„Zmiany ACWP”); porównanie uruchomień – wszystkie zamknięcia do wyboru i „Tylko zamknięcia okresów” (domyślnie dwa ostatnie –
+„od zamknięcia do zamknięcia”). Bez zamrażania przebiegu i bez rewizji EV (F8.2). Opis docelowy poniżej.
+
 | | |
 |---|---|
 | **Bramka wejścia** | Przebieg zamykający; etapy P0–P9 zakończone. |
@@ -322,7 +451,7 @@ Kontrole wymagające innych danych spoza zrzutu (odbiorca rozliczenia, suma kont
 
 | Zdarzenie | Zachowanie |
 |---|---|
-| **Zmiana po przypięciu** – nowe wersje plików, zmiany słowników | Baner w przebiegu: co się zmieniło, kto, kiedy, liczba zmian. **Kontynuuj na przypiętym stanie** – decyzja w dzienniku, baner znika dla tych zmian. **Przypnij ponownie** – nowy znacznik stanu (P1); etapy od P2 – Nieaktualne. |
+| **Zmiana po przypięciu** – nowe wersje plików, zmiany słowników | Wdrożone w wersji informacyjnej (F5.3): w zakładce Przebieg, dla ostatniego uruchomienia (nie w toku), baner – nowe wersje plików ACTUALS z danymi programu zaimportowane po przypięciu (plik, import) i słowniki przebiegu zmienione po przypięciu (Cost Category, Wykluczenia, WP i CAM, Harmonogram i budżet, Stawki wydziałów, Kursy walut, Reguły walidacji – liczba wierszy, kto, kiedy; `RunOverview.ChangesSincePin`). Bez decyzji i unieważniania etapów: przebieg liczy na przypiętym stanie; słowniki – „Wykonaj ponownie” etapu walidacji, nowe pliki – „Nowy przebieg” (kolejne przypięcie). |
 | **Kontynuacja przez inną osobę** | Każdy Analityk może wykonać dowolną akcję w dowolnym przebiegu. Ekran przebiegu pokazuje, kto ostatnio pracował; każda akcja jest w dzienniku z kontem AD. |
 
 Zamrożonego przebiegu zmiany nie dotyczą.

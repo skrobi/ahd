@@ -57,7 +57,7 @@
                   VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling"
                   BeginningEdit="OnBeginningEdit" PreparingCellForEdit="OnPreparingCellForEdit" CellEditEnding="OnCellEditEnding"
                   RowEditEnding="OnRowEditEnding" CurrentCellChanged="OnCurrentCellChanged" PreviewKeyDown="OnPreviewKeyDown"
-                  LostKeyboardFocus="OnLostKeyboardFocus" IsVisibleChanged="OnIsVisibleChanged">
+                  LostKeyboardFocus="OnLostKeyboardFocus" IsVisibleChanged="OnIsVisibleChanged" MouseDoubleClick="OnMouseDoubleClick">
             <DataGrid.RowStyle>
                 <Style TargetType="DataGridRow">
                     <Style.Triggers>
@@ -68,7 +68,7 @@
                         <!-- Wiersz z niezapisanymi zmianami (zapis w toku albo nieudany – komunikat w linii pod nagłówkiem projektu). -->
                         <DataTrigger Binding="{Binding HasChanges}" Value="True">
                             <Setter Property="Background" Value="{StaticResource WarnSoft}" />
-                            <Setter Property="ToolTip" Value="Niezapisane zmiany – zapis w toku albo nieudany (komunikat pod nagłówkiem projektu); „Odrzuć niezapisane” cofa" />
+                            <Setter Property="ToolTip" Value="Niezapisane zmiany – zapis w toku albo nieudany (komunikat pod nagłówkiem programu); „Odrzuć niezapisane” cofa" />
                         </DataTrigger>
                     </Style.Triggers>
                 </Style>

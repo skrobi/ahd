@@ -61,6 +61,26 @@ public sealed class StructureViewModel : ObservableObject
     /// <summary>Lista wyboru Cost Category – kategorie ze słownika „Kategorie WBS” projektu.</summary>
     public BulkObservableCollection<LookupOption> Categories { get; } = [];
 
+    /// <summary>Dwuklik w komórce ACWP (wiersz, klucz kolumny: Acwp, AcwpLabor, AcwpMaterial, AcwpOther) – okno „Zmiany ACWP”.</summary>
+    public Action<StructureRowViewModel, string>? OpenAcwpChanges { get; set; }
+
+    /// <summary>Elementy WBS wiersza i jego poddrzewa (wszystkie wiersze, także zwinięte) – zakres okna „Zmiany ACWP”.</summary>
+    public IReadOnlyList<string> WbsElementsOf(StructureRowViewModel row)
+    {
+        var children = _all.Where(r => r.Row.ParentId is not null).ToLookup(r => r.Row.ParentId!);
+        var result = new List<string>();
+        var stack = new Stack<StructureRowViewModel>([row]);
+        while (stack.Count > 0)
+        {
+            var current = stack.Pop();
+            if (current.Row.WbsElement is { Length: > 0 } wbs)
+                result.Add(wbs);
+            foreach (var child in children[current.Row.Id])
+                stack.Push(child);
+        }
+        return result.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+    }
+
     /// <summary>Wiersz bieżącej komórki – podświetlony w tabeli (IsCurrent), także po odświeżeniu danych.</summary>
     public StructureRowViewModel? Selected
     {

@@ -63,15 +63,24 @@ Słowniki, kreator projektu), `docs/zrodla-danych.md` (struktura P1S).
 | Stawki wydziałów | `MPK` (miejsce powstawania kosztów), `Department` (opis MPK, opcjonalny), `Year`, `Labor Rate`, `Overhead` (opcjonalny) | `MPK` + `Year` | łączenie źródeł – godziny na koszt (P3) |
 | Kursy walut | waluta, `Od` – `Do` (`Do` puste – bezterminowo), `Kurs` (do PLN: ile PLN za jednostkę), `Kurs CAS` (projekty CAS – rozdz. 6.1); wiersz ma Kurs albo Kurs CAS; okresy jednej waluty się nie nakładają (migracja 045 – wcześniej okres RRRR-MM); dane startowe 046 – przybliżone kursy USD 2024-01 … 2026-10 do zastąpienia kursami finansów | waluta + `Od` | Kurs – przeliczenia walut w strukturze projektu (kurs obowiązujący w dniu stanu), P3, P8; Kurs CAS – koszty projektów CAS |
 | Cost Category | numer elementu kosztowego → Opis, Obszar, Cost Category, Rozliczeniowy, Rodzaj kosztu (Hours / Materials / Other, puste – Other: podział ACWP na ACWP Hours / ACWP Materials / ACWP Other w strukturze projektu, suma = ACWP; migracja 038 – wstępnie wg Cost Category zawierającego „labor” / „material”; 040 – konta materiałowe 0051105550 PZL Mat Consump, 0051102550 PZL Mat Comsump-SAC, 0051103550 IC Profit Mat-SAC jako Materials), Grupa narzutowa CAS (wybór z „Grup narzutowych CAS” – zapisany identyfikator grupy) (rozdz. 6) | numer elementu kosztowego | walidacja (P2), łączenie źródeł (P3), raport kosztów CES |
-| Pule narzutu CAS | pula → `Kolejność` kolumny w raporcie, `Rodzaj` (Koszt – TOTAL COST, FCCOM – TOTAL FCCOM), opis (rozdz. 6.1) | pula | raport kosztów CES, formuły, wskaźniki |
+| Kategorie narzutu CAS | kategoria → `Kolejność` kolumny w raporcie, `Rodzaj` (Koszt – TOTAL COST, FCCOM – TOTAL FCCOM), opis (rozdz. 6.1) | kategoria | raport kosztów CES, formuły, wskaźniki |
 | Grupy narzutowe CAS | grupa narzutowa elementu kosztowego → opis (rozdz. 6.1) | grupa | raport kosztów CES, formuły, Cost Category |
-| Formuły narzutów CAS | grupa + pula → formuła z klocków; wiersz = pula naliczana w grupie; bez pozycji na liście ekranu Słowniki – edycja tylko w oknie „Formuły narzutów” (rozdz. 6.1) | grupa + pula | raport kosztów CES |
-| Wskaźniki narzutu CAS | pula → `Wskaźnik` obowiązujący `Od` – `Do` (zwykle rok; `Do` puste – bezterminowo) (rozdz. 6.1) | pula + `Od` | raport kosztów CES |
+| Formuły narzutów CAS | grupa + kategoria → formuła z klocków; wiersz = kategoria naliczana w grupie; bez pozycji na liście ekranu Słowniki – edycja tylko w oknie „Formuły narzutów” (rozdz. 6.1) | grupa + kategoria | raport kosztów CES |
+| Wskaźniki narzutu CAS | kategoria → `Wskaźnik` obowiązujący `Od` – `Do` (zwykle rok; `Do` puste – bezterminowo) (rozdz. 6.1) | `Kategoria` + `Od` | raport kosztów CES |
 | Osoby | pracownicy z HR – „Dodaj z HR” (PZLHRPROD `HR.ORG`, osoby z niepustym `USRID`): okno szukania po USRID, PERNR, imieniu i nazwisku, e-mailu, dziale; „Dodaj” przy wyniku odkłada osobę na listę, „Zatwierdź” – podgląd z samymi nowymi osobami (nic nie jest usuwane): USRID (numer znaczka, login), imię i nazwisko, imię, nazwisko, e-mail, MPK (`KOSTL`), dział (`SHORT`, `LONG`), stanowisko (`STEXT`), pion, manager, PERNR | USRID | wybór CAM w strukturze projektu i słowniku „WP i CAM” (zapisywany USRID) |
 | Wskaźniki DJK | prefiks grupy stanowisk (IPT, np. `W2`, `W51`) → `Udział DJK` (0–1) – godziny jakości doliczane do godzin TECH / TECH_PON; liczy się najdłuższy pasujący prefiks; dane startowe (migracja 023): W2–W4 10%, W5 15%, W6 20% | grupa stanowisk | Operational EV struktury projektu (`docs/zrodla-danych.md`, rozdz. 6) |
 | Parametry produkcji | `Okno produktywności IPT (mies.)` (12), `Statusy materiałów dostarczonych` (DOST, WYD), `Wartość materiałów ÷ (1 + Z_CLO)` (tak); puste słowniki – wartości raportu S70MR (informacja na ekranie projektu) | parametr | odczyt danych produkcyjnych (`sql/pzlprod/produkcja.sql`) |
+| Definicje przebiegów | szablon przebiegu (workflow, `docs/pipeline-fazy.md`, rozdz. 4.1): `Definicja` (nazwa) → `Typ programu` – typ, dla którego szablon jest domyślny (Wszystkie / WEWNETRZNY / SAC / CAS), `Aktywna`, `Opis`; `Program`, `Przebieg` – nieużywane (puste, „Każdy”); program wybiera szablon w „Parametry projektu” (`Przebieg`), bez wyboru – aktywny szablon swojego typu przed „Wszystkie”; bez szablonów – definicja wbudowana; szablony startowe „Wewnętrzny” (Wszystkie) i „CAS” – przycisk na ekranie Przebiegi | definicja | przebieg – etapy i bramki (P0–P2) |
+| Etapy przebiegów | `Definicja`, `Kolejność` → `Etap` (nazwa), `Akcja` (Import źródeł / Przypięcie stanu – stałe, etapy 1 i 2; Kontrole; Zatwierdzenie), `Bramka WARNING` (Potwierdzenie / Informacja), `Zatwierdzenie` (tak – etap czeka na potwierdzenie), `Opis` | definicja + kolejność | etapy przebiegu |
+| Elementy kontrolne etapów | `Definicja`, `Etap`, `Element` (nazwa reguły walidacji) → `Aktywny`, `Opis`; poziom – w regule | definicja + etap + element | reguły etapu walidacji przebiegu |
+| Reguły walidacji | reguły walidacji przebiegu w SQL (`docs/pipeline-fazy.md`, rozdz. 4.1): `Nazwa` → `Opis`, `Poziom` (ERROR / WARNING / INFO), `Aktywna`, `Zapytanie SQL` (jeden SELECT / WITH na tabelach danych uruchomienia; każdy zwrócony wiersz – nieprawidłowość), `Opis wyniku` (kolumny w { }); edycja – edytor reguł na ekranie Przebiegi; pusty słownik – reguły startowe aplikacji (pierwszy zapis tworzy wiersze); migracja 051 | nazwa | etapy walidacji przebiegu |
 
 Definicje źródeł i ich prefiksy są konfiguracją importu – `docs/zrodla-danych.md`, rozdz. 2.
+
+Słowniki przebiegu (Definicje przebiegów, Etapy przebiegów, Elementy kontrolne etapów, Reguły walidacji) nie są na liście ekranu
+Słowniki – szablony (kafelki etapów) i reguły walidacji (edytor SQL z testem na programie) edytuje ekran Przebiegi (ta sama historia
+i walidacja przy zapisie; `docs/funkcjonalnosc.md`, rozdz. 2). Słowniki „Kontrole przebiegu” (047) i „Reguły uzgodnień” (049) –
+usunięte migracją 051 (reguły SQL, F5.7).
 
 Na ekranie Słowniki przycisk **„Struktura P1S (PZLPROD)”** otwiera drzewo `LOG.WBS` (Z_KAT_ZBIORCZA → Z_KATEGORIA →
 Z_OPIS → PROJORG → elementy) z wyszukiwarką – tylko do odczytu, to nie jest słownik (`docs/zrodla-danych.md`, rozdz. 5.3).
@@ -88,7 +97,7 @@ Z_OPIS → PROJORG → elementy) z wyszukiwarką – tylko do odczytu, to nie je
 | Cost Category – zmiany w projekcie | zmiany i uzupełnienia słownika globalnego Cost Category dla projektu (rozdz. 6) | numer elementu kosztowego |
 | Wykluczenia | elementy pomijane na późniejszym etapie analizy: kombinacja `Cost Element`, `WBS Element`, `Partner object` (co najmniej jedno z trzech) + wymagany opis (rozdz. 7) – **opcjonalny** | kombinacja trzech pól |
 | Źródła danych | definicje źródeł (Administracja) importowane dla projektu – „Importuj źródła projektu” importuje tylko ich pliki: `Definicja źródła` (lista aktywnych definicji), `Opis`; definicja nieistniejąca albo nieaktywna – WARNING – **opcjonalny** | Definicja źródła |
-| Parametry projektu | `Parametr`, `Wartość`, `Opis`; parametr `Pole kwoty ACTUALS` – **zestaw walutowy ACTUALS** (kwota i jej kolumna waluty) dla ACWP struktury, raportu kosztów, ETC Cost i przebiegu: `ValueObjCrcy` (Object Currency / Value in Obj. Crcy), `ValueRepCur` (Report currency / Val.in rep.cur.) – waluta transakcji (Value TranCurr) nie jest zestawem (kwoty w różnych walutach się nie sumują – decyzja finansów); ustawiany w kreatorze projektu (krok 1), zmiana – zakładka Konfiguracja; waluta projektu – kod z kolumny waluty zestawu w danych ACTUALS projektu (kilka kodów – ostrzeżenie, kwoty w różnych walutach się nie sumują); inna wartość – ERROR; brak wiersza – `ValueObjCrcy` – **opcjonalny** | Parametr |
+| Parametry projektu | `Parametr`, `Wartość`, `Opis`; parametr `Pole kwoty ACTUALS` – **zestaw walutowy ACTUALS** (kwota i jej kolumna waluty) dla ACWP struktury, raportu kosztów, ETC Cost i przebiegu: `ValueObjCrcy` (Object Currency / Value in Obj. Crcy), `ValueRepCur` (Report currency / Val.in rep.cur.) – waluta transakcji (Value TranCurr) nie jest zestawem (kwoty w różnych walutach się nie sumują – decyzja finansów); ustawiany w kreatorze projektu (krok 1), zmiana – zakładka Konfiguracja; waluta projektu – kod z kolumny waluty zestawu w danych ACTUALS projektu (kilka kodów – ostrzeżenie, kwoty w różnych walutach się nie sumują); inna wartość – ERROR; brak wiersza – `ValueObjCrcy`; parametr `Przebieg` – szablon przebiegu programu (ekran Przebiegi; lista aktywnych szablonów z etapami), ustawiany w kreatorze (krok 1 – domyślnie szablon domyślny dla typu), zmiana – zakładka Konfiguracja; brak wiersza albo szablon nieaktywny – szablon domyślny dla typu programu (`docs/pipeline-fazy.md`, rozdz. 4.1) – **opcjonalny** | Parametr |
 
 - Słowniki projektu powstają w kreatorze projektu z plików Excel (szablon z elementami projektu – jeden
   plik z arkuszami albo osobne pliki / CSV) i są dalej utrzymywane w aplikacji (`docs/funkcjonalnosc.md`, F01, F03):
@@ -107,12 +116,13 @@ Z_OPIS → PROJORG → elementy) z wyszukiwarką – tylko do odczytu, to nie je
 ## 4. Typ projektu a słowniki
 
 Wszystkie typy projektów przechodzą ten sam przebieg (`docs/pipeline-fazy.md`). Typ wyznacza zestaw słowników
-pobieranych do przebiegu oraz wymaganych do jego uruchomienia:
+pobieranych do przebiegu; czego przebieg wymaga, sprawdzają reguły walidacji etapów przebiegu (szablon programu), a nie kontrola
+przed startem:
 
-| Typ | Słowniki projektu wymagane | Słowniki szczególne | Waluta wyniku | Wynik dodatkowy |
+| Typ | Słowniki projektu używane | Słowniki szczególne | Waluta wyniku | Wynik dodatkowy |
 |---|---|---|---|---|
 | SAC (Sikorsky) | WP i CAM, Harmonogram i budżet | Stawki wydziałów (bieżące), Kursy walut (USD) | USD | plik dla Cobra |
-| CAS Compliance | WP i CAM, Harmonogram i budżet | narzuty CAS – słowniki globalne (rozdz. 6.1): Pule, Grupy, Formuły i Wskaźniki narzutu CAS, grupa narzutowa w Cost Category, Kurs CAS w „Kursy walut” – koszty po narzutach (TOTAL COST) | PLN | – |
+| CAS Compliance | WP i CAM, Harmonogram i budżet | narzuty CAS – słowniki globalne (rozdz. 6.1): Kategorie, Grupy, Formuły i Wskaźniki narzutu CAS, grupa narzutowa w Cost Category, Kurs CAS w „Kursy walut” – koszty po narzutach (TOTAL COST) | PLN | – |
 | Wewnętrzny | WP i CAM, Harmonogram i budżet | – | PLN | – |
 
 Słowniki globalne (rozdz. 2) i „Cost Category – zmiany w projekcie” są pobierane dla każdego typu.
@@ -141,7 +151,7 @@ Kontekst biznesowy typów – `readme.md`.
 |---|---|
 | element P1S należy do projektu (kod P1S elementu nakładki – `Legacy WBS` – albo pod nim, także w `LOG.WBS`) i nie należy do innego projektu | ERROR |
 | jeden WP na element P1S | ERROR |
-| WP bez CAM – zapis dozwolony (najpierw wskazuje się WP, CAM uzupełnia się później); w strukturze brak „WP bez CAM”; gotowość projektu – ERROR (blokuje przebieg) | WARNING |
+| WP bez CAM – zapis dozwolony (najpierw wskazuje się WP, CAM uzupełnia się później); w strukturze brak „WP bez CAM” | WARNING |
 | CAM wybierany z listy osób; przy wczytaniu z Excela CAM spoza listy osób | – / WARNING |
 | Cost Category spoza słownika „Kategorie WBS” projektu (sprawdzane, gdy słownik ma pozycje) | WARNING |
 
@@ -171,11 +181,11 @@ Kontekst biznesowy typów – `readme.md`.
 | numer elementu kosztowego unikalny w słowniku (globalnym / zmianach projektu); zapisywany jako tekst – numer liczbowy uzupełniany zerami do 10 znaków | ERROR |
 | numer w słowniku bez Cost Category | WARNING |
 | „Grupa narzutowa CAS” spoza słownika „Grupy narzutowe CAS” albo pusta | uwaga w raporcie kosztów CES (wiersz bez narzutów) |
-| „Wskaźniki narzutu CAS”: pula z listy, `Od` wymagane, `Wskaźnik` ≥ 0 (15 cyfr znaczących, jak w Excelu); okresy `Od`–`Do` jednej puli bez nakładania | ERROR |
-| „Pule narzutu CAS”: nazwa bez „+” i inna niż „Base cost elements”; `Kolejność` i `Rodzaj` wymagane / kolejność powtórzona | ERROR / WARNING |
-| „Formuły narzutów CAS”: formuła poprawnie zbudowana (składnik – operator – składnik, nawiasy domknięte); narzut puli zależny od niego samego (wprost albo przez narzuty innych pul grupy) | ERROR |
-| usunięcie puli albo grupy używanej w formułach, wskaźnikach albo Cost Category (globalnie lub w projekcie) | ERROR |
-| pula albo składnik formuły spoza „Pul narzutu CAS”, brak wskaźnika naliczanej puli | uwaga w raporcie kosztów CES |
+| „Wskaźniki narzutu CAS”: `Kategoria` z listy, `Od` wymagane, `Wskaźnik` ≥ 0 (15 cyfr znaczących, jak w Excelu); okresy `Od`–`Do` jednej kategorii bez nakładania | ERROR |
+| „Kategorie narzutu CAS”: nazwa bez „+” i inna niż „Base cost elements”; `Kolejność` i `Rodzaj` wymagane / kolejność powtórzona | ERROR / WARNING |
+| „Formuły narzutów CAS”: formuła poprawnie zbudowana (składnik – operator – składnik, nawiasy domknięte); narzut kategorii zależny od niego samego (wprost albo przez narzuty innych kategorii grupy) | ERROR |
+| usunięcie kategorii albo grupy używanej w formułach, wskaźnikach albo Cost Category (globalnie lub w projekcie) | ERROR |
+| kategoria albo składnik formuły spoza „Kategorii narzutu CAS”, brak wskaźnika naliczanej kategorii | uwaga w raporcie kosztów CES |
 
 ### 5.6 Wykluczenia
 
@@ -194,6 +204,11 @@ Wydzielenia godzin z elementu P1S (np. Paint) to węzły wirtualne nakładki z k
 |---|---|
 | „Wskaźniki DJK”: udział od 0 do 1; prefiks zawarty w innym (W5 i W51) | ERROR / WARNING |
 | „Parametry produkcji”: okno 1–120 miesięcy; statusy niepuste; Z_CLO – tak / nie | ERROR |
+| „Reguły walidacji”: zapytanie SQL puste, nie jedno zapytanie SELECT / WITH, ze średnikiem albo z instrukcją zmieniającą dane, schemat, uprawnienia, transakcję lub sesję (INSERT, UPDATE, DELETE, MERGE, EXEC, DROP, ALTER, CREATE, TRUNCATE, GRANT, SELECT … INTO …, procedury sp_ / xp_ – `RunRules.Check`; to samo przed wykonaniem w przebiegu) | ERROR |
+| „Definicje przebiegów”: dwa aktywne szablony domyślne dla tego samego typu programu | ERROR |
+| Szablon przebiegu (zapis z ekranu Przebiegi): etapy stałe Import źródeł i Przypięcie stanu – po jednym, jako etapy 1 i 2; nazwy etapów bez powtórzeń; etap walidacji bez reguł; reguły w etapie innym niż walidacja; nieznana reguła (spoza „Reguł walidacji”) | ERROR |
+| „Etapy przebiegów”: kolejność nie jest liczbą od 1; nazwa etapu powtórzona w definicji | ERROR |
+| „Elementy kontrolne etapów”: element pusty; nieznaną regułę odrzuca zapis szablonu | ERROR |
 
 ### 5.8 Kategorie WBS
 
@@ -234,42 +249,42 @@ W projektach CAS na koszty Cost Elementów (także suche koszty – materiały, 
 te same wskaźniki dla wszystkich projektów, zmienne w czasie. Reguła odwzorowuje arkusz finansów (formuły narzutów
 po Cost Elementach dla lat 2025–2026).
 
-- **Powiązania identyfikatorem:** pule i grupy narzutowe są wskazywane identyfikatorem wiersza słownika (RowId), nie
-  nazwą – formuły, wskaźniki („Pula”) i Cost Category („Grupa narzutowa CAS”) zapisują identyfikator, a tabele, historia,
-  Excel i raport pokazują bieżącą nazwę. Zmiana nazwy puli albo grupy w jej słowniku jest od razu widoczna wszędzie;
-  puli ani grupy używanej gdzie indziej nie można usunąć (ERROR z nazwą słownika, który jej używa). W Excelu kolumny
+- **Powiązania identyfikatorem:** kategorie i grupy narzutowe są wskazywane identyfikatorem wiersza słownika (RowId), nie
+  nazwą – formuły i wskaźniki („Kategoria”) i Cost Category („Grupa narzutowa CAS”) zapisują identyfikator, a tabele, historia,
+  Excel i raport pokazują bieżącą nazwę. Zmiana nazwy kategorii albo grupy w jej słowniku jest od razu widoczna wszędzie;
+  kategorii ani grupy używanej gdzie indziej nie można usunąć (ERROR z nazwą słownika, który jej używa). W Excelu kolumny
   powiązane mają nazwy (lista w arkuszu „Listy”) – wczytanie zamienia nazwę na identyfikator.
 - **Mapowanie:** kolumna „Grupa narzutowa CAS” słownika Cost Category – globalnie, ze zmianą w projekcie jak pozostałe
   kolumny (słownik efektywny). Grupy nie da się wywnioskować z Cost Category: np. „Engineering labor” to ENG labor
   (ENG Fringe + ENG OH) albo ENG LL labor (praca leasingowana – bez ENG Fringe).
 - **Grupy narzutowe CAS** (dane startowe – migracja 034): MFG labor, ENG labor, ENG LL labor, MSV labor, GS labor,
   MTL labor, Direct Materials, Direct Services, Travel, ODC (bez formuł – bez narzutów).
-- **Pule narzutu CAS** (dane startowe – migracja 034; kolejność kolumn raportu): MFG Fringe, MFG OH, ENG Fringe,
+- **Kategorie narzutu CAS** (dane startowe – migracja 034; kolejność kolumn raportu): MFG Fringe, MFG OH, ENG Fringe,
   ENG OH, MTL Fringe, Material Handling (MTL), Miscellaneous Material Pool (MMP), General Services (GS), GS Fringe,
   MSV Fringe, General & Administrative (GA), Corporate Flowdowns (FD) – rodzaj Koszt, sumowane w `TOTAL COST`
-  z kosztem bazowym; FCCOM MFG, FCCOM ENG, FCCOM MTL, FCCOM GS, FCCOM G&A – rodzaj FCCOM, w `TOTAL FCCOM`. Nowa pula
+  z kosztem bazowym; FCCOM MFG, FCCOM ENG, FCCOM MTL, FCCOM GS, FCCOM G&A – rodzaj FCCOM, w `TOTAL FCCOM`. Nowa kategoria
   w słowniku to nowa kolumna raportu, kolumna macierzy formuł i klocki edytora – bez zmiany programu.
-- **Formuła narzutu** puli w grupie – z klocków: `Base cost elements` (koszt bazowy kolumny – okres albo rok), narzut
-  innej puli (w tym samym wierszu raportu), wskaźnik puli (wiersz wskaźników raportu), operatory `+ − × ÷` i nawiasy.
+- **Formuła narzutu** kategorii w grupie – z klocków: `Base cost elements` (koszt bazowy kolumny – okres albo rok), narzut
+  innej kategorii (w tym samym wierszu raportu), wskaźnik kategorii (wiersz wskaźników raportu), operatory `+ − × ÷` i nawiasy.
   Program nie zawiera reguł podstaw – dane startowe (migracja 034) odwzorowują formuły arkusza finansów, np. MFG labor:
   MFG OH = (Base + MFG Fringe) × wskaźnik MFG OH; Direct Materials: GS = Material Handling × wskaźnik GS,
   G&A = (Material Handling + GS) × wskaźnik G&A (suche koszty – bez kosztu bazowego).
-- **Okno „Formuły narzutów”** (ekran Słowniki, przycisk przy słownikach pul, grup i wskaźników): macierz – wiersze to
-  grupy, kolumny to pule; zaznaczone pole = pula naliczana w grupie, podpowiedź pokazuje formułę. Kliknięcie pola
-  otwiera **edytor formuły z klocków**: paleta (operatory, koszt, narzuty pul, wskaźniki pul), formuła z klocków
+- **Okno „Formuły narzutów”** (ekran Słowniki, przycisk przy słownikach kategorii, grup i wskaźników): macierz – wiersze to
+  grupy, kolumny to kategorie; zaznaczone pole = kategoria naliczana w grupie, podpowiedź pokazuje formułę. Kliknięcie pola
+  otwiera **edytor formuły z klocków**: paleta (operatory, koszt, narzuty kategorii, wskaźniki kategorii), formuła z klocków
   z kursorem wstawiania – klocek wstawia się kliknięciem albo przeciągnięciem, klocki formuły można przestawiać
   przeciągnięciem i usuwać (×, Backspace, Delete); formuła do czytania i kontrola na bieżąco (operator między
-  składnikami, nawiasy, klocek narzutu własnej puli niedozwolony). Pole puste (pula nienaliczana) otwiera
-  edytor z pustą formułą – przycisk „Koszt × wskaźnik puli” wstawia formułę podstawową; „Pula nienaliczana
+  składnikami, nawiasy, klocek narzutu własnej kategorii niedozwolony). Pole puste (kategoria nienaliczana) otwiera
+  edytor z pustą formułą – przycisk „Koszt × wskaźnik kategorii” wstawia formułę podstawową; „Kategoria nienaliczana
   w grupie” odznacza pole. Zmiany macierzy zapisuje „Zapisz” (historia
   wersji; zapętlenie formuł w grupie – pole czerwone, zapis zablokowany).
 - **Wskaźnik kolumny:** kolumna okresu (`Period MM/RRRR`) – wskaźnik obowiązujący w tym miesiącu; kolumna roku –
   w ostatnim miesiącu roku z danymi (bieżący rok – do ostatniego okresu danych). Projekt z kosztami z kilku lat ma
   blok na każdy rok, każdy z wskaźnikami swojego roku. Wskaźnik zmieniony w trakcie roku albo brak wskaźnika
-  naliczanej puli – uwaga w raporcie (arkusz „Uwagi”; brak wskaźnika = narzut 0).
+  naliczanej kategorii – uwaga w raporcie (arkusz „Uwagi”; brak wskaźnika = narzut 0).
 - **Raport** (ekran Projekt, zakładka Raporty, „Raport kosztów CES (Excel)” – projekty CAS): wiersze i kolumny kosztu
   raportu kosztów (`docs/model-danych.md`, migracja 013) + kolumna „Grupa narzutowa CAS”, potem blok na każdą kolumnę
-  kosztu: pule (kolejność ze słownika), `TOTAL COST …`, `TOTAL FCCOM …`. Narzuty to **formuły Excela** odwołujące się do kosztu wiersza
+  kosztu: kategorie (kolejność ze słownika), `TOTAL COST …`, `TOTAL FCCOM …`. Narzuty to **formuły Excela** odwołujące się do kosztu wiersza
   i wiersza wskaźników nad nagłówkiem – zmiana wskaźnika albo kosztu w pliku przelicza raport. Arkusz „Wskaźniki” –
   użyte wskaźniki z okresem obowiązywania.
 - **Waluta i kurs CAS (reguła tylko dla projektów CAS, decyzja 2026-10-15):** narzuty CAS liczy się samemu, więc koszt
@@ -279,7 +294,7 @@ po Cost Elementach dla lat 2025–2026).
   kolumna Kurs CAS – kurs zakupu waluty) obowiązującym w okresie kosztu (okresy 13–16 – grudzień), potem narzuty. Brak
   kursu CAS dla któregokolwiek okresu z kosztem – błąd z listą okresów (raport się nie tworzy, ACWP pusty). Narzuty
   w raporcie i w koszcie projektu liczy ta sama usługa (`CasCosts`, `CasBurden`): **ACWP projektu CAS = TOTAL COST**
-  (koszt + pule rodzaju Koszt, bez pul FCCOM), podział ACWP Hours / Materials / Other według rodzaju kosztu cost elementu
+  (koszt + kategorie rodzaju Koszt, bez kategorii FCCOM), podział ACWP Hours / Materials / Other według rodzaju kosztu cost elementu
   (narzut idzie za kosztem, od którego jest liczony); przebieg tygodniowy projektu CAS – na kosztach po narzutach
   (`docs/pipeline-fazy.md`, rozdz. 4.1). Dane – procedura `REP_ProjectCasCosts` (migracja 045). ETC, EAC i budżet
   projektu CAS z narzutami i kursem CAS – osobne zadanie (`tasks/F4.7-cas-etc-eac-z-narzutami.md`).

@@ -47,7 +47,7 @@ public sealed class ProjectSettingsTests : IDisposable
         // Zakładka Konfiguracja: Źródła danych i Parametry projektu; pozostałe słowniki – zakładka „Słowniki projektu”.
         Assert.Equal([ProjectDictionaries.Sources, ProjectDictionaries.Settings],
             ProjectDictionaries.Items.Where(i => ProjectDictionaries.Configuration.Contains(i.Code)).Select(i => i.Code));
-        Assert.Contains(ProjectDictionaries.Items, i => i.Code == ProjectDictionaries.Settings && i.Stored && i.RequiredFor.Count == 0);
+        Assert.Contains(ProjectDictionaries.Items, i => i.Code == ProjectDictionaries.Settings && i.Stored);
     }
 
     [SqlFact]
@@ -72,7 +72,7 @@ public sealed class ProjectSettingsTests : IDisposable
 
         // Bez parametru – waluta obiektu (PLN).
         Assert.Equal("ValueObjCrcy", service.ActualsAmount("PAF"));
-        Assert.Equal(store.CostsByElement("PAF", "ValueObjCrcy"), service.CostsByElement("PAF"));
+        Assert.Equal(store.CostsByElement("PAF", "ValueObjCrcy"), service.CostsAndHoursByElement("PAF", service.ActualsAmount("PAF")).Amounts);
         run.Execute("PAF");
         var first = Assert.Single(runs.Pins("PAF", 10));
         Assert.Equal("ValueObjCrcy", first.AmountField);
@@ -82,8 +82,8 @@ public sealed class ProjectSettingsTests : IDisposable
         var context = service.Context("PAF", tree, null, P1sInputs.None);
         Assert.Equal(SaveStatus.Saved, service.SaveDictionary(ProjectDictionaries.Settings, context, [Setting(ProjectSettings.ActualsAmount, "ValueRepCur")], [], "PAF").Status);
         Assert.Equal("ValueRepCur", service.ActualsAmount("PAF"));
-        Assert.Equal(store.CostsByElement("PAF", "ValueRepCur"), service.CostsByElement("PAF"));
-        Assert.NotEqual(service.CostsByElement("PAF", "ValueObjCrcy"), service.CostsByElement("PAF"));
+        Assert.Equal(store.CostsByElement("PAF", "ValueRepCur"), service.CostsAndHoursByElement("PAF", service.ActualsAmount("PAF")).Amounts);
+        Assert.NotEqual(service.CostsAndHoursByElement("PAF", "ValueObjCrcy").Amounts, service.CostsAndHoursByElement("PAF", service.ActualsAmount("PAF")).Amounts);
 
         _services.Clock.Advance(TimeSpan.FromDays(7));
         run.Execute("PAF");
@@ -93,9 +93,9 @@ public sealed class ProjectSettingsTests : IDisposable
         Assert.All(balance, r => Assert.Equal("USD", r.Currency));
         Assert.Equal(261.54m + 1000m + 500m + 89.58m, balance.Sum(r => r.Amount));   // Val.in rep.cur. wierszy 2DI473 pliku testowego
         var issues = runs.Issues(second.PinId);
-        Assert.Contains(issues, i => i.CheckName == RunChecks.Volume && i.Level == CheckLevel.Warning && i.Message.StartsWith("Pole kwoty ACTUALS zmienione (ValueObjCrcy → ValueRepCur"));
-        Assert.DoesNotContain(issues, i => i.CheckName == RunChecks.Deviations);
-        Assert.DoesNotContain(issues, i => i.CheckName == RunChecks.Quality && i.Message.StartsWith("Waluta inna"));
+        Assert.Contains(issues, i => i.CheckName == RunService.Pinned && i.Level == CheckLevel.Warning && i.Message.StartsWith("Pole kwoty ACTUALS zmienione (ValueObjCrcy → ValueRepCur"));
+        Assert.DoesNotContain(issues, i => i.CheckName == "Największe odchylenia raport do raportu" && i.Details is not null);   // bez porównania
+        Assert.Equal(CheckLevel.Pass, Assert.Single(issues, i => i.CheckName == "Waluta inna niż waluta kosztów").Level);          // waluta kosztów – przeważająca
 
         // Waluta transakcji nie jest zestawem walutowym – procedury jej nie przyjmują (migracja 042).
         Assert.Contains("nie ma pola kwoty ValueTranCurr", Assert.ThrowsAny<Exception>(() => store.CostsByElement("PAF", "ValueTranCurr")).Message);

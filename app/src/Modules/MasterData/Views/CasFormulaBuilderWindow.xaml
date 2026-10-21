@@ -52,7 +52,7 @@
     <DockPanel Margin="16">
         <TextBlock DockPanel.Dock="Top" Text="{Binding Title}" Style="{StaticResource H2}" />
         <TextBlock DockPanel.Dock="Top" Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="0,0,0,10"
-                   Text="Kliknij klocek z palety albo przeciągnij go do formuły. Pionowa kreska to kursor – miejsce wstawienia: kliknij klocek formuły, aby ustawić kursor za nim. Klocki formuły można przeciągać, × usuwa klocek; Backspace / Delete – usuń przed / za kursorem, ← → Home End – kursor. Narzut = wynik formuły (np. (koszt + Fringe) × wskaźnik puli)." />
+                   Text="Kliknij klocek z palety albo przeciągnij go do formuły. Pionowa kreska to kursor – miejsce wstawienia: kliknij klocek formuły, aby ustawić kursor za nim. Klocki formuły można przeciągać, × usuwa klocek; Backspace / Delete – usuń przed / za kursorem, ← → Home End – kursor. Narzut = wynik formuły (np. (koszt + Fringe) × wskaźnik kategorii)." />
 
         <!-- Przyciski i wynik -->
         <DockPanel DockPanel.Dock="Bottom" Margin="0,12,0,0">
@@ -61,11 +61,11 @@
                 <Button Content="Zatwierdź" Style="{StaticResource BtnPrimary}" Click="OnConfirm" IsEnabled="{Binding IsValid}" IsDefault="True" />
             </StackPanel>
             <StackPanel Orientation="Horizontal">
-                <Button Content="Koszt × wskaźnik puli" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding UseDefault}"
-                        ToolTip="Zastępuje formułę formułą podstawową: Base cost elements × wskaźnik tej puli" />
+                <Button Content="Koszt × wskaźnik kategorii" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding UseDefault}"
+                        ToolTip="Zastępuje formułę formułą podstawową: Base cost elements × wskaźnik tej kategorii" />
                 <Button Content="Wyczyść" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding Clear}" />
-                <Button Content="Pula nienaliczana w grupie" Style="{StaticResource Btn}" Click="OnRemove"
-                        ToolTip="Usuwa formułę – pula nie ma narzutu w tej grupie (pole w macierzy odznaczone)" />
+                <Button Content="Kategoria nienaliczana w grupie" Style="{StaticResource Btn}" Click="OnRemove"
+                        ToolTip="Usuwa formułę – kategoria nie ma narzutu w tej grupie (pole w macierzy odznaczone)" />
             </StackPanel>
         </DockPanel>
 
@@ -126,9 +126,9 @@
                     <ItemsControl ItemsSource="{Binding OperatorBlocks}" ItemsPanel="{StaticResource Wrap}" ItemTemplate="{StaticResource PaletteChip}" />
                     <TextBlock Text="Koszt" FontWeight="SemiBold" Margin="0,8,0,6" />
                     <ItemsControl ItemsSource="{Binding CostBlocks}" ItemsPanel="{StaticResource Wrap}" ItemTemplate="{StaticResource PaletteChip}" />
-                    <TextBlock Text="Narzuty pul (wartość narzutu puli w tym samym wierszu)" FontWeight="SemiBold" Margin="0,8,0,6" />
+                    <TextBlock Text="Narzuty kategorii (wartość narzutu kategorii w tym samym wierszu)" FontWeight="SemiBold" Margin="0,8,0,6" />
                     <ItemsControl ItemsSource="{Binding PoolBlocks}" ItemsPanel="{StaticResource Wrap}" ItemTemplate="{StaticResource PaletteChip}" />
-                    <TextBlock Text="Wskaźniki pul (słownik „Wskaźniki narzutu CAS”, wiersz wskaźników raportu)" FontWeight="SemiBold" Margin="0,8,0,6" />
+                    <TextBlock Text="Wskaźniki kategorii (słownik „Wskaźniki narzutu CAS”, wiersz wskaźników raportu)" FontWeight="SemiBold" Margin="0,8,0,6" />
                     <ItemsControl ItemsSource="{Binding RateBlocks}" ItemsPanel="{StaticResource Wrap}" ItemTemplate="{StaticResource PaletteChip}" />
                 </StackPanel>
             </ScrollViewer>

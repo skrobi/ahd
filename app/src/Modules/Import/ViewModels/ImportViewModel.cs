@@ -1,5 +1,4 @@
 using System.Collections.ObjectModel;
-using System.IO;
 using System.Windows.Input;
 using PzlEv.Modules.Import.Data;
 using PzlEv.Modules.Import.Models;

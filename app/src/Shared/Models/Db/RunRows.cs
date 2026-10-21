@@ -11,7 +11,17 @@ public static class RunStatuses
     public const string Errors = "zakończony z błędami";
     public const string Failed = "przerwany błędem";
     public const string Abandoned = "przerwany (brak zakończenia)";
+
+    /// <summary>Przebieg etapowy wstrzymany na bramce: WARNING do potwierdzenia albo zatwierdzenie ręczne.</summary>
+    public const string NeedsAction = "wymaga akcji";
+
+    /// <summary>Przebieg etapowy zatrzymany: etap z ERROR – po poprawie „Wykonaj ponownie”.</summary>
+    public const string Blocked = "zatrzymany – błąd";
 }
+
+/// <summary>Etap uruchomienia przebiegu – meta.RunStep (status, kto, kiedy, wyniki, potwierdzenie z komentarzem).</summary>
+public sealed record RunStepRow(long PinId, int StepNo, string Name, string Action, string Status, DateTimeOffset? StartedAt, DateTimeOffset? FinishedAt,
+    string? ActedBy, int Errors, int Warnings, string? Comment);
 
 /// <summary>Uruchomienie (przypięcie stanu) przebiegu projektu – meta.Run + meta.RunPin.</summary>
 public sealed record RunPinRow(
@@ -31,14 +41,24 @@ public sealed record RunPinRow(
     int Errors,
     int Warnings,
     string? Summary,
-    string? AmountField)
+    string? AmountField,
+    bool IsClosingWeek = false,
+    string? Period = null,
+    bool IsPeriodClose = false)
 {
-    /// <summary>Opis na listę projektów: kod, numer uruchomienia, stan.</summary>
-    public string Label => $"{Code} #{PinNo} – {Status}";
+    /// <summary>Opis na listę projektów: kod, numer uruchomienia, stan; zamknięcie okresu – znacznik.</summary>
+    public string Label => $"{Code} #{PinNo} – {Status}{ClosingText}";
+
+    /// <summary>
+    /// Znacznik zamknięcia okresu: IsPeriodClose – ostatnie zakończone uruchomienie tygodnia zamykającego okres (kalendarz okresów), czyli
+    /// wynik okresu do porównań „od zamknięcia do zamknięcia”; pozostałe uruchomienia tygodnia zamykającego – „tydzień zamykający”.
+    /// </summary>
+    public string ClosingText => IsPeriodClose ? $" · ★ zamknięcie {Period}" : IsClosingWeek ? " · tydzień zamykający" : "";
 }
 
-/// <summary>Wynik kontroli przebiegu – run.Issue.</summary>
-public sealed record RunIssueRow(long Id, long PinId, string CheckName, CheckLevel Level, string? Element, string Message, decimal? Amount);
+/// <summary>Wynik kontroli przebiegu – run.Issue; wynik reguły walidacji – CheckName = nazwa reguły, Details – wiersz wyniku (JSON, RunRules.Details).</summary>
+public sealed record RunIssueRow(long Id, long PinId, string CheckName, CheckLevel Level, string? Element, string Message, decimal? Amount, int? StepNo = null,
+    string? Details = null);
 
 /// <summary>
 /// Dane ACTUALS projektu w chwili przypięcia (run.Balance): element WBS × cost element × rok × okres × rozliczenie
@@ -54,3 +74,9 @@ public sealed record RunBalanceRow(
     int Rows,
     decimal Amount,
     DateTime? LastCreatedOn);
+
+/// <summary>Plik ACTUALS z danymi programu w chwili przypięcia (najnowsza wersja do tej chwili): nazwa, data raportu w RABIT, import.</summary>
+public sealed record RunPinFile(long FileId, string FileName, DateTimeOffset ReportAt, DateTimeOffset ImportedAt, long? BatchId);
+
+/// <summary>Zmiana słownika po chwili przypięcia (informacja w przebiegu): słownik, liczba zmienionych wierszy, ostatnia zmiana – kiedy, kto.</summary>
+public sealed record RunDictionaryChange(string Dictionary, int Rows, DateTimeOffset LastAt, string LastBy);

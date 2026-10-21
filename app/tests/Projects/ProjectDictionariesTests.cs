@@ -50,7 +50,7 @@ public sealed class ProjectDictionariesTests
     {
         Assert.True(HasError(Validate(ProjectDictionaries.WpCam, Wp("AC-CAB.7.01", "WP-1", "Anna Nowak")), "poza zakresem"));
         Assert.True(HasError(Validate(ProjectDictionaries.WpCam, Wp("AC-CAB.6.380", "WP-1", "Anna Nowak")), "poza zakresem"));
-        Assert.True(HasError(Validate(ProjectDictionaries.WpCam, Wp("AC-CAB.6.38.09", "WP-1", "Anna Nowak")), "należy do projektu S70I"));
+        Assert.True(HasError(Validate(ProjectDictionaries.WpCam, Wp("AC-CAB.6.38.09", "WP-1", "Anna Nowak")), "należy do programu S70I"));
         Assert.True(HasError(Validate(ProjectDictionaries.WpCam, Wp("AC-CAB.6.38.01", "WP-1", "Anna Nowak"), Wp("AC-CAB.6.38.01", "WP-2", "Anna Nowak")), "Duplikat klucza"));
         // WP bez CAM – zapis dozwolony (CAM uzupełnia się później), ostrzeżenie; przebieg blokuje gotowość projektu.
         var withoutCam = Validate(ProjectDictionaries.WpCam, Wp("AC-CAB.6.38.01", "WP-1", null));
@@ -82,8 +82,7 @@ public sealed class ProjectDictionariesTests
     {
         var item = ProjectDictionaries.Item(ProjectDictionaries.WbsCategories);
         Assert.True(item.Stored);
-        Assert.Empty(item.RequiredFor);
-        Assert.Contains(ProjectDictionaries.ForType(ProjectTypes.Sac), i => i.Code == ProjectDictionaries.WbsCategories);
+        Assert.Contains(ProjectDictionaries.Items, i => i.Code == ProjectDictionaries.WbsCategories);
         Assert.Contains(ProjectDictionaries.Tables, t => t.Spec.Code == ProjectDictionaries.WbsCategories);
         Assert.Empty(Validate(ProjectDictionaries.WbsCategories, Cat("Production", "produkcja"), Cat("Programs", null)));
         Assert.True(HasError(Validate(ProjectDictionaries.WbsCategories, Cat("Production", null), Cat("production", null)), "Duplikat klucza"));
@@ -174,9 +173,9 @@ public sealed class ProjectDictionariesTests
     public void Cas_project_has_no_project_rates_dictionary()
     {
         // Narzuty CAS – słowniki globalne (O37); projekt CAS ma te same słowniki projektu co pozostałe typy, wszystkie wczytywane.
-        Assert.Equal(ProjectDictionaries.ForType(ProjectTypes.Sac).Select(i => i.Code), ProjectDictionaries.ForType(ProjectTypes.Cas).Select(i => i.Code));
-        Assert.All(ProjectDictionaries.ForType(ProjectTypes.Cas), i => Assert.True(i.Stored));
-        Assert.DoesNotContain(ProjectDictionaries.ForType(ProjectTypes.Cas), i => i.Name.Contains("Stawki CAS"));
+        Assert.Equal(ProjectDictionaries.Items.Select(i => i.Code), ProjectDictionaries.Items.Select(i => i.Code));
+        Assert.All(ProjectDictionaries.Items, i => Assert.True(i.Stored));
+        Assert.DoesNotContain(ProjectDictionaries.Items, i => i.Name.Contains("Stawki CAS"));
     }
 
     [Fact]

@@ -118,7 +118,7 @@ public sealed class SqlPresetsTests : IDisposable
         var ownFx = new Dictionary<string, string?> { ["Waluta"] = "USD", ["Od"] = "2024-01-01", ["Do"] = "2024-01-31", ["Kurs"] = "3.5", [GlobalDictionaries.CasFxColumn] = "3.6" };
         Assert.True(_dictionaries.Save(GlobalDictionaries.FxRates, null, [new RowChange(RowChangeKind.Added, null, null, fxSpec.KeyOf(ownFx), ownFx)]).Success);
 
-        Assert.Equal(["002_dane_startowe.sql", "023_dane_produkcji.sql", "030_dane_narzuty_cas.sql", "032_dane_formuly_narzutow_cas.sql", "034_dane_narzuty_cas.sql", "040_dane_rodzaj_kosztu.sql", "046_dane_kursy_usd.sql"],
+        Assert.Equal(["002_dane_startowe.sql", "023_dane_produkcji.sql", "030_dane_narzuty_cas.sql", "032_dane_formuly_narzutow_cas.sql", "034_dane_narzuty_cas.sql", "040_dane_rodzaj_kosztu.sql", "046_dane_kursy_usd.sql", "053_dane_reguly_i_przebiegi.sql"],
             SqlMigrations.Apply(_database.Sql));
 
         var paf = _sources.Definitions().Single(d => d.Code == "ACTUALS_PAF");
@@ -144,5 +144,41 @@ public sealed class SqlPresetsTests : IDisposable
             Assert.InRange(decimal.Parse(r.Values["Kurs"]!, System.Globalization.CultureInfo.InvariantCulture), 3.5m, 4.5m);
         });
         Assert.Empty(DictionaryValidator.Validate(fxSpec, usd.Select(r => new DictRow(r.RowId, r.Version, r.Values)).ToList()).Where(i => i.Level == PzlEv.Shared.Models.Pipeline.CheckLevel.Error));   // okresy się nie nakładają
+    }
+
+    /// <summary>Migracja 053: reguły startowe w słowniku „Reguły walidacji” i szablony przebiegów Wewnętrzny i CAS jak w aplikacji.</summary>
+    [SqlFact]
+    public void Presets_contain_starter_rules_and_run_templates_and_drop_reconciliation_elements()
+    {
+        Use(presets: false);
+        var dictionaries = new DictionaryService(_dictionaries, _journal);
+        var store = new PzlEv.Modules.Runs.Data.SqlRunStore(_database.Sql);
+        var templates = new PzlEv.Modules.Runs.Services.RunTemplateService(dictionaries, store);
+        // Przed migracją 053: własny szablon CAS z elementem „Uzgodnienie: *” (reguły uzgodnień sprzed reguł SQL).
+        var cas = PzlEv.Shared.Models.Pipeline.RunDefinitions.Starters[1];
+        var own = cas with { Steps = [.. cas.Steps.Take(2), new(3, "Kontrole", PzlEv.Shared.Models.Pipeline.RunActions.Checks, PzlEv.Shared.Models.Pipeline.RunGates.Info, false,
+            [new("WP bez MPK")])] };
+        Assert.Equal(SaveStatus.Saved, templates.Save(own, isActive: true).Status);
+        var elements = PzlEv.Shared.Utils.Dictionaries.GlobalDictionaries.Get(GlobalDictionaries.RunStepElements);
+        var current = dictionaries.Load(elements);
+        Assert.Equal(SaveStatus.Saved, dictionaries.Save(elements, [.. current, new DictRow(null, null, new Dictionary<string, string?>
+            { ["Definicja"] = "CAS", ["Etap"] = "Kontrole", ["Element"] = "Uzgodnienie: *", ["Aktywny"] = "tak", ["Opis"] = null })], [], confirmWarnings: true).Status);
+
+        SqlMigrations.Apply(_database.Sql, presets: true);
+
+        static string Lines(string? text) => (text ?? "").Replace("\r\n", "\n");
+        var rules = store.Rules();
+        Assert.False(templates.Rules().Starters);                                        // reguły w słowniku, nie z aplikacji
+        Assert.Equal(PzlEv.Shared.Models.Pipeline.RunRules.Starters.Select(r => (r.Name, r.Level, r.IsActive, Lines(r.Sql), r.ResultTemplate, r.Description)),
+            rules.Select(r => (r.Name, r.Level, r.IsActive, Lines(r.Sql), r.ResultTemplate, r.Description)));
+        var loaded = templates.Load();
+        var internalTemplate = loaded.Single(t => t.Definition.Code == PzlEv.Shared.Models.Pipeline.RunDefinitions.InternalCode);
+        Assert.True(internalTemplate.IsActive);
+        Assert.Equal(PzlEv.Shared.Models.Pipeline.RunDefinitions.StandardSteps.Select(s => (s.No, s.Name, s.Action, string.Join("|", s.Elements.Select(e => e.Element)))),
+            internalTemplate.Definition.Steps.Select(s => (s.No, s.Name, s.Action, string.Join("|", s.Elements.Select(e => e.Element)))));
+        Assert.Empty(PzlEv.Shared.Models.Pipeline.RunDefinitions.Validate(internalTemplate.Definition, [.. rules.Select(r => r.Name)]));
+        var ownCas = loaded.Single(t => t.Definition.Code == "CAS").Definition;           // szablon użytkownika bez zmian
+        Assert.Equal(3, ownCas.Steps.Count);
+        Assert.Equal(["WP bez MPK"], ownCas.Steps[2].Elements.Select(e => e.Element));     // „Uzgodnienie: *” – usunięte
     }
 }

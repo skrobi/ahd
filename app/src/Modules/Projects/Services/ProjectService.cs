@@ -19,9 +19,10 @@ namespace PzlEv.Modules.Projects.Services;
 /// projektu i folderami; utrzymanie nakładki i słowników projektu; gotowość; baza analityczna i eksport do Excela.
 /// </summary>
 public sealed class ProjectService(IProjectStore store, IDictionaryStore dictionaries, IJournal journal, ProjectFolders folders,
-    IPzlProdSource? pzlProd, Func<ISourceImport?>? imports = null, Func<IRunLauncher?>? runs = null)
+    IPzlProdSource? pzlProd, Func<ISourceImport?>? imports = null, Func<IRunLauncher?>? runs = null, Func<IAcwpChanges?>? acwpChanges = null,
+    Func<IRunPanels?>? runPanels = null)
 {
-    private const string Area = "Projekty";
+    private const string Area = "Programy";
 
     private readonly DictionaryService _dictionaries = new(dictionaries, journal);
     private readonly object _mappingLock = new();
@@ -32,6 +33,21 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
     public IReadOnlyList<ProjectInfo> Projects() => store.Projects();
 
     public ProjectInfo? Find(string code) => store.Find(code);
+
+    /// <summary>
+    /// Trwałe usunięcie programu ze wszystkimi danymi (IProjectStore.Delete); folder na dysku sieciowym i dane importów zostają, wpis
+    /// w dzienniku. Odmowa (komunikat), gdy przebieg programu trwa w tej aplikacji; null – usunięty.
+    /// </summary>
+    public string? Delete(string code)
+    {
+        if (Runs?.IsRunning(code) == true)
+            return $"Przebieg programu {code} trwa – usuń program po jego zakończeniu.";
+        var deleted = store.Delete(code);
+        if (deleted == 0)
+            return $"Nie ma programu {code}.";
+        journal.Add(Area, $"{code}: program usunięty ze wszystkimi danymi ({deleted} wierszy); folder na dysku zostaje", code);
+        return null;
+    }
 
     public PoTree Objectives(string code) => store.Objectives(code);
 
@@ -176,13 +192,26 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
     /// Parametry projektu – pola kwoty ACTUALS; Cost Category – grupy narzutowe CAS (identyfikator → nazwa).
     /// </summary>
     public static IReadOnlyDictionary<string, IReadOnlyList<LookupOption>> Lookups(IReadOnlyList<LookupOption> persons, IReadOnlyList<LookupOption> categories,
-        IReadOnlyList<LookupOption>? sources = null, IReadOnlyList<LookupOption>? burdenGroups = null, IReadOnlyList<LookupOption>? mpks = null) =>
+        IReadOnlyList<LookupOption>? sources = null, IReadOnlyList<LookupOption>? burdenGroups = null, IReadOnlyList<LookupOption>? mpks = null,
+        IReadOnlyList<RunDefinitionHeaderRow>? runTemplates = null) =>
         new Dictionary<string, IReadOnlyList<LookupOption>>
         {
             [GlobalDictionaries.Persons] = persons, [ProjectDictionaries.WbsCategories] = categories, [ProjectDictionaries.Sources] = sources ?? [],
             [GlobalDictionaries.CasBurdenGroups] = burdenGroups ?? [], [GlobalDictionaries.DepartmentRates] = mpks ?? [],
-            [ProjectDictionaries.Settings] = CurrencySetOptions,
+            [ProjectDictionaries.Settings] = [.. CurrencySetOptions, .. RunTemplateOptions(runTemplates ?? [])],
         };
+
+    /// <summary>
+    /// Szablony przebiegów do wyboru w programie (Parametry programu → „Przebieg”, kreator): aktywne, z etapami – słowniki globalne
+    /// „Definicje przebiegów”, „Etapy przebiegów” (ekran Przebiegi).
+    /// </summary>
+    public IReadOnlyList<RunDefinitionHeaderRow> RunTemplates() =>
+        RunDefinitions.Available(RunDefinitionRows.Headers(_dictionaries.Load(GlobalDictionaries.Get(GlobalDictionaries.RunDefinitionHeaders))),
+            RunDefinitionRows.Steps(_dictionaries.Load(GlobalDictionaries.Get(GlobalDictionaries.RunSteps))));
+
+    /// <summary>Szablon → opcja wyboru („CAS – domyślny dla CAS”).</summary>
+    public static IReadOnlyList<LookupOption> RunTemplateOptions(IEnumerable<RunDefinitionHeaderRow> templates) =>
+        templates.Select(t => new LookupOption(t.Code, $"{t.Code} (przebieg; domyślny dla: {t.ProjectType})")).ToList();
 
     /// <summary>Stawki wydziałów (MPK × rok: Labor Rate, Overhead) – lista MPK w „WP i CAM” i stawka ETC Cost struktury.</summary>
     public IReadOnlyList<DictRow> DepartmentRates() => _dictionaries.Load(GlobalDictionaries.Get(GlobalDictionaries.DepartmentRates));
@@ -210,7 +239,7 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
         {
             0 => (null, null),
             1 => (codes[0], null),
-            _ => (null, $"kilka walut w kolumnie {set.CurrencyColumn}: {string.Join(", ", codes)} – kwoty w różnych walutach się nie sumują; wybierz inny zestaw walutowy w „Parametrach projektu”"),
+            _ => (null, $"kilka walut w kolumnie {set.CurrencyColumn}: {string.Join(", ", codes)} – kwoty w różnych walutach się nie sumują; wybierz inny zestaw walutowy w „Parametrach programu”"),
         };
     }
 
@@ -229,7 +258,7 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
             .GroupBy(r => r["MPK"]!, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(g => g.Key, g => Dec(g.First()["Labor Rate"])!.Value * (Dec(g.First()["Overhead"]) ?? 1), StringComparer.OrdinalIgnoreCase);
         if (currency is null)
-            return new EtcRates(rates, year, null, null, null, currencyProblem ?? "waluta projektu nieznana – brak danych ACTUALS projektu");
+            return new EtcRates(rates, year, null, null, null, currencyProblem ?? "waluta programu nieznana – brak danych ACTUALS programu");
         decimal? ToPln(string code) => FxRate.On(fxRates, code, today);
         var project = ToPln(currency);
         var usd = ToPln("USD");
@@ -261,6 +290,12 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
 
     /// <summary>Przebiegi projektów (kontrakt modułu Przebiegi); null – moduł niedostępny.</summary>
     public IRunLauncher? Runs => runs?.Invoke();
+
+    /// <summary>Okno „Zmiany ACWP” (moduł Przebiegi); null – moduł niedostępny.</summary>
+    public IAcwpChanges? AcwpChanges => acwpChanges?.Invoke();
+
+    /// <summary>Panel przebiegu programu (moduł Przebiegi); null – moduł niedostępny.</summary>
+    public IRunPanels? RunPanels => runPanels?.Invoke();
 
     /// <summary>Import źródeł projektu (kontrakt modułu Import); null – moduł Import niedostępny.</summary>
     public ISourceImport? Imports => imports?.Invoke();
@@ -352,9 +387,6 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
             last is null ? "" : $"{last.RecordedAt:yyyy-MM-dd HH:mm} · {last.RecordedBy}");
     }
 
-    /// <summary>Kontrole folderów projektu (gotowość) – dysk sieciowy, czytane rzadko (ekran projektu trzyma wynik).</summary>
-    public (Issue Structure, Issue CamAccess) FolderChecks(string code) => (folders.CheckStructure(code), folders.CamAccessWarning(code));
-
     /// <summary>Arkusz słownika w skoroszycie (nazwa jak w szablonie); null – plik bez takiego arkusza albo CSV.</summary>
     public static string? FindSheet(string path, ProjectDictionaryItem item) =>
         TabularFileReader.SheetNames(path).FirstOrDefault(s =>
@@ -383,10 +415,10 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
     /// Słowniki projektu do Excela – arkusz na słownik; szablon do uzupełnienia: „WP i CAM” z elementami P1S z zakresu
     /// bez WP, „Harmonogram i budżet” z WP bez harmonogramu.
     /// </summary>
-    public void ExportDictionaries(string path, string code, string type, PoTree tree, P1sInputs inputs)
+    public void ExportDictionaries(string path, string code, PoTree tree, P1sInputs inputs)
     {
         var sheets = new List<(string, IReadOnlyList<ExcelTableWriter.ExcelColumn>, IEnumerable<IReadOnlyList<object?>>)>();
-        foreach (var item in ProjectDictionaries.ForType(type).Where(i => i.Stored))
+        foreach (var item in ProjectDictionaries.Items.Where(i => i.Stored))
         {
             var spec = ProjectDictionaries.Base(item.Code);
             var rows = code.Length > 0 ? Rows(item.Code, code) : [];
@@ -413,7 +445,7 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
             sheets.Add((item.Sheet, columns, data));
         }
         ExcelTableWriter.WriteTemplate(path, sheets);
-        journal.Add(Area, $"{(code.Length > 0 ? code : "nowy projekt")}: słowniki projektu pobrane do Excela", code.Length > 0 ? code : null);
+        journal.Add(Area, $"{(code.Length > 0 ? code : "nowy program")}: słowniki programu pobrane do Excela", code.Length > 0 ? code : null);
     }
 
     /// <summary>Słowniki globalne z bieżącym stanem (krok „Słowniki projektu” kreatora): nazwa, wiersze, ostatnia zmiana.</summary>
@@ -602,7 +634,7 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
             StructureImport.WpHeader => new(header, Note: "Do uzupełnienia: wpisz cokolwiek (np. x) przy elemencie P1S, który jest WP – kod WP = kod elementu. Pusta komórka – bez zmiany.", Input: true),
             StructureImport.CamHeader => new(header, Note: "Do uzupełnienia: numer znaczka (USRID) CAM – lista w arkuszu „Listy”. Pusta komórka – bez zmiany.",
                 Lookup: persons.Select(p => (p.Value, p.Label)).ToList(), Input: true),
-            StructureImport.CategoryHeader => new(header, Note: "Do uzupełnienia: kategoria ze słownika „Kategorie WBS” projektu. Pusta komórka – bez zmiany.", Input: true),
+            StructureImport.CategoryHeader => new(header, Note: "Do uzupełnienia: kategoria ze słownika „Kategorie WBS” programu. Pusta komórka – bez zmiany.", Input: true),
             StructureImport.MpkHeader => new(header, Note: "Do uzupełnienia: MPK WP ze słownika „Stawki wydziałów” (stawka ETC Cost). Pusta komórka – bez zmiany.",
                 Lookup: mpks?.Select(m => (m.Value, m.Label)).ToList(), Input: true),
             StructureImport.StartHeader or StructureImport.FinishHeader or StructureImport.ForecastStartHeader or StructureImport.ForecastFinishHeader
@@ -625,7 +657,7 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
     public int ExportStructure(string path, string code, ProjectStructure structure, IReadOnlyList<LookupOption> persons, IReadOnlyList<LookupOption>? mpks = null)
     {
         ExcelTableWriter.WriteTemplate(path, [("Struktura", StructureSheetColumns(persons, mpks), StructureRows(structure, persons))]);
-        journal.Add(Area, $"{code}: struktura projektu pobrana do Excela ({structure.Rows.Count} wierszy)", code);
+        journal.Add(Area, $"{code}: struktura programu pobrana do Excela ({structure.Rows.Count} wierszy)", code);
         return structure.Rows.Count;
     }
 
@@ -641,29 +673,24 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
         return StructureImport.Read(TabularFileReader.Read(path, sheet), structure, Rows(ProjectDictionaries.ScheduleBudget, code));
     }
 
-    /// <summary>ACWP po elemencie CES z ostatniego importu ACTUALS (pole kwoty z „Parametrów projektu”) – kolumna ACWP struktury.</summary>
-    public IReadOnlyDictionary<string, decimal> CostsByElement(string code) => CostsByElement(code, ActualsAmount(code));
-
-    /// <summary>ACWP po elemencie CES z podanego pola kwoty ACTUALS.</summary>
-    public IReadOnlyDictionary<string, decimal> CostsByElement(string code, string field) => store.CostsByElement(code, field);
-
     /// <summary>Pole godzin parsera ACTUALS (kolumna „Total Quantity”) – Actual DLH struktury.</summary>
     public const string ActualsHours = "TotalQuantity";
 
     /// <summary>
     /// ACWP (pole kwoty field) i Actual DLH (suma „Total Quantity” z tych samych wierszy) po elemencie CES – jedno wywołanie
-    /// REP_ProjectCostsByElement (migracja 036; wcześniej dwa odczyty dużego zrzutu ACTUALS).
+    /// REP_ProjectCostsByElement (migracja 036; wcześniej dwa odczyty dużego zrzutu ACTUALS). asOf – stan danych zatwierdzonego
+    /// przebiegu (ApprovedActuals, migracja 054); null – ostatni import.
     /// </summary>
-    public ElementActuals CostsAndHoursByElement(string code, string field)
+    public ElementActuals CostsAndHoursByElement(string code, string field, DateTimeOffset? asOf = null)
     {
         var process = Process(code, field);
-        var actuals = store.CostsAndHoursByElement(code, process.AmountField(field), ActualsHours);
+        var actuals = store.CostsAndHoursByElement(code, process.AmountField(field), ActualsHours, asOf);
         if (!process.TransformsCosts)
             return actuals;
         // Koszt liczony procesem projektu z kosztów bazowych po okresach (np. CAS – narzuty, kurs CAS); Actual DLH – godziny
         // z tych samych wierszy co dotąd.
         var hours = actuals.Hours;
-        var data = store.CasCosts(code);
+        var data = store.CasCosts(code, asOf);
         var result = process.Costs(CostRows(data), LastPeriod(data));
         if (result.Error is { } error)
             throw new InvalidOperationException(error);
@@ -734,6 +761,9 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
 
     /// <summary>Z kiedy są dane ACTUALS (data raportu w RABIT, import, ostatnie sprawdzenie) – nagłówek ekranu projektu.</summary>
     public ActualsFreshness ActualsFreshness() => new(store.ActualsFiles());
+
+    /// <summary>Ostatni przebieg programu z zatwierdzonymi danymi ACTUALS – stan danych struktury; null – ostatni import.</summary>
+    public ApprovedActuals? ApprovedActuals(string code) => store.ApprovedActuals(code);
 
     /// <summary>
     /// Zapis zmiany wiersza tabeli struktury od razu po jej zatwierdzeniu (bez osobnego „Zapisz”): nazwa i Legacy WBS –
@@ -972,7 +1002,7 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
 
     /// <summary>
     /// Raport kosztów CES do Excela (projekty CAS): raport kosztów z narzutami CAS w formułach – grupa narzutowa
-    /// z efektywnego słownika Cost Category projektu, pule i formuły ze słowników „Pule narzutu CAS”, „Grupy narzutowe CAS”
+    /// z efektywnego słownika Cost Category projektu, pule i formuły ze słowników „Kategorie narzutu CAS”, „Grupy narzutowe CAS”
     /// i „Formuły narzutów CAS”, wskaźniki ze „Wskaźników narzutu CAS” (CasCostReport); arkusze „Wskaźniki” i „Uwagi” (braki mapowania i wskaźników). Zwraca liczbę wierszy i uwag.
     /// </summary>
     public (int Rows, int Notes) ExportCasCostReport(string path, string code)
@@ -1006,27 +1036,7 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
         return (rows.Count, notes.Count);
     }
 
-    // ---------- gotowość, baza analityczna ----------
-
-    public List<Issue> Readiness(ProjectInfo project, PoTree tree, P1sInputs inputs) =>
-        Readiness(project, tree, inputs,
-            ProjectDictionaries.Items.Where(i => i.Stored).ToDictionary(i => i.Code, i => Rows(i.Code, project.Code)), Persons(), FolderChecks(project.Code));
-
-    /// <summary>
-    /// Gotowość z danymi już wczytanymi (ekran projektu): struktura P1S, wiersze słowników projektu (kod →
-    /// wiersze), USRID osób, wynik kontroli folderów – bez ponownych odczytów z bazy i dysku sieciowego.
-    /// </summary>
-    public static List<Issue> Readiness(ProjectInfo project, PoTree tree, P1sInputs inputs,
-        IReadOnlyDictionary<string, IReadOnlyList<DictRow>> dictionaries, IReadOnlySet<string> persons, (Issue Structure, Issue CamAccess) folderChecks)
-    {
-        var counts = dictionaries.ToDictionary(d => d.Key, d => d.Value.Count);
-        var wpCam = dictionaries.GetValueOrDefault(ProjectDictionaries.WpCam) ?? [];
-        var withoutCam = wpCam.Where(r => r["WP"] is not null && r["CAM"] is null).Select(r => r["WP"]!).Distinct(StringComparer.OrdinalIgnoreCase).Order().ToList();
-        var camsOutside = wpCam.Select(r => r["CAM"]).OfType<string>()
-            .Where(c => !persons.Contains(c)).Distinct(StringComparer.OrdinalIgnoreCase).Order().ToList();
-        return ProjectReadiness.Check(project.Type, tree, counts, camsOutside, ObjectivesMapping.Check(tree, inputs),
-            folderChecks.Structure, folderChecks.CamAccess, withoutCam);
-    }
+    // ---------- baza analityczna ----------
 
     /// <param name="rates">Waluta projektu i kursy (EtcRatesOf) – kwoty „Harmonogram i budżet” w innej walucie przeliczone; null – bez przeliczenia.</param>
     public static AnalyticBase Analytic(PoTree tree, IReadOnlyList<DictRow> wpCam, IReadOnlyList<DictRow> schedule, P1sInputs inputs, EtcRates? rates = null)
@@ -1077,7 +1087,7 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
             ("Wg CAM", ["CAM", "WP", "BAC HOURS", material, "Start", "Koniec"],
                 analytic.ByCam.Select(c => (IReadOnlyList<object?>)new object?[] { c.Cam, c.Wps, c.BacHours, c.BacMaterial, c.Start, c.Finish })),
         ]);
-        journal.Add(Area, $"{(code.Length > 0 ? code : "nowy projekt")}: baza analityczna pobrana do Excela", code.Length > 0 ? code : null);
+        journal.Add(Area, $"{(code.Length > 0 ? code : "nowy program")}: baza analityczna pobrana do Excela", code.Length > 0 ? code : null);
     }
 
     // ---------- utworzenie projektu ----------
@@ -1088,7 +1098,7 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
     /// </summary>
     /// <param name="previews">Wczytane słowniki projektu: kod słownika → plik (ścieżka, arkusz).</param>
     public CreateOutcome Create(string code, string name, string type, PoTree tree, IReadOnlyDictionary<string, (string Path, string? Sheet)> previews,
-        string? actualsAmount = null)
+        string? actualsAmount = null, string? runDefinition = null)
     {
         var issues = ValidateBasics(code, name, type);
         issues.AddRange(ValidateObjectives(code, tree));
@@ -1104,8 +1114,8 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
         var created = store.Create(code, name.Trim(), type, tree);
         if (!created.Success)
             return new CreateOutcome(false, [], [Issue.Error(created.Conflict!, code)]);
-        steps.Add($"Zarejestrowano projekt {code} ({ProjectTypes.Label(type)}) z nakładką: {tree.ElementCount} elementów CES, {tree.VirtualCount} węzłów wirtualnych");
-        journal.Add(Area, $"{code}: utworzono projekt „{name.Trim()}” ({ProjectTypes.Label(type)})", code);
+        steps.Add($"Zarejestrowano program {code} ({ProjectTypes.Label(type)}) z nakładką: {tree.ElementCount} elementów CES, {tree.VirtualCount} węzłów wirtualnych");
+        journal.Add(Area, $"{code}: utworzono program „{name.Trim()}” ({ProjectTypes.Label(type)})", code);
 
         var problems = new List<Issue>();
         var wpRows = loaded.TryGetValue(ProjectDictionaries.WpCam, out var wpPreview) ? wpPreview.Working : null;
@@ -1119,18 +1129,30 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
                 problems.Add(Issue.Error($"{ProjectDictionaries.Item(dictionary).Name} nie zapisany: {outcome.Message}", dictionary));
         }
 
-        // Zestaw walutowy ACTUALS wybrany w kreatorze – „Parametry projektu” (gdy skoroszyt nie podał parametru).
-        if (actualsAmount is not null && !loaded.ContainsKey(ProjectDictionaries.Settings))
+        // Zestaw walutowy ACTUALS i przebieg wybrane w kreatorze – „Parametry projektu” (gdy skoroszyt nie podał parametrów).
+        if ((actualsAmount is not null || runDefinition is not null) && !loaded.ContainsKey(ProjectDictionaries.Settings))
         {
-            var setting = new DictRow(null, null, new Dictionary<string, string?>
-            {
-                ["Parametr"] = ProjectSettings.ActualsAmount, ["Wartość"] = ProjectSettings.ActualsAmountOf(actualsAmount), ["Opis"] = null,
-            });
-            var saved = SaveStructureDictionary(ProjectDictionaries.Settings, context, [setting], [], code);
+            var settings = new List<DictRow>();
+            if (actualsAmount is not null)
+                settings.Add(new DictRow(null, null, new Dictionary<string, string?>
+                {
+                    ["Parametr"] = ProjectSettings.ActualsAmount, ["Wartość"] = ProjectSettings.ActualsAmountOf(actualsAmount), ["Opis"] = null,
+                }));
+            if (runDefinition is not null)
+                settings.Add(new DictRow(null, null, new Dictionary<string, string?>
+                {
+                    ["Parametr"] = ProjectSettings.RunDefinition, ["Wartość"] = runDefinition, ["Opis"] = null,
+                }));
+            var saved = SaveStructureDictionary(ProjectDictionaries.Settings, context, settings, [], code);
             if (saved.Status is SaveStatus.Saved or SaveStatus.NoChanges)
-                steps.Add($"Zestaw walutowy ACTUALS: {ProjectSettings.SetOf(ProjectSettings.ActualsAmountOf(actualsAmount)).Label}");
+            {
+                if (actualsAmount is not null)
+                    steps.Add($"Zestaw walutowy ACTUALS: {ProjectSettings.SetOf(ProjectSettings.ActualsAmountOf(actualsAmount)).Label}");
+                if (runDefinition is not null)
+                    steps.Add($"Przebieg: {runDefinition}");
+            }
             else
-                problems.Add(Issue.Error($"Parametry projektu nie zapisane: {saved.Message}", ProjectDictionaries.Settings));
+                problems.Add(Issue.Error($"Parametry programu nie zapisane: {saved.Message}", ProjectDictionaries.Settings));
         }
 
         try

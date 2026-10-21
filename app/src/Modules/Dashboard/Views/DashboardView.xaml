@@ -20,7 +20,7 @@
         <!-- Błąd odczytu z bazy -->
         <Border Background="{StaticResource CritSoft}" CornerRadius="6" Padding="12,8" Margin="0,0,0,12"
                 Visibility="{Binding HasError, Converter={StaticResource BoolToVisibility}}">
-            <TextBlock Text="{Binding Error}" Foreground="{StaticResource Crit}" FontWeight="SemiBold" TextWrapping="Wrap" />
+            <TextBlock partials:CopyText.Enabled="True" Text="{Binding Error}" Foreground="{StaticResource Crit}" FontWeight="SemiBold" TextWrapping="Wrap" />
         </Border>
 
         <!-- Karty faz globalnych – klik przechodzi do sekcji (GlobalCard.ModuleKey) -->
@@ -122,7 +122,7 @@
                                         <TextBlock FontSize="11" Foreground="{StaticResource Muted}" FontFamily="{StaticResource FMono}">
                                             <Run Text="{Binding When, Mode=OneWay}" /><Run Text=" · " /><Run Text="{Binding Where, Mode=OneWay}" /><Run Text=" · " /><Run Text="{Binding Who, Mode=OneWay}" />
                                         </TextBlock>
-                                        <TextBlock Text="{Binding Message}" TextTrimming="CharacterEllipsis" ToolTip="{Binding Message}" />
+                                        <TextBlock partials:CopyText.Enabled="True" Text="{Binding Message}" TextTrimming="CharacterEllipsis" ToolTip="{Binding Message}" />
                                     </StackPanel>
                                 </Border>
                             </DataTemplate>

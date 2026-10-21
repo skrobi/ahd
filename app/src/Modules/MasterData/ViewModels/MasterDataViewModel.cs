@@ -1,4 +1,3 @@
-using System.IO;
 using System.Collections.ObjectModel;
 using System.Windows.Input;
 using PzlEv.Shared.Utils.Files;
@@ -30,6 +29,7 @@ public sealed class MasterDataViewModel : ObservableObject
     private readonly ICostElementSource? _costElements;
     private bool _showP1s;
     private IReadOnlyList<HrPerson>? _hrPersons;
+    private int _loading;   // trwające odczyty (słownik, liczby wierszy) – zmiana słownika dozwolona, starszy odczyt pomijany
 
     /// <param name="hr">Pracownicy z PZLHRPROD (słownik Osoby); null – brak sekcji PzlHrProd w pzl-ev.json.</param>
     /// <param name="costElements">Cost elementy ostatniego importu ACTUALS – „Uzupełnij z ACTUALS” w Cost Category.</param>
@@ -59,6 +59,18 @@ public sealed class MasterDataViewModel : ObservableObject
         Save = new AsyncRelayCommand(() => DoSave(confirmWarnings: false), () => Spec is not null && _preview is null && !Busy.IsBusy);
         Table.SaveWithWarnings = new AsyncRelayCommand(() => DoSave(confirmWarnings: true), () => Table.NeedsConfirmation && !Busy.IsBusy);
         Discard = new AsyncRelayCommand(() => Reload("Zmiany odrzucone."), () => Spec is not null && _preview is null && !Busy.IsBusy);
+        // Odśwież: słownik z bazy (np. po zapisie w innej aplikacji) i liczby wierszy; niezapisane zmiany – najpierw zapis albo odrzucenie.
+        Refresh = new AsyncRelayCommand(async () =>
+        {
+            Table.CommitEdits();
+            if (HasPendingChanges)
+            {
+                Status = "Masz niezapisane zmiany – zapisz albo odrzuć je przed odświeżeniem.";
+                return;
+            }
+            await Reload("Odświeżono z bazy.");
+            await LoadCounts();
+        }, () => Spec is not null && _preview is null && !Busy.IsBusy);
         Export = new AsyncRelayCommand(DoExport, () => Spec is not null && !Busy.IsBusy);
         Import = new AsyncRelayCommand(DoImport, () => Spec is not null && _preview is null && !Busy.IsBusy);
         ApplyImport = new AsyncRelayCommand(DoApplyImport, () => _preview is { HasErrors: false, HasChanges: true } && !Busy.IsBusy);
@@ -78,7 +90,16 @@ public sealed class MasterDataViewModel : ObservableObject
     {
         try
         {
-            var counts = await Busy.Run("Wczytywanie liczby wierszy słowników…", () => Dictionaries.Select(d => _service.Load(d.Spec).Count).ToList());
+            _loading++;
+            List<int> counts;
+            try
+            {
+                counts = await Busy.Run("Wczytywanie liczby wierszy słowników…", () => Dictionaries.Select(d => _service.Load(d.Spec).Count).ToList());
+            }
+            finally
+            {
+                _loading--;
+            }
             for (var i = 0; i < counts.Count; i++)
                 Dictionaries[i].Count = counts[i];
         }
@@ -111,10 +132,12 @@ public sealed class MasterDataViewModel : ObservableObject
             if (value is null || ReferenceEquals(value, _selectedDictionary))
                 return;
             Table.CommitEdits();
-            if (HasPendingChanges || Busy.IsBusy)
+            // Trwający odczyt nie blokuje zmiany słownika (wynik starszego odczytu jest pomijany); zapis i wczytywanie pliku – tak.
+            if (HasPendingChanges || Busy.IsBusy && _loading == 0)
             {
                 Status = Busy.IsBusy ? "Poczekaj na zakończenie bieżącej operacji." : "Masz niezapisane zmiany – zapisz albo odrzuć je przed zmianą słownika.";
-                OnPropertyChanged();
+                // Przywrócenie zaznaczenia po zakończeniu kliknięcia – bez tego lista zostaje na klikniętym słowniku, a tabela pokazuje poprzedni.
+                System.Windows.Application.Current?.Dispatcher.BeginInvoke(() => OnPropertyChanged(nameof(SelectedDictionary)));
                 return;
             }
             _selectedDictionary = value;
@@ -163,6 +186,9 @@ public sealed class MasterDataViewModel : ObservableObject
     public ICommand RemoveRow { get; }
     public ICommand Save { get; }
     public ICommand Discard { get; }
+
+    /// <summary>Ponowny odczyt słownika z bazy (np. nowa pozycja zapisana w innej aplikacji).</summary>
+    public ICommand Refresh { get; }
     public ICommand Export { get; }
     public ICommand Import { get; }
     public ICommand ApplyImport { get; }
@@ -191,7 +217,17 @@ public sealed class MasterDataViewModel : ObservableObject
             var item = _selectedDictionary!;
             try
             {
-                var (rows, lookups) = await Busy.Run($"Wczytywanie słownika „{spec.Name}”…", () => (_service.Load(spec), _service.Lookups(spec)));
+                _loading++;
+                (IReadOnlyList<DictRow> rows, IReadOnlyDictionary<string, IReadOnlyList<LookupOption>> lookups) loaded;
+                try
+                {
+                    loaded = await Busy.Run($"Wczytywanie słownika „{spec.Name}”…", () => (_service.Load(spec), _service.Lookups(spec)));
+                }
+                finally
+                {
+                    _loading--;
+                }
+                var (rows, lookups) = loaded;
                 if (!ReferenceEquals(item, _selectedDictionary))
                     return;   // w międzyczasie wybrano inny słownik
                 Table.Load(spec, rows.Select(r => (r, false)), lookups);

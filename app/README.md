@@ -4,11 +4,10 @@ Aplikacja PZL-EV rozwijana według planu w `tasks/` (`tasks/README.md`). Powsta�
 i nadal służy do sprawdzenia uruchomienia jednego `PZL-EV.exe` z dysku sieciowego (O6, sekcja „Test stosu”).
 
 Stan: **Słowniki** (słowniki globalne – F1), **Import RABIT** i **Administracja** (import plików, definicje
-źródeł, parsery, lokalizacje – F2), **Projekty** (kreator, Performance Objectives, słowniki
-projektu, gotowość, foldery – F4), **Przebiegi** (przebieg P0–P2 uruchamia „Uruchom przebieg” na ekranie
-projektu, historia – zakładka Przebiegi – F5), **Pulpit** (stan z bazy, otwarte problemy) i **Diagnostyka**.
-Pozycja menu „Przebiegi” pokazuje na razie ekran
-zastępczy modułu (dokumentacja i etapy, które moduł przejmie). Dane są w bazie MS SQL środowiska
+źródeł, parsery, lokalizacje – F2), **Programy** (kreator, Performance Objectives, słowniki
+projektu, foldery – F4), **Przebiegi** (przebieg P0–P2 uruchamia „Nowy przebieg” w zakładce Przebieg
+ekranu projektu, historia – ta sama zakładka – F5), **Pulpit** (stan z bazy, otwarte problemy) i **Diagnostyka**.
+Pozycja menu „Przebiegi” – szablony przebiegów i reguły walidacji. Dane są w bazie MS SQL środowiska
 (sekcja „Konfiguracja i dane”).
 
 Kod ma strukturę modułową (`docs/architektura.md`, rozdz. 5.3).
@@ -69,11 +68,11 @@ zmieni). Brak pliku albo błąd w nim = komunikat przy starcie z nazwą pola –
 - `029_narzuty_cas.sql` – narzuty CAS raportu kosztów CES: „Grupa narzutowa CAS” w Cost Category, słowniki „Grupy narzutowe CAS”
   i „Wskaźniki narzutu CAS”;
 - `030_dane_narzuty_cas.sql` – (zastąpione przez 034) tylko zapis wersji;
-- `031_formuly_narzutow_cas.sql` – słowniki „Pule narzutu CAS” i „Formuły narzutów CAS” (podstawy pul w danych, edytor formuł);
-  grupy narzutowe bez kolumn pul;
+- `031_formuly_narzutow_cas.sql` – słowniki „Kategorie narzutu CAS” i „Formuły narzutów CAS” (podstawy kategorii w danych, edytor formuł);
+  grupy narzutowe bez kolumn kategorii;
 - `032_dane_formuly_narzutow_cas.sql` – (zastąpione przez 034) tylko zapis wersji;
-- `033_narzuty_cas_identyfikatory.sql` – narzuty CAS powiązane identyfikatorem puli / grupy zamiast nazwy; formuły z klocków (`DICT_CasFormula`);
-- `034_dane_narzuty_cas.sql` – dane startowe narzutów CAS z arkusza finansów (pule, grupy, wskaźniki, formuły, grupa elementów kosztowych);
+- `033_narzuty_cas_identyfikatory.sql` – narzuty CAS powiązane identyfikatorem kategorii / grupy zamiast nazwy; formuły z klocków (`DICT_CasFormula`);
+- `034_dane_narzuty_cas.sql` – dane startowe narzutów CAS z arkusza finansów (kategorie, grupy, wskaźniki, formuły, grupa elementów kosztowych);
 - `035_daty_rzeczywiste_wp.sql` – daty rzeczywiste WP (Actual Start / Actual Koniec) w „Harmonogram i budżet” – nadpisanie dat z produkcji;
 - `036_koszty_i_godziny_po_elementach.sql` – `REP_ProjectCostsByElement` z parametrem `@Hours`: kwota i godziny jednym odczytem;
 - `037_zestawienie_actuals.sql` – zestawienie ACTUALS po Project definition (`CAN_ActualsBalance`, liczone przy imporcie);
@@ -90,7 +89,25 @@ zmieni). Brak pliku albo błąd w nim = komunikat przy starcie z nazwą pola –
 - `045_koszty_cas_z_narzutami.sql` – „Kursy walut” od – do z kolumną Kurs CAS; koszt bazowy projektu CAS po okresach
   (`REP_ProjectCasCosts`) – ACWP, raport CES i przebieg CAS po narzutach.
 - `046_dane_kursy_usd.sql` (dane startowe) – przybliżone kursy USD (Kurs = Kurs CAS) miesięcy 2024-01 … 2026-10 w „Kursy walut”;
-  tylko miesiące bez kursu USD, wiersze `RecordedBy = migracja 046 – kursy przybliżone` – do zastąpienia kursami finansów.
+  tylko miesiące bez kursu USD, wiersze `RecordedBy = migracja 046 – kursy przybliżone` – do zastąpienia kursami finansów;
+- `047_kontrole_przebiegu.sql` – słownik globalny „Kontrole przebiegu” (`DICT_RunCheck`): reguły kontroli przebiegu dla typu
+  programu i wariantu przebiegu (aktywna, poziom, próg); bez danych startowych;
+- `048_definicja_w_uruchomieniu.sql` – `META_RunPin.CheckSettings`: ustawienia reguł kontroli użyte w uruchomieniu (ekran Przebiegi);
+- `049_reguly_uzgodnien.sql` – słownik globalny „Reguły uzgodnień” (`DICT_RunReconciliation`): własne kontrole przebiegu z formuł
+  na miarach programu; bez danych startowych;
+- `050_definicje_przebiegow.sql` – definicje przebiegów (workflow): słowniki „Definicje przebiegów”, „Etapy przebiegów”,
+  „Elementy kontrolne etapów”; etapy uruchomienia `META_RunStep`, definicja w uruchomieniu (`META_RunPin.Definition`), etap
+  wyniku (`RUN_Issue.StepNo`); bez danych startowych (definicja wbudowana);
+- `051_reguly_walidacji.sql` – reguły walidacji przebiegu w SQL: słownik globalny „Reguły walidacji” (`DICT_RunValidation` –
+  zapytanie, poziom, opis wyniku; edytor na ekranie Przebiegi), dane jak w strukturze programu (`RUN_BalanceEv` – tabela `ev`
+  reguł), wiersz wyniku reguły (`RUN_Issue.Details`); sprzątanie – usuwa słowniki 047 i 049 oraz kolumny `CheckSettings` (048)
+  i `Level` / `Threshold` (050); bez danych startowych (reguły startowe aplikacji);
+- `052_naprawa_regul_walidacji.sql` – naprawa bazy z migracją 051 z aplikacji 0.58.0 (stara tabela reguł z formułami → reguły SQL,
+  brakujące zmiany 051);
+- `053_dane_reguly_i_przebiegi.sql` (dane startowe) – reguły startowe w słowniku „Reguły walidacji” i szablony przebiegów
+  „Wewnętrzny” i „CAS” z etapami walidacji; usuwa elementy etapów „Uzgodnienie: …”;
+- `054_struktura_na_zatwierdzonym_przebiegu.sql` – procedury kosztów struktury z parametrem `@AsOf` (dane ACTUALS zatwierdzonego
+  przebiegu – klocek „Zatwierdzenie ACTUALS”).
 
 Migracje wykonuje przycisk **Diagnostyka → Migracja** – uruchamia po kolei skrypty, których numeru nie ma
 w `META_SchemaVersion`, a wykonane pomija. Lista na tym ekranie pokazuje, które skrypty są wykonane (kiedy, kto)
@@ -139,12 +156,12 @@ na ekranie **Diagnostyka** i w stopce okna.
 8. **Pulpit → Wymaga uwagi** – otwarte problemy wszystkich obszarów, błędy najpierw. Plik z błędem → import (problem)
    → poprawiony plik → import: problem poprzedniego importu znika sam. **Rozwiązane** przy problemie – zamknięcie
    ręczne (wpis w dzienniku).
-9. **Projekty** – **+ Nowy projekt**: kod `M28`, nazwa, typ → **Performance Objectives**: **Wczytaj Excel**
+9. **Programy** – **+ Nowy program**: kod `M28`, nazwa, typ → **Performance Objectives**: **Wczytaj Excel**
    `testdata/Projekty/PO_M28.xlsx` (8 elementów; strona P1S – kolumna Legacy WBS), dodaj węzeł wirtualny i przeciągnij do niego elementy →
-   **Słowniki projektu**: **Pobierz szablon Excel** (arkusz „WP i CAM” z elementami P1S z zakresu) albo
+   **Słowniki programu**: **Pobierz szablon Excel** (arkusz „WP i CAM” z elementami P1S z zakresu) albo
    **Wczytaj skoroszyt** `testdata/Projekty/Slowniki_M28.xlsx` → **Foldery** → **Podsumowanie**: baza analityczna
-   (3 WP, 2 250 h, 75 000,50 materiałów) → **Utwórz projekt**. Bez słowników projekt powstaje, ale jest niegotowy
-   (ERROR „WP i CAM”); po wczytaniu słowników na ekranie projektu – gotowy. Drugi projekt z tym samym kodem albo z tym
+   (3 WP, 2 250 h, 75 000,50 materiałów) → **Utwórz program**. Bez słowników projekt też powstaje (braki
+   pokaże walidacja w przebiegu – reguły etapów). Drugi projekt z tym samym kodem albo z tym
    samym elementem CES – odrzucony.
 
 ## Test stosu – co aplikacja sprawdza
@@ -311,8 +328,8 @@ app/
     │   ├── Administration/      definicje źródeł, parsery, lokalizacje RABIT (F2)
     │   ├── Dashboard/           Pulpit: import, źródła, słowniki, otwarte problemy, dziennik (z bazy)
     │   ├── Diagnostics/         test stosu, konfiguracja środowiska, migracje, sprawdzenie PZLPROD
-    │   ├── Projects/            Projekty (F4): kreator, Performance Objectives, słowniki projektu, gotowość, struktura, przebiegi projektu
-    │   ├── Runs/                przebieg projektu P0–P2 (RunService, RunChecks); ekran „Przebiegi” – zastępczy
+    │   ├── Projects/            Projekty (F4): kreator, Performance Objectives, słowniki projektu, struktura, przebiegi projektu
+    │   ├── Runs/                przebieg programu etapami wg szablonu (RunService, RunWorkflowEngine – bramki; reguły walidacji w SQL – Shared/Models/Pipeline/RunRules*, wykonanie SqlRunStore.RunRule); ekran Przebiegi – szablony i edytor reguł; panel przebiegu programu – etapy, macierz reguł, porównanie uruchomień (RunPanel, kontrakt IRunPanels, RunOverview); ekran „Przebiegi” – szablony w kafelkach, okno Kontrole (RunTemplateService, RunStepTile, RunChecks*); okno „Zmiany ACWP” (AcwpChanges)
     │   └── Reconciliation/ Progress/ Evm/ Export/   pozostałe moduły: plik wejścia + etapy, bez pozycji w menu
     └── Shared/
         ├── Utils/Ui/            MVVM, konwertery, okna wyboru pliku, kontrakt modułu, tabela słownika do edycji (WPF)
