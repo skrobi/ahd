@@ -1,3 +1,4 @@
+using PzlEv.Modules.Runs.Data;
 using PzlEv.Shared.Models.Db;
 
 namespace PzlEv.Modules.Runs.Services;
@@ -31,6 +32,27 @@ public sealed record AcwpIncrement(int Year, int Period, decimal Amount, decimal
 
 /// <summary>Seria przyrostów rodzaju kosztu (wykres w oknie „Zmiany ACWP”).</summary>
 public sealed record AcwpIncrementSeries(string Kind, IReadOnlyList<AcwpIncrement> Increments);
+
+/// <summary>Wykres przyrostów (osobne okno): przyrosty rodzajów w okresach i skumulowany koszt rodzajów wykresu na koniec każdego okresu.</summary>
+public sealed record AcwpChart(IReadOnlyList<AcwpIncrementSeries> Series, IReadOnlyList<decimal> Cumulative);
+
+/// <summary>Stan linii źródłowej w porównaniu „było” / „jest”.</summary>
+public static class AcwpLineStates
+{
+    public const string Unchanged = "bez zmian";
+    public const string Changed = "zmieniona";
+    public const string New = "nowa";
+    public const string Removed = "usunięta";
+}
+
+/// <summary>Linia źródłowa w porównaniu: stan (AcwpLineStates), linia strony „było” i „jest” (null – brak linii po tej stronie).</summary>
+public sealed record AcwpLineChange(string State, RunLineRow? Before, RunLineRow? After)
+{
+    /// <summary>Linia do opisu (pola klucza są równe po obu stronach): „jest”, a dla usuniętej – „było”.</summary>
+    public RunLineRow Line => After ?? Before!;
+
+    public decimal Delta => (After?.Amount ?? 0) - (Before?.Amount ?? 0);
+}
 
 /// <summary>Wiersz eksportu drzewa zmian: ścieżka liścia i kwoty.</summary>
 public sealed record AcwpChangeExportRow(string Kind, string CostElement, string WbsElement, string Period, decimal Before, decimal After)
@@ -119,6 +141,48 @@ public static class AcwpChanges
         }).ToList();
     }
 
+    /// <summary>
+    /// Wykres przyrostów: przyrosty rodzajów (Increments) i skumulowany koszt brutto rodzajów wykresu (filtr rodzaju; bez filtra – wszystkie
+    /// rodzaje razem) zaksięgowany do końca każdego okresu wykresu, łącznie z kosztem sprzed pierwszego okresu wykresu.
+    /// </summary>
+    public static AcwpChart Chart(IReadOnlyList<RunBalanceRow> rows, IReadOnlyDictionary<string, string>? kinds, string? kind, IReadOnlySet<string>? wbsElements,
+        string? costElement, decimal factor)
+    {
+        var series = Increments(rows, kinds, kind, wbsElements, costElement, factor);
+        if (series.Count == 0)
+            return new([], []);
+        var byPeriod = rows.Where(r => !r.IsSettlement && (wbsElements is null || wbsElements.Contains(r.WbsElement))
+                                       && (costElement is null || string.Equals(r.CostElement, costElement, StringComparison.OrdinalIgnoreCase))
+                                       && (kind is null || RunCostKinds.Of(r, kinds) == kind))
+            .GroupBy(r => (r.FiscalYear, Math.Min(r.Period, 12))).ToDictionary(g => g.Key, g => g.Sum(r => r.Amount));
+        return new(series, series[0].Increments.Select(i => byPeriod.Where(p => p.Key.CompareTo((i.Year, i.Period)) <= 0).Sum(p => p.Value)).ToList());
+    }
+
+    /// <summary>
+    /// Linie źródłowe komórki (element WBS × cost element) w jednym wierszu na linię: linia „było” i „jest” to ta sama linia, gdy są równe
+    /// pola klucza (CO object name, Transaction Currency, Value TranCurr, Partner object, Original material, Purchase order number,
+    /// Created on); powtórzenia klucza łączone po kolei (plik, wiersz). Stan: bez zmian, zmieniona (kwota pola kwoty uruchomienia
+    /// albo ilość), nowa (tylko „jest”), usunięta (tylko „było”). Kolejność: zmiany od największej |zmiany kwoty|, potem bez zmian;
+    /// onlyChanges – bez linii bez zmian.
+    /// </summary>
+    public static IReadOnlyList<AcwpLineChange> Lines(IReadOnlyList<RunLineRow> before, IReadOnlyList<RunLineRow> after, bool onlyChanges)
+    {
+        var pending = before.OrderBy(l => l.FileName, StringComparer.Ordinal).ThenBy(l => l.RowNumber).GroupBy(LineKey)
+            .ToDictionary(g => g.Key, g => new Queue<RunLineRow>(g));
+        var result = new List<AcwpLineChange>();
+        foreach (var line in after.OrderBy(l => l.FileName, StringComparer.Ordinal).ThenBy(l => l.RowNumber))
+        {
+            if (pending.TryGetValue(LineKey(line), out var queue) && queue.TryDequeue(out var old))
+                result.Add(new(Same(old.Amount, line.Amount) && Same(old.Quantity, line.Quantity) ? AcwpLineStates.Unchanged : AcwpLineStates.Changed, old, line));
+            else
+                result.Add(new(AcwpLineStates.New, null, line));
+        }
+        result.AddRange(pending.Values.SelectMany(q => q).Select(l => new AcwpLineChange(AcwpLineStates.Removed, l, null)));
+        return result.Where(c => !onlyChanges || c.State != AcwpLineStates.Unchanged)
+            .OrderBy(c => c.State == AcwpLineStates.Unchanged).ThenByDescending(c => Math.Abs(c.Delta)).ThenByDescending(c => Math.Abs(c.Line.Amount ?? 0))
+            .ThenBy(c => c.Line.FileName, StringComparer.Ordinal).ThenBy(c => c.Line.RowNumber).ToList();
+    }
+
     /// <summary>Liście drzewa (bez węzłów „pozostałe”) ze ścieżką – eksport do Excela; drzewo budowane bez limitu pozycji.</summary>
     public static IReadOnlyList<AcwpChangeExportRow> Flatten(IReadOnlyList<AcwpChangeNode> tree)
     {
@@ -197,6 +261,14 @@ public static class AcwpChanges
         return Limit(cells.GroupBy(c => c.Kind).Select(g => new AcwpChangeNode(KindLevel, g.Key, g.Sum(c => c.Before), g.Sum(c => c.After),
             Limit(g.GroupBy(c => c.CostElement).Select(CostElement), CostElementLevel))), KindLevel);
     }
+
+    private static (string?, string?, decimal?, string?, string?, string?, string?) LineKey(RunLineRow l) =>
+        (Norm(l.CoObjectName), Norm(l.TransactionCurrency), l.ValueTranCurr, Norm(l.PartnerObject), Norm(l.OriginalMaterial), Norm(l.PurchaseOrderNumber),
+            Norm(l.CreatedOn));
+
+    private static string? Norm(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim().ToUpperInvariant();
+
+    private static bool Same(decimal? a, decimal? b) => Math.Abs((a ?? 0) - (b ?? 0)) < Zero;
 
     private static string Show(string wbs) => wbs.Length == 0 ? "(bez elementu WBS)" : wbs;
 }

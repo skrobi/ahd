@@ -161,17 +161,25 @@ rozdz. 4.1).
     i najnowsze; przycisk zamiany) albo **okres do okresu** – koszt zaksięgowany w dwóch okresach jednego uruchomienia;
     filtr rodzaju (Hours / Materials / Other / wszystkie), „Tylko zmiany”, „Wszystkie pozycje”;
   - kafelki ACWP rodzajów: było, jest, zmiana, zmiana %;
-  - **przyrosty miesięczne** każdego rodzaju (koszt zaksięgowany w okresie, 12 okresów do ostatniego okresu danych
-    uruchomienia „jest”) – słupki, skok w kolorze ostrzeżenia: przyrost > 3 × średni przyrost z 6 poprzednich okresów (jak reguła
-    startowa „Skok przyrostu kosztu”); podpowiedź – kwota i średnia;
+  - przycisk **Wykres** – osobne okno z jednym wykresem: w każdym okresie słupek **przyrostu miesięcznego** każdego rodzaju
+    (koszt zaksięgowany w okresie, 12 okresów do ostatniego okresu danych uruchomienia „jest”; lewa oś), skok – obramowanie w kolorze
+    ostrzeżenia: przyrost > 3 × średni przyrost z 6 poprzednich okresów (jak reguła startowa „Skok przyrostu kosztu”); nad słupkami
+    linia **kosztu skumulowanego** rodzajów wykresu na koniec okresu (suma rodzajów, łącznie z kosztem sprzed pierwszego okresu
+    wykresu; prawa oś); podpowiedź – kwota i średnia;
   - **Do Excela** – arkusze: wszystkie liście drzewa zmian bez limitu (rodzaj, cost element, element WBS, okres, było, jest,
     zmiana – do filtrów i tabel przestawnych), kafelki rodzajów, przyrosty ze skokami, opis porównania;
   - drzewo zmian: rodzaj → cost element (z opisem z Cost Category) → element WBS → okres (w wariancie okres do okresu liść
-    – element WBS), od największej zmiany; na każdym poziomie 50 pozycji i wiersz „pozostałe: N pozycji” z sumą – duże programy
+    – element WBS), od największej zmiany; kolumny było / jest / zmiana wyrównane na każdym poziomie (etykieta węższa o wcięcie); na każdym poziomie 50 pozycji i wiersz „pozostałe: N pozycji” z sumą – duże programy
     otwierają się szybko, gałęzie rozwijane na żądanie;
   - linie źródłowe wybranego liścia: wiersze ACTUALS obu stron (najnowsze wersje plików zaimportowane do zakończenia
-    uruchomienia – stan, który widział przebieg), 200 największych wg kwoty, liczba i suma wszystkich; kolumny: kwota pola kwoty
-    uruchomienia, ilość, Created on, opisy, partner, zamówienie, faktura, zlecenie, plik i wiersz;
+    uruchomienia – stan, który widział przebieg; do 100 000 największych wg kwoty na stronę), liczba i suma wszystkich; linia
+    „było” i „jest” w **jednym wierszu** – ta sama linia, gdy w komórce (element WBS × cost element) równe są pola: CO object name,
+    Transaction Currency, Value TranCurr, Partner object, Original material, Purchase order number, Created on (bez wielkości
+    liter i spacji na brzegach; powtórzenia łączone po kolei wg pliku i wiersza); stan: **nowa** (tylko „jest”), **usunięta**
+    (tylko „było”), **zmieniona** (inna kwota pola kwoty uruchomienia albo ilość), **bez zmian** – ukryte przy „Tylko zmiany”;
+    od największej zmiany, w tabeli 2000 linii, liczby stanów w opisie; kolumny: stan, kwota było / jest, zmiana, ilość było /
+    jest, Created on, opisy, waluta i Value TranCurr, partner, Original material, zamówienie, faktura, zlecenie, plik i wiersz
+    (linii „jest”, usuniętej – „było”);
   - koszty jak w przebiegu (CAS – po narzutach CAS), bez rozliczenia wychodzącego; dane przypięte nie uwzględniają słownika
     „Wykluczenia” – ACWP struktury może się różnić o pozycje wykluczone i o importy po uruchomieniu. Porównania linii po
     linii nie ma – zrzut ACTUALS nie ma stałego klucza linii (O50); porównanie na sumach komórki.

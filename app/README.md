@@ -329,7 +329,7 @@ app/
     │   ├── Dashboard/           Pulpit: import, źródła, słowniki, otwarte problemy, dziennik (z bazy)
     │   ├── Diagnostics/         test stosu, konfiguracja środowiska, migracje, sprawdzenie PZLPROD
     │   ├── Projects/            Projekty (F4): kreator, Performance Objectives, słowniki projektu, struktura, przebiegi projektu
-    │   ├── Runs/                przebieg programu etapami wg szablonu (RunService, RunWorkflowEngine – bramki; reguły walidacji w SQL – Shared/Models/Pipeline/RunRules*, wykonanie SqlRunStore.RunRule); ekran Przebiegi – szablony i edytor reguł; panel przebiegu programu – etapy, macierz reguł, porównanie uruchomień (RunPanel, kontrakt IRunPanels, RunOverview); ekran „Przebiegi” – szablony w kafelkach, okno Kontrole (RunTemplateService, RunStepTile, RunChecks*); okno „Zmiany ACWP” (AcwpChanges)
+    │   ├── Runs/                przebieg programu etapami wg szablonu (RunService, RunWorkflowEngine – bramki; reguły walidacji w SQL – Shared/Models/Pipeline/RunRules*, wykonanie SqlRunStore.RunRule); ekran Przebiegi – szablony i edytor reguł; panel przebiegu programu – etapy, macierz reguł, porównanie uruchomień (RunPanel, kontrakt IRunPanels, RunOverview); ekran „Przebiegi” – szablony w kafelkach, okno Kontrole (RunTemplateService, RunStepTile, RunChecks*); okno „Zmiany ACWP” (AcwpChanges; wykres przyrostów – AcwpChartWindow)
     │   └── Reconciliation/ Progress/ Evm/ Export/   pozostałe moduły: plik wejścia + etapy, bez pozycji w menu
     └── Shared/
         ├── Utils/Ui/            MVVM, konwertery, okna wyboru pliku, kontrakt modułu, tabela słownika do edycji (WPF)

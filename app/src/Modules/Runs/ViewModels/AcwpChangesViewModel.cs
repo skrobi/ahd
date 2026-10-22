@@ -24,35 +24,24 @@ public sealed record AcwpPeriodOption(int Year, int Period)
     public string Label => $"{Year}/{Period:00}";
 }
 
-/// <summary>Słupek wykresu przyrostów: wysokość (px), skok, podpowiedź.</summary>
-public sealed record AcwpBar(string Label, double Height, bool IsJump, string ToolTip);
-
-/// <summary>Wiersz wykresu: rodzaj kosztu i słupki okresów.</summary>
-public sealed record AcwpBarSeries(string Kind, IReadOnlyList<AcwpBar> Bars, int Jumps)
-{
-    public string Title => Jumps == 0 ? $"ACWP {Kind}" : $"ACWP {Kind} – skoki: {Jumps}";
-}
-
-/// <summary>Linia źródłowa w oknie: strona porównania („było” / „jest”) i linia.</summary>
-public sealed record AcwpLineView(string Side, RunLineRow Line);
-
 /// <summary>
 /// Okno „Zmiany ACWP” (docs/funkcjonalnosc.md, F06): porównanie kosztu brutto po rodzaju kosztu – dwa uruchomienia przebiegu
 /// (domyślnie: ostatnie uruchomienie poprzedniego okresu i najnowsze) albo okres do okresu w jednym uruchomieniu; kafelki
-/// rodzajów, drzewo zmian (AcwpChanges) i linie źródłowe wybranego liścia (stan plików z chwili uruchomienia). Koszty w walucie
-/// przebiegu (CAS – po narzutach); linie – dane źródłowe ACTUALS.
+/// rodzajów, drzewo zmian (AcwpChanges), linie źródłowe wybranego liścia – linia „było” i „jest” w jednym wierszu (AcwpChanges.Lines,
+/// stan plików z chwili uruchomienia) i wykres przyrostów (osobne okno). Koszty w walucie przebiegu (CAS – po narzutach); linie – dane
+/// źródłowe ACTUALS.
 /// </summary>
 public sealed class AcwpChangesViewModel : ObservableObject
 {
     private static readonly ILogger Logger = Log.ForContext("Module", "runs");
 
-    /// <summary>Liczba linii źródłowych jednej strony.</summary>
-    public const int LineCount = 200;
+    /// <summary>Liczba linii źródłowych w tabeli (po porównaniu, od największej zmiany).</summary>
+    public const int LineCount = 2000;
+
+    /// <summary>Liczba linii źródłowych jednej strony wczytywanych do porównania (wg |kwoty|).</summary>
+    public const int LineFetch = 100_000;
 
     public const string AllKinds = "Wszystkie";
-
-    /// <summary>Wysokość najwyższego słupka wykresu (px).</summary>
-    private const double BarHeight = 70;
 
     private readonly IRunStore _store;
     private readonly Func<IProjectProcessSource?> _processes;
@@ -61,7 +50,7 @@ public sealed class AcwpChangesViewModel : ObservableObject
     private readonly string _project;
     private readonly IReadOnlySet<string>? _wbsElements;
     private readonly decimal _jumpFactor = AcwpChanges.JumpFactor;
-    private IReadOnlyList<AcwpBarSeries> _chart = [];
+    private AcwpChart _chart = new([], []);
     private readonly Dictionary<long, IReadOnlyList<RunBalanceRow>> _balances = [];
     private RunDictionaryData? _dictionaries;
     private bool _periodMode;
@@ -76,7 +65,7 @@ public sealed class AcwpChangesViewModel : ObservableObject
     private bool _showAll;
     private AcwpComparison _comparison = new([], []);
     private AcwpChangeNode? _selected;
-    private IReadOnlyList<AcwpLineView> _lines = [];
+    private IReadOnlyList<AcwpLineChange> _lines = [];
     private string _linesTitle = "Wybierz pozycję drzewa na poziomie okresu (dwa uruchomienia) albo elementu WBS (okres do okresu) – linie źródłowe.";
     private string? _error;
     private string _note = "";
@@ -99,11 +88,18 @@ public sealed class AcwpChangesViewModel : ObservableObject
     /// <summary>Drzewo zmian (wszystkie pozycje, bez limitu) i przyrosty do Excela.</summary>
     public ICommand Export { get; }
 
-    /// <summary>Przyrosty miesięczne rodzajów (12 okresów do ostatniego okresu danych „jest”), skoki – próg reguły „Skok przyrostu kosztu”.</summary>
-    public IReadOnlyList<AcwpBarSeries> Chart { get => _chart; private set => SetProperty(ref _chart, value); }
+    /// <summary>
+    /// Wykres przyrostów (przycisk „Wykres”): przyrosty miesięczne rodzajów (12 okresów do ostatniego okresu danych „jest”), skoki – próg
+    /// reguły „Skok przyrostu kosztu”, skumulowany koszt rodzajów wykresu.
+    /// </summary>
+    public AcwpChart Chart { get => _chart; private set => SetProperty(ref _chart, value); }
 
-    public string ChartNote => $"Koszt zaksięgowany w okresie (uruchomienie „jest”); kolor ostrzeżenia – skok: przyrost > {_jumpFactor:0.##} × średni przyrost "
-                               + $"z {AcwpChanges.IncrementPeriods} poprzednich okresów (jak reguła startowa „Skok przyrostu kosztu”).";
+    /// <summary>Uruchomienie danych wykresu (opis okna wykresu).</summary>
+    public string ChartSource => (PeriodMode ? PeriodPin : AfterPin)?.Label ?? "";
+
+    public string ChartNote => $"Słupki – koszt zaksięgowany w okresie (uruchomienie „jest”), obramowanie w kolorze ostrzeżenia – skok: przyrost > {_jumpFactor:0.##} × "
+                               + $"średni przyrost z {AcwpChanges.IncrementPeriods} poprzednich okresów (jak reguła startowa „Skok przyrostu kosztu”); "
+                               + "linia – koszt skumulowany na koniec okresu (prawa oś).";
 
     public string Title { get; }
 
@@ -166,7 +162,7 @@ public sealed class AcwpChangesViewModel : ObservableObject
         }
     }
 
-    public IReadOnlyList<AcwpLineView> Lines { get => _lines; private set => SetProperty(ref _lines, value); }
+    public IReadOnlyList<AcwpLineChange> Lines { get => _lines; private set => SetProperty(ref _lines, value); }
 
     public string LinesTitle { get => _linesTitle; private set => SetProperty(ref _linesTitle, value); }
 
@@ -259,8 +255,9 @@ public sealed class AcwpChangesViewModel : ObservableObject
             else
                 Compare(AcwpChanges.Runs(_balances[BeforePin!.Pin.PinId], _balances[AfterPin!.Pin.PinId], _dictionaries?.CostKinds, _dictionaries?.CostElementNames,
                     kind, _wbsElements, OnlyChanges, top, _request.CostElement), $"Stan narastająco: było – {BeforePin.Label}, jest – {AfterPin.Label}.");
-            Chart = Bars(AcwpChanges.Increments(_balances[(PeriodMode ? PeriodPin! : AfterPin!).Pin.PinId], _dictionaries?.CostKinds, kind, _wbsElements,
-                _request.CostElement, _jumpFactor));
+            Chart = AcwpChanges.Chart(_balances[(PeriodMode ? PeriodPin! : AfterPin!).Pin.PinId], _dictionaries?.CostKinds, kind, _wbsElements,
+                _request.CostElement, _jumpFactor);
+            OnPropertyChanged(nameof(ChartSource));
         });
     }
 
@@ -302,27 +299,27 @@ public sealed class AcwpChangesViewModel : ObservableObject
             var sides = PeriodMode
                 ? new[] { ("było", PeriodPin!.Pin, key.Before), ("jest", PeriodPin!.Pin, key.After) }
                 : [("było", BeforePin!.Pin, key.Before), ("jest", AfterPin!.Pin, key.After)];
-            var result = await Busy.Run($"Linie źródłowe {key.WbsElement} × {key.CostElement}…", () => sides
-                .Where(s => s.Item3 is not null)
-                .Select(s => (Side: s.Item1, Lines: _store.ActualsLines(key.WbsElement, key.CostElement, s.Item3!.Value.Year, s.Item3.Value.Period,
-                    s.Item2.FinishedAt ?? s.Item2.StartedAt, s.Item2.AmountField ?? ProjectSettings.DefaultActualsAmount, LineCount)))
-                .ToList());
+            var onlyChanges = OnlyChanges;
+            var (result, lines) = await Busy.Run($"Linie źródłowe {key.WbsElement} × {key.CostElement}…", () =>
+            {
+                var loaded = sides.Select(s => (Side: s.Item1, Lines: s.Item3 is null
+                    ? new RunLines([], 0, 0)
+                    : _store.ActualsLines(key.WbsElement, key.CostElement, s.Item3.Value.Year, s.Item3.Value.Period,
+                        s.Item2.FinishedAt ?? s.Item2.StartedAt, s.Item2.AmountField ?? ProjectSettings.DefaultActualsAmount, LineFetch))).ToList();
+                return (loaded, AcwpChanges.Lines(loaded[0].Lines.Rows, loaded[1].Lines.Rows, onlyChanges));
+            });
             if (!ReferenceEquals(node, _selected))
                 return;
-            Lines = result.SelectMany(r => r.Lines.Rows.Select(l => new AcwpLineView(r.Side, l))).ToList();
+            Lines = lines.Take(LineCount).ToList();
+            var states = lines.GroupBy(l => l.State).ToDictionary(g => g.Key, g => g.Count());
             LinesTitle = $"Linie źródłowe {key.WbsElement} × {key.CostElement} (dane ACTUALS, pole kwoty uruchomienia): "
                 + string.Join("; ", result.Select(r => $"{r.Side} – {r.Lines.Count} linii, suma {r.Lines.Sum:#,0.00}"
-                                                       + (r.Lines.Count > r.Lines.Rows.Count ? $", pokazano {r.Lines.Rows.Count} największych" : "")));
+                                                       + (r.Lines.Count > r.Lines.Rows.Count ? $" (porównano {r.Lines.Rows.Count} największych)" : "")))
+                + $". Nowe: {states.GetValueOrDefault(AcwpLineStates.New)}, usunięte: {states.GetValueOrDefault(AcwpLineStates.Removed)}, "
+                + $"zmienione: {states.GetValueOrDefault(AcwpLineStates.Changed)}"
+                + (onlyChanges ? "" : $", bez zmian: {states.GetValueOrDefault(AcwpLineStates.Unchanged)}")
+                + (lines.Count > LineCount ? $"; pokazano {LineCount} z największą zmianą" : "") + ".";
         });
-    }
-
-    private static IReadOnlyList<AcwpBarSeries> Bars(IReadOnlyList<AcwpIncrementSeries> series)
-    {
-        var max = series.SelectMany(s => s.Increments).Select(i => i.Amount).DefaultIfEmpty(0).Max();
-        return series.Select(s => new AcwpBarSeries(s.Kind, s.Increments.Select(i => new AcwpBar(i.Label,
-            max <= 0 || i.Amount <= 0 ? 1 : Math.Max(1, (double)(i.Amount / max) * BarHeight), i.IsJump,
-            $"{i.Label}: {i.Amount:#,0.00} (średni przyrost {AcwpChanges.IncrementPeriods} poprzednich okresów {i.Average:#,0.00})"
-            + (i.IsJump ? " – skok" : ""))).ToList(), s.Increments.Count(i => i.IsJump))).ToList();
     }
 
     private async Task DoExport()

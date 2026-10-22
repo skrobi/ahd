@@ -403,7 +403,8 @@ public sealed class SqlRunStore(SqlDatabase db) : IRunStore
     {
         var lines = ActualsLines(null, wbsElement, [costElement], year, period, asOf, amountField, top, exactPeriod: true);
         return new RunLines(lines.Rows.Select(r => new RunLineRow(r.FileName, r.RowNumber, r.CreatedOn, r.Amount, r.Quantity, r.CostElementName, r.CoObjectName,
-            r.PartnerObject, r.PurchaseOrderNumber, r.InvoiceNumber, r.OriginalOrderNumber)).ToList(), lines.Count, lines.Sum);
+            r.PartnerObject, r.PurchaseOrderNumber, r.InvoiceNumber, r.OriginalOrderNumber, r.TransactionCurrency, r.ValueTranCurr, r.OriginalMaterial)).ToList(),
+            lines.Count, lines.Sum);
     }
 
     public RunActualsLines ActualsLines(RunActualsScope scope, DateTimeOffset asOf, string amountField, int top) =>
@@ -445,7 +446,8 @@ public sealed class SqlRunStore(SqlDatabase db) : IRunStore
             SELECT TOP (@top) {Text("WbsElement")} AS WbsElement, {Text("CostElement")} AS CostElement, {Integer("FiscalYear")} AS FiscalYear, {Integer("Period")} AS Period,
                    f.FileName, r.RowNumber, {Text("CreatedOn")} AS CreatedOn, {Number(amountField)} AS Amount, {Number("TotalQuantity")} AS Quantity,
                    {Text("CostElementName")} AS CostElementName, {Text("CoObjectName")} AS CoObjectName, {Text("PartnerObject")} AS PartnerObject,
-                   {Text("PurchaseOrderNumber")} AS PurchaseOrderNumber, {Text("InvoiceNumber")} AS InvoiceNumber, {Text("OriginalOrderNumber")} AS OriginalOrderNumber
+                   {Text("PurchaseOrderNumber")} AS PurchaseOrderNumber, {Text("InvoiceNumber")} AS InvoiceNumber, {Text("OriginalOrderNumber")} AS OriginalOrderNumber,
+                   {Text("TransactionCurrency")} AS TransactionCurrency, {Number("ValueTranCurr")} AS ValueTranCurr, {Text("OriginalMaterial")} AS OriginalMaterial
             {from}
             ORDER BY ABS(ISNULL({Number(amountField)}, 0)) DESC, f.FileName, r.RowNumber
             """, args, commandTimeout: LongTimeout).ToList();

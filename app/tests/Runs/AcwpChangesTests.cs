@@ -1,3 +1,4 @@
+using PzlEv.Modules.Runs.Data;
 using PzlEv.Modules.Runs.Services;
 using PzlEv.Shared.Models.Db;
 using PzlEv.Shared.Models.Pipeline;
@@ -100,5 +101,68 @@ public sealed class AcwpChangesTests
         var row = Assert.Single(flat.Where(r => r.Kind == "Materials"));   // A.2 w „pozostałe” – pominięty
         Assert.Equal(("51105550 – Materiały", "A.1", "2026/09", 30m), (row.CostElement, row.WbsElement, row.Period, row.Delta));
         Assert.Equal("", Assert.Single(AcwpChanges.Flatten(AcwpChanges.Periods(after, (2026, 8), (2026, 9), Kinds, null, null, null, true, costElement: "92212550").Tree)).Period);
+    }
+
+    private static RunLineRow Line(int row, decimal amount, decimal tranCurr, string po = "PO1", string createdOn = "2026-10-18", decimal? quantity = null,
+        string file = "ACTUALS.xlsx", string? coObject = "Certyfikacja") =>
+        new(file, row, createdOn, amount, quantity, "PZL Des Eng", coObject, "PETE22/41055", po, null, null, "PLN", tranCurr, null);
+
+    [Fact]
+    public void Lines_pair_before_and_after_by_key_fields_into_one_row_with_state()
+    {
+        // Ta sama linia w nowym imporcie ma inny numer wiersza – łączona po polach klucza, nie po pliku i wierszu.
+        RunLineRow[] before = [Line(10, 100m, 100m), Line(11, 50m, 50m, po: "PO2"), Line(12, 30m, 30m, po: "PO3"), Line(13, 7m, 7m, po: "PO4", quantity: 1m)];
+        RunLineRow[] after = [Line(20, 100m, 100m, file: "ACTUALS_NEW.xlsx"), Line(21, 55m, 50m, po: "po2 "), Line(22, 40m, 40m, po: "PO3"), Line(23, 9m, 9m, po: "PO5"),
+            Line(24, 7m, 7m, po: "PO4", quantity: 2m)];
+
+        var all = AcwpChanges.Lines(before, after, onlyChanges: false);
+        var changes = AcwpChanges.Lines(before, after, onlyChanges: true);
+
+        // PO3: inna Value TranCurr – inna linia (usunięta i nowa); PO2: ten sam klucz (wielkość liter, spacje), inna kwota – zmieniona.
+        Assert.Equal([(AcwpLineStates.New, 40m), (AcwpLineStates.Removed, -30m), (AcwpLineStates.New, 9m), (AcwpLineStates.Changed, 5m),
+            (AcwpLineStates.Changed, 0m), (AcwpLineStates.Unchanged, 0m)], all.Select(l => (l.State, l.Delta)));
+        Assert.Equal((10, 20), (all[^1].Before!.RowNumber, all[^1].After!.RowNumber));
+        Assert.Equal((11, 21), (all[3].Before!.RowNumber, all[3].After!.RowNumber));
+        Assert.Equal(12, all[1].Line.RowNumber);   // usunięta – opis z linii „było”
+        Assert.Null(all[1].After);
+        Assert.Equal((2m, 1m), (all[4].After!.Quantity, all[4].Before!.Quantity));   // PO4: zmiana tylko ilości
+        Assert.Equal(5, changes.Count);
+        Assert.DoesNotContain(changes, l => l.State == AcwpLineStates.Unchanged);
+    }
+
+    [Fact]
+    public void Lines_with_repeated_key_pair_in_file_and_row_order_and_extra_ones_are_new_or_removed()
+    {
+        RunLineRow[] before = [Line(2, 10m, 10m), Line(1, 10m, 10m), Line(3, 5m, 5m, createdOn: "2026-10-01", coObject: null)];
+        RunLineRow[] after = [Line(7, 10m, 10m), Line(5, 10m, 10m), Line(6, 10m, 10m), Line(8, 5m, 5m, createdOn: "2026-10-01", coObject: " ")];
+
+        var lines = AcwpChanges.Lines(before, after, onlyChanges: false);
+
+        Assert.Equal([(1, 5), (2, 6), (3, 8)], lines.Where(l => l.State == AcwpLineStates.Unchanged).Select(l => (l.Before!.RowNumber, l.After!.RowNumber)).OrderBy(x => x));
+        var added = Assert.Single(lines, l => l.State == AcwpLineStates.New);
+        Assert.Equal((7, 10m), (added.After!.RowNumber, added.Delta));
+        Assert.Equal(added, lines[0]);   // zmiany przed liniami bez zmian
+        Assert.Empty(AcwpChanges.Lines([], [], onlyChanges: true));
+    }
+
+    [Fact]
+    public void Chart_has_increments_and_cumulative_cost_of_chart_kinds_including_cost_before_first_chart_period()
+    {
+        // Koszt w 2025/01 – przed 12 okresami wykresu (2025/09–2026/08) – wchodzi do wartości skumulowanej; okres 14 jak 12.
+        RunBalanceRow[] rows = [new("A.1", "51105550", 2025, 1, false, "PLN", 1, 1000m, null), Row("A.1", "51105550", 7, 31m), Row("A.1", "51105550", 8, 25m),
+            Row("A.1", "92212550", 8, 4m), Row("A.1", "91902551", 8, -500m, settlement: true), new("A.1", "51105550", 2025, 14, false, "PLN", 1, 2m, null)];
+
+        var all = AcwpChanges.Chart(rows, Kinds, null, null, null, factor: 3m);
+        var hours = AcwpChanges.Chart(rows, Kinds, "Hours", null, null, factor: 3m);
+
+        Assert.Equal(["Hours", "Materials", "Other"], all.Series.Select(s => s.Kind));
+        Assert.Equal(12, all.Cumulative.Count);
+        Assert.Equal(1000m, all.Cumulative[0]);    // 2025/09
+        Assert.Equal(1002m, all.Cumulative[3]);    // 2025/12
+        Assert.Equal(1033m, all.Cumulative[^2]);   // 2026/07
+        Assert.Equal(1062m, all.Cumulative[^1]);   // 2026/08: + 25 Materials + 4 Hours (bez rozliczenia)
+        Assert.Equal(4m, hours.Cumulative[^1]);
+        Assert.Equal(0m, hours.Cumulative[0]);
+        Assert.Empty(AcwpChanges.Chart(rows, Kinds, null, new HashSet<string> { "X" }, null, 3m).Cumulative);
     }
 }

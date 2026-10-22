@@ -15,9 +15,13 @@ public sealed record RunDictionaryData(IReadOnlyDictionary<string, string> CostK
 /// <summary>Wiersz danych uruchomienia jak w strukturze programu (RUN_BalanceEv – tabela „ev” reguł walidacji).</summary>
 public sealed record RunEvRow(string WbsElement, string CostElement, int FiscalYear, int Period, string CostKind, decimal Amount);
 
-/// <summary>Linia źródłowa ACTUALS (okno „Zmiany ACWP”): plik, wiersz, data utworzenia, kwota pola kwoty uruchomienia, ilość, opisy.</summary>
+/// <summary>
+/// Linia źródłowa ACTUALS (okno „Zmiany ACWP”): plik, wiersz, data utworzenia, kwota pola kwoty uruchomienia, ilość, opisy; waluta
+/// i wartość w walucie transakcji, materiał – pola klucza linii (AcwpChanges.Lines).
+/// </summary>
 public sealed record RunLineRow(string FileName, int RowNumber, string? CreatedOn, decimal? Amount, decimal? Quantity, string? CostElementName,
-    string? CoObjectName, string? PartnerObject, string? PurchaseOrderNumber, string? InvoiceNumber, string? OriginalOrderNumber);
+    string? CoObjectName, string? PartnerObject, string? PurchaseOrderNumber, string? InvoiceNumber, string? OriginalOrderNumber,
+    string? TransactionCurrency = null, decimal? ValueTranCurr = null, string? OriginalMaterial = null);
 
 /// <summary>Linie źródłowe komórki: pierwsze linie wg |kwoty| oraz liczba i suma wszystkich.</summary>
 public sealed record RunLines(IReadOnlyList<RunLineRow> Rows, int Count, decimal Sum);
@@ -31,7 +35,7 @@ public sealed record RunActualsScope(long PinId, string? WbsElement, IReadOnlyCo
 /// <summary>Linia ACTUALS zrzutu: element WBS, cost element, rok, okres i pola linii źródłowej.</summary>
 public sealed record RunActualsLine(string? WbsElement, string? CostElement, int? FiscalYear, int? Period, string FileName, int RowNumber, string? CreatedOn,
     decimal? Amount, decimal? Quantity, string? CostElementName, string? CoObjectName, string? PartnerObject, string? PurchaseOrderNumber, string? InvoiceNumber,
-    string? OriginalOrderNumber);
+    string? OriginalOrderNumber, string? TransactionCurrency, decimal? ValueTranCurr, string? OriginalMaterial);
 
 /// <summary>Zrzut linii ACTUALS: pierwsze linie wg |kwoty| oraz liczba i suma wszystkich.</summary>
 public sealed record RunActualsLines(IReadOnlyList<RunActualsLine> Rows, int Count, decimal Sum);

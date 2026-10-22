@@ -1,0 +1,14 @@
+<Window x:Class="PzlEv.Modules.Runs.Views.AcwpChartWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Width="1100" Height="560" MinWidth="600" MinHeight="360"
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="False" Background="{StaticResource Surface}">
+    <!-- Wykres przyrostów okna „Zmiany ACWP” – docs/funkcjonalnosc.md, F06: słupki rodzajów w okresie, linia – koszt skumulowany -->
+    <DockPanel Margin="16">
+        <TextBlock x:Name="Heading" DockPanel.Dock="Top" Style="{StaticResource H2}" />
+        <TextBlock x:Name="Note" DockPanel.Dock="Top" Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="0,0,0,8" />
+        <WrapPanel x:Name="Legend" DockPanel.Dock="Top" Margin="0,0,0,8" />
+        <TextBlock x:Name="Empty" DockPanel.Dock="Top" Text="Brak kosztu w zakresie wykresu." Style="{StaticResource MutedText}" Visibility="Collapsed" />
+        <Canvas x:Name="Plot" ClipToBounds="True" SizeChanged="OnPlotSizeChanged" Background="Transparent" />
+    </DockPanel>
+</Window>
