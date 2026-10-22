@@ -133,6 +133,16 @@ zmiana zakresu zadania w trakcie realizacji wymaga uzgodnienia.
 | [F10.4 PZLPROD, WebDAV, wydajność](F10.4-pzlprod-webdav-wydajnosc.md) | całość | F10.3 | O5, O6 | w toku – import dużych plików przebudowany (2026-10-03); zostało: pomiar na prawdziwej lokalizacji i bazie |
 | [F10.5 Paczka wdrożeniowa](F10.5-paczka-wdrozeniowa.md) | całość | F10.3 | – | do zrobienia |
 
+## F11. Moduł CAM – estymacje dla Finansów i wyniki EV CAM-a
+
+| Zadanie | Moduł | Zależy od | Otwarte kwestie | Status |
+|---|---|---|---|---|
+| [F11.1 Moduł CAM – dane estymacji i kontrakt](F11.1-modul-cam-dane-i-kontrakt.md) | Cam, Projects | F4.6 | O10, O35 | do zrobienia |
+| [F11.2 Estymacja – propozycje i wyliczenia](F11.2-estymacja-propozycje-i-wyliczenia.md) | Cam | F11.1 | O10, O35, O15 | do zrobienia |
+| [F11.3 Ekran Estymacje](F11.3-ekran-estymacje.md) | Cam | F11.2 | – | do zrobienia |
+| [F11.4 Zatwierdzanie estymacji](F11.4-zatwierdzanie-estymacji.md) | Cam | F11.3 | – | do zrobienia |
+| [F11.5 Ekran Wyniki EV CAM-a](F11.5-ekran-wyniki-ev-cam.md) | Cam | F11.1 | O35 | do zrobienia |
+
 ## Otwarte kwestie blokujące
 
 | Kwestia | Kto | Blokuje |
@@ -144,4 +154,4 @@ zmiana zakresu zadania w trakcie realizacji wymaga uzgodnienia.
 | O45 – przypisanie kosztów i zaawansowania do węzłów nakładki | zespół | F5.2 |
 | O11, O33, O34 | zespół | F7.2, F6.1, F7.3 |
 
-Poza planem (v2): rola CAM i PM w aplikacji, raporty Power BI.
+Poza planem (v2): uprawnienia roli CAM i PM w aplikacji (moduł CAM – F11, na razie bez uprawnień), raporty Power BI.
