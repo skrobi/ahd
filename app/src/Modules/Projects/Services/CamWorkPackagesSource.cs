@@ -42,7 +42,7 @@ public sealed class CamWorkPackagesSource(ProjectService service) : ICamWorkPack
                     row.OpsBacHours is not null, row.ProductionEtcHours, row.EtcHours, row.MaterialEtc, row.EtcCost,
                     row.UndeliveredByYear ?? new Dictionary<int, decimal>(), ProjectService.HourRates(departmentRates, row.Mpk, rates),
                     rates.LaborFactor is { } labor && labor != 0 ? 1 / labor : null,
-                    rates.MaterialFactor is { } usd && usd != 0 ? 1 / usd : null, note));
+                    rates.MaterialFactor is { } usd && usd != 0 ? 1 / usd : null, note, row.ProductionEtcByYear, row.PlanStart, row.PlanFinish));
             }
         }
         return result;

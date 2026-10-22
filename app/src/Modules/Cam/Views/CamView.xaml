@@ -146,7 +146,7 @@
                                             </Style>
                                         </TextBlock.Style>
                                     </TextBlock>
-                                    <TextBlock Text="Baseline zmienia tylko analityk (Harmonogram i budżet)." Foreground="{StaticResource Muted}" FontSize="12" Margin="0,4,0,0" />
+                                    <TextBlock Text="Propozycja dat: ostatnio wpisana prognoza, bez niej najwcześniejsza i najpóźniejsza DATA_PLAN zleceń AHD. Baseline zmienia tylko analityk (Harmonogram i budżet)." Foreground="{StaticResource Muted}" FontSize="12" TextWrapping="Wrap" Margin="0,4,0,0" />
                                 </StackPanel>
                             </Border>
 

@@ -15,10 +15,12 @@ public sealed class CamEstimatesTests
         string? finish = "2028-01-31", string? forecastFinish = "2028-03-31", decimal bacMaterial = 180000, decimal acwpMaterial = 96400,
         IReadOnlyDictionary<int, decimal>? undelivered = null, IReadOnlyDictionary<int, decimal>? rates = null, string project = "PAF",
         decimal bac = 1152800, decimal? bcws = 697800, decimal? bcwp = 654800, decimal acwp = 701360, decimal? etcCost = 529970, decimal? materialEtc = 69750,
-        decimal? toPln = 1, decimal? toUsd = 0.27m, string currency = "PLN") =>
-        new(project, project + " – program", wp, "Montaż kadłuba", "0412", "4100", currency, "2025-03-03", finish, "2025-03-03", forecastFinish,
+        decimal? toPln = 1, decimal? toUsd = 0.27m, string currency = "PLN", IReadOnlyDictionary<int, decimal>? etcByYear = null,
+        string? forecastStart = "2025-03-03", string? planStart = null, string? planFinish = null) =>
+        new(project, project + " – program", wp, "Montaż kadłuba", "0412", "4100", currency, "2025-03-03", finish, forecastStart, forecastFinish,
             bacHours, bacMaterial, bac, bcws, bcwp, acwp, acwp - acwpMaterial, acwpMaterial, actualHours, production, productionEtc, 2950, materialEtc, etcCost,
-            undelivered ?? new Dictionary<int, decimal>(), rates ?? new Dictionary<int, decimal> { [2026] = 152, [2027] = 158 }, toPln, toUsd, null);
+            undelivered ?? new Dictionary<int, decimal>(), rates ?? new Dictionary<int, decimal> { [2026] = 152, [2027] = 158 }, toPln, toUsd, null,
+            etcByYear, planStart, planFinish);
 
     [Fact]
     public void Split_spreads_over_working_days_by_year_and_keeps_the_total()
@@ -41,6 +43,33 @@ public sealed class CamEstimatesTests
         Assert.Equal(420m, CamEstimates.HoursProposal(Wp(production: false, productionEtc: null, bacHours: 2400, actualHours: 1980), Today).Values.Sum());
         Assert.Empty(CamEstimates.HoursProposal(Wp(production: false, bacHours: 100, actualHours: 150), Today));      // przekroczony – 0, nie ujemne
         Assert.Equal([2026, 2027], CamEstimates.HoursProposal(Wp(forecastFinish: null, finish: "2027-06-30"), Today).Keys.Order());   // bez prognozy – baseline
+    }
+
+    [Fact]
+    public void Hours_proposal_of_production_wp_follows_planned_year_of_ahd()
+    {
+        // R z AHD: zaległe (2025) – rok bieżący; bez roku (0) – rozkład do końca WP; lata planu, nie liniowo.
+        var byYear = CamEstimates.HoursProposal(Wp(forecastFinish: "2026-12-31", etcByYear: new Dictionary<int, decimal>
+            { [2025] = 10.4m, [2026] = 100, [2028] = 500.6m, [0] = 50 }), Today);
+
+        Assert.Equal([(2026, 160m), (2028, 501m)], byYear.OrderBy(x => x.Key).Select(x => (x.Key, x.Value)));
+        Assert.Equal(3120m, CamEstimates.HoursProposal(Wp(etcByYear: new Dictionary<int, decimal>()), Today).Values.Sum());   // bez lat – liniowo
+        Assert.Equal(420m, CamEstimates.HoursProposal(Wp(production: false, productionEtc: null, bacHours: 2400, actualHours: 1980,
+            etcByYear: new Dictionary<int, decimal> { [2030] = 999 }), Today).Values.Sum());                                      // bez produkcji – z budżetu
+    }
+
+    [Fact]
+    public void Forecast_dates_are_the_last_entered_else_planned_dates_of_orders_else_baseline()
+    {
+        var planned = Wp(forecastStart: null, forecastFinish: null, planStart: "2026-02-10", planFinish: "2027-03-01");
+
+        Assert.Equal((new DateOnly(2026, 2, 10), new DateOnly(2027, 3, 1)), (CamEstimates.Start(planned), CamEstimates.Finish(planned)));
+        Assert.Equal((new DateOnly(2025, 3, 3), new DateOnly(2028, 3, 31)),
+            (CamEstimates.Start(Wp(planStart: "2026-02-10", planFinish: "2027-03-01")), CamEstimates.Finish(Wp(planFinish: "2027-03-01"))));   // wpisana prognoza wygrywa
+        Assert.Equal((new DateOnly(2025, 3, 3), new DateOnly(2028, 1, 31)), (CamEstimates.Start(Wp(forecastStart: null, forecastFinish: null)),
+            CamEstimates.Finish(Wp(forecastStart: null, forecastFinish: null))));                                                                   // bez planu – baseline
+        var estimate = CamEstimates.New(planned, "2026-10", Today);
+        Assert.Equal((new DateOnly(2026, 2, 10), new DateOnly(2027, 3, 1)), (estimate.ForecastStart, estimate.ForecastFinish));
     }
 
     [Fact]

@@ -10,12 +10,15 @@ namespace PzlEv.Shared.Models.PzlProd;
 /// materiały z LOG.vAPD (element P1S, nie wydzielenie): ActualMaterial – wartość dostarczona (statusy z „Parametry produkcji”),
 /// MaterialValue – wartość wszystkich części, MaterialFee – narzut Z_CLO, Parts / PartsDelivered – liczba numerów części,
 /// NextDeliveryYear – najbliższy rok planowanej dostawy części niedostarczonych; EtcHours = TECH_DO_PON / produktywność + DJK;
-/// UndeliveredByYear – wartość części niedostarczonych według roku planowanej dostawy (0 – bez daty; USD jak MaterialValue).
+/// UndeliveredByYear – wartość części niedostarczonych według roku planowanej dostawy (0 – bez daty; USD jak MaterialValue);
+/// PlanStart / PlanFinish – najwcześniejsza / najpóźniejsza planowana data operacji (DATA_PLAN); EtcByYear – ETC godzin według
+/// planowanego roku poniesienia (kolumna R; 0 – bez roku).
 /// </summary>
 public sealed record ProductionValues(string Pspnr, decimal? AcHours, decimal? BacHours, decimal? EvHours, decimal? ActualMaterial,
     string? VirtualCode = null, DateOnly? ActualStart = null, DateOnly? ActualFinish = null, decimal? EtcHours = null,
     decimal? MaterialValue = null, decimal? MaterialFee = null, int? Parts = null, int? PartsDelivered = null, int? NextDeliveryYear = null,
-    IReadOnlyDictionary<int, decimal>? UndeliveredByYear = null);
+    IReadOnlyDictionary<int, decimal>? UndeliveredByYear = null, DateOnly? PlanStart = null, DateOnly? PlanFinish = null,
+    IReadOnlyDictionary<int, decimal>? EtcByYear = null);
 
 /// <summary>
 /// Wydzielenie godzin z elementu P1S (węzeł wirtualny nakładki z kodem ELEMENT_P1S.NAZWA.CPLGR) z PSPNR elementu: operacje

@@ -12,7 +12,9 @@ public sealed record CamPerson(string Code, string Name)
 /// materiały), godziny poniesione (CATS, a bez produkcji – Actual DLH z ACTUALS), ETC (wpis w „Harmonogram i budżet”
 /// albo z produkcji), ETC z produkcji, materiały niedostarczone vAPD według roku dostawy, stawka godziny według roku (Labor Rate ×
 /// Overhead ze „Stawki wydziałów” MPK WP, przeliczona do waluty programu). Kwoty w walucie programu (zestaw walutowy ACTUALS);
-/// ToPln / ToUsd – przelicznik waluty programu (kurs bieżący, null – brak kursu); DataNote – braki danych (np. bez PZLPROD).
+/// ToPln / ToUsd – przelicznik waluty programu (kurs bieżący, null – brak kursu); DataNote – braki danych (np. bez PZLPROD);
+/// ProductionEtcByYear – ETC z produkcji według planowanego roku poniesienia (vAHDD R; 0 – bez roku); PlanStart / PlanFinish –
+/// MIN / MAX DATA_PLAN zleceń WP (prognoza terminów, gdy nie jest wpisana).
 /// </summary>
 public sealed record CamWorkPackage(
     string Project,
@@ -44,7 +46,10 @@ public sealed record CamWorkPackage(
     IReadOnlyDictionary<int, decimal> HourRates,
     decimal? ToPln,
     decimal? ToUsd,
-    string? DataNote);
+    string? DataNote,
+    IReadOnlyDictionary<int, decimal>? ProductionEtcByYear = null,
+    string? PlanStart = null,
+    string? PlanFinish = null);
 
 /// <summary>
 /// Moduł CAM – WP CAM-ów we wszystkich programach i przekazanie zatwierdzonej estymacji do struktury programu (słownik

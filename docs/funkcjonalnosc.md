@@ -205,10 +205,14 @@ rozdz. 4.1).
 
 ### F11. Moduł CAM – estymacje dla Finansów
 
-- Propozycje systemu w latach (rozkład liniowy po dniach roboczych do prognozowanego końca): WP produkcyjny – ETC z AHD,
-  bez danych produkcji – BAC godzin − poniesione; materiały – części niedostarczone `vAPD` według roku planowanej dostawy
-  (`docs/zrodla-danych.md`), bez nich – BAC materiałów − poniesione. Rozkład godzin produkcji po latach – liniowo (daty
-  operacji zleceń – O10).
+- Propozycje systemu w latach: WP produkcyjny – ETC z AHD (`TECH_DO_PON` ÷ produktywność IPT + DJK, suma elementów P1S
+  poddrzewa WP) według planowanego roku poniesienia (`vAHDD.R`; rok miniony – rok bieżący, operacje bez roku – rozkład
+  liniowy po dniach roboczych do prognozowanego końca); bez danych produkcji – BAC godzin − poniesione, rozłożone liniowo;
+  materiały – części niedostarczone `vAPD` według roku planowanej dostawy (`docs/zrodla-danych.md`), bez nich – BAC
+  materiałów − poniesione, rozłożone liniowo. Przeliczenie godzin technologicznych na rzeczywiste po latach wskaźnikami
+  programu – później (gotowa tabela wskaźników).
+- Prognoza terminów: ostatnio wpisana (Forecast Start / Koniec w „Harmonogram i budżet” – zapisuje ją zatwierdzenie
+  estymacji); bez niej najwcześniejsza i najpóźniejsza `DATA_PLAN` zleceń WP, a bez danych produkcji – baseline.
 - Koszt godzin = godziny × stawka MPK roku („Stawki wydziałów”: Labor Rate × Overhead) przeliczona na walutę programu
   (USD – kurs z „Kursy walut”).
 - Statusy: Do uzupełnienia → Szkic → Wysłana → Zatwierdzona / Zwrócona (z uwagą) → Szkic; jedna estymacja WP na cykl,

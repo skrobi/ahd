@@ -27,15 +27,16 @@ public sealed class PzlProdProductionTests : IDisposable
         connection.Execute(
             $"""
             CREATE TABLE {_prod.Table("vAHDD")} (PSPNR CHAR(8), SWBS NVARCHAR(40), CPLGR NVARCHAR(10), ARBPL NVARCHAR(10), IPT NVARCHAR(10), STAT NVARCHAR(10),
-                GSTRI DATE, LTRMI DATE, DATA_REAL DATE, CATS DECIMAL(18,2), TECH DECIMAL(18,2), TECH_PON DECIMAL(18,2), TECH_DO_PON DECIMAL(18,2));
+                GSTRI DATE, LTRMI DATE, DATA_REAL DATE, CATS DECIMAL(18,2), TECH DECIMAL(18,2), TECH_PON DECIMAL(18,2), TECH_DO_PON DECIMAL(18,2),
+                DATA_PLAN DATE, R NVARCHAR(4));
             CREATE TABLE {_prod.Table("vAHDD_PL_CPI")} (IPT NVARCHAR(10), CzTechPon DECIMAL(18,2), CzRzecz DECIMAL(18,2), DataZakonczeniaOperacji DATE);
             CREATE TABLE {_prod.Table("vAPD")} (PSPNR CHAR(8), STATUS NVARCHAR(10), NETWR_USD DECIMAL(18,2), Z_CLO DECIMAL(9,4), MATNR NVARCHAR(40), EINDT_MAX DATE);
             INSERT INTO {_prod.Table("vAHDD")} VALUES
-                ('00000101', 'Hangar', 'W51', '3622', 'W51', 'DONE', '2026-01-10', '2026-02-20', '2026-02-15', 12, 100, 40, 60),
-                ('00000101', 'Hangar', 'X10', 'K001', 'X10', 'DONE', '2026-01-05', '2026-02-25', '2026-02-24', 3, 10, 10, 0),
-                ('00000101', 'Hangar', 'W20', '2010', 'W20', 'OPEN', '2026-03-01', NULL, '2026-03-05', 4, 50, 20, 30),   -- Paint (Hangar W20)
-                ('00000102', 'Cabin', 'W30', '3010', 'W30', 'OPEN', '2026-02-01', NULL, NULL, 1, 20, 0, 20),
-                ('00000999', 'Hangar', 'W51', '3622', 'W51', 'DONE', '2025-01-01', '2025-02-01', NULL, 99, 99, 99, 0);
+                ('00000101', 'Hangar', 'W51', '3622', 'W51', 'DONE', '2026-01-10', '2026-02-20', '2026-02-15', 12, 100, 40, 60, '2026-02-10', '2026'),
+                ('00000101', 'Hangar', 'X10', 'K001', 'X10', 'DONE', '2026-01-05', '2026-02-25', '2026-02-24', 3, 10, 10, 0, '2026-02-20', '2026'),
+                ('00000101', 'Hangar', 'W20', '2010', 'W20', 'OPEN', '2026-03-01', NULL, '2026-03-05', 4, 50, 20, 30, '2027-03-01', '2027'),   -- Paint (Hangar W20)
+                ('00000102', 'Cabin', 'W30', '3010', 'W30', 'OPEN', '2026-02-01', NULL, NULL, 1, 20, 0, 20, NULL, NULL),
+                ('00000999', 'Hangar', 'W51', '3622', 'W51', 'DONE', '2025-01-01', '2025-02-01', NULL, 99, 99, 99, 0, '2025-01-01', '2025');
             -- W51: produktywność 0,8 (2 mies. temu); operacja sprzed 3 lat – poza oknem; pozostałe IPT – bez produktywności (1)
             INSERT INTO {_prod.Table("vAHDD_PL_CPI")} VALUES ('W51', 80, 100, DATEADD(MONTH, -2, GETDATE())), ('W51', 10, 100, DATEADD(YEAR, -3, GETDATE()));
             INSERT INTO {_prod.Table("vAPD")} VALUES ('00000101', 'DOST', 110, 0.10, 'PN-1', '2026-01-15'), ('00000101', 'WYD', 50, NULL, 'PN-2', '2026-02-01'),
@@ -68,6 +69,12 @@ public sealed class PzlProdProductionTests : IDisposable
         Assert.Equal((1350m, 30m, 4, 2, 2026), (wp.MaterialValue, wp.MaterialFee, wp.Parts, wp.PartsDelivered, wp.NextDeliveryYear));
         // ETC: W51 60/0,8 + 15% z 60 = 84; X10 0; W20 30 + 10% = 33 → 117.
         Assert.Equal(117m, wp.EtcHours);
+        // ETC według planowanego roku poniesienia (R): 2026 – W51 84 (X10 0 – pominięte), 2027 – W20 33; W30 bez roku – rok 0.
+        Assert.Equal([(2026, 84m), (2027, 33m)], wp.EtcByYear!.OrderBy(x => x.Key).Select(x => (x.Key, x.Value)));
+        Assert.Equal([(0, 22m)], values["102"].EtcByYear!.Select(x => (x.Key, x.Value)));
+        // Plan zleceń (DATA_PLAN): najwcześniejsza i najpóźniejsza data operacji; bez dat – puste.
+        Assert.Equal((new DateOnly(2026, 2, 10), new DateOnly(2027, 3, 1)), (wp.PlanStart, wp.PlanFinish));
+        Assert.Equal(((DateOnly?)null, (DateOnly?)null), (values["102"].PlanStart, values["102"].PlanFinish));
         // Niedostarczone według roku dostawy (propozycja materiałów CAM): 2026 – 220/1,10; 2027 – 1000; bez daty – rok 0.
         Assert.Equal([(2026, 200m), (2027, 1000m)], wp.UndeliveredByYear!.OrderBy(x => x.Key).Select(x => (x.Key, x.Value)));
         Assert.Equal([(0, 70m)], values["102"].UndeliveredByYear!.Select(x => (x.Key, x.Value)));
@@ -84,9 +91,11 @@ public sealed class PzlProdProductionTests : IDisposable
         var paint = Assert.Single(values, v => v.VirtualCode == Paint.Code);
         Assert.Equal((4m, 55m, 22m, (decimal?)null), (paint.AcHours, paint.BacHours, paint.EvHours, paint.ActualMaterial));   // DJK W20 idzie z Paint; materiały – nadrzędny
         Assert.Equal((new DateOnly(2026, 3, 5), (DateOnly?)null), (paint.ActualStart, paint.ActualFinish));                    // DATA_REAL; otwarta
+        Assert.Equal([(2027, 33m)], paint.EtcByYear!.Select(x => (x.Key, x.Value)));                                           // ETC po latach – też wydzielenie
         var parent = Assert.Single(values, v => v.VirtualCode is null);
         Assert.Equal((15m, 150m, 66m, 150m), (parent.AcHours, parent.BacHours, parent.EvHours, parent.ActualMaterial));          // bez operacji Paint
         Assert.Equal((new DateOnly(2026, 1, 5), new DateOnly(2026, 2, 25)), (parent.ActualStart, parent.ActualFinish));        // wszystkie DONE – koniec LTRMI
+        Assert.Equal([(2026, 84m)], parent.EtcByYear!.Select(x => (x.Key, x.Value)));
     }
 
     [SqlFact]

@@ -101,6 +101,7 @@ public sealed class EstimateEditorViewModel : ObservableObject
             new SummaryTile("Poniesione materiały", $"{Number(wp.AcwpMaterial, 0)} {wp.Currency}"),
             new SummaryTile("Stawka MPK " + (wp.Mpk ?? "—"), wp.HourRates.Count == 0 ? "brak w „Stawki wydziałów”" : string.Join(" · ", wp.HourRates.OrderBy(r => r.Key).Select(r => $"{r.Key}: {Number(r.Value, 2)}"))),
             new SummaryTile("Baseline", $"{wp.BaselineStart ?? "—"} → {wp.BaselineFinish ?? "—"}"),
+            new SummaryTile("Plan zleceń AHD (DATA_PLAN)", $"{wp.PlanStart ?? "—"} → {wp.PlanFinish ?? "—"}"),
             new SummaryTile("Poprzednia zatwierdzona", lastApproved is null ? "—" : $"{Number(lastApproved.Total(CamLineKinds.Hours), 0)} h · {Number(lastApproved.Total(CamLineKinds.Material), 0)} {lastApproved.Currency} · cykl {lastApproved.Cycle}"),
         ];
         SaveDraft = new AsyncRelayCommand(() => save(this, false), () => Editable);
@@ -125,7 +126,7 @@ public sealed class EstimateEditorViewModel : ObservableObject
     public bool HasReviewNote => ReviewNote is not null;
 
     public string HoursSource => Wp.Production
-        ? "Propozycja: ETC z AHD (TECH_DO_PON ÷ produktywność IPT × (1 + DJK)) rozłożone na dni robocze do prognozowanego końca."
+        ? "Propozycja: ETC z AHD (TECH_DO_PON ÷ produktywność IPT + DJK) według planowanego roku poniesienia (R); rok miniony – rok bieżący, operacje bez roku – rozłożone na dni robocze do prognozowanego końca."
         : "Propozycja: BAC godzin − poniesione, rozłożone na dni robocze do prognozowanego końca.";
 
     public string MaterialSource => Wp.UndeliveredByYear.Count > 0

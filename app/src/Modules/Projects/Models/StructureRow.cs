@@ -15,7 +15,8 @@ namespace PzlEv.Modules.Projects.Models;
 /// jak Acwp. ActualStart / ActualFinish – daty WP wpisane w „Harmonogram i budżet” (Actual Start / Koniec;
 /// ActualStartManual, ActualFinishManual), a bez nich vAHDD (GSTRI, LTRMI; wydzielenie – DATA_REAL); koniec, gdy
 /// wszystkie zlecenia zamknięte. ProductionEtcHours – ETC z produkcji (bez wpisu ETC HOURS), UndeliveredByYear – materiały
-/// niedostarczone vAPD według roku dostawy w walucie projektu (propozycja estymacji CAM).
+/// niedostarczone vAPD według roku dostawy w walucie projektu, ProductionEtcByYear – ETC z produkcji według planowanego roku
+/// poniesienia (vAHDD R; 0 – bez roku), PlanStart / PlanFinish – MIN / MAX DATA_PLAN operacji (propozycja estymacji CAM).
 /// </summary>
 public sealed record StructureRow(
     string Id,
@@ -71,7 +72,10 @@ public sealed record StructureRow(
     decimal AcwpMaterial = 0,
     decimal? EtcCost = null,
     decimal? ProductionEtcHours = null,
-    IReadOnlyDictionary<int, decimal>? UndeliveredByYear = null)
+    IReadOnlyDictionary<int, decimal>? UndeliveredByYear = null,
+    IReadOnlyDictionary<int, decimal>? ProductionEtcByYear = null,
+    string? PlanStart = null,
+    string? PlanFinish = null)
 {
     // Wskaźniki EVM (docs/performance-objectives.md, rozdz. 4.2) – z wartości wiersza; brak danych albo dzielenie przez 0 – null.
 

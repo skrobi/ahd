@@ -55,17 +55,20 @@ public static class StructureBuilder
     /// </summary>
     private readonly record struct ProductionSum(decimal? Ac, decimal? Bac, decimal? Ev, decimal? Material, DateOnly? Start, DateOnly? Finish, bool Open,
         decimal? Etc = null, decimal? Value = null, decimal? Fee = null, int? Parts = null, int? PartsDelivered = null, int? NextYear = null,
-        IReadOnlyDictionary<int, decimal>? Undelivered = null)
+        IReadOnlyDictionary<int, decimal>? Undelivered = null, DateOnly? PlanStart = null, DateOnly? PlanFinish = null,
+        IReadOnlyDictionary<int, decimal>? EtcByYear = null)
     {
         public ProductionSum Add(ProductionValues? v) => v is null ? this
             : new(Plus(Ac, v.AcHours), Plus(Bac, v.BacHours), Plus(Ev, v.EvHours), Plus(Material, v.ActualMaterial), Min(Start, v.ActualStart),
                 Max(Finish, v.ActualFinish), Open || (v.ActualFinish is null && (v.AcHours is not null || v.BacHours is not null)),
                 Plus(Etc, v.EtcHours), Plus(Value, v.MaterialValue), Plus(Fee, v.MaterialFee), Plus(Parts, v.Parts), Plus(PartsDelivered, v.PartsDelivered),
-                MinYear(NextYear, v.NextDeliveryYear), Plus(Undelivered, v.UndeliveredByYear));
+                MinYear(NextYear, v.NextDeliveryYear), Plus(Undelivered, v.UndeliveredByYear), Min(PlanStart, v.PlanStart), Max(PlanFinish, v.PlanFinish),
+                Plus(EtcByYear, v.EtcByYear));
 
         public ProductionSum Add(ProductionSum v) => new(Plus(Ac, v.Ac), Plus(Bac, v.Bac), Plus(Ev, v.Ev), Plus(Material, v.Material),
             Min(Start, v.Start), Max(Finish, v.Finish), Open || v.Open, Plus(Etc, v.Etc), Plus(Value, v.Value), Plus(Fee, v.Fee), Plus(Parts, v.Parts),
-            Plus(PartsDelivered, v.PartsDelivered), MinYear(NextYear, v.NextYear), Plus(Undelivered, v.Undelivered));
+            Plus(PartsDelivered, v.PartsDelivered), MinYear(NextYear, v.NextYear), Plus(Undelivered, v.Undelivered), Min(PlanStart, v.PlanStart),
+            Max(PlanFinish, v.PlanFinish), Plus(EtcByYear, v.EtcByYear));
 
         public DateOnly? ActualFinish => Open ? null : Finish;
 
@@ -383,7 +386,8 @@ public static class StructureBuilder
                 MaterialEtc: shown.Count > 0 ? Sum(shown, MaterialEtc) : ops.Value - (ops.Material ?? 0), MaterialEtcManual: budget?["ETC MATERIAL"] is not null,
                 Parts: ops.Parts, PartsDelivered: ops.PartsDelivered, NextDeliveryYear: ops.NextYear,
                 AcwpLabor: Actual(LaborMeasure), AcwpMaterial: Actual(MaterialMeasure), EtcCost: Sum(shown, EtcCost),
-                ProductionEtcHours: ops.Etc, UndeliveredByYear: ops.Undelivered));
+                ProductionEtcHours: ops.Etc, UndeliveredByYear: ops.Undelivered, ProductionEtcByYear: ops.EtcByYear,
+                PlanStart: Date(ops.PlanStart), PlanFinish: Date(ops.PlanFinish)));
             foreach (var child in item.Children)
                 Emit(child, item.Id, depth + 1);
         }

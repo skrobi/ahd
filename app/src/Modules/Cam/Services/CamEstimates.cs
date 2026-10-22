@@ -52,16 +52,26 @@ public static class CamEstimates
         return result;
     }
 
-    /// <summary>Koniec WP do rozkładu: prognoza, a bez niej baseline; null – brak dat.</summary>
-    public static DateOnly? Finish(CamWorkPackage wp) => Date(wp.ForecastFinish) ?? Date(wp.BaselineFinish);
+    /// <summary>Start WP: ostatnio wpisana prognoza (Forecast Start), bez niej najwcześniejsza DATA_PLAN zleceń, potem baseline.</summary>
+    public static DateOnly? Start(CamWorkPackage wp) => Date(wp.ForecastStart) ?? Date(wp.PlanStart) ?? Date(wp.BaselineStart);
+
+    /// <summary>Koniec WP do rozkładu: ostatnio wpisana prognoza (Forecast Koniec), bez niej najpóźniejsza DATA_PLAN zleceń, potem baseline; null – brak dat.</summary>
+    public static DateOnly? Finish(CamWorkPackage wp) => Date(wp.ForecastFinish) ?? Date(wp.PlanFinish) ?? Date(wp.BaselineFinish);
 
     /// <summary>
-    /// Propozycja godzin w latach: WP produkcyjny – ETC z AHD (TECH_DO_PON ÷ produktywność IPT × (1 + DJK)); bez produkcji –
-    /// BAC godzin − godziny poniesione (nie mniej niż 0); rozkład na dni robocze od daty stanu do końca WP (do czasu planowanych dat
-    /// zleceń – O10). Pełne godziny.
+    /// Propozycja godzin w latach: WP produkcyjny – ETC z AHD (TECH_DO_PON ÷ produktywność IPT + DJK) według planowanego roku
+    /// poniesienia (vAHDD R; rok miniony – rok bieżący; operacje bez roku – rozkład jak niżej); bez produkcji – BAC godzin − godziny
+    /// poniesione (nie mniej niż 0) rozłożone na dni robocze od daty stanu do końca WP. Pełne godziny.
     /// </summary>
     public static IReadOnlyDictionary<int, decimal> HoursProposal(CamWorkPackage wp, DateOnly today)
     {
+        if (wp.Production && wp.ProductionEtcByYear is { Count: > 0 } byYear)
+        {
+            var withoutYear = Split(byYear.GetValueOrDefault(0), today, Finish(wp) ?? today, 0);
+            return byYear.Where(x => x.Key != 0).Select(x => (Year: Math.Max(x.Key, today.Year), x.Value)).Concat(withoutYear.Select(x => (Year: x.Key, x.Value)))
+                .GroupBy(x => x.Year).Select(g => (g.Key, Value: Math.Round(g.Sum(x => x.Value), 0))).Where(x => x.Value != 0)
+                .ToDictionary(x => x.Key, x => x.Value);
+        }
         var total = wp.Production ? wp.ProductionEtcHours ?? 0 : Math.Max(0, wp.BacHours - (wp.ActualHours ?? 0));
         return Split(total, today, Finish(wp) ?? today, 0);
     }
@@ -80,7 +90,7 @@ public static class CamEstimates
     }
 
     /// <summary>
-    /// Nowa estymacja w cyklu z propozycji systemu (wartość CAM = propozycja; daty – prognoza WP, a bez niej baseline): lata od
+    /// Nowa estymacja w cyklu z propozycji systemu (wartość CAM = propozycja; daty – Start / Finish): lata od
     /// bieżącego do końca WP i lat z propozycjami.
     /// </summary>
     public static CamEstimate New(CamWorkPackage wp, string cycle, DateOnly today)
@@ -94,7 +104,7 @@ public static class CamEstimates
             lines.Add(new CamEstimateLine(CamLineKinds.Hours, year, hours.GetValueOrDefault(year), hours.GetValueOrDefault(year)));
             lines.Add(new CamEstimateLine(CamLineKinds.Material, year, materials.GetValueOrDefault(year), materials.GetValueOrDefault(year)));
         }
-        return new CamEstimate(null, wp.Project, wp.Wp, cycle, wp.Cam, CamStatuses.ToDo, Date(wp.ForecastStart) ?? Date(wp.BaselineStart),
+        return new CamEstimate(null, wp.Project, wp.Wp, cycle, wp.Cam, CamStatuses.ToDo, Start(wp),
             Finish(wp), wp.Currency, null, null, lines);
     }
 
