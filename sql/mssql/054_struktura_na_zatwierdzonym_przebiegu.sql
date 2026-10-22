@@ -178,3 +178,8 @@ BEGIN
     ORDER BY s.GroupingOrder, s.Grouping, s.ProjectDefinition, s.CostElement, s.WbsElement, s.FiscalYear, s.Period;
 END;
 GO
+
+IF NOT EXISTS (SELECT 1 FROM [$(Schema)].[$(Prefix)META_SchemaVersion] WHERE Version = 54)
+INSERT INTO [$(Schema)].[$(Prefix)META_SchemaVersion] (Version, Script, MinAppVersion)
+VALUES (54, N'054_struktura_na_zatwierdzonym_przebiegu.sql', '0.60.0');
+GO

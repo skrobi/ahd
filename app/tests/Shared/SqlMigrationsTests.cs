@@ -66,6 +66,8 @@ public sealed class SqlMigrationsTests
         Assert.Contains(batches, b => b.Contains("CREATE TABLE [FINOP].[PZLEV_META_Project]"));
         Assert.All(scripts.SelectMany(s => SqlMigrations.Batches(s.Text, "FINOP", "PZLEV_")),
             b => Assert.False(b.Contains("$(Schema)") || b.Contains("$(Prefix)")));
+        // Skrypt sam zapisuje swój numer – bez wpisu aplikacja pyta o migrację przy każdym starcie (wykonana jest pomijana tylko po wpisie).
+        Assert.All(scripts, s => Assert.Contains($"VALUES ({s.Number}, N'{s.Name}'", s.Text));
     }
 
     [SqlFact]
