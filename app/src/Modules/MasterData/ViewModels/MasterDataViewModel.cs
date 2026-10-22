@@ -8,13 +8,14 @@ using PzlEv.Shared.Utils.Dictionaries;
 using PzlEv.Shared.Models;
 using PzlEv.Shared.Utils.Ui.Dialogs;
 using PzlEv.Shared.Utils.Ui.Dictionaries;
+using PzlEv.Shared.Utils.Ui.Modularity;
 using PzlEv.Shared.Utils.Ui.Mvvm;
 using Serilog;
 
 namespace PzlEv.Modules.MasterData.ViewModels;
 
 /// <summary>Ekran Słowniki (F03): lista słowników globalnych, edycja w tabeli, zapis z walidacją, historia, Excel.</summary>
-public sealed class MasterDataViewModel : ObservableObject
+public sealed class MasterDataViewModel : ObservableObject, INavigationTarget
 {
     private static readonly ILogger Logger = Log.ForContext("Module", "master-data");
 
@@ -149,6 +150,20 @@ public sealed class MasterDataViewModel : ObservableObject
             ClosePreview(null);
             _ = Reload("");
         }
+    }
+
+    /// <summary>
+    /// Przejście z parametrem (INavigator): DictionaryLink – słownik z filtrem tabeli („Popraw w aplikacji” przy wyniku kontroli przebiegu);
+    /// niezapisane zmiany innego słownika – bez zmiany (komunikat ustawia SelectedDictionary).
+    /// </summary>
+    public void NavigatedTo(object parameter)
+    {
+        if (parameter is not DictionaryLink link || GlobalDictionaries.Find(link.Dictionary) is not { } spec
+            || Dictionaries.FirstOrDefault(d => d.Spec.Code == spec.Code) is not { } item)
+            return;
+        SelectedDictionary = item;
+        if (ReferenceEquals(_selectedDictionary, item))
+            Table.Filter = link.Filter ?? "";   // filtr zostaje po wczytaniu wierszy (Reload)
     }
 
     /// <summary>Struktura P1S z PZLPROD – podgląd tylko do odczytu zamiast tabeli słownika.</summary>

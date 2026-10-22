@@ -1,3 +1,5 @@
+using System.Text.RegularExpressions;
+using PzlEv.Modules.Projects.Services;
 using PzlEv.Modules.Runs.Services;
 using PzlEv.Shared.Models.Dictionaries;
 using PzlEv.Shared.Models.Pipeline;
@@ -103,6 +105,26 @@ public sealed class RunRulesTests
         Assert.All(RunRules.ActualsStarters, r => Assert.DoesNotContain("ev", RunRules.TablesUsed(r.Sql)));   // ACTUALS – cała pula
         Assert.All(RunRules.EvStarters, r => Assert.DoesNotContain("biezace", RunRules.TablesUsed(r.Sql)));
         Assert.Equal(["biezace", "cost_category"], RunRules.TablesUsed(RunRules.Starter("Cost element spoza słownika Cost Category")!.Sql));
+    }
+
+    /// <summary>„Popraw w aplikacji” w regułach startowych: słownik programu albo globalny (po nazwie) i filtr z kolumny wyniku.</summary>
+    [Fact]
+    public void Starter_rules_with_fix_in_app_name_existing_program_or_global_dictionary()
+    {
+        var fixes = RunRules.Starters.Select(r => (r.Name, Match: Regex.Match(r.Sql, @"N'([^']+)' AS Slownik, (\S+) AS Filtr"))).Where(x => x.Match.Success).ToList();
+
+        Assert.Equal(["Cost element spoza słownika Cost Category", "Cost element bez Cost Category", "MPK bez stawki wydziału na rok", "WP bez MPK", "WP bez budżetu"],
+            fixes.Select(f => f.Name));
+        Assert.Equal([GlobalDictionaries.CostCategory, GlobalDictionaries.CostCategory, null, ProjectDictionaries.WpCam, ProjectDictionaries.ScheduleBudget],
+            fixes.Select(f => ProjectDictionaries.Find(f.Match.Groups[1].Value)?.Code));   // słownik programu – ekran programu
+        Assert.Equal(GlobalDictionaries.DepartmentRates, GlobalDictionaries.Find(fixes[2].Match.Groups[1].Value)?.Code);   // globalny – ekran Słowniki
+        Assert.Equal(["b.CostElement", "e.CostElement", "w.MPK", "WP", "w.WP"], fixes.Select(f => f.Match.Groups[2].Value));
+
+        Assert.Equal(ProjectDictionaries.WpCam, ProjectDictionaries.Find(" WP-CAM ")?.Code);                         // kod, bez wielkości liter
+        Assert.Equal(GlobalDictionaries.CostCategory, ProjectDictionaries.Find("Cost Category projektu")?.Code);     // nazwa arkusza
+        Assert.Null(ProjectDictionaries.Find("Kursy walut"));
+        Assert.Equal(GlobalDictionaries.FxRates, GlobalDictionaries.Find("kursy walut")?.Code);
+        Assert.Null(GlobalDictionaries.Find("nie ma takiego"));
     }
 
     [Fact]

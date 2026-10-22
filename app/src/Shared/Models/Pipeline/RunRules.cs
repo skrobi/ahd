@@ -92,8 +92,10 @@ public static partial class RunRules
     /// <summary>Kolumny wyniku z własnym znaczeniem w programie (podpowiedź w edytorze).</summary>
     public static RunRuleTable ResultColumns { get; } = new("kolumny wyniku",
         "Opcjonalne kolumny o znaczeniu w zakładce Przebieg programu: Problem i Wskazowka – problem wiersza (zamiast opisu wyniku); "
-        + "ElementWBS, CostElement, RodzajKosztu, RokOkres (albo Rok i Okres) – zakres linii ACTUALS wiersza i „Pokaż zmiany”",
-        ["Problem", "Wskazowka", "ElementWBS", "CostElement", "RodzajKosztu", "RokOkres"]);
+        + "ElementWBS, CostElement, RodzajKosztu, RokOkres (albo Rok i Okres) – zakres linii ACTUALS wiersza i „Pokaż zmiany”; "
+        + "Slownik i Filtr – „Popraw w aplikacji”: słownik (nazwa albo kod – słownik programu, np. WP i CAM, albo globalny, np. Stawki wydziałów) "
+        + "i wartość filtra jego tabeli",
+        ["Problem", "Wskazowka", "ElementWBS", "CostElement", "RodzajKosztu", "RokOkres", "Slownik", "Filtr"]);
 
     /// <summary>Parametry zapytania (wartości uruchomienia).</summary>
     public static IReadOnlyList<RunRuleTable> Parameters { get; } =
@@ -112,6 +114,10 @@ public static partial class RunRules
     /// </summary>
     public const string ProblemColumn = "Problem";
     public const string HintColumn = "Wskazowka";
+
+    /// <summary>Kolumny „Popraw w aplikacji”: słownik do poprawy i wartość filtra jego tabeli (bez kolumny w tabeli wyniku).</summary>
+    public const string DictionaryColumn = "Slownik";
+    public const string FilterColumn = "Filtr";
 
     /// <summary>Kolumny wyniku wskazujące zakres okna „Zmiany ACWP” („Pokaż zmiany”) i element wyniku – w tej kolejności.</summary>
     public static IReadOnlyList<string> ElementColumns { get; } = ["ElementWBS", "CostElement", "RodzajKosztu", "WP", "MPK"];

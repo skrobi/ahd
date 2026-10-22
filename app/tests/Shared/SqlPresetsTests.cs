@@ -1,3 +1,4 @@
+using Dapper;
 using PzlEv.Modules.Administration.Data;
 using PzlEv.Modules.Administration.Models;
 using PzlEv.Modules.Administration.Services;
@@ -118,7 +119,7 @@ public sealed class SqlPresetsTests : IDisposable
         var ownFx = new Dictionary<string, string?> { ["Waluta"] = "USD", ["Od"] = "2024-01-01", ["Do"] = "2024-01-31", ["Kurs"] = "3.5", [GlobalDictionaries.CasFxColumn] = "3.6" };
         Assert.True(_dictionaries.Save(GlobalDictionaries.FxRates, null, [new RowChange(RowChangeKind.Added, null, null, fxSpec.KeyOf(ownFx), ownFx)]).Success);
 
-        Assert.Equal(["002_dane_startowe.sql", "023_dane_produkcji.sql", "030_dane_narzuty_cas.sql", "032_dane_formuly_narzutow_cas.sql", "034_dane_narzuty_cas.sql", "040_dane_rodzaj_kosztu.sql", "046_dane_kursy_usd.sql", "053_dane_reguly_i_przebiegi.sql"],
+        Assert.Equal(["002_dane_startowe.sql", "023_dane_produkcji.sql", "030_dane_narzuty_cas.sql", "032_dane_formuly_narzutow_cas.sql", "034_dane_narzuty_cas.sql", "040_dane_rodzaj_kosztu.sql", "046_dane_kursy_usd.sql", "053_dane_reguly_i_przebiegi.sql", "055_dane_popraw_w_aplikacji.sql"],
             SqlMigrations.Apply(_database.Sql));
 
         var paf = _sources.Definitions().Single(d => d.Code == "ACTUALS_PAF");
@@ -180,5 +181,38 @@ public sealed class SqlPresetsTests : IDisposable
         var ownCas = loaded.Single(t => t.Definition.Code == "CAS").Definition;           // szablon użytkownika bez zmian
         Assert.Equal(3, ownCas.Steps.Count);
         Assert.Equal(["WP bez MPK"], ownCas.Steps[2].Elements.Select(e => e.Element));     // „Uzgodnienie: *” – usunięte
+    }
+
+    /// <summary>
+    /// Migracja 055: reguła startowa z zapytaniem z migracji 053 – nowa wersja z kolumnami Slownik i Filtr na swoim miejscu listy;
+    /// reguła zmieniona przez użytkownika i reguła już poprawiona – bez zmian.
+    /// </summary>
+    [SqlFact]
+    public void Fix_in_app_migration_updates_only_starter_rules_unchanged_by_user()
+    {
+        Use(presets: true);
+        var store = new PzlEv.Modules.Runs.Data.SqlRunStore(_database.Sql);
+        var table = _database.Sql.Table("dict.RunValidation");
+        string Sql(string name) => store.Rules().Single(r => r.Name == name).Sql;
+        var budget = Sql("WP bez budżetu");
+        using (var connection = _database.Sql.Open())
+        {
+            // „WP bez budżetu” – zapytanie jak z 053 (bez kolumn), „WP bez MPK” – zmienione przez użytkownika; 055 do wykonania ponownie.
+            connection.Execute($"UPDATE {table} SET SqlText = @sql WHERE Name = N'WP bez budżetu' AND SupersededAt IS NULL",
+                new { sql = budget.Replace(", N'Harmonogram i budżet' AS Slownik, w.WP AS Filtr", "").Replace("\n", "\r\n") });
+            connection.Execute($"UPDATE {table} SET SqlText = N'SELECT WP FROM wp_cam' WHERE Name = N'WP bez MPK' AND SupersededAt IS NULL");
+            connection.Execute($"DELETE FROM {_database.Sql.Table("meta.SchemaVersion")} WHERE Version = 55");
+        }
+        var order = store.Rules().Select(r => r.Name).ToList();
+
+        Assert.Equal(["055_dane_popraw_w_aplikacji.sql"], SqlMigrations.Apply(_database.Sql));
+
+        Assert.Equal(budget.Replace("\r\n", "\n"), Sql("WP bez budżetu").Replace("\r\n", "\n"));   // CRLF z edytora – to samo zapytanie
+        Assert.Equal("SELECT WP FROM wp_cam", Sql("WP bez MPK"));
+        Assert.Equal(order, store.Rules().Select(r => r.Name));                                                   // kolejność listy bez zmian
+        using var check = _database.Sql.Open();
+        Assert.Equal([3, 2], check.Query<int>(
+            $"SELECT Version FROM {table} WHERE Name = N'WP bez budżetu' AND SupersededAt IS NULL UNION ALL " +
+            $"SELECT Version FROM {table} WHERE Name = N'Cost element bez Cost Category' AND SupersededAt IS NULL"));   // 053, 055, 055 ponownie / 053, 055
     }
 }

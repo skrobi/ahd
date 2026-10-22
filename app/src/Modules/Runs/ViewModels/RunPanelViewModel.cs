@@ -117,6 +117,7 @@ public sealed class RunPanelViewModel : ObservableObject, IDisposable
         Rerun = new AsyncRelayCommand(() => Launch(_launcher.Rerun(Project, _selectedPin!.PinId, _selectedStep!.Row.StepNo)),
             () => IsLatest && !_launcher.IsRunning(Project) && _selectedStep is { } step && RunWorkflowEngine.CanRerun(_steps.Select(s => s.Row).ToList(), step.Row.StepNo));
         ShowChanges = new RelayCommand(p => { if (p is RunIssueView { Changes: { } request }) _acwpChanges?.Show(request); }, _ => _acwpChanges is not null);
+        Fix = new RelayCommand(p => { if (p is RunIssueView { Fix: { } link }) FixRequested?.Invoke(link); });
         ExportResult = new AsyncRelayCommand(DoExportResult, () => !Busy.IsBusy && _selectedRuleResult is not null);
         Refresh = new AsyncRelayCommand(() => Load(_selectedPin?.PinId), () => !Busy.IsBusy);
         SelectCell = new RelayCommand(p => ShowCell(p as RunMatrixCell));
@@ -145,6 +146,11 @@ public sealed class RunPanelViewModel : ObservableObject, IDisposable
     public ICommand Rerun { get; }
 
     public ICommand ShowChanges { get; }
+
+    /// <summary>„Popraw w aplikacji”: słownik z kolumn Slownik i Filtr wyniku – pokazuje go ekran programu (FixRequested).</summary>
+    public ICommand Fix { get; }
+
+    public event Action<DictionaryLink>? FixRequested;
 
     /// <summary>Wynik reguły i linie ACTUALS zaznaczonego wiersza do Excela.</summary>
     public ICommand ExportResult { get; }
@@ -439,7 +445,7 @@ public sealed class RunPanelViewModel : ObservableObject, IDisposable
         }
         CellIssues = (_issueCache.GetValueOrDefault(cell.PinId) ?? []).Where(i => i.CheckName == cell.CheckName)
             .OrderBy(i => i.Level == CheckLevel.Error ? 0 : i.Level == CheckLevel.Warning ? 1 : 2).ThenBy(i => i.Id)
-            .Select(i => new RunIssueView(i, RunOverview.ChangesFor(i, Project))).ToList();
+            .Select(i => RunOverview.View(i, Project)).ToList();
         var pin = _pins.FirstOrDefault(p => p.PinId == cell.PinId);
         CellTitle = $"{cell.CheckName} – {pin?.Code} #{pin?.PinNo}: {cell.Text}";
     }
@@ -599,7 +605,7 @@ public sealed class RunPanelViewModel : ObservableObject, IDisposable
     private async Task LoadLines()
     {
         var row = SelectedRow();
-        SelectedIssue = row is null ? null : new RunIssueView(row.Issue, RunOverview.ChangesFor(row.Issue, Project));
+        SelectedIssue = row is null ? null : RunOverview.View(row.Issue, Project);
         ResultHint = (_resultTable.CommonHint ?? row?.Hint) is { Length: > 0 } hint ? $"Wskazówka: {hint}" : "";
         Lines = [];
         _linesScope = null;

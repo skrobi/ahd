@@ -76,6 +76,33 @@ public sealed partial class ProjectDetailViewModel
         set { if (value) SelectFrom(ConfigDictionaryList); }
     }
 
+    /// <summary>Indeks zakładki „Słowniki programu” (kolejność zakładek w ProjectDetailView.xaml).</summary>
+    private const int DictionaryTab = 3;
+
+    /// <summary>
+    /// „Popraw w aplikacji” przy wyniku kontroli przebiegu: słownik programu – zakładka „Słowniki programu” z tym słownikiem i filtrem tabeli;
+    /// słownik globalny – ekran Słowniki (nawigacja z parametrem); nieznany – komunikat.
+    /// </summary>
+    private void OnFixRequested(DictionaryLink link)
+    {
+        var filter = link.Filter ?? "";
+        if (ProjectDictionaries.Find(link.Dictionary) is not { } item || Dictionaries.FirstOrDefault(p => p.Item.Code == item.Code) is not { } panel)
+        {
+            if (PzlEv.Shared.Utils.Dictionaries.GlobalDictionaries.Find(link.Dictionary) is not null && _openGlobalDictionary is not null)
+                _openGlobalDictionary(link);
+            else
+                Status = $"Nie ma słownika „{link.Dictionary}” (kolumna Slownik reguły) – popraw nazwę w regule albo otwórz słownik ręcznie.";
+            return;
+        }
+        SelectedDictionary = panel;
+        if (!ReferenceEquals(_selectedDictionary, panel))
+            return;   // niezapisane zmiany innego słownika – komunikat ustawia SelectedDictionary
+        Table.Filter = filter;   // filtr zostaje po wczytaniu wierszy (Reload)
+        SelectedTab = item.Code is ProjectDictionaries.Sources or ProjectDictionaries.Settings ? DictionaryTab + 1 : DictionaryTab;
+        Status = $"„{panel.Name}”{(filter.Length > 0 ? $" – filtr: {filter}" : "")}. Popraw słownik, zapisz i wykonaj ponownie etap na zakładce Przebieg "
+                 + "(brak wiersza – „Dodaj wiersz”).";
+    }
+
     /// <summary>Słownik z listy zakładki: bieżący, jeśli z niej pochodzi, inaczej pierwszy (niezapisane zmiany – bez zmiany).</summary>
     private void SelectFrom(IReadOnlyList<DictionaryPanelViewModel> list)
     {

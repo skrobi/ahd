@@ -1,9 +1,14 @@
 namespace PzlEv.Shared.Utils.Data;
 
-/// <summary>Panel przebiegu programu: widok (WPF) i zwolnienie przy zamknięciu ekranu (odpięcie od zdarzeń przebiegu).</summary>
+/// <summary>
+/// Panel przebiegu programu: widok (WPF), zwolnienie przy zamknięciu ekranu (odpięcie od zdarzeń przebiegu); FixRequested – „Popraw
+/// w aplikacji” przy wyniku kontroli: słownik z filtrem do pokazania (słownik programu – ekran programu, globalny – ekran Słowniki).
+/// </summary>
 public interface IRunPanel : IDisposable
 {
     object View { get; }
+
+    event Action<DictionaryLink>? FixRequested;
 }
 
 /// <summary>

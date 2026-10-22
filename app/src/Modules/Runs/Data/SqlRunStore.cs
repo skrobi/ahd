@@ -144,7 +144,7 @@ public sealed class SqlRunStore(SqlDatabase db) : IRunStore
         using var connection = db.Open();
         var rules = connection.Query<(string Name, string? Description, string Level, bool IsActive, string SqlText, string? ResultTemplate)>(
                 $"SELECT Name, Description, Level, IsActive, SqlText, ResultTemplate FROM {db.Table("dict.RunValidation")} " +
-                "WHERE Project IS NULL AND SupersededAt IS NULL ORDER BY Id")
+                "WHERE Project IS NULL AND SupersededAt IS NULL ORDER BY RowId")   // kolejność jak w słowniku – nowa wersja reguły na swoim miejscu
             .Select(r => new RunRule(r.Name, RunRules.LevelOf(r.Level) ?? CheckLevel.Warning, r.IsActive, r.SqlText, r.ResultTemplate, r.Description))
             .ToList();
         return rules.Count == 0 ? RunRules.Starters : rules;

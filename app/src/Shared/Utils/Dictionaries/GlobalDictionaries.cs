@@ -287,6 +287,11 @@ public static partial class GlobalDictionaries
 
     public static DictionarySpec Get(string code) => All.First(s => s.Code == code);
 
+    /// <summary>Słownik po kodzie albo nazwie (bez wielkości liter; „Popraw w aplikacji” – kolumna Slownik reguły); null – nie ma.</summary>
+    public static DictionarySpec? Find(string nameOrCode) =>
+        All.FirstOrDefault(s => string.Equals(s.Code, nameOrCode.Trim(), StringComparison.OrdinalIgnoreCase)
+                                || string.Equals(s.Name, nameOrCode.Trim(), StringComparison.OrdinalIgnoreCase));
+
     /// <summary>Tabele słowników globalnych w bazie (SqlDictionaryStore).</summary>
     public static IReadOnlyList<DictionaryTable> Tables { get; } =
     [

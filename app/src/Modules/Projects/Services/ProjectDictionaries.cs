@@ -150,6 +150,18 @@ public static class ProjectDictionaries
 
     public static ProjectDictionaryItem Item(string code) => Items.First(i => i.Code == code);
 
+    /// <summary>
+    /// Słownik programu po kodzie, nazwie albo nazwie arkusza (bez wielkości liter; Cost Category – także nazwa słownika globalnego):
+    /// „Popraw w aplikacji” – kolumna Slownik reguły; null – słownik spoza programu (globalny albo nieznany).
+    /// </summary>
+    public static ProjectDictionaryItem? Find(string nameOrCode)
+    {
+        var name = nameOrCode.Trim();
+        bool Same(string? value) => string.Equals(value, name, StringComparison.OrdinalIgnoreCase);
+        return Items.FirstOrDefault(i => Same(i.Code) || Same(i.Name) || Same(i.Sheet)
+                                         || i.Code == GlobalDictionaries.CostCategory && Same(GlobalDictionaries.Get(i.Code).Name));
+    }
+
     /// <summary>Opis słownika z regułami projektu (kontekst: zakres nakładki, inne projekty, osoby, WP).</summary>
     public static DictionarySpec For(string code, ProjectDictionaryContext context) => code switch
     {

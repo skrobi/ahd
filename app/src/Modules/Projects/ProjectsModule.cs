@@ -41,5 +41,5 @@ public sealed class ProjectsModule : IModule
     }
 
     public FrameworkElement CreateView(ModuleContext context) =>
-        new ProjectsView { DataContext = new ProjectsViewModel(_service!, new FileDialogs()) };
+        new ProjectsView { DataContext = new ProjectsViewModel(_service!, new FileDialogs(), context.Navigator) };
 }

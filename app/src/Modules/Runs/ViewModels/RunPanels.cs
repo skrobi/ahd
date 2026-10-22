@@ -13,6 +13,12 @@ public sealed class RunPanels(IRunStore store, RunLauncher launcher, Func<IAcwpC
     {
         public object View { get; } = new RunPanelView { DataContext = model };
 
+        public event Action<DictionaryLink>? FixRequested
+        {
+            add => model.FixRequested += value;
+            remove => model.FixRequested -= value;
+        }
+
         public void Dispose() => model.Dispose();
     }
 }

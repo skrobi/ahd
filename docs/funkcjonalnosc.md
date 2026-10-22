@@ -132,7 +132,7 @@ rozdz. 4.1).
   W toku, Zakończony, Wymaga akcji, Błąd, Nieaktualny) z komentarzem potwierdzenia (kto, kiedy, co), opis etapu, bramka; wyniki
   wybranego etapu po regułach (poziom, liczba problemów); wybrana reguła – co sprawdza (dane i zakres uruchomienia w podpowiedzi), wynik
   zapytania: kolumny zapytania (kwoty do prawej), potem Problem, wskazówka pod tabelą; linie ACTUALS zaznaczonego wiersza (zakres z kolumn wiersza),
-  „Wynik do Excela”, „Pokaż zmiany” (`docs/pipeline-fazy.md`, rozdz. 4.1). Akcje (tylko ostatnie uruchomienie): **Dalsze etapy** – do najbliższej bramki;
+  „Wynik do Excela”, „Pokaż zmiany”, „Popraw w aplikacji” – słownik programu albo globalny z filtrem na wiersz (`docs/pipeline-fazy.md`, rozdz. 4.1). Akcje (tylko ostatnie uruchomienie): **Dalsze etapy** – do najbliższej bramki;
   **Potwierdź i dalej** – etap „Wymaga akcji” (WARNING przy bramce „Potwierdzenie” albo zatwierdzenie) z wymaganym komentarzem
   (etap, dziennik), potem dalsze etapy; **Zaakceptuj błędy i dalej** – etap „Błąd” (ERROR, np. znany błąd albo błędna reguła)
   z wymaganym komentarzem: etap zakończony, błędy zostają w wynikach, uruchomienie kończy się stanem „zakończony z błędami”;

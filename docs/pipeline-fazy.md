@@ -322,7 +322,13 @@ Wyniki w programie (zakładka Przebieg, O53 – bez wykresów i porównań okres
   |kwoty| (liczba i suma wszystkich): okres, element WBS, cost element, Created on, opis, partner, zamówienie, faktura, zlecenie, ilość,
   kwota, plik i wiersz (`SqlRunStore.ActualsLines`, `RunOverview.ActualsScope`); wiersz bez tych kolumn – bez linii;
 - **Wynik do Excela** – wynik reguły i wszystkie linie ACTUALS zaznaczonego wiersza; „Pokaż zmiany” – okno „Zmiany ACWP” dla wiersza
-  (kolumna `ElementWBS`, `RodzajKosztu` albo `CostElement` – dla tej wartości, inaczej cały program).
+  (kolumna `ElementWBS`, `RodzajKosztu` albo `CostElement` – dla tej wartości, inaczej cały program);
+- **Popraw w aplikacji** – przy wierszu z kolumną `Slownik` (bez miejsca w tabeli wyniku): słownik do poprawy z filtrem tabeli z kolumny
+  `Filtr`. Nazwa albo kod słownika: słownik programu (np. „WP i CAM”, „Harmonogram i budżet”, „Cost Category” – zmiany w programie)
+  – zakładka „Słowniki programu” ekranu programu; słownik globalny (np. „Stawki wydziałów”) – ekran Słowniki (nawigacja z parametrem,
+  `INavigator`); nieznana nazwa – komunikat. Po poprawie – „Wykonaj ponownie” etap. Reguły startowe z kolumnami: „Cost element spoza
+  słownika Cost Category” i „Cost element bez Cost Category” (Cost Category programu, filtr – cost element), „MPK bez stawki wydziału
+  na rok” (Stawki wydziałów, MPK), „WP bez MPK” (WP i CAM, WP), „WP bez budżetu” (Harmonogram i budżet, WP) – migracja 055.
 
 Zakładki porównań: macierz reguła × uruchomienia (wiersz – nazwa reguły; „n ERROR”, „n WARNING”, „n INFO”, „OK”) i porównanie dwóch
 uruchomień – wiersze wyników tej samej reguły dopasowane po wartościach kolumn tekstowych, różnice w kolumnach liczbowych; nowe,
@@ -362,7 +368,7 @@ Kontrole wymagające innych danych spoza zrzutu (odbiorca rozliczenia, suma kont
 | **Działanie** | Poprawność samych słowników zapewnia walidacja przy zapisie (`docs/slowniki.md`, rozdz. 5), a plików – import (`docs/zrodla-danych.md`, rozdz. 8). Tu: spójność danych projektu ze słownikami i okresem. |
 | **Wdrożone** | kontrole spójności ze słownikami w przebiegu (rozdz. 4.1): cost element spoza Cost Category (ERROR), cost element bez kategorii (WARNING), MPK WP bez stawki na rok (ERROR), WP bez MPK (WARNING), WP bez budżetu (WARNING). Niewdrożone: daty księgowania względem okresu – zrzut ACTUALS nie ma daty księgowania (tylko `Created on`, które po rozliczeniu legalnie jest późniejsze; kontrola okresów przyszłych – rozdz. 4.1) i znaczenie okresu nie jest polem definicji źródła (`docs/zrodla-danych.md`, rozdz. 2); duplikaty między częściami źródła – klucz wiersza ACTUALS nieustalony (O27, O50). Programy CAS: koszt po narzutach CAS (słowniki globalne, O37 rozstrzygnięte) – ETC Cost liczy ta sama stawka MPK, więc kontrola MPK obowiązuje także w CAS (wyłączenie – reguła „MPK bez stawki wydziału na rok” w edytorze reguł albo w szablonie). |
 | **Kontrole** | MPK z kosztów bez stawki na dany rok – stawki wydziałów (klucz MPK + rok) albo, w CAS, stawki CAS (ERROR); numer elementu kosztowego bez wpisu w efektywnym słowniku Cost Category (ERROR – O25; naprawa: pozycja w słowniku projektu); numer bez kategorii (WARNING); WP bez budżetu (WARNING); daty księgowania niezgodne z okresem przebiegu według znaczenia okresu w definicji źródła (ERROR); duplikaty wierszy między częściami źródła (ERROR). |
-| **Przy ERROR** | **Popraw w aplikacji** (ekran Słowniki z filtrem na problem) → **Przypnij ponownie** (P1) i waliduj. |
+| **Przy ERROR** | **Popraw w aplikacji** (słownik programu albo ekran Słowniki z filtrem na problem – kolumny wyniku `Slownik` i `Filtr`, rozdz. 4.1) → **Wykonaj ponownie** etap walidacji. |
 | **Efekt** | Problemy przebiegu; WARNING trafiają do raportu przebiegu. |
 | **Przekazanie** | P3 rusza tylko bez ERROR. |
 

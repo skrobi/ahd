@@ -193,6 +193,9 @@
                             <StackPanel Grid.Column="1" Margin="12,0,0,0">
                                 <DockPanel Margin="0,0,0,6">
                                     <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                                        <Button Content="Popraw w aplikacji" Style="{StaticResource Btn}" Margin="8,0,0,0" CommandParameter="{Binding SelectedIssue}"
+                                                Command="{Binding Fix}" Visibility="{Binding SelectedIssue.CanFix, Converter={StaticResource BoolToVisibility}, FallbackValue=Collapsed}"
+                                                ToolTip="Słownik do poprawy z filtrem na zaznaczony wiersz (kolumny Slownik i Filtr reguły); po poprawie – „Wykonaj ponownie” etap" />
                                         <Button Content="Pokaż zmiany" Style="{StaticResource Btn}" Margin="8,0,0,0" CommandParameter="{Binding SelectedIssue}"
                                                 Command="{Binding ShowChanges}" IsEnabled="{Binding SelectedIssue.CanShowChanges}"
                                                 ToolTip="Okno „Zmiany ACWP” dla zaznaczonego wiersza" />

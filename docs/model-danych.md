@@ -504,6 +504,12 @@ z parametrem `@AsOf` – dane ACTUALS z plików zaimportowanych do tej chwili (`
 Struktura programu podaje koniec przypięcia stanu ostatniego uruchomienia z zakończonym etapem „Zatwierdzenie ACTUALS” (akcja etapu
 `META_RunStep.Action`; `docs/pipeline-fazy.md`, rozdz. 4.1). Wymaga aplikacji 0.60.0.
 
+**Migracja `sql/mssql/055_dane_popraw_w_aplikacji.sql` (dane):** reguły startowe „Cost element spoza słownika Cost Category”, „Cost
+element bez Cost Category”, „MPK bez stawki wydziału na rok”, „WP bez MPK” i „WP bez budżetu” w `DICT_RunValidation` – nowa wersja
+z kolumnami wyniku `Slownik` i `Filtr` („Popraw w aplikacji”, `docs/pipeline-fazy.md`, rozdz. 4.1), tylko gdy zapytanie jest takie jak
+z migracji 053 (reguła zmieniona przez użytkownika zostaje); lista reguł w kolejności `RowId`. Wiersze `RecordedBy = N'migracja 055 –
+Popraw w aplikacji'`. Wymaga aplikacji 0.61.0.
+
 `META_SourceFile.CanonicalStatus`: „utworzone” – dane kanoniczne zapisane i sprawdzone (widoczne dla odczytów),
 „w toku” – zapis wierszy trwa (odczyty pomijają plik; po awarii wpis i wiersze są usuwane), inna wartość – powód
 braku danych (źródło bez parsera).
