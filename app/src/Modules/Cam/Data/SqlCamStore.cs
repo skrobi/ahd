@@ -34,10 +34,12 @@ public sealed class SqlCamStore(SqlDatabase db) : ICamStore
         return deadline is { } d ? DateOnly.FromDateTime(d) : null;
     }
 
-    public IReadOnlyList<CamEstimate> Estimates(string cycle, string? cam = null)
+    public IReadOnlyList<CamEstimate> Estimates(string cycle, string? cam = null, string? project = null)
     {
         using var connection = db.Open();
-        var headers = connection.Query<Row>($"SELECT {Columns} FROM {EstimateTable} WHERE Cycle = @cycle AND (@cam IS NULL OR Cam = @cam)", new { cycle, cam }).ToList();
+        var headers = connection.Query<Row>(
+            $"SELECT {Columns} FROM {EstimateTable} WHERE Cycle = @cycle AND (@cam IS NULL OR Cam = @cam) AND (@project IS NULL OR Project = @project)",
+            new { cycle, cam, project }).ToList();
         return WithLines(connection, headers);
     }
 

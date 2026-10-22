@@ -113,6 +113,11 @@ public sealed class CamReviewPanelViewModel : ObservableObject
             Logger.Error(ex, "Estymacje CAM programu {Project}", _project);
             Message = $"Błąd: {ex.Message}";
         }
+        RaiseCounters();
+    }
+
+    private void RaiseCounters()
+    {
         foreach (var name in new[] { nameof(Summary), nameof(RequiredText), nameof(ApprovedText), nameof(SentText), nameof(AtCamText), nameof(MissingText), nameof(Complete) })
             OnPropertyChanged(name);
     }
@@ -132,7 +137,8 @@ public sealed class CamReviewPanelViewModel : ObservableObject
                 CamStatuses.Returned => "crit",
                 _ => "warn",
             };
-            Rows.Add(new CamReviewRow(i, tone, i.Required ? "tak" : "nie", N(i.EtcHours) + " h", $"{N(i.Material)} {i.Currency}",
+            var todo = i.Status == CamStatuses.ToDo;
+            Rows.Add(new CamReviewRow(i, tone, i.Required ? "tak" : "nie", todo ? "—" : N(i.EtcHours) + " h", todo ? "—" : $"{N(i.Material)} {i.Currency}",
                 i.ForecastFinish?.ToString("yyyy-MM-dd") ?? "—",
                 i.SubmittedAt is { } s ? $"{s.LocalDateTime:yyyy-MM-dd HH:mm} · {i.SubmittedBy}" : "",
                 i.ReviewedAt is { } r && i.Status is CamStatuses.Approved or CamStatuses.Returned ? $"{r.LocalDateTime:yyyy-MM-dd HH:mm} · {i.ReviewedBy}" : ""));
@@ -152,7 +158,16 @@ public sealed class CamReviewPanelViewModel : ObservableObject
                 return;
             }
             Note = "";
-            await Load(outcome.Message);
+            if (outcome.Item is { } changed && _state is { } state)
+            {
+                // Pozycja po decyzji w miejsce poprzedniej – bez ponownego odczytu programu (struktura z PZLPROD).
+                _state = state with { Items = [.. state.Items.Select(i => i.Project == changed.Project && i.Wp == changed.Wp ? changed : i)] };
+                Show();
+                Message = outcome.Message;
+                RaiseCounters();
+            }
+            else
+                await Load(outcome.Message);
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {

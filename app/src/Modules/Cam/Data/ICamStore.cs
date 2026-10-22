@@ -15,8 +15,8 @@ public interface ICamStore
     /// <summary>Termin cyklu okresu: koniec jego tygodnia zamykającego w kalendarzu okresów; null – brak.</summary>
     DateOnly? Deadline(string period);
 
-    /// <summary>Estymacje cyklu z wierszami lat (cam null – wszystkich CAM-ów).</summary>
-    IReadOnlyList<CamEstimate> Estimates(string cycle, string? cam = null);
+    /// <summary>Estymacje cyklu z wierszami lat (cam null – wszystkich CAM-ów, project null – wszystkich programów).</summary>
+    IReadOnlyList<CamEstimate> Estimates(string cycle, string? cam = null, string? project = null);
 
     /// <summary>Estymacja WP programu w cyklu; null – brak.</summary>
     CamEstimate? Estimate(string project, string wp, string cycle);

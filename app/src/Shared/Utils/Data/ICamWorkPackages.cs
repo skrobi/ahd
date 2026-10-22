@@ -65,7 +65,10 @@ public interface ICamWorkPackages
     /// <summary>WP CAM-a we wszystkich programach (struktura każdego programu z jego danymi); program bez danych – pominięty z notatką w DataNote.</summary>
     IReadOnlyList<CamWorkPackage> WorkPackages(string cam);
 
-    /// <summary>WP z przypisanym CAM-em w programie (project null – we wszystkich programach) – estymacje wymagane w cyklu i postęp.</summary>
+    /// <summary>
+    /// WP z przypisanym CAM-em w programie (project null – we wszystkich programach) – estymacje wymagane w cyklu i postęp: struktura bez
+    /// kosztów ACTUALS (ACWP, waluta programu – puste), z datami, statusem i produkcją.
+    /// </summary>
     IReadOnlyList<CamWorkPackage> ProjectWorkPackages(string? project);
 
     /// <summary>

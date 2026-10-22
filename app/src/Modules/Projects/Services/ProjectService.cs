@@ -987,31 +987,41 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
     /// <summary>
     /// Struktura programu bez ekranu – te same dane co zakładka Struktura: nakładka, struktura P1S (mapping), „WP i CAM”,
     /// „Harmonogram i budżet”, produkcja PZLPROD, ACWP i godziny z zatwierdzonego przebiegu (bez niego – ostatni import), waluta
-    /// programu i stawki ETC na dzień stanu. Note – braki danych (produkcja, koszty, kurs) albo null.
+    /// programu i stawki ETC na dzień stanu. Koszty (baza środowiska) czytane równolegle z produkcją (PZLPROD) – jak ekran programu;
+    /// costs false – bez kosztów ACTUALS i waluty (lista WP z CAM-em, daty, status – estymacje wymagane w cyklu). Note – braki danych
+    /// (produkcja, koszty, kurs) albo null.
     /// </summary>
     public (ProjectStructure Structure, EtcRates Rates, string? Note) StructureOf(string code, P1sInputs mapping, IReadOnlyList<DictRow> departmentRates,
-        IReadOnlyList<DictRow> fxRates, DateOnly today)
+        IReadOnlyList<DictRow> fxRates, DateOnly today, bool costs = true)
     {
         var notes = new List<string>();
         var tree = store.Objectives(code);
+        var costsRead = costs ? Task.Run(() =>
+        {
+            var field = ActualsAmount(code);
+            return (Actuals: CostsAndHoursByElement(code, field, ApprovedActuals(code)?.AsOf), Currency: ProjectCurrency(code, field));
+        }) : null;
         var wpCam = Rows(ProjectDictionaries.WpCam, code);
         var production = Production(tree, mapping);
         if (production.Error is { } productionError)
             notes.Add(productionError);
-        var field = ActualsAmount(code);
         var actuals = ElementActuals.Empty;
         string? currency = null, currencyProblem = null;
-        try
+        if (costsRead is not null)
         {
-            actuals = CostsAndHoursByElement(code, field, ApprovedActuals(code)?.AsOf);
-            (currency, currencyProblem) = ProjectCurrency(code, field);
-        }
-        catch (Exception ex) when (ex is not OutOfMemoryException)
-        {
-            notes.Add($"koszty (ACWP) niedostępne: {ex.Message}");
+            try
+            {
+                var read = costsRead.GetAwaiter().GetResult();
+                actuals = read.Actuals;
+                (currency, currencyProblem) = read.Currency;
+            }
+            catch (Exception ex) when (ex is not OutOfMemoryException)
+            {
+                notes.Add($"koszty (ACWP) niedostępne: {ex.Message}");
+            }
         }
         var rates = EtcRatesOf(departmentRates, fxRates, currency, currencyProblem, today);
-        if (rates.Problem is { } problem)
+        if (costs && rates.Problem is { } problem)
             notes.Add(problem);
         var structure = StructureBuilder.Build(tree, mapping.P1s, wpCam, Rows(ProjectDictionaries.ScheduleBudget, code), actuals.Amounts, production, today,
             actuals.Hours, actuals.Labor, actuals.Material, rates);

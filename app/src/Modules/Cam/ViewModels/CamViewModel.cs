@@ -41,7 +41,8 @@ public sealed class CamViewModel : ObservableObject
         _service = service;
         Refresh = new AsyncRelayCommand(() => LoadCam(), () => !Busy.IsBusy && _selectedCam is not null);
         Open = new RelayCommand(p => _ = OpenRow(p as CamWorkRow));
-        Back = new RelayCommand(_ => { Editor = null; _ = LoadCam(); });
+        // Powrót z formularza: tylko estymacje cyklu z bazy (WP i struktury programów bez zmian) – pełny odczyt: „Odśwież”.
+        Back = new RelayCommand(_ => { Editor = null; _ = LoadWorklist(); });
         RefreshProgress = new AsyncRelayCommand(LoadProgress, () => !Busy.IsBusy);
         _ = Load();
     }
@@ -77,7 +78,8 @@ public sealed class CamViewModel : ObservableObject
         set
         {
             if (SetProperty(ref _selectedTab, value) && value == 1)
-                _ = LoadProgress();
+                if (_progressCycle != _cycle?.Period)
+                    _ = LoadProgress();   // raz na cykl – dalej „Odśwież” (struktury wszystkich programów)
         }
     }
 
@@ -143,6 +145,32 @@ public sealed class CamViewModel : ObservableObject
         });
     }
 
+    private string? _progressCycle;
+
+    /// <summary>Lista zadań z bieżących estymacji cyklu dla wczytanych WP CAM-a (bez odczytu struktur programów).</summary>
+    private async Task LoadWorklist()
+    {
+        if (_selectedCam is not { } cam || _cycle is not { } cycle)
+            return;
+        await Try(async () =>
+        {
+            var wps = _wps;
+            var items = await Busy.Run("Estymacje cyklu…", () => _service.Worklist(wps, cycle));
+            if (ReferenceEquals(_selectedCam, cam))
+                ShowWorklist(items);
+        });
+    }
+
+    private void ShowWorklist(IReadOnlyList<CamWorkItem> items)
+    {
+        _allRows = items.Select(ToRow).ToList();
+        var ready = items.Count(i => i.Estimate.Status is CamStatuses.Sent or CamStatuses.Approved);
+        ProgressText = $"{ready} z {items.Count} WP gotowe (wysłane albo zatwierdzone) · " +
+                       string.Join(" · ", items.GroupBy(i => i.Estimate.Status).OrderBy(g => CamStatuses.Order(g.Key)).Select(g => $"{g.Key.ToLowerInvariant()}: {g.Count()}"));
+        OnPropertyChanged(nameof(ProgressText));
+        ShowRows();
+    }
+
     private async Task LoadCam()
     {
         if (_selectedCam is not { } cam)
@@ -159,12 +187,7 @@ public sealed class CamViewModel : ObservableObject
             var items = await Busy.Run("Estymacje cyklu…", () => _service.Worklist(wps, cycle));
             if (!ReferenceEquals(_selectedCam, cam))
                 return;
-            _allRows = items.Select(ToRow).ToList();
-            var ready = items.Count(i => i.Estimate.Status is CamStatuses.Sent or CamStatuses.Approved);
-            ProgressText = $"{ready} z {items.Count} WP gotowe (wysłane albo zatwierdzone) · " +
-                           string.Join(" · ", items.GroupBy(i => i.Estimate.Status).OrderBy(g => CamStatuses.Order(g.Key)).Select(g => $"{g.Key.ToLowerInvariant()}: {g.Count()}"));
-            OnPropertyChanged(nameof(ProgressText));
-            ShowRows();
+            ShowWorklist(items);
             Results.Load(wps);
             if (wps.Count == 0)
                 Status = $"{cam.Label} nie ma WP w programach.";
@@ -240,6 +263,7 @@ public sealed class CamViewModel : ObservableObject
         {
             var cycle = _cycle ?? await Busy.Run("Cykl…", _service.Cycle);
             var review = await Busy.Run("Postęp estymacji – struktury programów…", () => _service.Progress(cycle));
+            _progressCycle = cycle.Period;
             static CamProgressRow Row(string name, IReadOnlyList<CamReviewItem> items)
             {
                 var review = new CamReview(new CamCycle("", null), items);

@@ -5,7 +5,7 @@ namespace PzlEv.Shared.Utils.Data;
 /// <summary>
 /// Estymacja CAM WP programu w cyklu (okres RRRR-MM; status – CamStatuses; ToDo – bez zapisanej estymacji, wartości z propozycji systemu): CAM,
 /// wymagana w cyklu (WP z CAM-em, niezakończony), ETC godzin i materiałów (waluta programu), prognozowany koniec, uzasadnienie CAM,
-/// uwaga analityka, kto i kiedy wysłał i ocenił; Version – znacznik wersji zapisanej estymacji do decyzji (kontrola zmiany w międzyczasie).
+/// uwaga analityka, kto i kiedy wysłał i ocenił (ToDo – wartości 0); Version – znacznik wersji zapisanej estymacji do decyzji (kontrola zmiany w międzyczasie).
 /// </summary>
 public sealed record CamReviewItem(string Project, string Wp, string Period, string Name, string Cam, bool Required, string Status, decimal EtcHours, decimal Material,
     string? Currency, DateOnly? ForecastFinish, string? Justification, string? ReviewNote, DateTimeOffset? SubmittedAt, string? SubmittedBy,
@@ -34,8 +34,8 @@ public sealed record CamReview(CamCycle Cycle, IReadOnlyList<CamReviewItem> Item
     private int Count(string status) => Items.Count(i => i.Required && i.Status == status);
 }
 
-/// <summary>Wynik decyzji finansisty o estymacji: powodzenie i komunikat.</summary>
-public sealed record CamDecision(bool Ok, string Message);
+/// <summary>Wynik decyzji finansisty o estymacji: powodzenie, komunikat i pozycja po decyzji (lista bez ponownego odczytu programu).</summary>
+public sealed record CamDecision(bool Ok, string Message, CamReviewItem? Item = null);
 
 /// <summary>
 /// Estymacje CAM dla przebiegu (etap „Estymacje CAM” – decyzje finansisty) i struktury programu (kolory WP). Rejestruje moduł CAM

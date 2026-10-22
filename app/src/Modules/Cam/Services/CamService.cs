@@ -117,7 +117,7 @@ public sealed class CamService(ICamStore store, Func<ICamWorkPackages?> packages
 
     /// <summary>
     /// Estymacje programu w cyklu (etap przebiegu „Estymacje CAM”): wymagane WP – z CAM-em, niezakończone (bez zapisanej estymacji –
-    /// Do uzupełnienia z wartościami propozycji systemu) i zapisane estymacje pozostałych WP (Required false).
+    /// Do uzupełnienia, bez wartości) i zapisane estymacje pozostałych WP (Required false).
     /// </summary>
     public CamReview Program(string project, CamCycle cycle) => Review(packages()?.ProjectWorkPackages(project) ?? [], cycle, project);
 
@@ -126,7 +126,7 @@ public sealed class CamService(ICamStore store, Func<ICamWorkPackages?> packages
 
     /// <summary>Zapisane estymacje programu w cyklu (kolory struktury programu) – bez listy wymaganych WP.</summary>
     public IReadOnlyList<CamReviewItem> Saved(string project, string period) =>
-        store.Estimates(period).Where(e => Same(e.Project, project)).Select(e => Item(e, e.Wp, false)).ToList();
+        store.Estimates(period, project: project).Select(e => Item(e, e.Wp, false)).ToList();
 
     /// <summary>Decyzja o estymacji z listy przebiegu: estymacja z bazy, a zmieniona od wczytania listy (Version) – odmowa.</summary>
     public CamOutcome Decide(CamReviewItem item, Func<CamEstimate, CamOutcome> decision) =>
@@ -136,24 +136,23 @@ public sealed class CamService(ICamStore store, Func<ICamWorkPackages?> packages
 
     private CamReview Review(IReadOnlyList<CamWorkPackage> wps, CamCycle cycle, string? project)
     {
-        var saved = store.Estimates(cycle.Period).Where(e => project is null || Same(e.Project, project))
-            .ToDictionary(e => (e.Project.ToUpperInvariant(), e.Wp.ToUpperInvariant()));
+        var saved = store.Estimates(cycle.Period, project: project).ToDictionary(e => (e.Project.ToUpperInvariant(), e.Wp.ToUpperInvariant()));
         var items = new List<CamReviewItem>();
         foreach (var wp in wps)
         {
             var key = (wp.Project.ToUpperInvariant(), wp.Wp.ToUpperInvariant());
-            var estimate = saved.Remove(key, out var stored) ? stored : CamEstimates.New(wp, cycle.Period, Today);
-            items.Add(Item(estimate, wp.Name, !wp.Finished));
+            items.Add(saved.Remove(key, out var stored) ? Item(stored, wp.Name, !wp.Finished)
+                : new CamReviewItem(wp.Project, wp.Wp, cycle.Period, wp.Name, wp.Cam, !wp.Finished, CamStatuses.ToDo, 0, 0, wp.Currency, null, null, null,
+                    null, null, null, null, null));
         }
         items.AddRange(saved.Values.Select(e => Item(e, e.Wp, false)));
         return new CamReview(cycle, items.OrderBy(i => i.Project, StringComparer.OrdinalIgnoreCase).ThenBy(i => i.Wp, StringComparer.OrdinalIgnoreCase).ToList());
     }
 
-    private static CamReviewItem Item(CamEstimate e, string name, bool required) =>
+    /// <summary>Pozycja przeglądu z zapisanej estymacji (po decyzji – z wymagalnością i nazwą pozycji z listy).</summary>
+    public static CamReviewItem Item(CamEstimate e, string name, bool required) =>
         new(e.Project, e.Wp, e.Cycle, name, e.Cam, required, e.Status, e.Total(CamLineKinds.Hours), e.Total(CamLineKinds.Material), e.Currency,
             e.ForecastFinish, e.Justification, e.ReviewNote, e.SubmittedAt, e.SubmittedBy, e.ReviewedAt, e.ReviewedBy, e.EstimateId is null ? null : e.UpdatedAt);
-
-    private static bool Same(string a, string b) => string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>Zatwierdzone estymacje cyklu (wszyscy CAM-owie) – do ponownego otwarcia.</summary>
     public IReadOnlyList<CamEstimate> Approved(CamCycle cycle) =>

@@ -226,6 +226,10 @@ rozdz. 4.1).
 - Zatwierdzenie zapisuje sumę lat jako ETC HOURS / ETC MATERIAL oraz Forecast Start / Koniec w „Harmonogram i budżet”
   (`docs/slowniki.md`) – struktura programu i wyniki EV liczą z nich ETC; estymacja zmieniona od wczytania listy (np. zwrócona
   i wysłana ponownie) – odmowa przed zapisem słownika, do odświeżenia listy.
+- Odczyt danych: WP CAM-a – struktura każdego programu (produkcja PZLPROD i koszty ACTUALS czytane równolegle, najwyżej 3 programy
+  naraz; czas programu w logu aplikacji); lista wymaganych WP (etap przebiegu, postęp) – bez kosztów ACTUALS. Powrót z formularza
+  odświeża tylko estymacje (WP bez ponownego odczytu – „Odśwież”), postęp estymacji – raz na cykl i „Odśwież”; panel etapu przebiegu
+  – odczyt przy pierwszym wyborze etapu, po decyzji zmienia się tylko jej wiersz („Odśwież” – ponowny odczyt).
 - Formularz: przesunięcie prognozowanego końca na późniejszy rok dodaje wiersze lat (bez propozycji, 0); wartość, której nie da
   się odczytać jako liczby, blokuje zapis szkicu i wysyłkę.
 - Wyniki EV: EAC = ACWP + ETC, IEAC = ACWP + (BAC − BCWP) ÷ CPI, TCPI = (BAC − BCWP) ÷ (EAC − ACWP), różnica TCPI − CPI > 0,10

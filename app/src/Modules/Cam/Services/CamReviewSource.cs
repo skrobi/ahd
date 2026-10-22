@@ -17,11 +17,12 @@ public sealed class CamReviewSource(CamService service) : ICamReview
 
     public IReadOnlyList<CamReviewItem> Saved(string project, string period) => service.Saved(project, period);
 
-    public CamDecision Approve(CamReviewItem item) => Decision(service.Decide(item, service.Approve));
+    public CamDecision Approve(CamReviewItem item) => Decision(item, service.Decide(item, service.Approve));
 
-    public CamDecision Return(CamReviewItem item, string note) => Decision(service.Decide(item, e => service.Return(e, note)));
+    public CamDecision Return(CamReviewItem item, string note) => Decision(item, service.Decide(item, e => service.Return(e, note)));
 
-    public CamDecision Reopen(CamReviewItem item, string comment) => Decision(service.Decide(item, e => service.Reopen(e, comment)));
+    public CamDecision Reopen(CamReviewItem item, string comment) => Decision(item, service.Decide(item, e => service.Reopen(e, comment)));
 
-    private static CamDecision Decision(CamOutcome outcome) => new(outcome.Ok, outcome.Message);
+    private static CamDecision Decision(CamReviewItem item, CamOutcome outcome) =>
+        new(outcome.Ok, outcome.Message, outcome.Estimate is { } saved ? CamService.Item(saved, item.Name, item.Required) : null);
 }

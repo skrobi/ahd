@@ -219,7 +219,7 @@ public sealed class CamServiceTests : IDisposable
         Assert.Equal((1, 0, 0, 0, 1), (empty.Required, empty.Approved, empty.Sent, empty.AtCam, empty.Missing));   // WP-2 zakończony – niewymagany
         var todo = empty.Items[0];
         Assert.Equal((CamStatuses.ToDo, (DateTimeOffset?)null), (todo.Status, todo.Version));
-        Assert.Equal(CamEstimates.HoursProposal(wp, new DateOnly(2026, 10, 20)).Values.Sum(), todo.EtcHours);   // bez estymacji – propozycja
+        Assert.Equal((0m, 0m), (todo.EtcHours, todo.Material));                          // bez estymacji – bez wartości (bez liczenia propozycji)
         Assert.False(review.Approve(todo).Ok);                                            // niezapisana – brak decyzji
 
         var sent = service.Save(wp, CamEstimates.New(wp, "2026-10", new DateOnly(2026, 10, 20)) with { Justification = "opóźnienie dostaw kooperacji" }, submit: true);
@@ -228,12 +228,20 @@ public sealed class CamServiceTests : IDisposable
         Assert.Equal((CamStatuses.Sent, 1), (listed.Status, review.Program("PAF", cycle).Sent));
         Assert.False(review.Return(listed, "za mało").Ok);                                // uwaga wymagana
         _services.Clock.Advance(TimeSpan.FromMinutes(1));
-        Assert.True(review.Approve(listed).Ok);
+        var decided = review.Approve(listed);
+        Assert.True(decided.Ok, decided.Message);
+        Assert.Equal((CamStatuses.Approved, listed.Name, true), (decided.Item!.Status, decided.Item.Name, decided.Item.Required));   // pozycja po decyzji – bez odczytu programu
+        Assert.True(review.Reopen(decided.Item, "korekta po decyzji z listy przebiegu").Ok);                                        // nowa wersja z wyniku decyzji
+        var reopened = review.Program("PAF", cycle).Items[0];
+        Assert.Equal(CamStatuses.Returned, reopened.Status);
+        Assert.True(service.Save(wp, store.Estimate("PAF", "WP-1", "2026-10")!, submit: true).Ok);
+        _services.Clock.Advance(TimeSpan.FromMinutes(1));
+        Assert.True(review.Approve(review.Program("PAF", cycle).Items[0]).Ok);
         Assert.False(review.Reopen(listed, "nieaktualny wiersz listy przebiegu").Ok);    // wersja sprzed zatwierdzenia
         var approved = review.Program("PAF", cycle);
         Assert.Equal((1, 1, 0), (approved.Required, approved.Approved, approved.Missing));
         Assert.StartsWith("Estymacje CAM 2026-10: zatwierdzone 1 z 1 wymaganych", approved.Summary);
-        Assert.Single(_packages.Applied);
+        Assert.Equal(2, _packages.Applied.Count);
         Assert.Equal([(CamStatuses.Approved, false), (CamStatuses.Draft, false)],
             review.Saved("PAF", "2026-10").OrderBy(i => i.Wp).Select(i => (i.Status, i.Required)));   // zapisane – bez wymagalności
 

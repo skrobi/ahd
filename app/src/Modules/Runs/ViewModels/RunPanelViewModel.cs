@@ -54,6 +54,7 @@ public sealed class RunPanelViewModel : ObservableObject, IDisposable
     private readonly IAcwpChanges? _acwpChanges;
     private readonly Func<ICamReview?>? _cams;
     private CamReviewPanelViewModel? _camReview;
+    private (long PinId, int StepNo, bool Editable)? _camReviewKey;
     private IReadOnlyList<RunPinRow> _pins = [];
     private RunPinRow? _selectedPin;
     private IReadOnlyList<RunStepView> _steps = [];
@@ -272,10 +273,18 @@ public sealed class RunPanelViewModel : ObservableObject, IDisposable
             CamReview = null;
             return;
         }
+        var editable = IsLatest && _selectedStep.Row.Status == RunStepStatuses.NeedsAction;
+        // Ten sam etap tego samego uruchomienia (ponowne kliknięcie, odświeżenie listy etapów) – panel bez ponownego odczytu estymacji.
+        if (_camReviewKey == (pin.PinId, _selectedStep.Row.StepNo, editable) && _camReview is not null)
+        {
+            OnPropertyChanged(nameof(CamReview));
+            return;
+        }
         try
         {
             var period = _store.RunWeek(pin.RunId).Period;
-            CamReview = new CamReviewPanelViewModel(review, Project, period, IsLatest && _selectedStep.Row.Status == RunStepStatuses.NeedsAction);
+            _camReviewKey = (pin.PinId, _selectedStep.Row.StepNo, editable);
+            CamReview = new CamReviewPanelViewModel(review, Project, period, editable);
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
