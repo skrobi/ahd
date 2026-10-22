@@ -510,6 +510,12 @@ z kolumnami wyniku `Slownik` i `Filtr` („Popraw w aplikacji”, `docs/pipeline
 z migracji 053 (reguła zmieniona przez użytkownika zostaje); lista reguł w kolejności `RowId`. Wiersze `RecordedBy = N'migracja 055 –
 Popraw w aplikacji'`. Wymaga aplikacji 0.61.0.
 
+**Migracja `sql/mssql/056_estymacje_cam.sql`:** moduł CAM (F11) – `CAM_Estimate` (estymacja WP w cyklu: `Project`, `Wp`, `Cycle`
+RRRR-MM, unikalne razem; `Cam`, `Status`, `ForecastStart` / `ForecastFinish`, `Currency`, `Justification`, `ReviewNote`, kto i kiedy
+zapisał, wysłał, zatwierdził / zwrócił; `UpdatedAt` – kontrola równoczesnej zmiany), `CAM_EstimateLine` (`Kind` H – godziny,
+M – materiały; `Year`, `Proposal` – propozycja systemu, `Value` – wartość CAM-a) i `CAM_EstimateEvent` (historia: status, opis
+zmian, komentarz). Usunięcie programu usuwa jego estymacje. Wymaga aplikacji 0.62.0.
+
 `META_SourceFile.CanonicalStatus`: „utworzone” – dane kanoniczne zapisane i sprawdzone (widoczne dla odczytów),
 „w toku” – zapis wierszy trwa (odczyty pomijają plik; po awarii wpis i wiersze są usuwane), inna wartość – powód
 braku danych (źródło bez parsera).

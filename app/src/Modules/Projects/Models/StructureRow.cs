@@ -14,7 +14,8 @@ namespace PzlEv.Modules.Projects.Models;
 /// BAC Cost; ActualDlh – godziny rzeczywiste (Total Quantity) z ostatniego importu ACTUALS, przypisane
 /// jak Acwp. ActualStart / ActualFinish – daty WP wpisane w „Harmonogram i budżet” (Actual Start / Koniec;
 /// ActualStartManual, ActualFinishManual), a bez nich vAHDD (GSTRI, LTRMI; wydzielenie – DATA_REAL); koniec, gdy
-/// wszystkie zlecenia zamknięte.
+/// wszystkie zlecenia zamknięte. ProductionEtcHours – ETC z produkcji (bez wpisu ETC HOURS), UndeliveredByYear – materiały
+/// niedostarczone vAPD według roku dostawy w walucie projektu (propozycja estymacji CAM).
 /// </summary>
 public sealed record StructureRow(
     string Id,
@@ -68,7 +69,9 @@ public sealed record StructureRow(
     int? NextDeliveryYear = null,
     decimal AcwpLabor = 0,
     decimal AcwpMaterial = 0,
-    decimal? EtcCost = null)
+    decimal? EtcCost = null,
+    decimal? ProductionEtcHours = null,
+    IReadOnlyDictionary<int, decimal>? UndeliveredByYear = null)
 {
     // Wskaźniki EVM (docs/performance-objectives.md, rozdz. 4.2) – z wartości wiersza; brak danych albo dzielenie przez 0 – null.
 

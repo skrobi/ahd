@@ -982,6 +982,89 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
         return _dictionaries.Save(spec, working, removed, confirmWarnings: true, code, _dictionaries.KnownErrors(spec, code));
     }
 
+    // ---------- moduł CAM (kontrakt ICamWorkPackages – CamWorkPackagesSource) ----------
+
+    /// <summary>
+    /// Struktura programu bez ekranu – te same dane co zakładka Struktura: nakładka, struktura P1S (mapping), „WP i CAM”,
+    /// „Harmonogram i budżet”, produkcja PZLPROD, ACWP i godziny z zatwierdzonego przebiegu (bez niego – ostatni import), waluta
+    /// programu i stawki ETC na dzień stanu. Note – braki danych (produkcja, koszty, kurs) albo null.
+    /// </summary>
+    public (ProjectStructure Structure, EtcRates Rates, string? Note) StructureOf(string code, P1sInputs mapping, IReadOnlyList<DictRow> departmentRates,
+        IReadOnlyList<DictRow> fxRates, DateOnly today)
+    {
+        var notes = new List<string>();
+        var tree = store.Objectives(code);
+        var wpCam = Rows(ProjectDictionaries.WpCam, code);
+        var production = Production(tree, mapping);
+        if (production.Error is { } productionError)
+            notes.Add(productionError);
+        var field = ActualsAmount(code);
+        var actuals = ElementActuals.Empty;
+        string? currency = null, currencyProblem = null;
+        try
+        {
+            actuals = CostsAndHoursByElement(code, field, ApprovedActuals(code)?.AsOf);
+            (currency, currencyProblem) = ProjectCurrency(code, field);
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            notes.Add($"koszty (ACWP) niedostępne: {ex.Message}");
+        }
+        var rates = EtcRatesOf(departmentRates, fxRates, currency, currencyProblem, today);
+        if (rates.Problem is { } problem)
+            notes.Add(problem);
+        var structure = StructureBuilder.Build(tree, mapping.P1s, wpCam, Rows(ProjectDictionaries.ScheduleBudget, code), actuals.Amounts, production, today,
+            actuals.Hours, actuals.Labor, actuals.Material, rates);
+        return (structure, rates, notes.Count == 0 ? null : string.Join("; ", notes));
+    }
+
+    /// <summary>
+    /// Stawka godziny MPK według roku: Labor Rate × Overhead (brak Overhead – 1) ze „Stawki wydziałów” (PLN) × przelicznik pracy
+    /// na walutę programu (rates.LaborFactor; brak kursu – pusta lista).
+    /// </summary>
+    public static IReadOnlyDictionary<int, decimal> HourRates(IReadOnlyList<DictRow> departmentRates, string? mpk, EtcRates rates)
+    {
+        static decimal? Dec(string? text) => decimal.TryParse(text, System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var v) ? v : null;
+        if (mpk is null || rates.LaborFactor is not { } factor)
+            return new Dictionary<int, decimal>();
+        return departmentRates.Where(r => string.Equals(r["MPK"], mpk, StringComparison.OrdinalIgnoreCase) && Dec(r["Labor Rate"]) is not null
+                                          && int.TryParse(r["Year"], out _))
+            .GroupBy(r => int.Parse(r["Year"]!, System.Globalization.CultureInfo.InvariantCulture))
+            .ToDictionary(g => g.Key, g => Dec(g.First()["Labor Rate"])!.Value * (Dec(g.First()["Overhead"]) ?? 1) * factor);
+    }
+
+    /// <summary>
+    /// Zatwierdzona estymacja CAM do „Harmonogram i budżet”: ETC HOURS, ETC MATERIAL (z waluty estymacji na walutę wiersza
+    /// – kolumna Waluta; pusta – waluta programu), Forecast Start / Koniec (null – bez zmiany) – zapis jak edycja tabeli struktury
+    /// (walidacja słownika, historia). Zwraca błąd albo null.
+    /// </summary>
+    public string? ApplyCamEstimate(string code, string wp, decimal etcHours, decimal materialEtc, string? currency, DateOnly? forecastStart, DateOnly? forecastFinish)
+    {
+        static string Number(decimal value) => Math.Round(value, 2).ToString(System.Globalization.CultureInfo.InvariantCulture);
+        var rows = Rows(ProjectDictionaries.ScheduleBudget, code);
+        var rowCurrency = rows.FirstOrDefault(r => string.Equals(r["WP"], wp, StringComparison.OrdinalIgnoreCase))?[ProjectDictionaries.CurrencyColumn];
+        var material = materialEtc;
+        if (currency is not null && rowCurrency is not null && !string.Equals(currency, rowCurrency, StringComparison.OrdinalIgnoreCase))
+        {
+            if (EtcRatesOf([], FxRates(), currency, null, DateOnly.FromDateTime(DateTime.Today)).Factor(rowCurrency) is not { } factor || factor == 0)
+                return $"brak kursu {rowCurrency} w „Kursy walut” – ETC MATERIAL WP {wp} nie przeliczony";
+            material = materialEtc / factor;
+        }
+        var changes = new Dictionary<string, string?>
+        {
+            [StructureEdits.EtcHours] = Number(etcHours),
+            [StructureEdits.MaterialEtc] = Number(material),
+        };
+        if (forecastStart is { } start)
+            changes[StructureEdits.ForecastStart] = start.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
+        if (forecastFinish is { } finish)
+            changes[StructureEdits.ForecastFinish] = finish.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
+        var (working, removed) = StructureEdits.Schedule(rows, wp, changes);
+        var outcome = SaveStructureDictionary(ProjectDictionaries.ScheduleBudget, Context(code, store.Objectives(code), Rows(ProjectDictionaries.WpCam, code), Mapping()),
+            working, removed, code);
+        return outcome.Status is SaveStatus.Saved or SaveStatus.NoChanges ? null : Describe($"Harmonogram i budżet: {outcome.Message}", outcome.Issues);
+    }
+
     /// <summary>Komunikat z pierwszymi problemami (ERROR przed WARNING).</summary>
     private static string Describe(string message, IReadOnlyList<Issue> issues)
     {

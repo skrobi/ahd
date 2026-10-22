@@ -68,6 +68,9 @@ public sealed class PzlProdProductionTests : IDisposable
         Assert.Equal((1350m, 30m, 4, 2, 2026), (wp.MaterialValue, wp.MaterialFee, wp.Parts, wp.PartsDelivered, wp.NextDeliveryYear));
         // ETC: W51 60/0,8 + 15% z 60 = 84; X10 0; W20 30 + 10% = 33 → 117.
         Assert.Equal(117m, wp.EtcHours);
+        // Niedostarczone według roku dostawy (propozycja materiałów CAM): 2026 – 220/1,10; 2027 – 1000; bez daty – rok 0.
+        Assert.Equal([(2026, 200m), (2027, 1000m)], wp.UndeliveredByYear!.OrderBy(x => x.Key).Select(x => (x.Key, x.Value)));
+        Assert.Equal([(0, 70m)], values["102"].UndeliveredByYear!.Select(x => (x.Key, x.Value)));
         Assert.Equal((new DateOnly(2026, 1, 5), (DateOnly?)null), (wp.ActualStart, wp.ActualFinish));   // W20 otwarta – bez końca
         Assert.Equal((22m, 0m, 0m), (values["102"].BacHours, values["102"].EvHours, values["102"].ActualMaterial));   // W30: 20 + 10% DJK
         Assert.Empty(new SqlPzlProdSource(_prod).Production([], [Paint], ProductionParameters.Default));

@@ -22,7 +22,7 @@ Role, zakres danych i egzekwowanie – `docs/uprawnienia.md`.
 
 ## 2. Ekrany
 
-Menu modułów po lewej (Pulpit, Import RABIT, Programy, Przebiegi, Słowniki, Administracja, Diagnostyka – kolejność z `Shell/ModuleCatalog.cs`) zwija się do ikon („☰” u góry menu; nazwa modułu w podpowiedzi) – więcej miejsca na ekran modułu.
+Menu modułów po lewej (Pulpit, Import RABIT, Programy, CAM, Przebiegi, Słowniki, Administracja, Diagnostyka – kolejność z `Shell/ModuleCatalog.cs`) zwija się do ikon („☰” u góry menu; nazwa modułu w podpowiedzi) – więcej miejsca na ekran modułu.
 
 | Ekran | Zawartość | Główne akcje |
 |---|---|---|
@@ -30,6 +30,7 @@ Menu modułów po lewej (Pulpit, Import RABIT, Programy, Przebiegi, Słowniki, A
 | **Import RABIT** | import źródeł, historia importów, decyzje dla plików (F05) | importuj |
 | **Programy** | lista programów: kod, nazwa, typ, ostatni przebieg (kod, numer uruchomienia, stan, data), problemy przebiegu (liczba błędów i ostrzeżeń, kolor; podsumowanie w podpowiedzi), folder – sam odczyt projektów (nakładka i gotowość – na ekranie projektu) | nowy program; usuń program (trwale ze wszystkimi danymi, po ostrzeżeniu; folder na dysku zostaje) |
 | **Program** | zakładki: Wskaźniki (wskaźniki programu w grupach Operational EV, Materials, Financial EV; pierwszy wiersz „Status”: źródło ACTUALS struktury – zatwierdzony przebieg albo ostatni import, niezatwierdzone; data danych RABIT, produkcji PZLPROD, waluta), Struktura (nakładka z rozwinięciem P1S, WP, CAM, Cost Category, budżet i daty – `docs/performance-objectives.md`, rozdz. 4.2), Raporty, Słowniki programu, Konfiguracja (Źródła danych, Parametry programu – w tym wybór przebiegu, `docs/slowniki.md`, rozdz. 3), Przebieg (przebieg programu: etapy, macierz reguł, porównanie uruchomień – F06), Foldery | edycja w komórkach struktury (zapis od razu); dwuklik w ACWP / ACWP Hours / Materials / Other – okno „Zmiany ACWP” (F06); dołożenie elementów z kolejnego eksportu SAP; Raport kosztów (Excel) na zakładce Raporty (`docs/model-danych.md`, migracja 013), w projektach CAS także Raport kosztów CES – narzuty CAS w formułach Excela (`docs/slowniki.md`, rozdz. 6.1); struktura do Excela i wczytanie uzupełnionej struktury (WP, CAM, budżet, daty); import źródeł projektu (F05); nowy przebieg, dalsze etapy, potwierdzenie etapu z komentarzem, ponowne wykonanie etapu, porównanie dwóch uruchomień, „Zmiany ACWP” (zakładka Przebieg); edycja słowników projektu w tabeli (Cost Category – pozycje globalne i zmiany projektu, `docs/slowniki.md`, rozdz. 6); pobierz / wczytaj słowniki z Excela |
+| **CAM** | wybór CAM-a (test – bez uprawnień; później CAM zalogowanego użytkownika), cykl (okres zamknięcia z kalendarza okresów, termin – koniec tygodnia zamykającego); zakładki: **Estymacje** – lista zadań cyklu (WP CAM-a ze wszystkich programów: status, czego brakuje, stan / uwaga analityka, ETC godzin i materiałów; filtr „Tylko do zrobienia”) i formularz WP w krokach: 1 prognoza terminów (baseline tylko odczyt), 2 godziny ETC w latach od bieżącego roku (propozycja, wartość CAM, różnica, stawka MPK roku – brak: ostatnia wcześniejsza, koszt), 3 koszty materiałowe do poniesienia w latach, 4 uzasadnienie (wymagane przy zmianach względem propozycji, min. 10 znaków) i „Co trafi do Finansów” (ETC godzin, robocizny, materiałów, EAC WP wobec BAC); punkt odniesienia (BAC, poniesione, stawki, baseline, poprzednia zatwierdzona) i historia – bez wskaźników EV; **Zatwierdzanie** – wysłane estymacje cyklu wszystkich CAM-ów; **Wyniki EV** – tylko odczyt: WP CAM-a w jednej walucie (programu – gdy wspólna, PLN, USD), zakres razem / robocizna / materiały, kafelki BAC, BCWP, ACWP, CPI, SPI, EAC, VAC, TCPI, tabela WP z sumą (wskaźniki z sum), odchylenia CPI / SPI poniżej 0,95 / 0,90 | zapisz szkic, wyślij do analityka; zatwierdź (zapis ETC HOURS, ETC MATERIAL, Forecast Start / Koniec w „Harmonogram i budżet” programu z historią słownika), zwróć do CAM-a z uwagą |
 | **Kreator programu** | 5 kroków (F01); w kroku 1 także przebieg programu (szablon domyślny dla typu) | utwórz program |
 | **Przebiegi** | szablony przebiegów i reguły walidacji w jednej kolumnie (bez przebiegów konkretnych programów, bez osobnego okna i zakładek): lista szablonów (startowe „Wewnętrzny” i „CAS”) – etapy szablonu w kafelkach: klocki predefiniowane Import źródeł i Przypięcie stanu (konfiguracja programu), klocek systemowy Zatwierdzenie ACTUALS (dane struktury programu), etapy walidacji z zaznaczonymi regułami (poziom i tabele reguły, szukaj), zatwierdzenie; nazwa, typ programu, dla którego szablon jest domyślny, aktywny, programy, które go wybrały; lista **reguł walidacji** (szukaj po nazwie i tabeli; przy regule – poziom i użyte tabele) – edytor reguły: nazwa, poziom, aktywna, opis, **zapytanie SQL** z listą tabel i kolumn danych uruchomienia obok, opis wyniku (kolumny w { }); **Testuj na programie** – reguła (także niezapisana) na ostatnim uruchomieniu wybranego programu i poprzednim, tabela kolumn zwróconych przez SQL z opisem wyniku, błąd SQL Server z linią (`docs/pipeline-fazy.md`, rozdz. 4.1) | nowy / kopiuj / usuń szablon, „Utwórz szablony startowe”, + etap walidacji, + zatwierdzenie, przesuń / usuń etap, zapisz szablon; reguła: + nowa, kopiuj, usuń, odrzuć zmiany, zapisz regułę, testuj |
 | **Przebieg** | kroki i etapy (F06), panel wybranego etapu, znacznik stanu, problemy, rewizje, dziennik – wdrożony jako zakładka Przebieg programu: przebieg programu (wybrany / domyślny), etapy uruchomienia ze statusem, wyniki etapu, macierz kontroli, porównanie dwóch uruchomień | akcje etapów, „Zmiany ACWP” |
@@ -201,6 +202,21 @@ rozdz. 4.1).
   nie są pokazywane.
 - **„Ostatnie zdarzenia”** – przekrój dzienników wszystkich przebiegów: do 60 najnowszych wpisów, po 6 na stronę (‹ ›), treść skrócona do jednej linii (pełna w podpowiedzi).
 - Dziennik przebiegu: czas, użytkownik, opis – od najnowszego.
+
+### F11. Moduł CAM – estymacje dla Finansów
+
+- Propozycje systemu w latach (rozkład liniowy po dniach roboczych do prognozowanego końca): WP produkcyjny – ETC z AHD,
+  bez danych produkcji – BAC godzin − poniesione; materiały – części niedostarczone `vAPD` według roku planowanej dostawy
+  (`docs/zrodla-danych.md`), bez nich – BAC materiałów − poniesione. Rozkład godzin produkcji po latach – liniowo (daty
+  operacji zleceń – O10).
+- Koszt godzin = godziny × stawka MPK roku („Stawki wydziałów”: Labor Rate × Overhead) przeliczona na walutę programu
+  (USD – kurs z „Kursy walut”).
+- Statusy: Do uzupełnienia → Szkic → Wysłana → Zatwierdzona / Zwrócona (z uwagą) → Szkic; jedna estymacja WP na cykl,
+  zapis z kontrolą równoczesnej zmiany, historia zdarzeń, wpis w dzienniku (obszar „CAM”).
+- Zatwierdzenie zapisuje sumę lat jako ETC HOURS / ETC MATERIAL oraz Forecast Start / Koniec w „Harmonogram i budżet”
+  (`docs/slowniki.md`) – struktura programu i wyniki EV liczą z nich ETC.
+- Wyniki EV: EAC = ACWP + ETC, IEAC = ACWP + (BAC − BCWP) ÷ CPI, TCPI = (BAC − BCWP) ÷ (EAC − ACWP), różnica TCPI − CPI > 0,10
+  – EAC mało wiarygodny; WP bez danych produkcji nie mają BCWP (O35).
 
 ### F08. Administracja
 

@@ -284,6 +284,8 @@ Z_KAT_ZBIORCZA
   - materiały `LOG.vAPD` (po PSPNR, na elemencie – nie na wydzieleniu), USD: wartość wszystkich części Σ `NETWR_USD`
     [÷ (1 + `Z_CLO`)], fee Σ `NETWR_USD` − Σ `NETWR_USD` ÷ (1 + `Z_CLO`), dostarczone – statusy dostarczone, liczba numerów
     części (`MATNR`) wszystkich i dostarczonych, najbliższy rok planowanej dostawy niedostarczonych (`EINDT_MAX`).
+  - materiały niedostarczone według roku planowanej dostawy (`EINDT_MAX`; trzeci wynik zapytania, rok 0 – bez daty) – propozycja
+    materiałów w estymacji CAM (F11, `docs/funkcjonalnosc.md`).
 - Raport S70MR liczy jednocześnie operacje kontroli DJK i DJK procentowe od godzin W2–W6 – przeniesione bez zmian, do
   potwierdzenia z autorem raportu (czy kontrola nie jest liczona podwójnie). TEMPO (`extCES.TEMPO1464`) – poza strukturą.
 

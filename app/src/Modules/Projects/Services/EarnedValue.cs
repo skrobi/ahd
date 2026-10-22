@@ -25,18 +25,7 @@ public static class EarnedValue
     }
 
     /// <summary>Dni robocze (pn–pt) od from do to włącznie.</summary>
-    public static int WorkingDays(DateOnly from, DateOnly to)
-    {
-        if (to < from)
-            return 0;
-        var days = to.DayNumber - from.DayNumber + 1;
-        var weeks = days / 7;
-        var result = weeks * 5;
-        for (var d = from.AddDays(weeks * 7); d <= to; d = d.AddDays(1))
-            if (d.DayOfWeek is not (DayOfWeek.Saturday or DayOfWeek.Sunday))
-                result++;
-        return result;
-    }
+    public static int WorkingDays(DateOnly from, DateOnly to) => PzlEv.Shared.Models.WorkingDays.Between(from, to);
 
     private static DateOnly? Date(string? value) =>
         DateOnly.TryParseExact(value, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var d) ? d : null;

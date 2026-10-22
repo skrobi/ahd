@@ -113,6 +113,7 @@ Każdy moduł jest folderem `Modules/<Folder>/` i właścicielem swoich ekranów
 | Import | `Import` | pobranie i załadowanie plików, parsery źródeł (F05) | G1 | `docs/zrodla-danych.md` |
 | Master Data | `MasterData` | ekran Słowniki – słowniki globalne (F03), struktura P1S z `PZLPROD` (tylko odczyt); mechanizm słowników jest wspólny (`Shared/Utils/Dictionaries`) | G3 | `docs/slowniki.md`, `docs/zrodla-danych.md` |
 | Projects | `Projects` | projekty, kreator, Performance Objectives, słowniki projektu, foldery projektu (F01) | – | `docs/performance-objectives.md` |
+| CAM | `Cam` | estymacje WP dla Finansów (godziny i materiały w latach, prognoza terminów), zatwierdzanie przez analityka, wyniki EV WP CAM-a (F11; test – bez uprawnień) | – | `docs/funkcjonalnosc.md` (moduł CAM) |
 | Runs | `Runs` | przebiegi, ekran przebiegu, przypięcie stanu, walidacja, zamknięcie (F06) | P0, P1, P2, Z | `docs/pipeline-fazy.md`, `docs/model-danych.md` |
 | Reconciliation | `Reconciliation` | łączenie źródeł, pliki dla finansów | P3, P4 | `docs/pipeline-fazy.md` |
 | CAM / Progress | `Progress` | zaawansowanie: produkcja, uzupełnienia, pliki CAM | P5, P6, P7 | `docs/pipeline-fazy.md` |
@@ -146,7 +147,7 @@ Shared/
   Utils/Files/                     Excel, CSV/TXT, liczby polskie, daty, sygnatura kolumn, SHA-256
   Utils/Mapping/                   klucze porównań kodów elementów P1S / CES (`MappingKeys`: bez spacji i wielkości liter, numery bez zer wiodących)
   Utils/Dictionaries/              mechanizm słowników (walidacja, zapis z historią, wymiana przez Excel, magazyn SQL) i słowniki globalne – używają go moduły Słowniki i Projekty
-  Models/                          modele wspólne, klucze modułów, wynik kontroli (Issue), kontrakt etapu (Pipeline), opisy słowników (Dictionaries), modele `PZLPROD` – struktura P1S i dane produkcji (PzlProd), pracownicy HR (Hr)
+  Models/                          modele wspólne, klucze modułów, wynik kontroli (Issue), kontrakt etapu (Pipeline), opisy słowników (Dictionaries), modele `PZLPROD` – struktura P1S i dane produkcji (PzlProd), pracownicy HR (Hr), dni robocze (`WorkingDays`)
   Models/Db/                       wiersze tabel schematu (meta, stg, can, dict) – wspólne jak schemat bazy
   Models/Sources/                  parsery i układy kolumn źródeł (kontrakt danych)
   Views/Templates/                 wygląd całej aplikacji: paleta, style, tabele, układ strony
@@ -166,7 +167,7 @@ modułu i `Shared/Models`; Excel, File Connectors, SQL Access – `Shared/Utils`
   (`INavigator`, `ModuleKeys`; z parametrem – typ ze `Shared`, np. `DictionaryLink`, który ekran celu przyjmuje przez `INavigationTarget`)
   albo kontrakt w `Shared`: moduł rejestruje implementację w `Initialize`
   (`AppServices.Contracts`), inny pobiera ją przy użyciu – np. `ISourceImport` (moduł Import) dla „Importuj źródła
-  projektu” i przebiegu, `IRunLauncher` (moduł Przebiegi) dla listy projektów, `IRunPanels` – panel przebiegu programu (zakładka Przebieg; uruchomienie przebiegu – bez kontroli gotowości, wymagania sprawdzają reguły etapów; „Popraw w aplikacji” – zdarzenie `IRunPanel.FixRequested` ze słownikiem do pokazania), `IAcwpChanges` – okno „Zmiany ACWP” (moduł Projekty);
+  projektu” i przebiegu, `IRunLauncher` (moduł Przebiegi) dla listy projektów, `IRunPanels` – panel przebiegu programu (zakładka Przebieg; uruchomienie przebiegu – bez kontroli gotowości, wymagania sprawdzają reguły etapów; „Popraw w aplikacji” – zdarzenie `IRunPanel.FixRequested` ze słownikiem do pokazania), `IAcwpChanges` – okno „Zmiany ACWP” (moduł Projekty), `ICamWorkPackages` – WP CAM-ów ze wszystkich programów z wartościami EV i stawkami MPK oraz zapis zatwierdzonej estymacji w „Harmonogram i budżet” (moduł Projekty dla modułu CAM);
   powiadomienia – `Shared/Utils/Ui/Notifications` (Windows),
 - silnik EVM zależy wyłącznie od modeli (rozdz. 5.1).
 

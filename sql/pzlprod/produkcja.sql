@@ -24,7 +24,9 @@
      Actual Finish = MAX(LTRMI) (wydzielenie – MAX(DATA_REAL)), gdy wszystkie operacje mają STAT = 'DONE', inaczej NULL.
    Wynik 2 – materiały po PSPNR (vAPD, USD): wartość wszystkich części Σ NETWR_USD [÷ (1 + Z_CLO)] (Value), fee Σ NETWR_USD −
      Σ NETWR_USD ÷ (1 + Z_CLO) (Fee), wartość dostarczona – statusy #delivered (Delivered), liczba numerów części (MATNR):
-     wszystkich i dostarczonych, najbliższy rok planowanej dostawy części niedostarczonych (YEAR(EINDT_MAX)). */
+     wszystkich i dostarczonych, najbliższy rok planowanej dostawy części niedostarczonych (YEAR(EINDT_MAX)).
+   Wynik 3 – materiały niedostarczone po PSPNR i roku planowanej dostawy (YEAR(EINDT_MAX); brak daty – NULL), USD jak Value –
+     propozycja materiałów w latach w estymacji CAM (docs/funkcjonalnosc.md, moduł CAM). */
 
 WITH Produktywnosc AS (
     SELECT IPT, SUM(CzTechPon) / SUM(CzRzecz) AS Factor
@@ -75,3 +77,11 @@ FROM $(vAPD) v
 JOIN #pspnr p ON p.PSPNR = TRY_CONVERT(BIGINT, v.PSPNR)
 LEFT JOIN #delivered s ON s.Status = v.STATUS
 GROUP BY p.PSPNR;
+
+SELECT CAST(p.PSPNR AS NVARCHAR(50)) AS Pspnr, YEAR(v.EINDT_MAX) AS DeliveryYear,
+       CAST(SUM(v.NETWR_USD / IIF(@divideZClo = 1, 1 + ISNULL(v.Z_CLO, 0), 1)) AS DECIMAL(28,8)) AS Value
+FROM $(vAPD) v
+JOIN #pspnr p ON p.PSPNR = TRY_CONVERT(BIGINT, v.PSPNR)
+LEFT JOIN #delivered s ON s.Status = v.STATUS
+WHERE s.Status IS NULL
+GROUP BY p.PSPNR, YEAR(v.EINDT_MAX);

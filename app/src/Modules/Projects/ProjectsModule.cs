@@ -38,6 +38,7 @@ public sealed class ProjectsModule : IModule
             () => services.Contracts.Get<IAcwpChanges>(),
             () => services.Contracts.Get<IRunPanels>());
         services.Contracts.Register<IProjectProcessSource>(new ProjectProcessSource(_service));
+        services.Contracts.Register<ICamWorkPackages>(new CamWorkPackagesSource(_service));
     }
 
     public FrameworkElement CreateView(ModuleContext context) =>

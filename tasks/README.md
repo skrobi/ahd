@@ -137,11 +137,11 @@ zmiana zakresu zadania w trakcie realizacji wymaga uzgodnienia.
 
 | Zadanie | Moduł | Zależy od | Otwarte kwestie | Status |
 |---|---|---|---|---|
-| [F11.1 Moduł CAM – dane estymacji i kontrakt](F11.1-modul-cam-dane-i-kontrakt.md) | Cam, Projects | F4.6 | O10, O35 | do zrobienia |
-| [F11.2 Estymacja – propozycje i wyliczenia](F11.2-estymacja-propozycje-i-wyliczenia.md) | Cam | F11.1 | O10, O35, O15 | do zrobienia |
-| [F11.3 Ekran Estymacje](F11.3-ekran-estymacje.md) | Cam | F11.2 | – | do zrobienia |
-| [F11.4 Zatwierdzanie estymacji](F11.4-zatwierdzanie-estymacji.md) | Cam | F11.3 | – | do zrobienia |
-| [F11.5 Ekran Wyniki EV CAM-a](F11.5-ekran-wyniki-ev-cam.md) | Cam | F11.1 | O35 | do zrobienia |
+| [F11.1 Moduł CAM – dane estymacji i kontrakt](F11.1-modul-cam-dane-i-kontrakt.md) | Cam, Projects | F4.6 | O10, O35 | zrobione |
+| [F11.2 Estymacja – propozycje i wyliczenia](F11.2-estymacja-propozycje-i-wyliczenia.md) | Cam | F11.1 | O10, O35, O15 | zrobione |
+| [F11.3 Ekran Estymacje](F11.3-ekran-estymacje.md) | Cam | F11.2 | – | w toku |
+| [F11.4 Zatwierdzanie estymacji](F11.4-zatwierdzanie-estymacji.md) | Cam | F11.3 | – | zrobione |
+| [F11.5 Ekran Wyniki EV CAM-a](F11.5-ekran-wyniki-ev-cam.md) | Cam | F11.1 | O35 | zrobione |
 
 ## Otwarte kwestie blokujące
 

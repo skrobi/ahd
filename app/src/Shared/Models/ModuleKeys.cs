@@ -10,6 +10,7 @@ public static class ModuleKeys
     public const string Import = "import";
     public const string MasterData = "master-data";
     public const string Projects = "projects";
+    public const string Cam = "cam";
     public const string Runs = "runs";
     public const string Reconciliation = "reconciliation";
     public const string Progress = "progress";
