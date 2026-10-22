@@ -27,7 +27,7 @@ public sealed record AcwpPeriodOption(int Year, int Period)
 /// <summary>
 /// Okno „Zmiany ACWP” (docs/funkcjonalnosc.md, F06): porównanie kosztu brutto po rodzaju kosztu – dwa uruchomienia przebiegu
 /// (domyślnie: ostatnie uruchomienie poprzedniego okresu i najnowsze) albo okres do okresu w jednym uruchomieniu; kafelki
-/// rodzajów, drzewo zmian (AcwpChanges), linie źródłowe wybranego liścia – linia „było” i „jest” w jednym wierszu (AcwpChanges.Lines,
+/// rodzajów, drzewo zmian (AcwpChanges), linie źródłowe wybranego węzła (wszystkie jego komórki) – linia „było” i „jest” w jednym wierszu (AcwpChanges.Lines,
 /// stan plików z chwili uruchomienia) i wykres przyrostów (osobne okno). Koszty w walucie przebiegu (CAS – po narzutach); linie – dane
 /// źródłowe ACTUALS.
 /// </summary>
@@ -66,7 +66,7 @@ public sealed class AcwpChangesViewModel : ObservableObject
     private AcwpComparison _comparison = new([], []);
     private AcwpChangeNode? _selected;
     private IReadOnlyList<AcwpLineChange> _lines = [];
-    private string _linesTitle = "Wybierz pozycję drzewa na poziomie okresu (dwa uruchomienia) albo elementu WBS (okres do okresu) – linie źródłowe.";
+    private string _linesTitle = "Wybierz pozycję drzewa – linie źródłowe wszystkich komórek pozycji.";
     private string? _error;
     private string _note = "";
     private int _version;
@@ -289,32 +289,35 @@ public sealed class AcwpChangesViewModel : ObservableObject
     private async Task LoadLines(AcwpChangeNode? node)
     {
         Lines = [];
-        if (node?.Line is not { } key)
-        {
-            LinesTitle = node is null ? LinesTitle : "Linie źródłowe – na poziomie okresu (dwa uruchomienia) albo elementu WBS (okres do okresu).";
+        if (node is null || node.Cells.Count == 0)
             return;
-        }
         await Try(async () =>
         {
             var sides = PeriodMode
-                ? new[] { ("było", PeriodPin!.Pin, key.Before), ("jest", PeriodPin!.Pin, key.After) }
-                : [("było", BeforePin!.Pin, key.Before), ("jest", AfterPin!.Pin, key.After)];
+                ? new[] { ("było", PeriodPin!.Pin, AcwpChanges.LineScope(node.Cells, before: true, foldClosing: true)),
+                    ("jest", PeriodPin!.Pin, AcwpChanges.LineScope(node.Cells, before: false, foldClosing: true)) }
+                : [("było", BeforePin!.Pin, AcwpChanges.LineScope(node.Cells, before: true, foldClosing: false)),
+                    ("jest", AfterPin!.Pin, AcwpChanges.LineScope(node.Cells, before: false, foldClosing: false))];
             var onlyChanges = OnlyChanges;
-            var (result, lines) = await Busy.Run($"Linie źródłowe {key.WbsElement} × {key.CostElement}…", () =>
+            var (result, lines) = await Busy.Run($"Linie źródłowe {node.Level.ToLowerInvariant()} {node.Label}…", () =>
             {
-                var loaded = sides.Select(s => (Side: s.Item1, Lines: s.Item3 is null
-                    ? new RunLines([], 0, 0)
-                    : _store.ActualsLines(key.WbsElement, key.CostElement, s.Item3.Value.Year, s.Item3.Value.Period,
-                        s.Item2.FinishedAt ?? s.Item2.StartedAt, s.Item2.AmountField ?? ProjectSettings.DefaultActualsAmount, LineFetch))).ToList();
-                return (loaded, AcwpChanges.Lines(loaded[0].Lines.Rows, loaded[1].Lines.Rows, onlyChanges));
+                var loaded = sides.Select(s =>
+                {
+                    if (s.Item3 is not { } scope)
+                        return (Side: s.Item1, Rows: (IReadOnlyList<RunActualsLine>)[], Truncated: false);
+                    var query = _store.ActualsLines(new RunActualsScope(s.Item2.PinId, null, scope.CostElements, scope.Year, scope.Period, scope.WbsElements),
+                        s.Item2.FinishedAt ?? s.Item2.StartedAt, s.Item2.AmountField ?? ProjectSettings.DefaultActualsAmount, LineFetch);
+                    return (Side: s.Item1, Rows: AcwpChanges.InScope(query.Rows, scope), Truncated: query.Count > query.Rows.Count);
+                }).ToList();
+                return (loaded, AcwpChanges.Lines(loaded[0].Rows, loaded[1].Rows, onlyChanges));
             });
             if (!ReferenceEquals(node, _selected))
                 return;
             Lines = lines.Take(LineCount).ToList();
             var states = lines.GroupBy(l => l.State).ToDictionary(g => g.Key, g => g.Count());
-            LinesTitle = $"Linie źródłowe {key.WbsElement} × {key.CostElement} (dane ACTUALS, pole kwoty uruchomienia): "
-                + string.Join("; ", result.Select(r => $"{r.Side} – {r.Lines.Count} linii, suma {r.Lines.Sum:#,0.00}"
-                                                       + (r.Lines.Count > r.Lines.Rows.Count ? $" (porównano {r.Lines.Rows.Count} największych)" : "")))
+            LinesTitle = $"Linie źródłowe – {node.Level.ToLowerInvariant()} {node.Label}, komórek: {node.Cells.Count} (dane ACTUALS, pole kwoty uruchomienia): "
+                + string.Join("; ", result.Select(r => $"{r.Side} – {r.Rows.Count} linii, suma {r.Rows.Sum(l => l.Amount ?? 0):#,0.00}"
+                                                       + (r.Truncated ? $" (porównano {LineFetch} największych linii zapytania)" : "")))
                 + $". Nowe: {states.GetValueOrDefault(AcwpLineStates.New)}, usunięte: {states.GetValueOrDefault(AcwpLineStates.Removed)}, "
                 + $"zmienione: {states.GetValueOrDefault(AcwpLineStates.Changed)}"
                 + (onlyChanges ? "" : $", bez zmian: {states.GetValueOrDefault(AcwpLineStates.Unchanged)}")

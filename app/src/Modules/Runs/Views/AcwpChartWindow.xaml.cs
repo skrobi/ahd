@@ -15,10 +15,10 @@ namespace PzlEv.Modules.Runs.Views;
 /// </summary>
 public partial class AcwpChartWindow : Window
 {
-    private const double Left = 80;
-    private const double Right = 90;
-    private const double Top = 12;
-    private const double Bottom = 28;
+    private const double PadLeft = 80;
+    private const double PadRight = 90;
+    private const double PadTop = 12;
+    private const double PadBottom = 28;
     private const int Ticks = 5;
 
     private readonly AcwpChart _chart;
@@ -43,27 +43,27 @@ public partial class AcwpChartWindow : Window
     {
         Plot.Children.Clear();
         var periods = _chart.Series.FirstOrDefault()?.Increments ?? [];
-        var width = Plot.ActualWidth - Left - Right;
-        var height = Plot.ActualHeight - Top - Bottom;
+        var width = Plot.ActualWidth - PadLeft - PadRight;
+        var height = Plot.ActualHeight - PadTop - PadBottom;
         if (periods.Count == 0 || width < 50 || height < 50)
             return;
 
         var (barMin, barMax) = Range(_chart.Series.SelectMany(s => s.Increments).Select(i => i.Amount));
         var (lineMin, lineMax) = Range(_chart.Cumulative);
-        double Y(decimal value, decimal min, decimal max) => Top + height - (double)((value - min) / (max - min)) * height;
+        double Y(decimal value, decimal min, decimal max) => PadTop + height - (double)((value - min) / (max - min)) * height;
 
         // Osie: siatka i opisy lewej osi (przyrost), opisy prawej osi (skumulowany).
         for (var t = 0; t <= Ticks; t++)
         {
-            var y = Top + height - height * t / Ticks;
-            Plot.Children.Add(new Line { X1 = Left, X2 = Left + width, Y1 = y, Y2 = y, Stroke = Brush("Line"), StrokeThickness = 1 });
-            AddText(Format(barMin + (barMax - barMin) * t / Ticks), 0, y - 8, Left - 6, TextAlignment.Right);
-            AddText(Format(lineMin + (lineMax - lineMin) * t / Ticks), Left + width + 6, y - 8, Right - 6, TextAlignment.Left);
+            var y = PadTop + height - height * t / Ticks;
+            Plot.Children.Add(new Line { X1 = PadLeft, X2 = PadLeft + width, Y1 = y, Y2 = y, Stroke = Brush("Line"), StrokeThickness = 1 });
+            AddText(Format(barMin + (barMax - barMin) * t / Ticks), 0, y - 8, PadLeft - 6, TextAlignment.Right);
+            AddText(Format(lineMin + (lineMax - lineMin) * t / Ticks), PadLeft + width + 6, y - 8, PadRight - 6, TextAlignment.Left);
         }
         if (barMin < 0)
         {
             var zero = Y(0, barMin, barMax);
-            Plot.Children.Add(new Line { X1 = Left, X2 = Left + width, Y1 = zero, Y2 = zero, Stroke = Brush("Muted"), StrokeThickness = 1 });
+            Plot.Children.Add(new Line { X1 = PadLeft, X2 = PadLeft + width, Y1 = zero, Y2 = zero, Stroke = Brush("Muted"), StrokeThickness = 1 });
         }
 
         // Słupki rodzajów w okresie.
@@ -71,7 +71,7 @@ public partial class AcwpChartWindow : Window
         var bar = group * 0.7 / _chart.Series.Count;
         for (var p = 0; p < periods.Count; p++)
         {
-            var x0 = Left + group * p + group * 0.15;
+            var x0 = PadLeft + group * p + group * 0.15;
             for (var k = 0; k < _chart.Series.Count; k++)
             {
                 var series = _chart.Series[k];
@@ -92,14 +92,14 @@ public partial class AcwpChartWindow : Window
                 Canvas.SetTop(rect, Math.Min(y, zero));
                 Plot.Children.Add(rect);
             }
-            AddText(periods[p].Label, Left + group * p, Top + height + 6, group, TextAlignment.Center);
+            AddText(periods[p].Label, PadLeft + group * p, PadTop + height + 6, group, TextAlignment.Center);
         }
 
         // Linia kosztu skumulowanego (suma rodzajów wykresu) nad słupkami.
         var line = new Polyline { Stroke = Brush("Ink"), StrokeThickness = 2 };
         for (var p = 0; p < periods.Count; p++)
         {
-            var point = new Point(Left + group * (p + 0.5), Y(_chart.Cumulative[p], lineMin, lineMax));
+            var point = new Point(PadLeft + group * (p + 0.5), Y(_chart.Cumulative[p], lineMin, lineMax));
             line.Points.Add(point);
             var dot = new Ellipse { Width = 8, Height = 8, Fill = Brush("Ink"), ToolTip = $"Skumulowany {periods[p].Label}: {_chart.Cumulative[p]:#,0.00}" };
             Canvas.SetLeft(dot, point.X - 4);

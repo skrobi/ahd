@@ -399,21 +399,13 @@ public sealed class SqlRunStore(SqlDatabase db) : IRunStore
             effective.Where(r => !string.IsNullOrWhiteSpace(r.Description)).ToDictionary(r => r.CostElement, r => r.Description!, StringComparer.OrdinalIgnoreCase));
     }
 
-    public RunLines ActualsLines(string wbsElement, string costElement, int year, int period, DateTimeOffset asOf, string amountField, int top)
-    {
-        var lines = ActualsLines(null, wbsElement, [costElement], year, period, asOf, amountField, top, exactPeriod: true);
-        return new RunLines(lines.Rows.Select(r => new RunLineRow(r.FileName, r.RowNumber, r.CreatedOn, r.Amount, r.Quantity, r.CostElementName, r.CoObjectName,
-            r.PartnerObject, r.PurchaseOrderNumber, r.InvoiceNumber, r.OriginalOrderNumber, r.TransactionCurrency, r.ValueTranCurr, r.OriginalMaterial)).ToList(),
-            lines.Count, lines.Sum);
-    }
-
     public RunActualsLines ActualsLines(RunActualsScope scope, DateTimeOffset asOf, string amountField, int top) =>
-        ActualsLines(scope.PinId, scope.WbsElement, scope.CostElements, scope.Year, scope.Period, asOf, amountField, top, exactPeriod: false);
+        ActualsLines(scope.PinId, scope.WbsElement, scope.WbsElements, scope.CostElements, scope.Year, scope.Period, asOf, amountField, top);
 
-    // Linie ACTUALS z najnowszych wersji plików do asOf: element WBS (null – elementy WBS danych przypiętych w uruchomieniu pinId),
-    // cost elementy, rok, okres (exactPeriod false – okres 12 obejmuje 13–16, jak RokOkres reguł).
-    private RunActualsLines ActualsLines(long? pinId, string? wbsElement, IReadOnlyCollection<string>? costElements, int? year, int? period, DateTimeOffset asOf,
-        string amountField, int top, bool exactPeriod)
+    // Linie ACTUALS z najnowszych wersji plików do asOf: element WBS albo elementy WBS (oba null – elementy WBS danych przypiętych
+    // w uruchomieniu pinId), cost elementy, rok, okres (okres 12 obejmuje 13–16, jak RokOkres reguł).
+    private RunActualsLines ActualsLines(long pinId, string? wbsElement, IReadOnlyCollection<string>? wbsElements, IReadOnlyCollection<string>? costElements,
+        int? year, int? period, DateTimeOffset asOf, string amountField, int top)
     {
         using var connection = db.Open();
         var parser = SqlCanonical.CurrentParser(connection, db, "ACTUALS") ?? throw new InvalidOperationException("Nie ma parsera ACTUALS.");
@@ -422,10 +414,11 @@ public sealed class SqlRunStore(SqlDatabase db) : IRunStore
         string Text(string field) => Slot(field) is var slot && slot == "NULL" ? "NULL" : $"CAST({slot} AS NVARCHAR(400))";
         string Number(string field) => Slot(field) is var slot && slot == "NULL" ? "NULL" : $"TRY_CONVERT(DECIMAL(28,8), {slot})";
         string Integer(string field) => Slot(field) is var slot && slot == "NULL" ? "NULL" : $"TRY_CONVERT(INT, {slot})";
-        var periodValue = exactPeriod ? Integer("Period") : $"CASE WHEN {Integer("Period")} > 12 THEN 12 ELSE {Integer("Period")} END";
+        var periodValue = $"CASE WHEN {Integer("Period")} > 12 THEN 12 ELSE {Integer("Period")} END";
         var conditions = new List<string>
         {
             wbsElement is not null ? $"{Slot("WbsElement")} = @wbsElement"
+                : wbsElements is not null ? $"{Slot("WbsElement")} IN @wbsElements"
                 : $"{Slot("WbsElement")} IN (SELECT WbsElement FROM {_balance} WHERE PinId = @pinId AND WbsElement <> N'')",
         };
         if (costElements is not null)
@@ -440,7 +433,7 @@ public sealed class SqlRunStore(SqlDatabase db) : IRunStore
             JOIN {db.Table(DbTables.CanonicalRow)} r ON r.FileId = f.FileId AND r.ParserId = @parserId
             WHERE {string.Join(" AND ", conditions)}
             """;
-        var args = new { asOf, parserId = parser.ParserId, pinId, wbsElement, costElements = costElements?.ToArray() ?? [], year, period, top };
+        var args = new { asOf, parserId = parser.ParserId, pinId, wbsElement, wbsElements = wbsElements?.ToArray() ?? [], costElements = costElements?.ToArray() ?? [], year, period, top };
         var rows = connection.Query<RunActualsLine>(
             $"""
             SELECT TOP (@top) {Text("WbsElement")} AS WbsElement, {Text("CostElement")} AS CostElement, {Integer("FiscalYear")} AS FiscalYear, {Integer("Period")} AS Period,

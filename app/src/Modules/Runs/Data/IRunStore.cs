@@ -16,23 +16,17 @@ public sealed record RunDictionaryData(IReadOnlyDictionary<string, string> CostK
 public sealed record RunEvRow(string WbsElement, string CostElement, int FiscalYear, int Period, string CostKind, decimal Amount);
 
 /// <summary>
-/// Linia źródłowa ACTUALS (okno „Zmiany ACWP”): plik, wiersz, data utworzenia, kwota pola kwoty uruchomienia, ilość, opisy; waluta
-/// i wartość w walucie transakcji, materiał – pola klucza linii (AcwpChanges.Lines).
+/// Zakres zrzutu linii ACTUALS (wynik reguły – kolumny wiersza; węzeł okna „Zmiany ACWP”): element WBS albo elementy WBS (oba null –
+/// elementy WBS danych przypiętych w uruchomieniu PinId), cost elementy (null – wszystkie), rok i okres (null – wszystkie; okres 12
+/// obejmuje 13–16).
 /// </summary>
-public sealed record RunLineRow(string FileName, int RowNumber, string? CreatedOn, decimal? Amount, decimal? Quantity, string? CostElementName,
-    string? CoObjectName, string? PartnerObject, string? PurchaseOrderNumber, string? InvoiceNumber, string? OriginalOrderNumber,
-    string? TransactionCurrency = null, decimal? ValueTranCurr = null, string? OriginalMaterial = null);
-
-/// <summary>Linie źródłowe komórki: pierwsze linie wg |kwoty| oraz liczba i suma wszystkich.</summary>
-public sealed record RunLines(IReadOnlyList<RunLineRow> Rows, int Count, decimal Sum);
+public sealed record RunActualsScope(long PinId, string? WbsElement, IReadOnlyCollection<string>? CostElements, int? Year, int? Period,
+    IReadOnlyCollection<string>? WbsElements = null);
 
 /// <summary>
-/// Zakres zrzutu linii ACTUALS (wynik reguły – kolumny wiersza): element WBS (null – elementy WBS danych przypiętych w uruchomieniu
-/// PinId), cost elementy (null – wszystkie), rok i okres (null – wszystkie; okres 12 obejmuje 13–16).
+/// Linia ACTUALS zrzutu: element WBS, cost element, rok, okres i pola linii źródłowej; waluta i wartość w walucie transakcji, materiał
+/// – pola klucza linii okna „Zmiany ACWP” (AcwpChanges.Lines).
 /// </summary>
-public sealed record RunActualsScope(long PinId, string? WbsElement, IReadOnlyCollection<string>? CostElements, int? Year, int? Period);
-
-/// <summary>Linia ACTUALS zrzutu: element WBS, cost element, rok, okres i pola linii źródłowej.</summary>
 public sealed record RunActualsLine(string? WbsElement, string? CostElement, int? FiscalYear, int? Period, string FileName, int RowNumber, string? CreatedOn,
     decimal? Amount, decimal? Quantity, string? CostElementName, string? CoObjectName, string? PartnerObject, string? PurchaseOrderNumber, string? InvoiceNumber,
     string? OriginalOrderNumber, string? TransactionCurrency, decimal? ValueTranCurr, string? OriginalMaterial);
@@ -93,12 +87,6 @@ public interface IRunStore
 
     /// <summary>Słowniki programu: rodzaj kosztu i opis cost elementu (Cost Category efektywny).</summary>
     RunDictionaryData Dictionaries(string project);
-
-    /// <summary>
-    /// Linie ACTUALS elementu WBS × cost element × rok × okres z najnowszych wersji plików zaimportowanych do asOf (stan uruchomienia),
-    /// kwota z pola amountField; pierwsze top linii wg |kwoty|.
-    /// </summary>
-    RunLines ActualsLines(string wbsElement, string costElement, int year, int period, DateTimeOffset asOf, string amountField, int top);
 
     /// <summary>
     /// Linie ACTUALS zakresu (wynik reguły – „Linie ACTUALS”) z najnowszych wersji plików zaimportowanych do asOf, kwota z pola amountField;

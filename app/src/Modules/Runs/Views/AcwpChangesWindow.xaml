@@ -59,18 +59,23 @@
             <ItemsControl.ItemTemplate>
                 <DataTemplate DataType="{x:Type services:AcwpKindTotal}">
                     <Border Style="{StaticResource Panel}" Padding="12,8" Margin="0,0,10,0" MinWidth="220">
+                        <!-- Wartość „jest”, „było” i zmiana kwotowo: zielona na plus, czerwona na minus -->
                         <StackPanel>
                             <TextBlock Text="{Binding Kind, StringFormat='ACWP {0}'}" FontWeight="SemiBold" />
-                            <TextBlock Style="{StaticResource MutedText}">
-                                <Run Text="było" /> <Run Text="{Binding Before, Mode=OneWay, StringFormat=#\,0.00}" />
-                                <Run Text=" · jest" /> <Run Text="{Binding After, Mode=OneWay, StringFormat=#\,0.00}" />
-                            </TextBlock>
-                            <TextBlock FontSize="16" FontWeight="SemiBold">
-                                <Run Text="{Binding Delta, Mode=OneWay, StringFormat=+#\,0.00;-#\,0.00;0}" />
-                                <Run Text="{Binding Percent, Mode=OneWay, StringFormat='({0:+0.0;-0.0;0}%)'}" Foreground="{StaticResource Muted}" FontSize="12" />
-                            </TextBlock>
+                            <TextBlock FontSize="16" FontWeight="SemiBold" Text="{Binding After, StringFormat=#\,0.00}" />
+                            <TextBlock Style="{StaticResource MutedText}" Text="{Binding Before, StringFormat='było {0:#,0.00}'}" />
+                            <TextBlock x:Name="Delta" FontWeight="SemiBold" Foreground="{StaticResource Muted}"
+                                       Text="{Binding Delta, StringFormat='zmiana {0:+#,0.00;-#,0.00;0}'}" />
                         </StackPanel>
                     </Border>
+                    <DataTemplate.Triggers>
+                        <DataTrigger Binding="{Binding Trend}" Value="1">
+                            <Setter TargetName="Delta" Property="Foreground" Value="{StaticResource Ok}" />
+                        </DataTrigger>
+                        <DataTrigger Binding="{Binding Trend}" Value="-1">
+                            <Setter TargetName="Delta" Property="Foreground" Value="{StaticResource Crit}" />
+                        </DataTrigger>
+                    </DataTemplate.Triggers>
                 </DataTemplate>
             </ItemsControl.ItemTemplate>
         </ItemsControl>
@@ -144,6 +149,9 @@
                     <DataGridTextColumn Header="Zmiana" Binding="{Binding Delta, StringFormat=+#\,0.00;-#\,0.00;0}" FontWeight="SemiBold" />
                     <DataGridTextColumn Header="Ilość było" Binding="{Binding Before.Quantity, StringFormat=#\,0.###}" />
                     <DataGridTextColumn Header="Ilość jest" Binding="{Binding After.Quantity, StringFormat=#\,0.###}" />
+                    <DataGridTextColumn Header="Element WBS" Binding="{Binding Line.WbsElement}" />
+                    <DataGridTextColumn Header="Cost element" Binding="{Binding Line.CostElement}" />
+                    <DataGridTextColumn Header="Okres" Binding="{Binding Period}" />
                     <DataGridTextColumn Header="Created on" Binding="{Binding Line.CreatedOn}" />
                     <DataGridTextColumn Header="Cost element name" Binding="{Binding Line.CostElementName}" />
                     <DataGridTextColumn Header="CO object name" Binding="{Binding Line.CoObjectName}" Width="*" />
