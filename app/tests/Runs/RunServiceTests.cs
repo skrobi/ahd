@@ -129,8 +129,9 @@ public sealed class RunServiceTests : IDisposable
         // (T40 #1 – błędy zaakceptowane; T41 #1 – zatrzymany na błędzie, niezatwierdzony).
         var projects = new SqlProjectStore(_database.Sql, _services.Clock, _services.User);
         Assert.Equal((pin.Code, pin.PinNo), (projects.ApprovedActuals("PAF")!.RunCode, projects.ApprovedActuals("PAF")!.PinNo));
-        var approval = new RunDefinition("A – zatwierdzenie ACTUALS", RunRules.AllTypes, [.. RunDefinitions.StandardSteps.Take(3), RunDefinitions.ActualsApproval(4)]);
-        Assert.Equal(PzlEv.Shared.Models.Dictionaries.SaveStatus.Saved, templates.Save(approval, isActive: true).Status);   // domyślny – pierwszy alfabetycznie
+        // Szablon typu programu – domyślny przed „Wewnętrzny” (Wszystkie; jeden aktywny szablon domyślny na typ – słownik „Definicje przebiegów”).
+        var approval = new RunDefinition("A – zatwierdzenie ACTUALS", ProjectTypes.Internal, [.. RunDefinitions.StandardSteps.Take(3), RunDefinitions.ActualsApproval(4)]);
+        Assert.Equal(PzlEv.Shared.Models.Dictionaries.SaveStatus.Saved, templates.Save(approval, isActive: true).Status);
         service.Execute("PAF");
         var approving = store.Pins("PAF", 1)[0];
         Assert.Contains(store.Issues(approving.PinId), i => i.Message.EndsWith("bez zmian względem przebiegu R-PAF-2026-10-T41 #1 (te same dane)"));
