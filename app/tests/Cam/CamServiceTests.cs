@@ -121,6 +121,38 @@ public sealed class CamServiceTests : IDisposable
     }
 
     [SqlFact]
+    public void Approval_of_an_estimate_changed_since_it_was_read_is_refused_before_writing_the_schedule()
+    {
+        var (service, store, _) = Create();
+        var wp = CamEstimatesTests.Wp();
+        var first = service.Save(wp, CamEstimates.New(wp, "2026-10", new DateOnly(2026, 10, 20)) with { Justification = "opóźnienie dostaw kooperacji" }, submit: true);
+        Assert.True(first.Ok, first.Message);
+        var sent = first.Estimate!;
+        var seenByAnalyst = store.Estimate("PAF", "WP-1", "2026-10")!;   // lista „Zatwierdzanie” wczytana
+
+        // Inny analityk zwraca, CAM poprawia i wysyła ponownie – obiekt na liście pierwszego analityka jest nieaktualny.
+        _services.Clock.Advance(TimeSpan.FromMinutes(1));
+        Assert.True(service.Return(seenByAnalyst, "zmień rozkład godzin na lata").Ok);
+        _services.Clock.Advance(TimeSpan.FromMinutes(1));
+        var changed = store.Estimate("PAF", "WP-1", "2026-10")!;
+        var resent = service.Save(wp, changed with
+        {
+            Justification = "przesunięcie montażu na 2027",
+            Lines = [.. changed.Lines.Select(l => l.Kind == CamLineKinds.Hours && l.Year == 2026 ? l with { Value = 0 } : l)],
+        }, submit: true);
+        Assert.True(resent.Ok, resent.Message);
+
+        var stale = service.Approve(seenByAnalyst);
+
+        Assert.False(stale.Ok);
+        Assert.Contains("zmieniono w międzyczasie", stale.Message);
+        Assert.Empty(_packages.Applied);                                     // „Harmonogram i budżet” bez nieaktualnych wartości
+        Assert.True(service.Approve(store.Estimate("PAF", "WP-1", "2026-10")!).Ok);
+        Assert.Equal(resent.Estimate!.Total(CamLineKinds.Hours), Assert.Single(_packages.Applied).Hours);
+        Assert.NotEqual(sent.Total(CamLineKinds.Hours), _packages.Applied[0].Hours);
+    }
+
+    [SqlFact]
     public void Save_of_an_estimate_changed_meanwhile_is_a_conflict()
     {
         var (service, store, _) = Create();

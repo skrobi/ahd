@@ -154,10 +154,15 @@ public sealed class CamViewModel : ObservableObject
         await Try(async () =>
         {
             var (wps, cycle) = await Busy.Run($"Wczytywanie WP – {cam.Label} (struktury programów)…", () => (_service.WorkPackages(cam.Code), _service.Cycle()));
+            // W międzyczasie wybrano innego CAM-a – wynik tego odczytu nieaktualny (pokazuje go odczyt nowego CAM-a).
+            if (!ReferenceEquals(_selectedCam, cam))
+                return;
             _wps = wps;
             _cycle = cycle;
             OnPropertyChanged(nameof(CycleText));
             var items = await Busy.Run("Estymacje cyklu…", () => _service.Worklist(wps, cycle));
+            if (!ReferenceEquals(_selectedCam, cam))
+                return;
             _allRows = items.Select(ToRow).ToList();
             var ready = items.Count(i => i.Estimate.Status is CamStatuses.Sent or CamStatuses.Approved);
             ProgressText = $"{ready} z {items.Count} WP gotowe (wysłane albo zatwierdzone) · " +

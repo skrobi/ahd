@@ -8,7 +8,7 @@ using PzlEv.Shared.Utils.Ui.Mvvm;
 namespace PzlEv.Modules.Cam.ViewModels;
 
 /// <summary>Wiersz roku w formularzu (godziny albo materiały): propozycja systemu, wartość CAM (tekst – liczba po polsku), różnica, stawka i koszt.</summary>
-public sealed class YearRowViewModel(EstimateEditorViewModel owner, char kind, int year, decimal? proposal, decimal value, bool editable) : ObservableObject
+public sealed class YearRowViewModel(EstimateEditorViewModel owner, char kind, int year, decimal? proposal, decimal value) : ObservableObject
 {
     private string _valueText = PolishNumber.ToDisplay(value, kind == CamLineKinds.Hours ? 0 : 2);
     private decimal _value = value;
@@ -19,7 +19,10 @@ public sealed class YearRowViewModel(EstimateEditorViewModel owner, char kind, i
 
     public decimal? Proposal { get; } = proposal;
 
-    public bool Editable { get; } = editable;
+    /// <summary>Edycja wartości – jak formularz (po wysłaniu zablokowana).</summary>
+    public bool Editable => owner.Editable;
+
+    public void EditableChanged() => OnPropertyChanged(nameof(Editable));
 
     public decimal Value => _value;
 
@@ -89,9 +92,9 @@ public sealed class EstimateEditorViewModel : ObservableObject
         _forecastFinish = estimate.ForecastFinish?.ToDateTime(TimeOnly.MinValue);
         _justification = estimate.Justification ?? "";
         foreach (var line in estimate.Of(CamLineKinds.Hours))
-            Hours.Add(new YearRowViewModel(this, CamLineKinds.Hours, line.Year, line.Proposal, line.Value, Editable));
+            Hours.Add(new YearRowViewModel(this, CamLineKinds.Hours, line.Year, line.Proposal, line.Value));
         foreach (var line in estimate.Of(CamLineKinds.Material))
-            Materials.Add(new YearRowViewModel(this, CamLineKinds.Material, line.Year, line.Proposal, line.Value, Editable));
+            Materials.Add(new YearRowViewModel(this, CamLineKinds.Material, line.Year, line.Proposal, line.Value));
         History = history.Select(h => $"{h.At.LocalDateTime:yyyy-MM-dd HH:mm} · {h.By} · {h.Status}: {h.Summary}" + (h.Comment is null ? "" : $" – {h.Comment}")).ToList();
         Context =
         [
@@ -104,8 +107,16 @@ public sealed class EstimateEditorViewModel : ObservableObject
             new SummaryTile("Plan zleceń AHD (DATA_PLAN)", $"{wp.PlanStart ?? "—"} → {wp.PlanFinish ?? "—"}"),
             new SummaryTile("Poprzednia zatwierdzona", lastApproved is null ? "—" : $"{Number(lastApproved.Total(CamLineKinds.Hours), 0)} h · {Number(lastApproved.Total(CamLineKinds.Material), 0)} {lastApproved.Currency} · cykl {lastApproved.Cycle}"),
         ];
-        SaveDraft = new AsyncRelayCommand(() => save(this, false), () => Editable);
-        Submit = new AsyncRelayCommand(() => save(this, true), () => Editable);
+        // Wartość, której nie da się odczytać, zostawia w wierszu poprzednią liczbę – zapis odmówiony, żeby nie wysłać innej wartości niż widoczna.
+        Task Save(bool submit)
+        {
+            if (!HasInvalidValues)
+                return save(this, submit);
+            Message = "Nie zapisano – popraw wartości oznaczone w tabeli.";
+            return Task.CompletedTask;
+        }
+        SaveDraft = new AsyncRelayCommand(() => Save(false), () => Editable);
+        Submit = new AsyncRelayCommand(() => Save(true), () => Editable);
         Recalculate();
     }
 
@@ -149,10 +160,30 @@ public sealed class EstimateEditorViewModel : ObservableObject
         set { if (SetProperty(ref _forecastStart, value)) Recalculate(); }
     }
 
+    /// <summary>Prognozowany koniec; koniec w późniejszym roku niż ostatni wiersz – dochodzą wiersze lat do roku końca (bez propozycji, 0).</summary>
     public DateTime? ForecastFinish
     {
         get => _forecastFinish;
-        set { if (SetProperty(ref _forecastFinish, value)) Recalculate(); }
+        set
+        {
+            if (!SetProperty(ref _forecastFinish, value))
+                return;
+            if (value is { } finish)
+            {
+                AddYears(Hours, CamLineKinds.Hours, finish.Year);
+                AddYears(Materials, CamLineKinds.Material, finish.Year);
+            }
+            Recalculate();
+        }
+    }
+
+    /// <summary>W wierszu roku jest wartość, której nie da się odczytać jako liczby ≥ 0.</summary>
+    public bool HasInvalidValues => Hours.Concat(Materials).Any(r => r.Error is not null);
+
+    private void AddYears(ObservableCollection<YearRowViewModel> rows, char kind, int lastYear)
+    {
+        for (var year = rows.Count == 0 ? lastYear : rows[^1].Year + 1; year <= lastYear; year++)
+            rows.Add(new YearRowViewModel(this, kind, year, null, 0));
     }
 
     public string FinishNote { get; private set; } = "";
@@ -191,6 +222,8 @@ public sealed class EstimateEditorViewModel : ObservableObject
         Editable = CamStatuses.Editable(estimate.Status);
         OnPropertyChanged(nameof(Status));
         OnPropertyChanged(nameof(Editable));
+        foreach (var row in Hours.Concat(Materials))
+            row.EditableChanged();
         OnPropertyChanged(nameof(ReviewNote));
         OnPropertyChanged(nameof(HasReviewNote));
         Recalculate();
@@ -221,7 +254,7 @@ public sealed class EstimateEditorViewModel : ObservableObject
         var changed = CamEstimates.Changed(Wp, current);
         JustificationLabel = changed ? "Uzasadnienie zmian (wymagane – są zmiany względem propozycji)" : "Uzasadnienie (opcjonalne)";
         var errors = CamEstimates.Validate(Wp, current).ToList();
-        if (Hours.Concat(Materials).Any(r => r.Error is not null))
+        if (HasInvalidValues)
             errors.Insert(0, "popraw wartości oznaczone w tabeli");
         Errors = errors.Count == 0 ? "" : "Do wysłania brakuje: " + string.Join("; ", errors) + ".";
         OnPropertyChanged(nameof(FinishNote));

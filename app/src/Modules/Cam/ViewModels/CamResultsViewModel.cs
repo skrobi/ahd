@@ -22,6 +22,7 @@ public sealed class CamResultsViewModel : ObservableObject
     private IReadOnlyList<CamWorkPackage> _wps = [];
     private CamScope _scope = CamScope.All;
     private CamCurrency _currency = CamCurrency.Pln;
+    private bool _currencyChosen;
 
     public IReadOnlyList<CamResultRow> Rows { get; private set; } = [];
 
@@ -48,7 +49,8 @@ public sealed class CamResultsViewModel : ObservableObject
     public void Load(IReadOnlyList<CamWorkPackage> wps)
     {
         _wps = wps;
-        if (CamResults.SingleCurrency(wps))
+        // Domyślnie waluta programu (gdy wspólna); waluta wybrana przez użytkownika zostaje przy odświeżeniu i zmianie CAM-a.
+        if (!_currencyChosen && CamResults.SingleCurrency(wps))
             _currency = CamCurrency.Program;
         else if (_currency == CamCurrency.Program)
             _currency = CamCurrency.Pln;
@@ -63,6 +65,7 @@ public sealed class CamResultsViewModel : ObservableObject
 
     private void SetCurrency(CamCurrency currency)
     {
+        _currencyChosen = true;
         _currency = currency == CamCurrency.Program && !CamResults.SingleCurrency(_wps) ? CamCurrency.Pln : currency;
         Recalculate();
     }

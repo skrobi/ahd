@@ -79,12 +79,15 @@ public sealed class CamService(ICamStore store, Func<ICamWorkPackages?> packages
 
     /// <summary>
     /// Zatwierdzenie: „Harmonogram i budżet” programu (ETC HOURS, ETC MATERIAL, Forecast Start / Koniec – ICamWorkPackages.ApplyEstimate),
-    /// potem status Zatwierdzona i historia; błąd zapisu słownika – estymacja zostaje wysłana.
+    /// potem status Zatwierdzona i historia; błąd zapisu słownika – estymacja zostaje wysłana. Estymacja zmieniona od wczytania
+    /// (np. zwrócona i wysłana ponownie) – odmowa przed zapisem słownika, żeby do struktury nie trafiły nieaktualne wartości.
     /// </summary>
     public CamOutcome Approve(CamEstimate estimate)
     {
         if (estimate.Status != CamStatuses.Sent)
             return new CamOutcome(false, "Zatwierdzić można tylko estymację wysłaną przez CAM-a.");
+        if (store.Estimate(estimate.Project, estimate.Wp, estimate.Cycle) is not { Status: CamStatuses.Sent } current || current.UpdatedAt != estimate.UpdatedAt)
+            return new CamOutcome(false, $"Estymację WP {estimate.Wp} zmieniono w międzyczasie – odśwież listę i sprawdź ją ponownie.");
         if (packages() is not { } source)
             return new CamOutcome(false, "Moduł Projekty niedostępny – nie można zapisać estymacji w „Harmonogram i budżet”.");
         var hours = estimate.Total(CamLineKinds.Hours);

@@ -218,7 +218,10 @@ rozdz. 4.1).
 - Statusy: Do uzupełnienia → Szkic → Wysłana → Zatwierdzona / Zwrócona (z uwagą) → Szkic; jedna estymacja WP na cykl,
   zapis z kontrolą równoczesnej zmiany, historia zdarzeń, wpis w dzienniku (obszar „CAM”).
 - Zatwierdzenie zapisuje sumę lat jako ETC HOURS / ETC MATERIAL oraz Forecast Start / Koniec w „Harmonogram i budżet”
-  (`docs/slowniki.md`) – struktura programu i wyniki EV liczą z nich ETC.
+  (`docs/slowniki.md`) – struktura programu i wyniki EV liczą z nich ETC; estymacja zmieniona od wczytania listy (np. zwrócona
+  i wysłana ponownie) – odmowa przed zapisem słownika, do odświeżenia listy.
+- Formularz: przesunięcie prognozowanego końca na późniejszy rok dodaje wiersze lat (bez propozycji, 0); wartość, której nie da
+  się odczytać jako liczby, blokuje zapis szkicu i wysyłkę.
 - Wyniki EV: EAC = ACWP + ETC, IEAC = ACWP + (BAC − BCWP) ÷ CPI, TCPI = (BAC − BCWP) ÷ (EAC − ACWP), różnica TCPI − CPI > 0,10
   – EAC mało wiarygodny; WP bez danych produkcji nie mają BCWP (O35).
 
