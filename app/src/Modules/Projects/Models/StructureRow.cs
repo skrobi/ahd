@@ -17,6 +17,7 @@ namespace PzlEv.Modules.Projects.Models;
 /// wszystkie zlecenia zamknięte. ProductionEtcHours – ETC z produkcji (bez wpisu ETC HOURS), UndeliveredByYear – materiały
 /// niedostarczone vAPD według roku dostawy w walucie projektu, ProductionEtcByYear – ETC z produkcji według planowanego roku
 /// poniesienia (vAHDD R; 0 – bez roku), PlanStart / PlanFinish – MIN / MAX DATA_PLAN operacji (propozycja estymacji CAM).
+/// CamEstimate / CamTone – estymacja CAM WP w bieżącym cyklu (ProjectService.WithCamEstimates): opis statusu i kolor wiersza.
 /// </summary>
 public sealed record StructureRow(
     string Id,
@@ -75,7 +76,9 @@ public sealed record StructureRow(
     IReadOnlyDictionary<int, decimal>? UndeliveredByYear = null,
     IReadOnlyDictionary<int, decimal>? ProductionEtcByYear = null,
     string? PlanStart = null,
-    string? PlanFinish = null)
+    string? PlanFinish = null,
+    string? CamEstimate = null,
+    string? CamTone = null)
 {
     // Wskaźniki EVM (docs/performance-objectives.md, rozdz. 4.2) – z wartości wiersza; brak danych albo dzielenie przez 0 – null.
 

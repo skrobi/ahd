@@ -15,7 +15,16 @@ public static class RunActions
     /// </summary>
     public const string ApproveActuals = "Zatwierdzenie ACTUALS";
 
-    public static IReadOnlyList<string> All { get; } = [Import, Pin, Checks, Approval, ApproveActuals];
+    /// <summary>
+    /// Klocek systemowy: finansista przegląda estymacje CAM programu w cyklu przebiegu (wymagane WP wobec zatwierdzonych), zatwierdza,
+    /// zwraca albo otwiera ponownie estymacje WP i akceptuje stan z komentarzem (także z brakami) – kontrakt ICamReview (moduł CAM).
+    /// </summary>
+    public const string CamEstimates = "Estymacje CAM";
+
+    public static IReadOnlyList<string> All { get; } = [Import, Pin, Checks, Approval, ApproveActuals, CamEstimates];
+
+    /// <summary>Klocek systemowy – najwyżej jeden w szablonie.</summary>
+    public static bool IsSystem(string action) => action is ApproveActuals or CamEstimates;
 }
 
 /// <summary>Bramka etapu przy wynikach WARNING (ERROR zawsze blokuje).</summary>
@@ -50,7 +59,7 @@ public sealed record RunStepDefinition(int No, string Name, string Action, strin
     string? Description = null)
 {
     /// <summary>Etap kończy się wstrzymaniem do decyzji człowieka (zatwierdzenie ręczne albo akcja Zatwierdzenie / Zatwierdzenie ACTUALS).</summary>
-    public bool NeedsApproval => Approval || Action is RunActions.Approval or RunActions.ApproveActuals;
+    public bool NeedsApproval => Approval || Action is RunActions.Approval or RunActions.ApproveActuals or RunActions.CamEstimates;
 }
 
 /// <summary>
@@ -93,6 +102,11 @@ public static class RunDefinitions
     public static RunStepDefinition ActualsApproval(int no) =>
         new(no, "Zatwierdzenie danych ACTUALS", RunActions.ApproveActuals, RunGates.Info, true, [],
             "Analityk zatwierdza dane ACTUALS przebiegu (komentarz) – od zatwierdzenia struktura programu pokazuje koszty z tego przebiegu.");
+
+    /// <summary>Klocek systemowy „Estymacje CAM” (edytor szablonów) – najwyżej jeden w szablonie.</summary>
+    public static RunStepDefinition CamApproval(int no) =>
+        new(no, "Estymacje CAM", RunActions.CamEstimates, RunGates.Info, true, [],
+            "Finansista przegląda estymacje CAM programu w cyklu przebiegu, zatwierdza albo zwraca estymacje WP i akceptuje stan z komentarzem.");
 
     /// <summary>
     /// Etapy definicji wbudowanej i szablonów startowych (jak migracja 053): stałe, Walidacja ACTUALS, Walidacja EV (bramka – potwierdzenie
@@ -155,8 +169,8 @@ public static class RunDefinitions
                 .ToList(), header.Description);
 
     /// <summary>
-    /// Kontrola szablonu przed zapisem: nazwa; etapy stałe (Import źródeł, Przypięcie stanu) – po jednym, na początku; Zatwierdzenie ACTUALS
-    /// – najwyżej jedno; nazwy etapów
+    /// Kontrola szablonu przed zapisem: nazwa; etapy stałe (Import źródeł, Przypięcie stanu) – po jednym, na początku; klocki systemowe
+    /// (Zatwierdzenie ACTUALS, Estymacje CAM) – najwyżej po jednym; nazwy etapów
     /// niepuste i bez powtórzeń; etap kontroli bez aktywnego elementu – ERROR; elementy tylko w etapach kontroli; element – reguła
     /// walidacji (rules – nazwy reguł; null – reguły startowe).
     /// </summary>
@@ -173,8 +187,8 @@ public static class RunDefinitions
             if (count != 1 || steps.Count <= index || steps[index].Action != action)
                 issues.Add(Issue.Error($"Etap stały „{action}” – dokładnie jeden, jako etap {index + 1}"));
         }
-        if (steps.Count(s => s.Action == RunActions.ApproveActuals) > 1)
-            issues.Add(Issue.Error($"Klocek „{RunActions.ApproveActuals}” – najwyżej jeden w szablonie"));
+        foreach (var system in steps.Where(s => RunActions.IsSystem(s.Action)).GroupBy(s => s.Action).Where(g => g.Count() > 1))
+            issues.Add(Issue.Error($"Klocek „{system.Key}” – najwyżej jeden w szablonie"));
         foreach (var step in steps)
         {
             var at = $"etap {step.No}";

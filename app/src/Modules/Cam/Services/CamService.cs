@@ -1,5 +1,6 @@
 using PzlEv.Modules.Cam.Data;
 using PzlEv.Modules.Cam.Models;
+using PzlEv.Shared.Models;
 using PzlEv.Shared.Utils.Data;
 
 namespace PzlEv.Modules.Cam.Services;
@@ -24,7 +25,13 @@ public sealed class CamService(ICamStore store, Func<ICamWorkPackages?> packages
     public bool Available => packages() is not null;
 
     /// <summary>Cykl dnia stanu; poza kalendarzem okresów – miesiąc kalendarzowy bez terminu.</summary>
-    public CamCycle Cycle() => store.Cycle(Today) ?? new CamCycle(Today.ToString("yyyy-MM", System.Globalization.CultureInfo.InvariantCulture), null);
+    public CamCycle Cycle() => Cycle(Today);
+
+    /// <summary>Cykl dnia; poza kalendarzem okresów – miesiąc kalendarzowy bez terminu.</summary>
+    public CamCycle Cycle(DateOnly day) => store.Cycle(day) ?? new CamCycle(day.ToString("yyyy-MM", System.Globalization.CultureInfo.InvariantCulture), null);
+
+    /// <summary>Cykl okresu RRRR-MM (okres tygodnia przebiegu) z terminem z kalendarza okresów.</summary>
+    public CamCycle CycleOf(string period) => new(period, store.Deadline(period));
 
     public IReadOnlyList<CamPerson> Cams() => packages()?.Cams() ?? [];
 
@@ -107,6 +114,46 @@ public sealed class CamService(ICamStore store, Func<ICamWorkPackages?> packages
             return new CamOutcome(false, $"Podaj uwagę dla CAM-a (min. {CamEstimates.JustificationLength} znaków).");
         return Review(estimate, CamStatuses.Returned, note.Trim(), "zwrócona do CAM-a");
     }
+
+    /// <summary>
+    /// Estymacje programu w cyklu (etap przebiegu „Estymacje CAM”): wymagane WP – z CAM-em, niezakończone (bez zapisanej estymacji –
+    /// Do uzupełnienia z wartościami propozycji systemu) i zapisane estymacje pozostałych WP (Required false).
+    /// </summary>
+    public CamReview Program(string project, CamCycle cycle) => Review(packages()?.ProjectWorkPackages(project) ?? [], cycle, project);
+
+    /// <summary>Postęp estymacji cyklu we wszystkich programach (monitoring finansisty w module CAM): wymagane WP wobec zatwierdzonych.</summary>
+    public CamReview Progress(CamCycle cycle) => Review(packages()?.ProjectWorkPackages(null) ?? [], cycle, null);
+
+    /// <summary>Zapisane estymacje programu w cyklu (kolory struktury programu) – bez listy wymaganych WP.</summary>
+    public IReadOnlyList<CamReviewItem> Saved(string project, string period) =>
+        store.Estimates(period).Where(e => Same(e.Project, project)).Select(e => Item(e, e.Wp, false)).ToList();
+
+    /// <summary>Decyzja o estymacji z listy przebiegu: estymacja z bazy, a zmieniona od wczytania listy (Version) – odmowa.</summary>
+    public CamOutcome Decide(CamReviewItem item, Func<CamEstimate, CamOutcome> decision) =>
+        store.Estimate(item.Project, item.Wp, item.Period) is { } current && item.Version is not null && current.UpdatedAt == item.Version
+            ? decision(current)
+            : new CamOutcome(false, $"Estymację WP {item.Wp} zmieniono w międzyczasie albo jej nie zapisano – odśwież listę i sprawdź ją ponownie.");
+
+    private CamReview Review(IReadOnlyList<CamWorkPackage> wps, CamCycle cycle, string? project)
+    {
+        var saved = store.Estimates(cycle.Period).Where(e => project is null || Same(e.Project, project))
+            .ToDictionary(e => (e.Project.ToUpperInvariant(), e.Wp.ToUpperInvariant()));
+        var items = new List<CamReviewItem>();
+        foreach (var wp in wps)
+        {
+            var key = (wp.Project.ToUpperInvariant(), wp.Wp.ToUpperInvariant());
+            var estimate = saved.Remove(key, out var stored) ? stored : CamEstimates.New(wp, cycle.Period, Today);
+            items.Add(Item(estimate, wp.Name, !wp.Finished));
+        }
+        items.AddRange(saved.Values.Select(e => Item(e, e.Wp, false)));
+        return new CamReview(cycle, items.OrderBy(i => i.Project, StringComparer.OrdinalIgnoreCase).ThenBy(i => i.Wp, StringComparer.OrdinalIgnoreCase).ToList());
+    }
+
+    private static CamReviewItem Item(CamEstimate e, string name, bool required) =>
+        new(e.Project, e.Wp, e.Cycle, name, e.Cam, required, e.Status, e.Total(CamLineKinds.Hours), e.Total(CamLineKinds.Material), e.Currency,
+            e.ForecastFinish, e.Justification, e.ReviewNote, e.SubmittedAt, e.SubmittedBy, e.ReviewedAt, e.ReviewedBy, e.EstimateId is null ? null : e.UpdatedAt);
+
+    private static bool Same(string a, string b) => string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>Zatwierdzone estymacje cyklu (wszyscy CAM-owie) – do ponownego otwarcia.</summary>
     public IReadOnlyList<CamEstimate> Approved(CamCycle cycle) =>

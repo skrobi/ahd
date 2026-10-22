@@ -1,4 +1,5 @@
 using PzlEv.Modules.Cam.Models;
+using PzlEv.Shared.Models;
 
 namespace PzlEv.Modules.Cam.Data;
 
@@ -10,6 +11,9 @@ public interface ICamStore
 {
     /// <summary>Cykl dnia: okres kalendarza okresów (dict.Calendar, globalny) i koniec jego tygodnia zamykającego; null – dzień poza kalendarzem.</summary>
     CamCycle? Cycle(DateOnly day);
+
+    /// <summary>Termin cyklu okresu: koniec jego tygodnia zamykającego w kalendarzu okresów; null – brak.</summary>
+    DateOnly? Deadline(string period);
 
     /// <summary>Estymacje cyklu z wierszami lat (cam null – wszystkich CAM-ów).</summary>
     IReadOnlyList<CamEstimate> Estimates(string cycle, string? cam = null);

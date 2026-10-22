@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using PzlEv.Modules.Cam.Models;
 using PzlEv.Modules.Cam.Services;
+using PzlEv.Shared.Models;
 using PzlEv.Shared.Utils.Data;
 using PzlEv.Shared.Utils.Files;
 using PzlEv.Shared.Utils.Ui.Mvvm;

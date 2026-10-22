@@ -48,6 +48,9 @@ public sealed class StructureRowViewModel(StructureRow row) : INotifyPropertyCha
 
     public bool HasGap => row.Gap is not null;
 
+    /// <summary>Kolor wiersza z estymacji CAM WP w cyklu: ok, info, crit, warn albo null (bez koloru).</summary>
+    public string? CamTone => row.CamTone;
+
     public bool HasChanges => _changes.Count > 0;
 
     /// <summary>Znacznik WP można zmienić w tym wierszu (wiersz z kodem P1S).</summary>
@@ -206,6 +209,7 @@ public sealed class StructureRowViewModel(StructureRow row) : INotifyPropertyCha
         StructureEdits.ForecastStart => row.ForecastStart,
         StructureEdits.ForecastFinish => row.ForecastFinish,
         StructureColumns.Status => row.Status,
+        StructureColumns.CamEstimate => row.CamEstimate,
         StructureEdits.EtcHours => Optional(row.EtcHours),
         StructureColumns.EacHours => Optional(row.EacHours),
         StructureColumns.SpiHours => Index(row.SpiHours),

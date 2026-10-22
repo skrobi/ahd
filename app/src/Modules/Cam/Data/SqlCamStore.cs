@@ -1,5 +1,6 @@
 using Dapper;
 using PzlEv.Modules.Cam.Models;
+using PzlEv.Shared.Models;
 using PzlEv.Shared.Utils.Data.Sql;
 
 namespace PzlEv.Modules.Cam.Data;
@@ -22,11 +23,15 @@ public sealed class SqlCamStore(SqlDatabase db) : ICamStore
         var period = connection.QueryFirstOrDefault<string?>(
             $"SELECT TOP (1) Period FROM {calendar} WHERE Project IS NULL AND SupersededAt IS NULL AND @day BETWEEN DateFrom AND DateTo ORDER BY DateFrom",
             new { day = day.ToDateTime(TimeOnly.MinValue) });
-        if (period is null)
-            return null;
+        return period is null ? null : new CamCycle(period, Deadline(period));
+    }
+
+    public DateOnly? Deadline(string period)
+    {
+        using var connection = db.Open();
         var deadline = connection.QueryFirstOrDefault<DateTime?>(
-            $"SELECT MAX(DateTo) FROM {calendar} WHERE Project IS NULL AND SupersededAt IS NULL AND Period = @period AND IsClosing = 1", new { period });
-        return new CamCycle(period, deadline is { } d ? DateOnly.FromDateTime(d) : null);
+            $"SELECT MAX(DateTo) FROM {db.Table("dict.Calendar")} WHERE Project IS NULL AND SupersededAt IS NULL AND Period = @period AND IsClosing = 1", new { period });
+        return deadline is { } d ? DateOnly.FromDateTime(d) : null;
     }
 
     public IReadOnlyList<CamEstimate> Estimates(string cycle, string? cam = null)

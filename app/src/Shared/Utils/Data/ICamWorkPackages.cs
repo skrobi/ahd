@@ -14,7 +14,8 @@ public sealed record CamPerson(string Code, string Name)
 /// Overhead ze „Stawki wydziałów” MPK WP, przeliczona do waluty programu). Kwoty w walucie programu (zestaw walutowy ACTUALS);
 /// ToPln / ToUsd – przelicznik waluty programu (kurs bieżący, null – brak kursu); DataNote – braki danych (np. bez PZLPROD);
 /// ProductionEtcByYear – ETC z produkcji według planowanego roku poniesienia (vAHDD R; 0 – bez roku); PlanStart / PlanFinish –
-/// MIN / MAX DATA_PLAN zleceń WP (prognoza terminów, gdy nie jest wpisana).
+/// MIN / MAX DATA_PLAN zleceń WP (prognoza terminów, gdy nie jest wpisana); Finished – WP zakończony (status struktury z dat
+/// rzeczywistych) – nie wymaga estymacji w cyklu.
 /// </summary>
 public sealed record CamWorkPackage(
     string Project,
@@ -49,7 +50,8 @@ public sealed record CamWorkPackage(
     string? DataNote,
     IReadOnlyDictionary<int, decimal>? ProductionEtcByYear = null,
     string? PlanStart = null,
-    string? PlanFinish = null);
+    string? PlanFinish = null,
+    bool Finished = false);
 
 /// <summary>
 /// Moduł CAM – WP CAM-ów we wszystkich programach i przekazanie zatwierdzonej estymacji do struktury programu (słownik
@@ -62,6 +64,9 @@ public interface ICamWorkPackages
 
     /// <summary>WP CAM-a we wszystkich programach (struktura każdego programu z jego danymi); program bez danych – pominięty z notatką w DataNote.</summary>
     IReadOnlyList<CamWorkPackage> WorkPackages(string cam);
+
+    /// <summary>WP z przypisanym CAM-em w programie (project null – we wszystkich programach) – estymacje wymagane w cyklu i postęp.</summary>
+    IReadOnlyList<CamWorkPackage> ProjectWorkPackages(string? project);
 
     /// <summary>
     /// Zatwierdzona estymacja WP do „Harmonogram i budżet” programu: ETC HOURS, ETC MATERIAL (waluta currency), Forecast Start /

@@ -21,7 +21,8 @@ public sealed record RunStepView(RunStepRow Row, string Gate, string? Descriptio
 
     /// <summary>Etap zatrzymany na błędzie – potwierdzenie akceptuje błędy (RunWorkflowEngine.CanConfirm); Zatwierdzenie ACTUALS – dane do struktury.</summary>
     public string ConfirmText => Row.Status == RunStepStatuses.Failed ? "Zaakceptuj błędy i dalej"
-        : Row.Action == RunActions.ApproveActuals ? "Zatwierdź dane ACTUALS i dalej" : "Potwierdź i dalej";
+        : Row.Action == RunActions.ApproveActuals ? "Zatwierdź dane ACTUALS i dalej"
+        : Row.Action == RunActions.CamEstimates ? "Zaakceptuj estymacje i dalej" : "Potwierdź i dalej";
 
     public bool HasComment => !string.IsNullOrWhiteSpace(Row.Comment);
 
@@ -51,6 +52,8 @@ public sealed class RunPanelViewModel : ObservableObject, IDisposable
     private readonly IRunStore _store;
     private readonly RunLauncher _launcher;
     private readonly IAcwpChanges? _acwpChanges;
+    private readonly Func<ICamReview?>? _cams;
+    private CamReviewPanelViewModel? _camReview;
     private IReadOnlyList<RunPinRow> _pins = [];
     private RunPinRow? _selectedPin;
     private IReadOnlyList<RunStepView> _steps = [];
@@ -100,9 +103,11 @@ public sealed class RunPanelViewModel : ObservableObject, IDisposable
     public const int LineCount = 500;
     private const int ExportLines = 100_000;
 
-    public RunPanelViewModel(IRunStore store, RunLauncher launcher, IAcwpChanges? acwpChanges, string project, IFileDialogs dialogs)
+    public RunPanelViewModel(IRunStore store, RunLauncher launcher, IAcwpChanges? acwpChanges, string project, IFileDialogs dialogs,
+        Func<ICamReview?>? cams = null)
     {
         _store = store;
+        _cams = cams;
         _dialogs = dialogs;
         _launcher = launcher;
         _acwpChanges = acwpChanges;
@@ -239,7 +244,43 @@ public sealed class RunPanelViewModel : ObservableObject, IDisposable
         set
         {
             if (SetProperty(ref _selectedStep, value))
+            {
                 ShowIssues();
+                ShowCamReview();
+            }
+        }
+    }
+
+    /// <summary>Etap „Estymacje CAM”: estymacje programu w cyklu przebiegu i decyzje finansisty; null – inny etap.</summary>
+    public CamReviewPanelViewModel? CamReview
+    {
+        get => _camReview;
+        private set
+        {
+            if (SetProperty(ref _camReview, value))
+                OnPropertyChanged(nameof(IsCamStep));
+        }
+    }
+
+    public bool IsCamStep => _camReview is not null;
+
+    /// <summary>Panel estymacji dla wybranego etapu „Estymacje CAM” (cykl – okres tygodnia uruchomienia); decyzje – ostatnie uruchomienie, etap czeka.</summary>
+    private void ShowCamReview()
+    {
+        if (_selectedStep?.Row.Action != RunActions.CamEstimates || _selectedPin is not { } pin || _cams?.Invoke() is not { } review)
+        {
+            CamReview = null;
+            return;
+        }
+        try
+        {
+            var period = _store.RunWeek(pin.RunId).Period;
+            CamReview = new CamReviewPanelViewModel(review, Project, period, IsLatest && _selectedStep.Row.Status == RunStepStatuses.NeedsAction);
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            Logger.Error(ex, "Estymacje CAM przebiegu {Code}", pin.Code);
+            CamReview = null;
         }
     }
 

@@ -20,7 +20,7 @@ namespace PzlEv.Modules.Projects.Services;
 /// </summary>
 public sealed class ProjectService(IProjectStore store, IDictionaryStore dictionaries, IJournal journal, ProjectFolders folders,
     IPzlProdSource? pzlProd, Func<ISourceImport?>? imports = null, Func<IRunLauncher?>? runs = null, Func<IAcwpChanges?>? acwpChanges = null,
-    Func<IRunPanels?>? runPanels = null)
+    Func<IRunPanels?>? runPanels = null, Func<ICamReview?>? camReview = null)
 {
     private const string Area = "Programy";
 
@@ -1016,6 +1016,55 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
         var structure = StructureBuilder.Build(tree, mapping.P1s, wpCam, Rows(ProjectDictionaries.ScheduleBudget, code), actuals.Amounts, production, today,
             actuals.Hours, actuals.Labor, actuals.Material, rates);
         return (structure, rates, notes.Count == 0 ? null : string.Join("; ", notes));
+    }
+
+    /// <summary>Estymacje CAM programu w bieżącym cyklu (kolory struktury); null – moduł CAM niedostępny albo błąd odczytu (struktura bez kolorów).</summary>
+    public (CamCycle Cycle, IReadOnlyList<CamReviewItem> Saved)? CamEstimates(string code, DateOnly today)
+    {
+        if (camReview?.Invoke() is not { } review)
+            return null;
+        try
+        {
+            var cycle = review.Cycle(today);
+            return (cycle, review.Saved(code, cycle.Period));
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            Serilog.Log.ForContext("Module", "projects").Error(ex, "Estymacje CAM programu {Code}", code);
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Estymacja CAM w wierszach WP struktury (kolumna „Estymacja CAM”, kolor wiersza): wymagany WP – z CAM-em, niezakończony; zatwierdzona –
+    /// ok, wysłana – info, zwrócona – crit, brak albo szkic po terminie cyklu – warn (przed terminem bez koloru). WP niewymagający
+    /// (bez CAM, zakończony) – tylko opis zapisanej estymacji.
+    /// </summary>
+    public static ProjectStructure WithCamEstimates(ProjectStructure structure, CamCycle cycle, IReadOnlyList<CamReviewItem> saved, DateOnly today)
+    {
+        var byWp = saved.GroupBy(i => i.Wp, StringComparer.OrdinalIgnoreCase).ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
+        var overdue = cycle.Deadline is { } deadline && today > deadline;
+        static string Day(DateTimeOffset? at) => at is { } a ? $" {a.LocalDateTime:yyyy-MM-dd}" : "";
+        StructureRow Decorate(StructureRow row)
+        {
+            if (row.Wp is null)
+                return row;
+            var required = row.Cam is not null && row.Status != "zakończony";
+            var item = byWp.GetValueOrDefault(row.Wp);
+            var status = item?.Status ?? CamStatuses.ToDo;
+            if (!required)
+                return item is null ? row : row with { CamEstimate = $"{status}{Day(item.ReviewedAt ?? item.SubmittedAt)} (niewymagana)" };
+            var (text, tone) = status switch
+            {
+                CamStatuses.Approved => ($"Zatwierdzona{Day(item!.ReviewedAt)}", "ok"),
+                CamStatuses.Sent => ($"Wysłana{Day(item!.SubmittedAt)} – do decyzji", "info"),
+                CamStatuses.Returned => ($"Zwrócona{Day(item!.ReviewedAt)} – u CAM-a", "crit"),
+                CamStatuses.Draft => (overdue ? "Szkic – po terminie" : "Szkic CAM-a", overdue ? "warn" : null),
+                _ => (overdue ? "Brak – po terminie" : "Brak estymacji", overdue ? "warn" : null),
+            };
+            return row with { CamEstimate = $"{text} · cykl {cycle.Period}", CamTone = tone };
+        }
+        return structure with { Rows = structure.Rows.Select(Decorate).ToList() };
     }
 
     /// <summary>

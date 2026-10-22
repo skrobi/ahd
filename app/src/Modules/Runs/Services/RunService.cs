@@ -1,4 +1,5 @@
 using PzlEv.Modules.Runs.Data;
+using PzlEv.Shared.Models;
 using PzlEv.Shared.Models.Db;
 using PzlEv.Shared.Models.Dictionaries;
 using PzlEv.Shared.Models.Pipeline;
@@ -23,9 +24,13 @@ public sealed record RunOutcome(string Project, string? Code, string Status, int
 /// → reguły walidacji w SQL wobec poprzedniego przebiegu (RunRules) → wynik w bazie. Blokady: przebieg projektu (jeden naraz)
 /// i trwające uruchomienie (wolna po awarii – uruchomienie „przerwane”).
 /// </summary>
-public sealed class RunService(IRunStore store, AppServices services, Func<ISourceImport?>? imports = null, Func<IProjectProcessSource?>? processes = null)
+public sealed class RunService(IRunStore store, AppServices services, Func<ISourceImport?>? imports = null, Func<IProjectProcessSource?>? processes = null,
+    Func<ICamReview?>? cams = null)
 {
     public const string Area = "Przebiegi";
+
+    /// <summary>Kontrola wyników etapu Estymacje CAM (wiersz macierzy).</summary>
+    public const string CamCheck = "Estymacje CAM";
 
     /// <summary>Kontrola wyników etapu Przypięcie stanu (wiersz macierzy).</summary>
     public const string Pinned = "Przypięcie stanu";
@@ -115,6 +120,26 @@ public sealed class RunService(IRunStore store, AppServices services, Func<ISour
             var at = services.Clock.Now;
             var what = step.Status == RunStepStatuses.Failed ? $"błędy zaakceptowane ({step.Errors})"
                 : step.Action == RunActions.ApproveActuals ? "dane ACTUALS zatwierdzone (struktura programu)" : "potwierdzony";
+            if (step.Action == RunActions.CamEstimates && step.Status != RunStepStatuses.Failed)
+            {
+                // Wynik etapu – stan estymacji w chwili akceptacji (decyzje finansisty w panelu etapu zmieniły go od wykonania).
+                List<RunIssue> issues;
+                CamReview? review;
+                try
+                {
+                    (issues, review) = CamState(pin);
+                }
+                catch (Exception ex) when (ex is not OutOfMemoryException)
+                {
+                    Logger.Error(ex, "Przebieg {Code} #{Pin}: odczyt estymacji CAM przy akceptacji", pin.Code, pin.PinNo);
+                    return Outcome(pin, steps, $"Nie zaakceptowano – błąd odczytu estymacji CAM: {ex.Message}");
+                }
+                store.ReplaceStepIssues(pinId, stepNo, issues.Select(i => (i.Check, i.Level, i.Element, i.Message, i.Amount, i.Details)).ToList());
+                step = step with { Errors = 0, Warnings = issues.Count(i => i.Level == CheckLevel.Warning) };
+                what = review is null ? "zaakceptowany bez estymacji CAM (moduł CAM niedostępny)"
+                    : $"estymacje CAM zaakceptowane – zatwierdzone {review.Approved} z {review.Required} wymaganych" +
+                      (review.Approved < review.Required ? $", bez zatwierdzenia {review.Required - review.Approved}" : "");
+            }
             store.SetStep(pinId, stepNo, RunStepStatuses.Done, step.StartedAt, step.FinishedAt ?? at, services.User.Account, step.Errors, step.Warnings,
                 $"{at.ToLocalTime():yyyy-MM-dd HH:mm} {services.User.Account} – {what}: {comment.Trim()}");
             services.Journal.Add(Area, $"Przebieg {pin.Code} #{pin.PinNo}: etap {stepNo} „{step.Name}” {what} – {comment.Trim()}", pin.Code);
@@ -216,8 +241,28 @@ public sealed class RunService(IRunStore store, AppServices services, Func<ISour
             RunActions.Import => ImportStep(pin, progress, cancellation),
             RunActions.Pin => PinStep(pin),
             RunActions.Checks => ChecksStep(pin, step, label, progress, cancellation),
+            RunActions.CamEstimates => CamState(pin).Issues,
             _ => [],
         };
+
+    /// <summary>
+    /// Estymacje CAM programu w cyklu okresu tygodnia przebiegu (ICamReview): podsumowanie wymaganych WP wobec zatwierdzonych i WARNING
+    /// dla każdego wymaganego WP bez zatwierdzonej estymacji (po terminie cyklu – w opisie); decyzje – panel etapu, akceptacja – Confirm.
+    /// </summary>
+    private (List<RunIssue> Issues, CamReview? Review) CamState(RunPinRow pin)
+    {
+        if (cams?.Invoke() is not { } source)
+            return ([new RunIssue(CamCheck, CheckLevel.Warning, null, "Moduł CAM niedostępny w tej aplikacji – estymacje CAM bez przeglądu")], null);
+        var review = source.Program(pin.Project, source.CycleOf(store.RunWeek(pin.RunId).Period));
+        var overdue = review.Overdue(DateOnly.FromDateTime(services.Clock.Now.LocalDateTime));
+        var issues = new List<RunIssue>
+        {
+            new(CamCheck, review.Approved == review.Required ? CheckLevel.Pass : CheckLevel.Warning, null, review.Summary),
+        };
+        issues.AddRange(review.Items.Where(i => i.Required && i.Status != CamStatuses.Approved).Select(i => new RunIssue(CamCheck, CheckLevel.Warning, i.Wp,
+            $"{i.Name} – CAM {i.Cam}: {i.Status.ToLowerInvariant()}" + (overdue && i.Status is CamStatuses.ToDo or CamStatuses.Draft ? " (po terminie cyklu)" : ""))));
+        return (issues, review);
+    }
 
     // Import źródeł programu (słownik „Źródła danych”) – pliki zapisują się raz, wspólnie dla programów.
     private List<RunIssue> ImportStep(RunPinRow pin, IProgress<string>? progress, CancellationToken cancellation)

@@ -218,7 +218,13 @@ bez zmian i przesuwania. Dalej etapy dokładane w edytorze: **etap walidacji** (
 i użytymi tabelami, szukaj po nazwie albo tabeli; treść i poziom reguły – edytor reguł; bramka WARNING: „Potwierdzenie” – wstrzymuje
 do potwierdzenia z komentarzem, „Informacja” – przebieg idzie dalej; opcjonalnie zatwierdzenie po etapie), **zatwierdzenie**
 (przebieg czeka na analityka) i klocek systemowy **Zatwierdzenie ACTUALS** (najwyżej jeden; „+ Zatwierdzenie ACTUALS”): przebieg czeka,
-aż analityk zatwierdzi dane ACTUALS przebiegu z komentarzem („Zatwierdź dane ACTUALS i dalej”). **Struktura programu** (ACWP, Actual DLH,
+aż analityk zatwierdzi dane ACTUALS przebiegu z komentarzem („Zatwierdź dane ACTUALS i dalej”). Klocek systemowy **Estymacje CAM**
+(najwyżej jeden; „+ Estymacje CAM”; F11.6): estymacje CAM programu w cyklu okresu tygodnia przebiegu (kontrakt `ICamReview`, moduł CAM) –
+podsumowanie i WARNING dla każdego wymaganego WP (z CAM-em, niezakończony) bez zatwierdzonej estymacji (brak / szkic po terminie cyklu –
+w opisie); panel etapu: liczniki (wymagane, zatwierdzone, wysłane, u CAM-a, brak), lista WP i decyzje finansisty – zatwierdź
+(„Harmonogram i budżet”), zwróć z uwagą, otwórz ponownie zatwierdzoną z komentarzem (ostatnie uruchomienie, etap czeka); „Zaakceptuj
+estymacje i dalej” z komentarzem, także z brakami – wynik etapu to stan w chwili akceptacji (WP bez zatwierdzonej estymacji liczą
+ETC jak dotąd: wpis w „Harmonogram i budżet” albo produkcja). **Struktura programu** (ACWP, Actual DLH,
 ACWP Labor / Material, wskaźniki) pokazuje dane ACTUALS w stanie z przypięcia ostatniego uruchomienia z zakończonym tym etapem (uruchomienie bez tego
 etapu w definicji – z zakończonym pierwszym etapem walidacji, czyli walidacją ACTUALS, także z zaakceptowanymi błędami)
 (pliki zaimportowane do końca etapu Przypięcie stanu – `@AsOf` procedur `REP_ProjectCostsByElement` / `REP_ProjectCasCosts`, migracja

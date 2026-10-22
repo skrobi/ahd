@@ -1,6 +1,7 @@
 using PzlEv.Modules.Cam.Data;
 using PzlEv.Modules.Cam.Models;
 using PzlEv.Modules.Cam.Services;
+using PzlEv.Shared.Models;
 using PzlEv.Shared.Utils.Data;
 using PzlEv.Shared.Utils.Data.Sql;
 using PzlEv.Tests.TestSupport;
@@ -38,6 +39,11 @@ public sealed class CamServiceTests : IDisposable
         public IReadOnlyList<CamPerson> Cams() => [new("0412", "Anna Nowak")];
 
         public IReadOnlyList<CamWorkPackage> WorkPackages(string cam) => [CamEstimatesTests.Wp()];
+
+        /// <summary>WP programów: PAF – WP-1 (wymagany), WP-2 zakończony (niewymagany); M28 – WP-3 innego CAM-a.</summary>
+        public IReadOnlyList<CamWorkPackage> ProjectWorkPackages(string? project) =>
+            [.. new[] { CamEstimatesTests.Wp(), CamEstimatesTests.Wp("WP-2") with { Finished = true }, CamEstimatesTests.Wp("WP-3", project: "M28") with { Cam = "0577" } }
+                .Where(w => project is null || w.Project == project)];
 
         public string? ApplyEstimate(string project, string wp, decimal etcHours, decimal materialEtc, string? currency, DateOnly? forecastStart, DateOnly? forecastFinish)
         {
@@ -192,6 +198,49 @@ public sealed class CamServiceTests : IDisposable
         Assert.True(service.Approve(store.Estimate("PAF", "WP-1", "2026-10")!).Ok);
         Assert.Equal(2, _packages.Applied.Count);
         Assert.Equal(corrected.Estimate!.Total(CamLineKinds.Material), _packages.Applied[1].Material);
+    }
+
+    /// <summary>Kontrakt ICamReview (etap przebiegu „Estymacje CAM”, kolory struktury): wymagane WP wobec zatwierdzonych, decyzje z kontrolą wersji.</summary>
+    [SqlFact]
+    public void Review_of_program_counts_required_work_packages_and_decides_on_the_current_version_only()
+    {
+        var (service, store, _) = Create();
+        var review = new CamReviewSource(service);
+        var cycle = review.CycleOf("2026-10");
+        Assert.Equal("2026-10", cycle.Period);
+        Assert.NotNull(cycle.Deadline);                                                    // tydzień zamykający z kalendarza
+        var wp = CamEstimatesTests.Wp();
+        var finished = CamEstimatesTests.Wp("WP-2");
+        Assert.True(service.Save(finished, CamEstimates.New(finished, "2026-10", new DateOnly(2026, 10, 20)), submit: false).Ok);   // szkic WP zakończonego
+
+        var empty = review.Program("PAF", cycle);
+
+        Assert.Equal(["WP-1", "WP-2"], empty.Items.Select(i => i.Wp));                    // tylko program PAF
+        Assert.Equal((1, 0, 0, 0, 1), (empty.Required, empty.Approved, empty.Sent, empty.AtCam, empty.Missing));   // WP-2 zakończony – niewymagany
+        var todo = empty.Items[0];
+        Assert.Equal((CamStatuses.ToDo, (DateTimeOffset?)null), (todo.Status, todo.Version));
+        Assert.Equal(CamEstimates.HoursProposal(wp, new DateOnly(2026, 10, 20)).Values.Sum(), todo.EtcHours);   // bez estymacji – propozycja
+        Assert.False(review.Approve(todo).Ok);                                            // niezapisana – brak decyzji
+
+        var sent = service.Save(wp, CamEstimates.New(wp, "2026-10", new DateOnly(2026, 10, 20)) with { Justification = "opóźnienie dostaw kooperacji" }, submit: true);
+        Assert.True(sent.Ok, sent.Message);
+        var listed = review.Program("PAF", cycle).Items[0];
+        Assert.Equal((CamStatuses.Sent, 1), (listed.Status, review.Program("PAF", cycle).Sent));
+        Assert.False(review.Return(listed, "za mało").Ok);                                // uwaga wymagana
+        _services.Clock.Advance(TimeSpan.FromMinutes(1));
+        Assert.True(review.Approve(listed).Ok);
+        Assert.False(review.Reopen(listed, "nieaktualny wiersz listy przebiegu").Ok);    // wersja sprzed zatwierdzenia
+        var approved = review.Program("PAF", cycle);
+        Assert.Equal((1, 1, 0), (approved.Required, approved.Approved, approved.Missing));
+        Assert.StartsWith("Estymacje CAM 2026-10: zatwierdzone 1 z 1 wymaganych", approved.Summary);
+        Assert.Single(_packages.Applied);
+        Assert.Equal([(CamStatuses.Approved, false), (CamStatuses.Draft, false)],
+            review.Saved("PAF", "2026-10").OrderBy(i => i.Wp).Select(i => (i.Status, i.Required)));   // zapisane – bez wymagalności
+
+        // Postęp wszystkich programów (monitoring w module CAM): M28 – WP-3 bez estymacji.
+        var progress = service.Progress(cycle);
+        Assert.Equal((2, 1, 1), (progress.Required, progress.Approved, progress.Missing));
+        Assert.Equal(["PAF", "M28"], progress.Items.Where(i => i.Required).Select(i => i.Project).Order(StringComparer.Ordinal).Reverse());
     }
 
     [SqlFact]

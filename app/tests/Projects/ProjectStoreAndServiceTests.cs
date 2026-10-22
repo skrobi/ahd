@@ -251,6 +251,8 @@ public sealed class ProjectStoreAndServiceTests : IDisposable
 
         Assert.Equal([new CamPerson("e123456", "e123456")], source.Cams());   // CAM spoza słownika Osoby – numer
         Assert.Equal(["M28", "M29"], source.WorkPackages("E123456").Select(w => w.Project).Order());
+        Assert.Equal(["M28", "M29"], source.ProjectWorkPackages(null).Select(w => w.Project).Order());   // WP z CAM-em wszystkich programów
+        Assert.Equal(("M29", false), (Assert.Single(source.ProjectWorkPackages("m29")).Project, source.ProjectWorkPackages("M29")[0].Finished));
         var wp = Assert.Single(source.WorkPackages("E123456"), w => w.Project == "M28");
         Assert.Equal(("M28", "M28 – modernizacja", "AC-CAB.6.38.01", 1000m, 150000m, "2027-12-31", false),
             (wp.Project, wp.ProjectName, wp.Wp, wp.BacHours, wp.Bac, wp.BaselineFinish, wp.Production));

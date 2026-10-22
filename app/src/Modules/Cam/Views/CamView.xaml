@@ -224,37 +224,55 @@
                 </Grid>
             </TabItem>
 
-            <!-- 2. Zatwierdzanie (analityk) -->
-            <TabItem Header="Zatwierdzanie" Padding="12,4">
-                <DockPanel>
-                    <Border DockPanel.Dock="Bottom" Style="{StaticResource Panel}" Margin="0,10,0,0">
-                        <StackPanel>
-                            <TextBlock Text="Uwaga przy zwrocie albo powód ponownego otwarcia (min. 10 znaków)" Foreground="{StaticResource Muted}" Margin="0,0,0,4" />
-                            <TextBox Style="{StaticResource Input}" Text="{Binding ReviewNote, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="50" />
-                            <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
-                                <Button Content="Zatwierdź – zapis w „Harmonogram i budżet”" Style="{StaticResource BtnPrimary}" Margin="0,0,8,0" Command="{Binding Approve}" />
-                                <Button Content="Zwróć do CAM-a" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding Return}" />
-                                <Button Content="Otwórz ponownie" Style="{StaticResource Btn}" Command="{Binding Reopen}"
-                                        ToolTip="Zatwierdzona estymacja wraca do CAM-a jako zwrócona z komentarzem; „Harmonogram i budżet” bez zmian do ponownego zatwierdzenia" />
-                            </StackPanel>
-                        </StackPanel>
-                    </Border>
-                    <CheckBox DockPanel.Dock="Top" Content="Pokaż też zatwierdzone (ponowne otwarcie)" IsChecked="{Binding ShowApproved}" Margin="0,0,0,8" />
-                    <DataGrid Style="{StaticResource DataTable}" ItemsSource="{Binding Pending}" SelectedItem="{Binding SelectedPending}" IsReadOnly="True">
+            <!-- 2. Postęp estymacji (monitoring finansisty; decyzje – etap „Estymacje CAM” w przebiegu programu) -->
+            <TabItem Header="Postęp estymacji" Padding="12,4">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <StackPanel>
+                    <DockPanel Margin="0,0,0,8">
+                        <Button DockPanel.Dock="Right" Content="Odśwież" Style="{StaticResource Btn}" Command="{Binding RefreshProgress}" />
+                        <TextBlock Text="{Binding ProgressSummary}" TextWrapping="Wrap" VerticalAlignment="Center" />
+                    </DockPanel>
+                    <TextBlock Text="Po programach" Style="{StaticResource H2}" FontSize="15" Margin="0,0,0,6" />
+                    <DataGrid Style="{StaticResource DataTable}" ItemsSource="{Binding ProgressByProgram}" IsReadOnly="True" Margin="0,0,0,12">
                         <DataGrid.Columns>
-                            <DataGridTextColumn Header="Status" Binding="{Binding Status}" />
-                            <DataGridTextColumn Header="Program" Binding="{Binding Program}" />
-                            <DataGridTextColumn Header="WP" Binding="{Binding Wp}" />
-                            <DataGridTextColumn Header="CAM" Binding="{Binding Cam}" />
-                            <DataGridTextColumn Header="ETC godziny" Binding="{Binding EtcHours}" />
-                            <DataGridTextColumn Header="ETC materiały" Binding="{Binding EtcMaterial}" />
-                            <DataGridTextColumn Header="Koniec (Forecast)" Binding="{Binding Finish}" />
-                            <DataGridTextColumn Header="Uzasadnienie" Binding="{Binding Justification}" Width="*" />
-                            <DataGridTextColumn Header="Wysłana" Binding="{Binding Submitted}" />
-                            <DataGridTextColumn Header="Zatwierdzona" Binding="{Binding Reviewed}" />
+                            <DataGridTextColumn Header="Program" Binding="{Binding Name}" Width="*" MinWidth="160" />
+                            <DataGridTextColumn Header="Wymagane" Binding="{Binding Required}" />
+                            <DataGridTextColumn Header="Zatwierdzone" Binding="{Binding Approved}" />
+                            <DataGridTextColumn Header="Wysłane (do decyzji)" Binding="{Binding Sent}" />
+                            <DataGridTextColumn Header="U CAM-a" Binding="{Binding AtCam}" />
+                            <DataGridTextColumn Header="Brak" Binding="{Binding Missing}" />
+                            <DataGridTemplateColumn Header="% zatwierdzonych">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding Percent}" FontWeight="SemiBold" HorizontalAlignment="Right"
+                                                   Foreground="{Binding Tone, Converter={StaticResource LevelBrush}, ConverterParameter=fg}" />
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
                         </DataGrid.Columns>
                     </DataGrid>
-                </DockPanel>
+                    <TextBlock Text="Po CAM-ach" Style="{StaticResource H2}" FontSize="15" Margin="0,0,0,6" />
+                    <DataGrid Style="{StaticResource DataTable}" ItemsSource="{Binding ProgressByCam}" IsReadOnly="True" Margin="0,0,0,12">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="CAM" Binding="{Binding Name}" Width="*" MinWidth="160" />
+                            <DataGridTextColumn Header="Wymagane" Binding="{Binding Required}" />
+                            <DataGridTextColumn Header="Zatwierdzone" Binding="{Binding Approved}" />
+                            <DataGridTextColumn Header="Wysłane (do decyzji)" Binding="{Binding Sent}" />
+                            <DataGridTextColumn Header="U CAM-a" Binding="{Binding AtCam}" />
+                            <DataGridTextColumn Header="Brak" Binding="{Binding Missing}" />
+                            <DataGridTemplateColumn Header="% zatwierdzonych">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding Percent}" FontWeight="SemiBold" HorizontalAlignment="Right"
+                                                   Foreground="{Binding Tone, Converter={StaticResource LevelBrush}, ConverterParameter=fg}" />
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                    <TextBlock Text="Wymagane – WP z CAM-em, niezakończone. U CAM-a – szkic albo zwrócona; brak – bez zapisanej estymacji w cyklu." Style="{StaticResource MutedText}" TextWrapping="Wrap" />
+                </StackPanel>
+                </ScrollViewer>
             </TabItem>
 
             <!-- 3. Wyniki EV (tylko odczyt) -->

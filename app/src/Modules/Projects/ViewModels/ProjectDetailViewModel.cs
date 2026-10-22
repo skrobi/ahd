@@ -213,6 +213,10 @@ public sealed partial class ProjectDetailViewModel : ObservableObject, IDisposab
                     var structure = steps.Time("budowa struktury", () =>
                         ProjectService.Structure(tree, mapping, wpCam, rows.GetValueOrDefault(ProjectDictionaries.ScheduleBudget) ?? [], costs.Amounts, production,
                             costs.Hours, costs.Labor, costs.Material, rates));
+                    // Estymacje CAM WP w bieżącym cyklu – kolumna „Estymacja CAM” i kolor wiersza WP.
+                    var today = DateOnly.FromDateTime(DateTime.Today);
+                    if (steps.Time("estymacje CAM", () => _service.CamEstimates(Code, today)) is { } cam)
+                        structure = ProjectService.WithCamEstimates(structure, cam.Cycle, cam.Saved, today);
                     var persons = cachedPersons ?? steps.Time("osoby", _service.PersonLookups);
                     var categories = ProjectService.CategoryLookups(rows.GetValueOrDefault(ProjectDictionaries.WbsCategories) ?? []);
                     var owners = cachedOwners ?? steps.Time("nakładki innych programów", () => _service.WbsOwners(Code));

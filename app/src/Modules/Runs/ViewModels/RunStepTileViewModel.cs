@@ -79,10 +79,13 @@ public sealed class RunStepTileViewModel : ObservableObject
 
     public bool IsChecks => Action == RunActions.Checks;
 
-    public bool IsApproval => Action is RunActions.Approval or RunActions.ApproveActuals;
+    public bool IsApproval => Action is RunActions.Approval or RunActions.ApproveActuals or RunActions.CamEstimates;
 
     /// <summary>Klocek systemowy „Zatwierdzenie ACTUALS” – zatwierdzone dane ACTUALS trafiają do struktury programu.</summary>
     public bool IsActualsApproval => Action == RunActions.ApproveActuals;
+
+    /// <summary>Klocek systemowy „Estymacje CAM” – finansista zatwierdza estymacje CAM programu w cyklu przebiegu.</summary>
+    public bool IsCamEstimates => Action == RunActions.CamEstimates;
 
     public IReadOnlyList<string> Gates => RunGates.All;
 
@@ -118,7 +121,8 @@ public sealed class RunStepTileViewModel : ObservableObject
         get
         {
             if (!IsChecks)
-                return IsFixed ? "klocek predefiniowany" : IsActualsApproval ? "klocek systemowy – zatwierdzone dane ACTUALS w strukturze programu" : "";
+                return IsFixed ? "klocek predefiniowany" : IsActualsApproval ? "klocek systemowy – zatwierdzone dane ACTUALS w strukturze programu"
+                    : IsCamEstimates ? "klocek systemowy – estymacje CAM programu (wymagane wobec zatwierdzonych)" : "";
             var selected = Rules.Where(c => c.IsSelected).Select(c => c.Name).ToList();
             return selected.Count == 0 ? "brak reguł – zaznacz"
                 : $"{selected.Count} {(selected.Count == 1 ? "reguła" : selected.Count % 10 is >= 2 and <= 4 && selected.Count / 10 % 10 != 1 ? "reguły" : "reguł")}: "

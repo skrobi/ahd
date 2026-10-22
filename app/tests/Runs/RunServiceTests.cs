@@ -202,6 +202,75 @@ public sealed class RunServiceTests : IDisposable
         Assert.NotEqual(RunStatuses.Failed, outcome.Status);
     }
 
+    /// <summary>Atrapa ICamReview: estymacje programu w cyklu zmieniane przez test (decyzje finansisty między wykonaniem a akceptacją etapu).</summary>
+    private sealed class FakeCamReview : ICamReview
+    {
+        public List<CamReviewItem> Items { get; } = [];
+
+        public string? AskedPeriod { get; private set; }
+
+        public static CamReviewItem Item(string wp, string status, bool required = true) =>
+            new("PAF", wp, "2026-10", $"Pakiet {wp}", "0412", required, status, 100, 0, "PLN", null, null, null, null, null, null, null, null);
+
+        public CamCycle Cycle(DateOnly day) => new("2026-10", new DateOnly(2026, 10, 30));
+
+        public CamCycle CycleOf(string period) => new(AskedPeriod = period, new DateOnly(2026, 10, 30));
+
+        public CamReview Program(string project, CamCycle cycle) => new(cycle, [.. Items]);
+
+        public IReadOnlyList<CamReviewItem> Saved(string project, string period) => Items;
+
+        public CamDecision Approve(CamReviewItem item) => new(true, "");
+
+        public CamDecision Return(CamReviewItem item, string note) => new(true, "");
+
+        public CamDecision Reopen(CamReviewItem item, string comment) => new(true, "");
+    }
+
+    /// <summary>
+    /// Klocek „Estymacje CAM”: etap czeka na finansistę – podsumowanie wymaganych WP i WARNING dla WP bez zatwierdzonej estymacji (cykl – okres
+    /// tygodnia przebiegu); akceptacja z komentarzem zapisuje stan z chwili akceptacji (także z brakami).
+    /// </summary>
+    [SqlFact]
+    public void Cam_estimates_step_waits_for_finance_and_records_the_state_at_acceptance()
+    {
+        _database = new TestDatabase(presets: true);
+        var app = _services.App(_root, _database.Sql);
+        var tree = new PoTree();
+        tree.AddElement(null, "2DI473", "PAF2", null);
+        Assert.True(new SqlProjectStore(_database.Sql, _services.Clock, _services.User).Create("PAF", "PAF", ProjectTypes.Internal, tree).Success);
+        var store = new SqlRunStore(_database.Sql);
+        var templates = new RunTemplateService(new PzlEv.Shared.Utils.Dictionaries.DictionaryService(new PzlEv.Shared.Utils.Dictionaries.SqlDictionaryStore(_database.Sql,
+            _services.Clock, _services.User, PzlEv.Shared.Utils.Dictionaries.GlobalDictionaries.Tables), app.Journal), store);
+        Assert.Equal(PzlEv.Shared.Models.Dictionaries.SaveStatus.Saved,
+            templates.Save(new RunDefinition("E – estymacje CAM", ProjectTypes.Internal, [.. RunDefinitions.FixedSteps, RunDefinitions.CamApproval(3)]), isActive: true).Status);
+        var cams = new FakeCamReview();
+        cams.Items.AddRange([FakeCamReview.Item("WP-1", CamStatuses.Approved), FakeCamReview.Item("WP-2", CamStatuses.Sent), FakeCamReview.Item("WP-3", CamStatuses.ToDo),
+            FakeCamReview.Item("WP-9", CamStatuses.Draft, required: false)]);
+        var service = new RunService(store, app, cams: () => cams);
+
+        service.Execute("PAF");
+
+        var pin = store.Pins("PAF", 1)[0];
+        Assert.Equal("2026-10", cams.AskedPeriod);                                                     // cykl – okres tygodnia przebiegu
+        var step = store.Steps(pin.PinId)[2];
+        Assert.Equal((RunActions.CamEstimates, RunStepStatuses.NeedsAction, 3), (step.Action, step.Status, step.Warnings));   // podsumowanie + 2 WP
+        var issues = store.Issues(pin.PinId).Where(i => i.StepNo == 3).ToList();
+        Assert.Contains(issues, i => i.Level == CheckLevel.Warning && i.Element is null && i.Message.StartsWith("Estymacje CAM 2026-10: zatwierdzone 1 z 3 wymaganych"));
+        Assert.Equal(["WP-2", "WP-3"], issues.Where(i => i.Element is not null).Select(i => i.Element).Order());   // WP-9 niewymagany
+        Assert.Equal("Potwierdzenie wymaga komentarza.", service.Confirm(pin.PinId, 3, "").Summary);
+
+        // Finansista zatwierdza WP-2 w panelu etapu; WP-3 bez estymacji – akceptacja z komentarzem mimo braku.
+        cams.Items[1] = cams.Items[1] with { Status = CamStatuses.Approved };
+        service.Confirm(pin.PinId, 3, "WP-3 – CAM na urlopie, ETC z produkcji");
+
+        step = store.Steps(pin.PinId)[2];
+        Assert.Equal((RunStepStatuses.Done, 2), (step.Status, step.Warnings));   // podsumowanie + WP-3
+        Assert.Contains("estymacje CAM zaakceptowane – zatwierdzone 2 z 3 wymaganych, bez zatwierdzenia 1: WP-3 – CAM na urlopie", step.Comment);
+        Assert.Equal(["WP-3"], store.Issues(pin.PinId).Where(i => i.StepNo == 3 && i.Element is not null).Select(i => i.Element));
+        Assert.Contains(app.Journal.Recent(5), j => j.Message.Contains("estymacje CAM zaakceptowane"));
+    }
+
     [Fact]
     public void Previous_period_stays_open_during_settlement_days()
     {

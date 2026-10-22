@@ -275,8 +275,10 @@
                                 ToolTip="Etap z zaznaczonymi regułami walidacji (bramka: ERROR zatrzymuje, WARNING – potwierdzenie albo informacja)" />
                         <Button Content="+ Zatwierdzenie" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding AddApproval}"
                                 ToolTip="Etap, na którym przebieg czeka na zatwierdzenie analityka z komentarzem" />
-                        <Button Content="+ Zatwierdzenie ACTUALS" Style="{StaticResource Btn}" Command="{Binding AddActualsApproval}"
+                        <Button Content="+ Zatwierdzenie ACTUALS" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding AddActualsApproval}"
                                 ToolTip="Klocek systemowy (najwyżej jeden): analityk zatwierdza dane ACTUALS przebiegu – od zatwierdzenia struktura programu pokazuje koszty z tego przebiegu" />
+                        <Button Content="+ Estymacje CAM" Style="{StaticResource Btn}" Command="{Binding AddCamEstimates}"
+                                ToolTip="Klocek systemowy (najwyżej jeden): finansista przegląda estymacje CAM programu w cyklu przebiegu, zatwierdza albo zwraca estymacje WP i akceptuje stan z komentarzem" />
                     </StackPanel>
                 </DockPanel>
                 <TextBlock partials:CopyText.Enabled="True" Text="{Binding Status}" TextWrapping="Wrap" Margin="0,0,0,4" />
@@ -352,6 +354,8 @@
                                    Style="{StaticResource MutedText}" TextWrapping="Wrap" Visibility="{Binding IsFixed, Converter={StaticResource BoolToVisibility}}" />
                         <TextBlock Text="Klocek systemowy: przebieg czeka na zatwierdzenie danych ACTUALS z komentarzem. Struktura programu pokazuje koszty z ostatniego przebiegu z zatwierdzonymi danymi – nowy import RABIT ani niezatwierdzony przebieg ich nie zmieniają."
                                    Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="0,0,0,6" Visibility="{Binding IsActualsApproval, Converter={StaticResource BoolToVisibility}}" />
+                        <TextBlock Text="Klocek systemowy: przebieg pokazuje estymacje CAM programu w cyklu (okres tygodnia przebiegu) – wymagane WP (z CAM-em, niezakończone) wobec zatwierdzonych. Finansista zatwierdza, zwraca albo otwiera ponownie estymacje WP i akceptuje stan z komentarzem, także z brakami (WP bez zatwierdzonej estymacji liczą ETC jak dotąd)."
+                                   Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="0,0,0,6" Visibility="{Binding IsCamEstimates, Converter={StaticResource BoolToVisibility}}" />
                         <Grid Visibility="{Binding IsEditable, Converter={StaticResource BoolToVisibility}}" Margin="0,0,0,8">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto" />

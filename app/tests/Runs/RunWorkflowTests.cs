@@ -132,6 +132,8 @@ public sealed class RunWorkflowTests
             new(5, "Zatwierdzenie", RunActions.Approval, RunGates.Confirm, true, [new(rule)]),
             RunDefinitions.ActualsApproval(6),
             RunDefinitions.ActualsApproval(7) with { Name = "Zatwierdzenie ACTUALS 2" },
+            RunDefinitions.CamApproval(8),
+            RunDefinitions.CamApproval(9) with { Name = "Estymacje CAM 2" },
         ]);
 
         var issues = RunDefinitions.Validate(broken).Select(i => i.Message).ToList();
@@ -145,6 +147,10 @@ public sealed class RunWorkflowTests
         Assert.Contains($"Reguła „{rule}” dwa razy w etapie „walidacja”", issues);
         Assert.Contains("Etap „Zatwierdzenie” (Zatwierdzenie) nie ma reguł – reguły tylko w etapach walidacji", issues);
         Assert.Contains($"Klocek „{RunActions.ApproveActuals}” – najwyżej jeden w szablonie", issues);
+        Assert.Contains($"Klocek „{RunActions.CamEstimates}” – najwyżej jeden w szablonie", issues);
+        Assert.Empty(RunDefinitions.Validate(RunDefinitions.Starters[0] with
+            { Steps = [.. RunDefinitions.StandardSteps.Take(3), RunDefinitions.ActualsApproval(4), RunDefinitions.CamApproval(5)] }));
+        Assert.Equal(RunStepStatuses.NeedsAction, RunWorkflowEngine.Gate(RunDefinitions.CamApproval(5), 0, 0));   // czeka na finansistę
         Assert.Empty(RunDefinitions.Validate(RunDefinitions.Starters[0] with { Steps = [.. RunDefinitions.StandardSteps.Take(3), RunDefinitions.ActualsApproval(4)] }));
         Assert.Empty(RunDefinitions.Validate(broken with { Code = "X", Steps = [.. RunDefinitions.FixedSteps, new(3, "W", RunActions.Checks, RunGates.Confirm, false, [new("Własna")])] },
             ["Własna"]));   // reguła ze słownika „Reguły walidacji”

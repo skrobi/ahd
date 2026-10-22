@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.Windows.Input;
 using PzlEv.Modules.Cam.Models;
 using PzlEv.Modules.Cam.Services;
+using PzlEv.Shared.Models;
 using PzlEv.Shared.Utils.Data;
 using PzlEv.Shared.Utils.Files;
 using PzlEv.Shared.Utils.Ui.Mvvm;
@@ -13,14 +14,13 @@ namespace PzlEv.Modules.Cam.ViewModels;
 public sealed record CamWorkRow(CamWorkItem Item, string Status, string Tone, string Name, string Code, string Missing, string State, string EtcHours,
     string EtcMaterial, string Action, bool ToDo);
 
-/// <summary>Estymacja na zakładce Zatwierdzanie: wysłana (do decyzji) albo zatwierdzona (do ponownego otwarcia); Reviewed – kto i kiedy zatwierdził.</summary>
-public sealed record CamPendingRow(CamEstimate Estimate, string Program, string Wp, string Cam, string EtcHours, string EtcMaterial, string Finish,
-    string Justification, string Submitted, string Status, string Reviewed);
+/// <summary>Wiersz postępu estymacji (program albo CAM): wymagane WP, zatwierdzone, wysłane, u CAM-a, brak, % zatwierdzonych; Tone – kolor %.</summary>
+public sealed record CamProgressRow(string Name, int Required, int Approved, int Sent, int AtCam, int Missing, string Percent, string Tone);
 
 /// <summary>
 /// Ekran modułu CAM (docs/funkcjonalnosc.md; tasks/F11.3–F11.5): Estymacje – lista zadań cyklu i formularz WP (wprowadzanie dla
-/// Finansów); Zatwierdzanie – wysłane estymacje wszystkich CAM-ów (zatwierdź / zwróć) i zatwierdzone (otwórz ponownie z komentarzem); Wyniki EV – przegląd tylko do odczytu. Test – bez uprawnień
-/// (wybór CAM-a z listy).
+/// Finansów); Postęp estymacji – monitoring finansisty: wymagane WP wobec zatwierdzonych po programach i CAM-ach (decyzje – etap przebiegu
+/// „Estymacje CAM”); Wyniki EV – przegląd tylko do odczytu. Test – bez uprawnień (wybór CAM-a z listy).
 /// </summary>
 public sealed class CamViewModel : ObservableObject
 {
@@ -33,9 +33,6 @@ public sealed class CamViewModel : ObservableObject
     private CamCycle? _cycle;
     private bool _onlyToDo = true;
     private EstimateEditorViewModel? _editor;
-    private CamPendingRow? _selectedPending;
-    private string _reviewNote = "";
-    private bool _showApproved;
     private string _status = "";
     private int _selectedTab;
 
@@ -45,9 +42,7 @@ public sealed class CamViewModel : ObservableObject
         Refresh = new AsyncRelayCommand(() => LoadCam(), () => !Busy.IsBusy && _selectedCam is not null);
         Open = new RelayCommand(p => _ = OpenRow(p as CamWorkRow));
         Back = new RelayCommand(_ => { Editor = null; _ = LoadCam(); });
-        Approve = new AsyncRelayCommand(() => Review(CamStatuses.Approved), () => _selectedPending?.Estimate.Status == CamStatuses.Sent && !Busy.IsBusy);
-        Return = new AsyncRelayCommand(() => Review(CamStatuses.Returned), () => _selectedPending?.Estimate.Status == CamStatuses.Sent && !Busy.IsBusy);
-        Reopen = new AsyncRelayCommand(() => Review(Reopened), () => _selectedPending?.Estimate.Status == CamStatuses.Approved && !Busy.IsBusy);
+        RefreshProgress = new AsyncRelayCommand(LoadProgress, () => !Busy.IsBusy);
         _ = Load();
     }
 
@@ -59,21 +54,7 @@ public sealed class CamViewModel : ObservableObject
 
     public ICommand Back { get; }
 
-    public ICommand Approve { get; }
-
-    public ICommand Return { get; }
-
-    /// <summary>Ponowne otwarcie zatwierdzonej estymacji z komentarzem (pole uwagi).</summary>
-    public ICommand Reopen { get; }
-
-    /// <summary>Na liście także zatwierdzone estymacje cyklu (do ponownego otwarcia).</summary>
-    public bool ShowApproved
-    {
-        get => _showApproved;
-        set { if (SetProperty(ref _showApproved, value)) _ = LoadPending(); }
-    }
-
-    private const string Reopened = "reopen";
+    public ICommand RefreshProgress { get; }
 
     public IReadOnlyList<CamPerson> Cams { get => _cams; private set => SetProperty(ref _cams, value); }
 
@@ -96,7 +77,7 @@ public sealed class CamViewModel : ObservableObject
         set
         {
             if (SetProperty(ref _selectedTab, value) && value == 1)
-                _ = LoadPending();
+                _ = LoadProgress();
         }
     }
 
@@ -132,11 +113,12 @@ public sealed class CamViewModel : ObservableObject
 
     public bool IsListing => _editor is null;
 
-    public ObservableCollection<CamPendingRow> Pending { get; } = [];
+    /// <summary>Postęp estymacji cyklu po programach i po CAM-ach (wymagane WP – z CAM-em, niezakończone).</summary>
+    public IReadOnlyList<CamProgressRow> ProgressByProgram { get; private set; } = [];
 
-    public CamPendingRow? SelectedPending { get => _selectedPending; set => SetProperty(ref _selectedPending, value); }
+    public IReadOnlyList<CamProgressRow> ProgressByCam { get; private set; } = [];
 
-    public string ReviewNote { get => _reviewNote; set => SetProperty(ref _reviewNote, value); }
+    public string ProgressSummary { get; private set; } = "";
 
     public CamResultsViewModel Results { get; } = new();
 
@@ -251,50 +233,32 @@ public sealed class CamViewModel : ObservableObject
         });
     }
 
-    /// <param name="message">Komunikat po decyzji – zostaje na ekranie zamiast stanu listy.</param>
-    private async Task LoadPending(string? message = null)
+    /// <summary>Postęp estymacji cyklu we wszystkich programach (struktura każdego programu z CAM-ami – CamService.Progress).</summary>
+    private async Task LoadProgress()
     {
         await Try(async () =>
         {
             var cycle = _cycle ?? await Busy.Run("Cykl…", _service.Cycle);
-            var pending = await Busy.Run("Estymacje do zatwierdzenia…",
-                () => _showApproved ? [.. _service.Pending(cycle), .. _service.Approved(cycle)] : _service.Pending(cycle));
-            Pending.Clear();
-            foreach (var e in pending)
-                Pending.Add(new CamPendingRow(e, e.Project, e.Wp, e.Cam, PolishNumber.ToDisplay(Math.Round(e.Total(CamLineKinds.Hours), 0), 0) + " h",
-                    $"{PolishNumber.ToDisplay(Math.Round(e.Total(CamLineKinds.Material), 0), 0)} {e.Currency}", e.ForecastFinish?.ToString("yyyy-MM-dd") ?? "—",
-                    e.Justification ?? "", $"{e.SubmittedAt?.LocalDateTime:yyyy-MM-dd HH:mm} · {e.SubmittedBy}", e.Status,
-                    e.Status == CamStatuses.Approved ? $"{e.ReviewedAt?.LocalDateTime:yyyy-MM-dd HH:mm} · {e.ReviewedBy}" : ""));
-            Status = message ?? (pending.Count > 0 ? "" : _showApproved ? "Brak wysłanych i zatwierdzonych estymacji w tym cyklu." : "Brak estymacji do zatwierdzenia w tym cyklu.");
-        });
-    }
-
-    /// <param name="decision">CamStatuses.Approved – zatwierdź, CamStatuses.Returned – zwróć z uwagą, Reopened – otwórz ponownie z komentarzem.</param>
-    private async Task Review(string decision)
-    {
-        if (_selectedPending is not { } row)
-            return;
-        await Try(async () =>
-        {
-            var note = _reviewNote;
-            var outcome = await Busy.Run(decision switch
-                {
-                    CamStatuses.Approved => "Zatwierdzanie – zapis w „Harmonogram i budżet”…",
-                    CamStatuses.Returned => "Zwrot do CAM-a…",
-                    _ => "Ponowne otwarcie estymacji…",
-                },
-                () => decision switch
-                {
-                    CamStatuses.Approved => _service.Approve(row.Estimate),
-                    CamStatuses.Returned => _service.Return(row.Estimate, note),
-                    _ => _service.Reopen(row.Estimate, note),
-                });
-            Status = outcome.Message;
-            if (outcome.Ok)
+            var review = await Busy.Run("Postęp estymacji – struktury programów…", () => _service.Progress(cycle));
+            static CamProgressRow Row(string name, IReadOnlyList<CamReviewItem> items)
             {
-                ReviewNote = "";
-                await LoadPending(outcome.Message);
+                var review = new CamReview(new CamCycle("", null), items);
+                var share = review.Required == 0 ? (decimal?)null : review.Approved * 100m / review.Required;
+                return new CamProgressRow(name, review.Required, review.Approved, review.Sent, review.AtCam, review.Missing,
+                    share is { } p ? $"{Math.Round(p, 0)}%" : "—", share is null ? "" : share == 100 ? "ok" : share >= 50 ? "warn" : "crit");
             }
+            var required = review.Items.Where(i => i.Required).ToList();
+            ProgressByProgram = [.. required.GroupBy(i => i.Project, StringComparer.OrdinalIgnoreCase).OrderBy(g => g.Key).Select(g => Row(g.Key, g.ToList())),
+                Row("Razem", required)];
+            ProgressByCam = [.. required.GroupBy(i => i.Cam, StringComparer.OrdinalIgnoreCase)
+                .Select(g => Row(_cams.FirstOrDefault(c => string.Equals(c.Code, g.Key, StringComparison.OrdinalIgnoreCase))?.Label ?? g.Key, g.ToList()))
+                .OrderBy(r => r.Name, StringComparer.CurrentCulture)];
+            ProgressSummary = review.Summary.Replace($"Estymacje CAM {cycle.Period}", $"Wszystkie programy, cykl {cycle.Period}") +
+                              (review.Overdue(DateOnly.FromDateTime(DateTime.Today)) ? " · termin minął" : "") +
+                              ". Decyzje (zatwierdź, zwróć, otwórz ponownie) – etap „Estymacje CAM” w przebiegu programu.";
+            OnPropertyChanged(nameof(ProgressByProgram));
+            OnPropertyChanged(nameof(ProgressByCam));
+            OnPropertyChanged(nameof(ProgressSummary));
         });
     }
 

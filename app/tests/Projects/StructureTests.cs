@@ -1,9 +1,11 @@
 using ClosedXML.Excel;
 using PzlEv.Modules.Projects.Models;
 using PzlEv.Modules.Projects.Services;
+using PzlEv.Shared.Models;
 using PzlEv.Shared.Models.Dictionaries;
 using PzlEv.Shared.Models.Pipeline;
 using PzlEv.Shared.Models.PzlProd;
+using PzlEv.Shared.Utils.Data;
 using PzlEv.Shared.Utils.Files;
 using PzlEv.Tests.TestSupport;
 using Xunit;
@@ -332,6 +334,37 @@ public sealed class StructureTests
     }
 
     /// <summary>Wskaźniki EVM wiersza WP: godziny i koszty z produkcji, ACTUALS i budżetu; ETC z produkcji albo wpisane; ETC Cost ze stawki MPK.</summary>
+    /// <summary>
+    /// Estymacja CAM na strukturze (ProjectService.WithCamEstimates): wymagany WP (z CAM-em, niezakończony) – kolor statusu, brak i szkic żółte
+    /// dopiero po terminie cyklu; WP bez CAM albo zakończony – tylko opis zapisanej estymacji, bez koloru; wiersz bez WP – bez zmian.
+    /// </summary>
+    [Fact]
+    public void Cam_estimates_color_work_package_rows_by_status_and_deadline()
+    {
+        var built = StructureBuilder.Build(Objectives(), Inputs().P1s, [Wp("AC-CAB.6.38.07", "WP-1")], []);
+        var template = Of(built, "p1s:AC-CAB.6.38.07") with { Status = "w toku" };
+        var plain = built.Rows.First(r => r.Wp is null);
+        StructureRow WpRow(string wp, string? cam = "0412", string status = "w toku") => template with { Id = wp, Wp = wp, Cam = cam, Status = status };
+        var structure = new ProjectStructure([plain, WpRow("A"), WpRow("S"), WpRow("R"), WpRow("D"), WpRow("M"), WpRow("F", status: "zakończony"), WpRow("N", cam: null)],
+            built.Summary);
+        static CamReviewItem Item(string wp, string status) => new("M28", wp, "2026-10", wp, "0412", false, status, 0, 0, "PLN", null, null, null,
+            new DateTimeOffset(2026, 10, 20, 9, 0, 0, TimeSpan.Zero), "e1", new DateTimeOffset(2026, 10, 21, 9, 0, 0, TimeSpan.Zero), "fin", null);
+        IReadOnlyList<CamReviewItem> saved = [Item("a", CamStatuses.Approved), Item("S", CamStatuses.Sent), Item("R", CamStatuses.Returned), Item("D", CamStatuses.Draft),
+            Item("F", CamStatuses.Approved)];
+        var cycle = new CamCycle("2026-10", new DateOnly(2026, 10, 30));
+
+        var before = ProjectService.WithCamEstimates(structure, cycle, saved, new DateOnly(2026, 10, 25));
+        var after = ProjectService.WithCamEstimates(structure, cycle, saved, new DateOnly(2026, 11, 2));
+
+        static string Tones(ProjectStructure s) => string.Join(" ", s.Rows.Select(r => r.CamTone ?? "-"));
+        Assert.Equal("- ok info crit - - - -", Tones(before));            // przed terminem: szkic i brak bez koloru
+        Assert.Equal("- ok info crit warn warn - -", Tones(after));       // po terminie – żółte
+        Assert.Equal("Zatwierdzona 2026-10-21 · cykl 2026-10", before.Rows[1].CamEstimate);            // WP bez względu na wielkość liter
+        Assert.Equal(("Brak – po terminie · cykl 2026-10", "Zatwierdzona 2026-10-21 (niewymagana)"), (after.Rows[5].CamEstimate, after.Rows[6].CamEstimate));
+        Assert.Null(after.Rows[7].CamEstimate);                                                          // WP bez CAM, bez estymacji
+        Assert.Same(plain, after.Rows[0]);
+    }
+
     [Fact]
     public void Evm_columns_of_wp_use_production_actuals_budget_and_mpk_rate()
     {

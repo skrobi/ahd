@@ -19,11 +19,18 @@ public sealed class CamWorkPackagesSource(ProjectService service) : ICamWorkPack
             .OrderBy(c => c.Name, StringComparer.CurrentCulture).ToList();
     }
 
-    public IReadOnlyList<CamWorkPackage> WorkPackages(string cam)
+    public IReadOnlyList<CamWorkPackage> WorkPackages(string cam) =>
+        Collect(_ => true, value => string.Equals(value, cam, StringComparison.OrdinalIgnoreCase));
+
+    public IReadOnlyList<CamWorkPackage> ProjectWorkPackages(string? project) =>
+        Collect(code => project is null || string.Equals(code, project, StringComparison.OrdinalIgnoreCase), value => !string.IsNullOrWhiteSpace(value));
+
+    /// <summary>WP z CAM-em spełniającym isCam w programach spełniających inProject (struktura każdego programu raz).</summary>
+    private List<CamWorkPackage> Collect(Func<string, bool> inProject, Func<string?, bool> isCam)
     {
-        bool IsCam(string? value) => string.Equals(value, cam, StringComparison.OrdinalIgnoreCase);
+        bool IsCam(string? value) => isCam(value);
         var today = DateOnly.FromDateTime(DateTime.Today);
-        var projects = service.Projects().Where(p => service.Rows(ProjectDictionaries.WpCam, p.Code).Any(r => IsCam(r["CAM"]))).ToList();
+        var projects = service.Projects().Where(p => inProject(p.Code) && service.Rows(ProjectDictionaries.WpCam, p.Code).Any(r => IsCam(r["CAM"]))).ToList();
         if (projects.Count == 0)
             return [];
         var mapping = service.Mapping();
@@ -42,7 +49,8 @@ public sealed class CamWorkPackagesSource(ProjectService service) : ICamWorkPack
                     row.OpsBacHours is not null, row.ProductionEtcHours, row.EtcHours, row.MaterialEtc, row.EtcCost,
                     row.UndeliveredByYear ?? new Dictionary<int, decimal>(), ProjectService.HourRates(departmentRates, row.Mpk, rates),
                     rates.LaborFactor is { } labor && labor != 0 ? 1 / labor : null,
-                    rates.MaterialFactor is { } usd && usd != 0 ? 1 / usd : null, note, row.ProductionEtcByYear, row.PlanStart, row.PlanFinish));
+                    rates.MaterialFactor is { } usd && usd != 0 ? 1 / usd : null, note, row.ProductionEtcByYear, row.PlanStart, row.PlanFinish,
+                    row.Status == "zakończony"));
             }
         }
         return result;

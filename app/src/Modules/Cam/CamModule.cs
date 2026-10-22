@@ -9,7 +9,7 @@ using PzlEv.Shared.Utils.Ui.Modularity;
 
 namespace PzlEv.Modules.Cam;
 
-/// <summary>CAM (F11): estymacje WP dla Finansów, zatwierdzanie przez analityka, wyniki EV WP CAM-a. Test – bez uprawnień (wybór CAM-a z listy).</summary>
+/// <summary>CAM (F11): estymacje WP dla Finansów, postęp estymacji, wyniki EV WP CAM-a; decyzje finansisty – etap przebiegu „Estymacje CAM” (ICamReview). Test – bez uprawnień (wybór CAM-a z listy).</summary>
 public sealed class CamModule : IModule
 {
     private CamService? _service;
@@ -21,8 +21,12 @@ public sealed class CamModule : IModule
     public string Doc => "docs/funkcjonalnosc.md (moduł CAM), tasks/F11.*";
 
     // Magazyn: baza MS SQL środowiska – CAM_Estimate*, migracja 056; WP i zapis zatwierdzonej estymacji – kontrakt ICamWorkPackages (Projekty).
-    public void Initialize(AppServices services) =>
+    // Rejestruje ICamReview – decyzje finansisty w etapie przebiegu „Estymacje CAM” (Przebiegi) i kolory struktury programu (Projekty).
+    public void Initialize(AppServices services)
+    {
         _service = new CamService(new SqlCamStore(services.Sql), () => services.Contracts.Get<ICamWorkPackages>(), services);
+        services.Contracts.Register<ICamReview>(new CamReviewSource(_service));
+    }
 
     public FrameworkElement CreateView(ModuleContext context) => new CamView { DataContext = new CamViewModel(_service!) };
 }
