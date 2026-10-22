@@ -108,6 +108,25 @@ public sealed class CamService(ICamStore store, Func<ICamWorkPackages?> packages
         return Review(estimate, CamStatuses.Returned, note.Trim(), "zwrócona do CAM-a");
     }
 
+    /// <summary>Zatwierdzone estymacje cyklu (wszyscy CAM-owie) – do ponownego otwarcia.</summary>
+    public IReadOnlyList<CamEstimate> Approved(CamCycle cycle) =>
+        store.Estimates(cycle.Period).Where(e => e.Status == CamStatuses.Approved).OrderByDescending(e => e.ReviewedAt).ToList();
+
+    /// <summary>
+    /// Ponowne otwarcie zatwierdzonej estymacji z wymaganym komentarzem (min. CamEstimates.JustificationLength znaków): wraca do CAM-a
+    /// jako zwrócona z komentarzem jako uwagą analityka; „Harmonogram i budżet” bez zmian – zostają wartości ostatniego zatwierdzenia
+    /// do ponownego zatwierdzenia poprawionej estymacji.
+    /// </summary>
+    public CamOutcome Reopen(CamEstimate estimate, string comment)
+    {
+        if (estimate.Status != CamStatuses.Approved)
+            return new CamOutcome(false, "Otworzyć ponownie można tylko zatwierdzoną estymację.");
+        if (comment.Trim().Length < CamEstimates.JustificationLength)
+            return new CamOutcome(false, $"Podaj powód ponownego otwarcia (min. {CamEstimates.JustificationLength} znaków).");
+        return Review(estimate, CamStatuses.Returned, comment.Trim(),
+            "otwarta ponownie po zatwierdzeniu – „Harmonogram i budżet” bez zmian do ponownego zatwierdzenia");
+    }
+
     public IReadOnlyList<CamEstimateEvent> History(CamEstimate estimate) => estimate.EstimateId is { } id ? store.Events(id) : [];
 
     /// <summary>Ostatnia zatwierdzona estymacja WP z wcześniejszego cyklu (punkt odniesienia w formularzu).</summary>

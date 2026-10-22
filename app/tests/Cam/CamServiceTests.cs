@@ -153,6 +153,48 @@ public sealed class CamServiceTests : IDisposable
     }
 
     [SqlFact]
+    public void Approved_estimate_reopened_with_comment_goes_back_to_cam_and_schedule_waits_for_new_approval()
+    {
+        var (service, store, app) = Create();
+        var wp = CamEstimatesTests.Wp();
+        var cycle = new CamCycle("2026-10", new DateOnly(2026, 10, 30));
+        var sent = service.Save(wp, CamEstimates.New(wp, "2026-10", new DateOnly(2026, 10, 20)) with { Justification = "opóźnienie dostaw kooperacji" }, submit: true);
+        Assert.True(sent.Ok, sent.Message);
+        Assert.False(service.Reopen(sent.Estimate!, "otwarcie wysłanej estymacji").Ok);   // tylko zatwierdzona
+        _services.Clock.Advance(TimeSpan.FromMinutes(1));
+        var approved = service.Approve(store.Estimate("PAF", "WP-1", "2026-10")!).Estimate!;
+        Assert.Equal([approved.Wp], service.Approved(cycle).Select(e => e.Wp));
+
+        _services.Clock.Advance(TimeSpan.FromMinutes(1));
+        Assert.False(service.Reopen(approved, "za mało").Ok);                              // komentarz wymagany
+        var reopened = service.Reopen(approved, "Finanse: przesunięcie zakupu materiałów na 2027");
+
+        Assert.True(reopened.Ok, reopened.Message);
+        Assert.Equal((CamStatuses.Returned, "Finanse: przesunięcie zakupu materiałów na 2027"), (reopened.Estimate!.Status, reopened.Estimate.ReviewNote));
+        Assert.Empty(service.Approved(cycle));
+        Assert.Single(_packages.Applied);                                                  // „Harmonogram i budżet” – wartości ostatniego zatwierdzenia
+        Assert.False(service.Reopen(approved, "drugi raz ze starego wiersza listy").Ok);  // nieaktualny wiersz – konflikt
+        var history = service.History(reopened.Estimate);
+        Assert.StartsWith("otwarta ponownie", history[0].Summary);
+        Assert.Equal(("Finanse: przesunięcie zakupu materiałów na 2027", CamStatuses.Returned), (history[0].Comment, history[0].Status));
+        Assert.Contains(app.Journal.Recent(10), j => j.Message.Contains("otwarta ponownie"));
+
+        // CAM poprawia i wysyła; nowe zatwierdzenie zapisuje nowe wartości.
+        var item = Assert.Single(service.Worklist([wp], cycle));
+        Assert.Equal(CamStatuses.Returned, item.Estimate.Status);
+        _services.Clock.Advance(TimeSpan.FromMinutes(1));
+        var corrected = service.Save(wp, item.Estimate with
+        {
+            Lines = [.. item.Estimate.Lines.Select(l => l.Kind == CamLineKinds.Material && l.Year == 2026 ? l with { Value = 0 } : l)],
+        }, submit: true);
+        Assert.True(corrected.Ok, corrected.Message);
+        _services.Clock.Advance(TimeSpan.FromMinutes(1));
+        Assert.True(service.Approve(store.Estimate("PAF", "WP-1", "2026-10")!).Ok);
+        Assert.Equal(2, _packages.Applied.Count);
+        Assert.Equal(corrected.Estimate!.Total(CamLineKinds.Material), _packages.Applied[1].Material);
+    }
+
+    [SqlFact]
     public void Save_of_an_estimate_changed_meanwhile_is_a_conflict()
     {
         var (service, store, _) = Create();

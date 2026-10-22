@@ -229,16 +229,20 @@
                 <DockPanel>
                     <Border DockPanel.Dock="Bottom" Style="{StaticResource Panel}" Margin="0,10,0,0">
                         <StackPanel>
-                            <TextBlock Text="Uwaga przy zwrocie (min. 10 znaków)" Foreground="{StaticResource Muted}" Margin="0,0,0,4" />
+                            <TextBlock Text="Uwaga przy zwrocie albo powód ponownego otwarcia (min. 10 znaków)" Foreground="{StaticResource Muted}" Margin="0,0,0,4" />
                             <TextBox Style="{StaticResource Input}" Text="{Binding ReviewNote, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="50" />
                             <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
                                 <Button Content="Zatwierdź – zapis w „Harmonogram i budżet”" Style="{StaticResource BtnPrimary}" Margin="0,0,8,0" Command="{Binding Approve}" />
-                                <Button Content="Zwróć do CAM-a" Style="{StaticResource Btn}" Command="{Binding Return}" />
+                                <Button Content="Zwróć do CAM-a" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding Return}" />
+                                <Button Content="Otwórz ponownie" Style="{StaticResource Btn}" Command="{Binding Reopen}"
+                                        ToolTip="Zatwierdzona estymacja wraca do CAM-a jako zwrócona z komentarzem; „Harmonogram i budżet” bez zmian do ponownego zatwierdzenia" />
                             </StackPanel>
                         </StackPanel>
                     </Border>
+                    <CheckBox DockPanel.Dock="Top" Content="Pokaż też zatwierdzone (ponowne otwarcie)" IsChecked="{Binding ShowApproved}" Margin="0,0,0,8" />
                     <DataGrid Style="{StaticResource DataTable}" ItemsSource="{Binding Pending}" SelectedItem="{Binding SelectedPending}" IsReadOnly="True">
                         <DataGrid.Columns>
+                            <DataGridTextColumn Header="Status" Binding="{Binding Status}" />
                             <DataGridTextColumn Header="Program" Binding="{Binding Program}" />
                             <DataGridTextColumn Header="WP" Binding="{Binding Wp}" />
                             <DataGridTextColumn Header="CAM" Binding="{Binding Cam}" />
@@ -247,6 +251,7 @@
                             <DataGridTextColumn Header="Koniec (Forecast)" Binding="{Binding Finish}" />
                             <DataGridTextColumn Header="Uzasadnienie" Binding="{Binding Justification}" Width="*" />
                             <DataGridTextColumn Header="Wysłana" Binding="{Binding Submitted}" />
+                            <DataGridTextColumn Header="Zatwierdzona" Binding="{Binding Reviewed}" />
                         </DataGrid.Columns>
                     </DataGrid>
                 </DockPanel>

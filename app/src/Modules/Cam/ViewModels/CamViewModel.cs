@@ -13,13 +13,13 @@ namespace PzlEv.Modules.Cam.ViewModels;
 public sealed record CamWorkRow(CamWorkItem Item, string Status, string Tone, string Name, string Code, string Missing, string State, string EtcHours,
     string EtcMaterial, string Action, bool ToDo);
 
-/// <summary>Estymacja czekająca na analityka (zakładka Zatwierdzanie).</summary>
+/// <summary>Estymacja na zakładce Zatwierdzanie: wysłana (do decyzji) albo zatwierdzona (do ponownego otwarcia); Reviewed – kto i kiedy zatwierdził.</summary>
 public sealed record CamPendingRow(CamEstimate Estimate, string Program, string Wp, string Cam, string EtcHours, string EtcMaterial, string Finish,
-    string Justification, string Submitted);
+    string Justification, string Submitted, string Status, string Reviewed);
 
 /// <summary>
 /// Ekran modułu CAM (docs/funkcjonalnosc.md; tasks/F11.3–F11.5): Estymacje – lista zadań cyklu i formularz WP (wprowadzanie dla
-/// Finansów); Zatwierdzanie – wysłane estymacje wszystkich CAM-ów; Wyniki EV – przegląd tylko do odczytu. Test – bez uprawnień
+/// Finansów); Zatwierdzanie – wysłane estymacje wszystkich CAM-ów (zatwierdź / zwróć) i zatwierdzone (otwórz ponownie z komentarzem); Wyniki EV – przegląd tylko do odczytu. Test – bez uprawnień
 /// (wybór CAM-a z listy).
 /// </summary>
 public sealed class CamViewModel : ObservableObject
@@ -35,6 +35,7 @@ public sealed class CamViewModel : ObservableObject
     private EstimateEditorViewModel? _editor;
     private CamPendingRow? _selectedPending;
     private string _reviewNote = "";
+    private bool _showApproved;
     private string _status = "";
     private int _selectedTab;
 
@@ -44,8 +45,9 @@ public sealed class CamViewModel : ObservableObject
         Refresh = new AsyncRelayCommand(() => LoadCam(), () => !Busy.IsBusy && _selectedCam is not null);
         Open = new RelayCommand(p => _ = OpenRow(p as CamWorkRow));
         Back = new RelayCommand(_ => { Editor = null; _ = LoadCam(); });
-        Approve = new AsyncRelayCommand(() => Review(approve: true), () => _selectedPending is not null && !Busy.IsBusy);
-        Return = new AsyncRelayCommand(() => Review(approve: false), () => _selectedPending is not null && !Busy.IsBusy);
+        Approve = new AsyncRelayCommand(() => Review(CamStatuses.Approved), () => _selectedPending?.Estimate.Status == CamStatuses.Sent && !Busy.IsBusy);
+        Return = new AsyncRelayCommand(() => Review(CamStatuses.Returned), () => _selectedPending?.Estimate.Status == CamStatuses.Sent && !Busy.IsBusy);
+        Reopen = new AsyncRelayCommand(() => Review(Reopened), () => _selectedPending?.Estimate.Status == CamStatuses.Approved && !Busy.IsBusy);
         _ = Load();
     }
 
@@ -60,6 +62,18 @@ public sealed class CamViewModel : ObservableObject
     public ICommand Approve { get; }
 
     public ICommand Return { get; }
+
+    /// <summary>Ponowne otwarcie zatwierdzonej estymacji z komentarzem (pole uwagi).</summary>
+    public ICommand Reopen { get; }
+
+    /// <summary>Na liście także zatwierdzone estymacje cyklu (do ponownego otwarcia).</summary>
+    public bool ShowApproved
+    {
+        get => _showApproved;
+        set { if (SetProperty(ref _showApproved, value)) _ = LoadPending(); }
+    }
+
+    private const string Reopened = "reopen";
 
     public IReadOnlyList<CamPerson> Cams { get => _cams; private set => SetProperty(ref _cams, value); }
 
@@ -237,34 +251,49 @@ public sealed class CamViewModel : ObservableObject
         });
     }
 
-    private async Task LoadPending()
+    /// <param name="message">Komunikat po decyzji – zostaje na ekranie zamiast stanu listy.</param>
+    private async Task LoadPending(string? message = null)
     {
         await Try(async () =>
         {
             var cycle = _cycle ?? await Busy.Run("Cykl…", _service.Cycle);
-            var pending = await Busy.Run("Estymacje do zatwierdzenia…", () => _service.Pending(cycle));
+            var pending = await Busy.Run("Estymacje do zatwierdzenia…",
+                () => _showApproved ? [.. _service.Pending(cycle), .. _service.Approved(cycle)] : _service.Pending(cycle));
             Pending.Clear();
             foreach (var e in pending)
                 Pending.Add(new CamPendingRow(e, e.Project, e.Wp, e.Cam, PolishNumber.ToDisplay(Math.Round(e.Total(CamLineKinds.Hours), 0), 0) + " h",
                     $"{PolishNumber.ToDisplay(Math.Round(e.Total(CamLineKinds.Material), 0), 0)} {e.Currency}", e.ForecastFinish?.ToString("yyyy-MM-dd") ?? "—",
-                    e.Justification ?? "", $"{e.SubmittedAt?.LocalDateTime:yyyy-MM-dd HH:mm} · {e.SubmittedBy}"));
-            Status = pending.Count == 0 ? "Brak estymacji do zatwierdzenia w tym cyklu." : "";
+                    e.Justification ?? "", $"{e.SubmittedAt?.LocalDateTime:yyyy-MM-dd HH:mm} · {e.SubmittedBy}", e.Status,
+                    e.Status == CamStatuses.Approved ? $"{e.ReviewedAt?.LocalDateTime:yyyy-MM-dd HH:mm} · {e.ReviewedBy}" : ""));
+            Status = message ?? (pending.Count > 0 ? "" : _showApproved ? "Brak wysłanych i zatwierdzonych estymacji w tym cyklu." : "Brak estymacji do zatwierdzenia w tym cyklu.");
         });
     }
 
-    private async Task Review(bool approve)
+    /// <param name="decision">CamStatuses.Approved – zatwierdź, CamStatuses.Returned – zwróć z uwagą, Reopened – otwórz ponownie z komentarzem.</param>
+    private async Task Review(string decision)
     {
         if (_selectedPending is not { } row)
             return;
         await Try(async () =>
         {
-            var outcome = await Busy.Run(approve ? "Zatwierdzanie – zapis w „Harmonogram i budżet”…" : "Zwrot do CAM-a…",
-                () => approve ? _service.Approve(row.Estimate) : _service.Return(row.Estimate, _reviewNote));
+            var note = _reviewNote;
+            var outcome = await Busy.Run(decision switch
+                {
+                    CamStatuses.Approved => "Zatwierdzanie – zapis w „Harmonogram i budżet”…",
+                    CamStatuses.Returned => "Zwrot do CAM-a…",
+                    _ => "Ponowne otwarcie estymacji…",
+                },
+                () => decision switch
+                {
+                    CamStatuses.Approved => _service.Approve(row.Estimate),
+                    CamStatuses.Returned => _service.Return(row.Estimate, note),
+                    _ => _service.Reopen(row.Estimate, note),
+                });
             Status = outcome.Message;
             if (outcome.Ok)
             {
                 ReviewNote = "";
-                await LoadPending();
+                await LoadPending(outcome.Message);
             }
         });
     }
