@@ -58,6 +58,9 @@ public sealed class RunService(IRunStore store, AppServices services, Func<ISour
 
     public IReadOnlyDictionary<string, RunPinRow> Latest() => store.Latest();
 
+    /// <summary>Dziennik przebiegu (wszystkie uruchomienia tygodnia): wpisy obszaru Przebiegi z kodem przebiegu, od najnowszego.</summary>
+    public IReadOnlyList<JournalEntry> RunLog(string code, int count = 200) => services.Journal.ForScope(Area, code, count);
+
     /// <summary>
     /// Pierwszy otwarty okres: bieżący, a w pierwszych SettlementDays dniach okresu – poprzedni (rozliczenie
     /// poprzedniego okresu jeszcze trwa). Okres z kalendarza (RRRR-MM) = okres księgowy SAP.
@@ -94,6 +97,8 @@ public sealed class RunService(IRunStore store, AppServices services, Func<ISour
             var week = store.Week(services.Clock.Now.Date);
             if (week is null)
                 return new RunOutcome(project, null, RunStatuses.Failed, 1, 0, $"Dzień {services.Clock.Now:yyyy-MM-dd} nie ma tygodnia w kalendarzu okresów (Słowniki → Kalendarz okresów)");
+            if (store.FrozenIn(project, week.Year, week.Week) is { } frozen)
+                return new RunOutcome(project, null, RunStatuses.Failed, 1, 0, $"Nowe uruchomienie odrzucone – {frozen.FrozenText}");
             var (headers, steps, elements) = store.DefinitionRows();
             var assigned = store.AssignedDefinition(project);
             var definition = RunDefinitions.For(headers, steps, elements, assigned, store.ProjectType(project) ?? "");
@@ -149,11 +154,40 @@ public sealed class RunService(IRunStore store, AppServices services, Func<ISour
                     : $"estymacje CAM zaakceptowane – zatwierdzone {review.Approved} z {review.Required} wymaganych" +
                       (review.Approved < review.Required ? $", bez zatwierdzenia {review.Required - review.Approved}" : "");
             }
+            if (step.Action == RunActions.ClosePeriod && step.Status != RunStepStatuses.Failed)
+            {
+                store.SetFrozen(pin.RunId, pinId, at, services.User.Account);
+                what = $"okres {pin.Period} zamknięty – uruchomienie zamrożone";
+            }
             store.SetStep(pinId, stepNo, RunStepStatuses.Done, step.StartedAt, step.FinishedAt ?? at, services.User.Account, step.Errors, step.Warnings,
                 $"{at.ToLocalTime():yyyy-MM-dd HH:mm} {services.User.Account} – {what}: {comment.Trim()}");
             services.Journal.Add(Area, $"Przebieg {pin.Code} #{pin.PinNo}: etap {stepNo} „{step.Name}” {what} – {comment.Trim()}", pin.Code);
             return Advance(pin, progress, cancellation);
         });
+
+    /// <summary>
+    /// „Otwórz zamknięcie” zamrożonego uruchomienia z komentarzem: przebieg tygodnia znów do zmian, etap Zamknięcie okresu – „Wymaga akcji”
+    /// (ponowne zatwierdzenie zamraża znowu); komentarz w etapie i dzienniku.
+    /// </summary>
+    public RunOutcome Reopen(long pinId, string comment) =>
+        WithPin(pinId, pin =>
+        {
+            var steps = store.Steps(pinId);
+            if (!pin.IsFrozenPin)
+                return Outcome(pin, steps, "Uruchomienie nie jest zamrożone.");
+            if (string.IsNullOrWhiteSpace(comment))
+                return Outcome(pin, steps, "Otwarcie zamknięcia wymaga komentarza.");
+            var at = services.Clock.Now;
+            store.SetFrozen(pin.RunId, null, null, null);
+            if (steps.LastOrDefault(s => s.Action == RunActions.ClosePeriod) is { } close)
+                store.SetStep(pinId, close.StepNo, RunStepStatuses.NeedsAction, close.StartedAt, close.FinishedAt, services.User.Account, close.Errors, close.Warnings,
+                    $"{(close.Comment is null ? "" : close.Comment + "\n")}{at.ToLocalTime():yyyy-MM-dd HH:mm} {services.User.Account} – zamknięcie otwarte ponownie: {comment.Trim()}");
+            steps = store.Steps(pinId);
+            var summary = RunWorkflowEngine.Summary(steps);
+            store.SetPinState(pinId, RunWorkflowEngine.PinStatus(steps), null, summary);
+            services.Journal.Add(Area, $"Przebieg {pin.Code} #{pin.PinNo}: zamknięcie okresu {pin.Period} otwarte ponownie – {comment.Trim()}", pin.Code);
+            return Outcome(store.Pin(pinId)!, steps, $"Zamknięcie okresu {pin.Period} otwarte – {summary}");
+        }, frozenAllowed: true);
 
     /// <summary>Ponowne wykonanie etapu (po poprawie danych albo słowników): późniejsze etapy – Nieaktualne, potem wykonanie do bramki.</summary>
     public RunOutcome Rerun(long pinId, int stepNo, IProgress<string>? progress = null, CancellationToken cancellation = default) =>
@@ -171,10 +205,13 @@ public sealed class RunService(IRunStore store, AppServices services, Func<ISour
             return Advance(pin, progress, cancellation);
         });
 
-    private RunOutcome WithPin(long pinId, Func<RunPinRow, RunOutcome> action)
+    /// <summary>Operacja na uruchomieniu pod blokadą przebiegu; przebieg zamrożony (zamknięcie okresu) – odrzucona, poza frozenAllowed.</summary>
+    private RunOutcome WithPin(long pinId, Func<RunPinRow, RunOutcome> action, bool frozenAllowed = false)
     {
         var pin = store.Pin(pinId) ?? throw new InvalidOperationException($"Nie ma uruchomienia przebiegu {pinId}.");
-        return Locked(pin.Project, () => action(store.Pin(pinId)!));
+        return Locked(pin.Project, () => store.Pin(pinId)! is var current && current.IsFrozen && !frozenAllowed
+            ? Outcome(current, store.Steps(pinId), $"Nie wykonano – {current.FrozenText}")
+            : action(current));
     }
 
     /// <summary>Operacja pod blokadą przebiegu programu (jeden naraz, także między komputerami); uruchomienia przerwane – „przerwany”.</summary>

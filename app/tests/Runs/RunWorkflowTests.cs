@@ -214,6 +214,28 @@ public sealed class RunWorkflowTests
     }
 
     [Fact]
+    public void Period_close_is_last_runs_only_in_closing_week_and_waits_for_approval()
+    {
+        var definition = new RunDefinition("Zamykający", RunRules.AllTypes, [.. RunDefinitions.FixedSteps, RunDefinitions.ActualsApproval(3), RunDefinitions.PeriodClose(4)]);
+        var header = new RunDefinitionHeaderRow(definition.Code, definition.ProjectType, true, null);
+        var values = RunDefinitionRows.StepValues(definition);
+
+        var read = RunDefinitions.Build(header, RunDefinitionRows.Steps([.. values.Select(v => new DictRow(null, null, v))]), []);
+        // Wiersz bez warunku (np. wpisany ręcznie w słowniku) – klocek i tak tylko w przebiegu zamykającym.
+        var bare = RunDefinitions.Build(header, RunDefinitionRows.Steps([.. values.Select(v => new DictRow(null, null,
+            v.ToDictionary(c => c.Key, c => c.Key == "Warunek" ? null : c.Value)))]), []);
+
+        Assert.Empty(RunDefinitions.Validate(definition));
+        Assert.Equal((RunActions.ClosePeriod, RunConditions.Closing, true), (read.Steps[3].Action, read.Steps[3].Condition, read.Steps[3].NeedsApproval));
+        Assert.Equal((true, false), (bare.Steps[3].RunsIn(closingWeek: true), bare.Steps[3].RunsIn(closingWeek: false)));
+        Assert.True(RunActions.IsSystem(RunActions.ClosePeriod));
+        Assert.Contains(RunDefinitions.Validate(definition with { Steps = [.. RunDefinitions.FixedSteps, RunDefinitions.PeriodClose(3), RunDefinitions.ActualsApproval(4)] }),
+            i => i.Message.StartsWith("Klocek „Zamknięcie okresu” – tylko jako ostatni etap"));
+        Assert.Contains(RunDefinitions.Validate(definition with { Steps = [.. RunDefinitions.FixedSteps, RunDefinitions.PeriodClose(3), RunDefinitions.PeriodClose(4) with { Name = "Drugie" }] }),
+            i => i.Message == "Klocek „Zamknięcie okresu” – najwyżej jeden w szablonie");
+    }
+
+    [Fact]
     public void Built_in_definition_checks_actuals_then_ev_starter_rules_and_ends_with_approval()
     {
         var builtIn = RunDefinitions.BuiltIn;

@@ -23,7 +23,8 @@ public sealed class SqlRunStore(SqlDatabase db) : IRunStore
 
     private string PinColumns =>
         "p.PinId, p.RunId, r.Code, r.Project, p.PinNo, p.StartedAt, p.StartedBy, p.FinishedAt, p.Status, p.ImportBatchId, p.Rows, p.GrossCost, p.Balance, " +
-        $"p.Errors, p.Warnings, p.Summary, p.AmountField, r.IsClosing AS IsClosingWeek, r.Period, CAST(CASE WHEN {PeriodClose} THEN 1 ELSE 0 END AS BIT) AS IsPeriodClose";
+        $"p.Errors, p.Warnings, p.Summary, p.AmountField, r.IsClosing AS IsClosingWeek, r.Period, CAST(CASE WHEN {PeriodClose} THEN 1 ELSE 0 END AS BIT) AS IsPeriodClose, " +
+        "r.FrozenPinId, r.FrozenAt, r.FrozenBy";
 
     /// <summary>Zamknięcie okresu: ostatnie zakończone uruchomienie (zakończony / z ostrzeżeniami / z błędami) przebiegu tygodnia zamykającego.</summary>
     private string PeriodClose =>
@@ -467,6 +468,21 @@ public sealed class SqlRunStore(SqlDatabase db) : IRunStore
     {
         using var connection = db.Open();
         return connection.QueryFirstOrDefault<RunPinRow>($"SELECT {PinColumns} FROM {PinFrom} WHERE p.PinId = @pinId", new { pinId });
+    }
+
+    public RunPinRow? FrozenIn(string project, int year, int week)
+    {
+        using var connection = db.Open();
+        return connection.QueryFirstOrDefault<RunPinRow>(
+            $"SELECT {PinColumns} FROM {PinFrom} WHERE r.Project = @project AND r.Year = @year AND r.Week = @week AND p.PinId = r.FrozenPinId",
+            new { project, year, week });
+    }
+
+    public void SetFrozen(long runId, long? pinId, DateTimeOffset? at, string? user)
+    {
+        using var connection = db.Open();
+        connection.Execute($"UPDATE {_runs} SET FrozenPinId = @pinId, FrozenAt = @at, FrozenBy = @user WHERE RunId = @runId",
+            new { runId, pinId, at, user });
     }
 
     public CalendarWeek RunWeek(long runId)

@@ -331,6 +331,77 @@ public sealed class RunServiceTests : IDisposable
         Assert.Single(cams.Notified);
     }
 
+    /// <summary>
+    /// Zamknięcie okresu (klocek „Zamknięcie okresu”): w środku okresu pominięte; w tygodniu zamykającym czeka na zatwierdzenie – uruchomienie
+    /// rozpoczęte przez analityka zatwierdza inna osoba (kontynuacja przebiegu), uruchomienie zostaje zamrożone: ponowne wykonanie, potwierdzenie
+    /// i nowe uruchomienie w tym tygodniu odrzucone; „Otwórz zamknięcie” z komentarzem zdejmuje blokadę. Dziennik przebiegu – zdarzenia z kodem przebiegu.
+    /// </summary>
+    [SqlFact]
+    public void Period_close_freezes_the_run_until_reopened_with_a_comment()
+    {
+        _database = new TestDatabase(presets: true);
+        var app = _services.App(_root, _database.Sql);
+        var tree = new PoTree();
+        tree.AddElement(null, "2DI473", "PAF2", null);
+        Assert.True(new SqlProjectStore(_database.Sql, _services.Clock, _services.User).Create("PAF", "PAF", ProjectTypes.Internal, tree).Success);
+        var store = new SqlRunStore(_database.Sql);
+        var templates = new RunTemplateService(new PzlEv.Shared.Utils.Dictionaries.DictionaryService(new PzlEv.Shared.Utils.Dictionaries.SqlDictionaryStore(_database.Sql,
+            _services.Clock, _services.User, PzlEv.Shared.Utils.Dictionaries.GlobalDictionaries.Tables), app.Journal), store);
+        Assert.Equal(PzlEv.Shared.Models.Dictionaries.SaveStatus.Saved,
+            templates.Save(new RunDefinition("Z – zamknięcie", ProjectTypes.Internal, [.. RunDefinitions.FixedSteps, RunDefinitions.PeriodClose(3)]), isActive: true).Status);
+        var service = new RunService(store, app);
+
+        service.Execute("PAF");                                                                     // tydzień 40 – w środku okresu
+        var mid = store.Pins("PAF", 1)[0];
+        Assert.Equal(RunStepStatuses.Done, store.Steps(mid.PinId)[2].Status);
+        Assert.StartsWith("Etap pominięty – przebieg w środku okresu", Assert.Single(store.Issues(mid.PinId), i => i.StepNo == 3).Message);
+        Assert.False(store.Pin(mid.PinId)!.IsFrozen);
+
+        while (!store.Week(_services.Clock.Now.Date)!.IsClosing)
+            _services.Clock.Advance(TimeSpan.FromDays(7));
+        service.Execute("PAF");
+        var pin = store.Pins("PAF", 1)[0];
+        Assert.Equal((RunStepStatuses.NeedsAction, RunStatuses.NeedsAction), (store.Steps(pin.PinId)[2].Status, store.Pin(pin.PinId)!.Status));
+        Assert.Equal(@"PZL\analityk", pin.StartedBy);
+
+        // Kontynuacja przez inną osobę: zatwierdzenie zamknięcia zamraża uruchomienie.
+        _services.User.Account = @"PZL\kierownik";
+        Assert.Equal("Potwierdzenie wymaga komentarza.", service.Confirm(pin.PinId, 3, " ").Summary);
+        service.Confirm(pin.PinId, 3, "Okres zamknięty po przeglądzie");
+
+        var frozen = store.Pin(pin.PinId)!;
+        var close = store.Steps(pin.PinId)[2];
+        Assert.Equal((true, true, @"PZL\kierownik", true), (frozen.IsFrozenPin, frozen.IsPeriodClose, frozen.FrozenBy, frozen.FinishedAt is not null));   // zakończone
+        Assert.Equal((RunStepStatuses.Done, @"PZL\kierownik"), (close.Status, close.ActedBy));
+        Assert.Contains($"okres {frozen.Period} zamknięty – uruchomienie zamrożone: Okres zamknięty po przeglądzie", close.Comment);
+        Assert.EndsWith(" · zamrożone", frozen.Label);
+        Assert.StartsWith("Nie wykonano – Okres", service.Rerun(pin.PinId, 2).Summary);
+        Assert.Equal(RunStepStatuses.Done, store.Steps(pin.PinId)[1].Status);
+        var refused = service.Execute("PAF");
+        Assert.True(refused.Failed);
+        Assert.StartsWith($"Nowe uruchomienie odrzucone – Okres {frozen.Period} zamknięty", refused.Summary);
+        Assert.Equal(pin.PinId, store.Pins("PAF", 1)[0].PinId);
+        Assert.Equal(frozen.PinId, store.FrozenIn("PAF", store.RunWeek(pin.RunId).Year, store.RunWeek(pin.RunId).Week)!.PinId);
+
+        // Otwórz zamknięcie: komentarz wymagany; etap znów czeka, nowe uruchomienie możliwe.
+        Assert.Equal("Otwarcie zamknięcia wymaga komentarza.", service.Reopen(pin.PinId, "").Summary);
+        service.Reopen(pin.PinId, "Korekta kosztów po zamknięciu");
+        var reopened = store.Pin(pin.PinId)!;
+        Assert.Equal((false, RunStatuses.NeedsAction), (reopened.IsFrozen, reopened.Status));
+        Assert.Equal(RunStepStatuses.NeedsAction, store.Steps(pin.PinId)[2].Status);
+        Assert.EndsWith(@"PZL\kierownik – zamknięcie otwarte ponownie: Korekta kosztów po zamknięciu", store.Steps(pin.PinId)[2].Comment);
+        Assert.Equal("Uruchomienie nie jest zamrożone.", service.Reopen(pin.PinId, "ponownie").Summary);
+        service.Execute("PAF");
+        Assert.Equal(2, store.Pins("PAF", 1)[0].PinNo);
+
+        var log = service.RunLog(pin.Code);
+        Assert.Contains(log, j => j.User == @"PZL\kierownik" && j.Message.Contains($"okres {frozen.Period} zamknięty – uruchomienie zamrożone"));
+        Assert.Contains(log, j => j.Message.Contains("zamknięcie okresu") && j.Message.Contains("otwarte ponownie – Korekta kosztów"));
+        Assert.Contains(log, j => j.User == @"PZL\analityk" && j.Message.Contains("#1") && j.Message.Contains("rozpoczęty"));
+        Assert.All(log, j => Assert.Equal(pin.Code, j.Scope));
+        Assert.True(log.Zip(log.Skip(1)).All(p => p.First.Id > p.Second.Id));                     // od najnowszego
+    }
+
     [Fact]
     public void Previous_period_stays_open_during_settlement_days()
     {

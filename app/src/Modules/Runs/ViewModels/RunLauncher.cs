@@ -39,6 +39,13 @@ public sealed class RunLauncher(RunService service, IRunStore store, Func<ISourc
     public Task<string?> Confirm(string project, long pinId, int stepNo, string comment) =>
         Launch(project, (progress, cancellation) => service.Confirm(pinId, stepNo, comment, progress, cancellation), $"Etap {stepNo} potwierdzony…");
 
+    /// <summary>Dziennik przebiegu (kod przebiegu) – panel uruchomienia.</summary>
+    public IReadOnlyList<JournalEntry> Log(string code) => service.RunLog(code);
+
+    /// <summary>„Otwórz zamknięcie” zamrożonego uruchomienia z komentarzem.</summary>
+    public Task<string?> Reopen(string project, long pinId, string comment) =>
+        Launch(project, (_, _) => service.Reopen(pinId, comment), "Otwieranie zamknięcia okresu…");
+
     /// <summary>Ponowne wykonanie etapu, potem dalsze etapy.</summary>
     public Task<string?> Rerun(string project, long pinId, int stepNo) =>
         Launch(project, (progress, cancellation) => service.Rerun(pinId, stepNo, progress, cancellation), $"Etap {stepNo} – ponowne wykonanie…");

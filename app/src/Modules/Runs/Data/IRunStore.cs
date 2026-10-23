@@ -116,6 +116,12 @@ public interface IRunStore
     /// <summary>Uruchomienie po identyfikatorze; null – brak.</summary>
     RunPinRow? Pin(long pinId);
 
+    /// <summary>Zamrożone uruchomienie przebiegu projektu w tygodniu (klocek „Zamknięcie okresu”); null – przebieg niezamrożony albo brak.</summary>
+    RunPinRow? FrozenIn(string project, int year, int week);
+
+    /// <summary>Zamrożenie przebiegu (meta.Run, migracja 058): uruchomienie, kto i kiedy; pinId null – „Otwórz zamknięcie”.</summary>
+    void SetFrozen(long runId, long? pinId, DateTimeOffset? at, string? user);
+
     /// <summary>Tydzień przebiegu (meta.Run) – okres i czy zamyka okres.</summary>
     CalendarWeek RunWeek(long runId);
 

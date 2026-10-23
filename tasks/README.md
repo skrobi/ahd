@@ -83,12 +83,12 @@ zmiana zakresu zadania w trakcie realizacji wymaga uzgodnienia.
 
 | Zadanie | Moduł | Zależy od | Otwarte kwestie | Status |
 |---|---|---|---|---|
-| [F5.1 P0 Uruchomienie przebiegu](F5.1-p0-uruchomienie-przebiegu.md) | Runs | F0.6, F4.5, F1.2 | O36 | w toku – P0/P1 i kontrole ACTUALS (RunService, reguły walidacji w SQL – F5.7; migracje 027/028) |
+| [F5.1 P0 Uruchomienie przebiegu](F5.1-p0-uruchomienie-przebiegu.md) | Runs | F0.6, F4.5, F1.2 | O36 | w toku – uruchomienie, przypięcie, kontrole; zostały: wybór tygodnia, świeżość danych produkcji, data stanu (O36) |
 | [F5.2 P1 Przypięcie stanu](F5.2-p1-przypiecie-stanu.md) | Runs | F5.1, F2.3, F3.2 | O30, O45 | zrobione – dane ACTUALS przypięte; słowniki bez zamrażania, zmiana w banerze (F5.3) |
 | [F5.3 Zmiana po przypięciu](F5.3-zmiana-po-przypieciu.md) | Runs | F5.2 | – | zrobione – wersja informacyjna (baner zmian) |
 | [F5.4 P2 Walidacja](F5.4-p2-walidacja.md) | Runs | F5.2 | O25 | zrobione – kontrole z testami, „Popraw w aplikacji” (migracja 055, 0.61.0) |
-| [F5.5 Z Zamknięcie okresu](F5.5-z-zamkniecie-okresu.md) | Runs | F8.2 | – | w toku – znacznik zamknięcia okresu (★) i porównania między zamknięciami; rewizja EV i zamrożenie – po F8.2 |
-| [F5.6 Ekrany Przebiegi i Przebieg](F5.6-ekrany-przebiegi-i-przebieg.md) | Runs | F5.1–F5.4 | – | w toku – szablony przebiegów (kafelki), przebieg w programie (etapy, macierz, porównanie), Zmiany ACWP |
+| [F5.5 Z Zamknięcie okresu](F5.5-z-zamkniecie-okresu.md) | Runs | F8.2 | – | w toku – znacznik ★, klocek „Zamknięcie okresu” z zamrożeniem i otwarciem (058); rewizja EV – po F8.2 |
+| [F5.6 Ekrany Przebiegi i Przebieg](F5.6-ekrany-przebiegi-i-przebieg.md) | Runs | F5.1–F5.4 | – | w toku – szablony (klocki), przebieg w programie, dziennik, Zmiany ACWP; zostały: rewizje EV i klocki F6–F9 |
 | [F5.7 Reguły walidacji w SQL – jeden edytor](F5.7-reguly-walidacji-sql.md) | Runs | F5.4, F5.6 | – | zrobione (migracja 051, 0.59.0) – wyniki: problemy i linie ACTUALS wiersza (O53) |
 | [F5.8 Kontrole P2 spoza zrzutu ACTUALS](F5.8-kontrole-spoza-zrzutu-actuals.md) | Runs | F5.4 | O27, O50 | zablokowane (O27, O50) – daty księgowania, duplikaty między częściami |
 

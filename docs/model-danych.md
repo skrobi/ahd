@@ -524,6 +524,11 @@ etapu szablonu (puste – każdy przebieg, „Przebieg zamykający”), `DICT_Ru
 uruchomienie przebiegu, WP w wiadomości, wynik: wysłano / brak adresu / błąd, opis błędu). Usunięcie programu usuwa jego powiadomienia.
 Wymaga aplikacji 0.63.0.
 
+**Migracja `sql/mssql/058_zamkniecie_okresu.sql`:** `META_Run.FrozenPinId` / `FrozenAt` / `FrozenBy` – uruchomienie zatwierdzone
+w klocku „Zamknięcie okresu” (przebieg tygodnia zamrożony – tylko do odczytu, bez nowych uruchomień; „Otwórz zamknięcie” czyści kolumny;
+`docs/pipeline-fazy.md`, Z); indeks `META_Journal (Scope, Id)` – dziennik przebiegu na panelu (wpisy obszaru „Przebiegi” z kodem
+przebiegu). Wymaga aplikacji 0.64.0.
+
 `META_SourceFile.CanonicalStatus`: „utworzone” – dane kanoniczne zapisane i sprawdzone (widoczne dla odczytów),
 „w toku” – zapis wierszy trwa (odczyty pomijają plik; po awarii wpis i wiersze są usuwane), inna wartość – powód
 braku danych (źródło bez parsera).

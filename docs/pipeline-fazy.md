@@ -231,14 +231,16 @@ Finanse: podsumowanie i WARNING dla każdego wymaganego WP (z CAM-em, niezakońc
 (wymagane, zatwierdzone, wysłane, u CAM-a, brak), lista WP i decyzje: zatwierdź (ETC HOURS, ETC MATERIAL, Forecast i Actual Start /
 Koniec w „Harmonogram i budżet”), zwróć z uwagą, otwórz ponownie zatwierdzoną z komentarzem (ostatnie uruchomienie); „Zaakceptuj
 estymacje i dalej” z komentarzem, także z brakami – wynik etapu to stan w chwili akceptacji (z wynikami powiadomień; WP bez zatwierdzonej
-estymacji liczą ETC jak dotąd: wpis w „Harmonogram i budżet” albo produkcja). **Struktura programu** (ACWP, Actual DLH,
+estymacji liczą ETC jak dotąd: wpis w „Harmonogram i budżet” albo produkcja). Klocek systemowy **Zamknięcie okresu** (najwyżej jeden,
+zawsze ostatni etap; „+ Zamknięcie okresu”; F5.5) – zawsze z warunkiem „Przebieg zamykający” (w innym tygodniu pominięty); przebieg czeka,
+aż analityk zatwierdzi zamknięcie z komentarzem („Zatwierdź zamknięcie okresu”) – uruchomienie zostaje **zamrożone** (Z). **Struktura programu** (ACWP, Actual DLH,
 ACWP Labor / Material, wskaźniki) pokazuje dane ACTUALS w stanie z przypięcia ostatniego uruchomienia z zakończonym tym etapem (uruchomienie bez tego
 etapu w definicji – z zakończonym pierwszym etapem walidacji, czyli walidacją ACTUALS, także z zaakceptowanymi błędami)
 (pliki zaimportowane do końca etapu Przypięcie stanu – `@AsOf` procedur `REP_ProjectCostsByElement` / `REP_ProjectCasCosts`, migracja
 054; `SqlProjectStore.ApprovedActuals`): nowy import RABIT ani przebieg bez zatwierdzenia (także ponowne wykonanie wcześniejszego etapu –
 zatwierdzenie Nieaktualne) nie zmieniają struktury. Bez zatwierdzonego uruchomienia – ostatni import (status w zakładce Wskaźniki „ACTUALS struktury:
 ostatni import – niezatwierdzone”). Słowniki (Cost Category, Wykluczenia) – bieżące. Zapis sprawdza strukturę (`RunDefinitions.Validate`:
-etapy stałe na początku, najwyżej jedno Zatwierdzenie ACTUALS, nazwy etapów bez powtórzeń, etap walidacji z regułą, reguły istniejące
+etapy stałe na początku, klocki systemowe najwyżej po jednym, Zamknięcie okresu – ostatni, nazwy etapów bez powtórzeń, etap walidacji z regułą, reguły istniejące
 w regułach walidacji) i zapisuje szablon w słownikach globalnych „Definicje
 przebiegów”, „Etapy przebiegów”, „Elementy kontrolne etapów” (historia; `docs/slowniki.md`, rozdz. 2;
 `Modules/Runs/Services/RunTemplateService.cs`). Szablonu wybranego w programach nie można usunąć.
@@ -450,13 +452,21 @@ Kontrole wymagające innych danych spoza zrzutu (odbiorca rozliczenia, suma kont
 
 ### Z. Zamknięcie okresu
 
+**Wdrożone – zamrożenie (klocek „Zamknięcie okresu”, migracja 058, decyzja użytkownika 2026-10-23):** szablon z klockiem „Zamknięcie
+okresu” (ostatni etap, tylko tydzień zamykający) czeka po pozostałych etapach na zatwierdzenie z komentarzem; zatwierdzenie zamraża
+uruchomienie (`META_Run.FrozenPinId`, `FrozenAt`, `FrozenBy`) – przebieg tygodnia tylko do odczytu: ponowne wykonanie etapów,
+potwierdzenia, decyzje ETC w panelu etapu i nowe uruchomienie w tym tygodniu są odrzucane (baner na panelu, „· zamrożone” na liście
+uruchomień). **Otwórz zamknięcie** (zamrożone uruchomienie, wymagany komentarz – etap i dziennik) zdejmuje blokadę: etap Zamknięcie
+okresu znów „Wymaga akcji”, możliwe ponowne wykonanie etapów i nowe uruchomienie; ponowne zatwierdzenie zamraża znowu
+(`RunService.Confirm` / `Reopen`). Szablon bez klocka – bez zamrażania (znacznik ★ jak niżej). Rewizja EV jako wynik okresu – po F8.2.
+
 **Wdrożone (decyzja użytkownika 2026-10-20) – znacznik zamknięcia bez osobnego zatwierdzenia:** każdy przebieg kończy się tak samo
 (ostatni etap szablonu, np. zatwierdzenie analityka, zapisuje wynik niezależnie od tego, czy tydzień jest zwykły, czy zamykający).
 Tydzień oznaczony w kalendarzu okresów jako zamknięcie (`META_Run.IsClosing`) – uruchomienia „tydzień zamykający”; ostatnie
 zakończone uruchomienie tego tygodnia (zakończony / z ostrzeżeniami / z błędami) to **zamknięcie okresu RRRR-MM** (★,
 `RunPinRow.IsPeriodClose`, `SqlRunStore.ClosingPins`) – znacznik na listach uruchomień (zakładka Przebieg, lista programów, okno
 „Zmiany ACWP”); porównanie uruchomień – wszystkie zamknięcia do wyboru i „Tylko zamknięcia okresów” (domyślnie dwa ostatnie –
-„od zamknięcia do zamknięcia”). Bez zamrażania przebiegu i bez rewizji EV (F8.2). Opis docelowy poniżej.
+„od zamknięcia do zamknięcia”). Zamrożone uruchomienie jest ostatnim zakończonym w tygodniu – ma znacznik ★. Opis docelowy poniżej.
 
 | | |
 |---|---|
