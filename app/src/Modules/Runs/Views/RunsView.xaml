@@ -279,6 +279,8 @@
                                 ToolTip="Klocek systemowy (najwyżej jeden): analityk zatwierdza dane ACTUALS przebiegu – od zatwierdzenia struktura programu pokazuje koszty z tego przebiegu" />
                         <Button Content="+ Zatwierdzenie ETC" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding AddCamEstimates}"
                                 ToolTip="Klocek systemowy (najwyżej jeden): Finanse zatwierdzają ETC wprowadzone przez CAM-ów – powiadomienie CAM-ów z zaległościami, zatwierdź / zwróć / otwórz ponownie, akceptacja z komentarzem; warunek wyznacza cykl estymacji (każdy przebieg – tygodniowy, przebieg zamykający – miesięczny)" />
+                        <Button Content="+ Łączenie źródeł" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding AddReconciliation}"
+                                ToolTip="Klocek systemowy (najwyżej jeden): koszt uruchomienia przypisany do WP, CAM i Cost Category jak w strukturze programu, suma kontrolna; koszt bez przypisania – w środku okresu ostrzeżenie (potwierdzenie „Kontynuuj bez tych elementów”), w przebiegu zamykającym błąd" />
                         <Button Content="+ Zamknięcie okresu" Style="{StaticResource Btn}" Command="{Binding AddPeriodClose}"
                                 ToolTip="Klocek systemowy (najwyżej jeden, ostatni etap; tylko przebieg zamykający): analityk zatwierdza zamknięcie okresu z komentarzem – uruchomienie zostaje zamrożone (tylko do odczytu, bez nowych uruchomień w tym tygodniu); „Otwórz zamknięcie” z komentarzem zdejmuje blokadę" />
                     </StackPanel>

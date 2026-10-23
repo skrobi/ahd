@@ -23,7 +23,8 @@ public sealed record RunStepView(RunStepRow Row, string Gate, string? Descriptio
     public string ConfirmText => Row.Status == RunStepStatuses.Failed ? "Zaakceptuj błędy i dalej"
         : Row.Action == RunActions.ApproveActuals ? "Zatwierdź dane ACTUALS i dalej"
         : Row.Action == RunActions.ApproveEtc ? "Zaakceptuj estymacje i dalej"
-        : Row.Action == RunActions.ClosePeriod ? "Zatwierdź zamknięcie okresu" : "Potwierdź i dalej";
+        : Row.Action == RunActions.ClosePeriod ? "Zatwierdź zamknięcie okresu"
+        : Row.Action == RunActions.Reconcile ? "Kontynuuj bez tych elementów" : "Potwierdź i dalej";
 
     public bool HasComment => !string.IsNullOrWhiteSpace(Row.Comment);
 

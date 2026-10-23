@@ -402,6 +402,90 @@ public sealed class RunServiceTests : IDisposable
         Assert.True(log.Zip(log.Skip(1)).All(p => p.First.Id > p.Second.Id));                     // od najnowszego
     }
 
+    /// <summary>Przypisanie kosztów jak w strukturze (atrapa): element 2DI473001001 → WP-1, pozostałe – bez WP.</summary>
+    private sealed class FakeCostAssignment : ICostAssignment
+    {
+        public IReadOnlyDictionary<string, decimal>? Asked { get; private set; }
+
+        public bool AssignAll { get; set; }
+
+        public CostAssignment Assign(string project, IReadOnlyDictionary<string, decimal> costs)
+        {
+            Asked = costs;
+            return new CostAssignment(costs.Keys.Select(k => AssignAll || k == "2DI473001001"
+                ? new CostTarget(k, "WP-1", "0577", "Production", null) : new CostTarget(k, null, null, null, CostGaps.NoWp)).ToList(), null);
+        }
+    }
+
+    /// <summary>
+    /// Łączenie źródeł (klocek): koszt „ev” uruchomienia przypisany do WP jak w strukturze i zapisany w uruchomieniu; suma kontrolna; koszt
+    /// bez przypisania – w środku okresu WARNING (potwierdzenie „Kontynuuj bez tych elementów”), w przebiegu zamykającym ERROR; pełne
+    /// przypisanie – etap zakończony; bez modułu Projekty – ERROR.
+    /// </summary>
+    [SqlFact]
+    public void Reconciliation_assigns_run_costs_to_wps_and_stops_on_unassigned_cost()
+    {
+        _database = new TestDatabase(presets: true);
+        var app = _services.App(_root, _database.Sql);
+        var config = new SourceConfigService(new SqlSourceConfigStore(_database.Sql, _services.Clock, _services.User), app.Journal);
+        var rabit = Assert.Single(config.Locations());
+        Assert.True(config.SaveLocation(new LocationInput(rabit.LocationId, rabit.Version, rabit.Name, rabit.Path, Active: false)).Success);
+        var import = new ImportService(new SqlImportStore(_database.Sql), app);
+        Directory.CreateDirectory(app.Config.ImportFolder);
+        File.Copy(TestServices.TestData("RABIT", "ACTUALS_PAF_01.csv"), Path.Combine(app.Config.ImportFolder, "ACTUALS_PAF_01.csv"));
+        Assert.Equal(FileDecisions.Imported, Assert.Single(import.Run().Files).Decision);
+        var tree = new PoTree();
+        tree.AddElement(null, "2DI473", "PAF2", null);
+        Assert.True(new SqlProjectStore(_database.Sql, _services.Clock, _services.User).Create("PAF", "PAF", ProjectTypes.Internal, tree).Success);
+        var store = new SqlRunStore(_database.Sql);
+        var templates = new RunTemplateService(new PzlEv.Shared.Utils.Dictionaries.DictionaryService(new PzlEv.Shared.Utils.Dictionaries.SqlDictionaryStore(_database.Sql,
+            _services.Clock, _services.User, PzlEv.Shared.Utils.Dictionaries.GlobalDictionaries.Tables), app.Journal), store);
+        Assert.Equal(PzlEv.Shared.Models.Dictionaries.SaveStatus.Saved,
+            templates.Save(new RunDefinition("Ł – łączenie", ProjectTypes.Internal, [.. RunDefinitions.FixedSteps, RunDefinitions.Reconciliation(3)]), isActive: true).Status);
+        var costs = new FakeCostAssignment();
+        var service = new RunService(store, app, costs: () => costs);
+
+        service.Execute("PAF");                                                                     // tydzień 40 – w środku okresu
+
+        var pin = store.Pins("PAF", 1)[0];
+        var asked = costs.Asked!;
+        Assert.Contains("2DI473001001", asked.Keys);
+        Assert.True(asked.Count > 1);                                                               // dane testowe – kilka elementów WBS
+        var saved = store.CostAssignment(pin.PinId);
+        Assert.Equal(asked.Keys.Order(StringComparer.OrdinalIgnoreCase), saved.Select(r => r.Target.WbsElement));
+        Assert.Equal(asked.Values.Sum(), saved.Sum(r => r.Amount));
+        Assert.Equal(("WP-1", "0577", "Production"), saved.Where(r => r.Target.WbsElement == "2DI473001001").Select(r => (r.Target.Wp, r.Target.Cam, r.Target.CostCategory)).Single());
+        Assert.Equal(RunStepStatuses.NeedsAction, store.Steps(pin.PinId)[2].Status);
+        var issues = store.Issues(pin.PinId).Where(i => i.StepNo == 3).ToList();
+        var unassigned = asked.Where(c => c.Key != "2DI473001001" && c.Value != 0).ToList();
+        Assert.Equal(unassigned.Select(c => c.Key).Order(), issues.Where(i => i.Level == CheckLevel.Warning).Select(i => i.Element).Order());
+        Assert.All(issues.Where(i => i.Level == CheckLevel.Warning), i => Assert.EndsWith($"bez przypisania do WP – {CostGaps.NoWp}", i.Message));
+        Assert.Contains(issues, i => i.Level == CheckLevel.Pass && i.CheckName == RunService.Coverage && i.Message.Contains("przypisany do 1 WP")
+                                     && i.Message.Contains($"({unassigned.Count} elementów – Kontynuuj bez tych elementów"));
+        Assert.DoesNotContain(issues, i => i.Message.StartsWith("Suma kontrolna"));
+        service.Confirm(pin.PinId, 3, "Elementy do przypisania w przyszłym tygodniu");
+        Assert.Equal(RunStepStatuses.Done, store.Steps(pin.PinId)[2].Status);
+
+        // Przebieg zamykający – koszt bez przypisania to ERROR.
+        while (!store.Week(_services.Clock.Now.Date)!.IsClosing)
+            _services.Clock.Advance(TimeSpan.FromDays(7));
+        service.Execute("PAF");
+        var closing = store.Pins("PAF", 1)[0];
+        Assert.Equal(RunStepStatuses.Failed, store.Steps(closing.PinId)[2].Status);
+        Assert.Equal(unassigned.Count, store.Issues(closing.PinId).Count(i => i.StepNo == 3 && i.Level == CheckLevel.Error));
+
+        // Pełne przypisanie – etap zakończony bez akcji; ponowne wykonanie zastępuje zapisany wynik.
+        costs.AssignAll = true;
+        service.Rerun(closing.PinId, 3);
+        Assert.Equal(RunStepStatuses.Done, store.Steps(closing.PinId)[2].Status);
+        Assert.All(store.CostAssignment(closing.PinId), r => Assert.Equal("WP-1", r.Target.Wp));
+
+        // Bez kontraktu (moduł Projekty niedostępny) – ERROR.
+        var without = new RunService(store, app);
+        without.Rerun(closing.PinId, 3);
+        Assert.StartsWith("Łączenie źródeł niedostępne", Assert.Single(store.Issues(closing.PinId), i => i.StepNo == 3).Message);
+    }
+
     [Fact]
     public void Previous_period_stays_open_during_settlement_days()
     {

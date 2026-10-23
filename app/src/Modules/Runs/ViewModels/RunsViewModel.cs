@@ -61,6 +61,7 @@ public sealed class RunsViewModel : ObservableObject
         AddActualsApproval = new RelayCommand(_ => AddStep(RunDefinitions.ActualsApproval(0)),
             _ => HasEditor && Steps.All(s => !s.IsActualsApproval));
         AddCamEstimates = new RelayCommand(_ => AddStep(RunDefinitions.EtcApproval(0)), _ => HasEditor && Steps.All(s => !s.IsEtcApproval));
+        AddReconciliation = new RelayCommand(_ => AddStep(RunDefinitions.Reconciliation(0)), _ => HasEditor && Steps.All(s => !s.IsReconcile));
         AddPeriodClose = new RelayCommand(_ => AddStep(RunDefinitions.PeriodClose(0)), _ => HasEditor && Steps.All(s => !s.IsPeriodClose));
         MoveLeft = new RelayCommand(p => Move(p as RunStepTileViewModel, -1), p => CanMove(p as RunStepTileViewModel, -1));
         MoveRight = new RelayCommand(p => Move(p as RunStepTileViewModel, 1), p => CanMove(p as RunStepTileViewModel, 1));
@@ -93,6 +94,9 @@ public sealed class RunsViewModel : ObservableObject
 
     /// <summary>Klocek systemowy „Zatwierdzenie ETC” (najwyżej jeden).</summary>
     public ICommand AddCamEstimates { get; }
+
+    /// <summary>Klocek systemowy „Łączenie źródeł” (najwyżej jeden).</summary>
+    public ICommand AddReconciliation { get; }
 
     /// <summary>Klocek systemowy „Zamknięcie okresu” (najwyżej jeden, ostatni).</summary>
     public ICommand AddPeriodClose { get; }

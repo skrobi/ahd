@@ -232,7 +232,7 @@ Finanse: podsumowanie i WARNING dla każdego wymaganego WP (z CAM-em, niezakońc
 Koniec w „Harmonogram i budżet”), zwróć z uwagą, otwórz ponownie zatwierdzoną z komentarzem (ostatnie uruchomienie); „Zaakceptuj
 estymacje i dalej” z komentarzem, także z brakami – wynik etapu to stan w chwili akceptacji (z wynikami powiadomień; WP bez zatwierdzonej
 estymacji liczą ETC jak dotąd: wpis w „Harmonogram i budżet” albo produkcja). Klocek systemowy **Zamknięcie okresu** (najwyżej jeden,
-zawsze ostatni etap; „+ Zamknięcie okresu”; F5.5) – zawsze z warunkiem „Przebieg zamykający” (w innym tygodniu pominięty); przebieg czeka,
+zawsze ostatni etap; „+ Zamknięcie okresu”; F5.5) i klocek systemowy **Łączenie źródeł** (najwyżej jeden; F6.1 – P3) – zawsze z warunkiem „Przebieg zamykający” (w innym tygodniu pominięty); przebieg czeka,
 aż analityk zatwierdzi zamknięcie z komentarzem („Zatwierdź zamknięcie okresu”) – uruchomienie zostaje **zamrożone** (Z). **Struktura programu** (ACWP, Actual DLH,
 ACWP Labor / Material, wskaźniki) pokazuje dane ACTUALS w stanie z przypięcia ostatniego uruchomienia z zakończonym tym etapem (uruchomienie bez tego
 etapu w definicji – z zakończonym pierwszym etapem walidacji, czyli walidacją ACTUALS, także z zaakceptowanymi błędami)
@@ -389,6 +389,18 @@ Kontrole wymagające innych danych spoza zrzutu (odbiorca rozliczenia, suma kont
 
 ### P3. Łączenie źródeł
 
+**Wdrożone (klocek systemowy „Łączenie źródeł”, migracja 059, decyzje użytkownika 2026-10-23 – O14, O33):** etap szablonu (najwyżej
+jeden, „+ Łączenie źródeł”) odświeża dane „ev” uruchomienia (bez rozliczeniowych, po Wykluczeniach, CAS po narzutach – w walucie
+programu; koszt ACTUALS to już kwota, bez przeliczania godzin) i przypisuje koszt każdego elementu WBS do WP, CAM i Cost Category
+**tą samą logiką co struktura programu** (O14: element nakładki → WP na jego kodzie P1S, a bez niego – jedyny WP pod elementem
+w poddrzewie `LOG.WBS`; kontrakt `ICostAssignment` modułu Projekty – `ProjectService.CostTargets`, `StructureBuilder`). Wynik –
+`RUN_CostAssignment` (element, WP, CAM, Cost Category, powód braku, koszt; podstawa ACWP WP dla F8). Kontrole: suma kontrolna (koszt
+po połączeniu = koszt „ev”, ERROR); koszt bez przypisania – element po elemencie z powodem (element nakładki bez WP, kilka WP pod
+elementem – O45, element CES spoza nakładki, wiersze bez elementu WBS): **WARNING w środku okresu** – etap czeka na „Kontynuuj bez
+tych elementów” z komentarzem, **ERROR w przebiegu zamykającym** (O33) – przypisanie (nakładka, „WP i CAM”) i „Wykonaj ponownie”
+albo „Zaakceptuj błędy i dalej” z komentarzem; struktura P1S niedostępna (PZLPROD) – WARNING. Bez modułu Projekty – ERROR.
+Niewdrożone: element z zaawansowaniem bez WP (po F7), raport pokrycia jako plik (F6.2). Opis docelowy poniżej.
+
 | | |
 |---|---|
 | **Cel** | Jeden spójny obraz kosztów projektu: koszt rzeczywisty (ACWP) przypisany do WP, CAM i kategorii kosztów, w walucie wyniku. |
@@ -507,9 +519,9 @@ Zamrożonego przebiegu zmiany nie dotyczą.
 | # | Kwestia |
 |---|---|
 | O11 | Zasady uzupełniania braków zaawansowania w środku okresu (metody, metoda domyślna) |
-| O14 | Logika łączenia źródeł (P3) – do przedstawienia przez zespół |
+| O14 | Logika łączenia źródeł (P3) – **rozstrzygnięte 2026-10-23:** jak struktura programu (element nakładki → WP na kodzie P1S albo jedyny WP pod elementem), P3 |
 | O29 | Próg świeżości importu przed przypięciem (ile dni od ostatniego importu) |
 | O31 | Harmonogram importu względem harmonogramu RABIT (RABIT nadpisuje pliki – wersja pośrednia bez importu przepada); import uruchamiany harmonogramem zadań Windows? |
-| O33 | Element CES z kosztem bez przypisania (spoza nakładki albo bez WP) w przebiegu zamykającym: czy dopuścić zamknięcie, czy wymagać przypisania (ERROR – P3)? Rekomendacja: wymagać przypisania |
+| O33 | Element CES z kosztem bez przypisania (spoza nakładki albo bez WP) w przebiegu zamykającym – **rozstrzygnięte 2026-10-23:** ERROR (przypisanie albo akceptacja błędów z komentarzem), w środku okresu WARNING, P3 |
 | O34 | CAM nie odesłał pliku w przebiegu zamykającym: blokada etapu (dziś) czy przyjęcie wartości z produkcji z oznaczeniem pochodzenia? |
 | O50 | Kontrole przebiegu wymagające kolumn spoza zrzutu ACTUALS: numer dokumentu CO i pozycja (stały klucz porównania przebiegów), odbiorca rozliczenia (PA, centrum kosztów, środek trwały w budowie), suma kontrolna projektu i okresu z niezależnego raportu SAP |

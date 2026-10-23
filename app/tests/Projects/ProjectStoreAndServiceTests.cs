@@ -179,6 +179,18 @@ public sealed class ProjectStoreAndServiceTests : IDisposable
         Assert.Empty(_dictionaries.Current(GlobalDictionaries.CostCategory));   // słownik globalny bez zmian
         Assert.Equal("M28", _store.P1sOwners("S70I")["AC-CAB.6.38.01"]);
 
+        // Łączenie źródeł w przebiegu (ICostAssignment): każdy element kosztów raz – WP z CAM i Cost Category „WP i CAM” albo powód braku;
+        // bez PZLPROD – uwaga (bez poddrzew LOG.WBS).
+        var costs = Objectives().Flatten().Select(x => x.Node.WbsElement).OfType<string>().Distinct().Append("XXX-SPOZA").ToDictionary(e => e, _ => 1m);
+        var assignment = _service.CostTargets("M28", costs);
+        var wpCam = _service.Rows(ProjectDictionaries.WpCam, "M28");
+        Assert.Equal(costs.Keys.Order(StringComparer.OrdinalIgnoreCase), assignment.Targets.Select(t => t.WbsElement).Order(StringComparer.OrdinalIgnoreCase));
+        Assert.Equal(CostGaps.Outside, assignment.Targets.Single(t => t.WbsElement == "XXX-SPOZA").Gap);
+        Assert.Contains(assignment.Targets, t => t.Wp is not null);
+        Assert.All(assignment.Targets.Where(t => t.Wp is not null), t =>
+            Assert.Equal((wpCam.First(r => r["WP"] == t.Wp)["CAM"], (string?)null), (t.Cam, t.Gap)));
+        Assert.Contains("PZLPROD", assignment.Note);
+
         // Ten sam element P1S w drugim projekcie – ERROR.
         var other = new PoTree();
         other.AddElement(null, "4D06WX", "inny", "AC-CAB.6.38");

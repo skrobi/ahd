@@ -91,6 +91,9 @@ public sealed class RunStepTileViewModel : ObservableObject
     /// <summary>Klocek systemowy „Zatwierdzenie ETC” – Finanse zatwierdzają ETC wprowadzone przez CAM-ów.</summary>
     public bool IsEtcApproval => Action == RunActions.ApproveEtc;
 
+    /// <summary>Klocek systemowy „Łączenie źródeł” – koszt uruchomienia przypisany do WP (bramka WARNING – potwierdzenie).</summary>
+    public bool IsReconcile => Action == RunActions.Reconcile;
+
     /// <summary>Klocek systemowy „Zamknięcie okresu” – ostatni etap, tylko przebieg zamykający; zatwierdzenie zamraża uruchomienie.</summary>
     public bool IsPeriodClose => Action == RunActions.ClosePeriod;
 
@@ -140,6 +143,7 @@ public sealed class RunStepTileViewModel : ObservableObject
     /// <summary>Bramka na kafelku: ERROR zatrzymuje; WARNING – potwierdzenie albo informacja; zatwierdzenie ręczne.</summary>
     public string GateText =>
         (IsApproval || Approval ? "czeka na zatwierdzenie" : IsChecks ? $"WARNING: {WarningGate.ToLowerInvariant()}"
+            : IsReconcile ? "WARNING: potwierdzenie · bez przypisania w przebiegu zamykającym – ERROR"
             : "stały – konfiguracja programu")
         + (HasCondition ? $" · {Condition.ToLowerInvariant()}" : IsPeriodClose ? $" · {RunConditions.Closing.ToLowerInvariant()}" : "");
 
@@ -152,7 +156,8 @@ public sealed class RunStepTileViewModel : ObservableObject
                 return IsFixed ? "klocek predefiniowany" : IsActualsApproval ? "klocek systemowy – zatwierdzone dane ACTUALS w strukturze programu"
                     : IsEtcApproval ? $"klocek systemowy – Finanse zatwierdzają ETC CAM-ów; cykl {(Condition == RunConditions.Closing ? "miesięczny" : "tygodniowy")}"
                       + (Notify ? "; powiadomienie CAM-ów" : "")
-                    : IsPeriodClose ? "klocek systemowy – zatwierdzenie zamyka okres i zamraża uruchomienie" : "";
+                    : IsPeriodClose ? "klocek systemowy – zatwierdzenie zamyka okres i zamraża uruchomienie"
+                    : IsReconcile ? "klocek systemowy – koszt do WP, CAM i Cost Category jak w strukturze; suma kontrolna" : "";
             var selected = Rules.Where(c => c.IsSelected).Select(c => c.Name).ToList();
             return selected.Count == 0 ? "brak reguł – zaznacz"
                 : $"{selected.Count} {(selected.Count == 1 ? "reguła" : selected.Count % 10 is >= 2 and <= 4 && selected.Count / 10 % 10 != 1 ? "reguły" : "reguł")}: "
@@ -161,7 +166,7 @@ public sealed class RunStepTileViewModel : ObservableObject
     }
 
     public RunStepDefinition ToStep() =>
-        new(No, Name.Trim(), Action, IsChecks ? WarningGate : RunGates.Info, IsApproval || Approval,
+        new(No, Name.Trim(), Action, IsChecks ? WarningGate : IsReconcile ? RunGates.Confirm : RunGates.Info, IsApproval || Approval,
             [.. Rules.Where(c => c.IsSelected).Select(c => new RunElementSetting(c.Name))], Description.Trim().Length == 0 ? null : Description.Trim(),
             HasCondition ? Condition : IsPeriodClose ? RunConditions.Closing : RunConditions.Always, HasCondition && Notify);
 

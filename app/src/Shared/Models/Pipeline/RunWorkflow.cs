@@ -24,16 +24,23 @@ public static class RunActions
     public const string ApproveEtc = "Zatwierdzenie ETC";
 
     /// <summary>
+    /// Klocek systemowy: łączenie źródeł (docs/pipeline-fazy.md, P3) – koszt danych uruchomienia (tabela „ev”) przypisany do WP, CAM
+    /// i Cost Category jak w strukturze programu (kontrakt ICostAssignment), suma kontrolna (ERROR), koszt bez przypisania – WARNING
+    /// w środku okresu (potwierdzenie „Kontynuuj bez tych elementów”), ERROR w przebiegu zamykającym (O33); wynik zapisany w uruchomieniu.
+    /// </summary>
+    public const string Reconcile = "Łączenie źródeł";
+
+    /// <summary>
     /// Klocek systemowy: analityk zatwierdza zamknięcie okresu z komentarzem – uruchomienie zostaje zamrożone (przebieg tygodnia tylko
     /// do odczytu, bez nowych uruchomień; „Otwórz zamknięcie” z komentarzem zdejmuje blokadę). Zawsze ostatni, zawsze z warunkiem
     /// „Przebieg zamykający” – w innym tygodniu pominięty.
     /// </summary>
     public const string ClosePeriod = "Zamknięcie okresu";
 
-    public static IReadOnlyList<string> All { get; } = [Import, Pin, Checks, Approval, ApproveActuals, ApproveEtc, ClosePeriod];
+    public static IReadOnlyList<string> All { get; } = [Import, Pin, Checks, Approval, ApproveActuals, ApproveEtc, Reconcile, ClosePeriod];
 
     /// <summary>Klocek systemowy – najwyżej jeden w szablonie.</summary>
-    public static bool IsSystem(string action) => action is ApproveActuals or ApproveEtc or ClosePeriod;
+    public static bool IsSystem(string action) => action is ApproveActuals or ApproveEtc or Reconcile or ClosePeriod;
 
     /// <summary>Klocek z warunkiem wykonania (RunConditions) i powiadomieniem CAM-ów – Zatwierdzenie ETC.</summary>
     public static bool HasCondition(string action) => action is ApproveEtc;
@@ -142,6 +149,11 @@ public static class RunDefinitions
         new(no, "Zatwierdzenie ETC", RunActions.ApproveEtc, RunGates.Info, true, [],
             "Finanse zatwierdzają ETC wprowadzone przez CAM-ów (estymacje programu w cyklu): powiadomienie CAM-ów z zaległościami, zatwierdź / zwróć / otwórz ponownie, akceptacja z komentarzem.",
             condition, notify);
+
+    /// <summary>Klocek systemowy „Łączenie źródeł” (edytor szablonów) – najwyżej jeden; WARNING czeka na potwierdzenie.</summary>
+    public static RunStepDefinition Reconciliation(int no) =>
+        new(no, "Łączenie źródeł", RunActions.Reconcile, RunGates.Confirm, false, [],
+            "Koszt uruchomienia przypisany do WP, CAM i Cost Category jak w strukturze programu; suma kontrolna; koszt bez przypisania – w środku okresu ostrzeżenie (Kontynuuj bez tych elementów), w przebiegu zamykającym błąd.");
 
     /// <summary>
     /// Klocek systemowy „Zamknięcie okresu” (edytor szablonów) – najwyżej jeden, ostatni etap; warunek zawsze „Przebieg zamykający”.

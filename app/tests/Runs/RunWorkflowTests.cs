@@ -229,6 +229,11 @@ public sealed class RunWorkflowTests
         Assert.Equal((RunActions.ClosePeriod, RunConditions.Closing, true), (read.Steps[3].Action, read.Steps[3].Condition, read.Steps[3].NeedsApproval));
         Assert.Equal((true, false), (bare.Steps[3].RunsIn(closingWeek: true), bare.Steps[3].RunsIn(closingWeek: false)));
         Assert.True(RunActions.IsSystem(RunActions.ClosePeriod));
+        var reconcile = RunDefinitions.Reconciliation(3);
+        Assert.Equal((RunActions.Reconcile, RunGates.Confirm, false, true), (reconcile.Action, reconcile.WarningGate, reconcile.NeedsApproval, RunActions.IsSystem(reconcile.Action)));
+        Assert.Equal((RunStepStatuses.NeedsAction, RunStepStatuses.Failed, RunStepStatuses.Done),
+            (RunWorkflowEngine.Gate(reconcile, 0, 1), RunWorkflowEngine.Gate(reconcile, 1, 0), RunWorkflowEngine.Gate(reconcile, 0, 0)));   // WARNING – potwierdzenie
+        Assert.Empty(RunDefinitions.Validate(definition with { Steps = [.. RunDefinitions.FixedSteps, RunDefinitions.Reconciliation(3), RunDefinitions.PeriodClose(4)] }));
         Assert.Contains(RunDefinitions.Validate(definition with { Steps = [.. RunDefinitions.FixedSteps, RunDefinitions.PeriodClose(3), RunDefinitions.ActualsApproval(4)] }),
             i => i.Message.StartsWith("Klocek „Zamknięcie okresu” – tylko jako ostatni etap"));
         Assert.Contains(RunDefinitions.Validate(definition with { Steps = [.. RunDefinitions.FixedSteps, RunDefinitions.PeriodClose(3), RunDefinitions.PeriodClose(4) with { Name = "Drugie" }] }),

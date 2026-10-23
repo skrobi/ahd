@@ -25,7 +25,7 @@ public sealed record RunOutcome(string Project, string? Code, string Status, int
 /// i trwające uruchomienie (wolna po awarii – uruchomienie „przerwane”).
 /// </summary>
 public sealed class RunService(IRunStore store, AppServices services, Func<ISourceImport?>? imports = null, Func<IProjectProcessSource?>? processes = null,
-    Func<ICamReview?>? cams = null)
+    Func<ICamReview?>? cams = null, Func<ICostAssignment?>? costs = null)
 {
     public const string Area = "Przebiegi";
 
@@ -37,6 +37,9 @@ public sealed class RunService(IRunStore store, AppServices services, Func<ISour
 
     /// <summary>Wynik etapu pominiętego warunkiem „Przebieg zamykający” w tygodniu bez zamknięcia okresu.</summary>
     public const string Skipped = "Warunek etapu";
+
+    /// <summary>Kontrola wyników etapu Łączenie źródeł – przypisanie kosztu do WP (wiersz macierzy).</summary>
+    public const string Coverage = "Łączenie źródeł";
 
     /// <summary>Kontrola wyników etapu Przypięcie stanu (wiersz macierzy).</summary>
     public const string Pinned = "Przypięcie stanu";
@@ -293,6 +296,7 @@ public sealed class RunService(IRunStore store, AppServices services, Func<ISour
             RunActions.Pin => PinStep(pin),
             RunActions.Checks => ChecksStep(pin, step, label, progress, cancellation),
             RunActions.ApproveEtc => [.. step.Notify ? CamNotifyStep(pin, definition) : [], .. CamState(pin, definition).Issues],
+            RunActions.Reconcile => ReconcileStep(pin, step),
             _ => [],
         };
 
@@ -542,6 +546,52 @@ public sealed class RunService(IRunStore store, AppServices services, Func<ISour
             RunRules.Describe(rule.ResultTemplate, result.Columns, row), null, RunRules.Details(result.Columns, row))).ToList();
         if (result.Truncated)
             issues.Add(new RunIssue(rule.Name, CheckLevel.Warning, null, $"Wynik obcięty do {RunRules.MaxRows} wierszy – zawęź zapytanie (TOP, WHERE)"));
+        return issues;
+    }
+
+    /// <summary>
+    /// Łączenie źródeł (docs/pipeline-fazy.md, P3): dane „ev” uruchomienia odświeżone (słowniki i Wykluczenia mogły się zmienić), koszt
+    /// po elemencie WBS przypisany do WP, CAM i Cost Category jak w strukturze programu (ICostAssignment) i zapisany w uruchomieniu;
+    /// suma kontrolna – koszt po połączeniu = koszt „ev” (ERROR); koszt bez przypisania – element po elemencie: WARNING w środku okresu,
+    /// ERROR w przebiegu zamykającym (O33).
+    /// </summary>
+    private List<RunIssue> ReconcileStep(RunPinRow pin, RunStepDefinition step)
+    {
+        if (pin.Rows is null)
+            return [new RunIssue("Przebieg", CheckLevel.Error, null, $"Etap „{step.Name}” przed przypięciem stanu – w definicji przebiegu brakuje etapu z akcją „{RunActions.Pin}”")];
+        if (costs?.Invoke() is not { } assignment)
+            return [new RunIssue(Coverage, CheckLevel.Error, null, "Łączenie źródeł niedostępne – moduł Projekty (struktura programu) nie jest załadowany")];
+        var issues = new List<RunIssue>();
+        var process = Process(pin.Project);
+        var (rows, error) = Ev(store.Balance(pin.PinId), store.Exclusions(pin.Project), process, store.Dictionaries(pin.Project).CostKinds);
+        store.SaveEv(pin.PinId, rows);
+        if (error is not null)
+            issues.Add(new RunIssue(process.CostsCheck, CheckLevel.Error, null, $"{process.CostsCheck} niepoliczone – {error}; koszt bez narzutów"));
+        var byElement = rows.GroupBy(r => r.WbsElement, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.Sum(r => r.Amount), StringComparer.OrdinalIgnoreCase);
+        var result = assignment.Assign(pin.Project, byElement);
+        if (result.Note is { } note)
+            issues.Add(new RunIssue(Coverage, CheckLevel.Warning, null, $"Przypisanie bez pełnych danych – {note}"));
+        var targets = result.Targets.GroupBy(t => t.WbsElement, StringComparer.OrdinalIgnoreCase).ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
+        // Element zapisany jak w danych uruchomienia (przypisanie podaje kod z nakładki – inna wielkość liter).
+        var assigned = byElement.Select(e => (Target: targets.GetValueOrDefault(e.Key) is { } t ? t with { WbsElement = e.Key } : new CostTarget(e.Key, null, null, null, CostGaps.Outside),
+                Amount: e.Value))
+            .OrderBy(x => x.Target.WbsElement, StringComparer.OrdinalIgnoreCase).ToList();
+        store.SaveCostAssignment(pin.PinId, assigned);
+        var total = rows.Sum(r => r.Amount);
+        var toWp = assigned.Where(x => x.Target.Wp is not null).Sum(x => x.Amount);
+        var without = assigned.Where(x => x.Target.Wp is null && x.Amount != 0).ToList();
+        if (Math.Abs(toWp + without.Sum(x => x.Amount) - total) > 0.01m)
+            issues.Add(new RunIssue(Coverage, CheckLevel.Error, null,
+                $"Suma kontrolna: koszt po połączeniu {Math.Round(toWp + without.Sum(x => x.Amount), 2):#,0.00} ≠ koszt danych uruchomienia {Math.Round(total, 2):#,0.00}"));
+        var closing = store.RunWeek(pin.RunId).IsClosing;
+        issues.Add(new RunIssue(Coverage, CheckLevel.Pass, null,
+            $"Koszt {Math.Round(total, 2):#,0.00}{(process.Currency is { } currency ? $" {currency}" : "")}: przypisany do " +
+            $"{assigned.Where(x => x.Target.Wp is not null).Select(x => x.Target.Wp!).Distinct(StringComparer.OrdinalIgnoreCase).Count()} WP – " +
+            $"{Math.Round(toWp, 2):#,0.00}; bez przypisania {Math.Round(without.Sum(x => x.Amount), 2):#,0.00} ({without.Count} elementów" +
+            (without.Count > 0 ? closing ? " – przebieg zamykający: przypisz albo zaakceptuj błędy z komentarzem)" : " – Kontynuuj bez tych elementów albo przypisz i wykonaj ponownie)" : ")")));
+        issues.AddRange(without.OrderByDescending(x => Math.Abs(x.Amount)).Select(x => new RunIssue(Coverage, closing ? CheckLevel.Error : CheckLevel.Warning,
+            x.Target.WbsElement.Length == 0 ? null : x.Target.WbsElement, $"Koszt {Math.Round(x.Amount, 2):#,0.00} bez przypisania do WP – {x.Target.Gap}", x.Amount)));
         return issues;
     }
 

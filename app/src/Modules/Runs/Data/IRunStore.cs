@@ -1,5 +1,6 @@
 using PzlEv.Shared.Models.Db;
 using PzlEv.Shared.Models.Pipeline;
+using PzlEv.Shared.Utils.Data;
 
 namespace PzlEv.Modules.Runs.Data;
 
@@ -99,6 +100,12 @@ public interface IRunStore
 
     /// <summary>Dane uruchomienia jak w strukturze (tabela „ev” reguł) – zastępuje zapisane wcześniej.</summary>
     void SaveEv(long pinId, IReadOnlyList<RunEvRow> rows);
+
+    /// <summary>Wynik łączenia źródeł uruchomienia (RUN_CostAssignment, migracja 059) – zastępuje zapisany wcześniej.</summary>
+    void SaveCostAssignment(long pinId, IReadOnlyList<(CostTarget Target, decimal Amount)> rows);
+
+    /// <summary>Wynik łączenia źródeł uruchomienia: element WBS, WP, CAM, Cost Category, powód braku, koszt.</summary>
+    IReadOnlyList<(CostTarget Target, decimal Amount)> CostAssignment(long pinId);
 
     /// <summary>Uruchomienie ma zapisane dane „ev” (uruchomienia sprzed migracji 051 – nie).</summary>
     bool HasEv(long pinId);

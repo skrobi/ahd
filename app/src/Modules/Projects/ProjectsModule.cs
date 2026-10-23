@@ -40,6 +40,7 @@ public sealed class ProjectsModule : IModule
             () => services.Contracts.Get<ICamReview>());
         services.Contracts.Register<IProjectProcessSource>(new ProjectProcessSource(_service));
         services.Contracts.Register<ICamWorkPackages>(new CamWorkPackagesSource(_service));
+        services.Contracts.Register<ICostAssignment>(new CostAssignmentSource(_service));
     }
 
     public FrameworkElement CreateView(ModuleContext context) =>

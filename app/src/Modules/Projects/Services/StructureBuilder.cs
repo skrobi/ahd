@@ -1,6 +1,7 @@
 using PzlEv.Modules.Projects.Models;
 using PzlEv.Shared.Models.Dictionaries;
 using PzlEv.Shared.Models.PzlProd;
+using PzlEv.Shared.Utils.Data;
 using PzlEv.Shared.Utils.Files;
 using PzlEv.Shared.Utils.Mapping;
 
@@ -237,6 +238,7 @@ public static class StructureBuilder
         var wpActuals = new Dictionary<string, decimal[]>(StringComparer.OrdinalIgnoreCase);
         var used = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var withoutWp = 0m;
+        var targets = new List<CostTarget>();
         void Assign(Item item)
         {
             if (item.Kind == GridRowKind.Objective && item.WbsElement is { } wbs && measures.Any(m => m.ContainsKey(wbs)) && used.Add(wbs))
@@ -246,6 +248,7 @@ public static class StructureBuilder
                 var amount = item.Own[CostMeasure];
                 var own = item.P1s is null ? null : assignments.GetValueOrDefault(MappingKeys.Key(item.P1s))?["WP"];
                 var target = own ?? (item.Wps.Count == 1 ? item.Wps.First() : null);
+                targets.Add(new CostTarget(wbs, target, null, null, target is not null ? null : item.Wps.Count == 0 ? CostGaps.NoWp : CostGaps.Ambiguous));
                 if (target is not null)
                 {
                     if (!wpActuals.TryGetValue(target, out var sums))
@@ -409,7 +412,9 @@ public static class StructureBuilder
             costOf.Where(c => !used.Contains(c.Key)).Sum(c => c.Value),
             costs is not null,
             AnalyticBaseBuilder.Bac(all, budgets));
-        return new ProjectStructure(rows, summary);
+        targets.AddRange(costOf.Keys.Where(k => !used.Contains(k))
+            .Select(k => new CostTarget(k, null, null, null, k.Trim().Length == 0 ? CostGaps.NoElement : CostGaps.Outside)));
+        return new ProjectStructure(rows, summary, targets);
     }
 
     private static string? Date(DateOnly? value) => value?.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);

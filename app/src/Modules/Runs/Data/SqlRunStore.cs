@@ -4,6 +4,7 @@ using Microsoft.Data.SqlClient;
 using PzlEv.Shared.Models.Db;
 using PzlEv.Shared.Models.Dictionaries;
 using PzlEv.Shared.Models.Pipeline;
+using PzlEv.Shared.Utils.Data;
 using PzlEv.Shared.Utils.Data.Sql;
 using PzlEv.Shared.Utils.Dictionaries;
 
@@ -159,6 +160,26 @@ public sealed class SqlRunStore(SqlDatabase db) : IRunStore
             [("PinId", typeof(long)), ("WbsElement", typeof(string)), ("CostElement", typeof(string)), ("FiscalYear", typeof(int)), ("Period", typeof(int)),
              ("CostKind", typeof(string)), ("Amount", typeof(decimal))],
             rows.Select(r => new object?[] { pinId, r.WbsElement, r.CostElement, r.FiscalYear, r.Period, r.CostKind, r.Amount }));
+    }
+
+    public void SaveCostAssignment(long pinId, IReadOnlyList<(CostTarget Target, decimal Amount)> rows)
+    {
+        using var connection = db.Open();
+        var table = db.Table(DbTables.RunCostAssignment);
+        connection.Execute($"DELETE FROM {table} WHERE PinId = @pinId", new { pinId }, commandTimeout: LongTimeout);
+        SqlBulk.InsertInBatches(connection, table,
+            [("PinId", typeof(long)), ("WbsElement", typeof(string)), ("Wp", typeof(string)), ("Cam", typeof(string)), ("CostCategory", typeof(string)),
+             ("Gap", typeof(string)), ("Amount", typeof(decimal))],
+            rows.Select(r => new object?[] { pinId, r.Target.WbsElement, r.Target.Wp, r.Target.Cam, r.Target.CostCategory, r.Target.Gap, r.Amount }));
+    }
+
+    public IReadOnlyList<(CostTarget Target, decimal Amount)> CostAssignment(long pinId)
+    {
+        using var connection = db.Open();
+        return connection.Query<(string WbsElement, string? Wp, string? Cam, string? CostCategory, string? Gap, decimal Amount)>(
+                $"SELECT WbsElement, Wp, Cam, CostCategory, Gap, Amount FROM {db.Table(DbTables.RunCostAssignment)} WHERE PinId = @pinId ORDER BY WbsElement",
+                new { pinId })
+            .Select(r => (new CostTarget(r.WbsElement, r.Wp, r.Cam, r.CostCategory, r.Gap), r.Amount)).ToList();
     }
 
     public bool HasEv(long pinId)

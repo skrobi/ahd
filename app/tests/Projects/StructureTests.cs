@@ -143,6 +143,11 @@ public sealed class StructureTests
         Assert.Equal(7m, Of(structure, "p1s:AC-CAB.6.38.03.01.05").Acwp);   // wiersz WP-3: koszt przypisany do WP
         Assert.Equal((187m, 80m, 5m, true), (structure.Summary.Acwp, structure.Summary.AcwpWithoutWp, structure.Summary.AcwpOutside, structure.Summary.HasCosts));
         Assert.False(ProjectService.Structure(Objectives(), Inputs(), wpCam, schedule).Summary.HasCosts);
+        // Przypisanie elementów (łączenie źródeł w przebiegu): każdy element kosztów raz – WP albo powód braku.
+        Assert.Equal(
+            [("4D06WP.02", "WP-3", null), ("4D06WP.RA", null, CostGaps.Ambiguous), ("4D06WP000001", "WP-2", null), ("4D06WP000002", null, CostGaps.NoWp),
+             ("XXX-SPOZA", null, CostGaps.Outside)],
+            structure.CostTargets!.OrderBy(t => t.WbsElement, StringComparer.OrdinalIgnoreCase).Select(t => (t.WbsElement, t.Wp, t.Gap)));
     }
 
     [Fact]

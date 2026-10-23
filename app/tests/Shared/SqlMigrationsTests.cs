@@ -57,9 +57,9 @@ public sealed class SqlMigrationsTests
     public void Scripts_are_embedded_numbered_and_parameterised()
     {
         var scripts = SqlMigrations.All();
-        Assert.Equal([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58], scripts.Select(s => s.Number));
-        Assert.Equal([false, true, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, true, false, false, false, false, false, false, true, false, true, false, true, false, false, false, false, false, true, false, false, false, false, false, true, false, false, false, false, false, false, true, false, true, false, false, false], scripts.Select(s => s.IsPresets));   // 002, 023, 030, 032, 034, 040, 046, 053, 055 (*_dane_*) – dane startowe
-        Assert.Equal(58, SqlMigrations.Required);
+        Assert.Equal([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59], scripts.Select(s => s.Number));
+        Assert.Equal([false, true, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, true, false, false, false, false, false, false, true, false, true, false, true, false, false, false, false, false, true, false, false, false, false, false, true, false, false, false, false, false, false, true, false, true, false, false, false, false], scripts.Select(s => s.IsPresets));   // 002, 023, 030, 032, 034, 040, 046, 053, 055 (*_dane_*) – dane startowe
+        Assert.Equal(59, SqlMigrations.Required);
 
         var batches = SqlMigrations.Batches(scripts[0].Text, "FINOP", "PZLEV_").ToList();
         Assert.True(batches.Count > 5);
@@ -82,7 +82,7 @@ public sealed class SqlMigrationsTests
         Assert.Empty(SqlMigrations.Pending(database.Sql));
         var status = SqlMigrations.Status(database.Sql);
         Assert.All(status, s => Assert.NotNull(s.AppliedAt));
-        Assert.Equal(58, SqlMigrations.CurrentVersion(database.Sql));
+        Assert.Equal(59, SqlMigrations.CurrentVersion(database.Sql));
         using var connection = database.Sql.Open();
         var tables = connection.Query<string>(
             "SELECT t.name FROM sys.tables t JOIN sys.schemas s ON s.schema_id = t.schema_id WHERE s.name = @schema AND LEFT(t.name, LEN(@prefix)) = @prefix",
@@ -96,8 +96,8 @@ public sealed class SqlMigrationsTests
         // – DICT_CasBurdenFormula + DICT_CasFormula (033) + CAN_ActualsBalance (037) + DICT_RunCheck (047) + DICT_RunReconciliation (049)
         // + DICT_RunDefinition, DICT_RunStep, DICT_RunStepElement, META_RunStep (050) + DICT_RunValidation, RUN_BalanceEv
         // – DICT_RunCheck, DICT_RunReconciliation (051) + CAM_Estimate, CAM_EstimateLine, CAM_EstimateEvent (056)
-        // + CAM_Notification (057)
-        Assert.Equal(44, tables.Count);
+        // + CAM_Notification (057) + RUN_CostAssignment (059)
+        Assert.Equal(45, tables.Count);
         Assert.DoesNotContain(tables, t => t.EndsWith("DICT_RunCheck") || t.EndsWith("DICT_RunReconciliation"));
         Assert.DoesNotContain(tables, t => t.EndsWith("CAN_Actuals") || t.EndsWith("CAN_MappingReport") || t.EndsWith("STG_RawRow") || t.EndsWith("SourceFileContent"));
         Assert.Contains(database.Sql.Settings.TablePrefix + "META_PerformanceObjective", tables);

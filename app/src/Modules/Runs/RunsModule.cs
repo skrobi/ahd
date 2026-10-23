@@ -39,7 +39,8 @@ public sealed class RunsModule : IModule
         ISourceImport? Imports() => services.Contracts.Get<ISourceImport>();
         IProjectProcessSource? Processes() => services.Contracts.Get<IProjectProcessSource>();
         ICamReview? Cams() => services.Contracts.Get<ICamReview>();
-        var launcher = new RunLauncher(new RunService(store, services, Imports, Processes, Cams), store, Imports);
+        ICostAssignment? Costs() => services.Contracts.Get<ICostAssignment>();
+        var launcher = new RunLauncher(new RunService(store, services, Imports, Processes, Cams, Costs), store, Imports);
         services.Contracts.Register<IRunLauncher>(launcher);
         services.Contracts.Register<IAcwpChanges>(_acwpChanges = new AcwpChangesLauncher(store, Processes));
         services.Contracts.Register<IRunPanels>(new RunPanels(store, launcher, () => _acwpChanges, Cams));

@@ -96,7 +96,7 @@ zmiana zakresu zadania w trakcie realizacji wymaga uzgodnienia.
 
 | Zadanie | Moduł | Zależy od | Otwarte kwestie | Status |
 |---|---|---|---|---|
-| [F6.1 P3 Łączenie źródeł](F6.1-p3-laczenie-zrodel.md) | Reconciliation | F5.4 | O14, O33 | do zrobienia |
+| [F6.1 P3 Łączenie źródeł](F6.1-p3-laczenie-zrodel.md) | Runs, Projects | F5.4 | – | w toku – klocek „Łączenie źródeł” (059, 0.65.0); zostało: sprawdzenie na danych programu, element z zaawansowaniem bez WP (F7) |
 | [F6.2 P4 Pliki dla finansów](F6.2-p4-pliki-dla-finansow.md) | Reconciliation | F6.1 | O16 | do zrobienia |
 
 ## F7. Zaawansowanie (P5–P7)
@@ -149,11 +149,11 @@ zmiana zakresu zadania w trakcie realizacji wymaga uzgodnienia.
 
 | Kwestia | Kto | Blokuje |
 |---|---|---|
-| O14 – logika łączenia źródeł | zespół | F6.1 |
+| O14 – logika łączenia źródeł – rozstrzygnięte 2026-10-23 (jak struktura programu) | zespół | F6.1 |
 | O35, O15, O30, O36 – metody EV, ETC, ACWP, data stanu | Finanse | F8.1; O36 – także F5.1 |
 | O16, O17 – układ plików dla finansów i CAM | Finanse, CAM | F6.2, F7.3 |
 | O10 – definicja vAHDD | właściciele PZLPROD | F7.1 |
 | O45 – przypisanie kosztów i zaawansowania do węzłów nakładki | zespół | F5.2 |
-| O11, O33, O34 | zespół | F7.2, F6.1, F7.3 |
+| O11, O33 (rozstrzygnięte 2026-10-23 – ERROR w przebiegu zamykającym), O34 | zespół | F7.2, F6.1, F7.3 |
 
 Poza planem (v2): uprawnienia roli CAM i PM w aplikacji (moduł CAM – F11, na razie bez uprawnień), raporty Power BI.

@@ -999,6 +999,25 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
         return _dictionaries.Save(spec, working, removed, confirmWarnings: true, code, _dictionaries.KnownErrors(spec, code));
     }
 
+    // ---------- przebieg – łączenie źródeł (kontrakt ICostAssignment – CostAssignmentSource) ----------
+
+    /// <summary>
+    /// Przypisanie kosztów elementów CES (costs – element WBS → koszt danych uruchomienia) do WP jak w strukturze programu (StructureBuilder:
+    /// nakładka, poddrzewa LOG.WBS, „WP i CAM”); CAM i Cost Category – z wiersza „WP i CAM” WP. Note – struktura P1S niedostępna
+    /// (bez poddrzew LOG.WBS – więcej kosztu bez przypisania) albo null.
+    /// </summary>
+    public CostAssignment CostTargets(string code, IReadOnlyDictionary<string, decimal> costs)
+    {
+        var mapping = Mapping();
+        var wpCam = Rows(ProjectDictionaries.WpCam, code);
+        var structure = StructureBuilder.Build(store.Objectives(code), mapping.P1s, wpCam, [], costs);
+        var byWp = wpCam.Where(r => r["WP"] is not null).GroupBy(r => r["WP"]!, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
+        var targets = (structure.CostTargets ?? []).Select(t => t.Wp is { } wp && byWp.GetValueOrDefault(wp) is { } row
+            ? t with { Cam = row["CAM"], CostCategory = row["Cost Category"] } : t).ToList();
+        return new CostAssignment(targets, mapping.P1sError is null ? null : mapping.Describe);
+    }
+
     // ---------- moduł CAM (kontrakt ICamWorkPackages – CamWorkPackagesSource) ----------
 
     /// <summary>

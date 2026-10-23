@@ -529,6 +529,10 @@ w klocku „Zamknięcie okresu” (przebieg tygodnia zamrożony – tylko do odc
 `docs/pipeline-fazy.md`, Z); indeks `META_Journal (Scope, Id)` – dziennik przebiegu na panelu (wpisy obszaru „Przebiegi” z kodem
 przebiegu). Wymaga aplikacji 0.64.0.
 
+**Migracja `sql/mssql/059_laczenie_zrodel.sql`:** `RUN_CostAssignment` – wynik klocka „Łączenie źródeł” (`docs/pipeline-fazy.md`, P3):
+koszt elementu WBS z danych uruchomienia (tabela „ev”) przypisany do WP, CAM i Cost Category jak w strukturze programu; `Wp` NULL –
+koszt bez przypisania, `Gap` – powód. Usunięcie programu usuwa jego wiersze. Wymaga aplikacji 0.65.0.
+
 `META_SourceFile.CanonicalStatus`: „utworzone” – dane kanoniczne zapisane i sprawdzone (widoczne dla odczytów),
 „w toku” – zapis wierszy trwa (odczyty pomijają plik; po awarii wpis i wiersze są usuwane), inna wartość – powód
 braku danych (źródło bez parsera).
