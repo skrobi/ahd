@@ -104,6 +104,28 @@ public sealed class RunOverviewTests
         Assert.NotNull(RunOverview.ChangesFor(Issue(RunService.Pinned, null), "PAF"));
     }
 
+    /// <summary>„Popraw w aplikacji”: słownik i filtr z kolumn Slownik i Filtr wiersza wyniku; kolumny bez miejsca w tabeli wyniku.</summary>
+    [Fact]
+    public void Fix_in_app_comes_from_dictionary_and_filter_columns_which_are_hidden_in_result_table()
+    {
+        RunIssueRow Row(long id, string? details) => new(id, 77, "WP bez MPK", CheckLevel.Warning, null, "x", null, 3, details);
+        var row = Row(1, Details(("WP", "WP-1"), ("Slownik", "WP i CAM"), ("Filtr", "WP-1")));
+
+        Assert.Equal(new PzlEv.Shared.Utils.Data.DictionaryLink("WP i CAM", "WP-1"), RunOverview.FixFor(row));
+        Assert.Equal(new PzlEv.Shared.Utils.Data.DictionaryLink("Stawki wydziałów", "4100"),
+            RunOverview.FixFor(Row(2, Details(("Slownik", " Stawki wydziałów "), ("Filtr", 4100m)))));   // liczba – bez formatu polskiego
+        Assert.Equal(new PzlEv.Shared.Utils.Data.DictionaryLink("Cost Category", null), RunOverview.FixFor(Row(3, Details(("Slownik", "Cost Category")))));
+        Assert.Null(RunOverview.FixFor(Row(4, Details(("Slownik", null), ("Filtr", "x")))));   // pusty słownik – bez akcji
+        Assert.Null(RunOverview.FixFor(Row(5, null)));
+        var view = RunOverview.View(row, "PAF");
+        Assert.Equal((true, true), (view.CanFix, view.CanShowChanges));
+        Assert.Equal(["WP"], RunOverview.ResultTable([row]).Columns);
+        // Porównanie uruchomień: wynik sprzed kolumn Slownik i Filtr (migracja 055) – ten sam wiersz, bez zmian.
+        var compared = Assert.Single(RunOverview.Compare([new(9, 76, "WP bez MPK", CheckLevel.Warning, null, "x", null, 3, Details(("WP", "WP-1")))], [row], "PAF"));
+        Assert.Equal((CheckLevel?)CheckLevel.Warning, compared.LevelBefore);
+        Assert.Equal((CheckLevel?)CheckLevel.Warning, compared.LevelAfter);
+    }
+
     [Fact]
     public void Step_results_are_grouped_by_rule_worst_first_with_problem_from_column_or_result_description()
     {

@@ -20,7 +20,7 @@ namespace PzlEv.Modules.Projects.Services;
 /// </summary>
 public sealed class ProjectService(IProjectStore store, IDictionaryStore dictionaries, IJournal journal, ProjectFolders folders,
     IPzlProdSource? pzlProd, Func<ISourceImport?>? imports = null, Func<IRunLauncher?>? runs = null, Func<IAcwpChanges?>? acwpChanges = null,
-    Func<IRunPanels?>? runPanels = null)
+    Func<IRunPanels?>? runPanels = null, Func<ICamReview?>? camReview = null)
 {
     private const string Area = "Programy";
 
@@ -151,6 +151,11 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
     public IReadOnlyList<LookupOption> PersonLookups() =>
         GlobalDictionaries.LookupOptions(GlobalDictionaries.Persons, _dictionaries.Load(GlobalDictionaries.Get(GlobalDictionaries.Persons)));
 
+    /// <summary>E-mail osób ze słownika Osoby po USRID (powiadomienia CAM); osoby bez adresu – pominięte.</summary>
+    public IReadOnlyDictionary<string, string> PersonEmails() =>
+        _dictionaries.Load(GlobalDictionaries.Get(GlobalDictionaries.Persons)).Where(r => r["USRID"] is not null && !string.IsNullOrWhiteSpace(r["E-mail"]))
+            .GroupBy(r => r["USRID"]!, StringComparer.OrdinalIgnoreCase).ToDictionary(g => g.Key, g => g.First()["E-mail"]!.Trim(), StringComparer.OrdinalIgnoreCase);
+
     /// <summary>
     /// Lista wyboru CAM w tabeli struktury: osoby ze słownika Osoby (persons) oraz CAM już wpisane w „WP i CAM”, których
     /// nie ma w słowniku (np. sprzed wczytania osób z HR) – żeby tabela je pokazała.
@@ -208,6 +213,18 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
     public IReadOnlyList<RunDefinitionHeaderRow> RunTemplates() =>
         RunDefinitions.Available(RunDefinitionRows.Headers(_dictionaries.Load(GlobalDictionaries.Get(GlobalDictionaries.RunDefinitionHeaders))),
             RunDefinitionRows.Steps(_dictionaries.Load(GlobalDictionaries.Get(GlobalDictionaries.RunSteps))));
+
+    /// <summary>
+    /// Przebieg programu jak przy starcie przebiegu (RunDefinitions.For): szablon wybrany w „Parametry programu” („Przebieg”), bez wyboru –
+    /// domyślny dla typu programu, bez szablonów – wbudowany; m.in. cykl estymacji CAM programu (RunDefinitions.CamWeekly).
+    /// </summary>
+    public RunDefinition RunDefinitionOf(string code)
+    {
+        IReadOnlyList<DictRow> Global(string dictionary) => _dictionaries.Load(GlobalDictionaries.Get(dictionary));
+        var assigned = Rows(ProjectDictionaries.Settings, code).FirstOrDefault(r => r["Parametr"] == ProjectSettings.RunDefinition)?["Wartość"]?.Trim() is { Length: > 0 } value ? value : null;
+        return RunDefinitions.For(RunDefinitionRows.Headers(Global(GlobalDictionaries.RunDefinitionHeaders)), RunDefinitionRows.Steps(Global(GlobalDictionaries.RunSteps)),
+            RunDefinitionRows.Elements(Global(GlobalDictionaries.RunStepElements)), assigned, store.Find(code)?.Type ?? "");
+    }
 
     /// <summary>Szablon → opcja wyboru („CAS – domyślny dla CAS”).</summary>
     public static IReadOnlyList<LookupOption> RunTemplateOptions(IEnumerable<RunDefinitionHeaderRow> templates) =>
@@ -980,6 +997,174 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
     {
         var spec = ProjectDictionaries.For(dictionary, context);
         return _dictionaries.Save(spec, working, removed, confirmWarnings: true, code, _dictionaries.KnownErrors(spec, code));
+    }
+
+    // ---------- przebieg – łączenie źródeł (kontrakt ICostAssignment – CostAssignmentSource) ----------
+
+    /// <summary>
+    /// Przypisanie kosztów elementów CES (costs – element WBS → koszt danych uruchomienia) do WP jak w strukturze programu (StructureBuilder:
+    /// nakładka, poddrzewa LOG.WBS, „WP i CAM”); CAM i Cost Category – z wiersza „WP i CAM” WP. Note – struktura P1S niedostępna
+    /// (bez poddrzew LOG.WBS – więcej kosztu bez przypisania) albo null.
+    /// </summary>
+    public CostAssignment CostTargets(string code, IReadOnlyDictionary<string, decimal> costs)
+    {
+        var mapping = Mapping();
+        var wpCam = Rows(ProjectDictionaries.WpCam, code);
+        var structure = StructureBuilder.Build(store.Objectives(code), mapping.P1s, wpCam, [], costs);
+        var byWp = wpCam.Where(r => r["WP"] is not null).GroupBy(r => r["WP"]!, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
+        var targets = (structure.CostTargets ?? []).Select(t => t.Wp is { } wp && byWp.GetValueOrDefault(wp) is { } row
+            ? t with { Cam = row["CAM"], CostCategory = row["Cost Category"] } : t).ToList();
+        return new CostAssignment(targets, mapping.P1sError is null ? null : mapping.Describe);
+    }
+
+    // ---------- moduł CAM (kontrakt ICamWorkPackages – CamWorkPackagesSource) ----------
+
+    /// <summary>
+    /// Struktura programu bez ekranu – te same dane co zakładka Struktura: nakładka, struktura P1S (mapping), „WP i CAM”,
+    /// „Harmonogram i budżet”, produkcja PZLPROD, ACWP i godziny z zatwierdzonego przebiegu (bez niego – ostatni import), waluta
+    /// programu i stawki ETC na dzień stanu. Koszty (baza środowiska) czytane równolegle z produkcją (PZLPROD) – jak ekran programu;
+    /// costs false – bez kosztów ACTUALS i waluty (lista WP z CAM-em, daty, status – estymacje wymagane w cyklu). Note – braki danych
+    /// (produkcja, koszty, kurs) albo null.
+    /// </summary>
+    public (ProjectStructure Structure, EtcRates Rates, string? Note) StructureOf(string code, P1sInputs mapping, IReadOnlyList<DictRow> departmentRates,
+        IReadOnlyList<DictRow> fxRates, DateOnly today, bool costs = true)
+    {
+        var notes = new List<string>();
+        var tree = store.Objectives(code);
+        var costsRead = costs ? Task.Run(() =>
+        {
+            var field = ActualsAmount(code);
+            return (Actuals: CostsAndHoursByElement(code, field, ApprovedActuals(code)?.AsOf), Currency: ProjectCurrency(code, field));
+        }) : null;
+        var wpCam = Rows(ProjectDictionaries.WpCam, code);
+        var production = Production(tree, mapping);
+        if (production.Error is { } productionError)
+            notes.Add(productionError);
+        var actuals = ElementActuals.Empty;
+        string? currency = null, currencyProblem = null;
+        if (costsRead is not null)
+        {
+            try
+            {
+                var read = costsRead.GetAwaiter().GetResult();
+                actuals = read.Actuals;
+                (currency, currencyProblem) = read.Currency;
+            }
+            catch (Exception ex) when (ex is not OutOfMemoryException)
+            {
+                notes.Add($"koszty (ACWP) niedostępne: {ex.Message}");
+            }
+        }
+        var rates = EtcRatesOf(departmentRates, fxRates, currency, currencyProblem, today);
+        if (costs && rates.Problem is { } problem)
+            notes.Add(problem);
+        var structure = StructureBuilder.Build(tree, mapping.P1s, wpCam, Rows(ProjectDictionaries.ScheduleBudget, code), actuals.Amounts, production, today,
+            actuals.Hours, actuals.Labor, actuals.Material, rates);
+        return (structure, rates, notes.Count == 0 ? null : string.Join("; ", notes));
+    }
+
+    /// <summary>Estymacje CAM programu w bieżącym cyklu (kolory struktury); null – moduł CAM niedostępny albo błąd odczytu (struktura bez kolorów).</summary>
+    public (CamCycle Cycle, IReadOnlyList<CamReviewItem> Saved)? CamEstimates(string code, DateOnly today)
+    {
+        if (camReview?.Invoke() is not { } review)
+            return null;
+        try
+        {
+            // Cykl programu z jego przebiegu: tygodniowy (klocek Zatwierdzenie ETC w każdym przebiegu) albo miesięczny.
+            var cycle = review.Cycle(today, RunDefinitions.CamWeekly(RunDefinitionOf(code)));
+            return (cycle, review.Saved(code, cycle.Period));
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            Serilog.Log.ForContext("Module", "projects").Error(ex, "Estymacje CAM programu {Code}", code);
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Estymacja CAM w wierszach WP struktury (kolumna „Estymacja CAM”, kolor wiersza): wymagany WP – z CAM-em, niezakończony; zatwierdzona –
+    /// ok, wysłana – info, zwrócona – crit, brak albo szkic po terminie cyklu – warn (przed terminem bez koloru). WP niewymagający
+    /// (bez CAM, zakończony) – tylko opis zapisanej estymacji.
+    /// </summary>
+    public static ProjectStructure WithCamEstimates(ProjectStructure structure, CamCycle cycle, IReadOnlyList<CamReviewItem> saved, DateOnly today)
+    {
+        var byWp = saved.GroupBy(i => i.Wp, StringComparer.OrdinalIgnoreCase).ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
+        var overdue = cycle.Deadline is { } deadline && today > deadline;
+        static string Day(DateTimeOffset? at) => at is { } a ? $" {a.LocalDateTime:yyyy-MM-dd}" : "";
+        StructureRow Decorate(StructureRow row)
+        {
+            if (row.Wp is null)
+                return row;
+            var required = row.Cam is not null && row.Status != "zakończony";
+            var item = byWp.GetValueOrDefault(row.Wp);
+            var status = item?.Status ?? CamStatuses.ToDo;
+            if (!required)
+                return item is null ? row : row with { CamEstimate = $"{status}{Day(item.ReviewedAt ?? item.SubmittedAt)} (niewymagana)" };
+            var (text, tone) = status switch
+            {
+                CamStatuses.Approved => ($"Zatwierdzona{Day(item!.ReviewedAt)}", "ok"),
+                CamStatuses.Sent => ($"Wysłana{Day(item!.SubmittedAt)} – do decyzji", "info"),
+                CamStatuses.Returned => ($"Zwrócona{Day(item!.ReviewedAt)} – u CAM-a", "crit"),
+                CamStatuses.Draft => (overdue ? "Szkic – po terminie" : "Szkic CAM-a", overdue ? "warn" : null),
+                _ => (overdue ? "Brak – po terminie" : "Brak estymacji", overdue ? "warn" : null),
+            };
+            return row with { CamEstimate = $"{text} · cykl {cycle.Period}", CamTone = tone };
+        }
+        return structure with { Rows = structure.Rows.Select(Decorate).ToList() };
+    }
+
+    /// <summary>
+    /// Stawka godziny MPK według roku: Labor Rate × Overhead (brak Overhead – 1) ze „Stawki wydziałów” (PLN) × przelicznik pracy
+    /// na walutę programu (rates.LaborFactor; brak kursu – pusta lista).
+    /// </summary>
+    public static IReadOnlyDictionary<int, decimal> HourRates(IReadOnlyList<DictRow> departmentRates, string? mpk, EtcRates rates)
+    {
+        static decimal? Dec(string? text) => decimal.TryParse(text, System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var v) ? v : null;
+        if (mpk is null || rates.LaborFactor is not { } factor)
+            return new Dictionary<int, decimal>();
+        return departmentRates.Where(r => string.Equals(r["MPK"], mpk, StringComparison.OrdinalIgnoreCase) && Dec(r["Labor Rate"]) is not null
+                                          && int.TryParse(r["Year"], out _))
+            .GroupBy(r => int.Parse(r["Year"]!, System.Globalization.CultureInfo.InvariantCulture))
+            .ToDictionary(g => g.Key, g => Dec(g.First()["Labor Rate"])!.Value * (Dec(g.First()["Overhead"]) ?? 1) * factor);
+    }
+
+    /// <summary>
+    /// Zatwierdzona estymacja CAM do „Harmonogram i budżet”: ETC HOURS, ETC MATERIAL (z waluty estymacji na walutę wiersza
+    /// – kolumna Waluta; pusta – waluta programu), Forecast Start / Koniec (null – bez zmiany) – zapis jak edycja tabeli struktury
+    /// (walidacja słownika, historia). Zwraca błąd albo null.
+    /// </summary>
+    public string? ApplyCamEstimate(string code, string wp, decimal etcHours, decimal materialEtc, string? currency, DateOnly? forecastStart, DateOnly? forecastFinish,
+        DateOnly? actualStart = null, DateOnly? actualFinish = null)
+    {
+        static string Number(decimal value) => Math.Round(value, 2).ToString(System.Globalization.CultureInfo.InvariantCulture);
+        var rows = Rows(ProjectDictionaries.ScheduleBudget, code);
+        var rowCurrency = rows.FirstOrDefault(r => string.Equals(r["WP"], wp, StringComparison.OrdinalIgnoreCase))?[ProjectDictionaries.CurrencyColumn];
+        var material = materialEtc;
+        if (currency is not null && rowCurrency is not null && !string.Equals(currency, rowCurrency, StringComparison.OrdinalIgnoreCase))
+        {
+            if (EtcRatesOf([], FxRates(), currency, null, DateOnly.FromDateTime(DateTime.Today)).Factor(rowCurrency) is not { } factor || factor == 0)
+                return $"brak kursu {rowCurrency} w „Kursy walut” – ETC MATERIAL WP {wp} nie przeliczony";
+            material = materialEtc / factor;
+        }
+        var changes = new Dictionary<string, string?>
+        {
+            [StructureEdits.EtcHours] = Number(etcHours),
+            [StructureEdits.MaterialEtc] = Number(material),
+        };
+        if (forecastStart is { } start)
+            changes[StructureEdits.ForecastStart] = start.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
+        if (forecastFinish is { } finish)
+            changes[StructureEdits.ForecastFinish] = finish.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
+        // Daty rzeczywiste podane przez CAM-a – Actual Start / Actual Koniec (nadpisują produkcję); bez nich – bez zmian.
+        if (actualStart is { } realStart)
+            changes[StructureEdits.ActualStart] = realStart.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
+        if (actualFinish is { } realFinish)
+            changes[StructureEdits.ActualFinish] = realFinish.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
+        var (working, removed) = StructureEdits.Schedule(rows, wp, changes);
+        var outcome = SaveStructureDictionary(ProjectDictionaries.ScheduleBudget, Context(code, store.Objectives(code), Rows(ProjectDictionaries.WpCam, code), Mapping()),
+            working, removed, code);
+        return outcome.Status is SaveStatus.Saved or SaveStatus.NoChanges ? null : Describe($"Harmonogram i budżet: {outcome.Message}", outcome.Issues);
     }
 
     /// <summary>Komunikat z pierwszymi problemami (ERROR przed WARNING).</summary>

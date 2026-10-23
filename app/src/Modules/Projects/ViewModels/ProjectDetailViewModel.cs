@@ -30,6 +30,8 @@ public sealed partial class ProjectDetailViewModel : ObservableObject, IDisposab
     private readonly IFileDialogs _dialogs;
     private string _status = "";
     private readonly IRunPanel? _runPanel;
+    private readonly Action<DictionaryLink>? _openGlobalDictionary;   // słownik globalny – ekran Słowniki (nawigacja z parametrem)
+    private int _selectedTab;
     private P1sInputs _mapping = P1sInputs.None;
     private PoTree _saved = new();
     private IReadOnlyDictionary<string, string> _owners = new Dictionary<string, string>();
@@ -55,9 +57,11 @@ public sealed partial class ProjectDetailViewModel : ObservableObject, IDisposab
     private IReadOnlyList<SourceDefinitionRow> _sourceDefinitions = [];
     private string _costsField = ProjectSettings.DefaultActualsAmount;   // pole kwoty ACTUALS kosztów w pamięci („Parametry projektu”)
 
-    public ProjectDetailViewModel(ProjectService service, IFileDialogs dialogs, BusyState busy, ProjectInfo project, Action back)
+    public ProjectDetailViewModel(ProjectService service, IFileDialogs dialogs, BusyState busy, ProjectInfo project, Action back,
+        Action<DictionaryLink>? openGlobalDictionary = null)
     {
         _service = service;
+        _openGlobalDictionary = openGlobalDictionary;
         _dialogs = dialogs;
         Busy = busy;
         Project = project;
@@ -82,6 +86,8 @@ public sealed partial class ProjectDetailViewModel : ObservableObject, IDisposab
         RefreshMapping = new AsyncRelayCommand(() => { Structure.CommitEdits(); return Reload(refreshMapping: true); }, () => !Busy.IsBusy);
         ImportSources = new AsyncRelayCommand(DoImportSources, () => !Busy.IsBusy && _service.Imports is not null);
         _runPanel = _service.RunPanels?.Create(Code);
+        if (_runPanel is not null)
+            _runPanel.FixRequested += OnFixRequested;
         if (_service.Runs is { } runs)
             runs.Finished += OnRunFinished;
         foreach (var item in ProjectDictionaries.Items)
@@ -134,9 +140,14 @@ public sealed partial class ProjectDetailViewModel : ObservableObject, IDisposab
     /// <summary>Przebieg programu – zakładka Przebieg (panel modułu Przebiegi: etapy, potwierdzenia, ponowne wykonanie); null – moduł niedostępny.</summary>
     public object? RunPanel => _runPanel?.View;
 
+    /// <summary>Wybrana zakładka ekranu programu (indeks – kolejność w ProjectDetailView.xaml).</summary>
+    public int SelectedTab { get => _selectedTab; set => SetProperty(ref _selectedTab, value); }
+
     /// <summary>Zwolnienie panelu przebiegu i odpięcie od zdarzeń przebiegów przy zmianie strony modułu.</summary>
     public void Dispose()
     {
+        if (_runPanel is not null)
+            _runPanel.FixRequested -= OnFixRequested;
         _runPanel?.Dispose();
         if (_service.Runs is { } runs)
             runs.Finished -= OnRunFinished;
@@ -202,6 +213,10 @@ public sealed partial class ProjectDetailViewModel : ObservableObject, IDisposab
                     var structure = steps.Time("budowa struktury", () =>
                         ProjectService.Structure(tree, mapping, wpCam, rows.GetValueOrDefault(ProjectDictionaries.ScheduleBudget) ?? [], costs.Amounts, production,
                             costs.Hours, costs.Labor, costs.Material, rates));
+                    // Estymacje CAM WP w bieżącym cyklu – kolumna „Estymacja CAM” i kolor wiersza WP.
+                    var today = DateOnly.FromDateTime(DateTime.Today);
+                    if (steps.Time("estymacje CAM", () => _service.CamEstimates(Code, today)) is { } cam)
+                        structure = ProjectService.WithCamEstimates(structure, cam.Cycle, cam.Saved, today);
                     var persons = cachedPersons ?? steps.Time("osoby", _service.PersonLookups);
                     var categories = ProjectService.CategoryLookups(rows.GetValueOrDefault(ProjectDictionaries.WbsCategories) ?? []);
                     var owners = cachedOwners ?? steps.Time("nakładki innych programów", () => _service.WbsOwners(Code));

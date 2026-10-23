@@ -17,7 +17,8 @@ public static class RunDefinitionRows
     public static IReadOnlyList<RunStepRowData> Steps(IEnumerable<DictRow> rows) =>
         rows.Where(r => r["Definicja"] is not null && r["Etap"] is not null)
             .Select(r => new RunStepRowData(r["Definicja"]!, int.TryParse(r["Kolejność"], NumberStyles.Integer, CultureInfo.InvariantCulture, out var no) ? no : 0,
-                r["Etap"]!, r["Akcja"] ?? RunActions.Checks, r["Bramka WARNING"] ?? RunGates.Confirm, r["Zatwierdzenie"] == "tak", r["Opis"])).ToList();
+                r["Etap"]!, r["Akcja"] ?? RunActions.Checks, r["Bramka WARNING"] ?? RunGates.Confirm, r["Zatwierdzenie"] == "tak", r["Opis"], r["Warunek"],
+                r["Powiadomienie CAM"] is null ? null : r["Powiadomienie CAM"] == "tak")).ToList();
 
     public static IReadOnlyList<RunStepElementRow> Elements(IEnumerable<DictRow> rows) =>
         rows.Where(r => r["Definicja"] is not null && r["Etap"] is not null && r["Element"] is not null)
@@ -35,6 +36,8 @@ public static class RunDefinitionRows
         {
             ["Definicja"] = definition.Code, ["Kolejność"] = s.No.ToString(CultureInfo.InvariantCulture), ["Etap"] = s.Name, ["Akcja"] = s.Action,
             ["Bramka WARNING"] = s.WarningGate, ["Zatwierdzenie"] = YesNo(s.Approval), ["Opis"] = s.Description,
+            ["Warunek"] = s.Condition == RunConditions.Closing ? RunConditions.Closing : null,
+            ["Powiadomienie CAM"] = s.Action == RunActions.ApproveEtc ? YesNo(s.Notify) : null,
         }).ToList();
 
     public static IReadOnlyList<IReadOnlyDictionary<string, string?>> ElementValues(RunDefinition definition) =>

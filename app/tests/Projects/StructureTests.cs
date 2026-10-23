@@ -1,9 +1,11 @@
 using ClosedXML.Excel;
 using PzlEv.Modules.Projects.Models;
 using PzlEv.Modules.Projects.Services;
+using PzlEv.Shared.Models;
 using PzlEv.Shared.Models.Dictionaries;
 using PzlEv.Shared.Models.Pipeline;
 using PzlEv.Shared.Models.PzlProd;
+using PzlEv.Shared.Utils.Data;
 using PzlEv.Shared.Utils.Files;
 using PzlEv.Tests.TestSupport;
 using Xunit;
@@ -141,6 +143,11 @@ public sealed class StructureTests
         Assert.Equal(7m, Of(structure, "p1s:AC-CAB.6.38.03.01.05").Acwp);   // wiersz WP-3: koszt przypisany do WP
         Assert.Equal((187m, 80m, 5m, true), (structure.Summary.Acwp, structure.Summary.AcwpWithoutWp, structure.Summary.AcwpOutside, structure.Summary.HasCosts));
         Assert.False(ProjectService.Structure(Objectives(), Inputs(), wpCam, schedule).Summary.HasCosts);
+        // Przypisanie elementów (łączenie źródeł w przebiegu): każdy element kosztów raz – WP albo powód braku.
+        Assert.Equal(
+            [("4D06WP.02", "WP-3", null), ("4D06WP.RA", null, CostGaps.Ambiguous), ("4D06WP000001", "WP-2", null), ("4D06WP000002", null, CostGaps.NoWp),
+             ("XXX-SPOZA", null, CostGaps.Outside)],
+            structure.CostTargets!.OrderBy(t => t.WbsElement, StringComparer.OrdinalIgnoreCase).Select(t => (t.WbsElement, t.Wp, t.Gap)));
     }
 
     [Fact]
@@ -332,6 +339,37 @@ public sealed class StructureTests
     }
 
     /// <summary>Wskaźniki EVM wiersza WP: godziny i koszty z produkcji, ACTUALS i budżetu; ETC z produkcji albo wpisane; ETC Cost ze stawki MPK.</summary>
+    /// <summary>
+    /// Estymacja CAM na strukturze (ProjectService.WithCamEstimates): wymagany WP (z CAM-em, niezakończony) – kolor statusu, brak i szkic żółte
+    /// dopiero po terminie cyklu; WP bez CAM albo zakończony – tylko opis zapisanej estymacji, bez koloru; wiersz bez WP – bez zmian.
+    /// </summary>
+    [Fact]
+    public void Cam_estimates_color_work_package_rows_by_status_and_deadline()
+    {
+        var built = StructureBuilder.Build(Objectives(), Inputs().P1s, [Wp("AC-CAB.6.38.07", "WP-1")], []);
+        var template = Of(built, "p1s:AC-CAB.6.38.07") with { Status = "w toku" };
+        var plain = built.Rows.First(r => r.Wp is null);
+        StructureRow WpRow(string wp, string? cam = "0412", string status = "w toku") => template with { Id = wp, Wp = wp, Cam = cam, Status = status };
+        var structure = new ProjectStructure([plain, WpRow("A"), WpRow("S"), WpRow("R"), WpRow("D"), WpRow("M"), WpRow("F", status: "zakończony"), WpRow("N", cam: null)],
+            built.Summary);
+        static CamReviewItem Item(string wp, string status) => new("M28", wp, "2026-10", wp, "0412", false, status, 0, 0, "PLN", null, null, null,
+            new DateTimeOffset(2026, 10, 20, 9, 0, 0, TimeSpan.Zero), "e1", new DateTimeOffset(2026, 10, 21, 9, 0, 0, TimeSpan.Zero), "fin", null);
+        IReadOnlyList<CamReviewItem> saved = [Item("a", CamStatuses.Approved), Item("S", CamStatuses.Sent), Item("R", CamStatuses.Returned), Item("D", CamStatuses.Draft),
+            Item("F", CamStatuses.Approved)];
+        var cycle = new CamCycle("2026-10", new DateOnly(2026, 10, 30));
+
+        var before = ProjectService.WithCamEstimates(structure, cycle, saved, new DateOnly(2026, 10, 25));
+        var after = ProjectService.WithCamEstimates(structure, cycle, saved, new DateOnly(2026, 11, 2));
+
+        static string Tones(ProjectStructure s) => string.Join(" ", s.Rows.Select(r => r.CamTone ?? "-"));
+        Assert.Equal("- ok info crit - - - -", Tones(before));            // przed terminem: szkic i brak bez koloru
+        Assert.Equal("- ok info crit warn warn - -", Tones(after));       // po terminie – żółte
+        Assert.Equal("Zatwierdzona 2026-10-21 · cykl 2026-10", before.Rows[1].CamEstimate);            // WP bez względu na wielkość liter
+        Assert.Equal(("Brak – po terminie · cykl 2026-10", "Zatwierdzona 2026-10-21 (niewymagana)"), (after.Rows[5].CamEstimate, after.Rows[6].CamEstimate));
+        Assert.Null(after.Rows[7].CamEstimate);                                                          // WP bez CAM, bez estymacji
+        Assert.Same(plain, after.Rows[0]);
+    }
+
     [Fact]
     public void Evm_columns_of_wp_use_production_actuals_budget_and_mpk_rate()
     {
@@ -350,8 +388,10 @@ public sealed class StructureTests
         var production = new ProductionData(new Dictionary<string, ProductionValues>
         {
             ["101"] = new("101", AcHours: 40, BacHours: 60, EvHours: 30, ActualMaterial: 100, ActualStart: new DateOnly(2026, 10, 6), EtcHours: 20,
-                MaterialValue: 400, MaterialFee: 40, Parts: 5, PartsDelivered: 2, NextDeliveryYear: 2027),
-            ["102"] = new("102", AcHours: 10, BacHours: 40, EvHours: 20, ActualMaterial: null, EtcHours: 10),
+                MaterialValue: 400, MaterialFee: 40, Parts: 5, PartsDelivered: 2, NextDeliveryYear: 2027,
+                PlanStart: new DateOnly(2026, 10, 1), PlanFinish: new DateOnly(2027, 2, 1), EtcByYear: new Dictionary<int, decimal> { [2026] = 15, [2027] = 5 }),
+            ["102"] = new("102", AcHours: 10, BacHours: 40, EvHours: 20, ActualMaterial: null, EtcHours: 10,
+                PlanStart: new DateOnly(2026, 9, 1), PlanFinish: new DateOnly(2026, 12, 1), EtcByYear: new Dictionary<int, decimal> { [2026] = 10 }),
         }, DateTimeOffset.Now);
         var costs = new Dictionary<string, decimal> { ["4D06WP000001"] = 900m };
         var rates = new EtcRates(new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase) { ["W30"] = 150m }, 2026, "PLN", 1, 4m, null);
@@ -369,6 +409,9 @@ public sealed class StructureTests
         Assert.Equal((5700m, 5000m, 5000m), (wp1.EtcCost, wp1.PvCost, wp1.EvCost));
         Assert.Equal(("2026-11-30", "w toku", "W30"), (wp1.ForecastFinish, wp1.Status, wp1.Mpk));
         Assert.False(wp1.EtcHoursManual);
+        // ETC z produkcji po planowanym roku (R) i plan zleceń (DATA_PLAN) – suma poddrzewa WP (101 i 102).
+        Assert.Equal([(2026, 25m), (2027, 5m)], wp1.ProductionEtcByYear!.OrderBy(x => x.Key).Select(x => (x.Key, x.Value)));
+        Assert.Equal(("2026-09-01", "2027-02-01"), (wp1.PlanStart, wp1.PlanFinish));
 
         // WP-2: ETC wpisane (8 h, 50 PLN – waluta projektu), bez MPK – ETC Cost pusty i brak „WP bez MPK”; ACWP węzła: Labor 600, Material 200, Other 100.
         var wp2Row = Of(structure, "4D06WP000001");   // węzeł nakładki z kodem AC-CAB.6.38.01 – WP-2 w wierszu węzła

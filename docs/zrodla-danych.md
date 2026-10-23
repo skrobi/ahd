@@ -272,7 +272,7 @@ Z_KAT_ZBIORCZA
   - **wydzielenia** (np. Paint) – węzły wirtualne nakładki z kodem P1S `ELEMENT_P1S.NAZWA.CPLGR`, reguła: CPLGR operacji
     zaczyna się od CPLGR kodu (`docs/performance-objectives.md`, rozdz. 4.2).
 - Ziarno `vAHDD`: operacja (`VORNR`) zlecenia (`AUFNR`) pod elementem (`PSPNR`, `WBS_ELEMENT`); `CPLGR` – grupa stanowisk
-  (zwykle = `IPT`), `ARBPL` – stanowisko, `SWBS` – podział (np. Cabin, Hangar), `VERWE` – MFG / QUAL (operacje kontroli DJK).
+  (zwykle = `IPT`), `ARBPL` – stanowisko, `SWBS` – podział (np. Cabin, Hangar), `VERWE` – MFG / QUAL (operacje kontroli DJK); `DATA_PLAN` – planowana data operacji, `R` – planowany rok poniesienia godzin.
 - Wynik po elemencie (PSPNR, a operacje zgodne z regułą wydzielenia – po wydzieleniu, odjęte od elementu):
   - AC = Σ `CATS`; BAC = Σ `TECH` ÷ produktywność IPT + DJK; EV = Σ `TECH_PON` ÷ produktywność IPT + DJK;
     produktywność IPT = Σ `CzTechPon` ÷ Σ `CzRzecz` z `LOG.vAHDD_PL_CPI` w oknie z „Parametry produkcji” (brak – 1);
@@ -280,10 +280,15 @@ Z_KAT_ZBIORCZA
     Paint – w Paint); operacje kontroli (`CPLGR` DJK, `VERWE` QUAL) – własne godziny w swoim elemencie;
   - Actual Start = najwcześniejszy `GSTRI` (rzeczywisty start zlecenia); Actual Finish = najpóźniejszy `LTRMI`, gdy wszystkie
     operacje elementu mają `STAT` = DONE, inaczej puste; wydzielenie – `DATA_REAL` jego operacji;
-  - ETC = Σ `TECH_DO_PON` ÷ produktywność IPT + DJK (godziny do wykonania);
+  - ETC = Σ `TECH_DO_PON` ÷ produktywność IPT + DJK (godziny do wykonania); także według planowanego roku poniesienia
+    (`R`; czwarty wynik zapytania, rok 0 – bez roku) – propozycja godzin w estymacji CAM (F11);
+  - Plan Start / Plan Finish = najwcześniejsza / najpóźniejsza `DATA_PLAN` operacji – prognoza WP (harmonogram) w estymacji CAM,
+    gdy nie jest wpisana;
   - materiały `LOG.vAPD` (po PSPNR, na elemencie – nie na wydzieleniu), USD: wartość wszystkich części Σ `NETWR_USD`
     [÷ (1 + `Z_CLO`)], fee Σ `NETWR_USD` − Σ `NETWR_USD` ÷ (1 + `Z_CLO`), dostarczone – statusy dostarczone, liczba numerów
     części (`MATNR`) wszystkich i dostarczonych, najbliższy rok planowanej dostawy niedostarczonych (`EINDT_MAX`).
+  - materiały niedostarczone według roku planowanej dostawy (`EINDT_MAX`; trzeci wynik zapytania, rok 0 – bez daty) – propozycja
+    materiałów w estymacji CAM (F11, `docs/funkcjonalnosc.md`).
 - Raport S70MR liczy jednocześnie operacje kontroli DJK i DJK procentowe od godzin W2–W6 – przeniesione bez zmian, do
   potwierdzenia z autorem raportu (czy kontrola nie jest liczona podwójnie). TEMPO (`extCES.TEMPO1464`) – poza strukturą.
 

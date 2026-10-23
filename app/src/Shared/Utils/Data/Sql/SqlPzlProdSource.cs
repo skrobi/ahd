@@ -99,13 +99,19 @@ public sealed class SqlPzlProdSource(SqlDatabase db) : IPzlProdSource
             commandTimeout: Timeout);
         var hours = results.Read<HoursRow>().ToList();
         var materials = results.Read<MaterialRow>().ToDictionary(r => r.Pspnr);
+        var undelivered = results.Read<(string Pspnr, int? DeliveryYear, decimal Value)>().GroupBy(r => r.Pspnr)
+            .ToDictionary(g => g.Key, g => (IReadOnlyDictionary<int, decimal>)g.ToDictionary(r => r.DeliveryYear ?? 0, r => r.Value));
+        var etcByYear = results.Read<(string Pspnr, string? VirtualCode, int? PlanYear, decimal EtcHours)>().GroupBy(r => (r.Pspnr, r.VirtualCode))
+            .ToDictionary(g => g.Key, g => (IReadOnlyDictionary<int, decimal>)g.ToDictionary(r => r.PlanYear ?? 0, r => r.EtcHours));
         // Materiały – na elemencie P1S, nie na wydzieleniu.
         ProductionValues WithMaterials(ProductionValues v, MaterialRow? m) => m is null || v.VirtualCode is not null ? v
             : v with { ActualMaterial = m.Delivered, MaterialValue = m.Value, MaterialFee = m.Fee, Parts = m.Parts, PartsDelivered = m.PartsDelivered,
-                NextDeliveryYear = m.NextDeliveryYear };
+                NextDeliveryYear = m.NextDeliveryYear, UndeliveredByYear = undelivered.GetValueOrDefault(m.Pspnr) };
         var values = hours.Select(h => WithMaterials(new ProductionValues(h.Pspnr, h.AcHours, h.BacHours, h.EvHours, null, h.VirtualCode,
                 h.ActualStart is { } start ? DateOnly.FromDateTime(start) : null, h.ActualFinish is { } finish ? DateOnly.FromDateTime(finish) : null,
-                h.EtcHours), materials.GetValueOrDefault(h.Pspnr)))
+                h.EtcHours, PlanStart: h.PlanStart is { } planStart ? DateOnly.FromDateTime(planStart) : null,
+                PlanFinish: h.PlanFinish is { } planFinish ? DateOnly.FromDateTime(planFinish) : null,
+                EtcByYear: etcByYear.GetValueOrDefault((h.Pspnr, h.VirtualCode))), materials.GetValueOrDefault(h.Pspnr)))
             .ToList();
         values.AddRange(materials.Values.Where(m => !hours.Any(h => h.VirtualCode is null && h.Pspnr == m.Pspnr))
             .Select(m => WithMaterials(new ProductionValues(m.Pspnr, null, null, null, null), m)));
@@ -134,6 +140,8 @@ public sealed class SqlPzlProdSource(SqlDatabase db) : IPzlProdSource
         public decimal? BacHours { get; set; }
         public decimal? EvHours { get; set; }
         public decimal? EtcHours { get; set; }
+        public DateTime? PlanStart { get; set; }
+        public DateTime? PlanFinish { get; set; }
     }
 
     private sealed class MaterialRow

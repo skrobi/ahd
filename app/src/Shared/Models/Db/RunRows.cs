@@ -44,8 +44,22 @@ public sealed record RunPinRow(
     string? AmountField,
     bool IsClosingWeek = false,
     string? Period = null,
-    bool IsPeriodClose = false)
+    bool IsPeriodClose = false,
+    long? FrozenPinId = null,
+    DateTimeOffset? FrozenAt = null,
+    string? FrozenBy = null)
 {
+    /// <summary>Przebieg tygodnia zamrożony (klocek „Zamknięcie okresu”) – uruchomienia tylko do odczytu, bez nowych uruchomień.</summary>
+    public bool IsFrozen => FrozenPinId is not null;
+
+    /// <summary>To uruchomienie zatwierdziło zamknięcie okresu (zamrożone).</summary>
+    public bool IsFrozenPin => FrozenPinId == PinId;
+
+    /// <summary>Opis zamrożenia: kto i kiedy zamknął okres; pusty – przebieg niezamrożony.</summary>
+    public string FrozenText => FrozenAt is { } at
+        ? $"Okres {Period} zamknięty {at.ToLocalTime():yyyy-MM-dd HH:mm} ({FrozenBy}) – przebieg {Code} tylko do odczytu; zmiany po „Otwórz zamknięcie” z komentarzem"
+        : "";
+
     /// <summary>Opis na listę projektów: kod, numer uruchomienia, stan; zamknięcie okresu – znacznik.</summary>
     public string Label => $"{Code} #{PinNo} – {Status}{ClosingText}";
 
@@ -53,7 +67,7 @@ public sealed record RunPinRow(
     /// Znacznik zamknięcia okresu: IsPeriodClose – ostatnie zakończone uruchomienie tygodnia zamykającego okres (kalendarz okresów), czyli
     /// wynik okresu do porównań „od zamknięcia do zamknięcia”; pozostałe uruchomienia tygodnia zamykającego – „tydzień zamykający”.
     /// </summary>
-    public string ClosingText => IsPeriodClose ? $" · ★ zamknięcie {Period}" : IsClosingWeek ? " · tydzień zamykający" : "";
+    public string ClosingText => (IsPeriodClose ? $" · ★ zamknięcie {Period}" : IsClosingWeek ? " · tydzień zamykający" : "") + (IsFrozenPin ? " · zamrożone" : "");
 }
 
 /// <summary>Wynik kontroli przebiegu – run.Issue; wynik reguły walidacji – CheckName = nazwa reguły, Details – wiersz wyniku (JSON, RunRules.Details).</summary>

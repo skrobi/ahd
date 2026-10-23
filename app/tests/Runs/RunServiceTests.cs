@@ -129,8 +129,9 @@ public sealed class RunServiceTests : IDisposable
         // (T40 #1 – błędy zaakceptowane; T41 #1 – zatrzymany na błędzie, niezatwierdzony).
         var projects = new SqlProjectStore(_database.Sql, _services.Clock, _services.User);
         Assert.Equal((pin.Code, pin.PinNo), (projects.ApprovedActuals("PAF")!.RunCode, projects.ApprovedActuals("PAF")!.PinNo));
-        var approval = new RunDefinition("A – zatwierdzenie ACTUALS", RunRules.AllTypes, [.. RunDefinitions.StandardSteps.Take(3), RunDefinitions.ActualsApproval(4)]);
-        Assert.Equal(PzlEv.Shared.Models.Dictionaries.SaveStatus.Saved, templates.Save(approval, isActive: true).Status);   // domyślny – pierwszy alfabetycznie
+        // Szablon typu programu – domyślny przed „Wewnętrzny” (Wszystkie; jeden aktywny szablon domyślny na typ – słownik „Definicje przebiegów”).
+        var approval = new RunDefinition("A – zatwierdzenie ACTUALS", ProjectTypes.Internal, [.. RunDefinitions.StandardSteps.Take(3), RunDefinitions.ActualsApproval(4)]);
+        Assert.Equal(PzlEv.Shared.Models.Dictionaries.SaveStatus.Saved, templates.Save(approval, isActive: true).Status);
         service.Execute("PAF");
         var approving = store.Pins("PAF", 1)[0];
         Assert.Contains(store.Issues(approving.PinId), i => i.Message.EndsWith("bez zmian względem przebiegu R-PAF-2026-10-T41 #1 (te same dane)"));
@@ -199,6 +200,290 @@ public sealed class RunServiceTests : IDisposable
         var ev = store.RunRule("SELECT SUM(Kwota) AS Koszt FROM ev", new RunRuleContext(pin.PinId, null, "PAF", (2026, 9), (2026, 10), "PLN", "CAS"));
         Assert.Equal(Math.Round(acwp, 2), Math.Round((decimal)ev.Rows.Single()[0]!, 2));   // tabela ev – koszty po narzutach CAS
         Assert.NotEqual(RunStatuses.Failed, outcome.Status);
+    }
+
+    /// <summary>Atrapa ICamReview: estymacje programu w cyklu zmieniane przez test (decyzje finansisty między wykonaniem a akceptacją etapu).</summary>
+    private sealed class FakeCamReview : ICamReview
+    {
+        public List<CamReviewItem> Items { get; } = [];
+
+        public string? AskedPeriod { get; private set; }
+
+        public static CamReviewItem Item(string wp, string status, bool required = true) =>
+            new("PAF", wp, "2026-10", $"Pakiet {wp}", "0412", required, status, 100, 0, "PLN", null, null, null, null, null, null, null, null);
+
+        public List<(string Cycle, long? PinId, bool Resend)> Notified { get; } = [];
+
+        public CamCycle Cycle(DateOnly day, bool weekly = false) => new("2026-10", new DateOnly(2026, 10, 30));
+
+        public CamCycle CycleOf(string code) => new(AskedPeriod = code, new DateOnly(2026, 10, 30));
+
+        public CamNotifyResult Notify(string project, CamCycle cycle, long? pinId, bool resend)
+        {
+            Notified.Add((cycle.Period, pinId, resend));
+            return new CamNotifyResult(
+                [new("0412", "Anna Nowak", "anna.nowak@pzl.pl", DateTimeOffset.Now, "t", "WP-3", CamNotificationResults.Sent, null),
+                 new("0577", "Jan Lis", null, DateTimeOffset.Now, "t", "WP-4", CamNotificationResults.NoEmail, "brak adresu e-mail w słowniku Osoby")],
+                ["0999"]);
+        }
+
+        public IReadOnlyList<CamNotification> Notifications(string project, string cycle) => [];
+
+        public CamReview Program(string project, CamCycle cycle) => new(cycle, [.. Items]);
+
+        public IReadOnlyList<CamReviewItem> Saved(string project, string period) => Items;
+
+        public CamDecision Approve(CamReviewItem item) => new(true, "");
+
+        public CamDecision Return(CamReviewItem item, string note) => new(true, "");
+
+        public CamDecision Reopen(CamReviewItem item, string comment) => new(true, "");
+    }
+
+    /// <summary>
+    /// Klocek „Estymacje CAM”: etap czeka na finansistę – podsumowanie wymaganych WP i WARNING dla WP bez zatwierdzonej estymacji (cykl – okres
+    /// tygodnia przebiegu); akceptacja z komentarzem zapisuje stan z chwili akceptacji (także z brakami).
+    /// </summary>
+    [SqlFact]
+    public void Cam_estimates_step_waits_for_finance_and_records_the_state_at_acceptance()
+    {
+        _database = new TestDatabase(presets: true);
+        var app = _services.App(_root, _database.Sql);
+        var tree = new PoTree();
+        tree.AddElement(null, "2DI473", "PAF2", null);
+        Assert.True(new SqlProjectStore(_database.Sql, _services.Clock, _services.User).Create("PAF", "PAF", ProjectTypes.Internal, tree).Success);
+        var store = new SqlRunStore(_database.Sql);
+        var templates = new RunTemplateService(new PzlEv.Shared.Utils.Dictionaries.DictionaryService(new PzlEv.Shared.Utils.Dictionaries.SqlDictionaryStore(_database.Sql,
+            _services.Clock, _services.User, PzlEv.Shared.Utils.Dictionaries.GlobalDictionaries.Tables), app.Journal), store);
+        Assert.Equal(PzlEv.Shared.Models.Dictionaries.SaveStatus.Saved,
+            templates.Save(new RunDefinition("E – estymacje CAM", ProjectTypes.Internal, [.. RunDefinitions.FixedSteps, RunDefinitions.EtcApproval(3, RunConditions.Always, notify: false)]), isActive: true).Status);
+        var cams = new FakeCamReview();
+        cams.Items.AddRange([FakeCamReview.Item("WP-1", CamStatuses.Approved), FakeCamReview.Item("WP-2", CamStatuses.Sent), FakeCamReview.Item("WP-3", CamStatuses.ToDo),
+            FakeCamReview.Item("WP-9", CamStatuses.Draft, required: false)]);
+        var service = new RunService(store, app, cams: () => cams);
+
+        service.Execute("PAF");
+
+        var pin = store.Pins("PAF", 1)[0];
+        Assert.Equal("2026-T40", cams.AskedPeriod);                                                    // cykl tygodniowy (każdy przebieg) – tydzień przebiegu
+        Assert.Empty(cams.Notified);                                                                    // bez powiadomienia CAM-ów
+        var step = store.Steps(pin.PinId)[2];
+        Assert.Equal((RunActions.ApproveEtc, RunStepStatuses.NeedsAction, 3), (step.Action, step.Status, step.Warnings));   // podsumowanie + 2 WP
+        var issues = store.Issues(pin.PinId).Where(i => i.StepNo == 3).ToList();
+        Assert.Contains(issues, i => i.Level == CheckLevel.Warning && i.Element is null && i.Message.StartsWith("Estymacje CAM 2026-T40: zatwierdzone 1 z 3 wymaganych"));
+        Assert.Equal(["WP-2", "WP-3"], issues.Where(i => i.Element is not null).Select(i => i.Element).Order());   // WP-9 niewymagany
+        Assert.Equal("Potwierdzenie wymaga komentarza.", service.Confirm(pin.PinId, 3, "").Summary);
+
+        // Finansista zatwierdza WP-2 w panelu etapu; WP-3 bez estymacji – akceptacja z komentarzem mimo braku.
+        cams.Items[1] = cams.Items[1] with { Status = CamStatuses.Approved };
+        service.Confirm(pin.PinId, 3, "WP-3 – CAM na urlopie, ETC z produkcji");
+
+        step = store.Steps(pin.PinId)[2];
+        Assert.Equal((RunStepStatuses.Done, 2), (step.Status, step.Warnings));   // podsumowanie + WP-3
+        Assert.Contains("estymacje CAM zaakceptowane – zatwierdzone 2 z 3 wymaganych, bez zatwierdzenia 1: WP-3 – CAM na urlopie", step.Comment);
+        Assert.Equal(["WP-3"], store.Issues(pin.PinId).Where(i => i.StepNo == 3 && i.Element is not null).Select(i => i.Element));
+        Assert.Contains(app.Journal.Recent(5), j => j.Message.Contains("estymacje CAM zaakceptowane"));
+    }
+
+    /// <summary>
+    /// Zatwierdzenie ETC w każdym przebiegu z powiadomieniem – program tygodniowy: cykl estymacji to tydzień przebiegu, na początku etapu
+    /// e-mail do CAM-ów (wynik na CAM-a, brak adresu – WARNING), potem etap czeka na Finanse; akceptacja zachowuje wyniki powiadomień.
+    /// Zatwierdzenie ETC przebiegu zamykającego (miesięczne) w tygodniu bez zamknięcia – pominięte, bez powiadomień.
+    /// </summary>
+    [SqlFact]
+    public void Etc_approval_notifies_cams_in_weekly_cycle_and_monthly_one_is_skipped_mid_period()
+    {
+        _database = new TestDatabase(presets: true);
+        var app = _services.App(_root, _database.Sql);
+        var tree = new PoTree();
+        tree.AddElement(null, "2DI473", "PAF2", null);
+        Assert.True(new SqlProjectStore(_database.Sql, _services.Clock, _services.User).Create("PAF", "PAF", ProjectTypes.Internal, tree).Success);
+        var store = new SqlRunStore(_database.Sql);
+        var templates = new RunTemplateService(new PzlEv.Shared.Utils.Dictionaries.DictionaryService(new PzlEv.Shared.Utils.Dictionaries.SqlDictionaryStore(_database.Sql,
+            _services.Clock, _services.User, PzlEv.Shared.Utils.Dictionaries.GlobalDictionaries.Tables), app.Journal), store);
+        var definition = new RunDefinition("T – tygodniowy CAM", ProjectTypes.Internal, [.. RunDefinitions.FixedSteps, RunDefinitions.EtcApproval(3, RunConditions.Always)]);
+        Assert.Equal(PzlEv.Shared.Models.Dictionaries.SaveStatus.Saved, templates.Save(definition, isActive: true).Status);
+        var cams = new FakeCamReview();
+        var service = new RunService(store, app, cams: () => cams);
+
+        service.Execute("PAF");
+
+        var pin = store.Pins("PAF", 1)[0];
+        Assert.False(store.RunWeek(pin.RunId).IsClosing);                                         // 2026-10-02 – tydzień 40, nie zamyka okresu
+        Assert.Equal([("2026-T40", (long?)pin.PinId, false)], cams.Notified);                     // cykl tygodniowy – z szablonu (warunek klocka)
+        Assert.Equal(("2026-T40", RunStepStatuses.NeedsAction), (cams.AskedPeriod, store.Steps(pin.PinId)[2].Status));   // stan estymacji – ten sam cykl; czeka na Finanse
+        var issues = store.Issues(pin.PinId).Where(i => i.StepNo == 3).ToList();
+        Assert.Contains(issues, i => i.CheckName == RunService.CamNotifyCheck && i.Element is null
+                                     && i.Message == "Powiadomienia CAM – cykl 2026-T40: wysłane 1 · powiadomieni wcześniej w cyklu: 1");
+        Assert.Contains(issues, i => i.CheckName == RunService.CamNotifyCheck && i.Element == "0577" && i.Level == CheckLevel.Warning && i.Message.StartsWith("Jan Lis: brak adresu"));
+        Assert.Contains(issues, i => i.CheckName == RunService.CamCheck && i.Message.StartsWith("Estymacje CAM 2026-T40"));
+        service.Confirm(pin.PinId, 3, "ETC zatwierdzone przez Finanse");
+        Assert.Equal(RunStepStatuses.Done, store.Steps(pin.PinId)[2].Status);
+        Assert.Equal(3, store.Issues(pin.PinId).Count(i => i.StepNo == 3 && i.CheckName == RunService.CamNotifyCheck));   // powiadomienia zostają po akceptacji
+
+        // Cykl miesięczny (przebieg zamykający) – w tygodniu bez zamknięcia etap pominięty, bez powiadomień.
+        Assert.Equal(PzlEv.Shared.Models.Dictionaries.SaveStatus.Saved,
+            templates.Save(definition with { Steps = [.. RunDefinitions.FixedSteps, RunDefinitions.EtcApproval(3)] }, isActive: true).Status);
+        service.Execute("PAF");
+        var monthly = store.Pins("PAF", 1)[0];
+        Assert.Equal(RunStepStatuses.Done, store.Steps(monthly.PinId)[2].Status);
+        Assert.StartsWith("Etap pominięty – przebieg w środku okresu", Assert.Single(store.Issues(monthly.PinId), i => i.StepNo == 3).Message);
+        Assert.Single(cams.Notified);
+    }
+
+    /// <summary>
+    /// Zamknięcie okresu (klocek „Zamknięcie okresu”): w środku okresu pominięte; w tygodniu zamykającym czeka na zatwierdzenie – uruchomienie
+    /// rozpoczęte przez analityka zatwierdza inna osoba (kontynuacja przebiegu), uruchomienie zostaje zamrożone: ponowne wykonanie, potwierdzenie
+    /// i nowe uruchomienie w tym tygodniu odrzucone; „Otwórz zamknięcie” z komentarzem zdejmuje blokadę. Dziennik przebiegu – zdarzenia z kodem przebiegu.
+    /// </summary>
+    [SqlFact]
+    public void Period_close_freezes_the_run_until_reopened_with_a_comment()
+    {
+        _database = new TestDatabase(presets: true);
+        var app = _services.App(_root, _database.Sql);
+        var tree = new PoTree();
+        tree.AddElement(null, "2DI473", "PAF2", null);
+        Assert.True(new SqlProjectStore(_database.Sql, _services.Clock, _services.User).Create("PAF", "PAF", ProjectTypes.Internal, tree).Success);
+        var store = new SqlRunStore(_database.Sql);
+        var templates = new RunTemplateService(new PzlEv.Shared.Utils.Dictionaries.DictionaryService(new PzlEv.Shared.Utils.Dictionaries.SqlDictionaryStore(_database.Sql,
+            _services.Clock, _services.User, PzlEv.Shared.Utils.Dictionaries.GlobalDictionaries.Tables), app.Journal), store);
+        Assert.Equal(PzlEv.Shared.Models.Dictionaries.SaveStatus.Saved,
+            templates.Save(new RunDefinition("Z – zamknięcie", ProjectTypes.Internal, [.. RunDefinitions.FixedSteps, RunDefinitions.PeriodClose(3)]), isActive: true).Status);
+        var service = new RunService(store, app);
+
+        service.Execute("PAF");                                                                     // tydzień 40 – w środku okresu
+        var mid = store.Pins("PAF", 1)[0];
+        Assert.Equal(RunStepStatuses.Done, store.Steps(mid.PinId)[2].Status);
+        Assert.StartsWith("Etap pominięty – przebieg w środku okresu", Assert.Single(store.Issues(mid.PinId), i => i.StepNo == 3).Message);
+        Assert.False(store.Pin(mid.PinId)!.IsFrozen);
+
+        while (!store.Week(_services.Clock.Now.Date)!.IsClosing)
+            _services.Clock.Advance(TimeSpan.FromDays(7));
+        service.Execute("PAF");
+        var pin = store.Pins("PAF", 1)[0];
+        Assert.Equal((RunStepStatuses.NeedsAction, RunStatuses.NeedsAction), (store.Steps(pin.PinId)[2].Status, store.Pin(pin.PinId)!.Status));
+        Assert.Equal(@"PZL\analityk", pin.StartedBy);
+
+        // Kontynuacja przez inną osobę: zatwierdzenie zamknięcia zamraża uruchomienie.
+        _services.User.Account = @"PZL\kierownik";
+        Assert.Equal("Potwierdzenie wymaga komentarza.", service.Confirm(pin.PinId, 3, " ").Summary);
+        service.Confirm(pin.PinId, 3, "Okres zamknięty po przeglądzie");
+
+        var frozen = store.Pin(pin.PinId)!;
+        var close = store.Steps(pin.PinId)[2];
+        Assert.Equal((true, true, @"PZL\kierownik", true), (frozen.IsFrozenPin, frozen.IsPeriodClose, frozen.FrozenBy, frozen.FinishedAt is not null));   // zakończone
+        Assert.Equal((RunStepStatuses.Done, @"PZL\kierownik"), (close.Status, close.ActedBy));
+        Assert.Contains($"okres {frozen.Period} zamknięty – uruchomienie zamrożone: Okres zamknięty po przeglądzie", close.Comment);
+        Assert.EndsWith(" · zamrożone", frozen.Label);
+        Assert.StartsWith("Nie wykonano – Okres", service.Rerun(pin.PinId, 2).Summary);
+        Assert.Equal(RunStepStatuses.Done, store.Steps(pin.PinId)[1].Status);
+        var refused = service.Execute("PAF");
+        Assert.True(refused.Failed);
+        Assert.StartsWith($"Nowe uruchomienie odrzucone – Okres {frozen.Period} zamknięty", refused.Summary);
+        Assert.Equal(pin.PinId, store.Pins("PAF", 1)[0].PinId);
+        Assert.Equal(frozen.PinId, store.FrozenIn("PAF", store.RunWeek(pin.RunId).Year, store.RunWeek(pin.RunId).Week)!.PinId);
+
+        // Otwórz zamknięcie: komentarz wymagany; etap znów czeka, nowe uruchomienie możliwe.
+        Assert.Equal("Otwarcie zamknięcia wymaga komentarza.", service.Reopen(pin.PinId, "").Summary);
+        service.Reopen(pin.PinId, "Korekta kosztów po zamknięciu");
+        var reopened = store.Pin(pin.PinId)!;
+        Assert.Equal((false, RunStatuses.NeedsAction), (reopened.IsFrozen, reopened.Status));
+        Assert.Equal(RunStepStatuses.NeedsAction, store.Steps(pin.PinId)[2].Status);
+        Assert.EndsWith(@"PZL\kierownik – zamknięcie otwarte ponownie: Korekta kosztów po zamknięciu", store.Steps(pin.PinId)[2].Comment);
+        Assert.Equal("Uruchomienie nie jest zamrożone.", service.Reopen(pin.PinId, "ponownie").Summary);
+        service.Execute("PAF");
+        Assert.Equal(2, store.Pins("PAF", 1)[0].PinNo);
+
+        var log = service.RunLog(pin.Code);
+        Assert.Contains(log, j => j.User == @"PZL\kierownik" && j.Message.Contains($"okres {frozen.Period} zamknięty – uruchomienie zamrożone"));
+        Assert.Contains(log, j => j.Message.Contains("zamknięcie okresu") && j.Message.Contains("otwarte ponownie – Korekta kosztów"));
+        Assert.Contains(log, j => j.User == @"PZL\analityk" && j.Message.Contains("#1") && j.Message.Contains("rozpoczęty"));
+        Assert.All(log, j => Assert.Equal(pin.Code, j.Scope));
+        Assert.True(log.Zip(log.Skip(1)).All(p => p.First.Id > p.Second.Id));                     // od najnowszego
+    }
+
+    /// <summary>Przypisanie kosztów jak w strukturze (atrapa): element 2DI473001001 → WP-1, pozostałe – bez WP.</summary>
+    private sealed class FakeCostAssignment : ICostAssignment
+    {
+        public IReadOnlyDictionary<string, decimal>? Asked { get; private set; }
+
+        public bool AssignAll { get; set; }
+
+        public CostAssignment Assign(string project, IReadOnlyDictionary<string, decimal> costs)
+        {
+            Asked = costs;
+            return new CostAssignment(costs.Keys.Select(k => AssignAll || k == "2DI473001001"
+                ? new CostTarget(k, "WP-1", "0577", "Production", null) : new CostTarget(k, null, null, null, CostGaps.NoWp)).ToList(), null);
+        }
+    }
+
+    /// <summary>
+    /// Łączenie źródeł (klocek): koszt „ev” uruchomienia przypisany do WP jak w strukturze i zapisany w uruchomieniu; suma kontrolna; koszt
+    /// bez przypisania – w środku okresu WARNING (potwierdzenie „Kontynuuj bez tych elementów”), w przebiegu zamykającym ERROR; pełne
+    /// przypisanie – etap zakończony; bez modułu Projekty – ERROR.
+    /// </summary>
+    [SqlFact]
+    public void Reconciliation_assigns_run_costs_to_wps_and_stops_on_unassigned_cost()
+    {
+        _database = new TestDatabase(presets: true);
+        var app = _services.App(_root, _database.Sql);
+        var config = new SourceConfigService(new SqlSourceConfigStore(_database.Sql, _services.Clock, _services.User), app.Journal);
+        var rabit = Assert.Single(config.Locations());
+        Assert.True(config.SaveLocation(new LocationInput(rabit.LocationId, rabit.Version, rabit.Name, rabit.Path, Active: false)).Success);
+        var import = new ImportService(new SqlImportStore(_database.Sql), app);
+        Directory.CreateDirectory(app.Config.ImportFolder);
+        File.Copy(TestServices.TestData("RABIT", "ACTUALS_PAF_01.csv"), Path.Combine(app.Config.ImportFolder, "ACTUALS_PAF_01.csv"));
+        Assert.Equal(FileDecisions.Imported, Assert.Single(import.Run().Files).Decision);
+        var tree = new PoTree();
+        tree.AddElement(null, "2DI473", "PAF2", null);
+        Assert.True(new SqlProjectStore(_database.Sql, _services.Clock, _services.User).Create("PAF", "PAF", ProjectTypes.Internal, tree).Success);
+        var store = new SqlRunStore(_database.Sql);
+        var templates = new RunTemplateService(new PzlEv.Shared.Utils.Dictionaries.DictionaryService(new PzlEv.Shared.Utils.Dictionaries.SqlDictionaryStore(_database.Sql,
+            _services.Clock, _services.User, PzlEv.Shared.Utils.Dictionaries.GlobalDictionaries.Tables), app.Journal), store);
+        Assert.Equal(PzlEv.Shared.Models.Dictionaries.SaveStatus.Saved,
+            templates.Save(new RunDefinition("Ł – łączenie", ProjectTypes.Internal, [.. RunDefinitions.FixedSteps, RunDefinitions.Reconciliation(3)]), isActive: true).Status);
+        var costs = new FakeCostAssignment();
+        var service = new RunService(store, app, costs: () => costs);
+
+        service.Execute("PAF");                                                                     // tydzień 40 – w środku okresu
+
+        var pin = store.Pins("PAF", 1)[0];
+        var asked = costs.Asked!;
+        Assert.Contains("2DI473001001", asked.Keys);
+        Assert.True(asked.Count > 1);                                                               // dane testowe – kilka elementów WBS
+        var saved = store.CostAssignment(pin.PinId);
+        Assert.Equal(asked.Keys.Order(StringComparer.OrdinalIgnoreCase), saved.Select(r => r.Target.WbsElement));
+        Assert.Equal(asked.Values.Sum(), saved.Sum(r => r.Amount));
+        Assert.Equal(("WP-1", "0577", "Production"), saved.Where(r => r.Target.WbsElement == "2DI473001001").Select(r => (r.Target.Wp, r.Target.Cam, r.Target.CostCategory)).Single());
+        Assert.Equal(RunStepStatuses.NeedsAction, store.Steps(pin.PinId)[2].Status);
+        var issues = store.Issues(pin.PinId).Where(i => i.StepNo == 3).ToList();
+        var unassigned = asked.Where(c => c.Key != "2DI473001001" && c.Value != 0).ToList();
+        Assert.Equal(unassigned.Select(c => c.Key).Order(), issues.Where(i => i.Level == CheckLevel.Warning).Select(i => i.Element).Order());
+        Assert.All(issues.Where(i => i.Level == CheckLevel.Warning), i => Assert.EndsWith($"bez przypisania do WP – {CostGaps.NoWp}", i.Message));
+        Assert.Contains(issues, i => i.Level == CheckLevel.Pass && i.CheckName == RunService.Coverage && i.Message.Contains("przypisany do 1 WP")
+                                     && i.Message.Contains($"({unassigned.Count} elementów – Kontynuuj bez tych elementów"));
+        Assert.DoesNotContain(issues, i => i.Message.StartsWith("Suma kontrolna"));
+        service.Confirm(pin.PinId, 3, "Elementy do przypisania w przyszłym tygodniu");
+        Assert.Equal(RunStepStatuses.Done, store.Steps(pin.PinId)[2].Status);
+
+        // Przebieg zamykający – koszt bez przypisania to ERROR.
+        while (!store.Week(_services.Clock.Now.Date)!.IsClosing)
+            _services.Clock.Advance(TimeSpan.FromDays(7));
+        service.Execute("PAF");
+        var closing = store.Pins("PAF", 1)[0];
+        Assert.Equal(RunStepStatuses.Failed, store.Steps(closing.PinId)[2].Status);
+        Assert.Equal(unassigned.Count, store.Issues(closing.PinId).Count(i => i.StepNo == 3 && i.Level == CheckLevel.Error));
+
+        // Pełne przypisanie – etap zakończony bez akcji; ponowne wykonanie zastępuje zapisany wynik.
+        costs.AssignAll = true;
+        service.Rerun(closing.PinId, 3);
+        Assert.Equal(RunStepStatuses.Done, store.Steps(closing.PinId)[2].Status);
+        Assert.All(store.CostAssignment(closing.PinId), r => Assert.Equal("WP-1", r.Target.Wp));
+
+        // Bez kontraktu (moduł Projekty niedostępny) – ERROR.
+        var without = new RunService(store, app);
+        without.Rerun(closing.PinId, 3);
+        Assert.StartsWith("Łączenie źródeł niedostępne", Assert.Single(store.Issues(closing.PinId), i => i.StepNo == 3).Message);
     }
 
     [Fact]

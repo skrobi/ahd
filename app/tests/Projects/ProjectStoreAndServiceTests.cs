@@ -179,6 +179,18 @@ public sealed class ProjectStoreAndServiceTests : IDisposable
         Assert.Empty(_dictionaries.Current(GlobalDictionaries.CostCategory));   // słownik globalny bez zmian
         Assert.Equal("M28", _store.P1sOwners("S70I")["AC-CAB.6.38.01"]);
 
+        // Łączenie źródeł w przebiegu (ICostAssignment): każdy element kosztów raz – WP z CAM i Cost Category „WP i CAM” albo powód braku;
+        // bez PZLPROD – uwaga (bez poddrzew LOG.WBS).
+        var costs = Objectives().Flatten().Select(x => x.Node.WbsElement).OfType<string>().Distinct().Append("XXX-SPOZA").ToDictionary(e => e, _ => 1m);
+        var assignment = _service.CostTargets("M28", costs);
+        var wpCam = _service.Rows(ProjectDictionaries.WpCam, "M28");
+        Assert.Equal(costs.Keys.Order(StringComparer.OrdinalIgnoreCase), assignment.Targets.Select(t => t.WbsElement).Order(StringComparer.OrdinalIgnoreCase));
+        Assert.Equal(CostGaps.Outside, assignment.Targets.Single(t => t.WbsElement == "XXX-SPOZA").Gap);
+        Assert.Contains(assignment.Targets, t => t.Wp is not null);
+        Assert.All(assignment.Targets.Where(t => t.Wp is not null), t =>
+            Assert.Equal((wpCam.First(r => r["WP"] == t.Wp)["CAM"], (string?)null), (t.Cam, t.Gap)));
+        Assert.Contains("PZLPROD", assignment.Note);
+
         // Ten sam element P1S w drugim projekcie – ERROR.
         var other = new PoTree();
         other.AddElement(null, "4D06WX", "inny", "AC-CAB.6.38");
@@ -224,6 +236,70 @@ public sealed class ProjectStoreAndServiceTests : IDisposable
         var wp = PzlEv.Shared.Utils.Files.TabularFileReader.Read(path, "WP i CAM");
         Assert.Equal(["AC-CAB", "AC-CAB.6.38", "AC-CAB.6.38.01", "AC-CAB.6.38.02", "AC-CAB.6.38.03", "AC-CAB.6.38.03.01"], wp.Rows.Select(r => r[0]));
     }
+    /// <summary>Kontrakt modułu CAM (CamWorkPackagesSource): CAM-owie, WP CAM-a ze struktury, zatwierdzona estymacja w „Harmonogram i budżet”.</summary>
+    [SqlFact]
+    public void Cam_contract_lists_cams_work_packages_and_writes_approved_estimate_to_schedule()
+    {
+        // Element 4D06WP000002 w drugim programie (element CES należy do jednego programu).
+        var objectives = Objectives();
+        var moved = objectives.Subtree(objectives.Nodes.Single(n => n.WbsElement == "4D06WP000002").Key).Select(n => n.Key).ToHashSet();
+        Assert.True(_store.Create("M28", "M28 – modernizacja", ProjectTypes.Internal, new PoTree(objectives.Nodes.Where(n => !moved.Contains(n.Key)))).Success);
+        var other = new PoTree();
+        other.AddElement(null, "4D06WP000002", "4D06WP000002", "AC-CAB.6.38.02");   // kod P1S z Legacy WBS
+        Assert.True(_store.Create("M29", "M29", ProjectTypes.Internal, other).Success);
+        var inputs = _service.Mapping();
+        StructureRow RowOf(string project, string wbs) => ProjectService.Structure(_store.Objectives(project), inputs,
+            _service.Rows(ProjectDictionaries.WpCam, project), _service.Rows(ProjectDictionaries.ScheduleBudget, project)).Rows.Single(r => r.WbsElement == wbs);
+        StructureRow Row(string wbs) => RowOf("M28", wbs);
+        Assert.True(_service.SaveStructureEdit("M28", inputs, Row("4D06WP000001"),
+            new Dictionary<string, string?> { [StructureEdits.Wp] = "true", [StructureEdits.Cam] = "e123456" }).Saved);
+        var otherWp = _service.SaveStructureEdit("M29", inputs, RowOf("M29", "4D06WP000002"),
+            new Dictionary<string, string?> { [StructureEdits.Wp] = "true", [StructureEdits.Cam] = "e123456" });
+        Assert.True(otherWp.Saved, otherWp.Message);
+        Assert.True(_service.SaveStructureEdit("M28", inputs, Row("4D06WP000001"),
+            new Dictionary<string, string?> { [StructureEdits.BacHours] = "1000", [StructureEdits.Bac] = "150000", [StructureEdits.Start] = "2026-01-05",
+                [StructureEdits.Finish] = "2027-12-31" }).Saved);
+        var source = new CamWorkPackagesSource(_service);
+
+        Assert.Equal([new CamPerson("e123456", "e123456")], source.Cams());   // CAM spoza słownika Osoby – numer
+        Assert.Equal(["M28", "M29"], source.WorkPackages("E123456").Select(w => w.Project).Order());
+        Assert.Equal(["M28", "M29"], source.ProjectWorkPackages(null).Select(w => w.Project).Order());   // WP z CAM-em wszystkich programów
+        Assert.Equal(("M29", false), (Assert.Single(source.ProjectWorkPackages("m29")).Project, source.ProjectWorkPackages("M29")[0].Finished));
+        var wp = Assert.Single(source.WorkPackages("E123456"), w => w.Project == "M28");
+        Assert.Equal(("M28", "M28 – modernizacja", "AC-CAB.6.38.01", 1000m, 150000m, "2027-12-31", false),
+            (wp.Project, wp.ProjectName, wp.Wp, wp.BacHours, wp.Bac, wp.BaselineFinish, wp.Production));
+        Assert.Empty(source.WorkPackages("nikt"));
+
+        Assert.Null(source.ApplyEstimate("M28", "AC-CAB.6.38.01", 420.5m, 1234.567m, null, new DateOnly(2026, 2, 1), new DateOnly(2028, 3, 31)));
+        var budget = Assert.Single(_service.Rows(ProjectDictionaries.ScheduleBudget, "M28"));
+        Assert.Equal(("420.5", "1234.57", "2026-02-01", "2028-03-31", "1000"),
+            (budget["ETC HOURS"], budget["ETC MATERIAL"], budget["Forecast Start"], budget["Forecast Koniec"], budget["BAC HOURS"]));   // budżet bez zmian
+        Assert.Equal((420.5m, "2028-03-31"), (Row("4D06WP000001").EtcHours, Row("4D06WP000001").ForecastFinish));
+        Assert.Null(budget["Actual Start"]);                                                            // bez dat rzeczywistych – bez zmian
+
+        // Daty rzeczywiste podane przez CAM-a – Actual Start / Actual Koniec w strukturze.
+        Assert.Null(source.ApplyEstimate("M28", "AC-CAB.6.38.01", 420.5m, 1234.567m, null, null, null, new DateOnly(2026, 1, 12), new DateOnly(2026, 9, 30)));
+        budget = Assert.Single(_service.Rows(ProjectDictionaries.ScheduleBudget, "M28"));
+        Assert.Equal(("2026-01-12", "2026-09-30", "2028-03-31"), (budget["Actual Start"], budget["Actual Koniec"], budget["Forecast Koniec"]));
+        Assert.Equal(("2026-01-12", "2026-09-30"), (Row("4D06WP000001").ActualStart, Row("4D06WP000001").ActualFinish));
+    }
+
+    /// <summary>Stawka godziny WP według roku: Labor Rate × Overhead („Stawki wydziałów”) × przelicznik PLN → waluta programu; inne MPK i lata bez stawki pominięte.</summary>
+    [Fact]
+    public void Hour_rates_of_mpk_by_year_in_program_currency()
+    {
+        static DictRow Rate(string mpk, string year, string labor, string? overhead) =>
+            new(null, null, new Dictionary<string, string?> { ["MPK"] = mpk, ["Year"] = year, ["Labor Rate"] = labor, ["Overhead"] = overhead });
+        var rates = new[] { Rate("W20", "2026", "100", "1.5"), Rate("w20", "2027", "110", null), Rate("W30", "2026", "90", "2"), Rate("W20", "x", "1", "1") };
+        var usd = new EtcRates(new Dictionary<string, decimal>(), 2026, "USD", 0.25m, 1, null);
+
+        var byYear = ProjectService.HourRates(rates, "W20", usd);
+
+        Assert.Equal(new Dictionary<int, decimal> { [2026] = 37.5m, [2027] = 27.5m }, byYear);
+        Assert.Empty(ProjectService.HourRates(rates, null, usd));
+        Assert.Empty(ProjectService.HourRates(rates, "W20", usd with { LaborFactor = null }));   // brak kursu PLN → waluta programu
+    }
+
     [SqlFact]
     public void Structure_edits_are_saved_to_overlay_and_project_dictionaries()
     {

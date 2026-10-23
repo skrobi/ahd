@@ -15,7 +15,46 @@ public static class RunActions
     /// </summary>
     public const string ApproveActuals = "Zatwierdzenie ACTUALS";
 
-    public static IReadOnlyList<string> All { get; } = [Import, Pin, Checks, Approval, ApproveActuals];
+    /// <summary>
+    /// Klocek systemowy: Finanse zatwierdzają ETC wprowadzone przez CAM-ów (estymacje programu w cyklu – kontrakt ICamReview, moduł CAM):
+    /// opcjonalnie e-mail do CAM-ów z zaległościami (Powiadomienie), przegląd wymaganych WP, zatwierdź / zwróć / otwórz ponownie, akceptacja
+    /// stanu z komentarzem (także z brakami). Warunek klocka wyznacza cykl estymacji programu: każdy przebieg – tygodniowy, przebieg zamykający
+    /// – miesięczny (RunDefinitions.CamWeekly).
+    /// </summary>
+    public const string ApproveEtc = "Zatwierdzenie ETC";
+
+    /// <summary>
+    /// Klocek systemowy: łączenie źródeł (docs/pipeline-fazy.md, P3) – koszt danych uruchomienia (tabela „ev”) przypisany do WP, CAM
+    /// i Cost Category jak w strukturze programu (kontrakt ICostAssignment), suma kontrolna (ERROR), koszt bez przypisania – WARNING
+    /// w środku okresu (potwierdzenie „Kontynuuj bez tych elementów”), ERROR w przebiegu zamykającym (O33); wynik zapisany w uruchomieniu.
+    /// </summary>
+    public const string Reconcile = "Łączenie źródeł";
+
+    /// <summary>
+    /// Klocek systemowy: analityk zatwierdza zamknięcie okresu z komentarzem – uruchomienie zostaje zamrożone (przebieg tygodnia tylko
+    /// do odczytu, bez nowych uruchomień; „Otwórz zamknięcie” z komentarzem zdejmuje blokadę). Zawsze ostatni, zawsze z warunkiem
+    /// „Przebieg zamykający” – w innym tygodniu pominięty.
+    /// </summary>
+    public const string ClosePeriod = "Zamknięcie okresu";
+
+    public static IReadOnlyList<string> All { get; } = [Import, Pin, Checks, Approval, ApproveActuals, ApproveEtc, Reconcile, ClosePeriod];
+
+    /// <summary>Klocek systemowy – najwyżej jeden w szablonie.</summary>
+    public static bool IsSystem(string action) => action is ApproveActuals or ApproveEtc or Reconcile or ClosePeriod;
+
+    /// <summary>Klocek z warunkiem wykonania (RunConditions) i powiadomieniem CAM-ów – Zatwierdzenie ETC.</summary>
+    public static bool HasCondition(string action) => action is ApproveEtc;
+}
+
+/// <summary>Warunek wykonania etapu szablonu (słownik „Etapy przebiegów”, kolumna Warunek): każdy przebieg albo tylko przebieg zamykający okres.</summary>
+public static class RunConditions
+{
+    public const string Always = "Każdy przebieg";
+
+    /// <summary>Tylko tydzień zamknięcia okresu w kalendarzu okresów; w innym tygodniu etap jest pomijany (zakończony bez akcji).</summary>
+    public const string Closing = "Przebieg zamykający";
+
+    public static IReadOnlyList<string> All { get; } = [Always, Closing];
 }
 
 /// <summary>Bramka etapu przy wynikach WARNING (ERROR zawsze blokuje).</summary>
@@ -46,11 +85,18 @@ public static class RunStepStatuses
 public sealed record RunElementSetting(string Element, bool Active = true);
 
 /// <summary>Etap definicji przebiegu: numer, nazwa, akcja, bramka WARNING, zatwierdzenie ręczne, elementy kontrolne (akcja Kontrole).</summary>
+/// <remarks>Condition – warunek wykonania (RunConditions); Notify – Zatwierdzenie ETC: e-mail do CAM-ów z zaległymi estymacjami na początku etapu.</remarks>
 public sealed record RunStepDefinition(int No, string Name, string Action, string WarningGate, bool Approval, IReadOnlyList<RunElementSetting> Elements,
-    string? Description = null)
+    string? Description = null, string Condition = RunConditions.Always, bool Notify = false)
 {
-    /// <summary>Etap kończy się wstrzymaniem do decyzji człowieka (zatwierdzenie ręczne albo akcja Zatwierdzenie / Zatwierdzenie ACTUALS).</summary>
-    public bool NeedsApproval => Approval || Action is RunActions.Approval or RunActions.ApproveActuals;
+    /// <summary>Etap wykonywany w tygodniu przebiegu (warunek „Przebieg zamykający” – tylko w tygodniu zamknięcia okresu).</summary>
+    public bool RunsIn(bool closingWeek) => (Condition != RunConditions.Closing && Action != RunActions.ClosePeriod) || closingWeek;
+
+    /// <summary>
+    /// Etap kończy się wstrzymaniem do decyzji człowieka (zatwierdzenie ręczne albo akcja Zatwierdzenie / Zatwierdzenie ACTUALS / ETC /
+    /// Zamknięcie okresu).
+    /// </summary>
+    public bool NeedsApproval => Approval || Action is RunActions.Approval or RunActions.ApproveActuals or RunActions.ApproveEtc or RunActions.ClosePeriod;
 }
 
 /// <summary>
@@ -62,7 +108,8 @@ public sealed record RunDefinition(string Code, string ProjectType, IReadOnlyLis
 /// <summary>Wiersze słowników definicji przebiegów (moduł Przebiegi): szablony, etapy, elementy kontrolne etapów.</summary>
 public sealed record RunDefinitionHeaderRow(string Code, string ProjectType, bool IsActive, string? Description);
 
-public sealed record RunStepRowData(string Definition, int No, string Name, string Action, string WarningGate, bool Approval, string? Description);
+public sealed record RunStepRowData(string Definition, int No, string Name, string Action, string WarningGate, bool Approval, string? Description,
+    string? Condition = null, bool? Notify = null);
 
 public sealed record RunStepElementRow(string Definition, string Step, string Element, bool IsActive);
 
@@ -93,6 +140,35 @@ public static class RunDefinitions
     public static RunStepDefinition ActualsApproval(int no) =>
         new(no, "Zatwierdzenie danych ACTUALS", RunActions.ApproveActuals, RunGates.Info, true, [],
             "Analityk zatwierdza dane ACTUALS przebiegu (komentarz) – od zatwierdzenia struktura programu pokazuje koszty z tego przebiegu.");
+
+    /// <summary>
+    /// Klocek systemowy „Zatwierdzenie ETC” (edytor szablonów) – najwyżej jeden: Finanse zatwierdzają ETC CAM-ów; warunek – cykl estymacji programu
+    /// (domyślnie przebieg zamykający – miesięczny), notify – e-mail do CAM-ów z zaległościami na początku etapu.
+    /// </summary>
+    public static RunStepDefinition EtcApproval(int no, string condition = RunConditions.Closing, bool notify = true) =>
+        new(no, "Zatwierdzenie ETC", RunActions.ApproveEtc, RunGates.Info, true, [],
+            "Finanse zatwierdzają ETC wprowadzone przez CAM-ów (estymacje programu w cyklu): powiadomienie CAM-ów z zaległościami, zatwierdź / zwróć / otwórz ponownie, akceptacja z komentarzem.",
+            condition, notify);
+
+    /// <summary>Klocek systemowy „Łączenie źródeł” (edytor szablonów) – najwyżej jeden; WARNING czeka na potwierdzenie.</summary>
+    public static RunStepDefinition Reconciliation(int no) =>
+        new(no, "Łączenie źródeł", RunActions.Reconcile, RunGates.Confirm, false, [],
+            "Koszt uruchomienia przypisany do WP, CAM i Cost Category jak w strukturze programu; suma kontrolna; koszt bez przypisania – w środku okresu ostrzeżenie (Kontynuuj bez tych elementów), w przebiegu zamykającym błąd.");
+
+    /// <summary>
+    /// Klocek systemowy „Zamknięcie okresu” (edytor szablonów) – najwyżej jeden, ostatni etap; warunek zawsze „Przebieg zamykający”.
+    /// </summary>
+    public static RunStepDefinition PeriodClose(int no) =>
+        new(no, "Zamknięcie okresu", RunActions.ClosePeriod, RunGates.Info, true, [],
+            "Analityk zatwierdza zamknięcie okresu (komentarz) – uruchomienie zostaje zamrożone: przebieg tygodnia tylko do odczytu, bez nowych uruchomień; „Otwórz zamknięcie” z komentarzem zdejmuje blokadę.",
+            RunConditions.Closing);
+
+    /// <summary>
+    /// Cykl estymacji CAM programu z jego przebiegu: klocek „Zatwierdzenie ETC” z warunkiem „Każdy przebieg” – tygodniowy (estymacja co tydzień),
+    /// inaczej (przebieg zamykający albo bez klocka) – miesięczny (okres zamknięcia).
+    /// </summary>
+    public static bool CamWeekly(RunDefinition definition) =>
+        definition.Steps.Any(s => s.Action == RunActions.ApproveEtc && s.Condition != RunConditions.Closing);
 
     /// <summary>
     /// Etapy definicji wbudowanej i szablonów startowych (jak migracja 053): stałe, Walidacja ACTUALS, Walidacja EV (bramka – potwierdzenie
@@ -151,12 +227,13 @@ public static class RunDefinitions
             steps.Where(s => Is(s.Definition, header.Code)).OrderBy(s => s.No)
                 .Select(s => new RunStepDefinition(s.No, s.Name, s.Action, s.WarningGate, s.Approval,
                     elements.Where(e => Is(e.Definition, header.Code) && Is(e.Step, s.Name))
-                        .Select(e => new RunElementSetting(e.Element.Trim(), e.IsActive)).ToList(), s.Description))
+                        .Select(e => new RunElementSetting(e.Element.Trim(), e.IsActive)).ToList(), s.Description,
+                    s.Condition == RunConditions.Closing || s.Action == RunActions.ClosePeriod ? RunConditions.Closing : RunConditions.Always, s.Notify == true))
                 .ToList(), header.Description);
 
     /// <summary>
-    /// Kontrola szablonu przed zapisem: nazwa; etapy stałe (Import źródeł, Przypięcie stanu) – po jednym, na początku; Zatwierdzenie ACTUALS
-    /// – najwyżej jedno; nazwy etapów
+    /// Kontrola szablonu przed zapisem: nazwa; etapy stałe (Import źródeł, Przypięcie stanu) – po jednym, na początku; klocki systemowe
+    /// (Zatwierdzenie ACTUALS, Zatwierdzenie ETC, Zamknięcie okresu) – najwyżej po jednym, Zamknięcie okresu – ostatni; nazwy etapów
     /// niepuste i bez powtórzeń; etap kontroli bez aktywnego elementu – ERROR; elementy tylko w etapach kontroli; element – reguła
     /// walidacji (rules – nazwy reguł; null – reguły startowe).
     /// </summary>
@@ -173,8 +250,10 @@ public static class RunDefinitions
             if (count != 1 || steps.Count <= index || steps[index].Action != action)
                 issues.Add(Issue.Error($"Etap stały „{action}” – dokładnie jeden, jako etap {index + 1}"));
         }
-        if (steps.Count(s => s.Action == RunActions.ApproveActuals) > 1)
-            issues.Add(Issue.Error($"Klocek „{RunActions.ApproveActuals}” – najwyżej jeden w szablonie"));
+        foreach (var system in steps.Where(s => RunActions.IsSystem(s.Action)).GroupBy(s => s.Action).Where(g => g.Count() > 1))
+            issues.Add(Issue.Error($"Klocek „{system.Key}” – najwyżej jeden w szablonie"));
+        if (steps.Count > 0 && steps.Any(s => s.Action == RunActions.ClosePeriod) && steps[^1].Action != RunActions.ClosePeriod)
+            issues.Add(Issue.Error($"Klocek „{RunActions.ClosePeriod}” – tylko jako ostatni etap (zamraża uruchomienie)"));
         foreach (var step in steps)
         {
             var at = $"etap {step.No}";
@@ -184,6 +263,10 @@ public static class RunDefinitions
                 issues.Add(Issue.Error($"Nazwa etapu „{step.Name}” powtórzona", at));
             if (step.Action == RunActions.Checks && !step.Elements.Any(e => e.Active))
                 issues.Add(Issue.Error($"Etap „{step.Name}” bez reguł – zaznacz reguły albo usuń etap", at));
+            if (step.Condition == RunConditions.Closing && !RunActions.HasCondition(step.Action) && step.Action != RunActions.ClosePeriod)
+                issues.Add(Issue.Error($"Etap „{step.Name}” ({step.Action}) – warunek „{RunConditions.Closing}” tylko w klocku {RunActions.ApproveEtc}", at));
+            if (step.Notify && step.Action != RunActions.ApproveEtc)
+                issues.Add(Issue.Error($"Etap „{step.Name}” ({step.Action}) – powiadomienie CAM tylko w klocku {RunActions.ApproveEtc}", at));
             if (step.Action != RunActions.Checks && step.Elements.Count > 0)
                 issues.Add(Issue.Error($"Etap „{step.Name}” ({step.Action}) nie ma reguł – reguły tylko w etapach walidacji", at));
             foreach (var element in step.Elements.GroupBy(e => e.Element.Trim(), StringComparer.OrdinalIgnoreCase).Where(g => g.Count() > 1))

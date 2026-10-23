@@ -60,6 +60,9 @@ public sealed class RunsViewModel : ObservableObject
             "Analityk zatwierdza wynik przebiegu (komentarz w dzienniku).")), _ => HasEditor);
         AddActualsApproval = new RelayCommand(_ => AddStep(RunDefinitions.ActualsApproval(0)),
             _ => HasEditor && Steps.All(s => !s.IsActualsApproval));
+        AddCamEstimates = new RelayCommand(_ => AddStep(RunDefinitions.EtcApproval(0)), _ => HasEditor && Steps.All(s => !s.IsEtcApproval));
+        AddReconciliation = new RelayCommand(_ => AddStep(RunDefinitions.Reconciliation(0)), _ => HasEditor && Steps.All(s => !s.IsReconcile));
+        AddPeriodClose = new RelayCommand(_ => AddStep(RunDefinitions.PeriodClose(0)), _ => HasEditor && Steps.All(s => !s.IsPeriodClose));
         MoveLeft = new RelayCommand(p => Move(p as RunStepTileViewModel, -1), p => CanMove(p as RunStepTileViewModel, -1));
         MoveRight = new RelayCommand(p => Move(p as RunStepTileViewModel, 1), p => CanMove(p as RunStepTileViewModel, 1));
         RemoveStep = new RelayCommand(p => Remove(p as RunStepTileViewModel), p => p is RunStepTileViewModel { IsFixed: false });
@@ -88,6 +91,16 @@ public sealed class RunsViewModel : ObservableObject
 
     /// <summary>Klocek systemowy „Zatwierdzenie ACTUALS” (najwyżej jeden w szablonie).</summary>
     public ICommand AddActualsApproval { get; }
+
+    /// <summary>Klocek systemowy „Zatwierdzenie ETC” (najwyżej jeden).</summary>
+    public ICommand AddCamEstimates { get; }
+
+    /// <summary>Klocek systemowy „Łączenie źródeł” (najwyżej jeden).</summary>
+    public ICommand AddReconciliation { get; }
+
+    /// <summary>Klocek systemowy „Zamknięcie okresu” (najwyżej jeden, ostatni).</summary>
+    public ICommand AddPeriodClose { get; }
+
     public ICommand MoveLeft { get; }
     public ICommand MoveRight { get; }
     public ICommand RemoveStep { get; }
@@ -359,7 +372,11 @@ public sealed class RunsViewModel : ObservableObject
     private void AddStep(RunStepDefinition step)
     {
         var tile = Tile(step);
-        Steps.Add(tile);
+        // Zamknięcie okresu zostaje ostatnim etapem – nowy etap przed nim.
+        if (!tile.IsPeriodClose && Steps.FirstOrDefault(s => s.IsPeriodClose) is { } close)
+            Steps.Insert(Steps.IndexOf(close), tile);
+        else
+            Steps.Add(tile);
         Renumber();
         SelectedStep = tile;
         IsDirty = true;

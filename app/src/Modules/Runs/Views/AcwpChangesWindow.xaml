@@ -3,9 +3,13 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:partials="clr-namespace:PzlEv.Shared.Views.Partials"
         xmlns:services="clr-namespace:PzlEv.Modules.Runs.Services"
+        xmlns:views="clr-namespace:PzlEv.Modules.Runs.Views"
         Title="{Binding Title}" Width="1280" Height="820" MinWidth="900" MinHeight="520"
         WindowStartupLocation="CenterOwner" ShowInTaskbar="False" Background="{StaticResource Surface}">
     <!-- Okno „Zmiany ACWP” (DataContext: AcwpChangesViewModel) – docs/funkcjonalnosc.md, F06 -->
+    <Window.Resources>
+        <views:AcwpTreeLabelWidth x:Key="TreeLabelWidth" />
+    </Window.Resources>
     <DockPanel Margin="16">
         <TextBlock DockPanel.Dock="Top" Text="{Binding Title}" Style="{StaticResource H2}" />
         <TextBlock DockPanel.Dock="Top" Text="{Binding Note}" Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="0,0,0,8" />
@@ -36,6 +40,8 @@
             <CheckBox Content="Tylko zmiany" IsChecked="{Binding OnlyChanges}" VerticalAlignment="Center" Margin="0,0,12,0" />
             <CheckBox Content="Wszystkie pozycje" IsChecked="{Binding ShowAll}" VerticalAlignment="Center" Margin="0,0,16,0"
                       ToolTip="Bez zaznaczenia – 50 pozycji z największą zmianą na każdym poziomie i wiersz „pozostałe”" />
+            <Button Content="Wykres" Style="{StaticResource Btn}" Margin="0,0,8,0" Click="OnChart"
+                    ToolTip="Przyrosty miesięczne rodzajów (słupki) i koszt skumulowany (linia) – w osobnym oknie" />
             <Button Content="Do Excela" Style="{StaticResource Btn}" Command="{Binding Export}"
                     ToolTip="Wszystkie pozycje drzewa zmian (bez limitu), kafelki rodzajów i przyrosty miesięczne – arkusze do filtrowania i tabel przestawnych" />
         </WrapPanel>
@@ -53,58 +59,26 @@
             <ItemsControl.ItemTemplate>
                 <DataTemplate DataType="{x:Type services:AcwpKindTotal}">
                     <Border Style="{StaticResource Panel}" Padding="12,8" Margin="0,0,10,0" MinWidth="220">
+                        <!-- Wartość „jest”, „było” i zmiana kwotowo: zielona na plus, czerwona na minus -->
                         <StackPanel>
                             <TextBlock Text="{Binding Kind, StringFormat='ACWP {0}'}" FontWeight="SemiBold" />
-                            <TextBlock Style="{StaticResource MutedText}">
-                                <Run Text="było" /> <Run Text="{Binding Before, Mode=OneWay, StringFormat=#\,0.00}" />
-                                <Run Text=" · jest" /> <Run Text="{Binding After, Mode=OneWay, StringFormat=#\,0.00}" />
-                            </TextBlock>
-                            <TextBlock FontSize="16" FontWeight="SemiBold">
-                                <Run Text="{Binding Delta, Mode=OneWay, StringFormat=+#\,0.00;-#\,0.00;0}" />
-                                <Run Text="{Binding Percent, Mode=OneWay, StringFormat='({0:+0.0;-0.0;0}%)'}" Foreground="{StaticResource Muted}" FontSize="12" />
-                            </TextBlock>
+                            <TextBlock FontSize="16" FontWeight="SemiBold" Text="{Binding After, StringFormat=#\,0.00}" />
+                            <TextBlock Style="{StaticResource MutedText}" Text="{Binding Before, StringFormat='było {0:#,0.00}'}" />
+                            <TextBlock x:Name="Delta" FontWeight="SemiBold" Foreground="{StaticResource Muted}"
+                                       Text="{Binding Delta, StringFormat='zmiana {0:+#,0.00;-#,0.00;0}'}" />
                         </StackPanel>
                     </Border>
+                    <DataTemplate.Triggers>
+                        <DataTrigger Binding="{Binding Trend}" Value="1">
+                            <Setter TargetName="Delta" Property="Foreground" Value="{StaticResource Ok}" />
+                        </DataTrigger>
+                        <DataTrigger Binding="{Binding Trend}" Value="-1">
+                            <Setter TargetName="Delta" Property="Foreground" Value="{StaticResource Crit}" />
+                        </DataTrigger>
+                    </DataTemplate.Triggers>
                 </DataTemplate>
             </ItemsControl.ItemTemplate>
         </ItemsControl>
-
-        <!-- Przyrosty miesięczne rodzajów: słupki, skoki w kolorze ostrzeżenia -->
-        <Expander DockPanel.Dock="Top" Header="Przyrosty miesięczne" IsExpanded="True" Margin="0,0,0,10">
-            <StackPanel Margin="0,6,0,0">
-                <TextBlock Text="{Binding ChartNote}" Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="0,0,0,6" />
-                <ItemsControl ItemsSource="{Binding Chart}">
-                    <ItemsControl.ItemTemplate>
-                        <DataTemplate>
-                            <DockPanel Margin="0,0,0,8">
-                                <TextBlock DockPanel.Dock="Left" Width="200" Text="{Binding Title}" FontWeight="SemiBold" VerticalAlignment="Center" />
-                                <ItemsControl ItemsSource="{Binding Bars}">
-                                    <ItemsControl.ItemsPanel>
-                                        <ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate>
-                                    </ItemsControl.ItemsPanel>
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate>
-                                            <StackPanel Width="58" Margin="0,0,4,0" ToolTip="{Binding ToolTip}">
-                                                <Grid Height="72">
-                                                    <Border x:Name="Bar" VerticalAlignment="Bottom" Height="{Binding Height}" Margin="8,0"
-                                                            Background="{StaticResource Accent}" CornerRadius="2,2,0,0" />
-                                                </Grid>
-                                                <TextBlock Text="{Binding Label}" FontSize="10" TextAlignment="Center" Foreground="{StaticResource Muted}" />
-                                            </StackPanel>
-                                            <DataTemplate.Triggers>
-                                                <DataTrigger Binding="{Binding IsJump}" Value="True">
-                                                    <Setter TargetName="Bar" Property="Background" Value="{StaticResource Warn}" />
-                                                </DataTrigger>
-                                            </DataTemplate.Triggers>
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
-                            </DockPanel>
-                        </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                </ItemsControl>
-            </StackPanel>
-        </Expander>
 
         <Grid>
             <Grid.RowDefinitions>
@@ -113,8 +87,8 @@
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="2*" />
             </Grid.RowDefinitions>
-            <!-- Nagłówek kolumn drzewa -->
-            <Grid Margin="22,0,0,4">
+            <!-- Nagłówek kolumn drzewa – prawa krawędź kolumn jak w wierszach drzewa (AcwpTreeLabelWidth) -->
+            <Grid Margin="22,0,20,4">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="150" />
@@ -128,18 +102,27 @@
             </Grid>
             <TextBlock Grid.Row="1" Text="Brak zmian w wybranym zakresie." Style="{StaticResource MutedText}" Margin="0,8,0,0"
                        Visibility="{Binding IsEmpty, Converter={StaticResource BoolToVisibility}}" />
-            <TreeView Grid.Row="1" ItemsSource="{Binding Tree}" SelectedItemChanged="OnSelectedItemChanged"
-                      VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling">
+            <TreeView x:Name="ChangesTree" Grid.Row="1" ItemsSource="{Binding Tree}" SelectedItemChanged="OnSelectedItemChanged"
+                      VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling"
+                      ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Visible">
                 <TreeView.ItemTemplate>
                     <HierarchicalDataTemplate DataType="{x:Type services:AcwpChangeNode}" ItemsSource="{Binding Children}">
-                        <Grid ToolTip="{Binding Level}">
+                        <Grid>
                             <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" MinWidth="420" />
+                                <ColumnDefinition Width="Auto" />
                                 <ColumnDefinition Width="150" />
                                 <ColumnDefinition Width="150" />
                                 <ColumnDefinition Width="150" />
                             </Grid.ColumnDefinitions>
-                            <TextBlock x:Name="Label" Text="{Binding Label}" TextTrimming="CharacterEllipsis" />
+                            <!-- Szerokość etykiety maleje z wcięciem poziomu – kolumny kwot w jednej linii na każdym poziomie -->
+                            <TextBlock x:Name="Label" Text="{Binding Label}" TextTrimming="CharacterEllipsis" ToolTip="{Binding Label}">
+                                <TextBlock.Width>
+                                    <MultiBinding Converter="{StaticResource TreeLabelWidth}">
+                                        <Binding ElementName="ChangesTree" Path="ActualWidth" />
+                                        <Binding Path="Level" />
+                                    </MultiBinding>
+                                </TextBlock.Width>
+                            </TextBlock>
                             <TextBlock Grid.Column="1" Text="{Binding Before, StringFormat=#\,0.00}" TextAlignment="Right" FontFamily="{StaticResource FMono}" />
                             <TextBlock Grid.Column="2" Text="{Binding After, StringFormat=#\,0.00}" TextAlignment="Right" FontFamily="{StaticResource FMono}" />
                             <TextBlock Grid.Column="3" Text="{Binding Delta, StringFormat=+#\,0.00;-#\,0.00;0}" TextAlignment="Right" FontFamily="{StaticResource FMono}"
@@ -156,15 +139,26 @@
             </TreeView>
 
             <TextBlock partials:CopyText.Enabled="True" Grid.Row="2" Text="{Binding LinesTitle}" Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="0,10,0,6" />
-            <DataGrid Grid.Row="3" Style="{StaticResource DataTable}" ItemsSource="{Binding Lines}" IsReadOnly="True">
+            <!-- Linia „było” i „jest” w jednym wierszu (AcwpChanges.Lines): stan, kwoty obu stron i zmiana -->
+            <DataGrid Grid.Row="3" Style="{StaticResource DataTable}" ItemsSource="{Binding Lines}" IsReadOnly="True"
+                      VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling">
                 <DataGrid.Columns>
-                    <DataGridTextColumn Header="Stan" Binding="{Binding Side}" />
-                    <DataGridTextColumn Header="Kwota" Binding="{Binding Line.Amount, StringFormat=#\,0.00}" />
-                    <DataGridTextColumn Header="Ilość" Binding="{Binding Line.Quantity, StringFormat=#\,0.###}" />
+                    <DataGridTextColumn Header="Stan" Binding="{Binding State}" />
+                    <DataGridTextColumn Header="Kwota było" Binding="{Binding Before.Amount, StringFormat=#\,0.00}" />
+                    <DataGridTextColumn Header="Kwota jest" Binding="{Binding After.Amount, StringFormat=#\,0.00}" />
+                    <DataGridTextColumn Header="Zmiana" Binding="{Binding Delta, StringFormat=+#\,0.00;-#\,0.00;0}" FontWeight="SemiBold" />
+                    <DataGridTextColumn Header="Ilość było" Binding="{Binding Before.Quantity, StringFormat=#\,0.###}" />
+                    <DataGridTextColumn Header="Ilość jest" Binding="{Binding After.Quantity, StringFormat=#\,0.###}" />
+                    <DataGridTextColumn Header="Element WBS" Binding="{Binding Line.WbsElement}" />
+                    <DataGridTextColumn Header="Cost element" Binding="{Binding Line.CostElement}" />
+                    <DataGridTextColumn Header="Okres" Binding="{Binding Period}" />
                     <DataGridTextColumn Header="Created on" Binding="{Binding Line.CreatedOn}" />
                     <DataGridTextColumn Header="Cost element name" Binding="{Binding Line.CostElementName}" />
                     <DataGridTextColumn Header="CO object name" Binding="{Binding Line.CoObjectName}" Width="*" />
+                    <DataGridTextColumn Header="Waluta" Binding="{Binding Line.TransactionCurrency}" />
+                    <DataGridTextColumn Header="Value TranCurr" Binding="{Binding Line.ValueTranCurr, StringFormat=#\,0.00}" />
                     <DataGridTextColumn Header="Partner object" Binding="{Binding Line.PartnerObject}" />
+                    <DataGridTextColumn Header="Original material" Binding="{Binding Line.OriginalMaterial}" />
                     <DataGridTextColumn Header="Zamówienie" Binding="{Binding Line.PurchaseOrderNumber}" />
                     <DataGridTextColumn Header="Faktura" Binding="{Binding Line.InvoiceNumber}" />
                     <DataGridTextColumn Header="Zlecenie" Binding="{Binding Line.OriginalOrderNumber}" />

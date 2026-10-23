@@ -22,7 +22,7 @@ Role, zakres danych i egzekwowanie – `docs/uprawnienia.md`.
 
 ## 2. Ekrany
 
-Menu modułów po lewej (Pulpit, Import RABIT, Programy, Przebiegi, Słowniki, Administracja, Diagnostyka – kolejność z `Shell/ModuleCatalog.cs`) zwija się do ikon („☰” u góry menu; nazwa modułu w podpowiedzi) – więcej miejsca na ekran modułu.
+Menu modułów po lewej (Pulpit, Import RABIT, Programy, CAM, Przebiegi, Słowniki, Administracja, Diagnostyka – kolejność z `Shell/ModuleCatalog.cs`) zwija się do ikon („☰” u góry menu; nazwa modułu w podpowiedzi) – więcej miejsca na ekran modułu.
 
 | Ekran | Zawartość | Główne akcje |
 |---|---|---|
@@ -30,9 +30,10 @@ Menu modułów po lewej (Pulpit, Import RABIT, Programy, Przebiegi, Słowniki, A
 | **Import RABIT** | import źródeł, historia importów, decyzje dla plików (F05) | importuj |
 | **Programy** | lista programów: kod, nazwa, typ, ostatni przebieg (kod, numer uruchomienia, stan, data), problemy przebiegu (liczba błędów i ostrzeżeń, kolor; podsumowanie w podpowiedzi), folder – sam odczyt projektów (nakładka i gotowość – na ekranie projektu) | nowy program; usuń program (trwale ze wszystkimi danymi, po ostrzeżeniu; folder na dysku zostaje) |
 | **Program** | zakładki: Wskaźniki (wskaźniki programu w grupach Operational EV, Materials, Financial EV; pierwszy wiersz „Status”: źródło ACTUALS struktury – zatwierdzony przebieg albo ostatni import, niezatwierdzone; data danych RABIT, produkcji PZLPROD, waluta), Struktura (nakładka z rozwinięciem P1S, WP, CAM, Cost Category, budżet i daty – `docs/performance-objectives.md`, rozdz. 4.2), Raporty, Słowniki programu, Konfiguracja (Źródła danych, Parametry programu – w tym wybór przebiegu, `docs/slowniki.md`, rozdz. 3), Przebieg (przebieg programu: etapy, macierz reguł, porównanie uruchomień – F06), Foldery | edycja w komórkach struktury (zapis od razu); dwuklik w ACWP / ACWP Hours / Materials / Other – okno „Zmiany ACWP” (F06); dołożenie elementów z kolejnego eksportu SAP; Raport kosztów (Excel) na zakładce Raporty (`docs/model-danych.md`, migracja 013), w projektach CAS także Raport kosztów CES – narzuty CAS w formułach Excela (`docs/slowniki.md`, rozdz. 6.1); struktura do Excela i wczytanie uzupełnionej struktury (WP, CAM, budżet, daty); import źródeł projektu (F05); nowy przebieg, dalsze etapy, potwierdzenie etapu z komentarzem, ponowne wykonanie etapu, porównanie dwóch uruchomień, „Zmiany ACWP” (zakładka Przebieg); edycja słowników projektu w tabeli (Cost Category – pozycje globalne i zmiany projektu, `docs/slowniki.md`, rozdz. 6); pobierz / wczytaj słowniki z Excela |
+| **CAM** | wybór CAM-a (test – bez uprawnień; później CAM zalogowanego użytkownika), cykl (okres zamknięcia z kalendarza okresów, termin – koniec tygodnia zamykającego); zakładki: **Estymacje** – lista zadań cyklu (WP CAM-a ze wszystkich programów: status, czego brakuje, stan / uwaga analityka, ETC godzin i materiałów; filtr „Tylko do zrobienia”) i formularz WP w krokach: 1 harmonogram – daty rzeczywiste (start, koniec; puste – bez zmiany w strukturze) i prognoza (baseline tylko odczyt), 2 godziny ETC w latach od bieżącego roku (propozycja, wartość CAM, różnica, stawka MPK roku – brak: ostatnia wcześniejsza, koszt), 3 koszty materiałowe do poniesienia w latach, 4 uzasadnienie (opcjonalne) i „Co trafi do Finansów” (ETC godzin, robocizny, materiałów, EAC WP wobec BAC); punkt odniesienia (BAC, poniesione, stawki, baseline, poprzednia zatwierdzona) i historia – bez wskaźników EV; **Postęp estymacji** – monitoring finansisty: wymagane WP (z CAM-em, niezakończone) wobec zatwierdzonych, wysłanych, u CAM-a i bez estymacji – po programach i po CAM-ach, % zatwierdzonych (decyzje – etap przebiegu „Zatwierdzenie ETC”); **Wyniki EV** – tylko odczyt: WP CAM-a w jednej walucie (programu – gdy wspólna, PLN, USD), zakres razem / robocizna / materiały, kafelki BAC, BCWP, ACWP, CPI, SPI, EAC, VAC, TCPI, tabela WP z sumą (wskaźniki z sum), odchylenia CPI / SPI poniżej 0,95 / 0,90 | zapisz szkic, wyślij do analityka (finansisty); odśwież postęp estymacji |
 | **Kreator programu** | 5 kroków (F01); w kroku 1 także przebieg programu (szablon domyślny dla typu) | utwórz program |
-| **Przebiegi** | szablony przebiegów i reguły walidacji w jednej kolumnie (bez przebiegów konkretnych programów, bez osobnego okna i zakładek): lista szablonów (startowe „Wewnętrzny” i „CAS”) – etapy szablonu w kafelkach: klocki predefiniowane Import źródeł i Przypięcie stanu (konfiguracja programu), klocek systemowy Zatwierdzenie ACTUALS (dane struktury programu), etapy walidacji z zaznaczonymi regułami (poziom i tabele reguły, szukaj), zatwierdzenie; nazwa, typ programu, dla którego szablon jest domyślny, aktywny, programy, które go wybrały; lista **reguł walidacji** (szukaj po nazwie i tabeli; przy regule – poziom i użyte tabele) – edytor reguły: nazwa, poziom, aktywna, opis, **zapytanie SQL** z listą tabel i kolumn danych uruchomienia obok, opis wyniku (kolumny w { }); **Testuj na programie** – reguła (także niezapisana) na ostatnim uruchomieniu wybranego programu i poprzednim, tabela kolumn zwróconych przez SQL z opisem wyniku, błąd SQL Server z linią (`docs/pipeline-fazy.md`, rozdz. 4.1) | nowy / kopiuj / usuń szablon, „Utwórz szablony startowe”, + etap walidacji, + zatwierdzenie, przesuń / usuń etap, zapisz szablon; reguła: + nowa, kopiuj, usuń, odrzuć zmiany, zapisz regułę, testuj |
-| **Przebieg** | kroki i etapy (F06), panel wybranego etapu, znacznik stanu, problemy, rewizje, dziennik – wdrożony jako zakładka Przebieg programu: przebieg programu (wybrany / domyślny), etapy uruchomienia ze statusem, wyniki etapu, macierz kontroli, porównanie dwóch uruchomień | akcje etapów, „Zmiany ACWP” |
+| **Przebiegi** | szablony przebiegów i reguły walidacji w jednej kolumnie (bez przebiegów konkretnych programów, bez osobnego okna i zakładek): lista szablonów (startowe „Wewnętrzny” i „CAS”) – etapy szablonu w kafelkach: klocki predefiniowane Import źródeł i Przypięcie stanu (konfiguracja programu), klocki systemowe Zatwierdzenie ACTUALS (dane struktury programu) i Zatwierdzenie ETC (Finanse zatwierdzają ETC CAM-ów; cykl estymacji – każdy przebieg: tygodniowy, przebieg zamykający: miesięczny; „Powiadom CAM-ów” – e-mail do CAM-ów z zaległościami), Łączenie źródeł (koszt do WP jak w strukturze, suma kontrolna, koszt bez przypisania), Zamknięcie okresu (ostatni etap, tylko przebieg zamykający – zatwierdzenie zamraża uruchomienie), etapy walidacji z zaznaczonymi regułami (poziom i tabele reguły, szukaj), zatwierdzenie; nazwa, typ programu, dla którego szablon jest domyślny, aktywny, programy, które go wybrały; lista **reguł walidacji** (szukaj po nazwie i tabeli; przy regule – poziom i użyte tabele) – edytor reguły: nazwa, poziom, aktywna, opis, **zapytanie SQL** z listą tabel i kolumn danych uruchomienia obok, opis wyniku (kolumny w { }); **Testuj na programie** – reguła (także niezapisana) na ostatnim uruchomieniu wybranego programu i poprzednim, tabela kolumn zwróconych przez SQL z opisem wyniku, błąd SQL Server z linią (`docs/pipeline-fazy.md`, rozdz. 4.1) | nowy / kopiuj / usuń szablon, „Utwórz szablony startowe”, + etap walidacji, + zatwierdzenie, + klocki systemowe, przesuń / usuń etap, zapisz szablon; reguła: + nowa, kopiuj, usuń, odrzuć zmiany, zapisz regułę, testuj |
+| **Przebieg** | kroki i etapy (F06), panel wybranego etapu, znacznik stanu, problemy, rewizje, dziennik – wdrożony jako zakładka Przebieg programu: przebieg programu (wybrany / domyślny), etapy uruchomienia ze statusem, wyniki etapu, macierz kontroli, porównanie dwóch uruchomień, dziennik przebiegu, baner zamrożonego okresu | akcje etapów, „Otwórz zamknięcie”, „Zmiany ACWP” |
 | **Słowniki** | słowniki globalne i projektu: tabela z filtrowaniem, historia zmian (F03); struktura P1S z `PZLPROD` (tylko odczyt) | dodaj / edytuj / zamknij ważność wiersza; „Odśwież” (ponowny odczyt z bazy); pobierz / wczytaj Excel; „Dodaj z HR” (Osoby); „Formuły narzutów” (narzuty CAS – macierz grupy × kategorie, edytor formuły z klocków, `docs/slowniki.md`, rozdz. 6.1); „Struktura P1S (PZLPROD)” |
 | **Administracja** | definicje źródeł, parsery, lokalizacje RABIT, role i grupy AD (F08) | dodaj / zmień |
 | **Diagnostyka** | test stosu (runtime, pakiety, ścieżka, konto), połączenie z `PZLPROD`, wersja serwera i schematu (`docs/architektura.md`, rozdz. 8) | Migracja |
@@ -132,14 +133,22 @@ rozdz. 4.1).
   W toku, Zakończony, Wymaga akcji, Błąd, Nieaktualny) z komentarzem potwierdzenia (kto, kiedy, co), opis etapu, bramka; wyniki
   wybranego etapu po regułach (poziom, liczba problemów); wybrana reguła – co sprawdza (dane i zakres uruchomienia w podpowiedzi), wynik
   zapytania: kolumny zapytania (kwoty do prawej), potem Problem, wskazówka pod tabelą; linie ACTUALS zaznaczonego wiersza (zakres z kolumn wiersza),
-  „Wynik do Excela”, „Pokaż zmiany” (`docs/pipeline-fazy.md`, rozdz. 4.1). Akcje (tylko ostatnie uruchomienie): **Dalsze etapy** – do najbliższej bramki;
+  „Wynik do Excela”, „Pokaż zmiany”, „Popraw w aplikacji” – słownik programu albo globalny z filtrem na wiersz (`docs/pipeline-fazy.md`, rozdz. 4.1). Akcje (tylko ostatnie uruchomienie): **Dalsze etapy** – do najbliższej bramki;
   **Potwierdź i dalej** – etap „Wymaga akcji” (WARNING przy bramce „Potwierdzenie” albo zatwierdzenie) z wymaganym komentarzem
   (etap, dziennik), potem dalsze etapy; **Zaakceptuj błędy i dalej** – etap „Błąd” (ERROR, np. znany błąd albo błędna reguła)
   z wymaganym komentarzem: etap zakończony, błędy zostają w wynikach, uruchomienie kończy się stanem „zakończony z błędami”;
   **Zatwierdź dane ACTUALS i dalej** – etap „Zatwierdzenie ACTUALS” (klocek systemowy szablonu) z wymaganym komentarzem: od tej chwili
   struktura programu pokazuje dane ACTUALS tego uruchomienia (stan z przypięcia), a nowy import – dopiero po kolejnym zatwierdzeniu
   (szablon bez tego klocka – zatwierdza zakończony pierwszy etap walidacji, także „Zaakceptuj błędy i dalej”);
+  **Zatwierdź zamknięcie okresu** – etap „Zamknięcie okresu” (klocek systemowy, tylko tydzień zamykający) z wymaganym komentarzem:
+  uruchomienie zamrożone – akcje etapów, decyzje ETC i nowe uruchomienie w tym tygodniu odrzucone, baner „Okres … zamknięty”;
+  **Kontynuuj bez tych elementów** – etap „Łączenie źródeł” z kosztem bez przypisania w środku okresu (wymagany komentarz);
+  **Otwórz zamknięcie** – zamrożone uruchomienie, wymagany komentarz: blokada zdjęta, etap znów czeka na zatwierdzenie;
   **Wykonaj ponownie** – etap po poprawie danych lub słowników (wcześniejsze etapy zakończone; późniejsze – Nieaktualne).
+  Akcje może wykonać każdy użytkownik – także uruchomienie rozpoczęte przez inną osobę (scenariusz 5; kto wykonał – w etapie i dzienniku).
+- Zakładka **Dziennik przebiegu** w zakładce Przebieg programu: zdarzenia przebiegu wybranego uruchomienia – wszystkie uruchomienia
+  tygodnia (wpisy obszaru „Przebiegi” z kodem przebiegu: start, etapy z wynikiem, potwierdzenia z komentarzem, ponowne wykonanie,
+  zamknięcie i otwarcie okresu) – czas, użytkownik, zdarzenie, od najnowszego.
 - Porównania w zakładce **Przebieg** programu: **Reguły – macierz** – reguła (i kontrola etapu: import, przypięcie stanu) ×
   ostatnie 8 zakończonych uruchomień (kolor i liczba wyników ERROR / WARNING / INFO, „OK” – reguła bez wierszy, „–” bez wyników),
   klik w komórkę – wyniki w uruchomieniu z „Pokaż zmiany”; **Porównanie uruchomień** – „było” i „jest” (domyślnie dwa ostatnie
@@ -160,18 +169,27 @@ rozdz. 4.1).
   - warianty: **dwa uruchomienia** – stan narastająco „było” i „jest” (domyślnie ostatnie uruchomienie wcześniejszego okresu
     i najnowsze; przycisk zamiany) albo **okres do okresu** – koszt zaksięgowany w dwóch okresach jednego uruchomienia;
     filtr rodzaju (Hours / Materials / Other / wszystkie), „Tylko zmiany”, „Wszystkie pozycje”;
-  - kafelki ACWP rodzajów: było, jest, zmiana, zmiana %;
-  - **przyrosty miesięczne** każdego rodzaju (koszt zaksięgowany w okresie, 12 okresów do ostatniego okresu danych
-    uruchomienia „jest”) – słupki, skok w kolorze ostrzeżenia: przyrost > 3 × średni przyrost z 6 poprzednich okresów (jak reguła
-    startowa „Skok przyrostu kosztu”); podpowiedź – kwota i średnia;
+  - kafelki ACWP rodzajów: wartość „jest”, „było” i zmiana kwotowo (zielona na plus, czerwona na minus; zmiana % – tylko w Excelu);
+  - przycisk **Wykres** – osobne okno z jednym wykresem: w każdym okresie słupek **przyrostu miesięcznego** każdego rodzaju
+    (koszt zaksięgowany w okresie, 12 okresów do ostatniego okresu danych uruchomienia „jest”; lewa oś), skok – obramowanie w kolorze
+    ostrzeżenia: przyrost > 3 × średni przyrost z 6 poprzednich okresów (jak reguła startowa „Skok przyrostu kosztu”); nad słupkami
+    linia **kosztu skumulowanego** rodzajów wykresu na koniec okresu (suma rodzajów, łącznie z kosztem sprzed pierwszego okresu
+    wykresu; prawa oś); podpowiedź – kwota i średnia;
   - **Do Excela** – arkusze: wszystkie liście drzewa zmian bez limitu (rodzaj, cost element, element WBS, okres, było, jest,
     zmiana – do filtrów i tabel przestawnych), kafelki rodzajów, przyrosty ze skokami, opis porównania;
   - drzewo zmian: rodzaj → cost element (z opisem z Cost Category) → element WBS → okres (w wariancie okres do okresu liść
-    – element WBS), od największej zmiany; na każdym poziomie 50 pozycji i wiersz „pozostałe: N pozycji” z sumą – duże programy
+    – element WBS), od największej zmiany; kolumny było / jest / zmiana wyrównane na każdym poziomie (etykieta węższa o wcięcie); na każdym poziomie 50 pozycji i wiersz „pozostałe: N pozycji” z sumą – duże programy
     otwierają się szybko, gałęzie rozwijane na żądanie;
-  - linie źródłowe wybranego liścia: wiersze ACTUALS obu stron (najnowsze wersje plików zaimportowane do zakończenia
-    uruchomienia – stan, który widział przebieg), 200 największych wg kwoty, liczba i suma wszystkich; kolumny: kwota pola kwoty
-    uruchomienia, ilość, Created on, opisy, partner, zamówienie, faktura, zlecenie, plik i wiersz;
+  - linie źródłowe wybranej pozycji drzewa na dowolnym poziomie – wszystkie komórki (element WBS × cost element × okres) pozycji,
+    także ukryte w „pozostałe” i bez zmiany: wiersze ACTUALS obu stron (najnowsze wersje plików zaimportowane do zakończenia
+    uruchomienia – stan, który widział przebieg; do 100 000 największych wg kwoty na stronę), liczba i suma wszystkich; linia
+    „było” i „jest” w **jednym wierszu** – ta sama linia, gdy równe są pola: WBS Element, Cost Element, CO object name,
+    Transaction Currency, Value TranCurr, Partner object, Original material, Purchase order number, Created on (bez wielkości
+    liter i spacji na brzegach; powtórzenia łączone po kolei wg pliku i wiersza); stan: **nowa** (tylko „jest”), **usunięta**
+    (tylko „było”), **zmieniona** (inna kwota pola kwoty uruchomienia albo ilość), **bez zmian** – ukryte przy „Tylko zmiany”;
+    od największej zmiany, w tabeli 2000 linii, liczby stanów w opisie; kolumny: stan, kwota było / jest, zmiana, ilość było /
+    jest, element WBS, cost element, okres, Created on, opisy, waluta i Value TranCurr, partner, Original material, zamówienie, faktura, zlecenie, plik i wiersz
+    (linii „jest”, usuniętej – „było”);
   - koszty jak w przebiegu (CAS – po narzutach CAS), bez rozliczenia wychodzącego; dane przypięte nie uwzględniają słownika
     „Wykluczenia” – ACWP struktury może się różnić o pozycje wykluczone i o importy po uruchomieniu. Porównania linii po
     linii nie ma – zrzut ACTUALS nie ma stałego klucza linii (O50); porównanie na sumach komórki.
@@ -192,6 +210,43 @@ rozdz. 4.1).
   nie są pokazywane.
 - **„Ostatnie zdarzenia”** – przekrój dzienników wszystkich przebiegów: do 60 najnowszych wpisów, po 6 na stronę (‹ ›), treść skrócona do jednej linii (pełna w podpowiedzi).
 - Dziennik przebiegu: czas, użytkownik, opis – od najnowszego.
+
+### F11. Moduł CAM – estymacje dla Finansów
+
+- Propozycje systemu w latach: WP produkcyjny – ETC z AHD (`TECH_DO_PON` ÷ produktywność IPT + DJK, suma elementów P1S
+  poddrzewa WP) według planowanego roku poniesienia (`vAHDD.R`; rok miniony – rok bieżący, operacje bez roku – rozkład
+  liniowy po dniach roboczych do prognozowanego końca); bez danych produkcji – BAC godzin − poniesione, rozłożone liniowo;
+  materiały – części niedostarczone `vAPD` według roku planowanej dostawy (`docs/zrodla-danych.md`), bez nich – BAC
+  materiałów − poniesione, rozłożone liniowo. Przeliczenie godzin technologicznych na rzeczywiste po latach wskaźnikami
+  programu – później (gotowa tabela wskaźników).
+- Harmonogram: daty rzeczywiste (Actual Start / Koniec) – wpisuje CAM, gdy struktura (wpis albo produkcja) ich nie ma albo są błędne;
+  puste – bez zmiany; prognoza: ostatnio wpisana (Forecast Start / Koniec w „Harmonogram i budżet” – zapisuje ją zatwierdzenie ETC),
+  bez niej najwcześniejsza i najpóźniejsza `DATA_PLAN` zleceń WP, a bez danych produkcji – baseline. Uzasadnienie – opcjonalne.
+- Koszt godzin = godziny × stawka MPK roku („Stawki wydziałów”: Labor Rate × Overhead) przeliczona na walutę programu
+  (USD – kurs z „Kursy walut”).
+- Cykl estymacji programu – z jego szablonu przebiegu: klocek „Zatwierdzenie ETC” w każdym przebiegu – tygodniowy (tydzień kalendarza
+  RRRR-Tnn, termin – koniec tygodnia; nowa estymacja od ostatnio zatwierdzonej: wartości, daty, uzasadnienie), inaczej miesięczny.
+  Lista zadań CAM-a łączy WP programów tygodniowych i miesięcznych (nagłówek – oba cykle).
+- Zatwierdzenie ETC przez Finanse – etap przebiegu „Zatwierdzenie ETC” programu (`docs/pipeline-fazy.md`, rozdz. 4.1): powiadomienie
+  CAM-ów z zaległościami (e-mail z Outlooka, raz w cyklu, „Wyślij ponownie”), zatwierdź (ETC, prognoza i daty rzeczywiste do
+  „Harmonogram i budżet”), zwróć z uwagą, otwórz ponownie z komentarzem; moduł CAM decyzji nie ma (zakładka „Postęp estymacji” – monitoring).
+- Struktura programu: kolumna „Estymacja CAM” i kolor wiersza WP w bieżącym cyklu – zielony zatwierdzona, niebieski wysłana,
+  czerwony zwrócona, żółty brak albo szkic po terminie cyklu (`docs/performance-objectives.md`, rozdz. 4.2).
+- Statusy: Do uzupełnienia → Szkic → Wysłana → Zatwierdzona / Zwrócona (z uwagą) → Szkic; zatwierdzona – ponowne otwarcie
+  przez finansistę z komentarzem (min. 10 znaków): wraca do CAM-a jako Zwrócona z komentarzem jako uwagą, „Harmonogram
+  i budżet” zostaje z wartościami ostatniego zatwierdzenia do ponownego zatwierdzenia; jedna estymacja WP na cykl,
+  zapis z kontrolą równoczesnej zmiany, historia zdarzeń, wpis w dzienniku (obszar „CAM”).
+- Zatwierdzenie zapisuje sumę lat jako ETC HOURS / ETC MATERIAL oraz Forecast Start / Koniec w „Harmonogram i budżet”
+  (`docs/slowniki.md`) – struktura programu i wyniki EV liczą z nich ETC; estymacja zmieniona od wczytania listy (np. zwrócona
+  i wysłana ponownie) – odmowa przed zapisem słownika, do odświeżenia listy.
+- Odczyt danych: WP CAM-a – struktura każdego programu (produkcja PZLPROD i koszty ACTUALS czytane równolegle, najwyżej 3 programy
+  naraz; czas programu w logu aplikacji); lista wymaganych WP (etap przebiegu, postęp) – bez kosztów ACTUALS. Powrót z formularza
+  odświeża tylko estymacje (WP bez ponownego odczytu – „Odśwież”), postęp estymacji – raz na cykl i „Odśwież”; panel etapu przebiegu
+  – odczyt przy pierwszym wyborze etapu, po decyzji zmienia się tylko jej wiersz („Odśwież” – ponowny odczyt).
+- Formularz: przesunięcie prognozowanego końca na późniejszy rok dodaje wiersze lat (bez propozycji, 0); wartość, której nie da
+  się odczytać jako liczby, blokuje zapis szkicu i wysyłkę.
+- Wyniki EV: EAC = ACWP + ETC, IEAC = ACWP + (BAC − BCWP) ÷ CPI, TCPI = (BAC − BCWP) ÷ (EAC − ACWP), różnica TCPI − CPI > 0,10
+  – EAC mało wiarygodny; WP bez danych produkcji nie mają BCWP (O35).
 
 ### F08. Administracja
 

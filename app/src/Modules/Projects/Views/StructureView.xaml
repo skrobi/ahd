@@ -61,6 +61,19 @@
             <DataGrid.RowStyle>
                 <Style TargetType="DataGridRow">
                     <Style.Triggers>
+                        <!-- Estymacja CAM WP w cyklu (kolumna „Estymacja CAM”); bieżący wiersz i niezapisane zmiany – niżej, mają pierwszeństwo. -->
+                        <DataTrigger Binding="{Binding CamTone}" Value="ok">
+                            <Setter Property="Background" Value="{StaticResource OkSoft}" />
+                        </DataTrigger>
+                        <DataTrigger Binding="{Binding CamTone}" Value="info">
+                            <Setter Property="Background" Value="{StaticResource InfoSoft}" />
+                        </DataTrigger>
+                        <DataTrigger Binding="{Binding CamTone}" Value="crit">
+                            <Setter Property="Background" Value="{StaticResource CritSoft}" />
+                        </DataTrigger>
+                        <DataTrigger Binding="{Binding CamTone}" Value="warn">
+                            <Setter Property="Background" Value="{StaticResource WarnSoft}" />
+                        </DataTrigger>
                         <!-- Wiersz bieżącej komórki – ciemniejszy szary (łatwiej śledzić wiersz przy wielu kolumnach); niezapisane zmiany mają pierwszeństwo. -->
                         <DataTrigger Binding="{Binding IsCurrent}" Value="True">
                             <Setter Property="Background" Value="{StaticResource RowCurrent}" />

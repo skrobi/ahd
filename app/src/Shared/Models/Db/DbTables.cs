@@ -19,4 +19,7 @@ public static class DbTables
     public const string RunIssue = "run.Issue";
     /// <summary>Dane uruchomienia jak w strukturze programu – tabela „ev” reguł walidacji (migracja 051).</summary>
     public const string RunBalanceEv = "run.BalanceEv";
+
+    /// <summary>Wynik klocka „Łączenie źródeł”: koszt elementu WBS uruchomienia przypisany do WP (migracja 059).</summary>
+    public const string RunCostAssignment = "run.CostAssignment";
 }

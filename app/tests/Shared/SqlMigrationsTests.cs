@@ -57,15 +57,17 @@ public sealed class SqlMigrationsTests
     public void Scripts_are_embedded_numbered_and_parameterised()
     {
         var scripts = SqlMigrations.All();
-        Assert.Equal([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54], scripts.Select(s => s.Number));
-        Assert.Equal([false, true, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, true, false, false, false, false, false, false, true, false, true, false, true, false, false, false, false, false, true, false, false, false, false, false, true, false, false, false, false, false, false, true, false], scripts.Select(s => s.IsPresets));   // 002, 023, 030, 032, 034, 040, 046, 053 (*_dane_*) – dane startowe
-        Assert.Equal(54, SqlMigrations.Required);
+        Assert.Equal([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59], scripts.Select(s => s.Number));
+        Assert.Equal([false, true, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, true, false, false, false, false, false, false, true, false, true, false, true, false, false, false, false, false, true, false, false, false, false, false, true, false, false, false, false, false, false, true, false, true, false, false, false, false], scripts.Select(s => s.IsPresets));   // 002, 023, 030, 032, 034, 040, 046, 053, 055 (*_dane_*) – dane startowe
+        Assert.Equal(59, SqlMigrations.Required);
 
         var batches = SqlMigrations.Batches(scripts[0].Text, "FINOP", "PZLEV_").ToList();
         Assert.True(batches.Count > 5);
         Assert.Contains(batches, b => b.Contains("CREATE TABLE [FINOP].[PZLEV_META_Project]"));
         Assert.All(scripts.SelectMany(s => SqlMigrations.Batches(s.Text, "FINOP", "PZLEV_")),
             b => Assert.False(b.Contains("$(Schema)") || b.Contains("$(Prefix)")));
+        // Skrypt sam zapisuje swój numer – bez wpisu aplikacja pyta o migrację przy każdym starcie (wykonana jest pomijana tylko po wpisie).
+        Assert.All(scripts, s => Assert.Contains($"VALUES ({s.Number}, N'{s.Name}'", s.Text));
     }
 
     [SqlFact]
@@ -73,14 +75,14 @@ public sealed class SqlMigrationsTests
     {
         using var database = new TestDatabase();   // bez danych startowych
 
-        Assert.Equal(["002_dane_startowe.sql", "023_dane_produkcji.sql", "030_dane_narzuty_cas.sql", "032_dane_formuly_narzutow_cas.sql", "034_dane_narzuty_cas.sql", "040_dane_rodzaj_kosztu.sql", "046_dane_kursy_usd.sql", "053_dane_reguly_i_przebiegi.sql"], SqlMigrations.Pending(database.Sql).Select(s => s.Name));
+        Assert.Equal(["002_dane_startowe.sql", "023_dane_produkcji.sql", "030_dane_narzuty_cas.sql", "032_dane_formuly_narzutow_cas.sql", "034_dane_narzuty_cas.sql", "040_dane_rodzaj_kosztu.sql", "046_dane_kursy_usd.sql", "053_dane_reguly_i_przebiegi.sql", "055_dane_popraw_w_aplikacji.sql"], SqlMigrations.Pending(database.Sql).Select(s => s.Name));
         Assert.Empty(SqlMigrations.Apply(database.Sql, presets: false));
-        Assert.Equal(["002_dane_startowe.sql", "023_dane_produkcji.sql", "030_dane_narzuty_cas.sql", "032_dane_formuly_narzutow_cas.sql", "034_dane_narzuty_cas.sql", "040_dane_rodzaj_kosztu.sql", "046_dane_kursy_usd.sql", "053_dane_reguly_i_przebiegi.sql"], SqlMigrations.Apply(database.Sql));   // pozostałe wykonane – pominięte
+        Assert.Equal(["002_dane_startowe.sql", "023_dane_produkcji.sql", "030_dane_narzuty_cas.sql", "032_dane_formuly_narzutow_cas.sql", "034_dane_narzuty_cas.sql", "040_dane_rodzaj_kosztu.sql", "046_dane_kursy_usd.sql", "053_dane_reguly_i_przebiegi.sql", "055_dane_popraw_w_aplikacji.sql"], SqlMigrations.Apply(database.Sql));   // pozostałe wykonane – pominięte
         Assert.Empty(SqlMigrations.Apply(database.Sql));                              // wszystko wykonane
         Assert.Empty(SqlMigrations.Pending(database.Sql));
         var status = SqlMigrations.Status(database.Sql);
         Assert.All(status, s => Assert.NotNull(s.AppliedAt));
-        Assert.Equal(54, SqlMigrations.CurrentVersion(database.Sql));
+        Assert.Equal(59, SqlMigrations.CurrentVersion(database.Sql));
         using var connection = database.Sql.Open();
         var tables = connection.Query<string>(
             "SELECT t.name FROM sys.tables t JOIN sys.schemas s ON s.schema_id = t.schema_id WHERE s.name = @schema AND LEFT(t.name, LEN(@prefix)) = @prefix",
@@ -93,8 +95,9 @@ public sealed class SqlMigrationsTests
         // + DICT_CasBurdenGroup, DICT_CasBurdenRate (029) + DICT_CasPool, DICT_CasBurdenFormula (031)
         // – DICT_CasBurdenFormula + DICT_CasFormula (033) + CAN_ActualsBalance (037) + DICT_RunCheck (047) + DICT_RunReconciliation (049)
         // + DICT_RunDefinition, DICT_RunStep, DICT_RunStepElement, META_RunStep (050) + DICT_RunValidation, RUN_BalanceEv
-        // – DICT_RunCheck, DICT_RunReconciliation (051)
-        Assert.Equal(40, tables.Count);
+        // – DICT_RunCheck, DICT_RunReconciliation (051) + CAM_Estimate, CAM_EstimateLine, CAM_EstimateEvent (056)
+        // + CAM_Notification (057) + RUN_CostAssignment (059)
+        Assert.Equal(45, tables.Count);
         Assert.DoesNotContain(tables, t => t.EndsWith("DICT_RunCheck") || t.EndsWith("DICT_RunReconciliation"));
         Assert.DoesNotContain(tables, t => t.EndsWith("CAN_Actuals") || t.EndsWith("CAN_MappingReport") || t.EndsWith("STG_RawRow") || t.EndsWith("SourceFileContent"));
         Assert.Contains(database.Sql.Settings.TablePrefix + "META_PerformanceObjective", tables);
@@ -157,7 +160,8 @@ public sealed class SqlMigrationsTests
                 """);
         }
 
-        Assert.Equal(["052_naprawa_regul_walidacji.sql", "053_dane_reguly_i_przebiegi.sql"], SqlMigrations.Apply(database.Sql).Where(n => n.StartsWith("05")));
+        Assert.Equal(["052_naprawa_regul_walidacji.sql", "053_dane_reguly_i_przebiegi.sql", "055_dane_popraw_w_aplikacji.sql"],
+            SqlMigrations.Apply(database.Sql).Where(n => n.StartsWith("05")));
 
         using var check = database.Sql.Open();
         Assert.NotNull(check.ExecuteScalar<int?>($"SELECT COL_LENGTH(N'{T("dict.RunValidation")}', N'SqlText')"));
@@ -184,7 +188,7 @@ public sealed class SqlMigrationsTests
         Parallel.For(0, 2, i => results[i] = SqlMigrations.Apply(database.Sql));   // blokada sp_getapplock
 
         // Każdy skrypt dokładnie raz (który wątek wykonał który skrypt – zależy od kolejności zdobycia blokady).
-        Assert.Equal(["002_dane_startowe.sql", "023_dane_produkcji.sql", "030_dane_narzuty_cas.sql", "032_dane_formuly_narzutow_cas.sql", "034_dane_narzuty_cas.sql", "040_dane_rodzaj_kosztu.sql", "046_dane_kursy_usd.sql", "053_dane_reguly_i_przebiegi.sql"],
+        Assert.Equal(["002_dane_startowe.sql", "023_dane_produkcji.sql", "030_dane_narzuty_cas.sql", "032_dane_formuly_narzutow_cas.sql", "034_dane_narzuty_cas.sql", "040_dane_rodzaj_kosztu.sql", "046_dane_kursy_usd.sql", "053_dane_reguly_i_przebiegi.sql", "055_dane_popraw_w_aplikacji.sql"],
             results.SelectMany(r => r).Order(StringComparer.Ordinal));
         using var connection = database.Sql.Open();
         Assert.Equal(2, connection.ExecuteScalar<int>($"SELECT COUNT(*) FROM {database.Sql.Table("meta.SourceDefinition")}"));

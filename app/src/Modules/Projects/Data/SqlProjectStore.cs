@@ -41,11 +41,14 @@ public sealed class SqlProjectStore(SqlDatabase db, IClock clock, ICurrentUser u
             var deleted = 0;
             // Przebiegi programu: dane uruchomień (po PinId), uruchomienia, przebiegi.
             var pins = $"SELECT p.PinId FROM {db.Table(DbTables.RunPin)} p JOIN {db.Table(DbTables.Run)} r ON r.RunId = p.RunId WHERE r.Project = @code";
-            foreach (var table in new[] { DbTables.RunBalance, DbTables.RunBalanceEv, DbTables.RunIssue, "meta.RunStep" })
+            foreach (var table in new[] { DbTables.RunBalance, DbTables.RunBalanceEv, DbTables.RunCostAssignment, DbTables.RunIssue, "meta.RunStep" })
                 deleted += connection.Execute($"DELETE FROM {db.Table(table)} WHERE PinId IN ({pins})", new { code }, transaction, commandTimeout: 1800);
             deleted += connection.Execute($"DELETE FROM {db.Table(DbTables.RunPin)} WHERE RunId IN (SELECT RunId FROM {db.Table(DbTables.Run)} WHERE Project = @code)",
                 new { code }, transaction);
             deleted += connection.Execute($"DELETE FROM {db.Table(DbTables.Run)} WHERE Project = @code", new { code }, transaction);
+            // Estymacje CAM programu (wiersze lat i historia – ON DELETE CASCADE).
+            deleted += connection.Execute($"DELETE FROM {db.Table("cam.Estimate")} WHERE Project = @code", new { code }, transaction);
+            deleted += connection.Execute($"DELETE FROM {db.Table("cam.Notification")} WHERE Project = @code", new { code }, transaction);
             // Słowniki programu z historią (wiersze globalnych słowników mają Project NULL – zostają), nakładka, rejestracja programu.
             foreach (var table in ProjectTables)
                 deleted += connection.Execute($"DELETE FROM {db.Table(table)} WHERE Project = @code", new { code }, transaction);

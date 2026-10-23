@@ -47,6 +47,8 @@ public sealed class RunStepTileViewModel : ObservableObject
     private string _warningGate;
     private bool _approval;
     private string _description;
+    private string _condition;
+    private bool _notify;
     private string _ruleSearch = "";
 
     public RunStepTileViewModel(RunStepDefinition step, IReadOnlyList<RunRule> library)
@@ -57,6 +59,8 @@ public sealed class RunStepTileViewModel : ObservableObject
         _warningGate = step.WarningGate;
         _approval = step.Approval;
         _description = step.Description ?? "";
+        _condition = step.Condition;
+        _notify = step.Notify;
         Rules = IsChecks ? BuildRules(step, library) : [];
         foreach (var choice in Rules)
             choice.Changed += () => { OnPropertyChanged(nameof(Summary)); Changed?.Invoke(); };
@@ -79,10 +83,38 @@ public sealed class RunStepTileViewModel : ObservableObject
 
     public bool IsChecks => Action == RunActions.Checks;
 
-    public bool IsApproval => Action is RunActions.Approval or RunActions.ApproveActuals;
+    public bool IsApproval => Action is RunActions.Approval or RunActions.ApproveActuals or RunActions.ApproveEtc or RunActions.ClosePeriod;
 
     /// <summary>Klocek systemowy „Zatwierdzenie ACTUALS” – zatwierdzone dane ACTUALS trafiają do struktury programu.</summary>
     public bool IsActualsApproval => Action == RunActions.ApproveActuals;
+
+    /// <summary>Klocek systemowy „Zatwierdzenie ETC” – Finanse zatwierdzają ETC wprowadzone przez CAM-ów.</summary>
+    public bool IsEtcApproval => Action == RunActions.ApproveEtc;
+
+    /// <summary>Klocek systemowy „Łączenie źródeł” – koszt uruchomienia przypisany do WP (bramka WARNING – potwierdzenie).</summary>
+    public bool IsReconcile => Action == RunActions.Reconcile;
+
+    /// <summary>Klocek systemowy „Zamknięcie okresu” – ostatni etap, tylko przebieg zamykający; zatwierdzenie zamraża uruchomienie.</summary>
+    public bool IsPeriodClose => Action == RunActions.ClosePeriod;
+
+    /// <summary>Klocek z warunkiem wykonania (cykl estymacji) i powiadomieniem CAM-ów – Zatwierdzenie ETC.</summary>
+    public bool HasCondition => RunActions.HasCondition(Action);
+
+    /// <summary>Zatwierdzenie ETC: na początku etapu e-mail do CAM-ów z zaległymi estymacjami.</summary>
+    public bool Notify
+    {
+        get => _notify;
+        set { if (SetProperty(ref _notify, value)) { OnPropertyChanged(nameof(Summary)); Changed?.Invoke(); } }
+    }
+
+    public IReadOnlyList<string> Conditions => RunConditions.All;
+
+    /// <summary>Warunek wykonania: każdy przebieg (cykl estymacji tygodniowy) albo przebieg zamykający (miesięczny).</summary>
+    public string Condition
+    {
+        get => _condition;
+        set { if (SetProperty(ref _condition, value ?? RunConditions.Always)) { OnPropertyChanged(nameof(GateText)); OnPropertyChanged(nameof(Summary)); Changed?.Invoke(); } }
+    }
 
     public IReadOnlyList<string> Gates => RunGates.All;
 
@@ -110,7 +142,10 @@ public sealed class RunStepTileViewModel : ObservableObject
 
     /// <summary>Bramka na kafelku: ERROR zatrzymuje; WARNING – potwierdzenie albo informacja; zatwierdzenie ręczne.</summary>
     public string GateText =>
-        IsApproval || Approval ? "czeka na zatwierdzenie" : IsChecks ? $"WARNING: {WarningGate.ToLowerInvariant()}" : "stały – konfiguracja programu";
+        (IsApproval || Approval ? "czeka na zatwierdzenie" : IsChecks ? $"WARNING: {WarningGate.ToLowerInvariant()}"
+            : IsReconcile ? "WARNING: potwierdzenie · bez przypisania w przebiegu zamykającym – ERROR"
+            : "stały – konfiguracja programu")
+        + (HasCondition ? $" · {Condition.ToLowerInvariant()}" : IsPeriodClose ? $" · {RunConditions.Closing.ToLowerInvariant()}" : "");
 
     /// <summary>Zawartość kafelka: liczba zaznaczonych reguł i pierwsze z nich.</summary>
     public string Summary
@@ -118,7 +153,11 @@ public sealed class RunStepTileViewModel : ObservableObject
         get
         {
             if (!IsChecks)
-                return IsFixed ? "klocek predefiniowany" : IsActualsApproval ? "klocek systemowy – zatwierdzone dane ACTUALS w strukturze programu" : "";
+                return IsFixed ? "klocek predefiniowany" : IsActualsApproval ? "klocek systemowy – zatwierdzone dane ACTUALS w strukturze programu"
+                    : IsEtcApproval ? $"klocek systemowy – Finanse zatwierdzają ETC CAM-ów; cykl {(Condition == RunConditions.Closing ? "miesięczny" : "tygodniowy")}"
+                      + (Notify ? "; powiadomienie CAM-ów" : "")
+                    : IsPeriodClose ? "klocek systemowy – zatwierdzenie zamyka okres i zamraża uruchomienie"
+                    : IsReconcile ? "klocek systemowy – koszt do WP, CAM i Cost Category jak w strukturze; suma kontrolna" : "";
             var selected = Rules.Where(c => c.IsSelected).Select(c => c.Name).ToList();
             return selected.Count == 0 ? "brak reguł – zaznacz"
                 : $"{selected.Count} {(selected.Count == 1 ? "reguła" : selected.Count % 10 is >= 2 and <= 4 && selected.Count / 10 % 10 != 1 ? "reguły" : "reguł")}: "
@@ -127,8 +166,9 @@ public sealed class RunStepTileViewModel : ObservableObject
     }
 
     public RunStepDefinition ToStep() =>
-        new(No, Name.Trim(), Action, IsChecks ? WarningGate : RunGates.Info, IsApproval || Approval,
-            [.. Rules.Where(c => c.IsSelected).Select(c => new RunElementSetting(c.Name))], Description.Trim().Length == 0 ? null : Description.Trim());
+        new(No, Name.Trim(), Action, IsChecks ? WarningGate : IsReconcile ? RunGates.Confirm : RunGates.Info, IsApproval || Approval,
+            [.. Rules.Where(c => c.IsSelected).Select(c => new RunElementSetting(c.Name))], Description.Trim().Length == 0 ? null : Description.Trim(),
+            HasCondition ? Condition : IsPeriodClose ? RunConditions.Closing : RunConditions.Always, HasCondition && Notify);
 
     /// <summary>Reguły biblioteki w jej kolejności; reguły etapu spoza biblioteki (np. usunięte) – na końcu jako „nieznana” (odznaczenie usuwa).</summary>
     private static IReadOnlyList<RunRuleChoice> BuildRules(RunStepDefinition step, IReadOnlyList<RunRule> library)

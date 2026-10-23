@@ -34,10 +34,10 @@ zmiana zakresu zadania w trakcie realizacji wymaga uzgodnienia.
 | [F0.3 Konfiguracja aplikacji](F0.3-konfiguracja-aplikacji.md) | Shell | F0.1 | – | zrobione |
 | [F0.4 Warstwa danych przejściowa (w pamięci)](F0.4-warstwa-danych-przejsciowa-w-pamieci.md) | Shared | F0.2 | – | zastąpione – baza SQL |
 | [F0.5 Usługi wspólne: użytkownik, dziennik, problemy](F0.5-uslugi-wspolne-uzytkownik-dziennik-problemy.md) | Shared | F0.4 | – | zrobione |
-| [F0.6 Silnik etapów](F0.6-silnik-etapow.md) | Shared / Runs | F0.5 | – | do zrobienia |
-| [F0.7 Pliki: Excel, CSV, dysk sieciowy](F0.7-pliki-excel-csv-dysk-sieciowy.md) | Shared | F0.2 | – | w toku |
-| [F0.8 Wspólne elementy interfejsu](F0.8-wspolne-elementy-interfejsu.md) | Shared/Views | F0.1 | – | w toku |
-| [F0.9 Dane wzorcowe](F0.9-dane-wzorcowe.md) | testdata | F0.4 | decyzja: próbki od użytkownika | w toku |
+| [F0.6 Silnik etapów](F0.6-silnik-etapow.md) | Shared / Runs | F0.5 | – | zrobione – definicja przebiegu z akcjami etapów zamiast `IStage` |
+| [F0.7 Pliki: Excel, CSV, dysk sieciowy](F0.7-pliki-excel-csv-dysk-sieciowy.md) | Shared | F0.2 | – | zrobione – ścieżki względne w bazie w etapach zapisujących pliki (F6.2, F7.3, F9.1) |
+| [F0.8 Wspólne elementy interfejsu](F0.8-wspolne-elementy-interfejsu.md) | Shared/Views | F0.1 | – | zrobione – nawigacja z parametrem („Popraw w aplikacji”) |
+| [F0.9 Dane wzorcowe](F0.9-dane-wzorcowe.md) | testdata | F0.4 | decyzja: próbki od użytkownika | zrobione – dane kolejnych faz w zadaniach faz |
 
 ## F1. Słowniki globalne (G3)
 
@@ -83,19 +83,20 @@ zmiana zakresu zadania w trakcie realizacji wymaga uzgodnienia.
 
 | Zadanie | Moduł | Zależy od | Otwarte kwestie | Status |
 |---|---|---|---|---|
-| [F5.1 P0 Uruchomienie przebiegu](F5.1-p0-uruchomienie-przebiegu.md) | Runs | F0.6, F4.5, F1.2 | O36 | w toku – P0/P1 i kontrole ACTUALS (RunService, reguły walidacji w SQL – F5.7; migracje 027/028) |
-| [F5.2 P1 Przypięcie stanu](F5.2-p1-przypiecie-stanu.md) | Runs | F5.1, F2.3, F3.2 | O30, O45 | w toku – P0/P1 i kontrole ACTUALS (RunService, reguły walidacji w SQL – F5.7; migracje 027/028) |
+| [F5.1 P0 Uruchomienie przebiegu](F5.1-p0-uruchomienie-przebiegu.md) | Runs | F0.6, F4.5, F1.2 | O36 | w toku – uruchomienie, przypięcie, kontrole; zostały: wybór tygodnia, świeżość danych produkcji, data stanu (O36) |
+| [F5.2 P1 Przypięcie stanu](F5.2-p1-przypiecie-stanu.md) | Runs | F5.1, F2.3, F3.2 | O30, O45 | zrobione – dane ACTUALS przypięte; słowniki bez zamrażania, zmiana w banerze (F5.3) |
 | [F5.3 Zmiana po przypięciu](F5.3-zmiana-po-przypieciu.md) | Runs | F5.2 | – | zrobione – wersja informacyjna (baner zmian) |
-| [F5.4 P2 Walidacja](F5.4-p2-walidacja.md) | Runs | F5.2 | O25 | w toku – P0/P1 i kontrole ACTUALS (RunService, reguły walidacji w SQL – F5.7; migracje 027/028) |
-| [F5.5 Z Zamknięcie okresu](F5.5-z-zamkniecie-okresu.md) | Runs | F8.2 | – | w toku – znacznik zamknięcia okresu (★) i porównania między zamknięciami; rewizja EV i zamrożenie – po F8.2 |
-| [F5.6 Ekrany Przebiegi i Przebieg](F5.6-ekrany-przebiegi-i-przebieg.md) | Runs | F5.1–F5.4 | – | w toku – szablony przebiegów (kafelki), przebieg w programie (etapy, macierz, porównanie), Zmiany ACWP |
+| [F5.4 P2 Walidacja](F5.4-p2-walidacja.md) | Runs | F5.2 | O25 | zrobione – kontrole z testami, „Popraw w aplikacji” (migracja 055, 0.61.0) |
+| [F5.5 Z Zamknięcie okresu](F5.5-z-zamkniecie-okresu.md) | Runs | F8.2 | – | w toku – znacznik ★, klocek „Zamknięcie okresu” z zamrożeniem i otwarciem (058); rewizja EV – po F8.2 |
+| [F5.6 Ekrany Przebiegi i Przebieg](F5.6-ekrany-przebiegi-i-przebieg.md) | Runs | F5.1–F5.4 | – | w toku – szablony (klocki), przebieg w programie, dziennik, Zmiany ACWP; zostały: rewizje EV i klocki F6–F9 |
 | [F5.7 Reguły walidacji w SQL – jeden edytor](F5.7-reguly-walidacji-sql.md) | Runs | F5.4, F5.6 | – | zrobione (migracja 051, 0.59.0) – wyniki: problemy i linie ACTUALS wiersza (O53) |
+| [F5.8 Kontrole P2 spoza zrzutu ACTUALS](F5.8-kontrole-spoza-zrzutu-actuals.md) | Runs | F5.4 | O27, O50 | zablokowane (O27, O50) – daty księgowania, duplikaty między częściami |
 
 ## F6. Uzgodnienie (P3, P4)
 
 | Zadanie | Moduł | Zależy od | Otwarte kwestie | Status |
 |---|---|---|---|---|
-| [F6.1 P3 Łączenie źródeł](F6.1-p3-laczenie-zrodel.md) | Reconciliation | F5.4 | O14, O33 | do zrobienia |
+| [F6.1 P3 Łączenie źródeł](F6.1-p3-laczenie-zrodel.md) | Runs, Projects | F5.4 | – | w toku – klocek „Łączenie źródeł” (059, 0.65.0); zostało: sprawdzenie na danych programu, element z zaawansowaniem bez WP (F7) |
 | [F6.2 P4 Pliki dla finansów](F6.2-p4-pliki-dla-finansow.md) | Reconciliation | F6.1 | O16 | do zrobienia |
 
 ## F7. Zaawansowanie (P5–P7)
@@ -132,15 +133,27 @@ zmiana zakresu zadania w trakcie realizacji wymaga uzgodnienia.
 | [F10.4 PZLPROD, WebDAV, wydajność](F10.4-pzlprod-webdav-wydajnosc.md) | całość | F10.3 | O5, O6 | w toku – import dużych plików przebudowany (2026-10-03); zostało: pomiar na prawdziwej lokalizacji i bazie |
 | [F10.5 Paczka wdrożeniowa](F10.5-paczka-wdrozeniowa.md) | całość | F10.3 | – | do zrobienia |
 
+## F11. Moduł CAM – estymacje dla Finansów i wyniki EV CAM-a
+
+| Zadanie | Moduł | Zależy od | Otwarte kwestie | Status |
+|---|---|---|---|---|
+| [F11.1 Moduł CAM – dane estymacji i kontrakt](F11.1-modul-cam-dane-i-kontrakt.md) | Cam, Projects | F4.6 | O10, O35 | zrobione |
+| [F11.2 Estymacja – propozycje i wyliczenia](F11.2-estymacja-propozycje-i-wyliczenia.md) | Cam | F11.1 | O10, O35, O15 | zrobione |
+| [F11.3 Ekran Estymacje](F11.3-ekran-estymacje.md) | Cam | F11.2 | – | w toku |
+| [F11.4 Zatwierdzanie estymacji](F11.4-zatwierdzanie-estymacji.md) | Cam | F11.3 | – | zrobione |
+| [F11.5 Ekran Wyniki EV CAM-a](F11.5-ekran-wyniki-ev-cam.md) | Cam | F11.1 | O35 | zrobione |
+| [F11.6 Zatwierdzenie ETC w przebiegu, postęp i kolory struktury](F11.6-zatwierdzenie-etc-w-przebiegu.md) | Runs, Cam, Projects | F11.4 | – | w toku |
+| [F11.7 Powiadomienia CAM w przebiegu i cykl tygodniowy](F11.7-powiadomienia-cam-i-cykl-tygodniowy.md) | Runs, Cam, Projects | F11.6 | – | w toku |
+
 ## Otwarte kwestie blokujące
 
 | Kwestia | Kto | Blokuje |
 |---|---|---|
-| O14 – logika łączenia źródeł | zespół | F6.1 |
+| O14 – logika łączenia źródeł – rozstrzygnięte 2026-10-23 (jak struktura programu) | zespół | F6.1 |
 | O35, O15, O30, O36 – metody EV, ETC, ACWP, data stanu | Finanse | F8.1; O36 – także F5.1 |
 | O16, O17 – układ plików dla finansów i CAM | Finanse, CAM | F6.2, F7.3 |
 | O10 – definicja vAHDD | właściciele PZLPROD | F7.1 |
 | O45 – przypisanie kosztów i zaawansowania do węzłów nakładki | zespół | F5.2 |
-| O11, O33, O34 | zespół | F7.2, F6.1, F7.3 |
+| O11, O33 (rozstrzygnięte 2026-10-23 – ERROR w przebiegu zamykającym), O34 | zespół | F7.2, F6.1, F7.3 |
 
-Poza planem (v2): rola CAM i PM w aplikacji, raporty Power BI.
+Poza planem (v2): uprawnienia roli CAM i PM w aplikacji (moduł CAM – F11, na razie bez uprawnień), raporty Power BI.

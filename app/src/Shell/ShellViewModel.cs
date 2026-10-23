@@ -57,12 +57,20 @@ public sealed class ShellViewModel : ObservableObject, INavigator
         private set => SetProperty(ref _currentView, value);
     }
 
-    public void NavigateTo(string moduleKey)
+    public void NavigateTo(string moduleKey) => Show(moduleKey);
+
+    public void NavigateTo(string moduleKey, object parameter)
+    {
+        if (Show(moduleKey)?.DataContext is INavigationTarget target)
+            target.NavigatedTo(parameter);
+    }
+
+    private FrameworkElement? Show(string moduleKey)
     {
         if (!_modules.TryGetValue(moduleKey, out var module))
         {
             Log.Warning("Nawigacja do nieznanego modułu {Module}", moduleKey);
-            return;
+            return null;
         }
 
         if (!_views.TryGetValue(moduleKey, out var view))
@@ -73,5 +81,6 @@ public sealed class ShellViewModel : ObservableObject, INavigator
 
         CurrentView = view;
         Log.ForContext("Module", moduleKey).Information("Nawigacja: {Module}", moduleKey);
+        return view;
     }
 }

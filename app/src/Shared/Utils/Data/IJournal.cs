@@ -8,4 +8,7 @@ public interface IJournal
     void Add(string area, string message, string? scope = null);
 
     IReadOnlyList<JournalEntry> Recent(int count);
+
+    /// <summary>Ostatnie wpisy obszaru o zakresie scope (np. kod przebiegu), od najnowszego.</summary>
+    IReadOnlyList<JournalEntry> ForScope(string area, string scope, int count);
 }

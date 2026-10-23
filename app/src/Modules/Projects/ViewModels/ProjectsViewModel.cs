@@ -1,4 +1,7 @@
 using PzlEv.Modules.Projects.Services;
+using PzlEv.Shared.Models;
+using PzlEv.Shared.Utils.Data;
+using PzlEv.Shared.Utils.Ui.Modularity;
 using PzlEv.Shared.Utils.Ui.Dialogs;
 using PzlEv.Shared.Utils.Ui.Mvvm;
 using Serilog;
@@ -12,12 +15,14 @@ public sealed class ProjectsViewModel : ObservableObject
 
     private readonly ProjectService _service;
     private readonly IFileDialogs _dialogs;
+    private readonly INavigator? _navigator;
     private object _page = null!;
 
-    public ProjectsViewModel(ProjectService service, IFileDialogs dialogs)
+    public ProjectsViewModel(ProjectService service, IFileDialogs dialogs, INavigator? navigator = null)
     {
         _service = service;
         _dialogs = dialogs;
+        _navigator = navigator;
         ShowList();
     }
 
@@ -46,7 +51,8 @@ public sealed class ProjectsViewModel : ObservableObject
         {
             if (await Busy.Run($"Otwieranie programu {code}…", () => _service.Find(code)) is { } project)
             {
-                Page = new ProjectDetailViewModel(_service, _dialogs, Busy, project, ShowList);
+                Page = new ProjectDetailViewModel(_service, _dialogs, Busy, project, ShowList,
+                    _navigator is null ? null : link => _navigator.NavigateTo(ModuleKeys.MasterData, link));
                 return;
             }
         }

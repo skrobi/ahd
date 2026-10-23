@@ -21,10 +21,16 @@
      ETC = TECH_DO_PON ÷ produktywność IPT + DJK × TECH_DO_PON (godziny do wykonania);
      produktywność IPT = Σ CzTechPon ÷ Σ CzRzecz z vAHDD_PL_CPI w oknie @months (brak – 1);
      Actual Start = MIN(GSTRI) (wydzielenie – MIN(DATA_REAL) jego operacji);
-     Actual Finish = MAX(LTRMI) (wydzielenie – MAX(DATA_REAL)), gdy wszystkie operacje mają STAT = 'DONE', inaczej NULL.
+     Actual Finish = MAX(LTRMI) (wydzielenie – MAX(DATA_REAL)), gdy wszystkie operacje mają STAT = 'DONE', inaczej NULL;
+     Plan Start / Plan Finish = MIN / MAX(DATA_PLAN) operacji – prognoza terminów WP, gdy nie jest wpisana (moduł CAM).
    Wynik 2 – materiały po PSPNR (vAPD, USD): wartość wszystkich części Σ NETWR_USD [÷ (1 + Z_CLO)] (Value), fee Σ NETWR_USD −
      Σ NETWR_USD ÷ (1 + Z_CLO) (Fee), wartość dostarczona – statusy #delivered (Delivered), liczba numerów części (MATNR):
-     wszystkich i dostarczonych, najbliższy rok planowanej dostawy części niedostarczonych (YEAR(EINDT_MAX)). */
+     wszystkich i dostarczonych, najbliższy rok planowanej dostawy części niedostarczonych (YEAR(EINDT_MAX)).
+   Wynik 3 – materiały niedostarczone po PSPNR i roku planowanej dostawy (YEAR(EINDT_MAX); brak daty – NULL), USD jak Value –
+     propozycja materiałów w latach w estymacji CAM (docs/funkcjonalnosc.md, moduł CAM).
+   Wynik 4 – ETC godzin po elemencie (PSPNR, VirtualCode) i planowanym roku poniesienia (R; brak – NULL), liczone jak ETC wyniku 1 –
+     propozycja godzin w latach w estymacji CAM.
+   Godziny operacji (produktywność IPT, DJK, wydzielenie) liczone raz – tabela #ops, z niej wyniki 1 i 4. */
 
 WITH Produktywnosc AS (
     SELECT IPT, SUM(CzTechPon) / SUM(CzRzecz) AS Factor
@@ -35,6 +41,7 @@ WITH Produktywnosc AS (
 A AS (
     SELECT p.PSPNR, a.IPT, a.CATS, a.TECH, a.TECH_PON, a.TECH_DO_PON, a.STAT,
            TRY_CONVERT(DATE, a.GSTRI) AS GSTRI, TRY_CONVERT(DATE, a.LTRMI) AS LTRMI, TRY_CONVERT(DATE, a.DATA_REAL) AS DATA_REAL,
+           TRY_CONVERT(DATE, a.DATA_PLAN) AS DATA_PLAN, TRY_CONVERT(INT, a.[R]) AS PlanYear,
            r.Code AS VirtualCode
     FROM $(vAHDD) a
     JOIN #pspnr p ON p.PSPNR = TRY_CONVERT(BIGINT, a.PSPNR)
@@ -46,22 +53,30 @@ A AS (
           AND (x.CPLGR IS NULL OR a.CPLGR LIKE x.CPLGR + '%')
           AND (x.ARBPL IS NULL OR x.ARBPL = a.ARBPL)
         ORDER BY LEN(x.CPLGR) DESC, x.Code) r)
-SELECT CAST(A.PSPNR AS NVARCHAR(50)) AS Pspnr, A.VirtualCode,
-       CAST(SUM(A.CATS) AS DECIMAL(28,8)) AS AcHours,
-       CAST(SUM(A.TECH / ISNULL(P.Factor, 1)) + SUM(ISNULL(K.Share, 0) * A.TECH) AS DECIMAL(28,8)) AS BacHours,
-       CAST(SUM(A.TECH_PON / ISNULL(P.Factor, 1)) + SUM(ISNULL(K.Share, 0) * A.TECH_PON) AS DECIMAL(28,8)) AS EvHours,
-       CAST(SUM(A.TECH_DO_PON / ISNULL(P.Factor, 1)) + SUM(ISNULL(K.Share, 0) * A.TECH_DO_PON) AS DECIMAL(28,8)) AS EtcHours,
-       MIN(CASE WHEN A.VirtualCode IS NULL THEN A.GSTRI ELSE A.DATA_REAL END) AS ActualStart,
-       CASE WHEN SUM(CASE WHEN A.STAT = 'DONE' THEN 0 ELSE 1 END) = 0
-            THEN MAX(CASE WHEN A.VirtualCode IS NULL THEN A.LTRMI ELSE A.DATA_REAL END) END AS ActualFinish
+SELECT A.PSPNR, A.VirtualCode, A.STAT, A.GSTRI, A.LTRMI, A.DATA_REAL, A.DATA_PLAN, A.PlanYear, A.CATS,
+       A.TECH / ISNULL(P.Factor, 1) + ISNULL(K.Share, 0) * A.TECH AS Bac,
+       A.TECH_PON / ISNULL(P.Factor, 1) + ISNULL(K.Share, 0) * A.TECH_PON AS Ev,
+       A.TECH_DO_PON / ISNULL(P.Factor, 1) + ISNULL(K.Share, 0) * A.TECH_DO_PON AS Etc
+INTO #ops
 FROM A
 LEFT JOIN Produktywnosc P ON P.IPT = A.IPT
 OUTER APPLY (
     SELECT TOP (1) d.Share
     FROM #djk d
     WHERE LEFT(A.IPT, LEN(d.Prefix)) = d.Prefix
-    ORDER BY LEN(d.Prefix) DESC) K
-GROUP BY A.PSPNR, A.VirtualCode;
+    ORDER BY LEN(d.Prefix) DESC) K;
+
+SELECT CAST(o.PSPNR AS NVARCHAR(50)) AS Pspnr, o.VirtualCode,
+       CAST(SUM(o.CATS) AS DECIMAL(28,8)) AS AcHours,
+       CAST(SUM(o.Bac) AS DECIMAL(28,8)) AS BacHours,
+       CAST(SUM(o.Ev) AS DECIMAL(28,8)) AS EvHours,
+       CAST(SUM(o.Etc) AS DECIMAL(28,8)) AS EtcHours,
+       MIN(CASE WHEN o.VirtualCode IS NULL THEN o.GSTRI ELSE o.DATA_REAL END) AS ActualStart,
+       CASE WHEN SUM(CASE WHEN o.STAT = 'DONE' THEN 0 ELSE 1 END) = 0
+            THEN MAX(CASE WHEN o.VirtualCode IS NULL THEN o.LTRMI ELSE o.DATA_REAL END) END AS ActualFinish,
+       MIN(o.DATA_PLAN) AS PlanStart, MAX(o.DATA_PLAN) AS PlanFinish
+FROM #ops o
+GROUP BY o.PSPNR, o.VirtualCode;
 
 SELECT CAST(p.PSPNR AS NVARCHAR(50)) AS Pspnr,
        CAST(SUM(CASE WHEN s.Status IS NOT NULL
@@ -75,3 +90,17 @@ FROM $(vAPD) v
 JOIN #pspnr p ON p.PSPNR = TRY_CONVERT(BIGINT, v.PSPNR)
 LEFT JOIN #delivered s ON s.Status = v.STATUS
 GROUP BY p.PSPNR;
+
+SELECT CAST(p.PSPNR AS NVARCHAR(50)) AS Pspnr, YEAR(v.EINDT_MAX) AS DeliveryYear,
+       CAST(SUM(v.NETWR_USD / IIF(@divideZClo = 1, 1 + ISNULL(v.Z_CLO, 0), 1)) AS DECIMAL(28,8)) AS Value
+FROM $(vAPD) v
+JOIN #pspnr p ON p.PSPNR = TRY_CONVERT(BIGINT, v.PSPNR)
+LEFT JOIN #delivered s ON s.Status = v.STATUS
+WHERE s.Status IS NULL
+GROUP BY p.PSPNR, YEAR(v.EINDT_MAX);
+
+SELECT CAST(o.PSPNR AS NVARCHAR(50)) AS Pspnr, o.VirtualCode, o.PlanYear,
+       CAST(SUM(o.Etc) AS DECIMAL(28,8)) AS EtcHours
+FROM #ops o
+GROUP BY o.PSPNR, o.VirtualCode, o.PlanYear
+HAVING SUM(o.Etc) <> 0;

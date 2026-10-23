@@ -111,6 +111,11 @@
                 Visibility="{Binding HasPinChanges, Converter={StaticResource BoolToVisibility}}">
             <TextBlock partials:CopyText.Enabled="True" Text="{Binding PinChanges}" TextWrapping="Wrap" />
         </Border>
+        <!-- Zamknięcie okresu (klocek „Zamknięcie okresu”) – przebieg tygodnia tylko do odczytu -->
+        <Border Background="{StaticResource InfoSoft}" CornerRadius="6" Padding="12,8" Margin="0,0,0,8"
+                Visibility="{Binding IsFrozen, Converter={StaticResource BoolToVisibility}}">
+            <TextBlock partials:CopyText.Enabled="True" Text="{Binding FrozenText}" TextWrapping="Wrap" FontWeight="SemiBold" />
+        </Border>
         <TextBlock partials:CopyText.Enabled="True" Text="{Binding Notice}" Style="{StaticResource MutedText}" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,0,0,4" />
         <TextBlock partials:CopyText.Enabled="True" Text="{Binding Definition}" Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="0,0,0,8" />
         <TextBlock Style="{StaticResource MutedText}" Text="Brak uruchomień przebiegu programu – „Nowy przebieg”." TextWrapping="Wrap"
@@ -161,6 +166,9 @@
                         <TextBlock partials:CopyText.Enabled="True" Text="{Binding SelectedStep.Description}" Style="{StaticResource MutedText}" TextWrapping="Wrap" />
 
                         <DockPanel Margin="0,10,0,10">
+                            <Button DockPanel.Dock="Right" Content="Otwórz zamknięcie" Style="{StaticResource Btn}" Margin="8,0,0,0" Command="{Binding Reopen}"
+                                    Visibility="{Binding IsFrozenPin, Converter={StaticResource BoolToVisibility}}"
+                                    ToolTip="Zdejmuje zamrożenie okresu (komentarz wymagany – etap, dziennik): etap Zamknięcie okresu znów czeka na zatwierdzenie, możliwe ponowne wykonanie etapów i nowe uruchomienie" />
                             <Button DockPanel.Dock="Right" Content="Wykonaj ponownie" Style="{StaticResource Btn}" Margin="8,0,0,0" Command="{Binding Rerun}"
                                     ToolTip="Ponowne wykonanie etapu (np. po poprawie danych lub słowników); późniejsze etapy stają się nieaktualne" />
                             <Button DockPanel.Dock="Right" Content="{Binding SelectedStep.ConfirmText, FallbackValue='Potwierdź i dalej'}" Style="{StaticResource BtnPrimary}"
@@ -169,6 +177,95 @@
                             <TextBox Style="{StaticResource Input}" Text="{Binding Comment, UpdateSourceTrigger=PropertyChanged}"
                                      AutomationProperties.Name="Komentarz potwierdzenia" ToolTip="Komentarz potwierdzenia etapu (wymagany)" />
                         </DockPanel>
+
+                        <!-- Etap „Zatwierdzenie ETC” z powiadomieniem CAM-ów: wysłane powiadomienia w cyklu, ponowna wysyłka -->
+                        <Border Style="{StaticResource Panel}" Margin="0,0,0,10" DataContext="{Binding CamNotify}"
+                                Visibility="{Binding DataContext.IsCamNotifyStep, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BoolToVisibility}}">
+                            <StackPanel>
+                                <DockPanel Margin="0,0,0,8">
+                                    <Button DockPanel.Dock="Right" Content="Wyślij ponownie" Style="{StaticResource Btn}" Command="{Binding Resend}"
+                                            ToolTip="E-mail do wszystkich CAM-ów z zaległymi estymacjami programu w cyklu – także powiadomionych wcześniej" />
+                                    <TextBlock Text="{Binding Title}" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                </DockPanel>
+                                <partials:BusyBar DataContext="{Binding Busy}" />
+                                <DataGrid Style="{StaticResource DataTable}" ItemsSource="{Binding Rows}" IsReadOnly="True" MaxHeight="260">
+                                    <DataGrid.Columns>
+                                        <DataGridTextColumn Header="Kiedy, kto" Binding="{Binding When}" />
+                                        <DataGridTextColumn Header="CAM" Binding="{Binding Cam}" />
+                                        <DataGridTextColumn Header="E-mail" Binding="{Binding Email}" />
+                                        <DataGridTemplateColumn Header="Wynik">
+                                            <DataGridTemplateColumn.CellTemplate>
+                                                <DataTemplate>
+                                                    <TextBlock Text="{Binding Result}" FontWeight="SemiBold"
+                                                               Foreground="{Binding Tone, Converter={StaticResource LevelBrush}, ConverterParameter=fg}" />
+                                                </DataTemplate>
+                                            </DataGridTemplateColumn.CellTemplate>
+                                        </DataGridTemplateColumn>
+                                        <DataGridTextColumn Header="WP" Binding="{Binding Wps}" Width="*" MinWidth="160" />
+                                        <DataGridTextColumn Header="Błąd" Binding="{Binding Message}" Width="*" MinWidth="120" />
+                                    </DataGrid.Columns>
+                                </DataGrid>
+                                <TextBlock partials:CopyText.Enabled="True" Text="{Binding Message}" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,6,0,0" />
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Etap „Zatwierdzenie ETC”: liczniki wymaganych WP, lista estymacji programu w cyklu, decyzje Finansów -->
+                        <Border Style="{StaticResource Panel}" Margin="0,0,0,10" DataContext="{Binding CamReview}"
+                                Visibility="{Binding DataContext.IsCamStep, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BoolToVisibility}}">
+                            <StackPanel>
+                                <DockPanel Margin="0,0,0,8">
+                                    <Button DockPanel.Dock="Right" Content="Odśwież" Style="{StaticResource Btn}" Command="{Binding Refresh}" />
+                                    <CheckBox DockPanel.Dock="Right" Content="Tylko wymagane" IsChecked="{Binding OnlyRequired}" VerticalAlignment="Center" Margin="0,0,12,0" />
+                                    <TextBlock Text="{Binding Summary}" FontWeight="SemiBold" TextWrapping="Wrap" VerticalAlignment="Center" />
+                                </DockPanel>
+                                <WrapPanel Margin="0,0,0,8">
+                                    <Border Style="{StaticResource Tag}" Margin="0,0,8,4"><TextBlock><Run Text="Wymagane: " /><Run Text="{Binding RequiredText, Mode=OneWay}" FontWeight="SemiBold" /></TextBlock></Border>
+                                    <Border Style="{StaticResource Tag}" Background="{StaticResource OkSoft}" Margin="0,0,8,4"><TextBlock><Run Text="Zatwierdzone: " /><Run Text="{Binding ApprovedText, Mode=OneWay}" FontWeight="SemiBold" /></TextBlock></Border>
+                                    <Border Style="{StaticResource Tag}" Background="{StaticResource InfoSoft}" Margin="0,0,8,4"><TextBlock><Run Text="Do decyzji (wysłane): " /><Run Text="{Binding SentText, Mode=OneWay}" FontWeight="SemiBold" /></TextBlock></Border>
+                                    <Border Style="{StaticResource Tag}" Background="{StaticResource CritSoft}" Margin="0,0,8,4"><TextBlock><Run Text="U CAM-a (szkic, zwrócone): " /><Run Text="{Binding AtCamText, Mode=OneWay}" FontWeight="SemiBold" /></TextBlock></Border>
+                                    <Border Style="{StaticResource Tag}" Background="{StaticResource WarnSoft}" Margin="0,0,8,4"><TextBlock><Run Text="Brak: " /><Run Text="{Binding MissingText, Mode=OneWay}" FontWeight="SemiBold" /></TextBlock></Border>
+                                </WrapPanel>
+                                <partials:BusyBar DataContext="{Binding Busy}" />
+                                <DataGrid Style="{StaticResource DataTable}" ItemsSource="{Binding Rows}" SelectedItem="{Binding Selected}" IsReadOnly="True" MaxHeight="360">
+                                    <DataGrid.Columns>
+                                        <DataGridTemplateColumn Header="Status">
+                                            <DataGridTemplateColumn.CellTemplate>
+                                                <DataTemplate>
+                                                    <Border Background="{Binding Tone, Converter={StaticResource LevelBrush}, ConverterParameter=bg}" CornerRadius="10" Padding="8,1" HorizontalAlignment="Left">
+                                                        <TextBlock Text="{Binding Status}" FontSize="12" FontWeight="Medium"
+                                                                   Foreground="{Binding Tone, Converter={StaticResource LevelBrush}, ConverterParameter=fg}" />
+                                                    </Border>
+                                                </DataTemplate>
+                                            </DataGridTemplateColumn.CellTemplate>
+                                        </DataGridTemplateColumn>
+                                        <DataGridTextColumn Header="WP" Binding="{Binding Wp}" />
+                                        <DataGridTextColumn Header="Nazwa" Binding="{Binding Name}" Width="*" MinWidth="140" />
+                                        <DataGridTextColumn Header="CAM" Binding="{Binding Cam}" />
+                                        <DataGridTextColumn Header="Wymagana" Binding="{Binding Required}" />
+                                        <DataGridTextColumn Header="ETC godziny" Binding="{Binding EtcHours}" />
+                                        <DataGridTextColumn Header="ETC materiały" Binding="{Binding Material}" />
+                                        <DataGridTextColumn Header="Koniec (Forecast)" Binding="{Binding Finish}" />
+                                        <DataGridTextColumn Header="Uzasadnienie / uwaga" Binding="{Binding Note}" Width="2*" MinWidth="160" />
+                                        <DataGridTextColumn Header="Wysłana" Binding="{Binding Submitted}" />
+                                        <DataGridTextColumn Header="Oceniona" Binding="{Binding Reviewed}" />
+                                    </DataGrid.Columns>
+                                </DataGrid>
+                                <StackPanel Margin="0,8,0,0" Visibility="{Binding Editable, Converter={StaticResource BoolToVisibility}}">
+                                    <TextBlock Text="Uwaga przy zwrocie albo powód ponownego otwarcia (min. 10 znaków)" Style="{StaticResource MutedText}" Margin="0,0,0,4" />
+                                    <TextBox Style="{StaticResource Input}" Text="{Binding Note, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="40" />
+                                    <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                                        <Button Content="Zatwierdź estymację" Style="{StaticResource BtnPrimary}" Margin="0,0,8,0" Command="{Binding Approve}"
+                                                ToolTip="Wysłana estymacja WP – zapis ETC HOURS, ETC MATERIAL, Forecast Start / Koniec w „Harmonogram i budżet”" />
+                                        <Button Content="Zwróć do CAM-a" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding Return}" />
+                                        <Button Content="Otwórz ponownie" Style="{StaticResource Btn}" Command="{Binding Reopen}"
+                                                ToolTip="Zatwierdzona estymacja wraca do CAM-a jako zwrócona z komentarzem; „Harmonogram i budżet” bez zmian do ponownego zatwierdzenia" />
+                                    </StackPanel>
+                                </StackPanel>
+                                <TextBlock Text="Decyzje – w ostatnim uruchomieniu, gdy etap czeka na akceptację." Style="{StaticResource MutedText}" Margin="0,6,0,0"
+                                           Visibility="{Binding ReadOnly, Converter={StaticResource BoolToVisibility}}" />
+                                <TextBlock partials:CopyText.Enabled="True" Text="{Binding Message}" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,6,0,0" />
+                            </StackPanel>
+                        </Border>
 
                         <!-- Wyniki etapu po regułach; wybrana reguła: kontekst, wynik zapytania z problemem, linie ACTUALS wiersza -->
                         <Grid>
@@ -193,6 +290,9 @@
                             <StackPanel Grid.Column="1" Margin="12,0,0,0">
                                 <DockPanel Margin="0,0,0,6">
                                     <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                                        <Button Content="Popraw w aplikacji" Style="{StaticResource Btn}" Margin="8,0,0,0" CommandParameter="{Binding SelectedIssue}"
+                                                Command="{Binding Fix}" Visibility="{Binding SelectedIssue.CanFix, Converter={StaticResource BoolToVisibility}, FallbackValue=Collapsed}"
+                                                ToolTip="Słownik do poprawy z filtrem na zaznaczony wiersz (kolumny Slownik i Filtr reguły); po poprawie – „Wykonaj ponownie” etap" />
                                         <Button Content="Pokaż zmiany" Style="{StaticResource Btn}" Margin="8,0,0,0" CommandParameter="{Binding SelectedIssue}"
                                                 Command="{Binding ShowChanges}" IsEnabled="{Binding SelectedIssue.CanShowChanges}"
                                                 ToolTip="Okno „Zmiany ACWP” dla zaznaczonego wiersza" />
@@ -376,6 +476,27 @@
                                     </DataTemplate>
                                 </DataGridTemplateColumn.CellTemplate>
                             </DataGridTemplateColumn>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </StackPanel>
+            </TabItem>
+
+            <!-- Dziennik przebiegu: zdarzenia wszystkich uruchomień tygodnia (kto, co, kiedy, komentarz) -->
+            <TabItem Header="Dziennik przebiegu" Padding="12,4">
+                <StackPanel Margin="0,12,0,0">
+                    <TextBlock Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="0,0,0,8"
+                               Text="Zdarzenia przebiegu wybranego uruchomienia (wszystkie uruchomienia tygodnia, od najnowszego): start, etapy, potwierdzenia z komentarzem, zamknięcie okresu." />
+                    <DataGrid Style="{StaticResource DataTable}" ItemsSource="{Binding RunLog}" IsReadOnly="True" MaxHeight="560">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Kiedy" Binding="{Binding At, StringFormat=yyyy-MM-dd HH:mm:ss}" />
+                            <DataGridTextColumn Header="Kto" Binding="{Binding User}" />
+                            <DataGridTextColumn Header="Zdarzenie" Binding="{Binding Message}" Width="*">
+                                <DataGridTextColumn.ElementStyle>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="TextWrapping" Value="Wrap" />
+                                    </Style>
+                                </DataGridTextColumn.ElementStyle>
+                            </DataGridTextColumn>
                         </DataGrid.Columns>
                     </DataGrid>
                 </StackPanel>

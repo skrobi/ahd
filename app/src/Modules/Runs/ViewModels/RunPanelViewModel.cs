@@ -21,7 +21,10 @@ public sealed record RunStepView(RunStepRow Row, string Gate, string? Descriptio
 
     /// <summary>Etap zatrzymany na błędzie – potwierdzenie akceptuje błędy (RunWorkflowEngine.CanConfirm); Zatwierdzenie ACTUALS – dane do struktury.</summary>
     public string ConfirmText => Row.Status == RunStepStatuses.Failed ? "Zaakceptuj błędy i dalej"
-        : Row.Action == RunActions.ApproveActuals ? "Zatwierdź dane ACTUALS i dalej" : "Potwierdź i dalej";
+        : Row.Action == RunActions.ApproveActuals ? "Zatwierdź dane ACTUALS i dalej"
+        : Row.Action == RunActions.ApproveEtc ? "Zaakceptuj estymacje i dalej"
+        : Row.Action == RunActions.ClosePeriod ? "Zatwierdź zamknięcie okresu"
+        : Row.Action == RunActions.Reconcile ? "Kontynuuj bez tych elementów" : "Potwierdź i dalej";
 
     public bool HasComment => !string.IsNullOrWhiteSpace(Row.Comment);
 
@@ -51,7 +54,12 @@ public sealed class RunPanelViewModel : ObservableObject, IDisposable
     private readonly IRunStore _store;
     private readonly RunLauncher _launcher;
     private readonly IAcwpChanges? _acwpChanges;
+    private readonly Func<ICamReview?>? _cams;
+    private CamReviewPanelViewModel? _camReview;
+    private (long PinId, int StepNo, bool Editable)? _camReviewKey;
+    private CamNotifyPanelViewModel? _camNotify;
     private IReadOnlyList<RunPinRow> _pins = [];
+    private IReadOnlyList<JournalEntry> _runLog = [];
     private RunPinRow? _selectedPin;
     private IReadOnlyList<RunStepView> _steps = [];
     private RunStepView? _selectedStep;
@@ -100,9 +108,11 @@ public sealed class RunPanelViewModel : ObservableObject, IDisposable
     public const int LineCount = 500;
     private const int ExportLines = 100_000;
 
-    public RunPanelViewModel(IRunStore store, RunLauncher launcher, IAcwpChanges? acwpChanges, string project, IFileDialogs dialogs)
+    public RunPanelViewModel(IRunStore store, RunLauncher launcher, IAcwpChanges? acwpChanges, string project, IFileDialogs dialogs,
+        Func<ICamReview?>? cams = null)
     {
         _store = store;
+        _cams = cams;
         _dialogs = dialogs;
         _launcher = launcher;
         _acwpChanges = acwpChanges;
@@ -110,13 +120,16 @@ public sealed class RunPanelViewModel : ObservableObject, IDisposable
         // Bez kontroli „na boku” – czego wymaga przebieg, sprawdzają reguły etapów przebiegu (docs/pipeline-fazy.md, rozdz. 4.1).
         NewRun = new AsyncRelayCommand(() => Launch(_launcher.Start(Project)), () => !Busy.IsBusy && !_launcher.IsRunning(Project));
         Continue = new AsyncRelayCommand(() => Launch(_launcher.Continue(Project, _selectedPin!.PinId)),
-            () => IsLatest && !_launcher.IsRunning(Project) && RunWorkflowEngine.Next(_steps.Select(s => s.Row).ToList()) is not null);
+            () => CanAct && !_launcher.IsRunning(Project) && RunWorkflowEngine.Next(_steps.Select(s => s.Row).ToList()) is not null);
         Confirm = new AsyncRelayCommand(() => Launch(_launcher.Confirm(Project, _selectedPin!.PinId, _selectedStep!.Row.StepNo, Comment)),
-            () => IsLatest && !_launcher.IsRunning(Project) && _selectedStep is { } step && RunWorkflowEngine.CanConfirm(_steps.Select(s => s.Row).ToList(), step.Row.StepNo)
+            () => CanAct && !_launcher.IsRunning(Project) && _selectedStep is { } step && RunWorkflowEngine.CanConfirm(_steps.Select(s => s.Row).ToList(), step.Row.StepNo)
                   && Comment.Trim().Length > 0);
         Rerun = new AsyncRelayCommand(() => Launch(_launcher.Rerun(Project, _selectedPin!.PinId, _selectedStep!.Row.StepNo)),
-            () => IsLatest && !_launcher.IsRunning(Project) && _selectedStep is { } step && RunWorkflowEngine.CanRerun(_steps.Select(s => s.Row).ToList(), step.Row.StepNo));
+            () => CanAct && !_launcher.IsRunning(Project) && _selectedStep is { } step && RunWorkflowEngine.CanRerun(_steps.Select(s => s.Row).ToList(), step.Row.StepNo));
+        Reopen = new AsyncRelayCommand(() => Launch(_launcher.Reopen(Project, _selectedPin!.PinId, Comment)),
+            () => _selectedPin is { IsFrozenPin: true } && !_launcher.IsRunning(Project) && Comment.Trim().Length > 0);
         ShowChanges = new RelayCommand(p => { if (p is RunIssueView { Changes: { } request }) _acwpChanges?.Show(request); }, _ => _acwpChanges is not null);
+        Fix = new RelayCommand(p => { if (p is RunIssueView { Fix: { } link }) FixRequested?.Invoke(link); });
         ExportResult = new AsyncRelayCommand(DoExportResult, () => !Busy.IsBusy && _selectedRuleResult is not null);
         Refresh = new AsyncRelayCommand(() => Load(_selectedPin?.PinId), () => !Busy.IsBusy);
         SelectCell = new RelayCommand(p => ShowCell(p as RunMatrixCell));
@@ -144,7 +157,15 @@ public sealed class RunPanelViewModel : ObservableObject, IDisposable
 
     public ICommand Rerun { get; }
 
+    /// <summary>„Otwórz zamknięcie” – zamrożone uruchomienie (klocek Zamknięcie okresu), komentarz wymagany.</summary>
+    public ICommand Reopen { get; }
+
     public ICommand ShowChanges { get; }
+
+    /// <summary>„Popraw w aplikacji”: słownik z kolumn Slownik i Filtr wyniku – pokazuje go ekran programu (FixRequested).</summary>
+    public ICommand Fix { get; }
+
+    public event Action<DictionaryLink>? FixRequested;
 
     /// <summary>Wynik reguły i linie ACTUALS zaznaczonego wiersza do Excela.</summary>
     public ICommand ExportResult { get; }
@@ -217,6 +238,9 @@ public sealed class RunPanelViewModel : ObservableObject, IDisposable
             if (SetProperty(ref _selectedPin, value))
             {
                 OnPropertyChanged(nameof(IsLatest));
+                OnPropertyChanged(nameof(IsFrozen));
+                OnPropertyChanged(nameof(FrozenText));
+                OnPropertyChanged(nameof(IsFrozenPin));
                 _ = LoadPin(value, null);
             }
         }
@@ -224,6 +248,19 @@ public sealed class RunPanelViewModel : ObservableObject, IDisposable
 
     /// <summary>Akcje etapów – tylko w ostatnim uruchomieniu programu.</summary>
     public bool IsLatest => _selectedPin is not null && _pins.Count > 0 && _selectedPin.PinId == _pins[0].PinId;
+
+    /// <summary>Akcje etapów i decyzje: ostatnie uruchomienie, przebieg niezamrożony (zamknięcie okresu – tylko do odczytu).</summary>
+    private bool CanAct => IsLatest && _selectedPin is { IsFrozen: false };
+
+    /// <summary>Przebieg tygodnia wybranego uruchomienia zamrożony – baner „tylko do odczytu”.</summary>
+    public bool IsFrozen => _selectedPin is { IsFrozen: true };
+
+    public bool IsFrozenPin => _selectedPin is { IsFrozenPin: true };
+
+    public string FrozenText => _selectedPin?.FrozenText ?? "";
+
+    /// <summary>Dziennik przebiegu wybranego uruchomienia (wszystkie uruchomienia tygodnia), od najnowszego.</summary>
+    public IReadOnlyList<JournalEntry> RunLog { get => _runLog; private set => SetProperty(ref _runLog, value); }
 
     public IReadOnlyList<RunStepView> Steps { get => _steps; private set => SetProperty(ref _steps, value); }
 
@@ -233,7 +270,86 @@ public sealed class RunPanelViewModel : ObservableObject, IDisposable
         set
         {
             if (SetProperty(ref _selectedStep, value))
+            {
                 ShowIssues();
+                ShowCamReview();
+            }
+        }
+    }
+
+    /// <summary>Etap „Zatwierdzenie ETC”: estymacje programu w cyklu przebiegu i decyzje Finansów; null – inny etap.</summary>
+    public CamReviewPanelViewModel? CamReview
+    {
+        get => _camReview;
+        private set
+        {
+            if (SetProperty(ref _camReview, value))
+                OnPropertyChanged(nameof(IsCamStep));
+        }
+    }
+
+    public bool IsCamStep => _camReview is not null;
+
+    /// <summary>Panel estymacji dla wybranego etapu „Zatwierdzenie ETC” (cykl programu w tygodniu uruchomienia); decyzje – ostatnie uruchomienie, etap czeka.</summary>
+    /// <summary>Kod cyklu estymacji CAM uruchomienia: tydzień RRRR-Tnn (program tygodniowy – definicja uruchomienia) albo okres tygodnia.</summary>
+    private string CamCycleCode(RunPinRow pin)
+    {
+        var week = _store.RunWeek(pin.RunId);
+        var definition = RunWorkflowEngine.Deserialize(_store.DefinitionOf(pin.PinId)) ?? RunDefinitions.BuiltIn;
+        return RunDefinitions.CamWeekly(definition) ? PzlEv.Shared.Models.CamCycles.Week(week.Year, week.Week) : week.Period;
+    }
+
+    /// <summary>Zatwierdzenie ETC z powiadomieniem CAM-ów: powiadomienia programu w cyklu i „Wyślij ponownie”; null – brak.</summary>
+    public CamNotifyPanelViewModel? CamNotify
+    {
+        get => _camNotify;
+        private set
+        {
+            if (SetProperty(ref _camNotify, value))
+                OnPropertyChanged(nameof(IsCamNotifyStep));
+        }
+    }
+
+    public bool IsCamNotifyStep => _camNotify is not null;
+
+    private void ShowCamReview()
+    {
+        CamNotify = null;
+        // Zatwierdzenie ETC z powiadomieniem CAM-ów (definicja zapisana w uruchomieniu) – lista powiadomień i „Wyślij ponownie”.
+        if (_selectedStep?.Row.Action == RunActions.ApproveEtc && _selectedPin is { } notifyPin && _cams?.Invoke() is { } notifier
+            && (RunWorkflowEngine.Deserialize(_store.DefinitionOf(notifyPin.PinId)) ?? RunDefinitions.BuiltIn).Steps
+                .FirstOrDefault(s => s.No == _selectedStep.Row.StepNo) is { Notify: true })
+        {
+            try
+            {
+                CamNotify = new CamNotifyPanelViewModel(notifier, Project, CamCycleCode(notifyPin), notifyPin.PinId, CanAct);
+            }
+            catch (Exception ex) when (ex is not OutOfMemoryException)
+            {
+                Logger.Error(ex, "Powiadomienia CAM przebiegu {Code}", notifyPin.Code);
+            }
+        }
+        if (_selectedStep?.Row.Action != RunActions.ApproveEtc || _selectedPin is not { } pin || _cams?.Invoke() is not { } review)
+        {
+            CamReview = null;
+            return;
+        }
+        var editable = CanAct && _selectedStep.Row.Status == RunStepStatuses.NeedsAction;
+        // Ten sam etap tego samego uruchomienia (ponowne kliknięcie, odświeżenie listy etapów) – panel bez ponownego odczytu estymacji.
+        if (_camReviewKey == (pin.PinId, _selectedStep.Row.StepNo, editable) && _camReview is not null)
+        {
+            OnPropertyChanged(nameof(CamReview));
+            return;
+        }
+        try
+        {
+            _camReviewKey = (pin.PinId, _selectedStep.Row.StepNo, editable);
+            CamReview = new CamReviewPanelViewModel(review, Project, CamCycleCode(pin), editable);
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            Logger.Error(ex, "Estymacje CAM przebiegu {Code}", pin.Code);
+            CamReview = null;
         }
     }
 
@@ -439,7 +555,7 @@ public sealed class RunPanelViewModel : ObservableObject, IDisposable
         }
         CellIssues = (_issueCache.GetValueOrDefault(cell.PinId) ?? []).Where(i => i.CheckName == cell.CheckName)
             .OrderBy(i => i.Level == CheckLevel.Error ? 0 : i.Level == CheckLevel.Warning ? 1 : 2).ThenBy(i => i.Id)
-            .Select(i => new RunIssueView(i, RunOverview.ChangesFor(i, Project))).ToList();
+            .Select(i => RunOverview.View(i, Project)).ToList();
         var pin = _pins.FirstOrDefault(p => p.PinId == cell.PinId);
         CellTitle = $"{cell.CheckName} – {pin?.Code} #{pin?.PinNo}: {cell.Text}";
     }
@@ -481,6 +597,7 @@ public sealed class RunPanelViewModel : ObservableObject, IDisposable
         Steps = [];
         Definition = "";
         PinChanges = null;
+        RunLog = [];
         if (pin is null)
         {
             ShowIssues();
@@ -488,13 +605,14 @@ public sealed class RunPanelViewModel : ObservableObject, IDisposable
         }
         try
         {
-            var (steps, issues, json, scope) = await Busy.Run($"Wczytywanie uruchomienia {pin.Code} #{pin.PinNo}…",
-                () => (_store.Steps(pin.PinId), _store.Issues(pin.PinId), _store.DefinitionOf(pin.PinId), Scope(pin)));
+            var (steps, issues, json, scope, log) = await Busy.Run($"Wczytywanie uruchomienia {pin.Code} #{pin.PinNo}…",
+                () => (_store.Steps(pin.PinId), _store.Issues(pin.PinId), _store.DefinitionOf(pin.PinId), Scope(pin), _launcher.Log(pin.Code)));
             if (!ReferenceEquals(pin, _selectedPin))
                 return;
             var definition = RunWorkflowEngine.Deserialize(json);
             _allIssues = issues;
             RunScope = scope;
+            RunLog = log;
             Steps = steps.Select(s =>
             {
                 var step = definition?.Steps.FirstOrDefault(d => d.No == s.StepNo);
@@ -599,7 +717,7 @@ public sealed class RunPanelViewModel : ObservableObject, IDisposable
     private async Task LoadLines()
     {
         var row = SelectedRow();
-        SelectedIssue = row is null ? null : new RunIssueView(row.Issue, RunOverview.ChangesFor(row.Issue, Project));
+        SelectedIssue = row is null ? null : RunOverview.View(row.Issue, Project);
         ResultHint = (_resultTable.CommonHint ?? row?.Hint) is { Length: > 0 } hint ? $"Wskazówka: {hint}" : "";
         Lines = [];
         _linesScope = null;

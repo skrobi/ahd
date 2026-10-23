@@ -1,4 +1,5 @@
 using PzlEv.Modules.Administration;
+using PzlEv.Modules.Cam;
 using PzlEv.Modules.Dashboard;
 using PzlEv.Modules.Diagnostics;
 using PzlEv.Modules.Evm;
@@ -30,6 +31,7 @@ public static class ModuleCatalog
             new DashboardModule(),
             new ImportModule(),
             new ProjectsModule(),
+            new CamModule(),
             new RunsModule(),
             new MasterDataModule(),
             new ReconciliationModule(),

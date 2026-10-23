@@ -82,7 +82,7 @@
             </TextBlock>
         </Grid>
 
-        <TabControl Grid.Row="2" Background="Transparent" BorderThickness="0,1,0,0" Padding="0,12,0,0">
+        <TabControl Grid.Row="2" Background="Transparent" BorderThickness="0,1,0,0" Padding="0,12,0,0" SelectedIndex="{Binding SelectedTab}">
             <!-- Wskaźniki: sumy projektu teraz, wskaźniki EV po przebiegach; gotowość do przebiegu zwinięta -->
             <TabItem Header="Wskaźniki" Padding="12,4">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">

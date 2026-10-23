@@ -23,6 +23,16 @@ public sealed class SqlJournal(SqlDatabase db, IClock clock, ICurrentUser user) 
             .ToList();
     }
 
+    public IReadOnlyList<JournalEntry> ForScope(string area, string scope, int count)
+    {
+        using var connection = db.Open();
+        return connection.Query<JournalRow>(
+                $"SELECT TOP (@count) Id, At, UserName, Area, Scope, Message FROM {_table} WHERE Scope = @scope AND Area = @area ORDER BY Id DESC",
+                new { count, area, scope })
+            .Select(r => new JournalEntry(r.Id, r.At, r.UserName, r.Area, r.Scope, r.Message))
+            .ToList();
+    }
+
     private sealed class JournalRow
     {
         public long Id { get; set; }

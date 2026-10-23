@@ -38,10 +38,12 @@ public sealed class RunsModule : IModule
         var store = _store = new SqlRunStore(services.Sql);
         ISourceImport? Imports() => services.Contracts.Get<ISourceImport>();
         IProjectProcessSource? Processes() => services.Contracts.Get<IProjectProcessSource>();
-        var launcher = new RunLauncher(new RunService(store, services, Imports, Processes), store, Imports);
+        ICamReview? Cams() => services.Contracts.Get<ICamReview>();
+        ICostAssignment? Costs() => services.Contracts.Get<ICostAssignment>();
+        var launcher = new RunLauncher(new RunService(store, services, Imports, Processes, Cams, Costs), store, Imports);
         services.Contracts.Register<IRunLauncher>(launcher);
         services.Contracts.Register<IAcwpChanges>(_acwpChanges = new AcwpChangesLauncher(store, Processes));
-        services.Contracts.Register<IRunPanels>(new RunPanels(store, launcher, () => _acwpChanges));
+        services.Contracts.Register<IRunPanels>(new RunPanels(store, launcher, () => _acwpChanges, Cams));
         _dictionaries = new SqlDictionaryStore(services.Sql, services.Clock, services.User, GlobalDictionaries.Tables);
     }
 

@@ -218,14 +218,29 @@ bez zmian i przesuwania. Dalej etapy dokładane w edytorze: **etap walidacji** (
 i użytymi tabelami, szukaj po nazwie albo tabeli; treść i poziom reguły – edytor reguł; bramka WARNING: „Potwierdzenie” – wstrzymuje
 do potwierdzenia z komentarzem, „Informacja” – przebieg idzie dalej; opcjonalnie zatwierdzenie po etapie), **zatwierdzenie**
 (przebieg czeka na analityka) i klocek systemowy **Zatwierdzenie ACTUALS** (najwyżej jeden; „+ Zatwierdzenie ACTUALS”): przebieg czeka,
-aż analityk zatwierdzi dane ACTUALS przebiegu z komentarzem („Zatwierdź dane ACTUALS i dalej”). **Struktura programu** (ACWP, Actual DLH,
+aż analityk zatwierdzi dane ACTUALS przebiegu z komentarzem („Zatwierdź dane ACTUALS i dalej”). Klocek systemowy **Zatwierdzenie ETC**
+(najwyżej jeden; „+ Zatwierdzenie ETC”; F11.6, F11.7) – zatwierdzenie ETC wprowadzonych przez CAM-ów przez Finanse (estymacje CAM programu
+w cyklu – kontrakt `ICamReview`, moduł CAM). Ustawienia klocka: **cykl estymacji (warunek)** – „Każdy przebieg” (cykl tygodniowy: estymacja
+co tydzień, kod RRRR-Tnn, termin – koniec tygodnia, nowa estymacja od ostatnio zatwierdzonej) albo „Przebieg zamykający” (cykl miesięczny:
+okres, termin – koniec tygodnia zamykającego; w innym tygodniu etap pominięty – zakończony bez akcji); brak klocka – cykl miesięczny;
+programy wypełniane co tydzień i co miesiąc używają różnych szablonów przebiegu; **Powiadom CAM-ów** (domyślnie tak) – na początku etapu
+e-mail z Outlooka finansisty (`Shared/Utils/Mail`) do każdego CAM-a z zaległymi wymaganymi estymacjami (brak, szkic, zwrócona): lista WP
+ze statusem, termin cyklu, uwagi do zwróconych; adres – słownik Osoby (`E-mail`); raz w cyklu (panel etapu – lista powiadomień,
+„Wyślij ponownie”); brak adresu albo błąd wysyłki – WARNING; każde powiadomienie zapisane (`CAM_Notification`). Potem etap czeka na
+Finanse: podsumowanie i WARNING dla każdego wymaganego WP (z CAM-em, niezakończony) bez zatwierdzonej estymacji; panel etapu – liczniki
+(wymagane, zatwierdzone, wysłane, u CAM-a, brak), lista WP i decyzje: zatwierdź (ETC HOURS, ETC MATERIAL, Forecast i Actual Start /
+Koniec w „Harmonogram i budżet”), zwróć z uwagą, otwórz ponownie zatwierdzoną z komentarzem (ostatnie uruchomienie); „Zaakceptuj
+estymacje i dalej” z komentarzem, także z brakami – wynik etapu to stan w chwili akceptacji (z wynikami powiadomień; WP bez zatwierdzonej
+estymacji liczą ETC jak dotąd: wpis w „Harmonogram i budżet” albo produkcja). Klocek systemowy **Zamknięcie okresu** (najwyżej jeden,
+zawsze ostatni etap; „+ Zamknięcie okresu”; F5.5) i klocek systemowy **Łączenie źródeł** (najwyżej jeden; F6.1 – P3) – zawsze z warunkiem „Przebieg zamykający” (w innym tygodniu pominięty); przebieg czeka,
+aż analityk zatwierdzi zamknięcie z komentarzem („Zatwierdź zamknięcie okresu”) – uruchomienie zostaje **zamrożone** (Z). **Struktura programu** (ACWP, Actual DLH,
 ACWP Labor / Material, wskaźniki) pokazuje dane ACTUALS w stanie z przypięcia ostatniego uruchomienia z zakończonym tym etapem (uruchomienie bez tego
 etapu w definicji – z zakończonym pierwszym etapem walidacji, czyli walidacją ACTUALS, także z zaakceptowanymi błędami)
 (pliki zaimportowane do końca etapu Przypięcie stanu – `@AsOf` procedur `REP_ProjectCostsByElement` / `REP_ProjectCasCosts`, migracja
 054; `SqlProjectStore.ApprovedActuals`): nowy import RABIT ani przebieg bez zatwierdzenia (także ponowne wykonanie wcześniejszego etapu –
 zatwierdzenie Nieaktualne) nie zmieniają struktury. Bez zatwierdzonego uruchomienia – ostatni import (status w zakładce Wskaźniki „ACTUALS struktury:
 ostatni import – niezatwierdzone”). Słowniki (Cost Category, Wykluczenia) – bieżące. Zapis sprawdza strukturę (`RunDefinitions.Validate`:
-etapy stałe na początku, najwyżej jedno Zatwierdzenie ACTUALS, nazwy etapów bez powtórzeń, etap walidacji z regułą, reguły istniejące
+etapy stałe na początku, klocki systemowe najwyżej po jednym, Zamknięcie okresu – ostatni, nazwy etapów bez powtórzeń, etap walidacji z regułą, reguły istniejące
 w regułach walidacji) i zapisuje szablon w słownikach globalnych „Definicje
 przebiegów”, „Etapy przebiegów”, „Elementy kontrolne etapów” (historia; `docs/slowniki.md`, rozdz. 2;
 `Modules/Runs/Services/RunTemplateService.cs`). Szablonu wybranego w programach nie można usunąć.
@@ -322,7 +337,13 @@ Wyniki w programie (zakładka Przebieg, O53 – bez wykresów i porównań okres
   |kwoty| (liczba i suma wszystkich): okres, element WBS, cost element, Created on, opis, partner, zamówienie, faktura, zlecenie, ilość,
   kwota, plik i wiersz (`SqlRunStore.ActualsLines`, `RunOverview.ActualsScope`); wiersz bez tych kolumn – bez linii;
 - **Wynik do Excela** – wynik reguły i wszystkie linie ACTUALS zaznaczonego wiersza; „Pokaż zmiany” – okno „Zmiany ACWP” dla wiersza
-  (kolumna `ElementWBS`, `RodzajKosztu` albo `CostElement` – dla tej wartości, inaczej cały program).
+  (kolumna `ElementWBS`, `RodzajKosztu` albo `CostElement` – dla tej wartości, inaczej cały program);
+- **Popraw w aplikacji** – przy wierszu z kolumną `Slownik` (bez miejsca w tabeli wyniku): słownik do poprawy z filtrem tabeli z kolumny
+  `Filtr`. Nazwa albo kod słownika: słownik programu (np. „WP i CAM”, „Harmonogram i budżet”, „Cost Category” – zmiany w programie)
+  – zakładka „Słowniki programu” ekranu programu; słownik globalny (np. „Stawki wydziałów”) – ekran Słowniki (nawigacja z parametrem,
+  `INavigator`); nieznana nazwa – komunikat. Po poprawie – „Wykonaj ponownie” etap. Reguły startowe z kolumnami: „Cost element spoza
+  słownika Cost Category” i „Cost element bez Cost Category” (Cost Category programu, filtr – cost element), „MPK bez stawki wydziału
+  na rok” (Stawki wydziałów, MPK), „WP bez MPK” (WP i CAM, WP), „WP bez budżetu” (Harmonogram i budżet, WP) – migracja 055.
 
 Zakładki porównań: macierz reguła × uruchomienia (wiersz – nazwa reguły; „n ERROR”, „n WARNING”, „n INFO”, „OK”) i porównanie dwóch
 uruchomień – wiersze wyników tej samej reguły dopasowane po wartościach kolumn tekstowych, różnice w kolumnach liczbowych; nowe,
@@ -362,11 +383,23 @@ Kontrole wymagające innych danych spoza zrzutu (odbiorca rozliczenia, suma kont
 | **Działanie** | Poprawność samych słowników zapewnia walidacja przy zapisie (`docs/slowniki.md`, rozdz. 5), a plików – import (`docs/zrodla-danych.md`, rozdz. 8). Tu: spójność danych projektu ze słownikami i okresem. |
 | **Wdrożone** | kontrole spójności ze słownikami w przebiegu (rozdz. 4.1): cost element spoza Cost Category (ERROR), cost element bez kategorii (WARNING), MPK WP bez stawki na rok (ERROR), WP bez MPK (WARNING), WP bez budżetu (WARNING). Niewdrożone: daty księgowania względem okresu – zrzut ACTUALS nie ma daty księgowania (tylko `Created on`, które po rozliczeniu legalnie jest późniejsze; kontrola okresów przyszłych – rozdz. 4.1) i znaczenie okresu nie jest polem definicji źródła (`docs/zrodla-danych.md`, rozdz. 2); duplikaty między częściami źródła – klucz wiersza ACTUALS nieustalony (O27, O50). Programy CAS: koszt po narzutach CAS (słowniki globalne, O37 rozstrzygnięte) – ETC Cost liczy ta sama stawka MPK, więc kontrola MPK obowiązuje także w CAS (wyłączenie – reguła „MPK bez stawki wydziału na rok” w edytorze reguł albo w szablonie). |
 | **Kontrole** | MPK z kosztów bez stawki na dany rok – stawki wydziałów (klucz MPK + rok) albo, w CAS, stawki CAS (ERROR); numer elementu kosztowego bez wpisu w efektywnym słowniku Cost Category (ERROR – O25; naprawa: pozycja w słowniku projektu); numer bez kategorii (WARNING); WP bez budżetu (WARNING); daty księgowania niezgodne z okresem przebiegu według znaczenia okresu w definicji źródła (ERROR); duplikaty wierszy między częściami źródła (ERROR). |
-| **Przy ERROR** | **Popraw w aplikacji** (ekran Słowniki z filtrem na problem) → **Przypnij ponownie** (P1) i waliduj. |
+| **Przy ERROR** | **Popraw w aplikacji** (słownik programu albo ekran Słowniki z filtrem na problem – kolumny wyniku `Slownik` i `Filtr`, rozdz. 4.1) → **Wykonaj ponownie** etap walidacji. |
 | **Efekt** | Problemy przebiegu; WARNING trafiają do raportu przebiegu. |
 | **Przekazanie** | P3 rusza tylko bez ERROR. |
 
 ### P3. Łączenie źródeł
+
+**Wdrożone (klocek systemowy „Łączenie źródeł”, migracja 059, decyzje użytkownika 2026-10-23 – O14, O33):** etap szablonu (najwyżej
+jeden, „+ Łączenie źródeł”) odświeża dane „ev” uruchomienia (bez rozliczeniowych, po Wykluczeniach, CAS po narzutach – w walucie
+programu; koszt ACTUALS to już kwota, bez przeliczania godzin) i przypisuje koszt każdego elementu WBS do WP, CAM i Cost Category
+**tą samą logiką co struktura programu** (O14: element nakładki → WP na jego kodzie P1S, a bez niego – jedyny WP pod elementem
+w poddrzewie `LOG.WBS`; kontrakt `ICostAssignment` modułu Projekty – `ProjectService.CostTargets`, `StructureBuilder`). Wynik –
+`RUN_CostAssignment` (element, WP, CAM, Cost Category, powód braku, koszt; podstawa ACWP WP dla F8). Kontrole: suma kontrolna (koszt
+po połączeniu = koszt „ev”, ERROR); koszt bez przypisania – element po elemencie z powodem (element nakładki bez WP, kilka WP pod
+elementem – O45, element CES spoza nakładki, wiersze bez elementu WBS): **WARNING w środku okresu** – etap czeka na „Kontynuuj bez
+tych elementów” z komentarzem, **ERROR w przebiegu zamykającym** (O33) – przypisanie (nakładka, „WP i CAM”) i „Wykonaj ponownie”
+albo „Zaakceptuj błędy i dalej” z komentarzem; struktura P1S niedostępna (PZLPROD) – WARNING. Bez modułu Projekty – ERROR.
+Niewdrożone: element z zaawansowaniem bez WP (po F7), raport pokrycia jako plik (F6.2). Opis docelowy poniżej.
 
 | | |
 |---|---|
@@ -431,13 +464,21 @@ Kontrole wymagające innych danych spoza zrzutu (odbiorca rozliczenia, suma kont
 
 ### Z. Zamknięcie okresu
 
+**Wdrożone – zamrożenie (klocek „Zamknięcie okresu”, migracja 058, decyzja użytkownika 2026-10-23):** szablon z klockiem „Zamknięcie
+okresu” (ostatni etap, tylko tydzień zamykający) czeka po pozostałych etapach na zatwierdzenie z komentarzem; zatwierdzenie zamraża
+uruchomienie (`META_Run.FrozenPinId`, `FrozenAt`, `FrozenBy`) – przebieg tygodnia tylko do odczytu: ponowne wykonanie etapów,
+potwierdzenia, decyzje ETC w panelu etapu i nowe uruchomienie w tym tygodniu są odrzucane (baner na panelu, „· zamrożone” na liście
+uruchomień). **Otwórz zamknięcie** (zamrożone uruchomienie, wymagany komentarz – etap i dziennik) zdejmuje blokadę: etap Zamknięcie
+okresu znów „Wymaga akcji”, możliwe ponowne wykonanie etapów i nowe uruchomienie; ponowne zatwierdzenie zamraża znowu
+(`RunService.Confirm` / `Reopen`). Szablon bez klocka – bez zamrażania (znacznik ★ jak niżej). Rewizja EV jako wynik okresu – po F8.2.
+
 **Wdrożone (decyzja użytkownika 2026-10-20) – znacznik zamknięcia bez osobnego zatwierdzenia:** każdy przebieg kończy się tak samo
 (ostatni etap szablonu, np. zatwierdzenie analityka, zapisuje wynik niezależnie od tego, czy tydzień jest zwykły, czy zamykający).
 Tydzień oznaczony w kalendarzu okresów jako zamknięcie (`META_Run.IsClosing`) – uruchomienia „tydzień zamykający”; ostatnie
 zakończone uruchomienie tego tygodnia (zakończony / z ostrzeżeniami / z błędami) to **zamknięcie okresu RRRR-MM** (★,
 `RunPinRow.IsPeriodClose`, `SqlRunStore.ClosingPins`) – znacznik na listach uruchomień (zakładka Przebieg, lista programów, okno
 „Zmiany ACWP”); porównanie uruchomień – wszystkie zamknięcia do wyboru i „Tylko zamknięcia okresów” (domyślnie dwa ostatnie –
-„od zamknięcia do zamknięcia”). Bez zamrażania przebiegu i bez rewizji EV (F8.2). Opis docelowy poniżej.
+„od zamknięcia do zamknięcia”). Zamrożone uruchomienie jest ostatnim zakończonym w tygodniu – ma znacznik ★. Opis docelowy poniżej.
 
 | | |
 |---|---|
@@ -478,9 +519,9 @@ Zamrożonego przebiegu zmiany nie dotyczą.
 | # | Kwestia |
 |---|---|
 | O11 | Zasady uzupełniania braków zaawansowania w środku okresu (metody, metoda domyślna) |
-| O14 | Logika łączenia źródeł (P3) – do przedstawienia przez zespół |
+| O14 | Logika łączenia źródeł (P3) – **rozstrzygnięte 2026-10-23:** jak struktura programu (element nakładki → WP na kodzie P1S albo jedyny WP pod elementem), P3 |
 | O29 | Próg świeżości importu przed przypięciem (ile dni od ostatniego importu) |
 | O31 | Harmonogram importu względem harmonogramu RABIT (RABIT nadpisuje pliki – wersja pośrednia bez importu przepada); import uruchamiany harmonogramem zadań Windows? |
-| O33 | Element CES z kosztem bez przypisania (spoza nakładki albo bez WP) w przebiegu zamykającym: czy dopuścić zamknięcie, czy wymagać przypisania (ERROR – P3)? Rekomendacja: wymagać przypisania |
+| O33 | Element CES z kosztem bez przypisania (spoza nakładki albo bez WP) w przebiegu zamykającym – **rozstrzygnięte 2026-10-23:** ERROR (przypisanie albo akceptacja błędów z komentarzem), w środku okresu WARNING, P3 |
 | O34 | CAM nie odesłał pliku w przebiegu zamykającym: blokada etapu (dziś) czy przyjęcie wartości z produkcji z oznaczeniem pochodzenia? |
 | O50 | Kontrole przebiegu wymagające kolumn spoza zrzutu ACTUALS: numer dokumentu CO i pozycja (stały klucz porównania przebiegów), odbiorca rozliczenia (PA, centrum kosztów, środek trwały w budowie), suma kontrolna projektu i okresu z niezależnego raportu SAP |

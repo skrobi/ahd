@@ -5,10 +5,15 @@ using PzlEv.Shared.Utils.Data;
 
 namespace PzlEv.Modules.Runs.Services;
 
-/// <summary>Wynik kontroli na ekranie Przebiegi z zakresem okna „Zmiany ACWP” (null – akcja „Pokaż zmiany” niedostępna).</summary>
-public sealed record RunIssueView(RunIssueRow Issue, AcwpChangesRequest? Changes)
+/// <summary>
+/// Wynik kontroli na ekranie Przebiegi z zakresem okna „Zmiany ACWP” (null – akcja „Pokaż zmiany” niedostępna) i słownikiem do poprawy
+/// (null – „Popraw w aplikacji” niedostępne).
+/// </summary>
+public sealed record RunIssueView(RunIssueRow Issue, AcwpChangesRequest? Changes, DictionaryLink? Fix = null)
 {
     public bool CanShowChanges => Changes is not null;
+
+    public bool CanFix => Fix is not null;
 
     /// <summary>Poziom wyniku: ERROR, WARNING, INFO (wiersz reguły INFO albo informacja), OK (reguła bez nieprawidłowości).</summary>
     public string LevelText => RunOverview.LevelText(Issue);
@@ -127,7 +132,11 @@ public static class RunOverview
         static bool Compared(RunIssueRow i) => i.Level != CheckLevel.Pass || i.Details is not null;
         static (string Check, string Key) Key(RunIssueRow i)
         {
-            var texts = RunRules.ReadDetails(i.Details).Where(d => d.Number is null).Select(d => d.Text ?? "").ToList();
+            // Bez kolumn „Popraw w aplikacji” – wynik sprzed ich dodania do reguły (migracja 055) to ten sam wiersz.
+            var texts = RunRules.ReadDetails(i.Details).Where(d => d.Number is null
+                    && !string.Equals(d.Column, RunRules.DictionaryColumn, StringComparison.OrdinalIgnoreCase)
+                    && !string.Equals(d.Column, RunRules.FilterColumn, StringComparison.OrdinalIgnoreCase))
+                .Select(d => d.Text ?? "").ToList();
             return (i.CheckName, i.Details is null ? i.Element ?? i.Message : string.Join(" · ", texts));
         }
         var was = before.Where(Compared).GroupBy(Key).ToDictionary(g => g.Key, g => g.ToList());
@@ -153,11 +162,27 @@ public static class RunOverview
                 : string.Join("; ", differences.Select(d => $"{d.Column}: {RunRules.Format(d.Before)} → {RunRules.Format(d.After)} ({(d.After - d.Before >= 0 ? "+" : "")}{RunRules.Format(d.After - d.Before)})"));
             var shown = Worst(a ?? b!);
             return new RunCompareRow(key.Check, key.Key.Length == 0 ? null : key.Key, status, b is null ? null : Worst(b).Level, a is null ? null : Worst(a).Level,
-                changes, (a ?? b)!.Count > 1 ? $"{shown.Message} (+{(a ?? b)!.Count - 1})" : shown.Message, new RunIssueView(shown, ChangesFor(shown, project)));
+                changes, (a ?? b)!.Count > 1 ? $"{shown.Message} (+{(a ?? b)!.Count - 1})" : shown.Message, View(shown, project));
         });
         static int Order(string status) => status switch { RunCompareRow.New => 0, RunCompareRow.Changed => 1, RunCompareRow.Resolved => 2, _ => 3 };
         return rows.OrderByDescending(r => r.Level).ThenBy(r => Order(r.Status)).ThenBy(r => r.CheckName, StringComparer.CurrentCulture)
             .ThenBy(r => r.Element, StringComparer.CurrentCulture).ToList();
+    }
+
+    /// <summary>Wynik z akcjami: „Pokaż zmiany” (ChangesFor) i „Popraw w aplikacji” (FixFor).</summary>
+    public static RunIssueView View(RunIssueRow issue, string project) => new(issue, ChangesFor(issue, project), FixFor(issue));
+
+    /// <summary>
+    /// „Popraw w aplikacji” dla wiersza wyniku reguły: kolumna Slownik (niepusta) – słownik, kolumna Filtr – wartość filtra jego tabeli;
+    /// bez kolumny Slownik – null.
+    /// </summary>
+    public static DictionaryLink? FixFor(RunIssueRow issue)
+    {
+        var details = RunRules.ReadDetails(issue.Details);
+        string? Value(string column) => details.FirstOrDefault(d => string.Equals(d.Column, column, StringComparison.OrdinalIgnoreCase)) is var d && d.Column is not null
+            ? d.Text is { Length: > 0 } text ? text.Trim() : d.Number is { } number ? number.ToString("0.########", System.Globalization.CultureInfo.InvariantCulture) : null
+            : null;
+        return Value(RunRules.DictionaryColumn) is { } dictionary ? new(dictionary, Value(RunRules.FilterColumn)) : null;
     }
 
     /// <summary>
@@ -213,7 +238,8 @@ public static class RunOverview
     }
 
     /// <summary>
-    /// Tabela wyniku reguły: kolumny zapytania w kolejności z wierszy (Details; bez Problem i Wskazowka – osobno), wiersze z problemem –
+    /// Tabela wyniku reguły: kolumny zapytania w kolejności z wierszy (Details; bez Problem i Wskazowka – osobno, bez Slownik i Filtr –
+    /// „Popraw w aplikacji”), wiersze z problemem –
     /// kolumna Problem albo opis wyniku, wskazówka – kolumna Wskazowka albo (gdy problem z kolumny) opis wyniku. Wynik bez wiersza
     /// zapytania (OK reguły, kontrole etapów) – problem = opis. Kolumny liczbowe – wszystkie niepuste wartości są liczbami.
     /// </summary>
@@ -221,7 +247,9 @@ public static class RunOverview
     {
         var details = issues.Select(i => RunRules.ReadDetails(i.Details)).ToList();
         static bool Special(string column) => string.Equals(column, RunRules.ProblemColumn, StringComparison.OrdinalIgnoreCase)
-                                              || string.Equals(column, RunRules.HintColumn, StringComparison.OrdinalIgnoreCase);
+                                              || string.Equals(column, RunRules.HintColumn, StringComparison.OrdinalIgnoreCase)
+                                              || string.Equals(column, RunRules.DictionaryColumn, StringComparison.OrdinalIgnoreCase)
+                                              || string.Equals(column, RunRules.FilterColumn, StringComparison.OrdinalIgnoreCase);
         var columns = details.SelectMany(d => d.Select(c => c.Column)).Where(c => !Special(c)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         var rows = issues.Select((issue, index) =>
         {

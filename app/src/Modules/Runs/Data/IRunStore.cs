@@ -1,5 +1,6 @@
 using PzlEv.Shared.Models.Db;
 using PzlEv.Shared.Models.Pipeline;
+using PzlEv.Shared.Utils.Data;
 
 namespace PzlEv.Modules.Runs.Data;
 
@@ -15,23 +16,21 @@ public sealed record RunDictionaryData(IReadOnlyDictionary<string, string> CostK
 /// <summary>Wiersz danych uruchomienia jak w strukturze programu (RUN_BalanceEv – tabela „ev” reguł walidacji).</summary>
 public sealed record RunEvRow(string WbsElement, string CostElement, int FiscalYear, int Period, string CostKind, decimal Amount);
 
-/// <summary>Linia źródłowa ACTUALS (okno „Zmiany ACWP”): plik, wiersz, data utworzenia, kwota pola kwoty uruchomienia, ilość, opisy.</summary>
-public sealed record RunLineRow(string FileName, int RowNumber, string? CreatedOn, decimal? Amount, decimal? Quantity, string? CostElementName,
-    string? CoObjectName, string? PartnerObject, string? PurchaseOrderNumber, string? InvoiceNumber, string? OriginalOrderNumber);
-
-/// <summary>Linie źródłowe komórki: pierwsze linie wg |kwoty| oraz liczba i suma wszystkich.</summary>
-public sealed record RunLines(IReadOnlyList<RunLineRow> Rows, int Count, decimal Sum);
+/// <summary>
+/// Zakres zrzutu linii ACTUALS (wynik reguły – kolumny wiersza; węzeł okna „Zmiany ACWP”): element WBS albo elementy WBS (oba null –
+/// elementy WBS danych przypiętych w uruchomieniu PinId), cost elementy (null – wszystkie), rok i okres (null – wszystkie; okres 12
+/// obejmuje 13–16).
+/// </summary>
+public sealed record RunActualsScope(long PinId, string? WbsElement, IReadOnlyCollection<string>? CostElements, int? Year, int? Period,
+    IReadOnlyCollection<string>? WbsElements = null);
 
 /// <summary>
-/// Zakres zrzutu linii ACTUALS (wynik reguły – kolumny wiersza): element WBS (null – elementy WBS danych przypiętych w uruchomieniu
-/// PinId), cost elementy (null – wszystkie), rok i okres (null – wszystkie; okres 12 obejmuje 13–16).
+/// Linia ACTUALS zrzutu: element WBS, cost element, rok, okres i pola linii źródłowej; waluta i wartość w walucie transakcji, materiał
+/// – pola klucza linii okna „Zmiany ACWP” (AcwpChanges.Lines).
 /// </summary>
-public sealed record RunActualsScope(long PinId, string? WbsElement, IReadOnlyCollection<string>? CostElements, int? Year, int? Period);
-
-/// <summary>Linia ACTUALS zrzutu: element WBS, cost element, rok, okres i pola linii źródłowej.</summary>
 public sealed record RunActualsLine(string? WbsElement, string? CostElement, int? FiscalYear, int? Period, string FileName, int RowNumber, string? CreatedOn,
     decimal? Amount, decimal? Quantity, string? CostElementName, string? CoObjectName, string? PartnerObject, string? PurchaseOrderNumber, string? InvoiceNumber,
-    string? OriginalOrderNumber);
+    string? OriginalOrderNumber, string? TransactionCurrency, decimal? ValueTranCurr, string? OriginalMaterial);
 
 /// <summary>Zrzut linii ACTUALS: pierwsze linie wg |kwoty| oraz liczba i suma wszystkich.</summary>
 public sealed record RunActualsLines(IReadOnlyList<RunActualsLine> Rows, int Count, decimal Sum);
@@ -91,12 +90,6 @@ public interface IRunStore
     RunDictionaryData Dictionaries(string project);
 
     /// <summary>
-    /// Linie ACTUALS elementu WBS × cost element × rok × okres z najnowszych wersji plików zaimportowanych do asOf (stan uruchomienia),
-    /// kwota z pola amountField; pierwsze top linii wg |kwoty|.
-    /// </summary>
-    RunLines ActualsLines(string wbsElement, string costElement, int year, int period, DateTimeOffset asOf, string amountField, int top);
-
-    /// <summary>
     /// Linie ACTUALS zakresu (wynik reguły – „Linie ACTUALS”) z najnowszych wersji plików zaimportowanych do asOf, kwota z pola amountField;
     /// pierwsze top linii wg |kwoty|, liczba i suma wszystkich.
     /// </summary>
@@ -107,6 +100,12 @@ public interface IRunStore
 
     /// <summary>Dane uruchomienia jak w strukturze (tabela „ev” reguł) – zastępuje zapisane wcześniej.</summary>
     void SaveEv(long pinId, IReadOnlyList<RunEvRow> rows);
+
+    /// <summary>Wynik łączenia źródeł uruchomienia (RUN_CostAssignment, migracja 059) – zastępuje zapisany wcześniej.</summary>
+    void SaveCostAssignment(long pinId, IReadOnlyList<(CostTarget Target, decimal Amount)> rows);
+
+    /// <summary>Wynik łączenia źródeł uruchomienia: element WBS, WP, CAM, Cost Category, powód braku, koszt.</summary>
+    IReadOnlyList<(CostTarget Target, decimal Amount)> CostAssignment(long pinId);
 
     /// <summary>Uruchomienie ma zapisane dane „ev” (uruchomienia sprzed migracji 051 – nie).</summary>
     bool HasEv(long pinId);
@@ -123,6 +122,12 @@ public interface IRunStore
 
     /// <summary>Uruchomienie po identyfikatorze; null – brak.</summary>
     RunPinRow? Pin(long pinId);
+
+    /// <summary>Zamrożone uruchomienie przebiegu projektu w tygodniu (klocek „Zamknięcie okresu”); null – przebieg niezamrożony albo brak.</summary>
+    RunPinRow? FrozenIn(string project, int year, int week);
+
+    /// <summary>Zamrożenie przebiegu (meta.Run, migracja 058): uruchomienie, kto i kiedy; pinId null – „Otwórz zamknięcie”.</summary>
+    void SetFrozen(long runId, long? pinId, DateTimeOffset? at, string? user);
 
     /// <summary>Tydzień przebiegu (meta.Run) – okres i czy zamyka okres.</summary>
     CalendarWeek RunWeek(long runId);

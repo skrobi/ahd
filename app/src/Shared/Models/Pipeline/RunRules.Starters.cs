@@ -55,7 +55,7 @@ public static partial class RunRules
             "10 cost elementów z największą zmianą kwoty (cała pula) od poprzedniego przebiegu."),
         new("Cost element spoza słownika Cost Category", CheckLevel.Error, true,
             """
-            SELECT b.CostElement, SUM(b.Wiersze) AS Wiersze, SUM(b.Kwota) AS Kwota
+            SELECT b.CostElement, SUM(b.Wiersze) AS Wiersze, SUM(b.Kwota) AS Kwota, N'Cost Category' AS Slownik, b.CostElement AS Filtr
             FROM biezace b
             WHERE b.CostElement IS NOT NULL
               AND NOT EXISTS (SELECT 1 FROM cost_category c WHERE c.CostElement = b.CostElement)
@@ -177,7 +177,7 @@ public static partial class RunRules
     [
         new("Cost element bez Cost Category", CheckLevel.Warning, true,
             """
-            SELECT e.CostElement, c.Opis, SUM(e.Kwota) AS Kwota
+            SELECT e.CostElement, c.Opis, SUM(e.Kwota) AS Kwota, N'Cost Category' AS Slownik, e.CostElement AS Filtr
             FROM ev e
             JOIN cost_category c ON c.CostElement = e.CostElement
             WHERE c.CostCategory IS NULL
@@ -189,7 +189,8 @@ public static partial class RunRules
         new("MPK bez stawki wydziału na rok", CheckLevel.Error, true,
             """
             SELECT w.MPK, CAST(LEFT(@BiezacyOkres, 4) AS INT) AS Rok, COUNT(*) AS LiczbaWP,
-                   STRING_AGG(CAST(w.WP AS NVARCHAR(MAX)), N', ') WITHIN GROUP (ORDER BY w.WP) AS ListaWP
+                   STRING_AGG(CAST(w.WP AS NVARCHAR(MAX)), N', ') WITHIN GROUP (ORDER BY w.WP) AS ListaWP,
+                   N'Stawki wydziałów' AS Slownik, w.MPK AS Filtr
             FROM (SELECT DISTINCT WP, MPK FROM wp_cam WHERE MPK IS NOT NULL) w
             WHERE NOT EXISTS (SELECT 1 FROM stawki s WHERE s.MPK = w.MPK AND s.Rok = CAST(LEFT(@BiezacyOkres, 4) AS INT))
             GROUP BY w.MPK
@@ -199,7 +200,7 @@ public static partial class RunRules
             "MPK WP ze słownika „WP i CAM” bez wiersza w „Stawki wydziałów” na rok bieżącego okresu."),
         new("WP bez MPK", CheckLevel.Warning, true,
             """
-            SELECT WP
+            SELECT WP, N'WP i CAM' AS Slownik, WP AS Filtr
             FROM wp_cam
             GROUP BY WP
             HAVING COUNT(MPK) = 0
@@ -209,7 +210,7 @@ public static partial class RunRules
             "WP ze słownika „WP i CAM” bez MPK."),
         new("WP bez budżetu", CheckLevel.Warning, true,
             """
-            SELECT DISTINCT w.WP
+            SELECT DISTINCT w.WP, N'Harmonogram i budżet' AS Slownik, w.WP AS Filtr
             FROM wp_cam w
             WHERE NOT EXISTS (SELECT 1 FROM harmonogram h
                               WHERE h.WP = w.WP AND (ISNULL(h.BAC, 0) <> 0 OR ISNULL(h.BacHours, 0) <> 0 OR ISNULL(h.BacMaterial, 0) <> 0))

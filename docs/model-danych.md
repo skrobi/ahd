@@ -504,6 +504,35 @@ z parametrem `@AsOf` – dane ACTUALS z plików zaimportowanych do tej chwili (`
 Struktura programu podaje koniec przypięcia stanu ostatniego uruchomienia z zakończonym etapem „Zatwierdzenie ACTUALS” (akcja etapu
 `META_RunStep.Action`; `docs/pipeline-fazy.md`, rozdz. 4.1). Wymaga aplikacji 0.60.0.
 
+**Migracja `sql/mssql/055_dane_popraw_w_aplikacji.sql` (dane):** reguły startowe „Cost element spoza słownika Cost Category”, „Cost
+element bez Cost Category”, „MPK bez stawki wydziału na rok”, „WP bez MPK” i „WP bez budżetu” w `DICT_RunValidation` – nowa wersja
+z kolumnami wyniku `Slownik` i `Filtr` („Popraw w aplikacji”, `docs/pipeline-fazy.md`, rozdz. 4.1), tylko gdy zapytanie jest takie jak
+z migracji 053 (reguła zmieniona przez użytkownika zostaje); lista reguł w kolejności `RowId`. Wiersze `RecordedBy = N'migracja 055 –
+Popraw w aplikacji'`. Wymaga aplikacji 0.61.0.
+
+**Migracja `sql/mssql/056_estymacje_cam.sql`:** moduł CAM (F11) – `CAM_Estimate` (estymacja WP w cyklu: `Project`, `Wp`, `Cycle`
+RRRR-MM, unikalne razem; `Cam`, `Status`, `ForecastStart` / `ForecastFinish`, `Currency`, `Justification`, `ReviewNote`, kto i kiedy
+zapisał, wysłał, zatwierdził / zwrócił; `UpdatedAt` – kontrola równoczesnej zmiany), `CAM_EstimateLine` (`Kind` H – godziny,
+M – materiały; `Year`, `Proposal` – propozycja systemu, `Value` – wartość CAM-a) i `CAM_EstimateEvent` (historia: status, opis
+zmian, komentarz). Usunięcie programu usuwa jego estymacje. Wymaga aplikacji 0.62.0.
+
+**Migracja `sql/mssql/057_powiadomienia_cam.sql`:** `CAM_Estimate.Cycle` – do 10 znaków: okres RRRR-MM (cykl miesięczny) albo tydzień
+RRRR-Tnn (cykl tygodniowy – program z klockiem „Zatwierdzenie ETC” w każdym przebiegu); `CAM_Estimate.ActualStart` / `ActualFinish` – daty
+rzeczywiste WP podane przez CAM-a (po zatwierdzeniu – Actual Start / Koniec w „Harmonogram i budżet”); `DICT_RunStep.Condition` – warunek
+etapu szablonu (puste – każdy przebieg, „Przebieg zamykający”), `DICT_RunStep.Notify` – powiadomienie CAM-ów w etapie Zatwierdzenie ETC;
+`CAM_Notification` – wysłane powiadomienia CAM (program, cykl, CAM, adres, kto i kiedy,
+uruchomienie przebiegu, WP w wiadomości, wynik: wysłano / brak adresu / błąd, opis błędu). Usunięcie programu usuwa jego powiadomienia.
+Wymaga aplikacji 0.63.0.
+
+**Migracja `sql/mssql/058_zamkniecie_okresu.sql`:** `META_Run.FrozenPinId` / `FrozenAt` / `FrozenBy` – uruchomienie zatwierdzone
+w klocku „Zamknięcie okresu” (przebieg tygodnia zamrożony – tylko do odczytu, bez nowych uruchomień; „Otwórz zamknięcie” czyści kolumny;
+`docs/pipeline-fazy.md`, Z); indeks `META_Journal (Scope, Id)` – dziennik przebiegu na panelu (wpisy obszaru „Przebiegi” z kodem
+przebiegu). Wymaga aplikacji 0.64.0.
+
+**Migracja `sql/mssql/059_laczenie_zrodel.sql`:** `RUN_CostAssignment` – wynik klocka „Łączenie źródeł” (`docs/pipeline-fazy.md`, P3):
+koszt elementu WBS z danych uruchomienia (tabela „ev”) przypisany do WP, CAM i Cost Category jak w strukturze programu; `Wp` NULL –
+koszt bez przypisania, `Gap` – powód. Usunięcie programu usuwa jego wiersze. Wymaga aplikacji 0.65.0.
+
 `META_SourceFile.CanonicalStatus`: „utworzone” – dane kanoniczne zapisane i sprawdzone (widoczne dla odczytów),
 „w toku” – zapis wierszy trwa (odczyty pomijają plik; po awarii wpis i wiersze są usuwane), inna wartość – powód
 braku danych (źródło bez parsera).

@@ -1,6 +1,7 @@
 using PzlEv.Modules.Projects.Models;
 using PzlEv.Shared.Models.Dictionaries;
 using PzlEv.Shared.Models.PzlProd;
+using PzlEv.Shared.Utils.Data;
 using PzlEv.Shared.Utils.Files;
 using PzlEv.Shared.Utils.Mapping;
 
@@ -54,23 +55,31 @@ public static class StructureBuilder
     /// najpóźniejszy, gdy żaden element z godzinami nie jest otwarty (Open – element bez daty końca).
     /// </summary>
     private readonly record struct ProductionSum(decimal? Ac, decimal? Bac, decimal? Ev, decimal? Material, DateOnly? Start, DateOnly? Finish, bool Open,
-        decimal? Etc = null, decimal? Value = null, decimal? Fee = null, int? Parts = null, int? PartsDelivered = null, int? NextYear = null)
+        decimal? Etc = null, decimal? Value = null, decimal? Fee = null, int? Parts = null, int? PartsDelivered = null, int? NextYear = null,
+        IReadOnlyDictionary<int, decimal>? Undelivered = null, DateOnly? PlanStart = null, DateOnly? PlanFinish = null,
+        IReadOnlyDictionary<int, decimal>? EtcByYear = null)
     {
         public ProductionSum Add(ProductionValues? v) => v is null ? this
             : new(Plus(Ac, v.AcHours), Plus(Bac, v.BacHours), Plus(Ev, v.EvHours), Plus(Material, v.ActualMaterial), Min(Start, v.ActualStart),
                 Max(Finish, v.ActualFinish), Open || (v.ActualFinish is null && (v.AcHours is not null || v.BacHours is not null)),
                 Plus(Etc, v.EtcHours), Plus(Value, v.MaterialValue), Plus(Fee, v.MaterialFee), Plus(Parts, v.Parts), Plus(PartsDelivered, v.PartsDelivered),
-                MinYear(NextYear, v.NextDeliveryYear));
+                MinYear(NextYear, v.NextDeliveryYear), Plus(Undelivered, v.UndeliveredByYear), Min(PlanStart, v.PlanStart), Max(PlanFinish, v.PlanFinish),
+                Plus(EtcByYear, v.EtcByYear));
 
         public ProductionSum Add(ProductionSum v) => new(Plus(Ac, v.Ac), Plus(Bac, v.Bac), Plus(Ev, v.Ev), Plus(Material, v.Material),
             Min(Start, v.Start), Max(Finish, v.Finish), Open || v.Open, Plus(Etc, v.Etc), Plus(Value, v.Value), Plus(Fee, v.Fee), Plus(Parts, v.Parts),
-            Plus(PartsDelivered, v.PartsDelivered), MinYear(NextYear, v.NextYear));
+            Plus(PartsDelivered, v.PartsDelivered), MinYear(NextYear, v.NextYear), Plus(Undelivered, v.Undelivered), Min(PlanStart, v.PlanStart),
+            Max(PlanFinish, v.PlanFinish), Plus(EtcByYear, v.EtcByYear));
 
         public DateOnly? ActualFinish => Open ? null : Finish;
 
         private static decimal? Plus(decimal? a, decimal? b) => a is null ? b : b is null ? a : a + b;
 
         private static int? Plus(int? a, int? b) => a is null ? b : b is null ? a : a + b;
+
+        private static IReadOnlyDictionary<int, decimal>? Plus(IReadOnlyDictionary<int, decimal>? a, IReadOnlyDictionary<int, decimal>? b) =>
+            a is null ? b : b is null ? a
+            : a.Concat(b).GroupBy(x => x.Key).ToDictionary(g => g.Key, g => g.Sum(x => x.Value));
 
         private static int? MinYear(int? a, int? b) => a is null ? b : b is null ? a : Math.Min(a.Value, b.Value);
 
@@ -97,6 +106,7 @@ public static class StructureBuilder
                 ActualMaterial = g.First().Value.ActualMaterial * materialFactor,
                 MaterialValue = g.First().Value.MaterialValue * materialFactor,
                 MaterialFee = g.First().Value.MaterialFee * materialFactor,
+                UndeliveredByYear = materialFactor is { } factor ? g.First().Value.UndeliveredByYear?.ToDictionary(x => x.Key, x => x.Value * factor) : null,
             });
         var currencyGaps = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         DictRow InProjectCurrency(DictRow row)
@@ -228,6 +238,7 @@ public static class StructureBuilder
         var wpActuals = new Dictionary<string, decimal[]>(StringComparer.OrdinalIgnoreCase);
         var used = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var withoutWp = 0m;
+        var targets = new List<CostTarget>();
         void Assign(Item item)
         {
             if (item.Kind == GridRowKind.Objective && item.WbsElement is { } wbs && measures.Any(m => m.ContainsKey(wbs)) && used.Add(wbs))
@@ -237,6 +248,7 @@ public static class StructureBuilder
                 var amount = item.Own[CostMeasure];
                 var own = item.P1s is null ? null : assignments.GetValueOrDefault(MappingKeys.Key(item.P1s))?["WP"];
                 var target = own ?? (item.Wps.Count == 1 ? item.Wps.First() : null);
+                targets.Add(new CostTarget(wbs, target, null, null, target is not null ? null : item.Wps.Count == 0 ? CostGaps.NoWp : CostGaps.Ambiguous));
                 if (target is not null)
                 {
                     if (!wpActuals.TryGetValue(target, out var sums))
@@ -376,7 +388,9 @@ public static class StructureBuilder
                 MaterialValue: ops.Value, MaterialFee: ops.Fee,
                 MaterialEtc: shown.Count > 0 ? Sum(shown, MaterialEtc) : ops.Value - (ops.Material ?? 0), MaterialEtcManual: budget?["ETC MATERIAL"] is not null,
                 Parts: ops.Parts, PartsDelivered: ops.PartsDelivered, NextDeliveryYear: ops.NextYear,
-                AcwpLabor: Actual(LaborMeasure), AcwpMaterial: Actual(MaterialMeasure), EtcCost: Sum(shown, EtcCost)));
+                AcwpLabor: Actual(LaborMeasure), AcwpMaterial: Actual(MaterialMeasure), EtcCost: Sum(shown, EtcCost),
+                ProductionEtcHours: ops.Etc, UndeliveredByYear: ops.Undelivered, ProductionEtcByYear: ops.EtcByYear,
+                PlanStart: Date(ops.PlanStart), PlanFinish: Date(ops.PlanFinish)));
             foreach (var child in item.Children)
                 Emit(child, item.Id, depth + 1);
         }
@@ -398,7 +412,9 @@ public static class StructureBuilder
             costOf.Where(c => !used.Contains(c.Key)).Sum(c => c.Value),
             costs is not null,
             AnalyticBaseBuilder.Bac(all, budgets));
-        return new ProjectStructure(rows, summary);
+        targets.AddRange(costOf.Keys.Where(k => !used.Contains(k))
+            .Select(k => new CostTarget(k, null, null, null, k.Trim().Length == 0 ? CostGaps.NoElement : CostGaps.Outside)));
+        return new ProjectStructure(rows, summary, targets);
     }
 
     private static string? Date(DateOnly? value) => value?.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
