@@ -256,7 +256,7 @@ public sealed class RunServiceTests : IDisposable
         var templates = new RunTemplateService(new PzlEv.Shared.Utils.Dictionaries.DictionaryService(new PzlEv.Shared.Utils.Dictionaries.SqlDictionaryStore(_database.Sql,
             _services.Clock, _services.User, PzlEv.Shared.Utils.Dictionaries.GlobalDictionaries.Tables), app.Journal), store);
         Assert.Equal(PzlEv.Shared.Models.Dictionaries.SaveStatus.Saved,
-            templates.Save(new RunDefinition("E – estymacje CAM", ProjectTypes.Internal, [.. RunDefinitions.FixedSteps, RunDefinitions.CamApproval(3)]), isActive: true).Status);
+            templates.Save(new RunDefinition("E – estymacje CAM", ProjectTypes.Internal, [.. RunDefinitions.FixedSteps, RunDefinitions.EtcApproval(3, RunConditions.Always, notify: false)]), isActive: true).Status);
         var cams = new FakeCamReview();
         cams.Items.AddRange([FakeCamReview.Item("WP-1", CamStatuses.Approved), FakeCamReview.Item("WP-2", CamStatuses.Sent), FakeCamReview.Item("WP-3", CamStatuses.ToDo),
             FakeCamReview.Item("WP-9", CamStatuses.Draft, required: false)]);
@@ -265,11 +265,12 @@ public sealed class RunServiceTests : IDisposable
         service.Execute("PAF");
 
         var pin = store.Pins("PAF", 1)[0];
-        Assert.Equal("2026-10", cams.AskedPeriod);                                                     // cykl – okres tygodnia przebiegu
+        Assert.Equal("2026-T40", cams.AskedPeriod);                                                    // cykl tygodniowy (każdy przebieg) – tydzień przebiegu
+        Assert.Empty(cams.Notified);                                                                    // bez powiadomienia CAM-ów
         var step = store.Steps(pin.PinId)[2];
-        Assert.Equal((RunActions.CamEstimates, RunStepStatuses.NeedsAction, 3), (step.Action, step.Status, step.Warnings));   // podsumowanie + 2 WP
+        Assert.Equal((RunActions.ApproveEtc, RunStepStatuses.NeedsAction, 3), (step.Action, step.Status, step.Warnings));   // podsumowanie + 2 WP
         var issues = store.Issues(pin.PinId).Where(i => i.StepNo == 3).ToList();
-        Assert.Contains(issues, i => i.Level == CheckLevel.Warning && i.Element is null && i.Message.StartsWith("Estymacje CAM 2026-10: zatwierdzone 1 z 3 wymaganych"));
+        Assert.Contains(issues, i => i.Level == CheckLevel.Warning && i.Element is null && i.Message.StartsWith("Estymacje CAM 2026-T40: zatwierdzone 1 z 3 wymaganych"));
         Assert.Equal(["WP-2", "WP-3"], issues.Where(i => i.Element is not null).Select(i => i.Element).Order());   // WP-9 niewymagany
         Assert.Equal("Potwierdzenie wymaga komentarza.", service.Confirm(pin.PinId, 3, "").Summary);
 
@@ -285,11 +286,12 @@ public sealed class RunServiceTests : IDisposable
     }
 
     /// <summary>
-    /// Klocek „Powiadomienie CAM” w każdym przebiegu – program tygodniowy: cykl estymacji to tydzień przebiegu, wynik na CAM-a (brak adresu –
-    /// WARNING, bez zatrzymania); „Estymacje CAM” z warunkiem „Przebieg zamykający” w tygodniu bez zamknięcia – pominięty, przebieg idzie dalej.
+    /// Zatwierdzenie ETC w każdym przebiegu z powiadomieniem – program tygodniowy: cykl estymacji to tydzień przebiegu, na początku etapu
+    /// e-mail do CAM-ów (wynik na CAM-a, brak adresu – WARNING), potem etap czeka na Finanse; akceptacja zachowuje wyniki powiadomień.
+    /// Zatwierdzenie ETC przebiegu zamykającego (miesięczne) w tygodniu bez zamknięcia – pominięte, bez powiadomień.
     /// </summary>
     [SqlFact]
-    public void Cam_notification_runs_every_week_and_closing_only_step_is_skipped_mid_period()
+    public void Etc_approval_notifies_cams_in_weekly_cycle_and_monthly_one_is_skipped_mid_period()
     {
         _database = new TestDatabase(presets: true);
         var app = _services.App(_root, _database.Sql);
@@ -299,8 +301,7 @@ public sealed class RunServiceTests : IDisposable
         var store = new SqlRunStore(_database.Sql);
         var templates = new RunTemplateService(new PzlEv.Shared.Utils.Dictionaries.DictionaryService(new PzlEv.Shared.Utils.Dictionaries.SqlDictionaryStore(_database.Sql,
             _services.Clock, _services.User, PzlEv.Shared.Utils.Dictionaries.GlobalDictionaries.Tables), app.Journal), store);
-        var definition = new RunDefinition("T – tygodniowy CAM", ProjectTypes.Internal,
-            [.. RunDefinitions.FixedSteps, RunDefinitions.CamNotification(3, RunConditions.Always), RunDefinitions.CamApproval(4) with { Condition = RunConditions.Closing }]);
+        var definition = new RunDefinition("T – tygodniowy CAM", ProjectTypes.Internal, [.. RunDefinitions.FixedSteps, RunDefinitions.EtcApproval(3, RunConditions.Always)]);
         Assert.Equal(PzlEv.Shared.Models.Dictionaries.SaveStatus.Saved, templates.Save(definition, isActive: true).Status);
         var cams = new FakeCamReview();
         var service = new RunService(store, app, cams: () => cams);
@@ -310,14 +311,24 @@ public sealed class RunServiceTests : IDisposable
         var pin = store.Pins("PAF", 1)[0];
         Assert.False(store.RunWeek(pin.RunId).IsClosing);                                         // 2026-10-02 – tydzień 40, nie zamyka okresu
         Assert.Equal([("2026-T40", (long?)pin.PinId, false)], cams.Notified);                     // cykl tygodniowy – z szablonu (warunek klocka)
-        var steps = store.Steps(pin.PinId);
-        Assert.Equal((RunStepStatuses.Done, 1), (steps[2].Status, steps[2].Warnings));            // brak adresu – ostrzeżenie, bez zatrzymania
-        var notify = store.Issues(pin.PinId).Where(i => i.StepNo == 3).ToList();
-        Assert.Contains(notify, i => i.Element is null && i.Message == "Powiadomienia CAM – cykl 2026-T40: wysłane 1 · powiadomieni wcześniej w cyklu: 1");
-        Assert.Contains(notify, i => i.Element == "0577" && i.Level == CheckLevel.Warning && i.Message.StartsWith("Jan Lis: brak adresu"));
-        Assert.Equal(RunStepStatuses.Done, steps[3].Status);                                        // tylko przebieg zamykający – pominięty
-        Assert.StartsWith("Etap pominięty – przebieg w środku okresu", Assert.Single(store.Issues(pin.PinId), i => i.StepNo == 4).Message);
-        Assert.Equal("2026-T40", cams.AskedPeriod);                                                // estymacje pominięte – jedyny cykl z powiadomień
+        Assert.Equal(("2026-T40", RunStepStatuses.NeedsAction), (cams.AskedPeriod, store.Steps(pin.PinId)[2].Status));   // stan estymacji – ten sam cykl; czeka na Finanse
+        var issues = store.Issues(pin.PinId).Where(i => i.StepNo == 3).ToList();
+        Assert.Contains(issues, i => i.CheckName == RunService.CamNotifyCheck && i.Element is null
+                                     && i.Message == "Powiadomienia CAM – cykl 2026-T40: wysłane 1 · powiadomieni wcześniej w cyklu: 1");
+        Assert.Contains(issues, i => i.CheckName == RunService.CamNotifyCheck && i.Element == "0577" && i.Level == CheckLevel.Warning && i.Message.StartsWith("Jan Lis: brak adresu"));
+        Assert.Contains(issues, i => i.CheckName == RunService.CamCheck && i.Message.StartsWith("Estymacje CAM 2026-T40"));
+        service.Confirm(pin.PinId, 3, "ETC zatwierdzone przez Finanse");
+        Assert.Equal(RunStepStatuses.Done, store.Steps(pin.PinId)[2].Status);
+        Assert.Equal(3, store.Issues(pin.PinId).Count(i => i.StepNo == 3 && i.CheckName == RunService.CamNotifyCheck));   // powiadomienia zostają po akceptacji
+
+        // Cykl miesięczny (przebieg zamykający) – w tygodniu bez zamknięcia etap pominięty, bez powiadomień.
+        Assert.Equal(PzlEv.Shared.Models.Dictionaries.SaveStatus.Saved,
+            templates.Save(definition with { Steps = [.. RunDefinitions.FixedSteps, RunDefinitions.EtcApproval(3)] }, isActive: true).Status);
+        service.Execute("PAF");
+        var monthly = store.Pins("PAF", 1)[0];
+        Assert.Equal(RunStepStatuses.Done, store.Steps(monthly.PinId)[2].Status);
+        Assert.StartsWith("Etap pominięty – przebieg w środku okresu", Assert.Single(store.Issues(monthly.PinId), i => i.StepNo == 3).Message);
+        Assert.Single(cams.Notified);
     }
 
     [Fact]

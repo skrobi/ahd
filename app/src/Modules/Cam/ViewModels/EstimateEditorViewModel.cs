@@ -79,6 +79,8 @@ public sealed class EstimateEditorViewModel : ObservableObject
 {
     private DateTime? _forecastStart;
     private DateTime? _forecastFinish;
+    private DateTime? _actualStart;
+    private DateTime? _actualFinish;
     private string _justification;
     private string _message = "";
     private string _errors = "";
@@ -91,6 +93,8 @@ public sealed class EstimateEditorViewModel : ObservableObject
         Editable = CamStatuses.Editable(estimate.Status);
         _forecastStart = estimate.ForecastStart?.ToDateTime(TimeOnly.MinValue);
         _forecastFinish = estimate.ForecastFinish?.ToDateTime(TimeOnly.MinValue);
+        _actualStart = estimate.ActualStart?.ToDateTime(TimeOnly.MinValue);
+        _actualFinish = estimate.ActualFinish?.ToDateTime(TimeOnly.MinValue);
         _justification = estimate.Justification ?? "";
         foreach (var line in estimate.Of(CamLineKinds.Hours))
             Hours.Add(new YearRowViewModel(this, CamLineKinds.Hours, line.Year, line.Proposal, line.Value));
@@ -155,6 +159,25 @@ public sealed class EstimateEditorViewModel : ObservableObject
 
     public ObservableCollection<SummaryTile> Summary { get; } = [];
 
+    /// <summary>Rzeczywisty start WP podany przez CAM-a; puste – w strukturze zostaje obecna data (wpisana albo z produkcji).</summary>
+    public DateTime? ActualStart
+    {
+        get => _actualStart;
+        set { if (SetProperty(ref _actualStart, value)) Recalculate(); }
+    }
+
+    /// <summary>Rzeczywisty koniec WP podany przez CAM-a; puste – bez zmiany w strukturze.</summary>
+    public DateTime? ActualFinish
+    {
+        get => _actualFinish;
+        set { if (SetProperty(ref _actualFinish, value)) Recalculate(); }
+    }
+
+    /// <summary>Daty rzeczywiste w strukturze programu (podpowiedź przy pustych polach).</summary>
+    public string ActualNote =>
+        $"W strukturze: start {Wp.ActualStart ?? "—"}, koniec {Wp.ActualFinish ?? "—"} (wpisane w „Harmonogram i budżet” albo z produkcji). "
+        + "Puste pola – bez zmiany; podana data po zatwierdzeniu ETC przez Finanse trafia do struktury (Actual Start / Actual Koniec).";
+
     public DateTime? ForecastStart
     {
         get => _forecastStart;
@@ -212,6 +235,8 @@ public sealed class EstimateEditorViewModel : ObservableObject
     {
         ForecastStart = _forecastStart is { } s ? DateOnly.FromDateTime(s) : null,
         ForecastFinish = _forecastFinish is { } f ? DateOnly.FromDateTime(f) : null,
+        ActualStart = _actualStart is { } a ? DateOnly.FromDateTime(a) : null,
+        ActualFinish = _actualFinish is { } b ? DateOnly.FromDateTime(b) : null,
         Justification = string.IsNullOrWhiteSpace(_justification) ? null : _justification.Trim(),
         Lines = [.. Hours.Select(r => new CamEstimateLine(r.Kind, r.Year, r.Proposal, r.Value)), .. Materials.Select(r => new CamEstimateLine(r.Kind, r.Year, r.Proposal, r.Value))],
     };
@@ -253,7 +278,7 @@ public sealed class EstimateEditorViewModel : ObservableObject
         FinishShifted = CamEstimates.ShiftedFinish(Wp, current);
         FinishNote = FinishShifted ? $"Koniec po baseline ({Wp.BaselineFinish}) – podaj przyczynę w uzasadnieniu." : "Prognoza zgodna z baseline albo wcześniejsza.";
         var changed = CamEstimates.Changed(Wp, current);
-        JustificationLabel = changed ? "Uzasadnienie zmian (wymagane – są zmiany względem propozycji)" : "Uzasadnienie (opcjonalne)";
+        JustificationLabel = changed ? "Uzasadnienie (opcjonalne; są zmiany względem propozycji – opis pomoże Finansom)" : "Uzasadnienie (opcjonalne)";
         var errors = CamEstimates.Validate(Wp, current).ToList();
         if (HasInvalidValues)
             errors.Insert(0, "popraw wartości oznaczone w tabeli");

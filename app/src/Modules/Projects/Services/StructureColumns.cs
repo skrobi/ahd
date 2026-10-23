@@ -78,7 +78,7 @@ public static class StructureColumns
         new(PerformanceObligation, "Performance Obligation", WbsAttributes, "Zobowiązanie wykonania SAC elementu nakładki (eksport SAP).", 170, Mono: true, Right: false, FromView: true),
         new(StructureEdits.Wp, "WP", WbsAttributes, "Work Package – znacznik elementu P1S, który ma koszty i budżet (kod WP = kod elementu P1S).", 50, Right: false),
         new(StructureEdits.Cam, "CAM", WbsAttributes, "Cost Account Manager WP – lista osób (słownik Osoby z HR); WP bez CAM blokuje przebieg.", 180, Right: false),
-        new(CamEstimate, "Estymacja CAM", WbsAttributes, "Estymacja CAM WP w bieżącym cyklu (moduł CAM, etap przebiegu „Estymacje CAM”) – kolor wiersza: zielony – zatwierdzona, niebieski – wysłana (czeka na finansistę), czerwony – zwrócona do CAM-a, żółty – brak albo szkic po terminie cyklu; bez koloru – przed terminem albo WP niewymagający estymacji (bez CAM, zakończony).", 170, Right: false, FromView: true),
+        new(CamEstimate, "Estymacja CAM", WbsAttributes, "Estymacja CAM WP w bieżącym cyklu (moduł CAM, etap przebiegu „Zatwierdzenie ETC”) – kolor wiersza: zielony – zatwierdzona, niebieski – wysłana (czeka na finansistę), czerwony – zwrócona do CAM-a, żółty – brak albo szkic po terminie cyklu; bez koloru – przed terminem albo WP niewymagający estymacji (bez CAM, zakończony).", 170, Right: false, FromView: true),
         new(StructureEdits.CostCategory, "Cost Category", WbsAttributes, "Kategoria WP jako rodzaj kosztu do raportu po kategoriach – słownik programu „Kategorie WBS”.", 150, Right: false),
         new(StructureEdits.Mpk, "MPK", WbsAttributes, "MPK WP – słownik „Stawki wydziałów”; stawka ETC Cost (Labor Rate × Overhead z bieżącego roku).", 150, Right: false),
 

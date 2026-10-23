@@ -277,10 +277,8 @@
                                 ToolTip="Etap, na którym przebieg czeka na zatwierdzenie analityka z komentarzem" />
                         <Button Content="+ Zatwierdzenie ACTUALS" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding AddActualsApproval}"
                                 ToolTip="Klocek systemowy (najwyżej jeden): analityk zatwierdza dane ACTUALS przebiegu – od zatwierdzenia struktura programu pokazuje koszty z tego przebiegu" />
-                        <Button Content="+ Powiadomienie CAM" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding AddCamNotify}"
-                                ToolTip="Klocek systemowy (najwyżej jeden): e-mail (Outlook) do CAM-ów z zaległymi estymacjami programu; warunek wyznacza cykl estymacji – każdy przebieg: tygodniowy, przebieg zamykający: miesięczny" />
-                        <Button Content="+ Estymacje CAM" Style="{StaticResource Btn}" Command="{Binding AddCamEstimates}"
-                                ToolTip="Klocek systemowy (najwyżej jeden): finansista przegląda estymacje CAM programu w cyklu przebiegu, zatwierdza albo zwraca estymacje WP i akceptuje stan z komentarzem" />
+                        <Button Content="+ Zatwierdzenie ETC" Style="{StaticResource Btn}" Command="{Binding AddCamEstimates}"
+                                ToolTip="Klocek systemowy (najwyżej jeden): Finanse zatwierdzają ETC wprowadzone przez CAM-ów – powiadomienie CAM-ów z zaległościami, zatwierdź / zwróć / otwórz ponownie, akceptacja z komentarzem; warunek wyznacza cykl estymacji (każdy przebieg – tygodniowy, przebieg zamykający – miesięczny)" />
                     </StackPanel>
                 </DockPanel>
                 <TextBlock partials:CopyText.Enabled="True" Text="{Binding Status}" TextWrapping="Wrap" Margin="0,0,0,4" />
@@ -356,14 +354,14 @@
                                    Style="{StaticResource MutedText}" TextWrapping="Wrap" Visibility="{Binding IsFixed, Converter={StaticResource BoolToVisibility}}" />
                         <TextBlock Text="Klocek systemowy: przebieg czeka na zatwierdzenie danych ACTUALS z komentarzem. Struktura programu pokazuje koszty z ostatniego przebiegu z zatwierdzonymi danymi – nowy import RABIT ani niezatwierdzony przebieg ich nie zmieniają."
                                    Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="0,0,0,6" Visibility="{Binding IsActualsApproval, Converter={StaticResource BoolToVisibility}}" />
-                        <TextBlock Text="Klocek systemowy: przebieg pokazuje estymacje CAM programu w cyklu (okres tygodnia przebiegu) – wymagane WP (z CAM-em, niezakończone) wobec zatwierdzonych. Finansista zatwierdza, zwraca albo otwiera ponownie estymacje WP i akceptuje stan z komentarzem, także z brakami (WP bez zatwierdzonej estymacji liczą ETC jak dotąd)."
-                                   Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="0,0,0,6" Visibility="{Binding IsCamEstimates, Converter={StaticResource BoolToVisibility}}" />
-                        <TextBlock Text="Klocek systemowy: e-mail z Outlooka finansisty do CAM-ów, którzy mają zaległe estymacje programu w cyklu (brak, szkic, zwrócona) – lista WP, termin i uwagi do zwróconych; CAM powiadomiony w tym cyklu nie dostaje kolejnej wiadomości (panel etapu – „Wyślij ponownie”). Warunek wyznacza cykl estymacji programu: każdy przebieg – estymacja co tydzień, przebieg zamykający – co miesiąc."
-                                   Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="0,0,0,6" Visibility="{Binding IsCamNotify, Converter={StaticResource BoolToVisibility}}" />
+                        <TextBlock Text="Klocek systemowy – zatwierdzenie ETC przez Finanse: na początku etapu (gdy zaznaczone) e-mail z Outlooka finansisty do CAM-ów z zaległymi estymacjami programu w cyklu (brak, szkic, zwrócona) – lista WP, termin, uwagi; raz w cyklu („Wyślij ponownie” w panelu etapu). Potem przebieg czeka: finansista przegląda wymagane WP (z CAM-em, niezakończone), zatwierdza ETC (zapis w „Harmonogram i budżet”), zwraca albo otwiera ponownie estymacje i akceptuje stan z komentarzem, także z brakami (WP bez zatwierdzonej estymacji liczą ETC jak dotąd)."
+                                   Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="0,0,0,6" Visibility="{Binding IsEtcApproval, Converter={StaticResource BoolToVisibility}}" />
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,8" Visibility="{Binding HasCondition, Converter={StaticResource BoolToVisibility}}">
-                            <TextBlock Text="Warunek" VerticalAlignment="Center" Margin="0,0,8,0" />
+                            <TextBlock Text="Cykl estymacji (warunek)" VerticalAlignment="Center" Margin="0,0,8,0" />
                             <ComboBox ItemsSource="{Binding Conditions}" SelectedItem="{Binding Condition}" Width="200"
-                                      ToolTip="Każdy przebieg – etap w każdym tygodniu; przebieg zamykający – tylko w tygodniu zamknięcia okresu (w innym tygodniu pominięty)" />
+                                      ToolTip="Każdy przebieg – estymacja i zatwierdzenie co tydzień; przebieg zamykający – co miesiąc (w innym tygodniu etap pominięty)" />
+                            <CheckBox Content="Powiadom CAM-ów" IsChecked="{Binding Notify}" VerticalAlignment="Center" Margin="16,0,0,0"
+                                      ToolTip="Na początku etapu e-mail (Outlook) do CAM-ów z zaległymi estymacjami programu w cyklu – raz w cyklu" />
                         </StackPanel>
                         <Grid Visibility="{Binding IsEditable, Converter={StaticResource BoolToVisibility}}" Margin="0,0,0,8">
                             <Grid.ColumnDefinitions>

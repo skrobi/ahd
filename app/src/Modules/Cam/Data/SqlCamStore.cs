@@ -16,7 +16,7 @@ public sealed class SqlCamStore(SqlDatabase db) : ICamStore
 
     private const string Columns =
         "EstimateId, Project, Wp, Cycle, Cam, Status, ForecastStart, ForecastFinish, Currency, Justification, ReviewNote, UpdatedAt, UpdatedBy, " +
-        "SubmittedAt, SubmittedBy, ReviewedAt, ReviewedBy";
+        "SubmittedAt, SubmittedBy, ReviewedAt, ReviewedBy, ActualStart, ActualFinish";
 
     public CamCycle? Cycle(DateOnly day, bool weekly = false)
     {
@@ -102,6 +102,7 @@ public sealed class SqlCamStore(SqlDatabase db) : ICamStore
                 ForecastStart = estimate.ForecastStart?.ToDateTime(TimeOnly.MinValue), ForecastFinish = estimate.ForecastFinish?.ToDateTime(TimeOnly.MinValue),
                 estimate.Currency, estimate.Justification, estimate.ReviewNote, UpdatedAt = change.At, UpdatedBy = change.By,
                 estimate.SubmittedAt, estimate.SubmittedBy, estimate.ReviewedAt, estimate.ReviewedBy, Expected = estimate.UpdatedAt,
+                ActualStart = estimate.ActualStart?.ToDateTime(TimeOnly.MinValue), ActualFinish = estimate.ActualFinish?.ToDateTime(TimeOnly.MinValue),
             };
             long id;
             if (estimate.EstimateId is null)
@@ -112,10 +113,10 @@ public sealed class SqlCamStore(SqlDatabase db) : ICamStore
                 id = connection.ExecuteScalar<long>(
                     $"""
                     INSERT INTO {EstimateTable} (Project, Wp, Cycle, Cam, Status, ForecastStart, ForecastFinish, Currency, Justification, ReviewNote, UpdatedAt, UpdatedBy,
-                        SubmittedAt, SubmittedBy, ReviewedAt, ReviewedBy)
+                        SubmittedAt, SubmittedBy, ReviewedAt, ReviewedBy, ActualStart, ActualFinish)
                     OUTPUT inserted.EstimateId
                     VALUES (@Project, @Wp, @Cycle, @Cam, @Status, @ForecastStart, @ForecastFinish, @Currency, @Justification, @ReviewNote, @UpdatedAt, @UpdatedBy,
-                        @SubmittedAt, @SubmittedBy, @ReviewedAt, @ReviewedBy)
+                        @SubmittedAt, @SubmittedBy, @ReviewedAt, @ReviewedBy, @ActualStart, @ActualFinish)
                     """, args, transaction);
             }
             else
@@ -125,10 +126,10 @@ public sealed class SqlCamStore(SqlDatabase db) : ICamStore
                     $"""
                     UPDATE {EstimateTable} SET Cam = @Cam, Status = @Status, ForecastStart = @ForecastStart, ForecastFinish = @ForecastFinish, Currency = @Currency,
                         Justification = @Justification, ReviewNote = @ReviewNote, UpdatedAt = @UpdatedAt, UpdatedBy = @UpdatedBy, SubmittedAt = @SubmittedAt,
-                        SubmittedBy = @SubmittedBy, ReviewedAt = @ReviewedAt, ReviewedBy = @ReviewedBy
+                        SubmittedBy = @SubmittedBy, ReviewedAt = @ReviewedAt, ReviewedBy = @ReviewedBy, ActualStart = @ActualStart, ActualFinish = @ActualFinish
                     WHERE EstimateId = @id AND UpdatedAt = @Expected
                     """, new { args.Cam, args.Status, args.ForecastStart, args.ForecastFinish, args.Currency, args.Justification, args.ReviewNote, args.UpdatedAt,
-                        args.UpdatedBy, args.SubmittedAt, args.SubmittedBy, args.ReviewedAt, args.ReviewedBy, id, args.Expected }, transaction);
+                        args.UpdatedBy, args.SubmittedAt, args.SubmittedBy, args.ReviewedAt, args.ReviewedBy, args.ActualStart, args.ActualFinish, id, args.Expected }, transaction);
                 if (updated == 0)
                     throw new CamConflictException($"Estymację WP {estimate.Wp} zmienił w międzyczasie ktoś inny – odśwież i wprowadź zmiany ponownie.");
                 connection.Execute($"DELETE FROM {LineTable} WHERE EstimateId = @id", new { id }, transaction);
@@ -170,10 +171,13 @@ public sealed class SqlCamStore(SqlDatabase db) : ICamStore
         public string? SubmittedBy { get; set; }
         public DateTimeOffset? ReviewedAt { get; set; }
         public string? ReviewedBy { get; set; }
+        public DateTime? ActualStart { get; set; }
+        public DateTime? ActualFinish { get; set; }
 
         public CamEstimate ToEstimate(IReadOnlyList<CamEstimateLine> lines) =>
             new(EstimateId, Project, Wp, Cycle, Cam, Status, ForecastStart is { } s ? DateOnly.FromDateTime(s) : null,
                 ForecastFinish is { } f ? DateOnly.FromDateTime(f) : null, Currency, Justification, ReviewNote, lines, UpdatedAt, UpdatedBy,
-                SubmittedAt, SubmittedBy, ReviewedAt, ReviewedBy);
+                SubmittedAt, SubmittedBy, ReviewedAt, ReviewedBy, ActualStart is { } a ? DateOnly.FromDateTime(a) : null,
+                ActualFinish is { } b ? DateOnly.FromDateTime(b) : null);
     }
 }

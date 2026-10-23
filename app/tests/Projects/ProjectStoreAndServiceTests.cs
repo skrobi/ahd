@@ -263,6 +263,13 @@ public sealed class ProjectStoreAndServiceTests : IDisposable
         Assert.Equal(("420.5", "1234.57", "2026-02-01", "2028-03-31", "1000"),
             (budget["ETC HOURS"], budget["ETC MATERIAL"], budget["Forecast Start"], budget["Forecast Koniec"], budget["BAC HOURS"]));   // budżet bez zmian
         Assert.Equal((420.5m, "2028-03-31"), (Row("4D06WP000001").EtcHours, Row("4D06WP000001").ForecastFinish));
+        Assert.Null(budget["Actual Start"]);                                                            // bez dat rzeczywistych – bez zmian
+
+        // Daty rzeczywiste podane przez CAM-a – Actual Start / Actual Koniec w strukturze.
+        Assert.Null(source.ApplyEstimate("M28", "AC-CAB.6.38.01", 420.5m, 1234.567m, null, null, null, new DateOnly(2026, 1, 12), new DateOnly(2026, 9, 30)));
+        budget = Assert.Single(_service.Rows(ProjectDictionaries.ScheduleBudget, "M28"));
+        Assert.Equal(("2026-01-12", "2026-09-30", "2028-03-31"), (budget["Actual Start"], budget["Actual Koniec"], budget["Forecast Koniec"]));
+        Assert.Equal(("2026-01-12", "2026-09-30"), (Row("4D06WP000001").ActualStart, Row("4D06WP000001").ActualFinish));
     }
 
     /// <summary>Stawka godziny WP według roku: Labor Rate × Overhead („Stawki wydziałów”) × przelicznik PLN → waluta programu; inne MPK i lata bez stawki pominięte.</summary>

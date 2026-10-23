@@ -29,10 +29,10 @@ public sealed class RunService(IRunStore store, AppServices services, Func<ISour
 {
     public const string Area = "Przebiegi";
 
-    /// <summary>Kontrola wyników etapu Estymacje CAM (wiersz macierzy).</summary>
+    /// <summary>Kontrola wyników etapu Zatwierdzenie ETC – stan estymacji CAM (wiersz macierzy).</summary>
     public const string CamCheck = "Estymacje CAM";
 
-    /// <summary>Kontrola wyników etapu Powiadomienie CAM (wiersz macierzy).</summary>
+    /// <summary>Kontrola wyników etapu Zatwierdzenie ETC – powiadomienia CAM (wiersz macierzy).</summary>
     public const string CamNotifyCheck = "Powiadomienie CAM";
 
     /// <summary>Wynik etapu pominiętego warunkiem „Przebieg zamykający” w tygodniu bez zamknięcia okresu.</summary>
@@ -126,7 +126,7 @@ public sealed class RunService(IRunStore store, AppServices services, Func<ISour
             var at = services.Clock.Now;
             var what = step.Status == RunStepStatuses.Failed ? $"błędy zaakceptowane ({step.Errors})"
                 : step.Action == RunActions.ApproveActuals ? "dane ACTUALS zatwierdzone (struktura programu)" : "potwierdzony";
-            if (step.Action == RunActions.CamEstimates && step.Status != RunStepStatuses.Failed)
+            if (step.Action == RunActions.ApproveEtc && step.Status != RunStepStatuses.Failed)
             {
                 // Wynik etapu – stan estymacji w chwili akceptacji (decyzje finansisty w panelu etapu zmieniły go od wykonania).
                 List<RunIssue> issues;
@@ -140,6 +140,9 @@ public sealed class RunService(IRunStore store, AppServices services, Func<ISour
                     Logger.Error(ex, "Przebieg {Code} #{Pin}: odczyt estymacji CAM przy akceptacji", pin.Code, pin.PinNo);
                     return Outcome(pin, steps, $"Nie zaakceptowano – błąd odczytu estymacji CAM: {ex.Message}");
                 }
+                // Wyniki powiadomień z wykonania etapu zostają (kto i kiedy dostał wezwanie).
+                issues.InsertRange(0, store.Issues(pinId).Where(i => i.StepNo == stepNo && i.CheckName == CamNotifyCheck)
+                    .Select(i => new RunIssue(i.CheckName, i.Level, i.Element, i.Message, i.Amount, i.Details)));
                 store.ReplaceStepIssues(pinId, stepNo, issues.Select(i => (i.Check, i.Level, i.Element, i.Message, i.Amount, i.Details)).ToList());
                 step = step with { Errors = 0, Warnings = issues.Count(i => i.Level == CheckLevel.Warning) };
                 what = review is null ? "zaakceptowany bez estymacji CAM (moduł CAM niedostępny)"
@@ -252,13 +255,12 @@ public sealed class RunService(IRunStore store, AppServices services, Func<ISour
             RunActions.Import => ImportStep(pin, progress, cancellation),
             RunActions.Pin => PinStep(pin),
             RunActions.Checks => ChecksStep(pin, step, label, progress, cancellation),
-            RunActions.CamEstimates => CamState(pin, definition).Issues,
-            RunActions.CamNotify => CamNotifyStep(pin, definition),
+            RunActions.ApproveEtc => [.. step.Notify ? CamNotifyStep(pin, definition) : [], .. CamState(pin, definition).Issues],
             _ => [],
         };
 
     /// <summary>
-    /// Cykl estymacji CAM programu w tygodniu uruchomienia: program tygodniowy (klocek Powiadomienie CAM z warunkiem „Każdy przebieg” –
+    /// Cykl estymacji CAM programu w tygodniu uruchomienia: program tygodniowy (klocek Zatwierdzenie ETC z warunkiem „Każdy przebieg” –
     /// RunDefinitions.CamWeekly) – tydzień RRRR-Tnn, inaczej okres tygodnia RRRR-MM.
     /// </summary>
     public CamCycle CamCycleOf(RunPinRow pin, RunDefinition definition, ICamReview source)
@@ -271,8 +273,8 @@ public sealed class RunService(IRunStore store, AppServices services, Func<ISour
     private RunDefinition DefinitionOf(RunPinRow pin) => RunWorkflowEngine.Deserialize(store.DefinitionOf(pin.PinId)) ?? RunDefinitions.BuiltIn;
 
     /// <summary>
-    /// Powiadomienie CAM: e-mail do CAM-ów z zaległymi estymacjami programu w cyklu (ICamReview.Notify) – wynik na CAM-a (wysłano – Pass,
-    /// brak adresu / błąd wysyłki – WARNING); CAM powiadomiony w cyklu – pominięty (informacja); etap nie zatrzymuje przebiegu.
+    /// Powiadomienie CAM (początek etapu Zatwierdzenie ETC z Powiadomieniem): e-mail do CAM-ów z zaległymi estymacjami programu w cyklu
+    /// (ICamReview.Notify) – wynik na CAM-a (wysłano – Pass, brak adresu / błąd wysyłki – WARNING); CAM powiadomiony w cyklu – pominięty.
     /// </summary>
     private List<RunIssue> CamNotifyStep(RunPinRow pin, RunDefinition definition)
     {
@@ -293,7 +295,7 @@ public sealed class RunService(IRunStore store, AppServices services, Func<ISour
     }
 
     /// <summary>
-    /// Estymacje CAM programu w cyklu okresu tygodnia przebiegu (ICamReview): podsumowanie wymaganych WP wobec zatwierdzonych i WARNING
+    /// Estymacje CAM programu w cyklu przebiegu (ICamReview) – etap Zatwierdzenie ETC: podsumowanie wymaganych WP wobec zatwierdzonych i WARNING
     /// dla każdego wymaganego WP bez zatwierdzonej estymacji (po terminie cyklu – w opisie); decyzje – panel etapu, akceptacja – Confirm.
     /// </summary>
     private (List<RunIssue> Issues, CamReview? Review) CamState(RunPinRow pin, RunDefinition definition)

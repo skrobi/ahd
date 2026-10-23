@@ -10,6 +10,8 @@ public sealed class OutlookMailSender : IMailSender
 
     public void Send(string to, string subject, string body)
     {
+        if (!OperatingSystem.IsWindows())
+            throw new InvalidOperationException("Outlook dostępny tylko w Windows – powiadomienie nie wysłane");
         var type = Type.GetTypeFromProgID("Outlook.Application")
                    ?? throw new InvalidOperationException("Outlook niedostępny na tym stanowisku – powiadomienie nie wysłane");
         dynamic outlook = Activator.CreateInstance(type) ?? throw new InvalidOperationException("Nie udało się uruchomić Outlooka");

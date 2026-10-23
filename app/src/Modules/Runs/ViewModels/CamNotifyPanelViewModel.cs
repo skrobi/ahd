@@ -10,7 +10,7 @@ namespace PzlEv.Modules.Runs.ViewModels;
 public sealed record CamNotificationRow(string When, string Cam, string Email, string Result, string Tone, string Wps, string Message);
 
 /// <summary>
-/// Etap przebiegu „Powiadomienie CAM” (docs/pipeline-fazy.md, rozdz. 4.1): powiadomienia programu w cyklu (kto, kiedy, wynik) i „Wyślij ponownie”
+/// Etap przebiegu „Zatwierdzenie ETC” z powiadomieniem CAM-ów (docs/pipeline-fazy.md, rozdz. 4.1): powiadomienia programu w cyklu (kto, kiedy, wynik) i „Wyślij ponownie”
 /// – e-mail do wszystkich CAM-ów z zaległymi estymacjami, także powiadomionych wcześniej w cyklu (ICamReview.Notify, resend).
 /// </summary>
 public sealed class CamNotifyPanelViewModel : ObservableObject

@@ -218,21 +218,20 @@ bez zmian i przesuwania. Dalej etapy dokładane w edytorze: **etap walidacji** (
 i użytymi tabelami, szukaj po nazwie albo tabeli; treść i poziom reguły – edytor reguł; bramka WARNING: „Potwierdzenie” – wstrzymuje
 do potwierdzenia z komentarzem, „Informacja” – przebieg idzie dalej; opcjonalnie zatwierdzenie po etapie), **zatwierdzenie**
 (przebieg czeka na analityka) i klocek systemowy **Zatwierdzenie ACTUALS** (najwyżej jeden; „+ Zatwierdzenie ACTUALS”): przebieg czeka,
-aż analityk zatwierdzi dane ACTUALS przebiegu z komentarzem („Zatwierdź dane ACTUALS i dalej”). Klocek systemowy **Estymacje CAM**
-(najwyżej jeden; „+ Estymacje CAM”; F11.6): estymacje CAM programu w cyklu okresu tygodnia przebiegu (kontrakt `ICamReview`, moduł CAM) –
-podsumowanie i WARNING dla każdego wymaganego WP (z CAM-em, niezakończony) bez zatwierdzonej estymacji (brak / szkic po terminie cyklu –
-w opisie); panel etapu: liczniki (wymagane, zatwierdzone, wysłane, u CAM-a, brak), lista WP i decyzje finansisty – zatwierdź
-(„Harmonogram i budżet”), zwróć z uwagą, otwórz ponownie zatwierdzoną z komentarzem (ostatnie uruchomienie, etap czeka); „Zaakceptuj
-estymacje i dalej” z komentarzem, także z brakami – wynik etapu to stan w chwili akceptacji (WP bez zatwierdzonej estymacji liczą
-ETC jak dotąd: wpis w „Harmonogram i budżet” albo produkcja). Klocek systemowy **Powiadomienie CAM** (najwyżej jeden; „+ Powiadomienie CAM”;
-F11.7): e-mail z Outlooka finansisty (`Shared/Utils/Mail`) do każdego CAM-a, który ma zaległe wymagane estymacje programu w cyklu (brak,
-szkic, zwrócona) – jedna wiadomość na CAM-a: lista WP ze statusem, termin cyklu, uwagi finansisty do zwróconych; adres – słownik Osoby
-(`E-mail`); CAM powiadomiony w cyklu nie dostaje kolejnej wiadomości (panel etapu – lista powiadomień, „Wyślij ponownie”); brak adresu albo
-błąd wysyłki – WARNING bez zatrzymania przebiegu; każde powiadomienie zapisane (`CAM_Notification`). Klocki CAM mają **warunek**: „Każdy
-przebieg” albo „Przebieg zamykający” (w tygodniu bez zamknięcia okresu etap jest pomijany – zakończony bez akcji). Warunek klocka
-Powiadomienie CAM wyznacza **cykl estymacji programu**: każdy przebieg – tygodniowy (estymacja co tydzień, kod RRRR-Tnn, termin – koniec
-tygodnia, nowa estymacja od ostatnio zatwierdzonej), przebieg zamykający albo brak klocka – miesięczny (okres, termin – koniec tygodnia
-zamykającego); programy wypełniane co tydzień i co miesiąc używają różnych szablonów przebiegu. **Struktura programu** (ACWP, Actual DLH,
+aż analityk zatwierdzi dane ACTUALS przebiegu z komentarzem („Zatwierdź dane ACTUALS i dalej”). Klocek systemowy **Zatwierdzenie ETC**
+(najwyżej jeden; „+ Zatwierdzenie ETC”; F11.6, F11.7) – zatwierdzenie ETC wprowadzonych przez CAM-ów przez Finanse (estymacje CAM programu
+w cyklu – kontrakt `ICamReview`, moduł CAM). Ustawienia klocka: **cykl estymacji (warunek)** – „Każdy przebieg” (cykl tygodniowy: estymacja
+co tydzień, kod RRRR-Tnn, termin – koniec tygodnia, nowa estymacja od ostatnio zatwierdzonej) albo „Przebieg zamykający” (cykl miesięczny:
+okres, termin – koniec tygodnia zamykającego; w innym tygodniu etap pominięty – zakończony bez akcji); brak klocka – cykl miesięczny;
+programy wypełniane co tydzień i co miesiąc używają różnych szablonów przebiegu; **Powiadom CAM-ów** (domyślnie tak) – na początku etapu
+e-mail z Outlooka finansisty (`Shared/Utils/Mail`) do każdego CAM-a z zaległymi wymaganymi estymacjami (brak, szkic, zwrócona): lista WP
+ze statusem, termin cyklu, uwagi do zwróconych; adres – słownik Osoby (`E-mail`); raz w cyklu (panel etapu – lista powiadomień,
+„Wyślij ponownie”); brak adresu albo błąd wysyłki – WARNING; każde powiadomienie zapisane (`CAM_Notification`). Potem etap czeka na
+Finanse: podsumowanie i WARNING dla każdego wymaganego WP (z CAM-em, niezakończony) bez zatwierdzonej estymacji; panel etapu – liczniki
+(wymagane, zatwierdzone, wysłane, u CAM-a, brak), lista WP i decyzje: zatwierdź (ETC HOURS, ETC MATERIAL, Forecast i Actual Start /
+Koniec w „Harmonogram i budżet”), zwróć z uwagą, otwórz ponownie zatwierdzoną z komentarzem (ostatnie uruchomienie); „Zaakceptuj
+estymacje i dalej” z komentarzem, także z brakami – wynik etapu to stan w chwili akceptacji (z wynikami powiadomień; WP bez zatwierdzonej
+estymacji liczą ETC jak dotąd: wpis w „Harmonogram i budżet” albo produkcja). **Struktura programu** (ACWP, Actual DLH,
 ACWP Labor / Material, wskaźniki) pokazuje dane ACTUALS w stanie z przypięcia ostatniego uruchomienia z zakończonym tym etapem (uruchomienie bez tego
 etapu w definicji – z zakończonym pierwszym etapem walidacji, czyli walidacją ACTUALS, także z zaakceptowanymi błędami)
 (pliki zaimportowane do końca etapu Przypięcie stanu – `@AsOf` procedur `REP_ProjectCostsByElement` / `REP_ProjectCasCosts`, migracja

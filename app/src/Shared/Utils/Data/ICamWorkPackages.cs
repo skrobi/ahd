@@ -15,7 +15,8 @@ public sealed record CamPerson(string Code, string Name, string? Email = null)
 /// ToPln / ToUsd – przelicznik waluty programu (kurs bieżący, null – brak kursu); DataNote – braki danych (np. bez PZLPROD);
 /// ProductionEtcByYear – ETC z produkcji według planowanego roku poniesienia (vAHDD R; 0 – bez roku); PlanStart / PlanFinish –
 /// MIN / MAX DATA_PLAN zleceń WP (prognoza terminów, gdy nie jest wpisana); Finished – WP zakończony (status struktury z dat
-/// rzeczywistych) – nie wymaga estymacji w cyklu; WeeklyCycle – program estymuje co tydzień (przebieg programu – RunDefinitions.CamWeekly).
+/// rzeczywistych) – nie wymaga estymacji w cyklu; WeeklyCycle – program estymuje co tydzień (przebieg programu – RunDefinitions.CamWeekly);
+/// ActualStart / ActualFinish – daty rzeczywiste WP ze struktury (wpisane w „Harmonogram i budżet” albo z produkcji).
 /// </summary>
 public sealed record CamWorkPackage(
     string Project,
@@ -52,7 +53,9 @@ public sealed record CamWorkPackage(
     string? PlanStart = null,
     string? PlanFinish = null,
     bool Finished = false,
-    bool WeeklyCycle = false);
+    bool WeeklyCycle = false,
+    string? ActualStart = null,
+    string? ActualFinish = null);
 
 /// <summary>
 /// Moduł CAM – WP CAM-ów we wszystkich programach i przekazanie zatwierdzonej estymacji do struktury programu (słownik
@@ -74,8 +77,9 @@ public interface ICamWorkPackages
 
     /// <summary>
     /// Zatwierdzona estymacja WP do „Harmonogram i budżet” programu: ETC HOURS, ETC MATERIAL (waluta currency), Forecast Start /
-    /// Koniec – nowa wersja wiersza WP (historia słownika); null – kolumna bez zmiany. Zwraca błąd zapisu albo null.
+    /// Koniec, Actual Start / Koniec (daty rzeczywiste podane przez CAM-a) – nowa wersja wiersza WP (historia słownika); null – kolumna bez
+    /// zmiany. Zwraca błąd zapisu albo null.
     /// </summary>
     string? ApplyEstimate(string project, string wp, decimal etcHours, decimal materialEtc, string? currency, DateOnly? forecastStart,
-        DateOnly? forecastFinish);
+        DateOnly? forecastFinish, DateOnly? actualStart = null, DateOnly? actualFinish = null);
 }

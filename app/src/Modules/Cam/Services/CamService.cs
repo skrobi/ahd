@@ -114,7 +114,8 @@ public sealed class CamService(ICamStore store, Func<ICamWorkPackages?> packages
             return new CamOutcome(false, "Moduł Projekty niedostępny – nie można zapisać estymacji w „Harmonogram i budżet”.");
         var hours = estimate.Total(CamLineKinds.Hours);
         var material = estimate.Total(CamLineKinds.Material);
-        if (source.ApplyEstimate(estimate.Project, estimate.Wp, hours, material, estimate.Currency, estimate.ForecastStart, estimate.ForecastFinish) is { } error)
+        if (source.ApplyEstimate(estimate.Project, estimate.Wp, hours, material, estimate.Currency, estimate.ForecastStart, estimate.ForecastFinish,
+                estimate.ActualStart, estimate.ActualFinish) is { } error)
             return new CamOutcome(false, $"Nie zatwierdzono – {error}");
         return Review(estimate, CamStatuses.Approved, null,
             $"zatwierdzona – „Harmonogram i budżet”: ETC HOURS {hours:0.##}, ETC MATERIAL {material:0.##} {estimate.Currency}");

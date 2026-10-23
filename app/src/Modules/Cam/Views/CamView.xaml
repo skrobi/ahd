@@ -127,13 +127,34 @@
                             <!-- Krok 1: daty prognozy -->
                             <Border Style="{StaticResource Panel}" Margin="0,0,0,12">
                                 <StackPanel>
-                                    <TextBlock Text="1. Prognoza terminów WP" Style="{StaticResource H2}" FontSize="15" Margin="0,0,0,8" />
-                                    <WrapPanel>
-                                        <TextBlock Text="Start (Forecast)" Foreground="{StaticResource Muted}" VerticalAlignment="Center" Margin="0,0,8,0" />
-                                        <DatePicker SelectedDate="{Binding ForecastStart}" Width="140" Margin="0,0,24,0" IsEnabled="{Binding Editable}" />
-                                        <TextBlock Text="Koniec (Forecast)" Foreground="{StaticResource Muted}" VerticalAlignment="Center" Margin="0,0,8,0" />
-                                        <DatePicker SelectedDate="{Binding ForecastFinish}" Width="140" IsEnabled="{Binding Editable}" />
-                                    </WrapPanel>
+                                    <TextBlock Text="1. Harmonogram" Style="{StaticResource H2}" FontSize="15" Margin="0,0,0,8" />
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="170" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition /><RowDefinition />
+                                        </Grid.RowDefinitions>
+                                        <TextBlock Text="Rzeczywiste" Foreground="{StaticResource Muted}" VerticalAlignment="Center" />
+                                        <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="0,2">
+                                            <TextBlock Text="Start" Foreground="{StaticResource Muted}" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                            <DatePicker SelectedDate="{Binding ActualStart}" Width="140" Margin="0,0,24,0" IsEnabled="{Binding Editable}" />
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="2" Orientation="Horizontal" Margin="0,2">
+                                            <TextBlock Text="Koniec" Foreground="{StaticResource Muted}" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                            <DatePicker SelectedDate="{Binding ActualFinish}" Width="140" IsEnabled="{Binding Editable}" />
+                                        </StackPanel>
+                                        <TextBlock Grid.Row="1" Text="Prognoza (Forecast)" Foreground="{StaticResource Muted}" VerticalAlignment="Center" />
+                                        <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal" Margin="0,2">
+                                            <TextBlock Text="Start" Foreground="{StaticResource Muted}" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                            <DatePicker SelectedDate="{Binding ForecastStart}" Width="140" Margin="0,0,24,0" IsEnabled="{Binding Editable}" />
+                                        </StackPanel>
+                                        <StackPanel Grid.Row="1" Grid.Column="2" Orientation="Horizontal" Margin="0,2">
+                                            <TextBlock Text="Koniec" Foreground="{StaticResource Muted}" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                            <DatePicker SelectedDate="{Binding ForecastFinish}" Width="140" IsEnabled="{Binding Editable}" />
+                                        </StackPanel>
+                                    </Grid>
+                                    <TextBlock Text="{Binding ActualNote}" Foreground="{StaticResource Muted}" FontSize="12" TextWrapping="Wrap" Margin="0,4,0,0" />
                                     <TextBlock Text="{Binding FinishNote}" TextWrapping="Wrap" Margin="0,6,0,0">
                                         <TextBlock.Style>
                                             <Style TargetType="TextBlock">
@@ -146,7 +167,7 @@
                                             </Style>
                                         </TextBlock.Style>
                                     </TextBlock>
-                                    <TextBlock Text="Propozycja dat: ostatnio wpisana prognoza, bez niej najwcześniejsza i najpóźniejsza DATA_PLAN zleceń AHD. Baseline zmienia tylko analityk (Harmonogram i budżet)." Foreground="{StaticResource Muted}" FontSize="12" TextWrapping="Wrap" Margin="0,4,0,0" />
+                                    <TextBlock Text="Propozycja prognozy: ostatnio wpisana, bez niej najwcześniejsza i najpóźniejsza DATA_PLAN zleceń AHD. Baseline zmienia tylko analityk (Harmonogram i budżet)." Foreground="{StaticResource Muted}" FontSize="12" TextWrapping="Wrap" Margin="0,4,0,0" />
                                 </StackPanel>
                             </Border>
 
@@ -192,7 +213,7 @@
                             <!-- Krok 4: uzasadnienie i wysyłka -->
                             <Border Style="{StaticResource Panel}" Margin="0,0,0,12">
                                 <StackPanel>
-                                    <TextBlock Text="4. Uzasadnienie i wysyłka do analityka" Style="{StaticResource H2}" FontSize="15" Margin="0,0,0,4" />
+                                    <TextBlock Text="4. Uzasadnienie i wysyłka do Finansów" Style="{StaticResource H2}" FontSize="15" Margin="0,0,0,4" />
                                     <TextBlock Text="{Binding JustificationLabel}" Foreground="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,0,0,6" />
                                     <TextBox Style="{StaticResource Input}" Text="{Binding Justification, UpdateSourceTrigger=PropertyChanged}" IsEnabled="{Binding Editable}"
                                              AcceptsReturn="True" TextWrapping="Wrap" MinHeight="60" />
@@ -200,7 +221,7 @@
                                     <TextBlock Text="{Binding Errors}" Foreground="{StaticResource Crit}" TextWrapping="Wrap" Margin="0,4,0,0" />
                                     <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
                                         <Button Content="Zapisz szkic" Style="{StaticResource Btn}" Margin="0,0,8,0" Command="{Binding SaveDraft}" />
-                                        <Button Content="Wyślij do analityka" Style="{StaticResource BtnPrimary}" Command="{Binding Submit}" />
+                                        <Button Content="Wyślij do Finansów" Style="{StaticResource BtnPrimary}" Command="{Binding Submit}" />
                                     </StackPanel>
                                     <TextBlock Text="{Binding Message}" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,6,0,0" />
                                 </StackPanel>

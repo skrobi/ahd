@@ -124,19 +124,22 @@ public sealed class CamEstimatesTests
     }
 
     [Fact]
-    public void Validate_requires_justification_for_changes_and_no_values_after_the_finish()
+    public void Validate_allows_changes_without_justification_and_checks_dates_and_values_after_the_finish()
     {
         var wp = Wp(finish: "2028-01-31");
         var changed = Estimate(wp, [(2026, 980), (2027, 1620), (2028, 350)], []);
 
-        Assert.Contains(CamEstimates.Validate(wp, changed), e => e.StartsWith("uzasadnienie zmian względem propozycji i końca po baseline"));
-        Assert.Empty(CamEstimates.Validate(wp, changed with { Justification = "kooperant przejmuje część prac" }));
+        Assert.True(CamEstimates.Changed(wp, changed));
+        Assert.Empty(CamEstimates.Validate(wp, changed));                                                 // uzasadnienie – opcjonalne
+        Assert.Contains("rzeczywisty koniec przed rzeczywistym startem",
+            CamEstimates.Validate(wp, changed with { ActualStart = new DateOnly(2026, 3, 1), ActualFinish = new DateOnly(2026, 2, 1) }));
+        Assert.Empty(CamEstimates.Validate(wp, changed with { ActualStart = new DateOnly(2025, 3, 3) }));
         Assert.Contains(CamEstimates.Validate(wp, changed with { Justification = "kooperant przejmuje", ForecastFinish = new DateOnly(2027, 12, 31) }),
             e => e.Contains("po prognozowanym końcu (2028)"));
         Assert.Contains(CamEstimates.Validate(wp, Estimate(wp, [(2026, -1)], []) with { Justification = "korekta ujemna test" }), e => e.Contains("ujemne"));
-        Assert.Equal(["Daty", "Godziny", "Materiały", "Uzasadnienie"], CamEstimates.Checklist(wp, changed).Select(c => c.Item));
+        Assert.Equal(["Daty", "Godziny", "Materiały"], CamEstimates.Checklist(wp, changed).Select(c => c.Item));
         Assert.Equal(["Daty", "Godziny"], CamEstimates.Checklist(Wp(bacMaterial: 0, acwpMaterial: 0, finish: "2028-03-31"), CamEstimates.New(Wp(bacMaterial: 0, acwpMaterial: 0, finish: "2028-03-31"), "2026-10", Today))
-            .Select(c => c.Item));   // bez materiałów i bez zmian – bez uzasadnienia
+            .Select(c => c.Item));   // bez materiałów
     }
 
     [Fact]

@@ -22,7 +22,7 @@ public sealed record RunStepView(RunStepRow Row, string Gate, string? Descriptio
     /// <summary>Etap zatrzymany na błędzie – potwierdzenie akceptuje błędy (RunWorkflowEngine.CanConfirm); Zatwierdzenie ACTUALS – dane do struktury.</summary>
     public string ConfirmText => Row.Status == RunStepStatuses.Failed ? "Zaakceptuj błędy i dalej"
         : Row.Action == RunActions.ApproveActuals ? "Zatwierdź dane ACTUALS i dalej"
-        : Row.Action == RunActions.CamEstimates ? "Zaakceptuj estymacje i dalej" : "Potwierdź i dalej";
+        : Row.Action == RunActions.ApproveEtc ? "Zaakceptuj estymacje i dalej" : "Potwierdź i dalej";
 
     public bool HasComment => !string.IsNullOrWhiteSpace(Row.Comment);
 
@@ -253,7 +253,7 @@ public sealed class RunPanelViewModel : ObservableObject, IDisposable
         }
     }
 
-    /// <summary>Etap „Estymacje CAM”: estymacje programu w cyklu przebiegu i decyzje finansisty; null – inny etap.</summary>
+    /// <summary>Etap „Zatwierdzenie ETC”: estymacje programu w cyklu przebiegu i decyzje Finansów; null – inny etap.</summary>
     public CamReviewPanelViewModel? CamReview
     {
         get => _camReview;
@@ -266,7 +266,7 @@ public sealed class RunPanelViewModel : ObservableObject, IDisposable
 
     public bool IsCamStep => _camReview is not null;
 
-    /// <summary>Panel estymacji dla wybranego etapu „Estymacje CAM” (cykl – okres tygodnia uruchomienia); decyzje – ostatnie uruchomienie, etap czeka.</summary>
+    /// <summary>Panel estymacji dla wybranego etapu „Zatwierdzenie ETC” (cykl programu w tygodniu uruchomienia); decyzje – ostatnie uruchomienie, etap czeka.</summary>
     /// <summary>Kod cyklu estymacji CAM uruchomienia: tydzień RRRR-Tnn (program tygodniowy – definicja uruchomienia) albo okres tygodnia.</summary>
     private string CamCycleCode(RunPinRow pin)
     {
@@ -275,7 +275,7 @@ public sealed class RunPanelViewModel : ObservableObject, IDisposable
         return RunDefinitions.CamWeekly(definition) ? PzlEv.Shared.Models.CamCycles.Week(week.Year, week.Week) : week.Period;
     }
 
-    /// <summary>Etap „Powiadomienie CAM”: powiadomienia programu w cyklu i „Wyślij ponownie”; null – inny etap.</summary>
+    /// <summary>Zatwierdzenie ETC z powiadomieniem CAM-ów: powiadomienia programu w cyklu i „Wyślij ponownie”; null – brak.</summary>
     public CamNotifyPanelViewModel? CamNotify
     {
         get => _camNotify;
@@ -291,7 +291,10 @@ public sealed class RunPanelViewModel : ObservableObject, IDisposable
     private void ShowCamReview()
     {
         CamNotify = null;
-        if (_selectedStep?.Row.Action == RunActions.CamNotify && _selectedPin is { } notifyPin && _cams?.Invoke() is { } notifier)
+        // Zatwierdzenie ETC z powiadomieniem CAM-ów (definicja zapisana w uruchomieniu) – lista powiadomień i „Wyślij ponownie”.
+        if (_selectedStep?.Row.Action == RunActions.ApproveEtc && _selectedPin is { } notifyPin && _cams?.Invoke() is { } notifier
+            && (RunWorkflowEngine.Deserialize(_store.DefinitionOf(notifyPin.PinId)) ?? RunDefinitions.BuiltIn).Steps
+                .FirstOrDefault(s => s.No == _selectedStep.Row.StepNo) is { Notify: true })
         {
             try
             {
@@ -302,7 +305,7 @@ public sealed class RunPanelViewModel : ObservableObject, IDisposable
                 Logger.Error(ex, "Powiadomienia CAM przebiegu {Code}", notifyPin.Code);
             }
         }
-        if (_selectedStep?.Row.Action != RunActions.CamEstimates || _selectedPin is not { } pin || _cams?.Invoke() is not { } review)
+        if (_selectedStep?.Row.Action != RunActions.ApproveEtc || _selectedPin is not { } pin || _cams?.Invoke() is not { } review)
         {
             CamReview = null;
             return;

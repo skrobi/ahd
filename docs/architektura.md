@@ -113,7 +113,7 @@ Każdy moduł jest folderem `Modules/<Folder>/` i właścicielem swoich ekranów
 | Import | `Import` | pobranie i załadowanie plików, parsery źródeł (F05) | G1 | `docs/zrodla-danych.md` |
 | Master Data | `MasterData` | ekran Słowniki – słowniki globalne (F03), struktura P1S z `PZLPROD` (tylko odczyt); mechanizm słowników jest wspólny (`Shared/Utils/Dictionaries`) | G3 | `docs/slowniki.md`, `docs/zrodla-danych.md` |
 | Projects | `Projects` | projekty, kreator, Performance Objectives, słowniki projektu, foldery projektu (F01) | – | `docs/performance-objectives.md` |
-| CAM | `Cam` | estymacje WP dla Finansów (godziny i materiały w latach, prognoza terminów), postęp estymacji (monitoring), wyniki EV WP CAM-a (F11; decyzje finansisty – etap przebiegu „Estymacje CAM”; test – bez uprawnień) | – | `docs/funkcjonalnosc.md` (moduł CAM) |
+| CAM | `Cam` | estymacje WP dla Finansów (godziny i materiały w latach, harmonogram – daty rzeczywiste i prognoza), postęp estymacji (monitoring), wyniki EV WP CAM-a (F11; zatwierdzenie ETC przez Finanse i powiadomienia – etap przebiegu „Zatwierdzenie ETC”; test – bez uprawnień) | – | `docs/funkcjonalnosc.md` (moduł CAM) |
 | Runs | `Runs` | przebiegi, ekran przebiegu, przypięcie stanu, walidacja, zamknięcie (F06) | P0, P1, P2, Z | `docs/pipeline-fazy.md`, `docs/model-danych.md` |
 | Reconciliation | `Reconciliation` | łączenie źródeł, pliki dla finansów | P3, P4 | `docs/pipeline-fazy.md` |
 | CAM / Progress | `Progress` | zaawansowanie: produkcja, uzupełnienia, pliki CAM | P5, P6, P7 | `docs/pipeline-fazy.md` |

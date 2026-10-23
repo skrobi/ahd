@@ -282,7 +282,7 @@ Z_KAT_ZBIORCZA
     operacje elementu mają `STAT` = DONE, inaczej puste; wydzielenie – `DATA_REAL` jego operacji;
   - ETC = Σ `TECH_DO_PON` ÷ produktywność IPT + DJK (godziny do wykonania); także według planowanego roku poniesienia
     (`R`; czwarty wynik zapytania, rok 0 – bez roku) – propozycja godzin w estymacji CAM (F11);
-  - Plan Start / Plan Finish = najwcześniejsza / najpóźniejsza `DATA_PLAN` operacji – prognoza terminów WP w estymacji CAM,
+  - Plan Start / Plan Finish = najwcześniejsza / najpóźniejsza `DATA_PLAN` operacji – prognoza WP (harmonogram) w estymacji CAM,
     gdy nie jest wpisana;
   - materiały `LOG.vAPD` (po PSPNR, na elemencie – nie na wydzieleniu), USD: wartość wszystkich części Σ `NETWR_USD`
     [÷ (1 + `Z_CLO`)], fee Σ `NETWR_USD` − Σ `NETWR_USD` ÷ (1 + `Z_CLO`), dostarczone – statusy dostarczone, liczba numerów

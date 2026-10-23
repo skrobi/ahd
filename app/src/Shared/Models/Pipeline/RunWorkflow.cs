@@ -16,25 +16,20 @@ public static class RunActions
     public const string ApproveActuals = "Zatwierdzenie ACTUALS";
 
     /// <summary>
-    /// Klocek systemowy: finansista przegląda estymacje CAM programu w cyklu przebiegu (wymagane WP wobec zatwierdzonych), zatwierdza,
-    /// zwraca albo otwiera ponownie estymacje WP i akceptuje stan z komentarzem (także z brakami) – kontrakt ICamReview (moduł CAM).
+    /// Klocek systemowy: Finanse zatwierdzają ETC wprowadzone przez CAM-ów (estymacje programu w cyklu – kontrakt ICamReview, moduł CAM):
+    /// opcjonalnie e-mail do CAM-ów z zaległościami (Powiadomienie), przegląd wymaganych WP, zatwierdź / zwróć / otwórz ponownie, akceptacja
+    /// stanu z komentarzem (także z brakami). Warunek klocka wyznacza cykl estymacji programu: każdy przebieg – tygodniowy, przebieg zamykający
+    /// – miesięczny (RunDefinitions.CamWeekly).
     /// </summary>
-    public const string CamEstimates = "Estymacje CAM";
+    public const string ApproveEtc = "Zatwierdzenie ETC";
 
-    /// <summary>
-    /// Klocek systemowy: e-mail (Outlook) do CAM-ów z zaległymi estymacjami programu w cyklu (brak, szkic, zwrócona) – lista WP, termin,
-    /// uwagi; bez powtórnej wysyłki do CAM-a w tym samym cyklu. Warunek klocka wyznacza cykl estymacji programu: każdy przebieg – tygodniowy,
-    /// przebieg zamykający – miesięczny (RunDefinitions.CamWeekly).
-    /// </summary>
-    public const string CamNotify = "Powiadomienie CAM";
-
-    public static IReadOnlyList<string> All { get; } = [Import, Pin, Checks, Approval, ApproveActuals, CamEstimates, CamNotify];
+    public static IReadOnlyList<string> All { get; } = [Import, Pin, Checks, Approval, ApproveActuals, ApproveEtc];
 
     /// <summary>Klocek systemowy – najwyżej jeden w szablonie.</summary>
-    public static bool IsSystem(string action) => action is ApproveActuals or CamEstimates or CamNotify;
+    public static bool IsSystem(string action) => action is ApproveActuals or ApproveEtc;
 
-    /// <summary>Klocek z warunkiem wykonania (RunConditions) – klocki CAM.</summary>
-    public static bool HasCondition(string action) => action is CamEstimates or CamNotify;
+    /// <summary>Klocek z warunkiem wykonania (RunConditions) i powiadomieniem CAM-ów – Zatwierdzenie ETC.</summary>
+    public static bool HasCondition(string action) => action is ApproveEtc;
 }
 
 /// <summary>Warunek wykonania etapu szablonu (słownik „Etapy przebiegów”, kolumna Warunek): każdy przebieg albo tylko przebieg zamykający okres.</summary>
@@ -76,14 +71,15 @@ public static class RunStepStatuses
 public sealed record RunElementSetting(string Element, bool Active = true);
 
 /// <summary>Etap definicji przebiegu: numer, nazwa, akcja, bramka WARNING, zatwierdzenie ręczne, elementy kontrolne (akcja Kontrole).</summary>
+/// <remarks>Condition – warunek wykonania (RunConditions); Notify – Zatwierdzenie ETC: e-mail do CAM-ów z zaległymi estymacjami na początku etapu.</remarks>
 public sealed record RunStepDefinition(int No, string Name, string Action, string WarningGate, bool Approval, IReadOnlyList<RunElementSetting> Elements,
-    string? Description = null, string Condition = RunConditions.Always)
+    string? Description = null, string Condition = RunConditions.Always, bool Notify = false)
 {
     /// <summary>Etap wykonywany w tygodniu przebiegu (warunek „Przebieg zamykający” – tylko w tygodniu zamknięcia okresu).</summary>
     public bool RunsIn(bool closingWeek) => Condition != RunConditions.Closing || closingWeek;
 
     /// <summary>Etap kończy się wstrzymaniem do decyzji człowieka (zatwierdzenie ręczne albo akcja Zatwierdzenie / Zatwierdzenie ACTUALS).</summary>
-    public bool NeedsApproval => Approval || Action is RunActions.Approval or RunActions.ApproveActuals or RunActions.CamEstimates;
+    public bool NeedsApproval => Approval || Action is RunActions.Approval or RunActions.ApproveActuals or RunActions.ApproveEtc;
 }
 
 /// <summary>
@@ -96,7 +92,7 @@ public sealed record RunDefinition(string Code, string ProjectType, IReadOnlyLis
 public sealed record RunDefinitionHeaderRow(string Code, string ProjectType, bool IsActive, string? Description);
 
 public sealed record RunStepRowData(string Definition, int No, string Name, string Action, string WarningGate, bool Approval, string? Description,
-    string? Condition = null);
+    string? Condition = null, bool? Notify = null);
 
 public sealed record RunStepElementRow(string Definition, string Step, string Element, bool IsActive);
 
@@ -128,22 +124,21 @@ public static class RunDefinitions
         new(no, "Zatwierdzenie danych ACTUALS", RunActions.ApproveActuals, RunGates.Info, true, [],
             "Analityk zatwierdza dane ACTUALS przebiegu (komentarz) – od zatwierdzenia struktura programu pokazuje koszty z tego przebiegu.");
 
-    /// <summary>Klocek systemowy „Estymacje CAM” (edytor szablonów) – najwyżej jeden w szablonie.</summary>
-    public static RunStepDefinition CamApproval(int no) =>
-        new(no, "Estymacje CAM", RunActions.CamEstimates, RunGates.Info, true, [],
-            "Finansista przegląda estymacje CAM programu w cyklu przebiegu, zatwierdza albo zwraca estymacje WP i akceptuje stan z komentarzem.");
-
-    /// <summary>Klocek systemowy „Powiadomienie CAM” (edytor szablonów) – najwyżej jeden; warunek – cykl estymacji programu.</summary>
-    public static RunStepDefinition CamNotification(int no, string condition = RunConditions.Closing) =>
-        new(no, "Powiadomienie CAM", RunActions.CamNotify, RunGates.Info, false, [],
-            "E-mail (Outlook) do CAM-ów z zaległymi estymacjami programu w cyklu: lista WP, termin, uwagi do zwróconych.", condition);
+    /// <summary>
+    /// Klocek systemowy „Zatwierdzenie ETC” (edytor szablonów) – najwyżej jeden: Finanse zatwierdzają ETC CAM-ów; warunek – cykl estymacji programu
+    /// (domyślnie przebieg zamykający – miesięczny), notify – e-mail do CAM-ów z zaległościami na początku etapu.
+    /// </summary>
+    public static RunStepDefinition EtcApproval(int no, string condition = RunConditions.Closing, bool notify = true) =>
+        new(no, "Zatwierdzenie ETC", RunActions.ApproveEtc, RunGates.Info, true, [],
+            "Finanse zatwierdzają ETC wprowadzone przez CAM-ów (estymacje programu w cyklu): powiadomienie CAM-ów z zaległościami, zatwierdź / zwróć / otwórz ponownie, akceptacja z komentarzem.",
+            condition, notify);
 
     /// <summary>
-    /// Cykl estymacji CAM programu z jego przebiegu: klocek „Powiadomienie CAM” z warunkiem „Każdy przebieg” – tygodniowy (estymacja co tydzień),
+    /// Cykl estymacji CAM programu z jego przebiegu: klocek „Zatwierdzenie ETC” z warunkiem „Każdy przebieg” – tygodniowy (estymacja co tydzień),
     /// inaczej (przebieg zamykający albo bez klocka) – miesięczny (okres zamknięcia).
     /// </summary>
     public static bool CamWeekly(RunDefinition definition) =>
-        definition.Steps.Any(s => s.Action == RunActions.CamNotify && s.Condition != RunConditions.Closing);
+        definition.Steps.Any(s => s.Action == RunActions.ApproveEtc && s.Condition != RunConditions.Closing);
 
     /// <summary>
     /// Etapy definicji wbudowanej i szablonów startowych (jak migracja 053): stałe, Walidacja ACTUALS, Walidacja EV (bramka – potwierdzenie
@@ -203,7 +198,7 @@ public static class RunDefinitions
                 .Select(s => new RunStepDefinition(s.No, s.Name, s.Action, s.WarningGate, s.Approval,
                     elements.Where(e => Is(e.Definition, header.Code) && Is(e.Step, s.Name))
                         .Select(e => new RunElementSetting(e.Element.Trim(), e.IsActive)).ToList(), s.Description,
-                    s.Condition == RunConditions.Closing ? RunConditions.Closing : RunConditions.Always))
+                    s.Condition == RunConditions.Closing ? RunConditions.Closing : RunConditions.Always, s.Notify == true))
                 .ToList(), header.Description);
 
     /// <summary>
@@ -237,7 +232,9 @@ public static class RunDefinitions
             if (step.Action == RunActions.Checks && !step.Elements.Any(e => e.Active))
                 issues.Add(Issue.Error($"Etap „{step.Name}” bez reguł – zaznacz reguły albo usuń etap", at));
             if (step.Condition == RunConditions.Closing && !RunActions.HasCondition(step.Action))
-                issues.Add(Issue.Error($"Etap „{step.Name}” ({step.Action}) – warunek „{RunConditions.Closing}” tylko w klockach CAM", at));
+                issues.Add(Issue.Error($"Etap „{step.Name}” ({step.Action}) – warunek „{RunConditions.Closing}” tylko w klocku {RunActions.ApproveEtc}", at));
+            if (step.Notify && step.Action != RunActions.ApproveEtc)
+                issues.Add(Issue.Error($"Etap „{step.Name}” ({step.Action}) – powiadomienie CAM tylko w klocku {RunActions.ApproveEtc}", at));
             if (step.Action != RunActions.Checks && step.Elements.Count > 0)
                 issues.Add(Issue.Error($"Etap „{step.Name}” ({step.Action}) nie ma reguł – reguły tylko w etapach walidacji", at));
             foreach (var element in step.Elements.GroupBy(e => e.Element.Trim(), StringComparer.OrdinalIgnoreCase).Where(g => g.Count() > 1))

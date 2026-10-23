@@ -23,7 +23,7 @@ public sealed record CamReviewRow(CamReviewItem Item, string Tone, string Requir
 }
 
 /// <summary>
-/// Etap przebiegu „Estymacje CAM” (docs/pipeline-fazy.md, rozdz. 4.1): estymacje programu w cyklu okresu tygodnia przebiegu – liczniki
+/// Etap przebiegu „Zatwierdzenie ETC” – zatwierdzenie ETC przez Finanse (docs/pipeline-fazy.md, rozdz. 4.1): estymacje programu w cyklu przebiegu – liczniki
 /// wymaganych WP wobec zatwierdzonych i lista WP; finansista zatwierdza albo zwraca wysłane estymacje (uwaga) i otwiera ponownie zatwierdzone
 /// (komentarz) – kontrakt ICamReview (moduł CAM). Akceptacja etapu – „Zaakceptuj estymacje i dalej” panelu przebiegu.
 /// </summary>

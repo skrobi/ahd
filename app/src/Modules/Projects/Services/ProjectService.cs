@@ -1052,7 +1052,7 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
             return null;
         try
         {
-            // Cykl programu z jego przebiegu: tygodniowy (klocek Powiadomienie CAM w każdym przebiegu) albo miesięczny.
+            // Cykl programu z jego przebiegu: tygodniowy (klocek Zatwierdzenie ETC w każdym przebiegu) albo miesięczny.
             var cycle = review.Cycle(today, RunDefinitions.CamWeekly(RunDefinitionOf(code)));
             return (cycle, review.Saved(code, cycle.Period));
         }
@@ -1115,7 +1115,8 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
     /// – kolumna Waluta; pusta – waluta programu), Forecast Start / Koniec (null – bez zmiany) – zapis jak edycja tabeli struktury
     /// (walidacja słownika, historia). Zwraca błąd albo null.
     /// </summary>
-    public string? ApplyCamEstimate(string code, string wp, decimal etcHours, decimal materialEtc, string? currency, DateOnly? forecastStart, DateOnly? forecastFinish)
+    public string? ApplyCamEstimate(string code, string wp, decimal etcHours, decimal materialEtc, string? currency, DateOnly? forecastStart, DateOnly? forecastFinish,
+        DateOnly? actualStart = null, DateOnly? actualFinish = null)
     {
         static string Number(decimal value) => Math.Round(value, 2).ToString(System.Globalization.CultureInfo.InvariantCulture);
         var rows = Rows(ProjectDictionaries.ScheduleBudget, code);
@@ -1136,6 +1137,11 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
             changes[StructureEdits.ForecastStart] = start.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
         if (forecastFinish is { } finish)
             changes[StructureEdits.ForecastFinish] = finish.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
+        // Daty rzeczywiste podane przez CAM-a – Actual Start / Actual Koniec (nadpisują produkcję); bez nich – bez zmian.
+        if (actualStart is { } realStart)
+            changes[StructureEdits.ActualStart] = realStart.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
+        if (actualFinish is { } realFinish)
+            changes[StructureEdits.ActualFinish] = realFinish.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
         var (working, removed) = StructureEdits.Schedule(rows, wp, changes);
         var outcome = SaveStructureDictionary(ProjectDictionaries.ScheduleBudget, Context(code, store.Objectives(code), Rows(ProjectDictionaries.WpCam, code), Mapping()),
             working, removed, code);

@@ -82,12 +82,12 @@ public sealed class CamWorkPackagesSource(ProjectService service) : ICamWorkPack
                     row.UndeliveredByYear ?? new Dictionary<int, decimal>(), ProjectService.HourRates(departmentRates, row.Mpk, rates),
                     rates.LaborFactor is { } labor && labor != 0 ? 1 / labor : null,
                     rates.MaterialFactor is { } usd && usd != 0 ? 1 / usd : null, note, row.ProductionEtcByYear, row.PlanStart, row.PlanFinish,
-                    row.Status == "zakończony", weekly))
+                    row.Status == "zakończony", weekly, row.ActualStart, row.ActualFinish))
                 .ToList();
         }
     }
 
     public string? ApplyEstimate(string project, string wp, decimal etcHours, decimal materialEtc, string? currency, DateOnly? forecastStart,
-        DateOnly? forecastFinish) =>
-        service.ApplyCamEstimate(project, wp, etcHours, materialEtc, currency, forecastStart, forecastFinish);
+        DateOnly? forecastFinish, DateOnly? actualStart = null, DateOnly? actualFinish = null) =>
+        service.ApplyCamEstimate(project, wp, etcHours, materialEtc, currency, forecastStart, forecastFinish, actualStart, actualFinish);
 }

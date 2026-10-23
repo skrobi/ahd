@@ -48,6 +48,7 @@ public sealed class RunStepTileViewModel : ObservableObject
     private bool _approval;
     private string _description;
     private string _condition;
+    private bool _notify;
     private string _ruleSearch = "";
 
     public RunStepTileViewModel(RunStepDefinition step, IReadOnlyList<RunRule> library)
@@ -59,6 +60,7 @@ public sealed class RunStepTileViewModel : ObservableObject
         _approval = step.Approval;
         _description = step.Description ?? "";
         _condition = step.Condition;
+        _notify = step.Notify;
         Rules = IsChecks ? BuildRules(step, library) : [];
         foreach (var choice in Rules)
             choice.Changed += () => { OnPropertyChanged(nameof(Summary)); Changed?.Invoke(); };
@@ -81,23 +83,27 @@ public sealed class RunStepTileViewModel : ObservableObject
 
     public bool IsChecks => Action == RunActions.Checks;
 
-    public bool IsApproval => Action is RunActions.Approval or RunActions.ApproveActuals or RunActions.CamEstimates;
+    public bool IsApproval => Action is RunActions.Approval or RunActions.ApproveActuals or RunActions.ApproveEtc;
 
     /// <summary>Klocek systemowy „Zatwierdzenie ACTUALS” – zatwierdzone dane ACTUALS trafiają do struktury programu.</summary>
     public bool IsActualsApproval => Action == RunActions.ApproveActuals;
 
-    /// <summary>Klocek systemowy „Estymacje CAM” – finansista zatwierdza estymacje CAM programu w cyklu przebiegu.</summary>
-    public bool IsCamEstimates => Action == RunActions.CamEstimates;
+    /// <summary>Klocek systemowy „Zatwierdzenie ETC” – Finanse zatwierdzają ETC wprowadzone przez CAM-ów.</summary>
+    public bool IsEtcApproval => Action == RunActions.ApproveEtc;
 
-    /// <summary>Klocek systemowy „Powiadomienie CAM” – e-mail do CAM-ów z zaległymi estymacjami.</summary>
-    public bool IsCamNotify => Action == RunActions.CamNotify;
-
-    /// <summary>Klocek z warunkiem wykonania (klocki CAM).</summary>
+    /// <summary>Klocek z warunkiem wykonania (cykl estymacji) i powiadomieniem CAM-ów – Zatwierdzenie ETC.</summary>
     public bool HasCondition => RunActions.HasCondition(Action);
+
+    /// <summary>Zatwierdzenie ETC: na początku etapu e-mail do CAM-ów z zaległymi estymacjami.</summary>
+    public bool Notify
+    {
+        get => _notify;
+        set { if (SetProperty(ref _notify, value)) { OnPropertyChanged(nameof(Summary)); Changed?.Invoke(); } }
+    }
 
     public IReadOnlyList<string> Conditions => RunConditions.All;
 
-    /// <summary>Warunek wykonania: każdy przebieg albo przebieg zamykający; w „Powiadomienie CAM” – też cykl estymacji programu.</summary>
+    /// <summary>Warunek wykonania: każdy przebieg (cykl estymacji tygodniowy) albo przebieg zamykający (miesięczny).</summary>
     public string Condition
     {
         get => _condition;
@@ -131,7 +137,7 @@ public sealed class RunStepTileViewModel : ObservableObject
     /// <summary>Bramka na kafelku: ERROR zatrzymuje; WARNING – potwierdzenie albo informacja; zatwierdzenie ręczne.</summary>
     public string GateText =>
         (IsApproval || Approval ? "czeka na zatwierdzenie" : IsChecks ? $"WARNING: {WarningGate.ToLowerInvariant()}"
-            : IsCamNotify ? "bez zatrzymania" : "stały – konfiguracja programu")
+            : "stały – konfiguracja programu")
         + (HasCondition ? $" · {Condition.ToLowerInvariant()}" : "");
 
     /// <summary>Zawartość kafelka: liczba zaznaczonych reguł i pierwsze z nich.</summary>
@@ -141,8 +147,8 @@ public sealed class RunStepTileViewModel : ObservableObject
         {
             if (!IsChecks)
                 return IsFixed ? "klocek predefiniowany" : IsActualsApproval ? "klocek systemowy – zatwierdzone dane ACTUALS w strukturze programu"
-                    : IsCamEstimates ? "klocek systemowy – estymacje CAM programu (wymagane wobec zatwierdzonych)"
-                    : IsCamNotify ? $"klocek systemowy – e-mail do CAM-ów z zaległościami; cykl estymacji {(Condition == RunConditions.Closing ? "miesięczny" : "tygodniowy")}" : "";
+                    : IsEtcApproval ? $"klocek systemowy – Finanse zatwierdzają ETC CAM-ów; cykl {(Condition == RunConditions.Closing ? "miesięczny" : "tygodniowy")}"
+                      + (Notify ? "; powiadomienie CAM-ów" : "") : "";
             var selected = Rules.Where(c => c.IsSelected).Select(c => c.Name).ToList();
             return selected.Count == 0 ? "brak reguł – zaznacz"
                 : $"{selected.Count} {(selected.Count == 1 ? "reguła" : selected.Count % 10 is >= 2 and <= 4 && selected.Count / 10 % 10 != 1 ? "reguły" : "reguł")}: "
@@ -153,7 +159,7 @@ public sealed class RunStepTileViewModel : ObservableObject
     public RunStepDefinition ToStep() =>
         new(No, Name.Trim(), Action, IsChecks ? WarningGate : RunGates.Info, IsApproval || Approval,
             [.. Rules.Where(c => c.IsSelected).Select(c => new RunElementSetting(c.Name))], Description.Trim().Length == 0 ? null : Description.Trim(),
-            HasCondition ? Condition : RunConditions.Always);
+            HasCondition ? Condition : RunConditions.Always, HasCondition && Notify);
 
     /// <summary>Reguły biblioteki w jej kolejności; reguły etapu spoza biblioteki (np. usunięte) – na końcu jako „nieznana” (odznaczenie usuwa).</summary>
     private static IReadOnlyList<RunRuleChoice> BuildRules(RunStepDefinition step, IReadOnlyList<RunRule> library)

@@ -517,8 +517,10 @@ M – materiały; `Year`, `Proposal` – propozycja systemu, `Value` – wartoś
 zmian, komentarz). Usunięcie programu usuwa jego estymacje. Wymaga aplikacji 0.62.0.
 
 **Migracja `sql/mssql/057_powiadomienia_cam.sql`:** `CAM_Estimate.Cycle` – do 10 znaków: okres RRRR-MM (cykl miesięczny) albo tydzień
-RRRR-Tnn (cykl tygodniowy – program z klockiem „Powiadomienie CAM” w każdym przebiegu); `DICT_RunStep.Condition` – warunek etapu szablonu
-(puste – każdy przebieg, „Przebieg zamykający”); `CAM_Notification` – wysłane powiadomienia CAM (program, cykl, CAM, adres, kto i kiedy,
+RRRR-Tnn (cykl tygodniowy – program z klockiem „Zatwierdzenie ETC” w każdym przebiegu); `CAM_Estimate.ActualStart` / `ActualFinish` – daty
+rzeczywiste WP podane przez CAM-a (po zatwierdzeniu – Actual Start / Koniec w „Harmonogram i budżet”); `DICT_RunStep.Condition` – warunek
+etapu szablonu (puste – każdy przebieg, „Przebieg zamykający”), `DICT_RunStep.Notify` – powiadomienie CAM-ów w etapie Zatwierdzenie ETC;
+`CAM_Notification` – wysłane powiadomienia CAM (program, cykl, CAM, adres, kto i kiedy,
 uruchomienie przebiegu, WP w wiadomości, wynik: wysłano / brak adresu / błąd, opis błędu). Usunięcie programu usuwa jego powiadomienia.
 Wymaga aplikacji 0.63.0.
 

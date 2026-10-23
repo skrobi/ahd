@@ -36,7 +36,9 @@ public sealed record CamEstimate(
     DateTimeOffset? SubmittedAt = null,
     string? SubmittedBy = null,
     DateTimeOffset? ReviewedAt = null,
-    string? ReviewedBy = null)
+    string? ReviewedBy = null,
+    DateOnly? ActualStart = null,
+    DateOnly? ActualFinish = null)
 {
     public IEnumerable<CamEstimateLine> Of(char kind) => Lines.Where(l => l.Kind == kind).OrderBy(l => l.Year);
 

@@ -24,7 +24,7 @@ public sealed record CamSummary(decimal EtcHours, decimal? LaborCost, decimal Ma
 /// </summary>
 public static class CamEstimates
 {
-    /// <summary>Minimalna długość uzasadnienia, gdy estymacja różni się od propozycji albo koniec jest po baseline.</summary>
+    /// <summary>Minimalna długość uwagi Finansów (zwrot, ponowne otwarcie).</summary>
     public const int JustificationLength = 10;
 
     /// <summary>
@@ -185,8 +185,8 @@ public static class CamEstimates
         estimate.ForecastFinish is { } finish && Date(wp.BaselineFinish) is { } baseline && finish > baseline;
 
     /// <summary>
-    /// Błędy blokujące wysłanie: ujemne wartości, godziny albo materiały w roku po prognozowanym końcu, koniec przed startem,
-    /// brak uzasadnienia przy zmianach względem propozycji albo końcu po baseline. Pusta lista – można wysłać.
+    /// Błędy blokujące wysłanie: ujemne wartości, godziny albo materiały w roku po prognozowanym końcu, prognozowany albo rzeczywisty koniec
+    /// przed startem. Uzasadnienie – opcjonalne. Pusta lista – można wysłać.
     /// </summary>
     public static IReadOnlyList<string> Validate(CamWorkPackage wp, CamEstimate estimate)
     {
@@ -197,12 +197,12 @@ public static class CamEstimates
             errors.Add("prognozowany koniec przed startem");
         if (estimate.ForecastFinish is { } finish && estimate.Lines.Where(l => l.Value > 0 && l.Year > finish.Year).Select(l => l.Year).Distinct().ToList() is { Count: > 0 } late)
             errors.Add($"godziny albo materiały w roku po prognozowanym końcu ({string.Join(", ", late)})");
-        if (Changed(wp, estimate) && (estimate.Justification?.Trim().Length ?? 0) < JustificationLength)
-            errors.Add($"uzasadnienie zmian względem propozycji{(ShiftedFinish(wp, estimate) ? " i końca po baseline" : "")} (min. {JustificationLength} znaków)");
+        if (estimate.ActualStart is { } realStart && estimate.ActualFinish is { } realFinish && realFinish < realStart)
+            errors.Add("rzeczywisty koniec przed rzeczywistym startem");
         return errors;
     }
 
-    /// <summary>Opis zmian do historii: suma godzin i materiałów, prognoza końca – względem poprzedniej wersji (null – nowa).</summary>
+    /// <summary>Opis zmian do historii: suma godzin i materiałów, prognoza końca, daty rzeczywiste – względem poprzedniej wersji (null – nowa).</summary>
     public static string Describe(CamEstimate estimate, CamEstimate? previous)
     {
         static string N(decimal v) => Math.Round(v, 0).ToString("#,0", System.Globalization.CultureInfo.GetCultureInfo("pl-PL"));
@@ -215,10 +215,14 @@ public static class CamEstimates
             parts.Add(previous is null ? $"materiały {N(material)} {estimate.Currency}" : $"materiały {N(previous.Total(CamLineKinds.Material))} → {N(material)} {estimate.Currency}");
         if (previous is not null && previous.ForecastFinish != estimate.ForecastFinish)
             parts.Add($"koniec {Text(previous.ForecastFinish)} → {Text(estimate.ForecastFinish)}");
+        if (previous is null ? estimate.ActualStart is not null : previous.ActualStart != estimate.ActualStart)
+            parts.Add($"rzeczywisty start {Text(estimate.ActualStart)}");
+        if (previous is null ? estimate.ActualFinish is not null : previous.ActualFinish != estimate.ActualFinish)
+            parts.Add($"rzeczywisty koniec {Text(estimate.ActualFinish)}");
         return parts.Count == 0 ? "bez zmian wartości" : string.Join(" · ", parts);
     }
 
-    /// <summary>Czego brakuje do wysłania (lista zadań): daty, godziny, materiały (gdy WP ma materiały), uzasadnienie.</summary>
+    /// <summary>Czego brakuje do wysłania (lista zadań): daty, godziny, materiały (gdy WP ma materiały).</summary>
     public static IReadOnlyList<(string Item, bool Done)> Checklist(CamWorkPackage wp, CamEstimate estimate)
     {
         var saved = estimate.EstimateId is not null;
@@ -229,8 +233,6 @@ public static class CamEstimates
         };
         if (wp.BacMaterial != 0 || wp.AcwpMaterial != 0 || wp.UndeliveredByYear.Count > 0)
             items.Add(("Materiały", saved));
-        if (Changed(wp, estimate))
-            items.Add(("Uzasadnienie", (estimate.Justification?.Trim().Length ?? 0) >= JustificationLength));
         return items;
     }
 

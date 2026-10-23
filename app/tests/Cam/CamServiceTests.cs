@@ -46,10 +46,16 @@ public sealed class CamServiceTests : IDisposable
             [.. new[] { CamEstimatesTests.Wp(), CamEstimatesTests.Wp("WP-2") with { Finished = true }, CamEstimatesTests.Wp("WP-3", project: "M28") with { Cam = "0577" } }
                 .Where(w => project is null || w.Project == project)];
 
-        public string? ApplyEstimate(string project, string wp, decimal etcHours, decimal materialEtc, string? currency, DateOnly? forecastStart, DateOnly? forecastFinish)
+        public List<(DateOnly? Start, DateOnly? Finish)> AppliedActual { get; } = [];
+
+        public string? ApplyEstimate(string project, string wp, decimal etcHours, decimal materialEtc, string? currency, DateOnly? forecastStart, DateOnly? forecastFinish,
+            DateOnly? actualStart = null, DateOnly? actualFinish = null)
         {
             if (Error is null)
+            {
                 Applied.Add((project, wp, etcHours, materialEtc, currency, forecastStart, forecastFinish));
+                AppliedActual.Add((actualStart, actualFinish));
+            }
             return Error;
         }
     }
@@ -175,14 +181,21 @@ public sealed class CamServiceTests : IDisposable
         var item = Assert.Single(service.Worklist(service.WorkPackages("0412"), cycle));
         Assert.Equal(CamStatuses.ToDo, item.Estimate.Status);
 
-        // Zmiana względem propozycji bez uzasadnienia – szkic tak, wysyłka nie.
-        var changed = item.Estimate with { Lines = [.. item.Estimate.Lines.Select(l => l.Kind == CamLineKinds.Hours && l.Year == 2027 ? l with { Value = l.Value - 200 } : l)] };
+        // Zmiana względem propozycji (uzasadnienie opcjonalne) i błędne daty rzeczywiste – szkic tak, wysyłka nie.
+        var changed = item.Estimate with
+        {
+            Lines = [.. item.Estimate.Lines.Select(l => l.Kind == CamLineKinds.Hours && l.Year == 2027 ? l with { Value = l.Value - 200 } : l)],
+            ActualStart = new DateOnly(2025, 4, 1), ActualFinish = new DateOnly(2025, 3, 1),
+        };
         var draft = service.Save(wp, changed, submit: false);
         Assert.True(draft.Ok, draft.Message);
-        Assert.Equal(CamStatuses.Draft, draft.Estimate!.Status);
+        Assert.Equal((CamStatuses.Draft, new DateOnly(2025, 4, 1)), (draft.Estimate!.Status, draft.Estimate.ActualStart));
+        Assert.Equal(new DateOnly(2025, 4, 1), store.Estimate("PAF", "WP-1", "2026-10")!.ActualStart);   // daty rzeczywiste w bazie
         var refused = service.Save(wp, draft.Estimate, submit: true);
         Assert.False(refused.Ok);
-        Assert.Contains(refused.Errors!, e => e.StartsWith("uzasadnienie"));
+        Assert.Contains("rzeczywisty koniec przed rzeczywistym startem", refused.Errors!);
+        draft = service.Save(wp, draft.Estimate with { ActualFinish = null }, submit: false);
+        Assert.True(draft.Ok, draft.Message);
 
         var sent = service.Save(wp, draft.Estimate with { Justification = "część poszycia przejmuje kooperant" }, submit: true);
         Assert.True(sent.Ok, sent.Message);
@@ -208,11 +221,14 @@ public sealed class CamServiceTests : IDisposable
         var applied = Assert.Single(_packages.Applied);
         Assert.Equal(("PAF", "WP-1", 2920m, resent.Estimate!.Total(CamLineKinds.Material), "PLN", new DateOnly(2028, 3, 31)),
             (applied.Project, applied.Wp, applied.Hours, applied.Material, applied.Currency, applied.Finish));
+        Assert.Equal(((DateOnly?)new DateOnly(2025, 4, 1), (DateOnly?)null), Assert.Single(_packages.AppliedActual));   // rzeczywisty start – do struktury
         Assert.Equal(CamStatuses.Approved, store.Estimate("PAF", "WP-1", "2026-10")!.Status);
 
         var history = service.History(approved.Estimate!);
-        Assert.Equal([CamStatuses.Approved, CamStatuses.Sent, CamStatuses.Returned, CamStatuses.Sent, CamStatuses.Draft], history.Select(h => h.Status));
-        Assert.StartsWith("ETC 2 920 h · materiały", history.Single(h => h.Status == CamStatuses.Draft).Summary.Replace('\u00A0', ' '));   // nowa – bez poprzedniej wersji
+        Assert.Equal([CamStatuses.Approved, CamStatuses.Sent, CamStatuses.Returned, CamStatuses.Sent, CamStatuses.Draft, CamStatuses.Draft], history.Select(h => h.Status));
+        Assert.StartsWith("ETC 2 920 h · materiały", history.Last().Summary.Replace('\u00A0', ' '));   // nowa – bez poprzedniej wersji
+        Assert.EndsWith("rzeczywisty start 2025-04-01 · rzeczywisty koniec 2025-03-01", history.Last().Summary);
+        Assert.Equal("rzeczywisty koniec —", history[^2].Summary);
         Assert.Equal(("zwrócona do CAM-a", "SPI 0,87 – dodaj wyjaśnienie odchylenia"),
             (history.Single(h => h.Status == CamStatuses.Returned).Summary, history.Single(h => h.Status == CamStatuses.Returned).Comment));
         Assert.Equal("bez zmian wartości", history.Last(h => h.Status == CamStatuses.Sent).Summary);   // ponowne wysłanie po zwrocie

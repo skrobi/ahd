@@ -52,7 +52,7 @@ public sealed record CamNotifyResult(IReadOnlyList<CamNotification> Notification
 public sealed record CamDecision(bool Ok, string Message, CamReviewItem? Item = null);
 
 /// <summary>
-/// Estymacje CAM dla przebiegu (etap „Estymacje CAM” – decyzje finansisty) i struktury programu (kolory WP). Rejestruje moduł CAM
+/// Estymacje CAM dla przebiegu (etap „Zatwierdzenie ETC” – decyzje Finansów, powiadomienia CAM) i struktury programu (kolory WP). Rejestruje moduł CAM
 /// (AppServices.Contracts), używają moduły Przebiegi i Projekty (docs/architektura.md, rozdz. 5.3).
 /// </summary>
 public interface ICamReview

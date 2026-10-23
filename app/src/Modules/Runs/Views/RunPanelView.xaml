@@ -170,7 +170,7 @@
                                      AutomationProperties.Name="Komentarz potwierdzenia" ToolTip="Komentarz potwierdzenia etapu (wymagany)" />
                         </DockPanel>
 
-                        <!-- Etap „Powiadomienie CAM”: wysłane powiadomienia w cyklu, ponowna wysyłka -->
+                        <!-- Etap „Zatwierdzenie ETC” z powiadomieniem CAM-ów: wysłane powiadomienia w cyklu, ponowna wysyłka -->
                         <Border Style="{StaticResource Panel}" Margin="0,0,0,10" DataContext="{Binding CamNotify}"
                                 Visibility="{Binding DataContext.IsCamNotifyStep, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BoolToVisibility}}">
                             <StackPanel>
@@ -201,7 +201,7 @@
                             </StackPanel>
                         </Border>
 
-                        <!-- Etap „Estymacje CAM”: liczniki wymaganych WP, lista estymacji programu w cyklu, decyzje finansisty -->
+                        <!-- Etap „Zatwierdzenie ETC”: liczniki wymaganych WP, lista estymacji programu w cyklu, decyzje Finansów -->
                         <Border Style="{StaticResource Panel}" Margin="0,0,0,10" DataContext="{Binding CamReview}"
                                 Visibility="{Binding DataContext.IsCamStep, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BoolToVisibility}}">
                             <StackPanel>

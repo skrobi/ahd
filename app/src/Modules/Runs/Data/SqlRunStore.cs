@@ -488,7 +488,7 @@ public sealed class SqlRunStore(SqlDatabase db) : IRunStore
             connection.Query<RunDefinitionHeaderRow>(
                 $"SELECT Code, ProjectType, IsActive, Description FROM {db.Table("dict.RunDefinition")} {Current}").ToList(),
             connection.Query<RunStepRowData>(
-                $"SELECT Definition, StepNo AS No, Name, Action, WarningGate, Approval, Description, Condition FROM {db.Table("dict.RunStep")} {Current}").ToList(),
+                $"SELECT Definition, StepNo AS No, Name, Action, WarningGate, Approval, Description, Condition, Notify FROM {db.Table("dict.RunStep")} {Current}").ToList(),
             connection.Query<RunStepElementRow>(
                 $"SELECT Definition, Step, Element, IsActive FROM {db.Table("dict.RunStepElement")} {Current}").ToList());
     }

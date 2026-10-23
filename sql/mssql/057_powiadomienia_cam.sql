@@ -1,7 +1,8 @@
 /* PZL-EV – migracja 057: powiadomienia CAM w przebiegu i tygodniowy cykl estymacji (docs/pipeline-fazy.md, rozdz. 4.1; tasks/F11.7).
    - CAM_Estimate.Cycle: kod cyklu do 10 znaków – okres RRRR-MM (cykl miesięczny) albo tydzień RRRR-Tnn (cykl tygodniowy).
    - DICT_RunStep.Condition: warunek wykonania etapu szablonu – „Każdy przebieg” (puste) albo „Przebieg zamykający” (tydzień zamknięcia
-     okresu w kalendarzu); klocki Powiadomienie CAM i Estymacje CAM.
+     okresu w kalendarzu); DICT_RunStep.Notify – powiadomienie CAM-ów na początku etapu; klocek Zatwierdzenie ETC.
+   - CAM_Estimate.ActualStart / ActualFinish: rzeczywisty start i koniec WP podane przez CAM-a (po zatwierdzeniu – „Harmonogram i budżet”).
    - CAM_Notification: wysłane powiadomienia CAM – program, cykl, CAM, adres, kto i kiedy, uruchomienie przebiegu, WP w wiadomości,
      wynik (wysłano, brak adresu, błąd).
    Skrypt jest idempotentny. Uruchomienie: aplikacja (Diagnostyka → Migracja albo pytanie przy starcie); ręcznie:
@@ -21,6 +22,14 @@ GO
 
 IF COL_LENGTH(N'[$(Schema)].[$(Prefix)DICT_RunStep]', N'Condition') IS NULL
     ALTER TABLE [$(Schema)].[$(Prefix)DICT_RunStep] ADD Condition NVARCHAR(30) NULL;
+GO
+
+IF COL_LENGTH(N'[$(Schema)].[$(Prefix)DICT_RunStep]', N'Notify') IS NULL
+    ALTER TABLE [$(Schema)].[$(Prefix)DICT_RunStep] ADD Notify BIT NULL;
+GO
+
+IF COL_LENGTH(N'[$(Schema)].[$(Prefix)CAM_Estimate]', N'ActualStart') IS NULL
+    ALTER TABLE [$(Schema)].[$(Prefix)CAM_Estimate] ADD ActualStart DATE NULL, ActualFinish DATE NULL;
 GO
 
 IF OBJECT_ID(N'[$(Schema)].[$(Prefix)CAM_Notification]') IS NULL
