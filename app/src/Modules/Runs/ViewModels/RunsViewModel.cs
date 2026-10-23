@@ -61,6 +61,7 @@ public sealed class RunsViewModel : ObservableObject
         AddActualsApproval = new RelayCommand(_ => AddStep(RunDefinitions.ActualsApproval(0)),
             _ => HasEditor && Steps.All(s => !s.IsActualsApproval));
         AddCamEstimates = new RelayCommand(_ => AddStep(RunDefinitions.CamApproval(0)), _ => HasEditor && Steps.All(s => !s.IsCamEstimates));
+        AddCamNotify = new RelayCommand(_ => AddStep(RunDefinitions.CamNotification(0)), _ => HasEditor && Steps.All(s => !s.IsCamNotify));
         MoveLeft = new RelayCommand(p => Move(p as RunStepTileViewModel, -1), p => CanMove(p as RunStepTileViewModel, -1));
         MoveRight = new RelayCommand(p => Move(p as RunStepTileViewModel, 1), p => CanMove(p as RunStepTileViewModel, 1));
         RemoveStep = new RelayCommand(p => Remove(p as RunStepTileViewModel), p => p is RunStepTileViewModel { IsFixed: false });
@@ -92,6 +93,9 @@ public sealed class RunsViewModel : ObservableObject
 
     /// <summary>Klocek systemowy „Estymacje CAM” (najwyżej jeden).</summary>
     public ICommand AddCamEstimates { get; }
+
+    /// <summary>Klocek systemowy „Powiadomienie CAM” (najwyżej jeden).</summary>
+    public ICommand AddCamNotify { get; }
     public ICommand MoveLeft { get; }
     public ICommand MoveRight { get; }
     public ICommand RemoveStep { get; }

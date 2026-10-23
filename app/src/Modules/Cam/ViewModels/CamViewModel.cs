@@ -31,6 +31,7 @@ public sealed class CamViewModel : ObservableObject
     private CamPerson? _selectedCam;
     private IReadOnlyList<CamWorkPackage> _wps = [];
     private CamCycle? _cycle;
+    private CamCycle? _weekly;
     private bool _onlyToDo = true;
     private EstimateEditorViewModel? _editor;
     private string _status = "";
@@ -84,7 +85,8 @@ public sealed class CamViewModel : ObservableObject
     }
 
     public string CycleText => _cycle is null ? ""
-        : $"Cykl: zamknięcie okresu {_cycle.Period}" + (_cycle.Deadline is { } d ? $" · termin {d:yyyy-MM-dd}" : " · termin – brak tygodnia zamykającego w kalendarzu");
+        : $"Cykl: zamknięcie okresu {_cycle.Period}" + (_cycle.Deadline is { } d ? $" · termin {d:yyyy-MM-dd}" : " · termin – brak tygodnia zamykającego w kalendarzu")
+          + (_weekly is { } w ? $" · programy tygodniowe: tydzień {w.Period}" + (w.Deadline is { } wd ? $", termin {wd:yyyy-MM-dd}" : "") : "");
 
     public string ProgressText { get; private set; } = "";
 
@@ -155,7 +157,8 @@ public sealed class CamViewModel : ObservableObject
         await Try(async () =>
         {
             var wps = _wps;
-            var items = await Busy.Run("Estymacje cyklu…", () => _service.Worklist(wps, cycle));
+            var weekly = _weekly;
+            var items = await Busy.Run("Estymacje cyklu…", () => _service.Worklist(wps, cycle, weekly));
             if (ReferenceEquals(_selectedCam, cam))
                 ShowWorklist(items);
         });
@@ -177,14 +180,19 @@ public sealed class CamViewModel : ObservableObject
             return;
         await Try(async () =>
         {
-            var (wps, cycle) = await Busy.Run($"Wczytywanie WP – {cam.Label} (struktury programów)…", () => (_service.WorkPackages(cam.Code), _service.Cycle()));
+            var (wps, cycle, weekly) = await Busy.Run($"Wczytywanie WP – {cam.Label} (struktury programów)…", () =>
+            {
+                var packages = _service.WorkPackages(cam.Code);
+                return (packages, _service.Cycle(), packages.Any(w => w.WeeklyCycle) ? _service.Cycle(true) : null);
+            });
             // W międzyczasie wybrano innego CAM-a – wynik tego odczytu nieaktualny (pokazuje go odczyt nowego CAM-a).
             if (!ReferenceEquals(_selectedCam, cam))
                 return;
             _wps = wps;
             _cycle = cycle;
+            _weekly = weekly;
             OnPropertyChanged(nameof(CycleText));
-            var items = await Busy.Run("Estymacje cyklu…", () => _service.Worklist(wps, cycle));
+            var items = await Busy.Run("Estymacje cyklu…", () => _service.Worklist(wps, cycle, weekly));
             if (!ReferenceEquals(_selectedCam, cam))
                 return;
             ShowWorklist(items);
@@ -261,7 +269,7 @@ public sealed class CamViewModel : ObservableObject
     {
         await Try(async () =>
         {
-            var cycle = _cycle ?? await Busy.Run("Cykl…", _service.Cycle);
+            var cycle = _cycle ?? await Busy.Run("Cykl…", () => _service.Cycle());
             var review = await Busy.Run("Postęp estymacji – struktury programów…", () => _service.Progress(cycle));
             _progressCycle = cycle.Period;
             static CamProgressRow Row(string name, IReadOnlyList<CamReviewItem> items)

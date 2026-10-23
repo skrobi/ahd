@@ -9,9 +9,13 @@ namespace PzlEv.Modules.Cam.Services;
 /// </summary>
 public sealed class CamReviewSource(CamService service) : ICamReview
 {
-    public CamCycle Cycle(DateOnly day) => service.Cycle(day);
+    public CamCycle Cycle(DateOnly day, bool weekly = false) => service.Cycle(day, weekly);
 
-    public CamCycle CycleOf(string period) => service.CycleOf(period);
+    public CamCycle CycleOf(string code) => service.CycleOf(code);
+
+    public CamNotifyResult Notify(string project, CamCycle cycle, long? pinId, bool resend) => service.Notify(project, cycle, pinId, resend);
+
+    public IReadOnlyList<CamNotification> Notifications(string project, string cycle) => service.Notifications(project, cycle);
 
     public CamReview Program(string project, CamCycle cycle) => service.Program(project, cycle);
 

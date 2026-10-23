@@ -5,6 +5,7 @@ using PzlEv.Modules.Cam.ViewModels;
 using PzlEv.Modules.Cam.Views;
 using PzlEv.Shared.Models;
 using PzlEv.Shared.Utils.Data;
+using PzlEv.Shared.Utils.Mail;
 using PzlEv.Shared.Utils.Ui.Modularity;
 
 namespace PzlEv.Modules.Cam;
@@ -24,7 +25,7 @@ public sealed class CamModule : IModule
     // Rejestruje ICamReview – decyzje finansisty w etapie przebiegu „Estymacje CAM” (Przebiegi) i kolory struktury programu (Projekty).
     public void Initialize(AppServices services)
     {
-        _service = new CamService(new SqlCamStore(services.Sql), () => services.Contracts.Get<ICamWorkPackages>(), services);
+        _service = new CamService(new SqlCamStore(services.Sql), () => services.Contracts.Get<ICamWorkPackages>(), services, new OutlookMailSender());
         services.Contracts.Register<ICamReview>(new CamReviewSource(_service));
     }
 

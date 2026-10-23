@@ -224,7 +224,15 @@ podsumowanie i WARNING dla każdego wymaganego WP (z CAM-em, niezakończony) bez
 w opisie); panel etapu: liczniki (wymagane, zatwierdzone, wysłane, u CAM-a, brak), lista WP i decyzje finansisty – zatwierdź
 („Harmonogram i budżet”), zwróć z uwagą, otwórz ponownie zatwierdzoną z komentarzem (ostatnie uruchomienie, etap czeka); „Zaakceptuj
 estymacje i dalej” z komentarzem, także z brakami – wynik etapu to stan w chwili akceptacji (WP bez zatwierdzonej estymacji liczą
-ETC jak dotąd: wpis w „Harmonogram i budżet” albo produkcja). **Struktura programu** (ACWP, Actual DLH,
+ETC jak dotąd: wpis w „Harmonogram i budżet” albo produkcja). Klocek systemowy **Powiadomienie CAM** (najwyżej jeden; „+ Powiadomienie CAM”;
+F11.7): e-mail z Outlooka finansisty (`Shared/Utils/Mail`) do każdego CAM-a, który ma zaległe wymagane estymacje programu w cyklu (brak,
+szkic, zwrócona) – jedna wiadomość na CAM-a: lista WP ze statusem, termin cyklu, uwagi finansisty do zwróconych; adres – słownik Osoby
+(`E-mail`); CAM powiadomiony w cyklu nie dostaje kolejnej wiadomości (panel etapu – lista powiadomień, „Wyślij ponownie”); brak adresu albo
+błąd wysyłki – WARNING bez zatrzymania przebiegu; każde powiadomienie zapisane (`CAM_Notification`). Klocki CAM mają **warunek**: „Każdy
+przebieg” albo „Przebieg zamykający” (w tygodniu bez zamknięcia okresu etap jest pomijany – zakończony bez akcji). Warunek klocka
+Powiadomienie CAM wyznacza **cykl estymacji programu**: każdy przebieg – tygodniowy (estymacja co tydzień, kod RRRR-Tnn, termin – koniec
+tygodnia, nowa estymacja od ostatnio zatwierdzonej), przebieg zamykający albo brak klocka – miesięczny (okres, termin – koniec tygodnia
+zamykającego); programy wypełniane co tydzień i co miesiąc używają różnych szablonów przebiegu. **Struktura programu** (ACWP, Actual DLH,
 ACWP Labor / Material, wskaźniki) pokazuje dane ACTUALS w stanie z przypięcia ostatniego uruchomienia z zakończonym tym etapem (uruchomienie bez tego
 etapu w definicji – z zakończonym pierwszym etapem walidacji, czyli walidacją ACTUALS, także z zaakceptowanymi błędami)
 (pliki zaimportowane do końca etapu Przypięcie stanu – `@AsOf` procedur `REP_ProjectCostsByElement` / `REP_ProjectCasCosts`, migracja

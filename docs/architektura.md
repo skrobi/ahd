@@ -145,6 +145,7 @@ Shared/
   Utils/Config/                    konfiguracja pzl-ev.json
   Utils/Data/                      baza MS SQL (Sql/: połączenie, migracje, dziennik, problemy), czas, użytkownik, blokady operacji, usługi wspólne
   Utils/Files/                     Excel, CSV/TXT, liczby polskie, daty, sygnatura kolumn, SHA-256
+  Utils/Mail/                      wysyłka e-mail (IMailSender; OutlookMailSender – Outlook stanowiska przez COM, bez pakietów) – powiadomienia CAM
   Utils/Mapping/                   klucze porównań kodów elementów P1S / CES (`MappingKeys`: bez spacji i wielkości liter, numery bez zer wiodących)
   Utils/Dictionaries/              mechanizm słowników (walidacja, zapis z historią, wymiana przez Excel, magazyn SQL) i słowniki globalne – używają go moduły Słowniki i Projekty
   Models/                          modele wspólne, klucze modułów, wynik kontroli (Issue), kontrakt etapu (Pipeline), opisy słowników (Dictionaries), modele `PZLPROD` – struktura P1S i dane produkcji (PzlProd), pracownicy HR (Hr), dni robocze (`WorkingDays`)
@@ -167,7 +168,7 @@ modułu i `Shared/Models`; Excel, File Connectors, SQL Access – `Shared/Utils`
   (`INavigator`, `ModuleKeys`; z parametrem – typ ze `Shared`, np. `DictionaryLink`, który ekran celu przyjmuje przez `INavigationTarget`)
   albo kontrakt w `Shared`: moduł rejestruje implementację w `Initialize`
   (`AppServices.Contracts`), inny pobiera ją przy użyciu – np. `ISourceImport` (moduł Import) dla „Importuj źródła
-  projektu” i przebiegu, `IRunLauncher` (moduł Przebiegi) dla listy projektów, `IRunPanels` – panel przebiegu programu (zakładka Przebieg; uruchomienie przebiegu – bez kontroli gotowości, wymagania sprawdzają reguły etapów; „Popraw w aplikacji” – zdarzenie `IRunPanel.FixRequested` ze słownikiem do pokazania), `IAcwpChanges` – okno „Zmiany ACWP” (moduł Projekty), `ICamWorkPackages` – WP CAM-ów ze wszystkich programów z wartościami EV i stawkami MPK oraz zapis zatwierdzonej estymacji w „Harmonogram i budżet” (moduł Projekty dla modułu CAM), `ICamReview` – estymacje CAM programu w cyklu i decyzje finansisty (moduł CAM dla etapu przebiegu „Estymacje CAM” i kolorów struktury programu; statusy – `Shared/Models/CamStatuses.cs`);
+  projektu” i przebiegu, `IRunLauncher` (moduł Przebiegi) dla listy projektów, `IRunPanels` – panel przebiegu programu (zakładka Przebieg; uruchomienie przebiegu – bez kontroli gotowości, wymagania sprawdzają reguły etapów; „Popraw w aplikacji” – zdarzenie `IRunPanel.FixRequested` ze słownikiem do pokazania), `IAcwpChanges` – okno „Zmiany ACWP” (moduł Projekty), `ICamWorkPackages` – WP CAM-ów ze wszystkich programów z wartościami EV i stawkami MPK oraz zapis zatwierdzonej estymacji w „Harmonogram i budżet” (moduł Projekty dla modułu CAM), `ICamReview` – estymacje CAM programu w cyklu, decyzje finansisty i powiadomienia CAM (moduł CAM dla etapu przebiegu „Estymacje CAM” i kolorów struktury programu; statusy – `Shared/Models/CamStatuses.cs`);
   powiadomienia – `Shared/Utils/Ui/Notifications` (Windows),
 - silnik EVM zależy wyłącznie od modeli (rozdz. 5.1).
 

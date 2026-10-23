@@ -3,7 +3,7 @@ using PzlEv.Shared.Models;
 namespace PzlEv.Shared.Utils.Data;
 
 /// <summary>
-/// Estymacja CAM WP programu w cyklu (okres RRRR-MM; status – CamStatuses; ToDo – bez zapisanej estymacji, wartości z propozycji systemu): CAM,
+/// Estymacja CAM WP programu w cyklu (kod cyklu – okres RRRR-MM albo tydzień RRRR-Tnn; status – CamStatuses; ToDo – bez zapisanej estymacji): CAM,
 /// wymagana w cyklu (WP z CAM-em, niezakończony), ETC godzin i materiałów (waluta programu), prognozowany koniec, uzasadnienie CAM,
 /// uwaga analityka, kto i kiedy wysłał i ocenił (ToDo – wartości 0); Version – znacznik wersji zapisanej estymacji do decyzji (kontrola zmiany w międzyczasie).
 /// </summary>
@@ -34,6 +34,20 @@ public sealed record CamReview(CamCycle Cycle, IReadOnlyList<CamReviewItem> Item
     private int Count(string status) => Items.Count(i => i.Required && i.Status == status);
 }
 
+/// <summary>Wynik powiadomienia CAM: wysłano, brak adresu (słownik Osoby, kolumna E-mail), błąd wysyłki.</summary>
+public static class CamNotificationResults
+{
+    public const string Sent = "wysłano";
+    public const string NoEmail = "brak adresu";
+    public const string Failed = "błąd";
+}
+
+/// <summary>Powiadomienie CAM w cyklu: CAM, nazwisko, adres, kiedy i kto wysłał, WP w wiadomości, wynik (CamNotificationResults), błąd.</summary>
+public sealed record CamNotification(string Cam, string Name, string? Email, DateTimeOffset SentAt, string SentBy, string Wps, string Result, string? Message);
+
+/// <summary>Wynik etapu powiadomień: powiadomienia tej akcji i CAM-owie z zaległościami pominięci (powiadomieni wcześniej w cyklu).</summary>
+public sealed record CamNotifyResult(IReadOnlyList<CamNotification> Notifications, IReadOnlyList<string> AlreadyNotified);
+
 /// <summary>Wynik decyzji finansisty o estymacji: powodzenie, komunikat i pozycja po decyzji (lista bez ponownego odczytu programu).</summary>
 public sealed record CamDecision(bool Ok, string Message, CamReviewItem? Item = null);
 
@@ -43,11 +57,14 @@ public sealed record CamDecision(bool Ok, string Message, CamReviewItem? Item = 
 /// </summary>
 public interface ICamReview
 {
-    /// <summary>Cykl dnia (okres kalendarza okresów i termin); poza kalendarzem – miesiąc kalendarzowy bez terminu.</summary>
-    CamCycle Cycle(DateOnly day);
+    /// <summary>
+    /// Cykl dnia: miesięczny – okres kalendarza okresów i termin (koniec tygodnia zamykającego), tygodniowy – tydzień kalendarza i jego koniec;
+    /// poza kalendarzem – miesiąc kalendarzowy bez terminu.
+    /// </summary>
+    CamCycle Cycle(DateOnly day, bool weekly = false);
 
-    /// <summary>Cykl okresu RRRR-MM (np. okres tygodnia przebiegu) z terminem z kalendarza okresów.</summary>
-    CamCycle CycleOf(string period);
+    /// <summary>Cykl kodu RRRR-MM albo RRRR-Tnn (okres albo tydzień przebiegu) z terminem z kalendarza okresów.</summary>
+    CamCycle CycleOf(string code);
 
     /// <summary>Estymacje programu w cyklu: wymagane WP (z CAM-em, niezakończone – także bez estymacji) i zapisane estymacje pozostałych WP.</summary>
     CamReview Program(string project, CamCycle cycle);
@@ -63,4 +80,13 @@ public interface ICamReview
 
     /// <summary>Ponowne otwarcie zatwierdzonej estymacji z komentarzem (min. 10 znaków) – wraca do CAM-a jako zwrócona.</summary>
     CamDecision Reopen(CamReviewItem item, string comment);
+
+    /// <summary>
+    /// E-mail do CAM-ów z zaległymi wymaganymi estymacjami programu w cyklu (brak, szkic, zwrócona): jedna wiadomość na CAM-a z listą WP,
+    /// terminem i uwagami; CAM powiadomiony w cyklu – pominięty, chyba że resend; zapis każdego powiadomienia (pinId – uruchomienie przebiegu).
+    /// </summary>
+    CamNotifyResult Notify(string project, CamCycle cycle, long? pinId, bool resend);
+
+    /// <summary>Powiadomienia programu w cyklu, od najnowszego.</summary>
+    IReadOnlyList<CamNotification> Notifications(string project, string cycle);
 }

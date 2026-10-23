@@ -33,7 +33,7 @@ public sealed class CamReviewPanelViewModel : ObservableObject
 
     private readonly ICamReview _review;
     private readonly string _project;
-    private readonly string _period;
+    private readonly string _period;   // kod cyklu: okres RRRR-MM albo tydzień RRRR-Tnn
     private readonly bool _editable;
     private CamReview? _state;
     private CamReviewRow? _selected;

@@ -151,6 +151,11 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
     public IReadOnlyList<LookupOption> PersonLookups() =>
         GlobalDictionaries.LookupOptions(GlobalDictionaries.Persons, _dictionaries.Load(GlobalDictionaries.Get(GlobalDictionaries.Persons)));
 
+    /// <summary>E-mail osób ze słownika Osoby po USRID (powiadomienia CAM); osoby bez adresu – pominięte.</summary>
+    public IReadOnlyDictionary<string, string> PersonEmails() =>
+        _dictionaries.Load(GlobalDictionaries.Get(GlobalDictionaries.Persons)).Where(r => r["USRID"] is not null && !string.IsNullOrWhiteSpace(r["E-mail"]))
+            .GroupBy(r => r["USRID"]!, StringComparer.OrdinalIgnoreCase).ToDictionary(g => g.Key, g => g.First()["E-mail"]!.Trim(), StringComparer.OrdinalIgnoreCase);
+
     /// <summary>
     /// Lista wyboru CAM w tabeli struktury: osoby ze słownika Osoby (persons) oraz CAM już wpisane w „WP i CAM”, których
     /// nie ma w słowniku (np. sprzed wczytania osób z HR) – żeby tabela je pokazała.
@@ -208,6 +213,18 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
     public IReadOnlyList<RunDefinitionHeaderRow> RunTemplates() =>
         RunDefinitions.Available(RunDefinitionRows.Headers(_dictionaries.Load(GlobalDictionaries.Get(GlobalDictionaries.RunDefinitionHeaders))),
             RunDefinitionRows.Steps(_dictionaries.Load(GlobalDictionaries.Get(GlobalDictionaries.RunSteps))));
+
+    /// <summary>
+    /// Przebieg programu jak przy starcie przebiegu (RunDefinitions.For): szablon wybrany w „Parametry programu” („Przebieg”), bez wyboru –
+    /// domyślny dla typu programu, bez szablonów – wbudowany; m.in. cykl estymacji CAM programu (RunDefinitions.CamWeekly).
+    /// </summary>
+    public RunDefinition RunDefinitionOf(string code)
+    {
+        IReadOnlyList<DictRow> Global(string dictionary) => _dictionaries.Load(GlobalDictionaries.Get(dictionary));
+        var assigned = Rows(ProjectDictionaries.Settings, code).FirstOrDefault(r => r["Parametr"] == ProjectSettings.RunDefinition)?["Wartość"]?.Trim() is { Length: > 0 } value ? value : null;
+        return RunDefinitions.For(RunDefinitionRows.Headers(Global(GlobalDictionaries.RunDefinitionHeaders)), RunDefinitionRows.Steps(Global(GlobalDictionaries.RunSteps)),
+            RunDefinitionRows.Elements(Global(GlobalDictionaries.RunStepElements)), assigned, store.Find(code)?.Type ?? "");
+    }
 
     /// <summary>Szablon → opcja wyboru („CAS – domyślny dla CAS”).</summary>
     public static IReadOnlyList<LookupOption> RunTemplateOptions(IEnumerable<RunDefinitionHeaderRow> templates) =>
@@ -1035,7 +1052,8 @@ public sealed class ProjectService(IProjectStore store, IDictionaryStore diction
             return null;
         try
         {
-            var cycle = review.Cycle(today);
+            // Cykl programu z jego przebiegu: tygodniowy (klocek Powiadomienie CAM w każdym przebiegu) albo miesięczny.
+            var cycle = review.Cycle(today, RunDefinitions.CamWeekly(RunDefinitionOf(code)));
             return (cycle, review.Saved(code, cycle.Period));
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)

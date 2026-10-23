@@ -170,6 +170,37 @@
                                      AutomationProperties.Name="Komentarz potwierdzenia" ToolTip="Komentarz potwierdzenia etapu (wymagany)" />
                         </DockPanel>
 
+                        <!-- Etap „Powiadomienie CAM”: wysłane powiadomienia w cyklu, ponowna wysyłka -->
+                        <Border Style="{StaticResource Panel}" Margin="0,0,0,10" DataContext="{Binding CamNotify}"
+                                Visibility="{Binding DataContext.IsCamNotifyStep, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BoolToVisibility}}">
+                            <StackPanel>
+                                <DockPanel Margin="0,0,0,8">
+                                    <Button DockPanel.Dock="Right" Content="Wyślij ponownie" Style="{StaticResource Btn}" Command="{Binding Resend}"
+                                            ToolTip="E-mail do wszystkich CAM-ów z zaległymi estymacjami programu w cyklu – także powiadomionych wcześniej" />
+                                    <TextBlock Text="{Binding Title}" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                </DockPanel>
+                                <partials:BusyBar DataContext="{Binding Busy}" />
+                                <DataGrid Style="{StaticResource DataTable}" ItemsSource="{Binding Rows}" IsReadOnly="True" MaxHeight="260">
+                                    <DataGrid.Columns>
+                                        <DataGridTextColumn Header="Kiedy, kto" Binding="{Binding When}" />
+                                        <DataGridTextColumn Header="CAM" Binding="{Binding Cam}" />
+                                        <DataGridTextColumn Header="E-mail" Binding="{Binding Email}" />
+                                        <DataGridTemplateColumn Header="Wynik">
+                                            <DataGridTemplateColumn.CellTemplate>
+                                                <DataTemplate>
+                                                    <TextBlock Text="{Binding Result}" FontWeight="SemiBold"
+                                                               Foreground="{Binding Tone, Converter={StaticResource LevelBrush}, ConverterParameter=fg}" />
+                                                </DataTemplate>
+                                            </DataGridTemplateColumn.CellTemplate>
+                                        </DataGridTemplateColumn>
+                                        <DataGridTextColumn Header="WP" Binding="{Binding Wps}" Width="*" MinWidth="160" />
+                                        <DataGridTextColumn Header="Błąd" Binding="{Binding Message}" Width="*" MinWidth="120" />
+                                    </DataGrid.Columns>
+                                </DataGrid>
+                                <TextBlock partials:CopyText.Enabled="True" Text="{Binding Message}" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,6,0,0" />
+                            </StackPanel>
+                        </Border>
+
                         <!-- Etap „Estymacje CAM”: liczniki wymaganych WP, lista estymacji programu w cyklu, decyzje finansisty -->
                         <Border Style="{StaticResource Panel}" Margin="0,0,0,10" DataContext="{Binding CamReview}"
                                 Visibility="{Binding DataContext.IsCamStep, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BoolToVisibility}}">

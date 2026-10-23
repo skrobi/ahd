@@ -55,6 +55,7 @@ public sealed class RunPanelViewModel : ObservableObject, IDisposable
     private readonly Func<ICamReview?>? _cams;
     private CamReviewPanelViewModel? _camReview;
     private (long PinId, int StepNo, bool Editable)? _camReviewKey;
+    private CamNotifyPanelViewModel? _camNotify;
     private IReadOnlyList<RunPinRow> _pins = [];
     private RunPinRow? _selectedPin;
     private IReadOnlyList<RunStepView> _steps = [];
@@ -266,8 +267,41 @@ public sealed class RunPanelViewModel : ObservableObject, IDisposable
     public bool IsCamStep => _camReview is not null;
 
     /// <summary>Panel estymacji dla wybranego etapu „Estymacje CAM” (cykl – okres tygodnia uruchomienia); decyzje – ostatnie uruchomienie, etap czeka.</summary>
+    /// <summary>Kod cyklu estymacji CAM uruchomienia: tydzień RRRR-Tnn (program tygodniowy – definicja uruchomienia) albo okres tygodnia.</summary>
+    private string CamCycleCode(RunPinRow pin)
+    {
+        var week = _store.RunWeek(pin.RunId);
+        var definition = RunWorkflowEngine.Deserialize(_store.DefinitionOf(pin.PinId)) ?? RunDefinitions.BuiltIn;
+        return RunDefinitions.CamWeekly(definition) ? PzlEv.Shared.Models.CamCycles.Week(week.Year, week.Week) : week.Period;
+    }
+
+    /// <summary>Etap „Powiadomienie CAM”: powiadomienia programu w cyklu i „Wyślij ponownie”; null – inny etap.</summary>
+    public CamNotifyPanelViewModel? CamNotify
+    {
+        get => _camNotify;
+        private set
+        {
+            if (SetProperty(ref _camNotify, value))
+                OnPropertyChanged(nameof(IsCamNotifyStep));
+        }
+    }
+
+    public bool IsCamNotifyStep => _camNotify is not null;
+
     private void ShowCamReview()
     {
+        CamNotify = null;
+        if (_selectedStep?.Row.Action == RunActions.CamNotify && _selectedPin is { } notifyPin && _cams?.Invoke() is { } notifier)
+        {
+            try
+            {
+                CamNotify = new CamNotifyPanelViewModel(notifier, Project, CamCycleCode(notifyPin), notifyPin.PinId, IsLatest);
+            }
+            catch (Exception ex) when (ex is not OutOfMemoryException)
+            {
+                Logger.Error(ex, "Powiadomienia CAM przebiegu {Code}", notifyPin.Code);
+            }
+        }
         if (_selectedStep?.Row.Action != RunActions.CamEstimates || _selectedPin is not { } pin || _cams?.Invoke() is not { } review)
         {
             CamReview = null;
@@ -282,9 +316,8 @@ public sealed class RunPanelViewModel : ObservableObject, IDisposable
         }
         try
         {
-            var period = _store.RunWeek(pin.RunId).Period;
             _camReviewKey = (pin.PinId, _selectedStep.Row.StepNo, editable);
-            CamReview = new CamReviewPanelViewModel(review, Project, period, editable);
+            CamReview = new CamReviewPanelViewModel(review, Project, CamCycleCode(pin), editable);
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {

@@ -1,7 +1,7 @@
 namespace PzlEv.Shared.Utils.Data;
 
-/// <summary>CAM: numer (kolumna CAM słownika „WP i CAM” – numer znaczka) i nazwisko ze słownika „Osoby” (brak – numer).</summary>
-public sealed record CamPerson(string Code, string Name)
+/// <summary>CAM: numer (kolumna CAM słownika „WP i CAM” – numer znaczka), nazwisko i e-mail ze słownika „Osoby” (brak – numer, bez adresu).</summary>
+public sealed record CamPerson(string Code, string Name, string? Email = null)
 {
     public string Label => Name == Code ? Code : $"{Name} ({Code})";
 }
@@ -15,7 +15,7 @@ public sealed record CamPerson(string Code, string Name)
 /// ToPln / ToUsd – przelicznik waluty programu (kurs bieżący, null – brak kursu); DataNote – braki danych (np. bez PZLPROD);
 /// ProductionEtcByYear – ETC z produkcji według planowanego roku poniesienia (vAHDD R; 0 – bez roku); PlanStart / PlanFinish –
 /// MIN / MAX DATA_PLAN zleceń WP (prognoza terminów, gdy nie jest wpisana); Finished – WP zakończony (status struktury z dat
-/// rzeczywistych) – nie wymaga estymacji w cyklu.
+/// rzeczywistych) – nie wymaga estymacji w cyklu; WeeklyCycle – program estymuje co tydzień (przebieg programu – RunDefinitions.CamWeekly).
 /// </summary>
 public sealed record CamWorkPackage(
     string Project,
@@ -51,7 +51,8 @@ public sealed record CamWorkPackage(
     IReadOnlyDictionary<int, decimal>? ProductionEtcByYear = null,
     string? PlanStart = null,
     string? PlanFinish = null,
-    bool Finished = false);
+    bool Finished = false,
+    bool WeeklyCycle = false);
 
 /// <summary>
 /// Moduł CAM – WP CAM-ów we wszystkich programach i przekazanie zatwierdzonej estymacji do struktury programu (słownik

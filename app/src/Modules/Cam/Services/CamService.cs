@@ -2,6 +2,7 @@ using PzlEv.Modules.Cam.Data;
 using PzlEv.Modules.Cam.Models;
 using PzlEv.Shared.Models;
 using PzlEv.Shared.Utils.Data;
+using PzlEv.Shared.Utils.Mail;
 
 namespace PzlEv.Modules.Cam.Services;
 
@@ -15,7 +16,7 @@ public sealed record CamOutcome(bool Ok, string Message, CamEstimate? Estimate =
 /// Moduł CAM (docs/funkcjonalnosc.md; tasks/F11.2–F11.4): lista zadań cyklu, szkic i wysyłka estymacji (walidacja CamEstimates),
 /// zatwierdzenie – „Harmonogram i budżet” programu przez kontrakt ICamWorkPackages – albo zwrot z uwagą; historia i dziennik.
 /// </summary>
-public sealed class CamService(ICamStore store, Func<ICamWorkPackages?> packages, AppServices services)
+public sealed class CamService(ICamStore store, Func<ICamWorkPackages?> packages, AppServices services, IMailSender? mail = null)
 {
     private const string Area = "CAM";
 
@@ -25,29 +26,43 @@ public sealed class CamService(ICamStore store, Func<ICamWorkPackages?> packages
     public bool Available => packages() is not null;
 
     /// <summary>Cykl dnia stanu; poza kalendarzem okresów – miesiąc kalendarzowy bez terminu.</summary>
-    public CamCycle Cycle() => Cycle(Today);
+    public CamCycle Cycle(bool weekly = false) => Cycle(Today, weekly);
 
-    /// <summary>Cykl dnia; poza kalendarzem okresów – miesiąc kalendarzowy bez terminu.</summary>
-    public CamCycle Cycle(DateOnly day) => store.Cycle(day) ?? new CamCycle(day.ToString("yyyy-MM", System.Globalization.CultureInfo.InvariantCulture), null);
+    /// <summary>Cykl dnia (miesięczny albo tygodniowy); poza kalendarzem okresów – miesiąc kalendarzowy bez terminu.</summary>
+    public CamCycle Cycle(DateOnly day, bool weekly = false) =>
+        store.Cycle(day, weekly) ?? new CamCycle(day.ToString("yyyy-MM", System.Globalization.CultureInfo.InvariantCulture), null);
 
-    /// <summary>Cykl okresu RRRR-MM (okres tygodnia przebiegu) z terminem z kalendarza okresów.</summary>
-    public CamCycle CycleOf(string period) => new(period, store.Deadline(period));
+    /// <summary>Cykl kodu RRRR-MM albo RRRR-Tnn (okres albo tydzień przebiegu) z terminem z kalendarza okresów.</summary>
+    public CamCycle CycleOf(string code) => new(code, store.Deadline(code));
 
     public IReadOnlyList<CamPerson> Cams() => packages()?.Cams() ?? [];
 
     public IReadOnlyList<CamWorkPackage> WorkPackages(string cam) => packages()?.WorkPackages(cam) ?? [];
 
-    /// <summary>Lista zadań cyklu: WP CAM-a z estymacją cyklu (bez zapisanej – nowa z propozycji), od wymagających działania.</summary>
-    public IReadOnlyList<CamWorkItem> Worklist(IReadOnlyList<CamWorkPackage> wps, CamCycle cycle)
+    /// <summary>
+    /// Lista zadań: WP CAM-a z estymacją cyklu programu – miesięczny (monthly) albo tygodniowy (weekly; program estymujący co tydzień);
+    /// bez zapisanej – nowa z propozycji, a w cyklu tygodniowym od ostatnio zatwierdzonej (CamEstimates.Continue); od wymagających działania.
+    /// </summary>
+    public IReadOnlyList<CamWorkItem> Worklist(IReadOnlyList<CamWorkPackage> wps, CamCycle monthly, CamCycle? weekly = null)
     {
-        var saved = store.Estimates(cycle.Period).ToDictionary(e => (e.Project.ToUpperInvariant(), e.Wp.ToUpperInvariant()));
+        weekly ??= wps.Any(w => w.WeeklyCycle) ? Cycle(true) : null;
+        var saved = new[] { monthly, weekly }.OfType<CamCycle>().Select(c => c.Period).Distinct()
+            .SelectMany(c => store.Estimates(c)).ToDictionary(e => (e.Project.ToUpperInvariant(), e.Wp.ToUpperInvariant(), e.Cycle));
         return wps.Select(wp =>
             {
-                var estimate = saved.GetValueOrDefault((wp.Project.ToUpperInvariant(), wp.Wp.ToUpperInvariant())) ?? CamEstimates.New(wp, cycle.Period, Today);
+                var cycle = wp.WeeklyCycle ? weekly! : monthly;
+                var estimate = saved.GetValueOrDefault((wp.Project.ToUpperInvariant(), wp.Wp.ToUpperInvariant(), cycle.Period)) ?? Fresh(wp, cycle);
                 return new CamWorkItem(wp, estimate, CamEstimates.Checklist(wp, estimate));
             })
             .OrderBy(i => CamStatuses.Order(i.Estimate.Status)).ThenBy(i => i.Wp.Project, StringComparer.OrdinalIgnoreCase)
             .ThenBy(i => i.Wp.Wp, StringComparer.OrdinalIgnoreCase).ToList();
+    }
+
+    /// <summary>Nowa estymacja cyklu: z propozycji systemu, w cyklu tygodniowym – od ostatnio zatwierdzonej (wartości, daty, uzasadnienie).</summary>
+    private CamEstimate Fresh(CamWorkPackage wp, CamCycle cycle)
+    {
+        var fresh = CamEstimates.New(wp, cycle.Period, Today);
+        return cycle.Weekly && store.LastApproved(wp.Project, wp.Wp, cycle.Period) is { } last ? CamEstimates.Continue(fresh, last, Today) : fresh;
     }
 
     /// <summary>Zapis szkicu (submit false) albo wysyłka do zatwierdzenia (walidacja CamEstimates.Validate); estymacja wysłana lub zatwierdzona – bez zmian.</summary>
@@ -122,7 +137,63 @@ public sealed class CamService(ICamStore store, Func<ICamWorkPackages?> packages
     public CamReview Program(string project, CamCycle cycle) => Review(packages()?.ProjectWorkPackages(project) ?? [], cycle, project);
 
     /// <summary>Postęp estymacji cyklu we wszystkich programach (monitoring finansisty w module CAM): wymagane WP wobec zatwierdzonych.</summary>
-    public CamReview Progress(CamCycle cycle) => Review(packages()?.ProjectWorkPackages(null) ?? [], cycle, null);
+    public CamReview Progress(CamCycle monthly, CamCycle? weekly = null)
+    {
+        var wps = packages()?.ProjectWorkPackages(null) ?? [];
+        var byCycle = wps.GroupBy(w => w.WeeklyCycle).ToList();
+        weekly ??= byCycle.Any(g => g.Key) ? Cycle(true) : null;
+        return new CamReview(monthly, [.. byCycle.SelectMany(g => Review([.. g], g.Key ? weekly! : monthly, null).Items)]);
+    }
+
+    /// <summary>
+    /// Powiadomienia CAM (etap przebiegu „Powiadomienie CAM”): CAM-owie z zaległymi wymaganymi estymacjami programu w cyklu (brak, szkic,
+    /// zwrócona) – jedna wiadomość na CAM-a z listą WP, terminem i uwagami do zwróconych; CAM powiadomiony w cyklu – pominięty (resend –
+    /// ponownie); adres ze słownika Osoby; każde powiadomienie zapisane (także brak adresu i błąd wysyłki), dziennik.
+    /// </summary>
+    public CamNotifyResult Notify(string project, CamCycle cycle, long? pinId, bool resend)
+    {
+        var review = Program(project, cycle);
+        var pending = review.Items.Where(i => i.Required && i.Status is CamStatuses.ToDo or CamStatuses.Draft or CamStatuses.Returned)
+            .GroupBy(i => i.Cam, StringComparer.OrdinalIgnoreCase).OrderBy(g => g.Key, StringComparer.OrdinalIgnoreCase).ToList();
+        var notified = resend ? new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            : store.Notifications(project, cycle.Period).Where(n => n.Result == CamNotificationResults.Sent).Select(n => n.Cam).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var people = Cams().ToDictionary(p => p.Code, StringComparer.OrdinalIgnoreCase);
+        var sent = new List<CamNotification>();
+        foreach (var group in pending.Where(g => !notified.Contains(g.Key)))
+        {
+            var person = people.GetValueOrDefault(group.Key) ?? new CamPerson(group.Key, group.Key);
+            var (subject, body) = CamEstimates.Notification(project, review.Cycle, person, [.. group]);
+            var (result, message) = (CamNotificationResults.Sent, (string?)null);
+            if (person.Email is null)
+                (result, message) = (CamNotificationResults.NoEmail, "brak adresu e-mail w słowniku Osoby");
+            else
+            {
+                try
+                {
+                    (mail ?? throw new InvalidOperationException("wysyłka e-mail niedostępna w tej aplikacji")).Send(person.Email, subject, body);
+                }
+                catch (Exception ex) when (ex is not OutOfMemoryException)
+                {
+                    (result, message) = (CamNotificationResults.Failed, ex.Message);
+                }
+            }
+            var notification = new CamNotification(person.Code, person.Name, person.Email, services.Clock.Now, services.User.Account,
+                string.Join(", ", group.Select(i => i.Wp)), result, message);
+            store.AddNotification(project, cycle.Period, notification, pinId);
+            sent.Add(notification);
+        }
+        if (sent.Count > 0)
+            services.Journal.Add(Area, $"Powiadomienia CAM {project} (cykl {cycle.Period}): " +
+                string.Join("; ", sent.Select(n => $"{n.Name} – {n.Result}{(n.Message is null ? "" : $" ({n.Message})")}")), project);
+        return new CamNotifyResult(sent, [.. pending.Select(g => g.Key).Where(notified.Contains)]);
+    }
+
+    /// <summary>Powiadomienia programu w cyklu z nazwiskami CAM-ów, od najnowszego.</summary>
+    public IReadOnlyList<CamNotification> Notifications(string project, string cycle)
+    {
+        var people = Cams().ToDictionary(p => p.Code, StringComparer.OrdinalIgnoreCase);
+        return [.. store.Notifications(project, cycle).Select(n => n with { Name = people.GetValueOrDefault(n.Cam)?.Name ?? n.Cam })];
+    }
 
     /// <summary>Zapisane estymacje programu w cyklu (kolory struktury programu) – bez listy wymaganych WP.</summary>
     public IReadOnlyList<CamReviewItem> Saved(string project, string period) =>

@@ -4,6 +4,7 @@ using PzlEv.Modules.Cam.Services;
 using PzlEv.Shared.Models;
 using PzlEv.Shared.Utils.Data;
 using PzlEv.Shared.Utils.Data.Sql;
+using PzlEv.Shared.Utils.Mail;
 using PzlEv.Tests.TestSupport;
 using Xunit;
 
@@ -36,7 +37,7 @@ public sealed class CamServiceTests : IDisposable
 
         public string? Error { get; set; }
 
-        public IReadOnlyList<CamPerson> Cams() => [new("0412", "Anna Nowak")];
+        public IReadOnlyList<CamPerson> Cams() => [new("0412", "Anna Nowak", "anna.nowak@pzl.pl")];
 
         public IReadOnlyList<CamWorkPackage> WorkPackages(string cam) => [CamEstimatesTests.Wp()];
 
@@ -53,11 +54,104 @@ public sealed class CamServiceTests : IDisposable
         }
     }
 
+    /// <summary>Atrapa poczty: wysłane wiadomości; Error – wysyłka kończy się wyjątkiem (np. brak Outlooka).</summary>
+    private sealed class FakeMail : IMailSender
+    {
+        public List<(string To, string Subject, string Body)> Sent { get; } = [];
+
+        public string? Error { get; set; }
+
+        public void Send(string to, string subject, string body)
+        {
+            if (Error is not null)
+                throw new InvalidOperationException(Error);
+            Sent.Add((to, subject, body));
+        }
+    }
+
+    private readonly FakeMail _mail = new();
+
     private (CamService Service, SqlCamStore Store, AppServices App) Create()
     {
         var app = _services.App(_root, _database!.Sql);
         var store = new SqlCamStore(_database.Sql);
-        return (new CamService(store, () => _packages, app), store, app);
+        return (new CamService(store, () => _packages, app, _mail), store, app);
+    }
+
+    /// <summary>
+    /// Powiadomienia CAM: wiadomość do CAM-a z zaległymi wymaganymi estymacjami (lista WP, termin), zapis każdego powiadomienia, bez ponownej
+    /// wysyłki w cyklu (chyba że resend), brak adresu i błąd wysyłki – zapisane z wynikiem, estymacja wysłana – bez wezwania.
+    /// </summary>
+    [SqlFact]
+    public void Notify_sends_one_mail_per_cam_with_pending_work_packages_once_per_cycle()
+    {
+        var (service, store, app) = Create();
+        var cycle = service.CycleOf("2026-10");
+
+        var first = service.Notify("PAF", cycle, pinId: 7, resend: false);
+
+        var sent = Assert.Single(first.Notifications);
+        Assert.Equal(("0412", "Anna Nowak", "anna.nowak@pzl.pl", CamNotificationResults.Sent, "WP-1"), (sent.Cam, sent.Name, sent.Email, sent.Result, sent.Wps));
+        var mail = Assert.Single(_mail.Sent);
+        Assert.Equal("anna.nowak@pzl.pl", mail.To);
+        Assert.Equal($"PZL-EV: estymacje CAM PAF – okres 2026-10, termin {cycle.Deadline:yyyy-MM-dd}", mail.Subject);
+        Assert.Contains("- WP-1 Montaż kadłuba: do uzupełnienia", mail.Body);                       // WP-2 zakończony – bez wezwania
+        Assert.Contains(app.Journal.Recent(5), j => j.Message.StartsWith("Powiadomienia CAM PAF (cykl 2026-10): Anna Nowak – wysłano"));
+
+        var again = service.Notify("PAF", cycle, pinId: 8, resend: false);
+        Assert.Empty(again.Notifications);
+        Assert.Equal(["0412"], again.AlreadyNotified);                                            // powiadomiony w cyklu – pominięty
+        Assert.Single(_mail.Sent);
+        _services.Clock.Advance(TimeSpan.FromMinutes(1));
+        _mail.Error = "Outlook niedostępny na tym stanowisku";
+        var failed = Assert.Single(service.Notify("PAF", cycle, pinId: null, resend: true).Notifications);   // „Wyślij ponownie”
+        Assert.Equal((CamNotificationResults.Failed, "Outlook niedostępny na tym stanowisku"), (failed.Result, failed.Message));
+        Assert.Equal([CamNotificationResults.Failed, CamNotificationResults.Sent], service.Notifications("PAF", "2026-10").Select(n => n.Result));
+        Assert.Equal("Anna Nowak", service.Notifications("PAF", "2026-10")[0].Name);
+
+        // CAM bez adresu w słowniku Osoby (0577 – M28) – zapis „brak adresu”, bez wysyłki.
+        _mail.Error = null;
+        var noEmail = Assert.Single(service.Notify("M28", cycle, pinId: null, resend: false).Notifications);
+        Assert.Equal(("0577", null, CamNotificationResults.NoEmail), (noEmail.Cam, noEmail.Email, noEmail.Result));
+        Assert.Single(_mail.Sent);
+        Assert.Single(service.Notify("M28", cycle, pinId: null, resend: false).Notifications);   // bez skutecznej wysyłki – próba w kolejnym przebiegu
+
+        // Estymacja wysłana przez CAM-a – nie jest zaległa.
+        var wp = CamEstimatesTests.Wp();
+        Assert.True(service.Save(wp, CamEstimates.New(wp, "2026-10", new DateOnly(2026, 10, 20)) with { Justification = "opóźnienie dostaw kooperacji" }, submit: true).Ok);
+        Assert.Empty(service.Notify("PAF", cycle, pinId: null, resend: true).Notifications);
+        Assert.Equal((2, 2), (store.Notifications("PAF", "2026-10").Count, store.Notifications("M28", "2026-10").Count));
+    }
+
+    /// <summary>Cykl tygodniowy: tydzień kalendarza okresów z terminem – koniec tygodnia; nowa estymacja tygodniowa – od ostatnio zatwierdzonej.</summary>
+    [SqlFact]
+    public void Weekly_cycle_comes_from_calendar_week_and_new_weekly_estimate_continues_last_approved()
+    {
+        var (service, store, _) = Create();
+        var week = store.Cycle(new DateOnly(2026, 10, 7), weekly: true)!;
+        Assert.True(week.Weekly);
+        Assert.Matches(@"^2026-T\d{2}$", week.Period);
+        Assert.True(week.Deadline >= new DateOnly(2026, 10, 7) && week.Deadline <= new DateOnly(2026, 10, 13), $"termin {week.Deadline}");
+        Assert.Equal(week.Deadline, store.Deadline(week.Period));
+
+        var wp = CamEstimatesTests.Wp();
+        var monthly = service.Save(wp, CamEstimates.New(wp, "2026-10", new DateOnly(2026, 10, 20)) with
+        {
+            Justification = "część poszycia przejmuje kooperant",
+            Lines = [.. CamEstimates.New(wp, "2026-10", new DateOnly(2026, 10, 20)).Lines.Select(l => l.Kind == CamLineKinds.Hours && l.Year == 2027 ? l with { Value = 1234 } : l)],
+        }, submit: true).Estimate!;
+        _services.Clock.Advance(TimeSpan.FromMinutes(1));
+        Assert.True(service.Approve(store.Estimate("PAF", "WP-1", "2026-10")!).Ok);
+
+        var item = Assert.Single(service.Worklist([wp with { WeeklyCycle = true }], service.CycleOf("2026-10"), week));
+
+        Assert.Equal((week.Period, CamStatuses.ToDo, "część poszycia przejmuje kooperant"), (item.Estimate.Cycle, item.Estimate.Status, item.Estimate.Justification));
+        Assert.Equal(1234m, item.Estimate.Lines.Single(l => l.Kind == CamLineKinds.Hours && l.Year == 2027).Value);   // wartość z zatwierdzonej
+        var today = DateOnly.FromDateTime(_services.Clock.Now.LocalDateTime);
+        Assert.Equal(CamEstimates.HoursProposal(wp, today).GetValueOrDefault(2027),
+            item.Estimate.Lines.Single(l => l.Kind == CamLineKinds.Hours && l.Year == 2027).Proposal);               // propozycja systemu bez zmian
+        Assert.NotEqual(1234m, monthly.Lines.Single(l => l.Kind == CamLineKinds.Hours && l.Year == 2027).Proposal);
+        Assert.Equal(CamStatuses.Approved, Assert.Single(service.Worklist([wp], service.CycleOf("2026-10"), week)).Estimate.Status);   // program miesięczny
     }
 
     [SqlFact]

@@ -516,6 +516,12 @@ zapisał, wysłał, zatwierdził / zwrócił; `UpdatedAt` – kontrola równocze
 M – materiały; `Year`, `Proposal` – propozycja systemu, `Value` – wartość CAM-a) i `CAM_EstimateEvent` (historia: status, opis
 zmian, komentarz). Usunięcie programu usuwa jego estymacje. Wymaga aplikacji 0.62.0.
 
+**Migracja `sql/mssql/057_powiadomienia_cam.sql`:** `CAM_Estimate.Cycle` – do 10 znaków: okres RRRR-MM (cykl miesięczny) albo tydzień
+RRRR-Tnn (cykl tygodniowy – program z klockiem „Powiadomienie CAM” w każdym przebiegu); `DICT_RunStep.Condition` – warunek etapu szablonu
+(puste – każdy przebieg, „Przebieg zamykający”); `CAM_Notification` – wysłane powiadomienia CAM (program, cykl, CAM, adres, kto i kiedy,
+uruchomienie przebiegu, WP w wiadomości, wynik: wysłano / brak adresu / błąd, opis błędu). Usunięcie programu usuwa jego powiadomienia.
+Wymaga aplikacji 0.63.0.
+
 `META_SourceFile.CanonicalStatus`: „utworzone” – dane kanoniczne zapisane i sprawdzone (widoczne dla odczytów),
 „w toku” – zapis wierszy trwa (odczyty pomijają plik; po awarii wpis i wiersze są usuwane), inna wartość – powód
 braku danych (źródło bez parsera).

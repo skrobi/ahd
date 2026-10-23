@@ -48,6 +48,7 @@ public sealed class SqlProjectStore(SqlDatabase db, IClock clock, ICurrentUser u
             deleted += connection.Execute($"DELETE FROM {db.Table(DbTables.Run)} WHERE Project = @code", new { code }, transaction);
             // Estymacje CAM programu (wiersze lat i historia – ON DELETE CASCADE).
             deleted += connection.Execute($"DELETE FROM {db.Table("cam.Estimate")} WHERE Project = @code", new { code }, transaction);
+            deleted += connection.Execute($"DELETE FROM {db.Table("cam.Notification")} WHERE Project = @code", new { code }, transaction);
             // Słowniki programu z historią (wiersze globalnych słowników mają Project NULL – zostają), nakładka, rejestracja programu.
             foreach (var table in ProjectTables)
                 deleted += connection.Execute($"DELETE FROM {db.Table(table)} WHERE Project = @code", new { code }, transaction);

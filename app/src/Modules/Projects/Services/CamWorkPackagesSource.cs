@@ -1,4 +1,5 @@
 using PzlEv.Modules.Projects.Models;
+using PzlEv.Shared.Models.Pipeline;
 using PzlEv.Shared.Utils.Data;
 using PzlEv.Shared.Utils.Dictionaries;
 using Serilog;
@@ -16,10 +17,11 @@ public sealed class CamWorkPackagesSource(ProjectService service) : ICamWorkPack
     public IReadOnlyList<CamPerson> Cams()
     {
         var names = service.PersonLookups().GroupBy(p => p.Value, StringComparer.OrdinalIgnoreCase).ToDictionary(g => g.Key, g => g.First().Label, StringComparer.OrdinalIgnoreCase);
+        var emails = service.PersonEmails();
         return service.Projects()
             .SelectMany(p => service.Rows(ProjectDictionaries.WpCam, p.Code)).Select(r => r["CAM"]).OfType<string>()
             .Distinct(StringComparer.OrdinalIgnoreCase)
-            .Select(c => new CamPerson(c, names.GetValueOrDefault(c) ?? c))
+            .Select(c => new CamPerson(c, names.GetValueOrDefault(c) ?? c, emails.GetValueOrDefault(c)))
             .OrderBy(c => c.Name, StringComparer.CurrentCulture).ToList();
     }
 
@@ -70,6 +72,7 @@ public sealed class CamWorkPackagesSource(ProjectService service) : ICamWorkPack
         List<CamWorkPackage> Of(ProjectInfo project)
         {
             var (structure, rates, note) = service.StructureOf(project.Code, mapping, departmentRates, fxRates, today, costs);
+            var weekly = RunDefinitions.CamWeekly(service.RunDefinitionOf(project.Code));
             return structure.Rows.Where(r => r.Wp is not null && IsCam(r.Cam)).GroupBy(r => r.Wp!, StringComparer.OrdinalIgnoreCase)
                 .Select(g => g.OrderBy(r => r.Depth).First())
                 .Select(row => new CamWorkPackage(project.Code, project.Name, row.Wp!, row.Name, row.Cam!, row.Mpk, rates.Currency,
@@ -79,7 +82,7 @@ public sealed class CamWorkPackagesSource(ProjectService service) : ICamWorkPack
                     row.UndeliveredByYear ?? new Dictionary<int, decimal>(), ProjectService.HourRates(departmentRates, row.Mpk, rates),
                     rates.LaborFactor is { } labor && labor != 0 ? 1 / labor : null,
                     rates.MaterialFactor is { } usd && usd != 0 ? 1 / usd : null, note, row.ProductionEtcByYear, row.PlanStart, row.PlanFinish,
-                    row.Status == "zakończony"))
+                    row.Status == "zakończony", weekly))
                 .ToList();
         }
     }

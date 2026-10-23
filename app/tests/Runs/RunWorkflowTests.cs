@@ -151,6 +151,11 @@ public sealed class RunWorkflowTests
         Assert.Empty(RunDefinitions.Validate(RunDefinitions.Starters[0] with
             { Steps = [.. RunDefinitions.StandardSteps.Take(3), RunDefinitions.ActualsApproval(4), RunDefinitions.CamApproval(5)] }));
         Assert.Equal(RunStepStatuses.NeedsAction, RunWorkflowEngine.Gate(RunDefinitions.CamApproval(5), 0, 0));   // czeka na finansistę
+        Assert.Contains("Etap „Zatwierdzenie analityka” (Zatwierdzenie) – warunek „Przebieg zamykający” tylko w klockach CAM",
+            RunDefinitions.Validate(RunDefinitions.Starters[0] with { Steps = [.. RunDefinitions.StandardSteps.Take(4), RunDefinitions.StandardSteps[4] with { Condition = RunConditions.Closing }] })
+                .Select(i => i.Message));
+        Assert.Contains($"Klocek „{RunActions.CamNotify}” – najwyżej jeden w szablonie", RunDefinitions.Validate(RunDefinitions.Starters[0] with
+            { Steps = [.. RunDefinitions.FixedSteps, RunDefinitions.CamNotification(3), RunDefinitions.CamNotification(4) with { Name = "Powiadomienie 2" }] }).Select(i => i.Message));
         Assert.Empty(RunDefinitions.Validate(RunDefinitions.Starters[0] with { Steps = [.. RunDefinitions.StandardSteps.Take(3), RunDefinitions.ActualsApproval(4)] }));
         Assert.Empty(RunDefinitions.Validate(broken with { Code = "X", Steps = [.. RunDefinitions.FixedSteps, new(3, "W", RunActions.Checks, RunGates.Confirm, false, [new("Własna")])] },
             ["Własna"]));   // reguła ze słownika „Reguły walidacji”
@@ -182,6 +187,27 @@ public sealed class RunWorkflowTests
         Assert.Equal([4L, 1L, 2L], working.Select(r => r.RowId ?? 0));
         Assert.Equal("X", working[1]["Etap"]);
         Assert.Equal([3L], removed.Select(r => r.RowId ?? 0));
+    }
+
+    /// <summary>Warunek klocków CAM w słowniku „Etapy przebiegów” (kolumna Warunek) i cykl estymacji programu z klocka Powiadomienie CAM.</summary>
+    [Fact]
+    public void Cam_block_condition_round_trips_and_sets_weekly_or_monthly_cycle()
+    {
+        var weekly = new RunDefinition("Tygodniowy", RunRules.AllTypes,
+            [.. RunDefinitions.FixedSteps, RunDefinitions.CamNotification(3, RunConditions.Always), RunDefinitions.CamApproval(4) with { Condition = RunConditions.Closing }]);
+        var header = new RunDefinitionHeaderRow(weekly.Code, weekly.ProjectType, true, null);
+        var values = RunDefinitionRows.StepValues(weekly);
+        var rows = values.Select(v => new DictRow(null, null, v)).ToList();
+
+        var read = RunDefinitions.Build(header, RunDefinitionRows.Steps(rows), []);
+
+        Assert.Equal([null, null, null, RunConditions.Closing], values.Select(v => v["Warunek"]));   // „Każdy przebieg” – puste
+        Assert.Equal([RunConditions.Always, RunConditions.Always, RunConditions.Always, RunConditions.Closing], read.Steps.Select(s => s.Condition));
+        Assert.True(RunDefinitions.CamWeekly(read));
+        Assert.False(RunDefinitions.CamWeekly(weekly with { Steps = [.. RunDefinitions.FixedSteps, RunDefinitions.CamNotification(3)] }));   // domyślnie – zamykający
+        Assert.False(RunDefinitions.CamWeekly(RunDefinitions.BuiltIn));                                                                        // bez klocka – miesięczny
+        Assert.Equal((true, false, true), (read.Steps[3].RunsIn(closingWeek: true), read.Steps[3].RunsIn(closingWeek: false), read.Steps[2].RunsIn(false)));
+        Assert.Empty(RunDefinitions.Validate(weekly));
     }
 
     [Fact]

@@ -1,6 +1,7 @@
 using Dapper;
 using PzlEv.Modules.Cam.Models;
 using PzlEv.Shared.Models;
+using PzlEv.Shared.Utils.Data;
 using PzlEv.Shared.Utils.Data.Sql;
 
 namespace PzlEv.Modules.Cam.Data;
@@ -11,26 +12,32 @@ public sealed class SqlCamStore(SqlDatabase db) : ICamStore
     private string EstimateTable => db.Table("cam.Estimate");
     private string LineTable => db.Table("cam.EstimateLine");
     private string EventTable => db.Table("cam.EstimateEvent");
+    private string NotificationTable => db.Table("cam.Notification");
 
     private const string Columns =
         "EstimateId, Project, Wp, Cycle, Cam, Status, ForecastStart, ForecastFinish, Currency, Justification, ReviewNote, UpdatedAt, UpdatedBy, " +
         "SubmittedAt, SubmittedBy, ReviewedAt, ReviewedBy";
 
-    public CamCycle? Cycle(DateOnly day)
+    public CamCycle? Cycle(DateOnly day, bool weekly = false)
+    {
+        using var connection = db.Open();
+        var week = connection.QueryFirstOrDefault<(string Period, int Year, int Week, DateTime DateTo)?>(
+            $"SELECT TOP (1) Period, Year, Week, DateTo FROM {db.Table("dict.Calendar")} WHERE Project IS NULL AND SupersededAt IS NULL AND @day BETWEEN DateFrom AND DateTo ORDER BY DateFrom",
+            new { day = day.ToDateTime(TimeOnly.MinValue) });
+        if (week is not { } w)
+            return null;
+        return weekly ? new CamCycle(CamCycles.Week(w.Year, w.Week), DateOnly.FromDateTime(w.DateTo)) : new CamCycle(w.Period, Deadline(w.Period));
+    }
+
+    public DateOnly? Deadline(string code)
     {
         using var connection = db.Open();
         var calendar = db.Table("dict.Calendar");
-        var period = connection.QueryFirstOrDefault<string?>(
-            $"SELECT TOP (1) Period FROM {calendar} WHERE Project IS NULL AND SupersededAt IS NULL AND @day BETWEEN DateFrom AND DateTo ORDER BY DateFrom",
-            new { day = day.ToDateTime(TimeOnly.MinValue) });
-        return period is null ? null : new CamCycle(period, Deadline(period));
-    }
-
-    public DateOnly? Deadline(string period)
-    {
-        using var connection = db.Open();
-        var deadline = connection.QueryFirstOrDefault<DateTime?>(
-            $"SELECT MAX(DateTo) FROM {db.Table("dict.Calendar")} WHERE Project IS NULL AND SupersededAt IS NULL AND Period = @period AND IsClosing = 1", new { period });
+        var deadline = CamCycles.WeekOf(code) is { } week
+            ? connection.QueryFirstOrDefault<DateTime?>(
+                $"SELECT MAX(DateTo) FROM {calendar} WHERE Project IS NULL AND SupersededAt IS NULL AND Year = @year AND Week = @week", new { year = week.Year, week = week.Week })
+            : connection.QueryFirstOrDefault<DateTime?>(
+                $"SELECT MAX(DateTo) FROM {calendar} WHERE Project IS NULL AND SupersededAt IS NULL AND Period = @code AND IsClosing = 1", new { code });
         return deadline is { } d ? DateOnly.FromDateTime(d) : null;
     }
 
@@ -55,10 +62,29 @@ public sealed class SqlCamStore(SqlDatabase db) : ICamStore
     {
         using var connection = db.Open();
         var header = connection.QueryFirstOrDefault<Row>(
-            $"SELECT TOP (1) {Columns} FROM {EstimateTable} WHERE Project = @project AND Wp = @wp AND Cycle < @beforeCycle AND Status = @status ORDER BY Cycle DESC",
+            $"SELECT TOP (1) {Columns} FROM {EstimateTable} WHERE Project = @project AND Wp = @wp AND Cycle <> @beforeCycle AND Status = @status ORDER BY ReviewedAt DESC",
             new { project, wp, beforeCycle, status = CamStatuses.Approved });
         return header is null ? null : WithLines(connection, [header]).Single();
     }
+
+    public IReadOnlyList<CamNotification> Notifications(string project, string cycle)
+    {
+        using var connection = db.Open();
+        return connection.Query<CamNotification>(
+            $"SELECT Cam, Cam AS Name, Email, SentAt, SentBy, Wps, Result, Message FROM {NotificationTable} WHERE Project = @project AND Cycle = @cycle ORDER BY SentAt DESC, NotificationId DESC",
+            new { project, cycle }).ToList();
+    }
+
+    public void AddNotification(string project, string cycle, CamNotification notification, long? pinId)
+    {
+        using var connection = db.Open();
+        connection.Execute(
+            $"INSERT INTO {NotificationTable} (Project, Cycle, Cam, Email, SentAt, SentBy, PinId, Wps, Result, Message) VALUES (@project, @cycle, @Cam, @Email, @SentAt, @SentBy, @pinId, @Wps, @Result, @Message)",
+            new { project, cycle, notification.Cam, notification.Email, notification.SentAt, notification.SentBy, pinId, Wps = Cut(notification.Wps, 2000), notification.Result,
+                Message = notification.Message is null ? null : Cut(notification.Message, 1000) });
+    }
+
+    private static string Cut(string text, int length) => text.Length <= length ? text : text[..(length - 1)] + "…";
 
     public IReadOnlyList<CamEstimateEvent> Events(long estimateId)
     {

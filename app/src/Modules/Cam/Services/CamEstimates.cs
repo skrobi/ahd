@@ -108,6 +108,41 @@ public static class CamEstimates
             Finish(wp), wp.Currency, null, null, lines);
     }
 
+    /// <summary>
+    /// Estymacja cyklu tygodniowego od ostatnio zatwierdzonej (fresh – nowa z propozycji): wartości CAM lat od bieżącego z zatwierdzonej
+    /// (propozycje systemu bez zmian; rok spoza propozycji – bez propozycji), prognozowane daty i uzasadnienie z zatwierdzonej.
+    /// </summary>
+    public static CamEstimate Continue(CamEstimate fresh, CamEstimate last, DateOnly today)
+    {
+        var approved = last.Lines.Where(l => l.Year >= today.Year).ToDictionary(l => (l.Kind, l.Year), l => l.Value);
+        var lines = fresh.Lines.Select(l => approved.TryGetValue((l.Kind, l.Year), out var value) ? l with { Value = value } : l with { Value = 0 }).ToList();
+        lines.AddRange(approved.Where(a => !lines.Any(l => (l.Kind, l.Year) == a.Key)).Select(a => new CamEstimateLine(a.Key.Kind, a.Key.Year, null, a.Value)));
+        return fresh with
+        {
+            Lines = [.. lines.OrderBy(l => l.Kind).ThenBy(l => l.Year)],
+            ForecastStart = last.ForecastStart ?? fresh.ForecastStart,
+            ForecastFinish = last.ForecastFinish ?? fresh.ForecastFinish,
+            Justification = last.Justification,
+        };
+    }
+
+    /// <summary>
+    /// Wiadomość do CAM-a o zaległych estymacjach programu w cyklu: temat (program, cykl, termin) i treść – lista WP ze statusem, uwagi
+    /// finansisty do zwróconych, gdzie uzupełnić (PZL-EV, moduł CAM → Estymacje).
+    /// </summary>
+    public static (string Subject, string Body) Notification(string project, CamCycle cycle, CamPerson cam, IReadOnlyList<CamReviewItem> items)
+    {
+        var deadline = cycle.Deadline is { } d ? $"do {d:yyyy-MM-dd}" : "jak najszybciej";
+        var kind = cycle.Weekly ? $"tydzień {cycle.Period}" : $"okres {cycle.Period}";
+        var lines = items.Select(i => $"- {i.Wp} {i.Name}: {i.Status.ToLowerInvariant()}" +
+            (i.Status == CamStatuses.Returned && i.ReviewNote is { } note ? $" – uwaga finansisty: {note}" : ""));
+        var body = $"Dzień dobry,{Environment.NewLine}{Environment.NewLine}" +
+                   $"w programie {project} czekają estymacje CAM ({kind}) – prosimy o uzupełnienie i wysłanie {deadline}:{Environment.NewLine}" +
+                   string.Join(Environment.NewLine, lines) + Environment.NewLine + Environment.NewLine +
+                   $"Estymacje: PZL-EV → moduł CAM → Estymacje (CAM: {cam.Label}).{Environment.NewLine}{Environment.NewLine}Wiadomość wysłana automatycznie z przebiegu PZL-EV.";
+        return ($"PZL-EV: estymacje CAM {project} – {kind}, termin {(cycle.Deadline is { } t ? t.ToString("yyyy-MM-dd") : "—")}", body);
+    }
+
     /// <summary>Stawka godziny roku: stawka tego roku, a bez niej ostatnia wcześniejsza (FromYear – jej rok); brak – null.</summary>
     public static CamRate? Rate(CamWorkPackage wp, int year)
     {

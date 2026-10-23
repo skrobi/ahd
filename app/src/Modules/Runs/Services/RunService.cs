@@ -32,6 +32,12 @@ public sealed class RunService(IRunStore store, AppServices services, Func<ISour
     /// <summary>Kontrola wyników etapu Estymacje CAM (wiersz macierzy).</summary>
     public const string CamCheck = "Estymacje CAM";
 
+    /// <summary>Kontrola wyników etapu Powiadomienie CAM (wiersz macierzy).</summary>
+    public const string CamNotifyCheck = "Powiadomienie CAM";
+
+    /// <summary>Wynik etapu pominiętego warunkiem „Przebieg zamykający” w tygodniu bez zamknięcia okresu.</summary>
+    public const string Skipped = "Warunek etapu";
+
     /// <summary>Kontrola wyników etapu Przypięcie stanu (wiersz macierzy).</summary>
     public const string Pinned = "Przypięcie stanu";
 
@@ -127,7 +133,7 @@ public sealed class RunService(IRunStore store, AppServices services, Func<ISour
                 CamReview? review;
                 try
                 {
-                    (issues, review) = CamState(pin);
+                    (issues, review) = CamState(pin, DefinitionOf(pin));
                 }
                 catch (Exception ex) when (ex is not OutOfMemoryException)
                 {
@@ -200,10 +206,14 @@ public sealed class RunService(IRunStore store, AppServices services, Func<ISour
             var label = $"Etap {step.No}/{definition.Steps.Count}: {step.Name}";
             progress?.Report($"{label}…");
             List<RunIssue> issues;
+            // Warunek „Przebieg zamykający” w tygodniu bez zamknięcia okresu – etap zakończony bez akcji (także bez czekania na zatwierdzenie).
+            var skipped = !step.RunsIn(store.RunWeek(pin.RunId).IsClosing);
             try
             {
                 cancellation.ThrowIfCancellationRequested();
-                issues = ExecuteStep(store.Pin(pin.PinId)!, step, label, progress, cancellation);
+                issues = skipped
+                    ? [new RunIssue(Skipped, CheckLevel.Pass, null, $"Etap pominięty – przebieg w środku okresu (warunek: {RunConditions.Closing.ToLowerInvariant()})")]
+                    : ExecuteStep(store.Pin(pin.PinId)!, step, label, progress, cancellation, definition);
             }
             catch (Exception ex) when (ex is not OutOfMemoryException)
             {
@@ -213,7 +223,7 @@ public sealed class RunService(IRunStore store, AppServices services, Func<ISour
             }
             var errors = issues.Count(i => i.Level == CheckLevel.Error);
             var warnings = issues.Count(i => i.Level == CheckLevel.Warning);
-            var status = RunWorkflowEngine.Gate(step, errors, warnings);
+            var status = skipped && errors == 0 ? RunStepStatuses.Done : RunWorkflowEngine.Gate(step, errors, warnings);
             store.ReplaceStepIssues(pin.PinId, step.No, issues.Select(i => (i.Check, i.Level, i.Element, i.Message, i.Amount, i.Details)).ToList());
             store.SetStep(pin.PinId, step.No, status, started, services.Clock.Now, services.User.Account, errors, warnings);
             services.Journal.Add(Area, $"Przebieg {pin.Code} #{pin.PinNo}: etap {step.No} „{step.Name}” – {status.ToLowerInvariant()} (błędy {errors}, ostrzeżenia {warnings})", pin.Code);
@@ -235,25 +245,62 @@ public sealed class RunService(IRunStore store, AppServices services, Func<ISour
     /// Akcja etapu: import źródeł, przypięcie stanu, kontrole (elementy kontrolne etapu), zatwierdzenie i zatwierdzenie ACTUALS (bez wykonania –
     /// czekają na analityka); label – postęp etapu.
     /// </summary>
-    private List<RunIssue> ExecuteStep(RunPinRow pin, RunStepDefinition step, string label, IProgress<string>? progress, CancellationToken cancellation) =>
+    private List<RunIssue> ExecuteStep(RunPinRow pin, RunStepDefinition step, string label, IProgress<string>? progress, CancellationToken cancellation,
+        RunDefinition definition) =>
         step.Action switch
         {
             RunActions.Import => ImportStep(pin, progress, cancellation),
             RunActions.Pin => PinStep(pin),
             RunActions.Checks => ChecksStep(pin, step, label, progress, cancellation),
-            RunActions.CamEstimates => CamState(pin).Issues,
+            RunActions.CamEstimates => CamState(pin, definition).Issues,
+            RunActions.CamNotify => CamNotifyStep(pin, definition),
             _ => [],
         };
+
+    /// <summary>
+    /// Cykl estymacji CAM programu w tygodniu uruchomienia: program tygodniowy (klocek Powiadomienie CAM z warunkiem „Każdy przebieg” –
+    /// RunDefinitions.CamWeekly) – tydzień RRRR-Tnn, inaczej okres tygodnia RRRR-MM.
+    /// </summary>
+    public CamCycle CamCycleOf(RunPinRow pin, RunDefinition definition, ICamReview source)
+    {
+        var week = store.RunWeek(pin.RunId);
+        return source.CycleOf(RunDefinitions.CamWeekly(definition) ? CamCycles.Week(week.Year, week.Week) : week.Period);
+    }
+
+    /// <summary>Definicja zapisana w uruchomieniu (bez niej – wbudowana).</summary>
+    private RunDefinition DefinitionOf(RunPinRow pin) => RunWorkflowEngine.Deserialize(store.DefinitionOf(pin.PinId)) ?? RunDefinitions.BuiltIn;
+
+    /// <summary>
+    /// Powiadomienie CAM: e-mail do CAM-ów z zaległymi estymacjami programu w cyklu (ICamReview.Notify) – wynik na CAM-a (wysłano – Pass,
+    /// brak adresu / błąd wysyłki – WARNING); CAM powiadomiony w cyklu – pominięty (informacja); etap nie zatrzymuje przebiegu.
+    /// </summary>
+    private List<RunIssue> CamNotifyStep(RunPinRow pin, RunDefinition definition)
+    {
+        if (cams?.Invoke() is not { } source)
+            return [new RunIssue(CamNotifyCheck, CheckLevel.Warning, null, "Moduł CAM niedostępny w tej aplikacji – powiadomienia nie wysłane")];
+        var cycle = CamCycleOf(pin, definition, source);
+        var result = source.Notify(pin.Project, cycle, pin.PinId, resend: false);
+        var issues = new List<RunIssue>
+        {
+            new(CamNotifyCheck, CheckLevel.Pass, null,
+                $"Powiadomienia CAM – cykl {cycle.Period}: wysłane {result.Notifications.Count(n => n.Result == CamNotificationResults.Sent)}" +
+                (result.AlreadyNotified.Count > 0 ? $" · powiadomieni wcześniej w cyklu: {result.AlreadyNotified.Count}" : "") +
+                (result.Notifications.Count == 0 && result.AlreadyNotified.Count == 0 ? " · brak zaległych estymacji" : "")),
+        };
+        issues.AddRange(result.Notifications.Select(n => new RunIssue(CamNotifyCheck, n.Result == CamNotificationResults.Sent ? CheckLevel.Pass : CheckLevel.Warning,
+            n.Cam, $"{n.Name}{(n.Email is null ? "" : $" <{n.Email}>")}: {n.Result}{(n.Message is null ? "" : $" – {n.Message}")} · WP: {n.Wps}")));
+        return issues;
+    }
 
     /// <summary>
     /// Estymacje CAM programu w cyklu okresu tygodnia przebiegu (ICamReview): podsumowanie wymaganych WP wobec zatwierdzonych i WARNING
     /// dla każdego wymaganego WP bez zatwierdzonej estymacji (po terminie cyklu – w opisie); decyzje – panel etapu, akceptacja – Confirm.
     /// </summary>
-    private (List<RunIssue> Issues, CamReview? Review) CamState(RunPinRow pin)
+    private (List<RunIssue> Issues, CamReview? Review) CamState(RunPinRow pin, RunDefinition definition)
     {
         if (cams?.Invoke() is not { } source)
             return ([new RunIssue(CamCheck, CheckLevel.Warning, null, "Moduł CAM niedostępny w tej aplikacji – estymacje CAM bez przeglądu")], null);
-        var review = source.Program(pin.Project, source.CycleOf(store.RunWeek(pin.RunId).Period));
+        var review = source.Program(pin.Project, CamCycleOf(pin, definition, source));
         var overdue = review.Overdue(DateOnly.FromDateTime(services.Clock.Now.LocalDateTime));
         var issues = new List<RunIssue>
         {
