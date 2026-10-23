@@ -142,7 +142,7 @@ zmiana zakresu zadania w trakcie realizacji wymaga uzgodnienia.
 | [F11.3 Ekran Estymacje](F11.3-ekran-estymacje.md) | Cam | F11.2 | – | w toku |
 | [F11.4 Zatwierdzanie estymacji](F11.4-zatwierdzanie-estymacji.md) | Cam | F11.3 | – | zrobione |
 | [F11.5 Ekran Wyniki EV CAM-a](F11.5-ekran-wyniki-ev-cam.md) | Cam | F11.1 | O35 | zrobione |
-| [F11.6 Estymacje CAM w przebiegu, postęp i kolory struktury](F11.6-estymacje-cam-w-przebiegu.md) | Runs, Cam, Projects | F11.4 | – | w toku |
+| [F11.6 Zatwierdzenie ETC w przebiegu, postęp i kolory struktury](F11.6-estymacje-cam-w-przebiegu.md) | Runs, Cam, Projects | F11.4 | – | w toku |
 | [F11.7 Powiadomienia CAM w przebiegu i cykl tygodniowy](F11.7-powiadomienia-cam-i-cykl-tygodniowy.md) | Runs, Cam, Projects | F11.6 | – | w toku |
 
 ## Otwarte kwestie blokujące
