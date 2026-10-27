@@ -42,15 +42,15 @@
 
   // ---------- nawigacja ----------
   var NAV = [
-    ['grp', 'Analiza'], ['pulpit', 'Pulpit', 'home'], ['nowa', 'Nowa sesja', 'plus'], ['analiza/S-0008', 'Analiza w toku', 'job'],
-    ['wyniki/S-0007', 'Wyniki analizy', 'chart'], ['porownanie', 'Porównanie sesji', 'cmp'],
-    ['grp', 'Dopasowanie'], ['komfort/S-0007', 'Komfort jazdy', 'heart'], ['historia', 'Historia zmian', 'hist'], ['rowery', 'Moje rowery', 'bike'], ['profil', 'Profil', 'user']
+    ['pulpit', 'Moje analizy', 'home'], ['nowa', 'Nowa analiza', 'plus'], ['komfort/S-0007', 'Komfort jazdy', 'heart'],
+    ['historia', 'Historia zmian', 'hist'], ['rowery', 'Moje rowery', 'bike'], ['profil', 'Profil', 'user']
   ];
+  var NAV_ALIAS = { wyniki: 'pulpit', analiza: 'pulpit', porownanie: 'pulpit' };
   function renderNav(route) {
     var head = route.split('/')[0];
     $('#nav').innerHTML = NAV.map(function (n) {
       if (n[0] === 'grp') return '<div class="grp">' + n[1] + '</div>';
-      var on = n[0].split('/')[0] === head;
+      var on = n[0].split('/')[0] === (NAV_ALIAS[head] || head);
       return '<a href="#/' + n[0] + '" class="' + (on ? 'on' : '') + '">' + icon(n[2]) + '<span>' + n[1] + '</span></a>';
     }).join('');
   }
@@ -193,40 +193,138 @@
     cleanup.push(function () { playing = false; cancelAnimationFrame(raf); });
   }
 
-  // ---------- ekran: Pulpit ----------
-  function keyVal(s, mId, rep) { return s.agg[mId].stat[rep]; }
+  // ---------- ekran: Pulpit (tylko analizy i ich efekty) ----------
   function viewDashboard() {
-    var last = session('S-0007'), job = session('S-0008'), prevC = RM.COMFORT['S-0006'].items, lastC = RM.COMFORT['S-0007'].items;
-    var kpis = [['knee', 'max', 'Kąt kolana – maks.'], ['hip', 'min', 'Kąt biodra – min.'], ['torso', 'med', 'Pochylenie tułowia']].map(function (k) {
-      var st = keyVal(last, k[0], k[1]);
-      return '<div class="kpi"><span class="v">' + num(st.value) + '<small>°</small></span><span class="l">' + k[2] + '</span><span>' + qBadge(last.quality[k[0]], true) + '</span></div>';
+    var list = RM.SESSIONS.slice().sort(function (a, b) { return a.date < b.date ? 1 : -1; });
+    var cards = list.map(function (s) {
+      var b = bike(s.bike), body;
+      if (!s.agg && s.status === 'failed') body = '<p class="small">Nie udało się przeanalizować nagrania. ' + esc(s.error.msg.split('.').slice(1).join('.').trim() || '') + '</p><a class="btn sm" href="#/analiza/' + s.id + '">Co zrobić?</a>';
+      else if (!s.agg) body = '<div class="bar" style="margin:8px 0 6px"><i style="width:' + s.progress + '%"></i></div><p class="small muted">Analizujemy nagranie. Wynik pojawi się tutaj – możesz zamknąć stronę.</p><a class="btn sm" href="#/analiza/' + s.id + '">Postęp</a>';
+      else {
+        var F = fitOf(s), prev = prevSession(s), eff = '';
+        if (prev) {
+          var P = fitOf(prev), byP = {}; P.list.forEach(function (r) { byP[r.adj.id] = r; });
+          var ch = RM.CHANGES.filter(function (c) { return c.bike === s.bike && c.date > prev.date && c.date <= s.date; });
+          var better = F.list.filter(function (r) { return byP[r.adj.id].status !== 'ok' && r.status === 'ok'; });
+          var cA = (RM.COMFORT[prev.id] || { items: {} }).items, cB = (RM.COMFORT[s.id] || { items: {} }).items;
+          var comf = Object.keys(cB).filter(function (k) { return cA[k] && cB[k][0] < cA[k][0]; });
+          eff = '<div class="effect"><b>Efekt zmiany</b> (' + ch.map(function (c) { return esc(c.param.toLowerCase()) + ' ' + esc(c.before) + '→' + esc(c.after) + ' ' + c.unit; }).join(', ') + '):<br>' +
+            (better.length ? better.map(function (r) { return '✓ ' + esc(r.adj.name.toLowerCase()) + ' – teraz w zakresie'; }).join('<br>') : 'bez zmiany statusu regulacji') +
+            (comf.length ? '<br>✓ mniej dyskomfortu: ' + comf.map(function (k) { return esc(k.toLowerCase()) + ' ' + cA[k][0] + ' → ' + cB[k][0]; }).join(', ') : '') + '</div>';
+        }
+        var done = RM.CHANGES.filter(function (c) { return c.before_s === s.id && F.next && c.adj === F.next.adj.id; });
+        body = '<div class="row" style="gap:6px;margin:4px 0 10px">' + F.list.map(function (r) { return '<span title="' + esc(r.adj.name) + '">' + fitStatus(r.status).replace(ST_PLAIN[r.status][1], esc(r.adj.name)) + '</span>'; }).join('') + '</div>' +
+          (F.next ? '<p class="next-line">' + (done.length ? '<span class="pill">wykonano ' + dateTxt(done[0].date) + '</span> ' : '<b>Następny krok:</b> ') + esc(actionText(F.next)) + '</p>' : '<p class="next-line">✓ Wszystko w zalecanych zakresach</p>') + eff +
+          '<div class="row" style="margin-top:10px"><a class="btn sm pri" href="#/wyniki/' + s.id + '">Zobacz analizę</a></div>';
+      }
+      return '<div class="card acard"><div class="card-h" style="margin-bottom:4px"><div><h2>' + dateTxt(s.date) + ' · ' + esc(b.name) + '</h2><div class="xs muted">' + s.id + (s.agg ? ' · ' + fitOf(s).okCount + ' z 4 regulacji w zakresie' : '') + '</div></div>' + (s.agg ? '<span class="st done">Gotowe</span>' : stBadge(s.status)) + '</div>' + body + '</div>';
     }).join('');
-    var comfortRows = Object.keys(lastC).map(function (r) {
-      var b = prevC[r] ? prevC[r][0] : 0, a = lastC[r][0];
-      return '<tr><td>' + esc(r) + '</td><td class="num">' + b + '</td><td class="num">' + a + '</td><td class="num">' + signed(a - b, 0) + '</td></tr>';
-    }).join('');
-    var rows = RM.SESSIONS.map(function (s) {
-      var b = bike(s.bike), link = s.agg ? '#/wyniki/' + s.id : '#/analiza/' + s.id;
-      return '<tr class="click" data-href="' + link + '"><td class="mono">' + s.id + '</td><td>' + dateTxt(s.date) + '</td><td>' + esc(b.name) + '</td><td>' + stBadge(s.status) + '</td>' +
-        '<td>' + (s.quality ? qBadge(s.quality.overall, true) : '<span class="muted">—</span>') + '</td>' +
-        '<td class="num">' + (s.agg ? s.valid + ' / ' + s.cycles.length : '—') + '</td><td class="small muted">' + esc(s.settingsNote || s.note || (s.error ? s.error.msg.split('.')[0] : '')) + '</td></tr>';
-    }).join('');
-    return '<div class="page-head"><div><div class="crumbs">ridemore.bike / fit</div><h1>Pulpit</h1><div class="sub">Twoja pozycja na rowerze: pomiary, komfort i zmiany ustawień w jednym miejscu.</div></div>' +
+    return '<div class="page-head"><div><div class="crumbs">ridemore.bike / fit</div><h1>Moje analizy</h1><div class="sub">Każda analiza pokazuje, co zmienić w rowerze, i czy poprzednia zmiana pomogła.</div></div>' +
       '<a class="btn pri" href="#/nowa">' + icon('plus').replace('<svg', '<svg width="16" height="16"') + ' Nowa analiza</a></div>' +
-      '<div class="card" style="margin-bottom:16px"><div class="row" style="justify-content:space-between"><h3>Ścieżka dopasowania</h3><span class="xs muted">gdzie jesteś: analiza sesji S-0008 w toku</span></div><div class="flow" style="margin-top:8px">' +
-      ['Wybór roweru', 'Instrukcja nagrania', 'Przesłanie wideo', 'Analiza', 'Kontrola jakości', 'Wyniki', 'Ocena komfortu', 'Zapis ustawień', 'Porównanie'].map(function (x, i) { return (i ? '<i>→</i>' : '') + '<span class="' + (i === 3 ? 'on' : '') + '">' + x + '</span>'; }).join('') + '</div></div>' +
-      '<div class="grid g3">' +
-      '<div class="card"><div class="card-h"><h2>Analiza w toku</h2>' + stBadge(job.status) + '</div><p class="small muted">' + job.id + ' · ' + dateTxt(job.date) + ' · ' + esc(bike(job.bike).name) + ' · ' + esc(job.note) + '</p>' +
-      '<div class="bar" style="margin:10px 0 6px"><i style="width:' + job.progress + '%"></i></div><p class="small">Etap: wykrywanie punktów anatomicznych · ' + job.progress + '%</p><a class="btn sm" href="#/analiza/' + job.id + '">Szczegóły zadania</a></div>' +
-      '<div class="card"><div class="card-h"><h2>Ostatnie wyniki</h2>' + stBadge(last.status) + '</div><p class="small muted">' + last.id + ' · ' + dateTxt(last.date) + ' · strona ' + last.side + '</p><div class="grid g3" style="margin:12px 0">' + kpis + '</div>' +
-      '<div class="row"><a class="btn sm pri" href="#/wyniki/' + last.id + '">Otwórz wyniki</a><a class="btn sm" href="#/porownanie">Porównaj z S-0006</a></div></div>' +
-      '<div class="card"><div class="card-h"><h2>Komfort</h2><a class="btn sm ghost" href="#/komfort/S-0007">Oceń</a></div><p class="xs muted">Skala 0–10 (0 = brak dyskomfortu). Sesja S-0006 → S-0007.</p>' +
-      '<table class="tbl"><thead><tr><th>Obszar</th><th class="num">przed</th><th class="num">po</th><th class="num">Δ</th></tr></thead><tbody>' + comfortRows + '</tbody></table></div>' +
-      '</div>' +
-      '<div class="card" style="margin-top:16px"><div class="card-h"><h2>Historia pomiarów</h2><span class="xs muted">kliknij wiersz, aby otworzyć</span></div><div class="tbl-wrap"><table class="tbl"><thead><tr><th>Sesja</th><th>Data</th><th>Rower</th><th>Status</th><th>Jakość</th><th class="num">Cykle OK</th><th>Ustawienia / uwagi</th></tr></thead><tbody>' + rows + '</tbody></table></div></div>' +
-      '<div class="grid g3" style="margin-top:16px">' + RM.BIKES.map(function (b) {
-        return '<a class="card" href="#/rowery/' + b.id + '" style="text-decoration:none;color:inherit"><div class="row"><h3>' + esc(b.name) + '</h3><span class="spacer"></span>' + (b.active ? '<span class="pill">aktywny</span>' : '') + '</div><p class="small muted" style="margin-top:4px">' + b.type + ' · rozmiar ' + b.size + (b.incomplete ? ' · <b style="color:var(--warn-ink)">uzupełnij ustawienia</b>' : ' · siodło ' + b.contact.saddleH[0] + ' mm') + '</p></a>';
-      }).join('') + '</div>';
+      '<div class="grid g2">' + cards + '</div>';
+  }
+
+  // ---------- zalecenia dla użytkownika (warstwa „laik”) ----------
+  var ST_PLAIN = { ok: ['good', 'W porządku'], near: ['warn', 'Blisko granicy'], out: ['bad', 'Do zmiany'], unknown: ['na', 'Nie oceniono'] };
+  function fitStatus(st) { var x = ST_PLAIN[st]; return '<span class="q ' + x[0] + '">' + x[1] + '</span>'; }
+  function fitOf(s) { return RM_FIT.evaluateAll(s, bike(s.bike).type); }
+  function prevSession(s) { return analysed().filter(function (x) { return x.bike === s.bike && x.date < s.date; }).sort(function (a, b) { return a.date < b.date ? 1 : -1; })[0]; }
+  function actionText(r) { return r.text.action + ' o ok. ' + r.mm + ' mm'; }
+  function rangeBar(r, small) {
+    var sc = r.adj.scale, g = r.range.green, y = r.range.yellow;
+    function pct(v) { return Math.max(0, Math.min(100, (v - sc[0]) / (sc[1] - sc[0]) * 100)); }
+    var segs = [[sc[0], y[0], 'r'], [y[0], g[0], 'y'], [g[0], g[1], 'g'], [g[1], y[1], 'y'], [y[1], sc[1], 'r']];
+    return '<div class="rbar' + (small ? ' sm' : '') + '" role="img" aria-label="' + esc(r.adj.measure + ': ' + num(r.value, 0) + ' ' + r.adj.unit + ', zakres ' + g[0] + '–' + g[1]) + '">' +
+      '<div class="rbar-track">' + segs.map(function (sg) { return '<i class="' + sg[2] + '" style="width:' + (pct(sg[1]) - pct(sg[0])) + '%"></i>'; }).join('') + '</div>' +
+      (r.status === 'unknown' ? '' : '<b class="rbar-mk" style="left:' + pct(r.value) + '%"></b>') +
+      (small ? '' : '<div class="rbar-lbl"><span>' + esc(r.adj.low.title) + '</span><span>' + esc(r.adj.high.title) + '</span></div>') + '</div>';
+  }
+  function labeledFigure(s, sim) {
+    var geo = Object.assign({}, s.geo, sim || {}), p = RM.pose(0.42, geo), q = p.pts;
+    function lbl(pt, dx, dy, title, val) {
+      var x = pt.x + dx, y = pt.y + dy;
+      return '<line x1="' + pt.x + '" y1="' + pt.y + '" x2="' + (x + 150) + '" y2="' + (y + 55) + '" stroke="#9CC7AE" stroke-width="4"/>' +
+        '<rect x="' + x + '" y="' + y + '" width="300" height="110" rx="18" fill="#2C6B4F" opacity=".92"/>' +
+        '<text x="' + (x + 150) + '" y="' + (y + 40) + '" text-anchor="middle" fill="#D9EBE0" font-size="30" font-family="Instrument Sans">' + title + '</text>' +
+        '<text x="' + (x + 150) + '" y="' + (y + 90) + '" text-anchor="middle" fill="#fff" font-size="50" font-family="IBM Plex Mono" font-weight="600">' + val + '</text>';
+    }
+    var f = fitOf(s).list, by = {}; f.forEach(function (r) { by[r.adj.id] = r; });
+    return '<svg viewBox="-760 -1420 1720 1700" aria-label="Schemat pozycji z opisanymi pomiarami">' + bikeSvg() + figureSvg(p, { angles: false }) +
+      lbl(q.K, 60, -40, 'Zgięcie kolana', num(by.saddleH.value, 0) + '°') +
+      lbl(q.H, -560, -260, 'Pochylenie pleców', num(by.barHeight.value, 0) + '°') +
+      lbl(q.S, 120, -120, 'Tułów–ramię', num(by.barReach.value, 0) + '°') +
+      lbl(q.P, -700, -170, 'Kolano–pedał', num(by.saddleFA.value, 0) + ' mm') + '</svg>';
+  }
+  function adjCard(r, compact) {
+    var a = r.adj, act = r.status === 'ok' ? '' : r.status === 'unknown' ? '<p class="small muted">Nagranie nie pozwala tego wiarygodnie ocenić – brak zalecenia.</p>' :
+      '<p class="act">→ ' + esc(actionText(r)) + (r.mmTotal > r.mm ? ' <span class="small muted">(pierwszy krok; łącznie może być potrzebne ok. ' + r.mmTotal + ' mm)</span>' : '') + '</p>';
+    return '<div class="adj"><div class="row"><h3>' + esc(a.name) + '</h3><span class="spacer"></span>' + fitStatus(r.status) + '</div>' +
+      '<p class="small" style="margin:6px 0 10px">' + esc(r.status === 'ok' ? a.ok : r.status === 'unknown' ? '' : r.text.plain) + '</p>' + rangeBar(r) +
+      '<div class="xs muted" style="margin-top:4px">' + esc(a.measure) + ': <b class="mono">' + (r.status === 'unknown' ? '—' : num(r.value, 0) + ' ' + a.unit) + '</b> · zalecany zakres ' + rangeTxt(r.range.green, a.unit) + '</div>' + act + '</div>';
+  }
+  function rangeTxt(g, u) { return g[0] < 0 ? 'od ' + signed(g[0], 0) + ' do ' + signed(g[1], 0) + ' ' + u : g[0] + '–' + g[1] + ' ' + u; }
+  function viewSummary(s) {
+    var b = bike(s.bike), F = fitOf(s), nx = F.next, prev = prevSession(s);
+    var head = resultsHead(s, 'summary');
+    var next = nx ? '<div class="card next"><div class="layer-tag">Twój następny krok</div><h2 class="big">' + esc(actionText(nx)) + '</h2>' +
+      '<p>' + esc(nx.text.plain) + '</p><p class="small muted"><b>Jak to zrobić:</b> ' + esc(nx.adj.how) + '</p>' +
+      '<p class="small"><b>Na co wpłynie:</b> ' + nx.adj.body.map(function (x) { return '<span class="pill">' + x + '</span>'; }).join(' ') + '</p>' +
+      '<div class="row" style="margin-top:10px"><a class="btn pri" href="#/rowery/' + b.id + '">Zrobiłem – zapisz zmianę</a><a class="btn" href="#/nowa">Nagraj kontrolnie</a></div>' +
+      '<p class="xs muted" style="margin-top:10px">Zmieniaj jedną rzecz naraz. Po zmianie pojeździj kilka razy i nagraj kontrolną analizę – zobaczysz, czy zmiana pomogła.</p></div>'
+      : '<div class="card next"><div class="layer-tag">Twój następny krok</div><h2 class="big">Nic nie musisz zmieniać</h2><p>Wszystkie ocenione regulacje są w zalecanych zakresach. Jeśli coś Cię boli, opisz to w ocenie komfortu.</p></div>';
+    var qual = s.quality.overall === 'good' ? '<span class="q good">Nagranie dobrej jakości</span>' :
+      '<span class="q warn">Część pomiarów mniej pewna</span> <span class="small muted">' + (s.quality.ankle !== 'good' ? 'stopa była słabo widoczna – nie wpływa to na zalecenia poniżej.' : '') + '</span>';
+    var cmp = '';
+    if (prev) {
+      var P = fitOf(prev), byP = {}; P.list.forEach(function (r) { byP[r.adj.id] = r; });
+      var ch = RM.CHANGES.filter(function (c) { return c.bike === s.bike && c.date > prev.date && c.date <= s.date; });
+      var cA = (RM.COMFORT[prev.id] || { items: {} }).items, cB = (RM.COMFORT[s.id] || { items: {} }).items;
+      cmp = '<div class="card" style="margin-top:16px"><div class="card-h"><h2>Co dała zmiana</h2><span class="small muted">' + dateTxt(prev.date) + ' → ' + dateTxt(s.date) + '</span></div>' +
+        (ch.length ? '<p class="small">Zmieniono: ' + ch.map(function (c) { return '<b>' + esc(c.param.toLowerCase()) + '</b> ' + esc(c.before) + ' → ' + esc(c.after) + ' ' + c.unit; }).join(', ') + '</p>' : '') +
+        '<div class="tbl-wrap"><table class="tbl ba"><thead><tr><th></th><th>Przed</th><th>Po</th></tr></thead><tbody>' + F.list.map(function (r) {
+          var p0 = byP[r.adj.id];
+          return '<tr><td><b>' + esc(r.adj.name) + '</b></td><td>' + fitStatus(p0.status) + rangeBar(p0, true) + '</td><td>' + fitStatus(r.status) + rangeBar(r, true) + '</td></tr>';
+        }).join('') + '</tbody></table></div>' +
+        (Object.keys(cB).length ? '<p class="small" style="margin-top:10px"><b>Twoje odczucia:</b> ' + Object.keys(cB).filter(function (k) { return cA[k] && cA[k][0] !== cB[k][0]; }).map(function (k) { return esc(k.toLowerCase()) + ' ' + cA[k][0] + ' → ' + cB[k][0] + '/10'; }).join(' · ') + '</p>' : '') + '</div>';
+    }
+    return head +
+      '<div class="grid g2" style="margin-top:16px"><div><div class="viewer">' + labeledFigure(s) + '</div><div class="xs muted" style="margin-top:4px"><b>Schemat demonstracyjny</b> – w aplikacji tu będzie kadr z Twojego nagrania z opisanymi pomiarami.</div>' +
+      '<p class="small" style="margin-top:8px">' + qual + '</p></div>' + next + '</div>' +
+      '<div class="card" style="margin-top:16px"><div class="card-h"><h2>Twoja pozycja – 4 regulacje</h2><span class="small"><b>' + F.okCount + ' z 4</b> w zalecanym zakresie</span></div>' +
+      '<div class="grid g2">' + F.list.map(function (r) { return adjCard(r); }).join('') + '</div></div>' + cmp +
+      '<div class="card" style="margin-top:16px" id="sim"><div class="card-h"><h2>Sprawdź, zanim zmienisz</h2><span class="xs muted">szacunek z modelu geometrycznego, nie pomiar</span></div>' +
+      '<p class="small muted">Przesuń suwak, aby zobaczyć, jak zmiana roweru przesunie Twoją pozycję w zakresach.</p>' +
+      '<div class="grid g2"><div class="stack">' + [['dh', 'Wysokość siodła', 'mm'], ['df', 'Siodło do tyłu (+) / przodu (−)', 'mm'], ['ds', 'Długość mostka', 'mm'], ['db', 'Wysokość kierownicy', 'mm']].map(function (x) {
+        return '<div class="fld"><label>' + x[1] + ' <b class="mono" data-simv="' + x[0] + '">0 mm</b></label><input type="range" min="-30" max="30" step="5" value="0" data-sim-in="' + x[0] + '" style="accent-color:var(--accent)"></div>';
+      }).join('') + '</div><div id="simOut"></div></div></div>' +
+      '<div class="callout info" style="margin-top:16px"><div class="ic">i</div><div class="small">Zalecenia są szacunkiem na podstawie nagrania z boku (2D) i zakresów z publikacji oraz praktyki bike fittingu – źródła w zakładce <a href="#" data-act="details">Szczegóły</a>. Nie zastępują wizyty u bike fittera. Jeśli coś boli, a nie tylko męczy, skonsultuj się z fizjoterapeutą.</div></div>' +
+      '<div style="margin-top:16px">' + demoNote('Pozycja i zalecenia wyliczone z danych demonstracyjnych i roboczego modelu dopasowania (' + RM_FIT.VERSION + ').') + '</div>';
+  }
+  // symulacja: wartość zmierzona + różnica z modelu geometrycznego (geo + zmiana) − (geo)
+  function simulate(s, d) {
+    var sin = Math.sin(73.5 * Math.PI / 180), cos = Math.cos(73.5 * Math.PI / 180);
+    var g0 = Object.assign({ tilt: 42, wx: 655, wy: -760 }, s.geo);
+    var g1 = Object.assign({}, g0, { hy: g0.hy - d.dh * sin, hx: g0.hx - d.dh * cos - d.df, wx: g0.wx + d.ds, wy: g0.wy - d.db, tilt: g0.tilt + d.db * 0.1 });
+    function vals(g) {
+      var mx = 0; for (var i = 0; i <= 100; i++) mx = Math.max(mx, RM.pose(i / 100, g).knee);
+      var p = RM.pose(0.25, g), pm = RM.pose(0.5, g);
+      return { knee: mx, kneePedal: p.kneePedal, shoulder: p.shoulder, torso: pm.torso };
+    }
+    var a = vals(g0), b = vals(g1), agg = {};
+    Object.keys(s.agg).forEach(function (k) { agg[k] = s.agg[k]; });
+    ['knee', 'kneePedal', 'shoulder', 'torso'].forEach(function (k) {
+      var st = JSON.parse(JSON.stringify(s.agg[k].stat)), dlt = b[k] - a[k];
+      Object.keys(st).forEach(function (r) { if (r !== 'rom') st[r].value += dlt; });
+      agg[k] = { stat: st };
+    });
+    return { s: Object.assign({}, s, { agg: agg }), geo: g1 };
+  }
+  function renderSim(s) {
+    var d = {}; $$('[data-sim-in]').forEach(function (i) { d[i.dataset.simIn] = +i.value; $('[data-simv="' + i.dataset.simIn + '"]').textContent = (i.value > 0 ? '+' : '') + i.value + ' mm'; });
+    var x = simulate(s, d), F0 = fitOf(s), F1 = fitOf(x.s);
+    $('#simOut').innerHTML = '<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Regulacja</th><th>Teraz</th><th>Po zmianie (szacunek)</th></tr></thead><tbody>' + F1.list.map(function (r, i) {
+      return '<tr data-simrow="' + r.adj.id + '"><td class="small"><b>' + esc(r.adj.name) + '</b></td><td>' + fitStatus(F0.list[i].status) + '</td><td>' + fitStatus(r.status) + rangeBar(r, true) + '</td></tr>';
+    }).join('') + '</tbody></table></div>';
   }
 
   // ---------- ekran: Profil ----------
@@ -423,10 +521,18 @@
       sd: '±' + num(st[r0[0]].sd) + ' ' + u
     };
   }
+  function resultsHead(s, tab) {
+    var b = bike(s.bike);
+    var opts = analysed().map(function (x) { return '<option value="' + x.id + '"' + (x.id === s.id ? ' selected' : '') + '>' + dateTxt(x.date) + ' · ' + esc(bike(x.bike).name) + '</option>'; }).join('');
+    return '<div class="page-head"><div><div class="crumbs"><a href="#/pulpit">Moje analizy</a> / ' + s.id + '</div><h1>Analiza pozycji · ' + dateTxt(s.date) + '</h1><div class="sub">' + esc(b.name) + ' · ' + esc(s.settingsNote) + '</div></div>' +
+      '<div class="row"><select class="sel" id="sessSel" style="width:auto">' + opts + '</select><a class="btn" href="#/komfort/' + s.id + '">Oceń komfort</a></div></div>' +
+      '<div class="tabs"><button data-rtab="summary" class="' + (tab === 'summary' ? 'on' : '') + '">Podsumowanie</button><button data-rtab="details" class="' + (tab === 'details' ? 'on' : '') + '">Szczegóły (dla bike fittera)</button></div>';
+  }
   function viewResults(id) {
     var s = session(id);
     if (!s) return viewNotFound();
     if (!s.agg) { location.hash = '#/analiza/' + s.id; return ''; }
+    if (state.resTab !== 'details') return viewSummary(s);
     var b = bike(s.bike), Qs = s.quality;
     var opts = analysed().map(function (x) { return '<option value="' + x.id + '"' + (x.id === s.id ? ' selected' : '') + '>' + x.id + ' · ' + dateTxt(x.date) + '</option>'; }).join('');
     var rows = RM.METRICS.map(function (m) {
@@ -436,8 +542,8 @@
     var rejected = s.cycles.filter(function (c) { return !c.valid; });
     var cad = s.cycles.filter(function (c) { return c.valid; }).map(function (c) { return c.cadence; }).sort(function (a, b) { return a - b; });
     var m = metric(state.metric);
-    return '<div class="page-head"><div><div class="crumbs">Analiza · wyniki</div><h1>Wyniki analizy · ' + s.id + '</h1><div class="sub">' + dateTxt(s.date) + ' · ' + esc(b.name) + ' · ' + esc(s.settingsNote) + '</div></div>' +
-      '<div class="row"><select class="sel" id="sessSel" style="width:auto">' + opts + '</select>' + stBadge(s.status) + '<a class="btn" href="#/komfort/' + s.id + '">Oceń komfort</a><a class="btn" href="#/porownanie">Porównaj</a><button class="btn" disabled title="Etap 6">Eksport CSV/JSON</button></div></div>' +
+    return resultsHead(s, 'details') +
+      '<div class="row" style="margin-bottom:12px"><a class="btn sm" href="#/porownanie">Porównanie sesji (pomiary)</a><button class="btn sm" disabled title="Etap 6">Eksport CSV/JSON</button><span class="small muted">Widok dla bike fittera: kąty, definicje, jakość śledzenia i cykle.</span></div>' +
       demoNote('Przebiegi i wartości wygenerowano z modelu geometrycznego w przeglądarce. To <b>nie jest</b> wynik analizy wideo ani modelu AI.') +
 
       // 1. jakość
@@ -469,7 +575,9 @@
 
       // 4–5. interpretacja i zalecenia
       '<div class="grid g2" style="margin-top:16px"><section class="card layer interp"><div class="layer-tag">3 · Interpretacja (opis, nie ocena)</div>' + interpretation(s) + '</section>' +
-      '<section class="card layer reco"><div class="layer-tag">4 · Zalecenia – funkcja planowana</div><p class="small muted">W tej wersji aplikacja <b>nie wydaje zaleceń</b>. Docelowo zalecenia będą tworzone na podstawie publikacji naukowych i praktyki bike fittingu, zawsze ze wskazaniem źródła i tylko dla pomiarów o wystarczającej jakości.</p></section></div>' +
+      '<section class="card layer reco"><div class="layer-tag">4 · Zalecenia – reguły modelu dopasowania ' + RM_FIT.VERSION + '</div><table class="tbl small"><thead><tr><th>Regulacja</th><th>Pomiar</th><th>Zakres</th><th>Źródło</th></tr></thead><tbody>' +
+      RM_FIT.ADJUSTMENTS.map(function (a) { var r = RM_FIT.rangeFor(a, b.type); return '<tr><td><b>' + esc(a.name) + '</b></td><td>' + esc(a.measure) + '</td><td class="num">' + rangeTxt(r.green, a.unit) + '</td><td class="xs muted">' + esc(a.source) + '</td></tr>'; }).join('') +
+      '</tbody></table><p class="xs muted">Liczba mm w zaleceniu to szacunek z modelu geometrycznego, zaokrąglony do 5 mm i ograniczony do 10 mm na jeden krok. Zakresy robocze – do weryfikacji w Etapie 4.</p></section></div>' +
 
       '<div class="callout info" style="margin-top:16px"><div class="ic">i</div><div class="small"><h3>Ograniczenia analizy 2D</h3><ul style="margin:4px 0 0;padding-left:18px"><li>Kąty to rzut na płaszczyznę obrazu; skręcenie kończyny lub kamery zmienia wynik.</li><li>Kalibracja znacznikiem daje skalę tylko w płaszczyźnie znacznika i nie usuwa perspektywy.</li><li>Punkty anatomiczne są estymowane z obrazu (często przez ubranie i buty) – to nie jest pomiar laboratoryjny.</li><li>Porównuj sesje nagrane w tych samych warunkach: ta sama kamera, odległość, chwyt i kadencja.</li></ul></div></div>';
   }
@@ -548,7 +656,9 @@
       else if (A && B && A.agg && B.agg && c.metric) {
         var m = metric(c.metric), d = B.agg[c.metric].stat[c.rep].value - A.agg[c.metric].stat[c.rep].value;
         var ca = RM.COMFORT[A.id].items[c.comfort], cb = RM.COMFORT[B.id].items[c.comfort];
-        res = '<div class="small"><a href="#/wyniki/' + B.id + '">' + B.id + '</a>: ' + m.name.toLowerCase() + ' ' + (c.rep === 'max' ? 'maks.' : 'min.') + ' <b>' + signed(d) + m.unit + '</b> ' + qBadge(B.quality[c.metric], true) +
+        var adjR = c.adj && RM_FIT.ADJUSTMENTS.filter(function (x) { return x.id === c.adj; })[0];
+        var st = adjR ? fitStatus(RM_FIT.evaluate(adjR, A, bike(c.bike).type).status) + ' → ' + fitStatus(RM_FIT.evaluate(adjR, B, bike(c.bike).type).status) + '<br>' : '';
+        res = '<div class="small">' + st + '<a href="#/wyniki/' + B.id + '">' + B.id + '</a>: ' + m.name.toLowerCase() + ' ' + (c.rep === 'max' ? 'maks.' : 'min.') + ' <span class="mono">' + signed(d) + m.unit + '</span>' +
           (ca && cb ? '<br>komfort „' + esc(c.comfort) + '”: ' + ca[0] + ' → ' + cb[0] : '') + '</div>';
       }
       return '<tr><td>' + dateTxt(c.date) + '</td><td class="small">' + esc(bike(c.bike).name) + '</td><td><b>' + esc(c.param) + '</b></td><td class="num">' + esc(c.before) + '</td><td class="num">' + esc(c.after) + '</td><td>' + esc(c.unit || '—') + '</td><td class="small muted">' + esc(c.reason) + '</td><td>' + res + '</td></tr>';
@@ -601,7 +711,13 @@
   }
   function afterRender(parts) {
     var p0 = parts[0];
-    if (p0 === 'wyniki') {
+    if (p0 === 'wyniki' && $('#sim')) {
+      var ss = session(parts[1] || 'S-0007');
+      $$('[data-sim-in]').forEach(function (i) { i.oninput = function () { renderSim(ss); }; });
+      renderSim(ss);
+      $('#sessSel').onchange = function () { location.hash = '#/wyniki/' + this.value; };
+    }
+    if (p0 === 'wyniki' && $('#viewer')) {
       var s = session(parts[1] || 'S-0007');
       viewer($('#viewer'), s);
       var el = $('#cycleChart'), m = metric(state.metric);
@@ -657,12 +773,13 @@
 
   // delegacja kliknięć
   document.addEventListener('click', function (e) {
-    var t = e.target.closest('[data-def],[data-metric],[data-cmetric],[data-href],[data-act],[data-sim],[data-ptab],[data-btab],[data-seg] button,[data-side] button,[data-chk],input[name=wb],input[name=keep],input[data-w=consent]');
+    var t = e.target.closest('[data-rtab],[data-def],[data-metric],[data-cmetric],[data-href],[data-act],[data-sim],[data-ptab],[data-btab],[data-seg] button,[data-side] button,[data-chk],input[name=wb],input[name=keep],input[data-w=consent]');
     if (!t) return;
     if (t.dataset.def) { e.stopPropagation(); openDef(t.dataset.def); return; }
     if (t.dataset.metric) { state.metric = t.dataset.metric; var y = window.scrollY; render(); window.scrollTo(0, y); return; }
     if (t.dataset.cmetric) { state.cmpMetric = t.dataset.cmetric; var y2 = window.scrollY; render(); window.scrollTo(0, y2); return; }
     if (t.dataset.href) { location.hash = t.dataset.href; return; }
+    if (t.dataset.rtab) { state.resTab = t.dataset.rtab; render(); return; }
     if (t.dataset.ptab) { state.profileTab = t.dataset.ptab; render(); return; }
     if (t.dataset.btab) { state.bikeTab = t.dataset.btab; render(); return; }
     if (t.dataset.chk != null && state.wizard) { state.wizard.checks[t.dataset.chk] = t.checked; render(); return; }
@@ -679,6 +796,7 @@
     if (a === 'save') toast('Prototyp: dane profilu nie są zapisywane.');
     if (a === 'soon') toast('Funkcja zaprojektowana – formularz pojawi się w kolejnym etapie.');
     if (a === 'closeDef') closeDef();
+    if (a === 'details') { e.preventDefault(); state.resTab = 'details'; render(); }
     if (a === 'wnext') { state.wizard.step++; render(); }
     if (a === 'wback') { state.wizard.step--; render(); }
     if (a === 'wsend') {

@@ -23,7 +23,7 @@
   }
 
   // Sylwetka 2D: początek układu = oś suportu, mm, oś y w dół. t = faza korby 0..1 (0 = GMP).
-  var BASE = { hx: -200, hy: -765, r: 172.5, th: 420, sh: 480, lf: 150, torso: 580, tilt: 42, ua: 305, fa: 275, wx: 555, wy: -720, phase: 0 };
+  var BASE = { hx: -200, hy: -765, r: 172.5, th: 420, sh: 480, lf: 150, torso: 580, tilt: 42, ua: 305, fa: 275, wx: 655, wy: -760, phase: 0 };
   function pose(t, geo) {
     var o = Object.assign({}, BASE, geo || {});
     var th = t * 2 * Math.PI;
@@ -39,7 +39,8 @@
     return {
       pts: { P: P, MT: MT, A: A, K: K, H: H, S: S, E: E, W: W, C: { x: 0, y: 0 } },
       knee: angleAt(K, H, A), hip: angleAt(H, S, K), ankle: angleAt(A, K, MT),
-      elbow: angleAt(E, S, W), torso: angleToHorizontal(H, S), foot: angleToHorizontal(A, MT) * -1
+      elbow: angleAt(E, S, W), torso: angleToHorizontal(H, S), foot: angleToHorizontal(A, MT) * -1,
+      shoulder: angleAt(S, H, E), kneePedal: K.x - P.x
     };
   }
 
@@ -51,8 +52,9 @@
   function sd(a) { var m = mean(a); return Math.sqrt(a.reduce(function (s, x) { return s + (x - m) * (x - m); }, 0) / Math.max(1, a.length - 1)); }
 
   var N = 101; // próbki cyklu 0..100%
-  var CURVE_METRICS = ['knee', 'hip', 'ankle', 'elbow', 'torso', 'foot', 'pelvisY'];
-  var NOISE = { knee: 0.7, hip: 0.6, ankle: 2.2, elbow: 0.8, torso: 0.3, foot: 2.4, pelvisY: 1.2 };
+  var CURVE_METRICS = ['knee', 'hip', 'ankle', 'elbow', 'torso', 'foot', 'pelvisY', 'shoulder', 'kneePedal'];
+  var POSE_METRICS = ['knee', 'hip', 'ankle', 'elbow', 'torso', 'foot', 'shoulder', 'kneePedal'];
+  var NOISE = { knee: 0.7, hip: 0.6, ankle: 2.2, elbow: 0.8, torso: 0.3, foot: 2.4, pelvisY: 1.2, shoulder: 0.7, kneePedal: 2.5 };
 
   function genSession(seed, geo, nCycles, rejected) {
     var r = rng(seed), cycles = [];
@@ -65,7 +67,7 @@
       var pAmp = (geo.pelvisAmp || 5) + gauss(r) * 0.8;
       for (var i = 0; i < N; i++) {
         var p = pose(i / (N - 1), g);
-        ['knee', 'hip', 'ankle', 'elbow', 'torso', 'foot'].forEach(function (m) { curves[m].push(p[m] + gauss(r) * NOISE[m]); });
+        POSE_METRICS.forEach(function (m) { curves[m].push(p[m] + gauss(r) * NOISE[m]); });
         curves.pelvisY.push(pAmp * Math.cos(4 * Math.PI * i / (N - 1)) + gauss(r) * NOISE.pelvisY);
       }
       var rej = rejected[c];
@@ -84,10 +86,10 @@
       }
       var per = valid.map(function (c) {
         var a = c.curves[m]; var mx = Math.max.apply(null, a), mn = Math.min.apply(null, a);
-        return { max: mx, min: mn, rom: mx - mn, med: median(a) };
+        return { max: mx, min: mn, rom: mx - mn, med: median(a), at25: a[25] };
       });
       var stat = {};
-      ['max', 'min', 'rom', 'med'].forEach(function (k) {
+      ['max', 'min', 'rom', 'med', 'at25'].forEach(function (k) {
         var col = per.map(function (p) { return p[k]; });
         stat[k] = { value: median(col), sd: sd(col) };
       });
@@ -133,6 +135,16 @@
       def: 'Kąt odcinka kostka→głowa V kości śródstopia względem poziomu. Wartość dodatnia: przód stopy niżej niż kostka (palce w dół).',
       formula: 'θ = atan2( MT.y−A.y, |MT.x−A.x| )',
       reps: [['max', 'Maks. (palce najbardziej w dół)'], ['min', 'Min.'], ['rom', 'Zakres ruchu']] },
+    { id: 'shoulder', name: 'Kąt barku (tułów–ramię)', unit: '°', vertex: 'S', pts: ['H', 'S', 'E'],
+      points: ['Krętarz większy', 'Akromion – wierzchołek', 'Nadkłykieć boczny k. ramiennej'],
+      def: 'Kąt wewnętrzny w barku między odcinkami bark→biodro i bark→łokieć. Większa wartość = ramiona bardziej wyciągnięte do przodu (dalej do kierownicy).',
+      formula: 'θ = ∠(H−S, E−S)',
+      reps: [['at25', 'Przy korbie w poziomie z przodu (25% cyklu)'], ['rom', 'Zakres ruchu']] },
+    { id: 'kneePedal', name: 'Kolano względem osi pedału', unit: 'mm', vertex: 'K', pts: [],
+      points: ['Nadkłykieć boczny k. udowej', 'Oś pedału', 'Skala z kalibracji znacznikiem'],
+      def: 'Pozioma odległość nadkłykcia bocznego kości udowej od osi pedału przy korbie w poziomie z przodu (90°, 25% cyklu). Wartość ujemna: kolano za osią pedału.',
+      formula: 'd = (x_K − x_P) / skala [px/mm] przy fazie 25%',
+      reps: [['at25', 'Przy korbie w poziomie z przodu (25% cyklu)']] },
     { id: 'kneeTrack', name: 'Tor ruchu kolana (przód)', unit: 'mm', vertex: 'K', pts: [], na: true,
       points: ['Środek rzepki', 'Środek stawu skokowego', 'Kolec biodrowy przedni górny'],
       def: 'Boczne wychylenie kolana w płaszczyźnie czołowej. Wymaga nagrania z przodu – z kamery bocznej nie da się go wiarygodnie wyznaczyć.',
@@ -164,23 +176,23 @@
   // ---- sesje ----
   var rejA = { 0: 'Niepełny cykl (początek fragmentu)', 17: 'Przesłonięcie stopy', 18: 'Przesłonięcie stopy', 43: 'Niepełny cykl (koniec fragmentu)' };
   var rejB = { 0: 'Niepełny cykl (początek fragmentu)', 29: 'Skok punktu kostki', 30: 'Niska pewność punktów (rozmycie)', 31: 'Niska pewność punktów (rozmycie)', 45: 'Niepełny cykl (koniec fragmentu)' };
-  var GEO_A = { hy: -765, hx: -200 }, GEO_B = { hy: -770, hx: -201.5, pelvisAmp: 4.2 };
+  var GEO_A = { hy: -755, hx: -200 }, GEO_B = { hy: -765, hx: -201.5, pelvisAmp: 4.2 };
 
   function strip(n, warn, bad) { var s = []; for (var i = 0; i < n; i++) s.push(bad.indexOf(i) >= 0 ? 'b' : warn.indexOf(i) >= 0 ? 'w' : 'g'); return s; }
 
   var SESSIONS = [
     { id: 'S-0008', date: '2026-10-27', bike: 'b1', status: 'running', progress: 46, stage: 2, note: 'Po korekcie bloków' },
     Object.assign({ id: 'S-0007', date: '2026-10-21', bike: 'b1', status: 'warn', side: 'prawa', duration: '0:45', fragment: '0:08–0:40', fps: 60, res: '1920×1080',
-      geo: GEO_B, settingsNote: 'Po zmianie z 14.10: siodło +5 mm, kąt siodła −1°', keepVideo: false,
+      geo: GEO_B, settingsNote: 'Po zmianie z 14.10: siodło +10 mm, kąt siodła −1°', keepVideo: false,
       calibration: { marker: 'Znacznik 200 mm', scale: 1.94, tilt: 0.8, ok: true },
-      quality: { overall: 'warn', framesOk: 91, knee: 'good', hip: 'good', ankle: 'warn', elbow: 'good', torso: 'good', pelvisY: 'good', foot: 'warn', kneeTrack: 'na',
+      quality: { overall: 'warn', framesOk: 91, shoulder: 'good', kneePedal: 'good', knee: 'good', hip: 'good', ankle: 'warn', elbow: 'good', torso: 'good', pelvisY: 'good', foot: 'warn', kneeTrack: 'na',
         conf: { knee: 0.93, hip: 0.91, ankle: 0.68, elbow: 0.88, torso: 0.92, pelvisY: 0.86, foot: 0.64 } },
       warnings: ['Fragment 0:29–0:33: rozmycie ruchu stopy – 3 cykle odrzucone.', 'Punkt głowy V kości śródstopia szacowany na bucie – kąt stawu skokowego i pozycja stopy mają ograniczoną wiarygodność.', 'Tor kolana niedostępny: nagranie tylko z boku.'],
       qstrip: strip(32, [20, 21, 24], [22, 23]) }, genSession(707, GEO_B, 46, rejB)),
     Object.assign({ id: 'S-0006', date: '2026-10-08', bike: 'b1', status: 'done', side: 'prawa', duration: '0:50', fragment: '0:10–0:40', fps: 60, res: '1920×1080',
       geo: GEO_A, settingsNote: 'Ustawienia wyjściowe', keepVideo: true,
       calibration: { marker: 'Znacznik 200 mm', scale: 1.91, tilt: 1.2, ok: true },
-      quality: { overall: 'good', framesOk: 96, knee: 'good', hip: 'good', ankle: 'good', elbow: 'good', torso: 'good', pelvisY: 'good', foot: 'good', kneeTrack: 'na',
+      quality: { overall: 'good', framesOk: 96, shoulder: 'good', kneePedal: 'good', knee: 'good', hip: 'good', ankle: 'good', elbow: 'good', torso: 'good', pelvisY: 'good', foot: 'good', kneeTrack: 'na',
         conf: { knee: 0.95, hip: 0.93, ankle: 0.81, elbow: 0.9, torso: 0.94, pelvisY: 0.88, foot: 0.78 } },
       warnings: ['Tor kolana niedostępny: nagranie tylko z boku.'],
       qstrip: strip(30, [12], []) }, genSession(606, GEO_A, 44, rejA)),
@@ -198,7 +210,7 @@
   // ---- historia zmian ustawień ----
   var CHANGES = [
     { date: '2026-10-25', bike: 'b1', param: 'Bloki – ustawienie', before: '8 mm za osią', after: '6 mm za osią', unit: '', reason: 'Drętwienie palców stopy prawej po ~60 min', before_s: 'S-0007', after_s: 'S-0008' },
-    { date: '2026-10-14', bike: 'b1', param: 'Wysokość siodła', before: '745', after: '750', unit: 'mm', reason: 'Dyskomfort przodu kolana prawego po ~60 min; odczucie „siedzenia nisko”', before_s: 'S-0006', after_s: 'S-0007', metric: 'knee', rep: 'max', comfort: 'Kolano – przód' },
+    { date: '2026-10-14', bike: 'b1', param: 'Wysokość siodła', before: '740', after: '750', unit: 'mm', reason: 'Zalecenie z analizy S-0006 („podnieś siodło o ok. 10 mm”); ból przodu kolana po ~60 min', before_s: 'S-0006', after_s: 'S-0007', metric: 'knee', rep: 'max', adj: 'saddleH', comfort: 'Kolano – przód' },
     { date: '2026-10-14', bike: 'b1', param: 'Kąt siodła', before: '0', after: '−1', unit: '°', reason: 'Ucisk w okolicy krocza po ~30 min', before_s: 'S-0006', after_s: 'S-0007', metric: 'hip', rep: 'min', comfort: 'Krocze / kontakt z siodłem' },
     { date: '2026-09-20', bike: 'b2', param: 'Długość mostka', before: '90', after: '80', unit: 'mm', reason: 'Napięcie barków na długich podjazdach', before_s: null, after_s: 'S-0005' }
   ];

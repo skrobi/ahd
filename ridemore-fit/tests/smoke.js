@@ -60,8 +60,23 @@ function check(ok, msg) { if (!ok) { fail++; console.log('  BŁĄD: ' + msg); } 
   await page.click('[data-act=retry]');
   check((await page.textContent('.joblist').catch(() => '')).length > 0, 'ponowienie: lista etapów');
   check((await page.textContent('main')).includes('2 z 3'), 'ponowienie: licznik prób powinien wzrosnąć');
-  // 3. wyniki: wybór pomiaru, definicja, tor kolana niedostępny
+  // 3a. podsumowanie dla użytkownika: zalecenia prostym językiem
+  await page.goto(url + '#/wyniki/S-0006');
+  check((await page.textContent('.card.next')).includes('Podnieś siodło o ok. 10 mm'), 'podsumowanie S-0006: zalecenie podniesienia siodła');
   await page.goto(url + '#/wyniki/S-0007');
+  check((await page.textContent('.card.next')).includes('Skróć mostek o ok. 10 mm'), 'podsumowanie S-0007: zalecenie skrócenia mostka');
+  check((await page.textContent('main')).includes('Co dała zmiana'), 'podsumowanie S-0007: porównanie przed/po');
+  check(!(await page.textContent('main')).includes('Kąt kolana'), 'podsumowanie nie powinno pokazywać tabeli kątów');
+  const simBefore = await page.textContent('[data-simrow=barReach]');
+  await page.fill('[data-sim-in=ds]', '-10'); await page.dispatchEvent('[data-sim-in=ds]', 'input');
+  const simAfter = await page.textContent('[data-simrow=barReach] td:nth-child(3)');
+  check(simBefore.includes('Blisko granicy') && simAfter.includes('W porządku'), 'symulacja: krótszy mostek powinien przenieść odległość do kierownicy w zakres');
+  await page.goto(url + '#/pulpit');
+  check((await page.textContent('main')).includes('teraz w zakresie'), 'pulpit: efekt zmiany siodła');
+  check(!(await page.textContent('main')).includes('wykonano 25.10.2026'), 'pulpit: zmiana bloków nie jest wykonaniem zalecenia „skróć mostek”');
+  // 3b. szczegóły: wybór pomiaru, definicja, tor kolana niedostępny
+  await page.goto(url + '#/wyniki/S-0007');
+  await page.click('[data-rtab=details]');
   await page.click('tr[data-metric=hip]');
   check((await page.textContent('main')).includes('Kąt biodra w cyklu'), 'wyniki: wybór pomiaru powinien zmienić wykres');
   await page.click('[data-def=knee]');
